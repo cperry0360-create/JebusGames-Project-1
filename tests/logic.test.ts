@@ -5,6 +5,7 @@ import { Path } from '../src/systems/Path.ts'
 import { pickFirst, pickNearest, withinRadius } from '../src/systems/Targeting.ts'
 import { WaveSpawner } from '../src/systems/WaveSpawner.ts'
 import { BuildSystem } from '../src/systems/BuildSystem.ts'
+import { facesLeft } from '../src/systems/Facing.ts'
 
 const read = (n: string) => JSON.parse(readFileSync(new URL(`../src/data/${n}.json`, import.meta.url), 'utf8'))
 const map = read('map'), display = read('display'), waves = read('waves')
@@ -209,6 +210,40 @@ test('one tower per spot, and Restructure frees the old one', () => {
   assert.equal(b.towerCount, 0)
   assert.equal(b.isFree(-1), false)
   assert.equal(b.isFree(spots.length), false)
+})
+
+// ---------------------------------------------------------------- unit facing
+
+test('art drawn facing right mirrors only when the walk turns left', () => {
+  const dz = read('presentation').facing.deadZone
+  const R = 0, L = Math.PI, DOWN = Math.PI / 2, UP = -Math.PI / 2
+  assert.equal(facesLeft(R, false, dz), false, 'walking east should not flip')
+  assert.equal(facesLeft(L, false, dz), true, 'walking west should flip')
+  assert.equal(facesLeft(R, true, dz), false, 'walking east again should unflip')
+  // Diagonals commit to a side.
+  assert.equal(facesLeft(Math.PI * 0.75, false, dz), true, 'north-west faces left')
+  assert.equal(facesLeft(Math.PI * 0.25, true, dz), false, 'south-east faces right')
+})
+
+test('a near-vertical stretch of lane never spins a unit on the spot', () => {
+  const dz = read('presentation').facing.deadZone
+  // Straight down and straight up: the sideways component is noise either way,
+  // so whatever the unit was facing is what it keeps.
+  for (const angle of [Math.PI / 2, -Math.PI / 2]) {
+    assert.equal(facesLeft(angle, true, dz), true)
+    assert.equal(facesLeft(angle, false, dz), false)
+  }
+  // The dead zone has to be wide enough to cover this map's steepest leg,
+  // which drifts 3px west while dropping 92px.
+  const steepest = map.waypoints
+    .slice(1)
+    .map((w: number[], i: number) => [w[0] - map.waypoints[i][0], w[1] - map.waypoints[i][1]])
+    .filter(([dx]: number[]) => dx < 0)
+  for (const [dx, dy] of steepest) {
+    const angle = Math.atan2(dy, dx)
+    assert.equal(facesLeft(angle, false, dz), false,
+      `a leg drifting ${dx.toFixed(1)}px west over ${Math.abs(dy).toFixed(0)}px should not flip anyone`)
+  }
 })
 
 // ----------------------------------------------------------------- combat bits

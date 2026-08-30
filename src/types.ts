@@ -59,7 +59,6 @@ export interface EnemyDef {
   flavor: string
   role: string
   sprite: string
-  spriteScale: number
   maxHealth: number
   /** Flat damage subtracted per hit, unless the attacker ignores armour. */
   armor: number

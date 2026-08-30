@@ -1,3 +1,14 @@
+"""Measure the painted art and print the manifest values it implies.
+
+Run from the repository root:
+
+    python3 tools/measure_art.py
+
+Nothing at runtime reads this. It is the record of where the anchor,
+displayHeight and shadowWidth numbers in art.json came from, so they can be
+re-derived rather than re-guessed when art changes.
+"""
+
 import sys, glob, os, json
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import png
@@ -79,3 +90,84 @@ for r in rows_out:
     print(f"{r[0]:22s} {r[2]:9s} {r[3]:9s} {r[4]:7d} {r[5]:6d} {r[6]:7.4f} "
           f"{r[7]:7.1f} {r[8]:7.1f} {r[9]:6.1f} {r[10]:6.4f} {r[11]:6.4f}")
 json.dump({'files': files, 'render': render}, open('/tmp/towerpatch.json', 'w'), indent=2)
+
+
+# ---------------------------------------------------------------- enemies
+
+# The three enemies are 3/4 characters, already drawn to one scale relative to
+# each other with the brute tallest at 512px, so one uniform scale preserves
+# the artist's proportions. It is set so the brute stands a little shorter
+# than a tower (72.8px), which is what a big enemy beside a building should do.
+BRUTE_ON_SCREEN = 66.0
+
+ENEMY_KEY = {
+    'enemy_brute.png':   ('enemy-notice',   0.90),
+    'enemy_soldier.png': ('enemy-filer',    0.87),
+    'enemy_scout.png':   ('enemy-shredder', 0.84),
+}
+# The second value is where the foot band starts, as a fraction of the sprite's
+# height. It cannot be one number for all three: the brute's leaf blower hangs
+# to within 10% of his ground line while the scout's trailing skate is 13%
+# above hers, so any single depth cut either swallows the blower or loses a
+# foot. Each value is the deepest cut that still catches both feet, read off
+# the ground silhouette this script prints below.
+
+
+def ground_silhouette(w, h, px):
+    """Lowest opaque pixel in each column — where the art meets the ground."""
+    low = [-1] * w
+    for x in range(w):
+        for y in range(h - 1, -1, -1):
+            if px[(y * w + x) * 4 + 3] > ALPHA:
+                low[x] = y
+                break
+    return low
+
+
+def foot_groups(low, cut):
+    """Runs of columns that touch the ground below `cut`. Feet, and only feet,
+    once the cut is below whatever the character is carrying."""
+    groups, start = [], None
+    for x, y in enumerate(low + [-1]):
+        deep = y >= cut
+        if deep and start is None:
+            start = x
+        elif not deep and start is not None:
+            groups.append((start, x - 1))
+            start = None
+    return groups
+
+
+print('\n\nenemies')
+efiles, erender = {}, {}
+escale = BRUTE_ON_SCREEN / 512.0
+print(f'uniform scale {escale:.4f} (brute 512px -> {BRUTE_ON_SCREEN}px on screen)\n')
+for f in sorted(glob.glob('public/assets/enemies/enemy_*.png')):
+    name = os.path.basename(f)
+    key, band = ENEMY_KEY[name]
+    w, h, px = png.read(f)
+    low = ground_silhouette(w, h, px)
+    bot = max(low)
+    groups = foot_groups(low, int(h * band))
+    lo = min(g[0] for g in groups)
+    hi = max(g[1] for g in groups)
+    footW = hi - lo + 1
+    footCx = (lo + hi) / 2.0
+
+    efiles[key] = f'enemies/{name}'
+    erender[key] = {
+        'anchorX': round(footCx / w, 4),
+        'anchorY': round((bot + 1) / h, 4),
+        'displayHeight': round(h * escale, 1),
+        'shadowWidth': round(footW * escale, 1),
+        # All three are trimmed, so content is the canvas. Recording it anyway
+        # lets anything that needs the on-screen width work it out from the
+        # manifest instead of loading the image.
+        'contentWidth': w,
+        'contentHeight': h,
+    }
+    print(f'{name:20s} {w}x{h}  cut y{int(h*band):4d}  feet {groups}')
+    print(f'{"":20s} -> {key}: footprint x{lo}-{hi} ({footW}px), '
+          f'on screen {round(w*escale,1)}x{round(h*escale,1)}, '
+          f'anchorX {erender[key]["anchorX"]}, shadowWidth {erender[key]["shadowWidth"]}')
+json.dump({'files': efiles, 'render': erender}, open('/tmp/enemypatch.json', 'w'), indent=2)

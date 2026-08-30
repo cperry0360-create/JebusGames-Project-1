@@ -43,6 +43,58 @@ test('the sprite keys the scenes ask for by role are all in the manifest', () =>
   for (const k of hardcoded) assert.ok(ART_KEYS.has(k), `code uses sprite key "${k}" which art.json lacks`)
 })
 
+test('the three enemies are the painted art, standing on the ground', () => {
+  for (const [id, e] of Object.entries(enemies) as [string, any][]) {
+    assert.match(art.files[e.sprite], /^enemies\//, `${id} is not using the painted enemy art`)
+    const cfg = art.render[e.sprite]
+    assert.ok(cfg, `${id} has no render entry, so it would draw at its raw 512px size`)
+    assert.ok(cfg.anchorY >= 0.95,
+      `${id} anchors at ${cfg.anchorY}; a 3/4 character has to stand on its feet`)
+    assert.ok(cfg.displayHeight > 0 && cfg.shadowWidth > 0, `${id} is missing a measured size`)
+  }
+})
+
+test('the enemies keep the sizes they were drawn at, relative to each other', () => {
+  // They arrived already scaled against each other with the brute tallest at
+  // 512px. Normalising them to a common height would throw that away, so every
+  // one has to sit at the same scale factor from its own source art.
+  const scales = Object.values(enemies).map((e: any) => {
+    const cfg = art.render[e.sprite]
+    return cfg.displayHeight / cfg.contentHeight
+  })
+  for (const s of scales) {
+    assert.ok(Math.abs(s - scales[0]) < 1e-3,
+      `enemies draw at different scales (${scales.map((v) => v.toFixed(4)).join(', ')}); ` +
+      'that is a normalised height, not the artist\'s proportions')
+  }
+  const heights = Object.values(enemies).map((e: any) => art.render[e.sprite].displayHeight)
+  assert.ok(Math.max(...heights) > Math.min(...heights) * 1.5,
+    'the three should be visibly different sizes on screen')
+})
+
+test('an enemy is smaller than a tower but big enough to read', () => {
+  const towerHeights = Object.values(towers).map((t: any) => art.render[t.sprite].displayHeight)
+  const biggest = Math.max(...Object.values(enemies).map((e: any) => art.render[e.sprite].displayHeight))
+  assert.ok(biggest < Math.min(...towerHeights), 'the brute towers over the buildings')
+  assert.ok(biggest > 40, 'the biggest enemy is too small to make out')
+})
+
+test('health bars are sized from the sprite, not fixed', () => {
+  const b = pres.healthBar
+  assert.ok(b.widthFactor > 0 && b.widthFactor <= 1, 'a bar should not be wider than its sprite')
+  assert.ok(b.minWidth > 0 && b.maxWidth > b.minWidth, 'bar clamp is inverted')
+  assert.ok(b.heightPx > 0 && b.gapAbovePx > 0, 'the bar needs height, and air above the head')
+  // The clamp must not flatten the three enemies back to one width, or scaling
+  // to the sprite achieves nothing.
+  const widths = Object.values(enemies).map((e: any) => {
+    const cfg = art.render[e.sprite]
+    const w = (cfg.contentWidth / cfg.contentHeight) * cfg.displayHeight * b.widthFactor
+    return Math.min(Math.max(w, b.minWidth), b.maxWidth)
+  })
+  assert.equal(new Set(widths.map((w) => Math.round(w))).size, widths.length,
+    'the clamp collapses two enemies to the same bar width')
+})
+
 test('the fonts and sound cues are bundled', () => {
   for (const f of ['KenneyFuture.ttf', 'KenneyFutureNarrow.ttf', 'KenneyMiniSquare.ttf', 'License.txt']) {
     assert.ok(existsSync(url(`../public/assets/fonts/${f}`)), `missing font asset ${f}`)

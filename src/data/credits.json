@@ -4,12 +4,12 @@
   "lines": [
     "A JebusGames project, in collaboration with CP Plays.",
     "",
-    "Enemies, effects and scenery:",
+    "Projectiles, effects, scenery and the hero:",
     "Kenney Tower Defense (Top-Down) pack — CC0",
     "Type: Kenney Font Package — CC0",
     "kenney.nl",
     "",
-    "Level map and tower art: original.",
+    "Level map, tower and enemy art: original.",
     "Sound cues: synthesised for this project.",
     "Built with Phaser 3."
   ],

@@ -428,7 +428,7 @@ export class GameScene extends Phaser.Scene {
     target.knockBack(hm.knockbackPixels)
     const s = PRESENTATION.shake
     this.cameras.main.shake(s.haymakerMs, s.haymakerIntensity)
-    const punch = this.add.image(target.x, target.y, ART.fx.spark).setDepth(target.y + 8).setScale(1.2)
+    const punch = this.add.image(target.x, target.centreY, ART.fx.spark).setDepth(target.y + 8).setScale(1.2)
     this.tweens.add({
       targets: punch, scale: 0.2, alpha: 0, angle: 200, duration: 300, onComplete: () => punch.destroy(),
     })
@@ -628,7 +628,7 @@ export class GameScene extends Phaser.Scene {
   private fire(tower: Tower, target: Enemy): void {
     this.shots.push(
       new Projectile(this, tower.x, tower.y - 10, tower.def.shot, target, tower.def.projectileSpeed, (hit) => {
-        this.impactSpark(hit.x, hit.y)
+        this.impactSpark(hit.x, hit.target.centreY)
         if (tower.def.splashRadius > 0) {
           this.blast(hit.x, hit.y, tower.def.splashRadius)
           for (const e of withinRadius(this.enemies, hit.x, hit.y, tower.def.splashRadius)) {
@@ -693,7 +693,7 @@ export class GameScene extends Phaser.Scene {
 
   private leak(enemy: Enemy): void {
     this.status.lives -= enemy.def.livesCost
-    floatingDamage(this, enemy.x, enemy.y, enemy.def.livesCost, true)
+    floatingDamage(this, enemy.x, enemy.centreY, enemy.def.livesCost, true)
     enemy.destroy()
     const s = PRESENTATION.shake
     this.cameras.main.shake(s.leakMs, s.leakIntensity)

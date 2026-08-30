@@ -122,11 +122,19 @@ python3 tools/mksfx.py public/assets/audio
 
 ## Art
 
-The map plate is in `public/assets/maps/` and the towers are painted art in
-`public/assets/towers/`. Everything else — enemies, effects, scenery — is still
-Kenney's **Tower Defense (Top-Down)** pack, with the **Kenney font package** for
-type, both CC0. All 299 sprites live in `public/assets/kenney/` with the pack's
-own `License.txt`; the game loads the handful it still uses.
+The map plate, the six towers and the three enemies are painted art, in
+`public/assets/maps/`, `towers/` and `enemies/`. What is left of Kenney's
+**Tower Defense (Top-Down)** pack is the projectiles, the effects, the scenery
+on the title and credits backdrops, and Cory himself; the **Kenney font
+package** supplies the type. Both are CC0. All 299 sprites live in
+`public/assets/kenney/` with the pack's own `License.txt`; the game loads the
+twenty it still uses.
+
+Everything that stands on the ground — towers, enemies — is anchored on its
+base and sorted by Y, so a unit lower on the screen draws in front. The
+enemies are 3/4 characters drawn facing right and mirrored when the lane turns
+back to the left. `src/data/README.md` covers how the anchors and shadow widths
+were measured, and why an enemy's is not measured the same way as a tower's.
 
 **`src/data/art.json` is the only place a sprite is named.** It holds the
 key-to-filename map plus every *role* the game draws — map plates, UI chrome,

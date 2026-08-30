@@ -8,6 +8,16 @@
     "textureWidth": 96,
     "textureHeight": 40
   },
+  "facing": {
+    "deadZone": 0.15
+  },
+  "healthBar": {
+    "heightPx": 4,
+    "gapAbovePx": 7,
+    "widthFactor": 0.85,
+    "minWidth": 22,
+    "maxWidth": 54
+  },
   "enemyBob": {
     "amplitudeY": 2.5,
     "durationMs": 620,

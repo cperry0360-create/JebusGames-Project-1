@@ -11,12 +11,12 @@ shape of each one — add a field there when you add one here.
 | `map.json` | Which painted plate to draw, the traced lane, the build spots, hero start |
 | `rules.json` | Starting gold and lives, wave payout |
 | `towers.json` | The six towers: cost, range, damage, fire rate, splash, slow, support |
-| `enemies.json` | The three enemies: health, armour, speed, reward, melee |
+| `enemies.json` | The three enemies: health, armour, speed, reward, melee. Their on-screen size lives in `art.json` |
 | `heroes.json` | Cory's stats and the whole Last Stand block |
 | `waves.json` | Twelve waves: composition, spawn pacing, per-group delays |
 | `abilities.json` | The six active abilities: cooldown, radius, damage, duration |
 | `draft.json` | Draw weights, opening hand size, tower cap, unlock waves |
-| `presentation.json` | Shadows, idle bob, recoil, damage numbers, shake |
+| `presentation.json` | Shadows, idle bob, recoil, damage numbers, shake, health bars, facing dead zone |
 | `art.json` | **Every sprite in the game.** Files, map plates, UI, effects, scenery, brand marks |
 | `branding.json` | Splash timing, corner-mark size and placement, credits layout |
 | `credits.json` | Every line of credit copy, so adding a name never touches code |
@@ -96,6 +96,57 @@ each tower's base to the same width instead would have stretched the thin
 obelisk to 120px against the others' 66-79px, undoing the artist's proportions.
 72.8 puts the widest base (Write-Off) at 66px, just under the 68px build-spot
 circle — it fills its spot without spilling onto its neighbours.
+
+### How the enemy values were measured
+
+The three painted enemies are in `public/assets/enemies/`. `tools/measure_art.py`
+reproduces their `render` values too.
+
+| | canvas | feet | on screen | anchorX | shadowWidth |
+|---|---|---|---|---|---|
+| Final Notice (brute) | 428x512 | x14-349 | 55.2x66.0 | 0.4241 | 43.3 |
+| Late Filer (soldier) | 366x339 | x38-231 | 47.2x43.7 | 0.3675 | 25.0 |
+| Shredder (scout) | 271x273 | x22-172 | 34.9x35.2 | 0.3579 | 19.5 |
+
+All three are fully trimmed, so `anchorY` is exactly 1: the bottom of the canvas
+is the ground line. Three things are different from the towers:
+
+**The base is the feet, not the widest row.** The towers are buildings, so the
+widest row near the bottom is the base ellipse. These are characters holding
+things. The brute's leaf blower is the widest thing in his bottom third and
+runs to 95% of his width, so the tower heuristic would have given him a shadow
+wide enough to cover the barrel — at an `anchorX` of 0.499, which looks
+perfectly reasonable and is wrong. The measurement instead takes the *ground
+silhouette*: the lowest opaque pixel in each column, cut below whatever the
+character is carrying, which leaves exactly two groups per sprite — two feet.
+
+**The cut cannot be one number.** The brute's blower hangs to within 10% of his
+ground line while the scout's trailing skate is 13% above hers, so any single
+depth would either swallow the blower or lose a foot. The cut is per sprite,
+listed in `measure_art.py`, and the script prints the foot groups it found so
+the choice stays checkable.
+
+**The anchor is nowhere near centre, and that is correct.** A character with a
+prop out to one side has feet well off the frame's middle: 0.358 for the scout.
+So the art's origin stays at the frame's *horizontal centre* and the sprite is
+offset instead — see `applyGroundRender` in `src/systems/Art.ts`. That keeps a
+horizontal flip a plain mirror about the character rather than about its feet,
+which would make a unit jump sideways every time it turned around.
+
+**The scale is uniform, as with the towers.** The three arrived already sized
+against each other with the brute tallest at 512px, so one scale factor
+(0.1289) preserves that. Normalising them to a common height would make a
+roller-skating goblin the same size as an armoured brute.
+
+- **`presentation.healthBar` sizes a bar from its sprite.** Width is
+  `widthFactor` of the sprite's on-screen width, clamped, so the three enemies
+  get visibly different bars; the bar floats `gapAbovePx` above the art's own
+  top edge, so taller art carries its bar higher without a per-enemy number.
+- **`presentation.facing.deadZone` stops units spinning on corners.** On a
+  near-vertical stretch of lane the heading's sideways component is noise, so
+  below this threshold the current facing is kept. This map's steepest leg
+  drifts 3px west over 92px; `tests/logic.test.ts` checks the dead zone covers
+  it.
 
 - **`art.json` is the only place a sprite is named.** Code asks for a *role*
   (`ART.fx.blast`, `ART.map.level1`, `ART.ui.towerBase`) and

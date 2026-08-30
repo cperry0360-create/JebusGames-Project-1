@@ -42,8 +42,10 @@ export class Projectile extends Phaser.GameObjects.Sprite {
       return true
     }
 
+    // Aim at the body, not the feet: gameplay still resolves at ground level,
+    // but a shot that dives into a 66px brute's boots reads as a miss.
     const dx = this.target.x - this.x
-    const dy = this.target.y - this.y
+    const dy = this.target.centreY - this.y
     const dist = Math.hypot(dx, dy)
     const step = this.speed * dt
 

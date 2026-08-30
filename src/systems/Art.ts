@@ -63,6 +63,31 @@ export function renderFor(key: string): SpriteRender {
 }
 
 /**
+ * Places 3/4 character art so its *feet* sit on the object's position, and
+ * returns how far the art's frame centre ends up from those feet.
+ *
+ * The origin deliberately stays at the frame's horizontal centre rather than
+ * at the manifest's anchorX. These characters carry props — a leaf blower, a
+ * rake — that widen the canvas to one side, so their feet are off-centre in
+ * the frame. Anchoring on the feet would make flipX mirror the art about the
+ * feet instead of about the character, and a sprite would jump sideways every
+ * time it turned around. Offsetting the sprite instead keeps a flip a plain
+ * mirror about the art's own centre line: negate the offset and the feet stay
+ * exactly where they were.
+ */
+export function applyGroundRender(
+  sprite: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image,
+  key: string,
+): number {
+  const cfg = renderFor(key)
+  sprite.setOrigin(0.5, cfg.anchorY)
+  if (cfg.displayHeight !== undefined) sprite.setScale(cfg.displayHeight / sprite.height)
+  const offset = (0.5 - cfg.anchorX) * sprite.displayWidth
+  sprite.x = offset
+  return offset
+}
+
+/**
  * Applies a key's anchor and on-screen height. Source art can be any size —
  * a 512px tower and a 64px tile both land at the height the manifest asks for,
  * with their aspect ratio preserved.

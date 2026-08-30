@@ -1,6 +1,6 @@
 {
   "assetRoot": "assets/",
-  "credit": "Enemies, effects and scenery from Kenney Tower Defense (Top-Down), CC0. See public/assets/kenney/License.txt. The level map and the towers are original art.",
+  "credit": "Projectiles, effects, scenery and the hero from Kenney Tower Defense (Top-Down), CC0. See public/assets/kenney/License.txt. The level map, the towers and the enemies are original art.",
   "note": "Every sprite the game draws is named here. `files` maps a key to a path under assetRoot, so a new art pack is a path change. `render` gives a key its anchor and on-screen height, so art of any source size drops in without touching code.",
   "files": {
     "tower-base": "kenney/towerDefense_tile181.png",
@@ -10,9 +10,9 @@
     "turret-escalation": "towers/tower_escalation.png",
     "turret-extension": "towers/tower_filing.png",
     "turret-shelter": "towers/tower_tax.png",
-    "enemy-filer": "kenney/towerDefense_tile247.png",
-    "enemy-shredder": "kenney/towerDefense_tile246.png",
-    "enemy-notice": "kenney/towerDefense_tile248.png",
+    "enemy-filer": "enemies/enemy_soldier.png",
+    "enemy-shredder": "enemies/enemy_scout.png",
+    "enemy-notice": "enemies/enemy_brute.png",
     "hero-body": "kenney/towerDefense_tile268.png",
     "hero-gun": "kenney/towerDefense_tile291.png",
     "shot-small": "kenney/towerDefense_tile272.png",
@@ -91,6 +91,30 @@
       "anchorY": 0.4975,
       "contentWidth": 522,
       "contentHeight": 592
+    },
+    "enemy-notice": {
+      "anchorX": 0.4241,
+      "anchorY": 1.0,
+      "displayHeight": 66.0,
+      "shadowWidth": 43.3,
+      "contentWidth": 428,
+      "contentHeight": 512
+    },
+    "enemy-shredder": {
+      "anchorX": 0.3579,
+      "anchorY": 1.0,
+      "displayHeight": 35.2,
+      "shadowWidth": 19.5,
+      "contentWidth": 271,
+      "contentHeight": 273
+    },
+    "enemy-filer": {
+      "anchorX": 0.3675,
+      "anchorY": 1.0,
+      "displayHeight": 43.7,
+      "shadowWidth": 25.0,
+      "contentWidth": 366,
+      "contentHeight": 339
     }
   },
   "map": {

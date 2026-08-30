@@ -4,6 +4,8 @@ import { Path } from '../systems/Path.ts'
 import { ySort } from '../systems/DepthSort.ts'
 import { damageAfterArmor, slowedSpeed } from '../systems/Combat.ts'
 import { makeShadow, PRESENTATION, floatingDamage, deathPuff } from '../systems/Presentation.ts'
+import { applyGroundRender } from '../systems/Art.ts'
+import { facesLeft } from '../systems/Facing.ts'
 
 export type EnemyState = 'walking' | 'fighting' | 'dead'
 
@@ -36,6 +38,10 @@ export class Enemy extends Phaser.GameObjects.Container {
   private slowFactor = 0
   private slowRemaining = 0
   private bobPhase = Math.random() * Math.PI * 2
+  /** Distance from the feet to the art's frame centre, negated on a flip. */
+  private readonly artOffset: number
+  private readonly baseScaleX: number
+  private facingLeft = false
 
   constructor(scene: Phaser.Scene, def: EnemyDef, lane: Path) {
     super(scene, 0, 0)
@@ -44,9 +50,14 @@ export class Enemy extends Phaser.GameObjects.Container {
     this.maxHealth = def.maxHealth
     this.health = def.maxHealth
 
-    this.shadow = makeShadow(scene, def.sprite, def.spriteScale)
-    this.art = scene.add.sprite(0, 0, def.sprite).setScale(def.spriteScale)
+    this.shadow = makeShadow(scene, def.sprite)
+    this.art = scene.add.sprite(0, 0, def.sprite)
+    // Anchor and on-screen size come from the manifest, so the three enemies
+    // keep the sizes they were drawn at relative to each other.
+    this.artOffset = applyGroundRender(this.art, def.sprite)
+    this.baseScaleX = this.art.scaleX
     this.bar = scene.add.graphics()
+    // Shadow first, then the art, then the bar, so each draws over the last.
     this.add([this.shadow, this.art, this.bar])
 
     const p = lane.pointAt(0)
@@ -102,7 +113,7 @@ export class Enemy extends Phaser.GameObjects.Container {
         this.attackTimer = this.def.attackInterval
         onAttackBlocker(this.def.damage)
         this.scene.tweens.add({
-          targets: this.art, scaleX: this.def.spriteScale * 1.2, duration: 90, yoyo: true,
+          targets: this.art, scaleX: this.baseScaleX * 1.15, duration: 90, yoyo: true,
         })
       }
     } else {
@@ -111,8 +122,7 @@ export class Enemy extends Phaser.GameObjects.Container {
       this.distance += slowedSpeed(this.def.speed, this.slowFactor, this.slowed) * dt
       const p = this.lane.pointAt(this.distance)
       this.setPosition(p.x, p.y)
-      // Pack sprites face east, so the lane angle is the sprite rotation.
-      this.art.setRotation(this.lane.angleAt(this.distance))
+      this.face(this.lane.angleAt(this.distance))
       if (this.distance >= this.lane.totalLength) return true
     }
 
@@ -126,12 +136,29 @@ export class Enemy extends Phaser.GameObjects.Container {
     return false
   }
 
+  /** Mirrors the art when the lane turns back to the left. */
+  private face(angle: number): void {
+    const left = facesLeft(angle, this.facingLeft, PRESENTATION.facing.deadZone)
+    if (left === this.facingLeft) return
+    this.facingLeft = left
+    this.art.setFlipX(left)
+    // Mirroring is about the art's centre, so the feet stay put once the
+    // offset that put them on the lane is mirrored too.
+    this.art.x = left ? -this.artOffset : this.artOffset
+  }
+
+  /** Mid-body height, for anything that should land on the enemy rather than
+   *  at its feet. Gameplay still measures everything at ground level. */
+  get centreY(): number {
+    return this.y - (this.art.displayHeight * this.art.originY) / 2
+  }
+
   /** Returns true if this hit killed it. */
   hurt(damage: number, ignoresArmor: boolean, showNumber = true): boolean {
     if (this.status === 'dead') return false
     const dealt = damageAfterArmor(damage, this.effectiveArmor, ignoresArmor)
     this.health -= dealt
-    if (showNumber) floatingDamage(this.scene, this.x, this.y, dealt, dealt >= 60)
+    if (showNumber) floatingDamage(this.scene, this.x, this.centreY, dealt, dealt >= 60)
     this.drawBar()
     if (this.health <= 0) {
       this.die()
@@ -145,7 +172,7 @@ export class Enemy extends Phaser.GameObjects.Container {
     this.status = 'dead'
     this.bar.setVisible(false)
     this.shadow.setVisible(false)
-    deathPuff(this.scene, this.x, this.y)
+    deathPuff(this.scene, this.x, this.centreY)
     this.scene.tweens.add({
       targets: this,
       angle: Phaser.Math.Between(-200, 200),
@@ -157,18 +184,28 @@ export class Enemy extends Phaser.GameObjects.Container {
     })
   }
 
+  /** Sized to the sprite and floated just above its head, so a brute and a
+   *  scout each get a bar that reads as theirs. */
   private drawBar(): void {
-    const w = 30
+    const cfg = PRESENTATION.healthBar
+    const w = Phaser.Math.Clamp(
+      this.art.displayWidth * cfg.widthFactor, cfg.minWidth, cfg.maxWidth,
+    )
+    const h = cfg.heightPx
+    // The art's top edge, from its own anchor, so taller art carries its bar
+    // higher without a per-enemy number.
+    const top = -this.art.displayHeight * this.art.originY
+    const y = top - cfg.gapAbovePx - h
+
     const ratio = Phaser.Math.Clamp(this.health / this.maxHealth, 0, 1)
-    const y = -26
     this.bar.clear()
-    this.bar.fillStyle(0x14181f, 0.9).fillRect(-w / 2 - 1, y - 1, w + 2, 6)
+    this.bar.fillStyle(0x14181f, 0.9).fillRect(-w / 2 - 1, y - 1, w + 2, h + 2)
     const col = ratio > 0.5 ? 0x6cc24a : ratio > 0.25 ? 0xe8c33c : 0xd44b32
-    this.bar.fillStyle(col, 1).fillRect(-w / 2, y, w * ratio, 4)
+    this.bar.fillStyle(col, 1).fillRect(-w / 2, y, w * ratio, h)
     if (this.def.armor > 0) {
       // A small pip showing armour is still up, so shredding it reads.
       const shredded = this.effectiveArmor <= 0
-      this.bar.fillStyle(shredded ? 0x6f7a86 : 0xc9d3de, 1).fillRect(w / 2 + 2, y, 3, 4)
+      this.bar.fillStyle(shredded ? 0x6f7a86 : 0xc9d3de, 1).fillRect(w / 2 + 2, y, 3, h)
     }
   }
 }

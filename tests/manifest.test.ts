@@ -106,14 +106,34 @@ test('a sprite anchored at its base is what makes it stand on the ground', () =>
   }
 })
 
-test('anchors sit near the horizontal centre', () => {
-  // A canvas padded unevenly needs an anchor off 0.5 to put the art's base
-  // over the build spot, but never far off — that would mean a bad measurement.
+test('anchors stay well inside the frame', () => {
+  // An anchor is allowed off centre, and character art genuinely is: an enemy
+  // carrying a leaf blower has a canvas much wider on one side than the other,
+  // so the point its feet stand on is nowhere near the middle. What is never
+  // right is an anchor out near an edge — that means the measurement latched
+  // onto the prop instead of the feet.
   for (const [key, cfg] of Object.entries(art.render) as [string, any][]) {
     if (cfg.anchorX === undefined) continue
-    assert.ok(Math.abs(cfg.anchorX - 0.5) < 0.1,
-      `${key} anchorX ${cfg.anchorX} is far off centre; check the measurement`)
+    assert.ok(cfg.anchorX > 0.2 && cfg.anchorX < 0.8,
+      `${key} anchorX ${cfg.anchorX} is out at the frame edge; check the measurement`)
   }
+})
+
+test('a ground shadow covers the footprint and not the whole sprite', () => {
+  // This is the assertion that catches the mistake the anchor check cannot:
+  // measuring the widest row instead of the feet. The brute's leaf blower runs
+  // to 95% of his width, so a shadow that swallowed it would fail here while
+  // still sitting at a perfectly central-looking anchor.
+  let checked = 0
+  for (const [key, cfg] of Object.entries(art.render) as [string, any][]) {
+    if (cfg.shadowWidth === undefined || !cfg.contentWidth || !cfg.contentHeight) continue
+    checked++
+    const onScreenWidth = (cfg.contentWidth / cfg.contentHeight) * cfg.displayHeight
+    const share = cfg.shadowWidth / onScreenWidth
+    assert.ok(share > 0.25, `${key} shadow is only ${(share * 100).toFixed(0)}% of its width; too small to stand on`)
+    assert.ok(share < 0.85, `${key} shadow is ${(share * 100).toFixed(0)}% of its width; it has swallowed something the art is holding`)
+  }
+  assert.ok(checked >= 3, `only ${checked} sprites carry a measured footprint`)
 })
 
 test('swapping the manifest to another pack needs no code edit', () => {
