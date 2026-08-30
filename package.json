@@ -3,12 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Courjahan Defense — a roguelite tower defense game. JebusGames.",
+  "description": "Courjahan Defense \u2014 a roguelite tower defense game. JebusGames.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test 'tests/*.test.ts'"
   },
   "dependencies": {
     "phaser": "^3.90.0"

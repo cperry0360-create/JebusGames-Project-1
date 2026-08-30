@@ -1,0 +1,14 @@
+{
+  "lateFiler": {
+    "name": "Late Filer",
+    "flavor": "Shambling, penalised, and still technically compliant.",
+    "sprite": "enemy-latefiler",
+    "maxHealth": 58,
+    "speed": 62,
+    "goldReward": 6,
+    "livesCost": 1,
+    "damage": 7,
+    "attackInterval": 1,
+    "engageRange": 42
+  }
+}

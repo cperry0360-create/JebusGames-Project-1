@@ -1,0 +1,23 @@
+{
+  "cory": {
+    "name": "Cory",
+    "title": "The Optimizer",
+    "flavor": "Mild-mannered tax advisor with the power of pure strength. Not an auditor.",
+    "sprite": "hero-cory",
+    "maxHealth": 320,
+    "moveSpeed": 96,
+    "attackRange": 80,
+    "blockRange": 48,
+    "blockCapacity": 3,
+    "damage": 15,
+    "attackInterval": 0.9,
+    "lastStand": {
+      "name": "DAD MODE",
+      "healthThreshold": 0.25,
+      "damageMultiplier": 2,
+      "attackIntervalMultiplier": 0.8,
+      "damageTakenMultiplier": 1.5,
+      "hitsAllInRange": true
+    }
+  }
+}

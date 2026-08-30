@@ -1,6 +1,8 @@
 import Phaser from 'phaser'
 import display from './data/display.json'
-import { BootScene } from './scenes/BootScene'
+import { BootScene } from './scenes/BootScene.ts'
+import { GameScene } from './scenes/GameScene.ts'
+import { HudScene } from './scenes/HudScene.ts'
 
 export const gameConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -8,15 +10,11 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   width: display.width,
   height: display.height,
   backgroundColor: display.backgroundColor,
-  // Placeholder art is pixel-ish; nearest-neighbour keeps it crisp when scaled.
-  pixelArt: true,
+  pixelArt: false,
+  roundPixels: true,
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
-  physics: {
-    default: 'arcade',
-    arcade: { debug: false },
-  },
-  scene: [BootScene],
+  scene: [BootScene, GameScene, HudScene],
 }

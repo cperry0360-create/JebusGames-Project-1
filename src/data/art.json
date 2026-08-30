@@ -1,0 +1,14 @@
+{
+  "useKenneyPack": false,
+  "kenneyPath": "assets/kenney/",
+  "sprites": {
+    "tile-grass":         { "placeholder": { "shape": "tile", "color": "#407a33", "accent": "#376a2c" } },
+    "tile-grass-alt":     { "placeholder": { "shape": "tile", "color": "#3b722f", "accent": "#336228" } },
+    "tile-path":          { "placeholder": { "shape": "tile", "color": "#b7975f", "accent": "#9d7f4c" } },
+    "tower-withholding":  { "placeholder": { "shape": "tower", "color": "#93a1b0", "accent": "#5c6675" } },
+    "tower-rounding":     { "placeholder": { "shape": "tower", "color": "#b08f63", "accent": "#755c3d" } },
+    "enemy-latefiler":    { "placeholder": { "shape": "unit", "color": "#c9563a", "accent": "#8c3626" } },
+    "hero-cory":          { "placeholder": { "shape": "unit", "color": "#4180cc", "accent": "#2a568d" } },
+    "projectile":         { "placeholder": { "shape": "dot", "color": "#f6ecd9", "accent": "#c2ab84" } }
+  }
+}

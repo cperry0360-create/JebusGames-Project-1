@@ -1,0 +1,7 @@
+{
+  "startingGold": 220,
+  "startingLives": 20,
+  "goldPerWaveCleared": 25,
+  "timeBetweenWaves": 8,
+  "firstWaveDelay": 6
+}

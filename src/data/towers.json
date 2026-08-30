@@ -1,0 +1,26 @@
+{
+  "withholding": {
+    "name": "Withholding Tower",
+    "flavor": "Takes a little off the top. Every single time.",
+    "sprite": "tower-withholding",
+    "cost": 80,
+    "range": 152,
+    "damage": 13,
+    "fireInterval": 0.7,
+    "projectileSpeed": 520,
+    "splashRadius": 0,
+    "buildTime": 0
+  },
+  "rounding": {
+    "name": "Rounding Error",
+    "flavor": "Individually negligible. Collectively catastrophic.",
+    "sprite": "tower-rounding",
+    "cost": 110,
+    "range": 130,
+    "damage": 8,
+    "fireInterval": 1.3,
+    "projectileSpeed": 360,
+    "splashRadius": 58,
+    "buildTime": 0
+  }
+}

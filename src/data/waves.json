@@ -1,0 +1,10 @@
+{
+  "waves": [
+    { "spawns": [{ "enemy": "lateFiler", "count": 5, "interval": 1.6 }] },
+    { "spawns": [{ "enemy": "lateFiler", "count": 8, "interval": 1.4 }] },
+    { "spawns": [{ "enemy": "lateFiler", "count": 11, "interval": 1.2 }] },
+    { "spawns": [{ "enemy": "lateFiler", "count": 14, "interval": 1 }] },
+    { "spawns": [{ "enemy": "lateFiler", "count": 18, "interval": 0.85 }] },
+    { "spawns": [{ "enemy": "lateFiler", "count": 24, "interval": 0.7 }] }
+  ]
+}
