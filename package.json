@@ -9,7 +9,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "node --test 'tests/*.test.ts'"
+    "test": "node --test 'tests/*.test.ts'",
+    "pretest": "node -e \"const f=require('fs').readdirSync('tests').filter(n=>n.endsWith('.test.ts'));if(!f.length){console.error('no test files found in tests/');process.exit(1)}console.log('test files: '+f.join(', '))\""
   },
   "dependencies": {
     "phaser": "^3.90.0"
