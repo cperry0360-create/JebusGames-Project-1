@@ -26,7 +26,8 @@ npm run preview  # serve the built dist/ locally
 
 ## Playing it
 
-A run goes: **title and hero pick → ability draft → tower draft → the map.**
+A run goes: **studio splash → title and hero pick → ability draft → tower draft →
+the map.** The splash runs about two seconds and any click or key skips it.
 
 | Input | Does |
 |---|---|
@@ -40,6 +41,7 @@ A run goes: **title and hero pick → ability draft → tower draft → the map.
 | `Space` or the HUD button | Start the next wave |
 | Right click or `Esc` | Cancel |
 | `R` (after the run ends) | Back to the title screen |
+| CREDITS on the title | Studio marks and attribution; `Esc` or BACK returns |
 
 Twelve named waves of Late Filers, Shredders and Final Notices walk one winding
 lane. Leaks cost lives. Waves start when you say so, so build first.
@@ -63,12 +65,13 @@ almost useless against Final Notices, which is the point.
 ```
 .github/workflows/deploy.yml  Build, test and publish to GitHub Pages
 public/assets/kenney/         Kenney tower defense pack, CC0
+public/assets/branding/       Studio marks
 public/assets/fonts/          Kenney font package, CC0
 public/assets/audio/          Sound cues, synthesised by tools/mksfx.py
 src/main.ts                   Entry point; waits for fonts before booting
 src/config.ts                 Phaser game config
 src/types.ts                  Shapes of everything in src/data
-src/scenes/                   Boot, Title, Draft, Game, Hud
+src/scenes/                   Boot, Splash, Title, Credits, Draft, Game, Hud
 src/systems/                  One file per system
 src/entities/                 Tower, Enemy, Hero, Fighter, Projectile
 src/ui/                       Theme, build menu

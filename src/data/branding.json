@@ -1,0 +1,22 @@
+{
+  "splash": {
+    "backgroundColor": "#0b0e13",
+    "cardHeight": 460,
+    "fadeInMs": 450,
+    "holdMs": 1100,
+    "fadeOutMs": 450,
+    "skipGuardMs": 220
+  },
+  "titleMark": {
+    "height": 100,
+    "x": 104,
+    "y": 108
+  },
+  "credits": {
+    "logoHeight": 200,
+    "logoGap": 170,
+    "logoY": 242,
+    "textTop": 372,
+    "lineHeight": 24
+  }
+}

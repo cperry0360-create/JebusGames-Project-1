@@ -48,6 +48,6 @@ export class BootScene extends Phaser.Scene {
     }
     // Every ground shadow reuses one generated texture; build it once here.
     ensureShadowTexture(this)
-    this.scene.start('Title')
+    this.scene.start('Splash')
   }
 }

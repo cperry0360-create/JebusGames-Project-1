@@ -51,7 +51,10 @@
     "decor-plant": "kenney/towerDefense_tile134.png",
     "decor-rock": "kenney/towerDefense_tile135.png",
     "decor-rock2": "kenney/towerDefense_tile136.png",
-    "decor-rock3": "kenney/towerDefense_tile137.png"
+    "decor-rock3": "kenney/towerDefense_tile137.png",
+    "brand-studio-card": "branding/logo_studio_card.png",
+    "brand-jebusgames": "branding/logo_jebusgames.png",
+    "brand-cpplays": "branding/logo_cpplays.png"
   },
   "render": {
     "turret-escalation": {
@@ -89,6 +92,24 @@
       "anchorY": 0.9902,
       "displayHeight": 72.8,
       "shadowWidth": 66.0
+    },
+    "brand-studio-card": {
+      "anchorX": 0.4896,
+      "anchorY": 0.4911,
+      "contentWidth": 1235,
+      "contentHeight": 655
+    },
+    "brand-jebusgames": {
+      "anchorX": 0.5009,
+      "anchorY": 0.4875,
+      "contentWidth": 534,
+      "contentHeight": 584
+    },
+    "brand-cpplays": {
+      "anchorX": 0.486,
+      "anchorY": 0.4975,
+      "contentWidth": 522,
+      "contentHeight": 592
     }
   },
   "ground": {
@@ -155,6 +176,11 @@
     "decor-rock2",
     "decor-rock3"
   ],
+  "brand": {
+    "studioCard": "brand-studio-card",
+    "jebusGames": "brand-jebusgames",
+    "cpPlays": "brand-cpplays"
+  },
   "generated": {
     "groundShadow": "gen-ground-shadow"
   }

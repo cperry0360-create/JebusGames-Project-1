@@ -17,7 +17,9 @@ shape of each one — add a field there when you add one here.
 | `abilities.json` | The six active abilities: cooldown, radius, damage, duration |
 | `draft.json` | Draw weights, opening hand size, tower cap, unlock waves |
 | `presentation.json` | Shadows, idle bob, recoil, damage numbers, shake, scatter |
-| `art.json` | **Every sprite in the game.** Files, ground variants, autotile roles, UI, effects, scenery |
+| `art.json` | **Every sprite in the game.** Files, ground variants, autotile roles, UI, effects, scenery, brand marks |
+| `branding.json` | Splash timing, corner-mark size and placement, credits layout |
+| `credits.json` | Every line of credit copy, so adding a name never touches code |
 
 ## Notes on specific numbers
 

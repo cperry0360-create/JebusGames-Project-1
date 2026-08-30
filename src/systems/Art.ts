@@ -30,6 +30,7 @@ export const ART = {
   ui: art.ui,
   fx: art.fx,
   decor: art.decor,
+  brand: art.brand,
   generated: art.generated,
 }
 
@@ -37,6 +38,29 @@ export const SPRITE_KEYS = Object.keys(art.files)
 
 export function roadSpriteFor(role: RoadRole): string {
   return art.autotile[role]
+}
+
+/**
+ * Scales a sprite so its *artwork* is `targetHeight` tall, ignoring any
+ * transparent margin in the canvas, and anchors it on the artwork's centre.
+ * Logos are padded and slightly off-centre, so sizing by the texture would
+ * make them smaller than asked for and hang them off centre.
+ */
+export function fitContentHeight(
+  sprite: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image,
+  key: string,
+  targetHeight: number,
+): void {
+  const cfg = renderFor(key)
+  sprite.setOrigin(cfg.anchorX, cfg.anchorY)
+  sprite.setScale(targetHeight / (cfg.contentHeight ?? sprite.height))
+}
+
+/** On-screen width of art fitted to a given content height. */
+export function contentWidthAt(key: string, targetHeight: number): number {
+  const cfg = renderFor(key)
+  if (!cfg.contentWidth || !cfg.contentHeight) return targetHeight
+  return (cfg.contentWidth / cfg.contentHeight) * targetHeight
 }
 
 /** Centred at natural size unless the manifest says otherwise. */

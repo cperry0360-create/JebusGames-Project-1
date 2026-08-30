@@ -1,7 +1,9 @@
 import Phaser from 'phaser'
 import display from './data/display.json'
 import { BootScene } from './scenes/BootScene.ts'
+import { SplashScene } from './scenes/SplashScene.ts'
 import { TitleScene } from './scenes/TitleScene.ts'
+import { CreditsScene } from './scenes/CreditsScene.ts'
 import { DraftScene } from './scenes/DraftScene.ts'
 import { GameScene } from './scenes/GameScene.ts'
 import { HudScene } from './scenes/HudScene.ts'
@@ -18,5 +20,5 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
-  scene: [BootScene, TitleScene, DraftScene, GameScene, HudScene],
+  scene: [BootScene, SplashScene, TitleScene, CreditsScene, DraftScene, GameScene, HudScene],
 }

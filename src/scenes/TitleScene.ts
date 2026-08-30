@@ -1,12 +1,14 @@
 import Phaser from 'phaser'
-import type { HeroDef } from '../types.ts'
+import type { BrandingDef, HeroDef } from '../types.ts'
 import displayData from '../data/display.json'
 import heroesData from '../data/heroes.json'
+import brandingData from '../data/branding.json'
 import { setRunState } from '../systems/RunState.ts'
 import { COLOR, FONT_DISPLAY, FONT_UI, button, panel } from '../ui/Theme.ts'
-import { ART } from '../systems/Art.ts'
+import { ART, fitContentHeight } from '../systems/Art.ts'
 
 const HEROES = heroesData as Record<string, HeroDef>
+const BRANDING = brandingData as BrandingDef
 
 /** Title, hero selection, and the only place a run can begin. */
 export class TitleScene extends Phaser.Scene {
@@ -27,6 +29,10 @@ export class TitleScene extends Phaser.Scene {
 
     this.add.rectangle(0, 0, W, H, 0x10161d).setOrigin(0, 0)
     this.decorateBackdrop()
+
+    const mark = BRANDING.titleMark
+    const logo = this.add.image(mark.x, mark.y, ART.brand.jebusGames)
+    fitContentHeight(logo, ART.brand.jebusGames, mark.height)
 
     this.add.text(W / 2, 96, 'COURJAHAN', {
       fontFamily: FONT_DISPLAY, fontSize: '82px', color: COLOR.ink,
@@ -52,14 +58,15 @@ export class TitleScene extends Phaser.Scene {
     const totalW = ids.length * cardW + (ids.length - 1) * gap
     ids.forEach((id, i) => this.heroCard(id, W / 2 - totalW / 2 + i * (cardW + gap), 282, cardW, 190))
 
-    this.blurb = this.add.text(W / 2, 500, '', {
-      fontFamily: FONT_UI, fontSize: '14px', color: COLOR.dim,
-      align: 'center', wordWrap: { width: 640 },
+    this.blurb = this.add.text(W / 2, 494, '', {
+      fontFamily: FONT_UI, fontSize: '13px', color: COLOR.dim,
+      align: 'center', wordWrap: { width: 660 },
     }).setOrigin(0.5, 0)
 
-    button(this, W / 2, 610, 260, 58, 'START RUN', () => this.start(), 24)
+    button(this, W / 2, 598, 260, 58, 'START RUN', () => this.start(), 24)
+    button(this, W / 2, 660, 190, 40, 'CREDITS', () => this.scene.start('Credits'), 15)
 
-    this.add.text(W / 2, 676, 'art and fonts: Kenney, CC0    ·    click a hero, then start', {
+    this.add.text(W / 2, 700, 'click a hero, then start', {
       fontFamily: FONT_UI, fontSize: '11px', color: COLOR.dim,
     }).setOrigin(0.5).setAlpha(0.6)
 

@@ -133,6 +133,33 @@ export interface HeroDef {
   lastStand: LastStandDef
 }
 
+export interface BrandingDef {
+  splash: {
+    backgroundColor: string
+    cardHeight: number
+    fadeInMs: number
+    holdMs: number
+    fadeOutMs: number
+    /** Ignore skip input for a moment, so a stray click cannot eat the splash. */
+    skipGuardMs: number
+  }
+  titleMark: { height: number; x: number; y: number }
+  credits: {
+    logoHeight: number
+    logoGap: number
+    logoY: number
+    textTop: number
+    lineHeight: number
+  }
+}
+
+export interface CreditsDef {
+  heading: string
+  subheading: string
+  lines: string[]
+  footer: string
+}
+
 export interface AbilityDef {
   name: string
   flavor: string
@@ -191,6 +218,11 @@ export interface SpriteRender {
   displayHeight?: number
   /** Width of the ground shadow under this sprite. */
   shadowWidth?: number
+  /** The artwork's real extents inside its canvas, for art with padding.
+   *  Sizing by these means a logo drawn at a requested height really is that
+   *  tall on screen, rather than that tall including its transparent margin. */
+  contentWidth?: number
+  contentHeight?: number
 }
 
 /**
@@ -224,6 +256,11 @@ export interface ArtDef {
     coin: string
   }
   decor: string[]
+  brand: {
+    studioCard: string
+    jebusGames: string
+    cpPlays: string
+  }
   /** Textures the game draws for itself, named here so code never does. */
   generated: {
     groundShadow: string
