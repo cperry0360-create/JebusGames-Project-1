@@ -72,6 +72,22 @@ test('the painted plate is a first-class manifest role', () => {
   }
 })
 
+test('art.json and the ArtDef type describe the same manifest', () => {
+  // Removing a role from art.json while leaving it in types.ts is invisible to
+  // the tests and to a local tsc that cannot resolve phaser — it only shows up
+  // in CI as a cast error. This catches the drift where it happens.
+  const types = readFileSync(url('../src/types.ts'), 'utf8')
+  const artDef = types.slice(types.indexOf('export interface ArtDef'))
+  for (const section of ['fx', 'ui']) {
+    const block = artDef.match(new RegExp(`\\n  ${section}: \\{([^}]*)\\}`))
+    assert.ok(block, `ArtDef declares no ${section} section`)
+    const declared = [...block[1].matchAll(/^\s*(\w+):/gm)].map((m) => m[1]).sort()
+    const actual = Object.keys(art[section]).sort()
+    assert.deepEqual(actual, declared,
+      `art.json's ${section} section and ArtDef.${section} disagree`)
+  }
+})
+
 test('the manifest is complete enough to load a whole game', () => {
   assert.ok(Object.keys(art.files).length > 30, 'suspiciously small manifest')
   assert.match(art.assetRoot, /\/$/, 'assetRoot must end in a slash or URLs will be wrong')

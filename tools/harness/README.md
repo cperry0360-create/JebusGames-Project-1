@@ -48,6 +48,12 @@ screenshots are the evidence.
 - **Do not use `--virtual-time-budget`.** Chromium's virtual clock does not
   advance Phaser's `TimeStep`, so the splash never times out and nothing moves.
   The harness runs in real time and the page uploads its own frames instead.
+- **`tsc` here cannot resolve `phaser`**, so every file importing it reports a
+  cascade of errors and a real one hides among them. Filtering by error code
+  helps (`TS2352`, `TS2739` on the project's own types are usually real), but
+  CI is the only complete typecheck. Data that drifts from its declared type —
+  a role removed from `art.json` but left in `ArtDef` — is covered by a test
+  instead, because that is the drift that actually reached CI.
 - The Phaser build must match `package.json`. A mismatched major version boots
   and renders, which makes it look like it is working while input behaves
   differently.

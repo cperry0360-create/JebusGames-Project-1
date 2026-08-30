@@ -271,7 +271,6 @@ export interface ArtDef {
     blast: string
     ember: string
     muzzle: string
-    coin: string
   }
   decor: string[]
   brand: {
