@@ -31,6 +31,11 @@ export class BuildSystem {
     this.occupied.add(this.grid.key(col, row))
   }
 
+  /** Frees a tile again — Restructure moves a tower off its plot. */
+  release(col: number, row: number): void {
+    this.occupied.delete(this.grid.key(col, row))
+  }
+
   isOccupied(col: number, row: number): boolean {
     return this.occupied.has(this.grid.key(col, row))
   }

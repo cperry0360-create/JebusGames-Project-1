@@ -19,7 +19,7 @@ const PAD = 10
  */
 export class BuildMenu {
   private readonly scene: Phaser.Scene
-  private readonly options: BuildOption[]
+  private options: BuildOption[]
   private container?: Phaser.GameObjects.Container
   private hitAreas: Phaser.GameObjects.Rectangle[] = []
 
@@ -28,6 +28,11 @@ export class BuildMenu {
 
   constructor(scene: Phaser.Scene, options: BuildOption[]) {
     this.scene = scene
+    this.options = options
+  }
+
+  /** The unlocked tower list grows as the run goes on. */
+  setOptions(options: BuildOption[]): void {
     this.options = options
   }
 

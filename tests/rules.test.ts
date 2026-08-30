@@ -143,9 +143,11 @@ test('armour is a real problem for the wrong tower and no problem for the right 
 
 // ------------------------------------------------------------------ waves
 
-test('there are eight waves and each is named', () => {
-  assert.equal(waves.waves.length, 8)
-  for (const w of waves.waves) assert.ok(w.name && w.name.length > 0)
+test('there are twelve waves and each is named', () => {
+  assert.equal(waves.waves.length, 12)
+  const names = waves.waves.map((w: any) => w.name)
+  for (const n of names) assert.ok(n && n.length > 0)
+  assert.equal(new Set(names).size, names.length, 'two waves share a name')
 })
 
 test('waves escalate in total effective health, not just headcount', () => {
@@ -154,7 +156,7 @@ test('waves escalate in total effective health, not just headcount', () => {
   for (let i = 1; i < hp.length; i++) {
     assert.ok(hp[i] > hp[i - 1], `wave ${i + 1} (${hp[i]}hp) is not harder than wave ${i} (${hp[i - 1]}hp)`)
   }
-  assert.ok(hp[7] > hp[0] * 8, 'the last wave should dwarf the first')
+  assert.ok(hp[hp.length - 1] > hp[0] * 8, 'the last wave should dwarf the first')
   console.log('   wave hp: ' + hp.join(', '))
 })
 
@@ -190,7 +192,7 @@ test('the board grows at a sane rate across the run', () => {
   const total = rules.startingGold + waves.waves.map((_: any, i: number) => payout(i))
     .reduce((a: number, b: number) => a + b, 0)
   const affordable = total / avg
-  assert.ok(affordable > 6 && affordable < 20, `run affords ~${affordable.toFixed(1)} towers, which is off`)
+  assert.ok(affordable > 8 && affordable < 30, `run affords ~${affordable.toFixed(1)} towers, which is off`)
   console.log(`   economy: open ${rules.startingGold}g, run total ${total}g (~${affordable.toFixed(1)} towers)`)
 })
 

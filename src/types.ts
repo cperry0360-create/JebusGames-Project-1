@@ -83,12 +83,40 @@ export interface LastStandDef {
   hitsAllInRange: boolean
 }
 
+export interface PassiveDef {
+  name: string
+  flavor: string
+  armorShredRadius: number
+  armorShredPerSecond: number
+  maxArmorShred: number
+}
+
+export interface HaymakerDef {
+  name: string
+  flavor: string
+  icon: string
+  cooldown: number
+  range: number
+  damage: number
+  ignoresArmor: boolean
+  knockbackPixels: number
+}
+
+export interface RestructureDef {
+  name: string
+  flavor: string
+  icon: string
+  cooldown: number
+}
+
 export interface HeroDef {
   name: string
   title: string
   flavor: string
+  blurb: string
   bodySprite: string
   gunSprite: string
+  portraitSprite: string
   maxHealth: number
   moveSpeed: number
   attackRange: number
@@ -99,7 +127,38 @@ export interface HeroDef {
   damage: number
   attackInterval: number
   ignoresArmor: boolean
+  passive: PassiveDef
+  haymaker: HaymakerDef
+  restructure: RestructureDef
   lastStand: LastStandDef
+}
+
+export interface AbilityDef {
+  name: string
+  flavor: string
+  icon: string
+  /** 'ground' asks the player for a spot; 'instant' fires immediately. */
+  targeting: string
+  cooldown: number
+  radius: number
+  damage: number
+  ignoresArmor: boolean
+  duration: number
+  /** Repeated impacts (Meteor Barrage) or jumps (Chain Lightning). */
+  ticks: number
+  slowFactor: number
+  gold: number
+  summonCount: number
+}
+
+export interface DraftDef {
+  towersAtStart: number
+  towerCap: number
+  unlockAfterWave: number[]
+  abilitiesDrawn: number
+  damageArchetypes: string[]
+  answerArchetypes: string[]
+  towerWeights: Record<string, number>
 }
 
 export interface WaveSpawnDef {

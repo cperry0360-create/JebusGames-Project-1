@@ -133,6 +133,38 @@ test('decorations sit off the road and on the grid', () => {
   }
 })
 
+test('scattered decoration never starves the board or blocks the good plots', () => {
+  const pres = read('presentation')
+  const b = new BuildSystem(grid)
+  for (const t of onGrid) b.block(t.col, t.row)
+  for (const d of map.decorations) b.block(d[0] as number, d[1] as number)
+
+  let buildable = 0
+  let eligible = 0
+  let nearRoadPlots = 0
+  const near = (c: number, r: number, dist: number) => {
+    for (let dc = -dist; dc <= dist; dc++) {
+      for (let dr = -dist; dr <= dist; dr++) if (isRoad(c + dc, r + dr)) return true
+    }
+    return false
+  }
+  for (let c = 0; c < grid.cols; c++) {
+    for (let r = 0; r < grid.rows; r++) {
+      if (!b.isBuildable(c, r)) continue
+      buildable++
+      if (near(c, r, pres.decoration.minDistanceFromRoad)) nearRoadPlots++
+      else eligible++
+    }
+  }
+  // Scatter only touches tiles away from the road, so every plot that can
+  // actually cover the lane survives however dense the scatter gets.
+  assert.equal(buildable, eligible + nearRoadPlots)
+  assert.ok(nearRoadPlots > 40, `only ${nearRoadPlots} plots sit near the lane`)
+  const worstCase = buildable - eligible * (pres.decoration.densityPercent / 100)
+  assert.ok(worstCase > 80, `scatter could leave only ~${worstCase.toFixed(0)} buildable tiles`)
+  console.log(`   scatter: ${buildable} plots, ${nearRoadPlots} near the lane, ~${worstCase.toFixed(0)} left after scatter`)
+})
+
 test('targeting picks furthest along, nearest, and radius', () => {
   const mk = (x: number, y: number, distance: number, alive = true) => ({ x, y, distance, alive })
   const list = [mk(10, 0, 5), mk(20, 0, 90), mk(30, 0, 50), mk(15, 0, 999, false)]

@@ -3,6 +3,7 @@ import type { HeroDef } from '../types.ts'
 import { ySort } from '../systems/DepthSort.ts'
 import { pickNearest, withinRadius } from '../systems/Targeting.ts'
 import { attackInterval, incomingDamage, outgoingDamage, shouldTrigger } from '../systems/LastStand.ts'
+import { makeShadow, deathPuff } from '../systems/Presentation.ts'
 import { Enemy } from './Enemy.ts'
 
 /**
@@ -22,6 +23,7 @@ export class Hero extends Phaser.GameObjects.Container {
 
   private readonly body_: Phaser.GameObjects.Sprite
   private readonly gun: Phaser.GameObjects.Sprite
+  private readonly shadow: Phaser.GameObjects.Sprite
   private readonly bar: Phaser.GameObjects.Graphics
   private rallyX: number
   private rallyY: number
@@ -35,10 +37,11 @@ export class Hero extends Phaser.GameObjects.Container {
     this.rallyX = x
     this.rallyY = y
 
+    this.shadow = makeShadow(scene, def.bodySprite)
     this.body_ = scene.add.sprite(0, 0, def.bodySprite)
     this.gun = scene.add.sprite(0, -2, def.gunSprite)
     this.bar = scene.add.graphics()
-    this.add([this.body_, this.gun, this.bar])
+    this.add([this.shadow, this.body_, this.gun, this.bar])
     scene.add.existing(this)
     this.drawBar()
     ySort(this)
@@ -95,6 +98,12 @@ export class Hero extends Phaser.GameObjects.Container {
       }
     }
 
+    // Depreciation: anything standing near Cory quietly loses its armour.
+    const p = this.def.passive
+    for (const e of withinRadius(enemies, this.x, this.y, p.armorShredRadius)) {
+      e.shredArmor(p.armorShredPerSecond * dt, p.maxArmorShred)
+    }
+
     ySort(this)
   }
 
@@ -126,7 +135,13 @@ export class Hero extends Phaser.GameObjects.Container {
     this.lastStandUsed = true
     this.lastStandActive = true
     this.body_.setTint(0xff5a3c)
-    this.scene.tweens.add({ targets: this, scale: 1.35, duration: 260, ease: 'Back.easeOut' })
+    this.gun.setTint(0xffb03a)
+    // Visible transformation: he gets bigger and stays that way.
+    this.scene.tweens.add({ targets: this, scale: 1.4, duration: 280, ease: 'Back.easeOut' })
+    this.scene.tweens.add({
+      targets: this.body_, angle: { from: -12, to: 12 }, duration: 140, yoyo: true, repeat: 3,
+      onComplete: () => this.body_.setAngle(0),
+    })
     this.drawBar()
   }
 
@@ -134,6 +149,8 @@ export class Hero extends Phaser.GameObjects.Container {
     this.down = true
     this.lastStandActive = false
     this.bar.setVisible(false)
+    this.shadow.setVisible(false)
+    deathPuff(this.scene, this.x, this.y, 0xff8f7a)
     this.scene.tweens.add({ targets: this, angle: 90, alpha: 0.35, duration: 400, ease: 'Quad.easeIn' })
   }
 

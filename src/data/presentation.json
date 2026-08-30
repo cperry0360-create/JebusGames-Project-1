@@ -1,0 +1,37 @@
+{
+  "shadow": {
+    "alpha": 0.28,
+    "offsetY": 6,
+    "scaleX": 0.9,
+    "scaleY": 0.42
+  },
+  "enemyBob": {
+    "amplitudeY": 2.5,
+    "durationMs": 620,
+    "jitterMs": 260
+  },
+  "towerRecoilPixels": 5,
+  "towerRecoilMs": 70,
+  "muzzleFlashMs": 110,
+  "muzzleFlashScale": 0.5,
+  "damageNumbers": {
+    "risePixels": 34,
+    "durationMs": 620,
+    "fontSize": 15,
+    "critFontSize": 21
+  },
+  "deathPuffMs": 340,
+  "shake": {
+    "leakMs": 160,
+    "leakIntensity": 0.005,
+    "lastStandMs": 420,
+    "lastStandIntensity": 0.011,
+    "haymakerMs": 180,
+    "haymakerIntensity": 0.007
+  },
+  "decoration": {
+    "densityPercent": 34,
+    "minDistanceFromRoad": 1,
+    "seed": "courjahan"
+  }
+}

@@ -1,8 +1,10 @@
 import Phaser from 'phaser'
 import displayData from '../data/display.json'
 import { queueArt, SPRITE_KEYS } from '../systems/ArtLoader.ts'
+import { queueSfx } from '../systems/Sfx.ts'
+import { COLOR, FONT_DISPLAY } from '../ui/Theme.ts'
 
-/** Loads the Kenney pack, then hands over to the game. */
+/** Loads the Kenney art and the synthesised cues, then hands over to the title. */
 export class BootScene extends Phaser.Scene {
   constructor() {
     super('Boot')
@@ -12,24 +14,25 @@ export class BootScene extends Phaser.Scene {
     const cx = displayData.width / 2
     const cy = displayData.height / 2
 
-    const label = this.add.text(cx, cy - 30, 'Courjahan Defense', {
-      fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '40px', color: '#f6ecd9',
+    const label = this.add.text(cx, cy - 34, 'COURJAHAN DEFENSE', {
+      fontFamily: FONT_DISPLAY, fontSize: '40px', color: COLOR.ink,
     }).setOrigin(0.5)
 
-    const barBg = this.add.rectangle(cx, cy + 30, 320, 14, 0x14181f).setStrokeStyle(2, 0x4a5666)
     const bar = this.add.rectangle(cx - 158, cy + 30, 0, 10, 0x6cc24a).setOrigin(0, 0.5)
+    const frame = this.add.rectangle(cx, cy + 30, 320, 14).setStrokeStyle(2, 0x4a5666)
 
     this.load.on(Phaser.Loader.Events.PROGRESS, (v: number) => bar.setSize(316 * v, 10))
     this.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, (file: Phaser.Loader.File) => {
-      console.error(`[art] failed to load "${file.key}" from ${file.url}`)
+      console.error(`[assets] failed to load "${file.key}" from ${file.url}`)
     })
     this.load.once(Phaser.Loader.Events.COMPLETE, () => {
       label.destroy()
-      barBg.destroy()
       bar.destroy()
+      frame.destroy()
     })
 
     queueArt(this)
+    queueSfx(this)
   }
 
   create(): void {
@@ -42,7 +45,6 @@ export class BootScene extends Phaser.Scene {
       })
       return
     }
-    this.scene.start('Game')
-    this.scene.launch('Hud')
+    this.scene.start('Title')
   }
 }

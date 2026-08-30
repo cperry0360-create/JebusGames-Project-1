@@ -26,18 +26,28 @@ npm run preview  # serve the built dist/ locally
 
 ## Playing it
 
+A run goes: **title and hero pick → ability draft → tower draft → the map.**
+
 | Input | Does |
 |---|---|
 | Click an empty plot | Open the build menu for that tile |
 | Hover a menu option | Preview that tower's range |
 | Click a built tower | Select it and show its range |
 | Click the road or scenery | Set Cory's rally point |
+| `Q` / `W` or the HUD slots | Cast a drafted ability (click to place it) |
+| `E` | Haymaker — huge single-target hit with knockback |
+| `R` | Restructure — move a built tower for free |
 | `Space` or the HUD button | Start the next wave |
 | Right click or `Esc` | Cancel |
-| `R` | Restart, once the run is over |
+| `R` (after the run ends) | Back to the title screen |
 
-Eight named waves of Late Filers, Shredders and Final Notices walk one winding
+Twelve named waves of Late Filers, Shredders and Final Notices walk one winding
 lane. Leaks cost lives. Waves start when you say so, so build first.
+
+**Every run is a different hand.** Two of six active abilities are drawn at the
+start, and two of six towers; a third tower arrives after wave 4 and a fourth
+after wave 8. The tower draw is weighted and guaranteed to open with at least
+one damage option and one AOE or control option.
 
 Cory holds up to three enemies at a time and fights them; at 25% health he goes
 into **DAD MODE**, and if he drops he stays down for the rest of the encounter.
@@ -51,15 +61,19 @@ almost useless against Final Notices, which is the point.
 
 ```
 .github/workflows/deploy.yml  Build, test and publish to GitHub Pages
-public/assets/                Static art, copied verbatim into the build
-src/main.ts                   Entry point
+public/assets/kenney/         Kenney tower defense pack, CC0
+public/assets/fonts/          Kenney font package, CC0
+public/assets/audio/          Sound cues, synthesised by tools/mksfx.py
+src/main.ts                   Entry point; waits for fonts before booting
 src/config.ts                 Phaser game config
 src/types.ts                  Shapes of everything in src/data
-src/scenes/                   Boot, Game, Hud
+src/scenes/                   Boot, Title, Draft, Game, Hud
 src/systems/                  One file per system
-src/entities/                 Tower, Enemy, Hero, Projectile
+src/entities/                 Tower, Enemy, Hero, Fighter, Projectile
+src/ui/                       Theme, build menu
 src/data/                     All tuneable numbers, as JSON
-tests/                        Logic and balance tests
+tests/                        Logic, balance, draft and content tests
+tools/mksfx.py                Regenerates the sound cues
 ```
 
 Rendering is a **flat square grid** with sprites sorted by Y position, so
@@ -67,9 +81,20 @@ things lower on the screen draw in front. There is no isometric coordinate
 math anywhere, and none should be added — see the orientation section of
 DESIGN.md.
 
+## Audio
+
+The audio hosts are unreachable from the build environment, so the four cues
+are **synthesised** rather than downloaded. `tools/mksfx.py` writes them with
+the Python standard library alone; re-run it to change them:
+
+```bash
+python3 tools/mksfx.py public/assets/audio
+```
+
 ## Art
 
-Kenney's **Tower Defense (Top-Down)** pack, CC0. All 299 sprites live in
+Kenney's **Tower Defense (Top-Down)** pack for art and the **Kenney font
+package** for type, both CC0. All 299 sprites live in
 `public/assets/kenney/` with the pack's own `License.txt`; the game loads the
 ~49 it uses.
 
