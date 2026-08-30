@@ -104,11 +104,18 @@ key-to-filename map plus every *role* the game draws — weighted ground
 variants, the twelve autotile roles, UI chrome, effects and scenery:
 
 ```json
-"files":    { "turret-ledger": "towerDefense_tile203.png" },
-"ground":   { "grass": [{ "key": "ground-grass", "weight": 6 }, ...] },
-"autotile": { "outer-nw": "road-outer-nw", ... },
-"fx":       { "blast": "fx-flame", "spark": "fx-spark", ... }
+"assetRoot": "assets/",
+"files":     { "turret-ledger": "kenney/towerDefense_tile203.png" },
+"render":    { "turret-ledger": { "anchorY": 1, "displayHeight": 92 } },
+"ground":    { "grass": [{ "key": "ground-grass", "weight": 6 }, ...] },
+"autotile":  { "outer-nw": "road-outer-nw", ... },
+"fx":        { "blast": "fx-flame", "spark": "fx-spark", ... }
 ```
+
+`files` paths are relative to `assetRoot`, so art from a second directory drops
+in as a different prefix. `render` carries anchor, on-screen height and shadow
+width, so source art of any size lands correctly — see **Swapping art** in
+[`src/data/README.md`](src/data/README.md).
 
 Code asks `src/systems/Art.ts` for a role and never mentions a key or a
 filename. `tests/manifest.test.ts` fails the build if any `.ts` file does,

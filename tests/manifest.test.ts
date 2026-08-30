@@ -29,13 +29,17 @@ test('art.json is the only place a sprite is named', () => {
   assert.deepEqual(offenders, [], 'sprite keys must be resolved through src/systems/Art.ts')
 })
 
-test('no source file names an art filename directly', () => {
+test('no source file names an art file or directory directly', () => {
   const offenders: string[] = []
+  const dirs = new Set(Object.values(art.files).map((p: any) => String(p).split('/')[0]))
   for (const f of sourceFiles('../src')) {
     const src = readFileSync(url(f), 'utf8')
-    if (/towerDefense_tile\d{3}/.test(src)) offenders.push(f.replace('../', ''))
+    if (/towerDefense_tile\d{3}/.test(src)) offenders.push(`${f} names a pack filename`)
+    for (const d of dirs) {
+      if (src.includes(`${d}/`)) offenders.push(`${f} names the "${d}/" asset directory`)
+    }
   }
-  assert.deepEqual(offenders, [], 'filenames belong in art.json, not in code')
+  assert.deepEqual(offenders, [], 'paths belong in art.json, not in code')
 })
 
 test('every role in the manifest resolves to a file that exists', () => {
@@ -50,7 +54,7 @@ test('every role in the manifest resolves to a file that exists', () => {
   }
   for (const [role, key] of roleRefs) {
     assert.ok(keys.has(key), `${role} points at unknown sprite key "${key}"`)
-    assert.ok(existsSync(url(`../public/assets/kenney/${art.files[key]}`)), `${role} -> ${key} has no file`)
+    assert.ok(existsSync(url(`../public/${art.assetRoot}${art.files[key]}`)), `${role} -> ${key} has no file`)
   }
 })
 
@@ -91,8 +95,37 @@ test('weights actually bias the ground variants', () => {
 
 test('the manifest is complete enough to load a whole game', () => {
   assert.ok(Object.keys(art.files).length > 40, 'suspiciously small manifest')
-  assert.match(art.basePath, /\/$/, 'basePath must end in a slash or URLs will be wrong')
+  assert.match(art.assetRoot, /\/$/, 'assetRoot must end in a slash or URLs will be wrong')
   assert.ok(art.note && art.note.length > 0, 'the manifest should say what it is for')
+})
+
+test('every file in the manifest exists under assetRoot', () => {
+  for (const [key, path] of Object.entries(art.files) as [string, string][]) {
+    assert.ok(!path.startsWith('/'), `${key} path should be relative to assetRoot`)
+    assert.ok(existsSync(url(`../public/${art.assetRoot}${path}`)), `${key} -> ${path} is missing`)
+  }
+})
+
+test('art from any source size can be placed without touching code', () => {
+  // This is the swap guarantee: anchor and on-screen height are manifest
+  // fields, so art authored at 512px drops in beside art authored at 64px.
+  for (const [key, cfg] of Object.entries(art.render) as [string, any][]) {
+    assert.ok(art.files[key], `render config for unknown sprite key "${key}"`)
+    if (cfg.anchorX !== undefined) assert.ok(cfg.anchorX >= 0 && cfg.anchorX <= 1, `${key} anchorX`)
+    if (cfg.anchorY !== undefined) assert.ok(cfg.anchorY >= 0 && cfg.anchorY <= 1, `${key} anchorY`)
+    if (cfg.displayHeight !== undefined) assert.ok(cfg.displayHeight > 0, `${key} displayHeight`)
+    if (cfg.shadowWidth !== undefined) assert.ok(cfg.shadowWidth > 0, `${key} shadowWidth`)
+  }
+})
+
+test('a sprite anchored at its base is what makes it stand on the tile', () => {
+  // anchorY 1 puts the art's bottom edge on the tile's ground line. Anything
+  // taller than a tile must use it or it floats.
+  const tall = Object.entries(art.render).filter(([, c]: [string, any]) =>
+    c.displayHeight !== undefined && c.displayHeight > 64)
+  for (const [key, cfg] of tall as [string, any][]) {
+    assert.equal(cfg.anchorY, 1, `${key} is taller than a tile but is not anchored at its base`)
+  }
 })
 
 test('swapping the manifest to another pack needs no code edit', () => {

@@ -4,7 +4,7 @@ import { ySort } from '../systems/DepthSort.ts'
 import { pickFirst } from '../systems/Targeting.ts'
 import { boostedDamage } from '../systems/Combat.ts'
 import { makeShadow, muzzleFlash, PRESENTATION } from '../systems/Presentation.ts'
-import { ART } from '../systems/Art.ts'
+import { ART, applyRender } from '../systems/Art.ts'
 import { Enemy } from './Enemy.ts'
 
 export class Tower extends Phaser.GameObjects.Container {
@@ -16,7 +16,7 @@ export class Tower extends Phaser.GameObjects.Container {
   supportBonus = 0
 
   private readonly turret: Phaser.GameObjects.Sprite
-  private readonly shadow: Phaser.GameObjects.Sprite
+  private readonly shadow: Phaser.GameObjects.Image
   private cooldown = 0
 
   constructor(scene: Phaser.Scene, x: number, y: number, id: string, def: TowerDef, col: number, row: number) {
@@ -26,10 +26,21 @@ export class Tower extends Phaser.GameObjects.Container {
     this.col = col
     this.row = row
 
-    this.shadow = makeShadow(scene, ART.ui.towerBase)
-    const base = scene.add.sprite(0, 0, ART.ui.towerBase)
-    this.turret = scene.add.sprite(0, -4, def.sprite)
-    this.add([this.shadow, base, this.turret])
+    // The base plate is optional: art that carries its own base sets
+    // ui.towerBase to null in the manifest and this drops out.
+    this.shadow = makeShadow(scene, def.sprite)
+    const parts: Phaser.GameObjects.GameObject[] = [this.shadow]
+    if (ART.ui.towerBase !== null) {
+      const base = scene.add.sprite(0, 0, ART.ui.towerBase)
+      applyRender(base, ART.ui.towerBase)
+      parts.push(base)
+    }
+    this.turret = scene.add.sprite(0, 0, def.sprite)
+    // Anchor and on-screen height come from the manifest, so a 512px tower and
+    // a 64px turret both sit on the tile at the size the manifest asks for.
+    applyRender(this.turret, def.sprite)
+    parts.push(this.turret)
+    this.add(parts)
     scene.add.existing(this)
     ySort(this)
     this.popIn()
@@ -83,7 +94,7 @@ export class Tower extends Phaser.GameObjects.Container {
     this.scene.tweens.add({
       targets: this.turret,
       x: -Math.cos(angle - Math.PI / 2) * recoil,
-      y: -4 - Math.sin(angle - Math.PI / 2) * recoil,
+      y: -Math.sin(angle - Math.PI / 2) * recoil,
       duration: PRESENTATION.towerRecoilMs,
       yoyo: true,
       ease: 'Quad.easeOut',

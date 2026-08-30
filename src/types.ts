@@ -183,16 +183,28 @@ export interface WeightedSprite {
   weight: number
 }
 
+/** Where a sprite sits and how big it draws. Absent fields take defaults. */
+export interface SpriteRender {
+  anchorX: number
+  anchorY: number
+  /** On-screen height in pixels; the aspect ratio is preserved. */
+  displayHeight?: number
+  /** Width of the ground shadow under this sprite. */
+  shadowWidth?: number
+}
+
 /**
  * The one manifest every sprite comes from. `files` maps a logical key to a
- * filename; everything below maps a *role* the code asks for to a logical key,
- * so swapping art packs never touches a .ts file.
+ * path under `assetRoot`; `render` gives a key its anchor and size; everything
+ * below maps a *role* the code asks for to a logical key. Swapping art never
+ * touches a .ts file.
  */
 export interface ArtDef {
-  basePath: string
+  assetRoot: string
   credit: string
   note: string
   files: Record<string, string>
+  render: Record<string, Partial<SpriteRender>>
   ground: {
     grass: WeightedSprite[]
     road: WeightedSprite[]
@@ -201,7 +213,8 @@ export interface ArtDef {
   ui: {
     plot: string
     plotHover: string
-    towerBase: string
+    /** null once towers ship as one sprite carrying their own base. */
+    towerBase: string | null
   }
   fx: {
     spark: string
@@ -211,4 +224,8 @@ export interface ArtDef {
     coin: string
   }
   decor: string[]
+  /** Textures the game draws for itself, named here so code never does. */
+  generated: {
+    groundShadow: string
+  }
 }

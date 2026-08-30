@@ -9,7 +9,7 @@ export { SPRITE_KEYS }
 export const ART_CREDIT = ART.credit
 
 export function queueArt(scene: Phaser.Scene): void {
-  for (const [key, file] of Object.entries(ART.files)) {
-    scene.load.image(key, `${ART.basePath}${file}`)
+  for (const [key, path] of Object.entries(ART.files)) {
+    scene.load.image(key, `${ART.assetRoot}${path}`)
   }
 }

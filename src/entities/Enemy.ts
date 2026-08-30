@@ -30,7 +30,7 @@ export class Enemy extends Phaser.GameObjects.Container {
 
   private readonly lane: Path
   private readonly art: Phaser.GameObjects.Sprite
-  private readonly shadow: Phaser.GameObjects.Sprite
+  private readonly shadow: Phaser.GameObjects.Image
   private readonly bar: Phaser.GameObjects.Graphics
   private attackTimer = 0
   private slowFactor = 0
@@ -113,7 +113,6 @@ export class Enemy extends Phaser.GameObjects.Container {
       this.setPosition(p.x, p.y)
       // Pack sprites face east, so the lane angle is the sprite rotation.
       this.art.setRotation(this.lane.angleAt(this.distance))
-      this.shadow.setRotation(this.art.rotation)
       if (this.distance >= this.lane.totalLength) return true
     }
 

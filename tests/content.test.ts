@@ -26,9 +26,9 @@ test('every sprite key referenced anywhere resolves to a real file', () => {
 })
 
 test('the art manifest points at files that exist on disk', () => {
-  for (const [key, file] of Object.entries(art.files) as [string, string][]) {
-    assert.match(file, /^towerDefense_tile\d{3}\.png$/, `${key} -> ${file} is not a pack filename`)
-    assert.ok(existsSync(url(`../public/assets/kenney/${file}`)), `${key} -> ${file} is missing from public/assets`)
+  for (const [key, path] of Object.entries(art.files) as [string, string][]) {
+    assert.match(path, /^[\w-]+\/[\w.-]+\.png$/, `${key} -> ${path} is not an asset path`)
+    assert.ok(existsSync(url(`../public/${art.assetRoot}${path}`)), `${key} -> ${path} is missing from public/assets`)
   }
 })
 
@@ -120,7 +120,12 @@ test('Depreciation strips armour but cannot go past the toughest enemy', () => {
 
 test('presentation numbers are present and sane', () => {
   assert.ok(pres.shadow.alpha > 0 && pres.shadow.alpha < 1)
-  assert.ok(pres.shadow.scaleY < pres.shadow.scaleX, 'a drop shadow should be squashed')
+  assert.ok(pres.shadow.heightFactor < pres.shadow.widthFactor,
+    'a ground shadow should be an ellipse, wider than it is tall')
+  assert.ok(pres.shadow.softLayers > 1, 'a single layer gives a hard edge, not a soft shadow')
+  assert.ok(pres.shadow.defaultWidth > 0)
+  assert.ok(pres.shadow.textureWidth > pres.shadow.textureHeight,
+    'the shadow texture should be wider than it is tall')
   assert.ok(pres.enemyBob.amplitudeY > 0 && pres.enemyBob.durationMs > 0)
   assert.ok(pres.towerRecoilPixels > 0 && pres.towerRecoilMs > 0)
   assert.ok(pres.damageNumbers.critFontSize > pres.damageNumbers.fontSize)

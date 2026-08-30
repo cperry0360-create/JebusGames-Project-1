@@ -24,7 +24,7 @@ import { Cooldowns } from '../systems/Cooldowns.ts'
 import { unlockedTowerCount } from '../systems/Draft.ts'
 import { runState } from '../systems/RunState.ts'
 import { castAbility } from '../systems/AbilityRunner.ts'
-import { PRESENTATION, floatingDamage, DECOR_DEPTH } from '../systems/Presentation.ts'
+import { PRESENTATION, floatingDamage } from '../systems/Presentation.ts'
 import { play } from '../systems/Sfx.ts'
 import { Enemy } from '../entities/Enemy.ts'
 import type { Blocker } from '../entities/Enemy.ts'
@@ -205,7 +205,8 @@ export class GameScene extends Phaser.Scene {
       const col = d[0] as number
       const row = d[1] as number
       if (!this.grid.contains(col, row)) continue
-      this.add.image(this.grid.centreX(col), this.grid.centreY(row), d[2] as string).setDepth(DECOR_DEPTH)
+      const dy = this.grid.centreY(row)
+      this.add.image(this.grid.centreX(col), dy, d[2] as string).setDepth(dy)
     }
 
     const cfg = PRESENTATION.decoration
@@ -218,9 +219,12 @@ export class GameScene extends Phaser.Scene {
         // Keep clear of the road so the lane stays readable.
         if (this.nearRoad(roadKeys, c, r, cfg.minDistanceFromRoad)) continue
         this.build.block(c, r)
+        // Depth is the tile's ground line, so a unit lower on the screen
+        // walks in front of scenery and a unit higher walks behind it.
+        const sy = this.grid.centreY(r)
         this.add
-          .image(this.grid.centreX(c), this.grid.centreY(r), ART.decor[rng.between(0, ART.decor.length - 1)])
-          .setDepth(DECOR_DEPTH)
+          .image(this.grid.centreX(c), sy, ART.decor[rng.between(0, ART.decor.length - 1)])
+          .setDepth(sy)
           .setScale(rng.realInRange(0.7, 1.05))
           .setAngle(rng.between(-18, 18))
       }

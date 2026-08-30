@@ -214,9 +214,9 @@ test('every sprite key referenced by data exists in the art manifest', () => {
   for (const k of referenced) assert.ok(keys.has(k), `data references unknown sprite key "${k}"`)
 })
 
-test('the art manifest points at real Kenney filenames', () => {
-  for (const [key, file] of Object.entries(art.files) as [string, string][]) {
-    assert.match(file, /^towerDefense_tile\d{3}\.png$/, `${key} -> ${file} is not a pack filename`)
+test('the art manifest points at asset paths, not bare filenames', () => {
+  for (const [key, path] of Object.entries(art.files) as [string, string][]) {
+    assert.ok(path.includes('/'), `${key} -> ${path} should name its asset directory`)
   }
 })
 

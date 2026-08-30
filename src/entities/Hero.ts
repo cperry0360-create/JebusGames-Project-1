@@ -27,7 +27,7 @@ export class Hero extends Phaser.GameObjects.Container {
 
   private readonly body_: Phaser.GameObjects.Sprite
   private readonly gun: Phaser.GameObjects.Sprite
-  private readonly shadow: Phaser.GameObjects.Sprite
+  private readonly shadow: Phaser.GameObjects.Image
   private readonly bar: Phaser.GameObjects.Graphics
   private rallyX: number
   private rallyY: number

@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import type { TowerDef } from '../types.ts'
-import { ART } from '../systems/Art.ts'
+import { towerIcon } from './TowerIcon.ts'
 
 export interface BuildOption {
   id: string
@@ -87,12 +87,8 @@ export class BuildMenu {
         .setStrokeStyle(1, 0x3b4552)
 
       const iconX = cx + (CELL_W - 6) / 2
-      const base = this.scene.add.image(iconX, cy + 30, ART.ui.towerBase).setScale(0.62)
-      const turret = this.scene.add.image(iconX, cy + 27, opt.def.sprite).setScale(0.62)
-      if (!affordable) {
-        base.setAlpha(0.35)
-        turret.setAlpha(0.35)
-      }
+      const icon = towerIcon(this.scene, iconX, cy + 48, opt.def.sprite, 44)
+      if (!affordable) for (const part of icon) part.setAlpha(0.35)
 
       const cost = this.scene.add
         .text(iconX, cy + 56, `${opt.def.cost}g`, {
@@ -128,7 +124,7 @@ export class BuildMenu {
       })
 
       this.hitAreas.push(hit)
-      c.add([cell, name, base, turret, cost, hit])
+      c.add([cell, name, ...icon, cost, hit])
     })
 
     this.container = c

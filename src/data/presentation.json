@@ -1,9 +1,13 @@
 {
   "shadow": {
-    "alpha": 0.28,
-    "offsetY": 6,
-    "scaleX": 0.9,
-    "scaleY": 0.42
+    "alpha": 0.34,
+    "offsetY": 2,
+    "widthFactor": 0.78,
+    "heightFactor": 0.3,
+    "softLayers": 5,
+    "textureWidth": 96,
+    "textureHeight": 40,
+    "defaultWidth": 34
   },
   "enemyBob": {
     "amplitudeY": 2.5,

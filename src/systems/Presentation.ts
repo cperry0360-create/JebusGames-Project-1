@@ -3,19 +3,42 @@
 
 import Phaser from 'phaser'
 import presentationData from '../data/presentation.json'
-import { GROUND_DEPTH } from './DepthSort.ts'
-import { ART } from './Art.ts'
+import { ART, renderFor } from './Art.ts'
 
 export const PRESENTATION = presentationData
 
-/** A squashed dark ellipse sprite reused as the shadow for any unit. */
-export function makeShadow(scene: Phaser.Scene, spriteKey: string, scale = 1): Phaser.GameObjects.Sprite {
+/**
+ * Builds the one soft ellipse every ground shadow reuses. Concentric ellipses
+ * of falling alpha give a soft edge without a blur pass. Called once at boot.
+ */
+export function ensureShadowTexture(scene: Phaser.Scene): void {
+  const key = ART.generated.groundShadow
+  if (scene.textures.exists(key)) return
+
   const s = PRESENTATION.shadow
-  return scene.add
-    .sprite(0, s.offsetY, spriteKey)
-    .setTint(0x000000)
-    .setAlpha(s.alpha)
-    .setScale(scale * s.scaleX, scale * s.scaleY)
+  const w = s.textureWidth
+  const h = s.textureHeight
+  const g = scene.make.graphics({ x: 0, y: 0 }, false)
+  for (let i = s.softLayers; i >= 1; i--) {
+    const t = i / s.softLayers
+    g.fillStyle(0x000000, (1 / s.softLayers) * 0.9)
+    g.fillEllipse(w / 2, h / 2, w * t, h * t)
+  }
+  g.generateTexture(key, w, h)
+  g.destroy()
+}
+
+/**
+ * A soft elliptical shadow sized to a sprite's footprint. Taking the width
+ * from the art rather than squashing a copy of it means a tall sprite still
+ * gets a shadow that looks like it is standing on the ground.
+ */
+export function makeShadow(scene: Phaser.Scene, spriteKey: string, scale = 1): Phaser.GameObjects.Image {
+  const s = PRESENTATION.shadow
+  const width = (renderFor(spriteKey).shadowWidth ?? s.defaultWidth) * scale
+  const img = scene.add.image(0, s.offsetY, ART.generated.groundShadow).setAlpha(s.alpha)
+  img.setDisplaySize(width * s.widthFactor, width * s.heightFactor)
+  return img
 }
 
 /** Rising damage number. Crits (or anything flagged big) read larger and gold. */
@@ -87,5 +110,3 @@ export function muzzleFlash(scene: Phaser.Scene, x: number, y: number, angle: nu
     onComplete: () => flash.destroy(),
   })
 }
-
-export const DECOR_DEPTH = GROUND_DEPTH + 3
