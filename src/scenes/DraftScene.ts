@@ -8,6 +8,7 @@ import { draftAbilities, draftOpeningTowers, makeRng, reserveTowers } from '../s
 import { runState, setRunState } from '../systems/RunState.ts'
 import { COLOR, FONT_DISPLAY, FONT_UI, button, panel } from '../ui/Theme.ts'
 import { towerIcon } from '../ui/TowerIcon.ts'
+import { fitInBox } from '../systems/Art.ts'
 
 const TOWERS = towersData as Record<string, TowerDef>
 const ABILITIES = abilitiesData as Record<string, AbilityDef>
@@ -94,14 +95,18 @@ export class DraftScene extends Phaser.Scene {
           this.scene.launch('Hud')
         }
       }, 22)
-    this.layer.add([b.hit, b.text])
+    this.layer.add(b.parts)
   }
 
   private abilityCard(x: number, y: number, w: number, id: string): void {
     const def = ABILITIES[id]
     const h = 280
     this.layer.add(panel(this, x, y, w, h, { fill: COLOR.panelHi }))
-    this.layer.add(this.add.image(x + w / 2, y + 74, def.icon).setScale(2.2))
+    // Fitted, not scaled: an ability whose icon is painted art rather than a
+    // 64px pack tile would otherwise draw at its source size.
+    const icon = this.add.image(x + w / 2, y + 74, def.icon)
+    fitInBox(icon, def.icon, 104)
+    this.layer.add(icon)
     this.layer.add(this.add.text(x + w / 2, y + 128, def.name.toUpperCase(), {
       fontFamily: FONT_DISPLAY, fontSize: '24px', color: COLOR.ink,
     }).setOrigin(0.5))

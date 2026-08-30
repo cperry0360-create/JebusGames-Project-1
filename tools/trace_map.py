@@ -214,7 +214,17 @@ def simplify(pts, eps):
 
 # Mask-pixel distances. One mask pixel is about 3.06 canvas pixels.
 NEAR, FAR, CLEAR_OF_SCENERY = 15, 33, 13
-TARGET_SPOTS, MIN_SEPARATION = 13, 25
+# A tower stands about 115px tall from its pad and the HUD bar owns the top
+# 78px of the canvas, so a pad any higher than this puts a tower's roof behind
+# the HUD. Canvas pixels; converted to mask rows where it is used.
+MIN_CANVAS_Y = 200
+# Seven spots, not a lattice. With a four-tower cap the choice of stretch is
+# the decision the player is making, so each spot has to own a distinct piece
+# of the walk and none may cover the whole thing. The separation is in mask
+# pixels (about 3.06 canvas px each), set so no two spots can cover the same
+# bend — a much smaller value let two of the seven sit 78px apart, which is
+# two spots spending one decision.
+TARGET_SPOTS, MIN_SEPARATION = 7, 46
 
 
 def pick_spots(sw, sh, kind, line, dist_road, dist_block):
@@ -226,8 +236,10 @@ def pick_spots(sw, sh, kind, line, dist_road, dist_block):
     stops them bunching near the arch; alternating the preferred side keeps
     both verges in play.
     """
+    min_row = MIN_CANVAS_Y / (CANVAS_H / sh)
     cand = [i for i, v in enumerate(kind)
-            if v == GRASS and NEAR <= dist_road[i] <= FAR and dist_block[i] >= CLEAR_OF_SCENERY]
+            if v == GRASS and NEAR <= dist_road[i] <= FAR and dist_block[i] >= CLEAR_OF_SCENERY
+            and (i // sw) >= min_row]
 
     chosen = []
 

@@ -63,6 +63,31 @@ export class Hero extends Phaser.GameObjects.Container {
     return attackInterval(this.def.attackInterval, this.def.lastStand, this.lastStandActive)
   }
 
+  /** Where he has been told to hold. The scene draws a marker here. */
+  get rally(): { x: number; y: number } {
+    return { x: this.rallyX, y: this.rallyY }
+  }
+
+  /** True once he has walked to his rally point and stopped. */
+  get atRally(): boolean {
+    return Math.hypot(this.rallyX - this.x, this.rallyY - this.y) < 2
+  }
+
+  /** How big a tap counts as a tap on him. */
+  get pickRadius(): number {
+    return 30
+  }
+
+  /** How far below his origin his feet are, for ground markings. His art is
+   *  centre-anchored, unlike the towers and enemies. */
+  get footOffsetY(): number {
+    return this.body_.displayHeight / 2
+  }
+
+  hits(x: number, y: number): boolean {
+    return Math.hypot(this.x - x, this.y - y) <= this.pickRadius
+  }
+
   setRally(x: number, y: number): void {
     if (this.down) return
     this.rallyX = x

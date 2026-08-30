@@ -4,6 +4,9 @@
 export interface DisplayDef {
   width: number
   height: number
+  /** Height of the HUD bar, including its shadow. The world draws under it,
+   *  so nothing that must stay readable may sit above this line. */
+  hudHeight: number
   backgroundColor: string
 }
 
@@ -176,7 +179,8 @@ export interface AbilityDef {
 
 export interface DraftDef {
   towersAtStart: number
-  towerCap: number
+  /** How many tower types the build menu ever offers, not a placement cap. */
+  unlockedTypeCap: number
   unlockAfterWave: number[]
   abilitiesDrawn: number
   damageArchetypes: string[]

@@ -13,7 +13,9 @@ export interface Weighted {
 
 export interface DraftRules {
   towersAtStart: number
-  towerCap: number
+  /** How many tower *types* the build menu ever offers. Not a limit on how
+   *  many towers may stand on the map — that is the number of build pads. */
+  unlockedTypeCap: number
   unlockAfterWave: number[]
   abilitiesDrawn: number
   damageArchetypes: string[]
@@ -83,7 +85,7 @@ export function reserveTowers(pool: Weighted[], opening: string[], rng: Rng): st
 /** How many towers the player should have unlocked after clearing `wavesCleared`. */
 export function unlockedTowerCount(rules: DraftRules, wavesCleared: number): number {
   const earned = rules.unlockAfterWave.filter((w) => wavesCleared >= w).length
-  return Math.min(rules.towersAtStart + earned, rules.towerCap)
+  return Math.min(rules.towersAtStart + earned, rules.unlockedTypeCap)
 }
 
 export function draftAbilities(ids: string[], count: number, rng: Rng): string[] {

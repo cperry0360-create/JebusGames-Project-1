@@ -7,7 +7,7 @@ shape of each one — add a field there when you add one here.
 
 | File | Contents |
 |---|---|
-| `display.json` | Canvas size, background colour |
+| `display.json` | Canvas size, HUD bar height, background colour |
 | `map.json` | Which painted plate to draw, the traced lane, the build spots, hero start |
 | `rules.json` | Starting gold and lives, wave payout |
 | `towers.json` | The six towers: cost, range, damage, fire rate, splash, slow, support |
@@ -15,8 +15,8 @@ shape of each one — add a field there when you add one here.
 | `heroes.json` | Cory's stats and the whole Last Stand block |
 | `waves.json` | Twelve waves: composition, spawn pacing, per-group delays |
 | `abilities.json` | The six active abilities: cooldown, radius, damage, duration |
-| `draft.json` | Draw weights, opening hand size, tower cap, unlock waves |
-| `presentation.json` | Shadows, idle bob, recoil, damage numbers, shake, health bars, facing dead zone |
+| `draft.json` | Draw weights, opening hand size, unlocked-type cap, unlock waves |
+| `presentation.json` | Shadows, idle bob, recoil, muzzle, damage numbers, shake, health bars, facing dead zone |
 | `art.json` | **Every sprite in the game.** Files, map plates, UI, effects, scenery, brand marks |
 | `branding.json` | Splash timing, corner-mark size and placement, credits layout |
 | `credits.json` | Every line of credit copy, so adding a name never touches code |
@@ -37,6 +37,16 @@ shape of each one — add a field there when you add one here.
   traced out of the painted artwork by `tools/trace_map.py`; re-run it when the
   art changes rather than nudging numbers by hand. The first and last waypoints
   sit off-screen so enemies walk in through the arch and out through the gate.
+- **`draft.unlockedTypeCap` is a cap on tower *types*, not on towers.** It is
+  how many different towers the build menu ever offers. How many towers can
+  stand on the map is `map.json.buildSpots.length` — seven. The field used to
+  be called `towerCap`, which read like a placement limit and was taken for one.
+- **`display.hudHeight` is shared, not just the HUD's own business.** The world
+  draws underneath the bar, so `tools/trace_map.py` uses it to keep build pads
+  low enough that a tower on one is not decapitated, and a test enforces it.
+- **`presentation.muzzle` puts a shot at the top of a tower.** The towers are
+  painted buildings: they do not rotate to aim (doing that laid them on their
+  sides), so the muzzle flash and the recoil are the only aim cues there are.
 - **`map.json.spotRadius` is the click target and the highlight, in one.** A
   spot is a circle, not a tile. `tests/logic.test.ts` fails if two spots are
   closer than twice this — overlapping highlights would make a click ambiguous
@@ -68,14 +78,14 @@ the work:
 The six painted towers are in `public/assets/towers/`. Their `render` values are
 measured from the art, not guessed. `tools/measure_art.py` reproduces them.
 
-| | canvas | artwork | base ellipse | shadowWidth |
-|---|---|---|---|---|
-| Withholding Tower | 415x512 | 415x512 | 415px @ row 444 | 59.0 |
-| Write-Off | 616x512 | 464x506 | 464px @ row 382 | 66.0 |
-| Rounding Error | 336x512 | 201x512 | 201px @ row 433 | 28.6 |
-| Escalation Clause | 462x512 | 454x510 | 454px @ row 397 | 64.6 |
-| Filing Extension | 389x512 | 389x512 | 389px @ row 362 | 55.3 |
-| Tax Shelter | 429x512 | 429x512 | 429px @ row 356 | 61.0 |
+| | canvas | content | base row | displayHeight | shadowWidth |
+|---|---|---|---|---|---|
+| Withholding Tower | 415x512 | 415x512 | 415px @ row 444 | 114.6 | 92.9 |
+| Write-Off | 616x512 | 464x506 | 464px @ row 382 | 114.6 | 103.8 |
+| Rounding Error | 336x512 | 201x512 | 201px @ row 433 | 114.6 | 45.0 |
+| Escalation Clause | 462x512 | 461x510 | 454px @ row 397 | 114.6 | 101.6 |
+| Filing Extension | 389x512 | 389x512 | 389px @ row 362 | 114.6 | 87.0 |
+| Tax Shelter | 429x512 | 429x512 | 429px @ row 356 | 114.6 | 96.0 |
 
 Three things the measurements settled:
 
@@ -91,11 +101,15 @@ narrows to the ellipse's front edge. `shadowWidth` is the widest row in the
 bottom third — the ellipse's true width — not the width at the bottom.
 
 **The scale is uniform, not per-sprite.** All six are drawn at one consistent
-scale in a 512-tall frame, so `displayHeight` is 72.8 for every one. Normalising
-each tower's base to the same width instead would have stretched the thin
-obelisk to 120px against the others' 66-79px, undoing the artist's proportions.
-72.8 puts the widest base (Write-Off) at 66px, just under the 68px build-spot
-circle — it fills its spot without spilling onto its neighbours.
+scale in a 512-tall frame, so `displayHeight` is the same for every one.
+Normalising each tower's base to a common width instead would have stretched
+the thin obelisk against the others, undoing the artist's proportions.
+
+The scale is set from the set's *median* base — 96px on screen — so one
+unusually wide or narrow tower cannot drag the rest. Worth naming: the painted
+road is 61px wide on the 1280px canvas, so a literal "base 1.2x the path" would
+be 73px. 96px is what actually reads against the tavern and against a 44px
+soldier, and it is the size the brief asked for in pixels.
 
 ### How the enemy values were measured
 

@@ -78,7 +78,7 @@ test('towers unlock after the waves the design names, and stop at the cap', () =
   assert.equal(unlockedTowerCount(draft, 7), 3)
   assert.equal(unlockedTowerCount(draft, 8), 4, 'the 4th tower should arrive after wave 8')
   assert.equal(unlockedTowerCount(draft, 12), 4, 'the cap is 4')
-  assert.equal(draft.towerCap, 4)
+  assert.equal(draft.unlockedTypeCap, 4)
 })
 
 test('every unlock lands before the run ends', () => {

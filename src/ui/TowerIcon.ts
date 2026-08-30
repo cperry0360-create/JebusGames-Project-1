@@ -26,7 +26,10 @@ export function towerIcon(
   // menu exactly as it does on a tile. Only the scale differs.
   const cfg = renderFor(spriteKey)
   const art = scene.add.image(x, baselineY, spriteKey).setOrigin(cfg.anchorX, cfg.anchorY)
-  art.setScale((boxHeight * 0.86) / art.height)
+  // Fitted by the artwork's own bounds, so a wide tower cannot spill out of
+  // its cell and a padded canvas is not drawn smaller than the rest.
+  const box = boxHeight * 0.86
+  art.setScale(Math.min(box / (cfg.contentHeight ?? art.height), box / (cfg.contentWidth ?? art.width)))
   out.push(art)
 
   return out

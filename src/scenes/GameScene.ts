@@ -68,6 +68,8 @@ export interface GameStatus {
 }
 
 const OVERLAY_DEPTH = 150000
+/** Ground markings are ellipses, not circles: the map is painted in 3/4. */
+const PAD_SQUASH = 0.62
 
 export class GameScene extends Phaser.Scene {
   readonly status: GameStatus = {
@@ -91,7 +93,9 @@ export class GameScene extends Phaser.Scene {
   private fighters: Fighter[] = []
 
   private spotLayer!: Phaser.GameObjects.Graphics
+  private markerLayer!: Phaser.GameObjects.Graphics
   private hoverSpot: BuildSpot | null = null
+  private heroSelected = false
   private rangeRing!: Phaser.GameObjects.Graphics
   private targetRing!: Phaser.GameObjects.Graphics
   private selected: Tower | null = null
@@ -111,6 +115,7 @@ export class GameScene extends Phaser.Scene {
     this.hoverSpot = null
     this.selected = null
     this.restructuring = null
+    this.heroSelected = false
 
     const run = runState()
     const heroDef = HEROES[run.heroId] ?? HEROES.cory
@@ -122,6 +127,7 @@ export class GameScene extends Phaser.Scene {
     this.drawPlate()
 
     this.spotLayer = this.add.graphics().setDepth(GROUND_DEPTH + 5)
+    this.markerLayer = this.add.graphics().setDepth(GROUND_DEPTH + 6)
     this.rangeRing = this.add.graphics().setDepth(OVERLAY_DEPTH)
     this.targetRing = this.add.graphics().setDepth(OVERLAY_DEPTH + 1)
 
@@ -142,7 +148,7 @@ export class GameScene extends Phaser.Scene {
     this.status.pendingAbility = null
     this.status.abilities = [...run.abilities]
     this.status.unlockedTowers = run.openingTowers.slice(0, DRAFT.towersAtStart)
-    this.status.message = 'Click a building spot to build. Click open ground to rally Cory.'
+    this.status.message = 'Click a glowing pad to build a tower, then START WAVE.'
 
     for (const id of this.status.abilities) this.cooldowns.register(id, ABILITIES[id].cooldown)
     this.cooldowns.register('haymaker', heroDef.haymaker.cooldown)
@@ -166,20 +172,77 @@ export class GameScene extends Phaser.Scene {
     plate.setDisplaySize(displayData.width, displayData.height)
   }
 
-  /** Spots show only while the player is placing something. No standing grid. */
   private get placing(): boolean {
     return this.menu.isOpen || this.status.mode === 'restructure'
   }
 
+  /**
+   * Every free building pad, always visible.
+   *
+   * A player cannot choose where to build if finding a spot means tapping the
+   * map at random, so the pads are part of the map's furniture rather than a
+   * mode. They brighten while placing and brighter still under the cursor.
+   * Pads are drawn as flat ellipses because the map is painted in 3/4: a true
+   * circle reads as a floating disc rather than a patch of ground.
+   */
   private drawSpots(): void {
     this.spotLayer.clear()
-    if (!this.placing) return
     const r = MAP.spotRadius
+    const placing = this.placing
     for (const spot of this.build.freeSpots()) {
       const hot = this.hoverSpot?.index === spot.index
-      this.spotLayer.fillStyle(0xf6ecd9, hot ? 0.22 : 0.1).fillCircle(spot.x, spot.y, r)
-      this.spotLayer.lineStyle(hot ? 3 : 2, hot ? 0x8fd07a : 0xf6ecd9, hot ? 0.95 : 0.45)
-      this.spotLayer.strokeCircle(spot.x, spot.y, r)
+      const fill = hot ? 0.34 : placing ? 0.22 : 0.14
+      const edge = hot ? 1 : placing ? 0.8 : 0.5
+      const colour = hot ? 0x8fd07a : 0xf6ecd9
+
+      this.spotLayer.fillStyle(colour, fill)
+      this.spotLayer.fillEllipse(spot.x, spot.y, r * 2, r * 2 * PAD_SQUASH)
+      this.spotLayer.lineStyle(hot ? 3 : 2, colour, edge)
+      this.spotLayer.strokeEllipse(spot.x, spot.y, r * 2, r * 2 * PAD_SQUASH)
+
+      // A small cross marks the pad as a place to put something, so it does
+      // not read as scenery when nothing is being placed.
+      const t = r * 0.3
+      this.spotLayer.lineStyle(2, colour, edge * 0.8)
+      this.spotLayer.lineBetween(spot.x - t, spot.y, spot.x + t, spot.y)
+      this.spotLayer.lineBetween(spot.x, spot.y - t * PAD_SQUASH, spot.x, spot.y + t * PAD_SQUASH)
+    }
+  }
+
+  /**
+   * The hero's selection ring and his rally marker.
+   *
+   * Redrawn every frame because he walks. The marker stays after he arrives:
+   * it is the standing order, not a travel animation.
+   */
+  private drawHeroMarkers(): void {
+    this.markerLayer.clear()
+    if (this.status.phase === 'won' || this.status.phase === 'lost') return
+    if (this.hero.down) return
+
+    const r = this.hero.rally
+    const walking = !this.hero.atRally
+    const a = walking ? 1 : 0.55
+    const w = 40
+    this.markerLayer.fillStyle(0x4fa3e3, walking ? 0.28 : 0.14)
+    this.markerLayer.fillEllipse(r.x, r.y, w, w * PAD_SQUASH)
+    this.markerLayer.lineStyle(3, 0x4fa3e3, a)
+    this.markerLayer.strokeEllipse(r.x, r.y, w, w * PAD_SQUASH)
+    // A flag, so the marker reads as an order and not as another build pad.
+    this.markerLayer.lineStyle(3, 0x4fa3e3, a)
+    this.markerLayer.lineBetween(r.x, r.y - 4, r.x, r.y - 40)
+    this.markerLayer.fillStyle(0x4fa3e3, a)
+    this.markerLayer.fillTriangle(r.x + 1, r.y - 40, r.x + 22, r.y - 34, r.x + 1, r.y - 28)
+
+    if (this.heroSelected) {
+      // At his feet and wider than he is: drawn on his centre it disappeared
+      // behind the sprite, because ground markings sort below the world.
+      const w = this.hero.pickRadius * 2.4
+      const y = this.hero.y + this.hero.footOffsetY
+      this.markerLayer.fillStyle(0x8fd07a, 0.18)
+      this.markerLayer.fillEllipse(this.hero.x, y, w, w * PAD_SQUASH)
+      this.markerLayer.lineStyle(3, 0x8fd07a, 0.95)
+      this.markerLayer.strokeEllipse(this.hero.x, y, w, w * PAD_SQUASH)
     }
   }
 
@@ -222,6 +285,16 @@ export class GameScene extends Phaser.Scene {
       return
     }
 
+    // Precedence, most specific target first. A building pad is a deliberate
+    // target: it must never lose a tap to the ground underneath it, and it
+    // takes the tap even when a menu is already open, so a click on the next
+    // pad moves the menu there rather than being spent dismissing it.
+    const spot = this.build.spotAt(p.worldX, p.worldY)
+    if (spot && this.build.isFree(spot.index)) {
+      this.openBuildMenu(spot)
+      return
+    }
+
     if (this.menu.isOpen) {
       this.clearSelection()
       return
@@ -233,23 +306,50 @@ export class GameScene extends Phaser.Scene {
       return
     }
 
-    const spot = this.build.spotAt(p.worldX, p.worldY)
-    if (spot && this.build.isFree(spot.index)) {
-      this.openBuildMenu(spot)
+    if (this.hero.hits(p.worldX, p.worldY)) {
+      this.selectHero()
       return
     }
 
-    // Anywhere else on the map is a rally order.
+    // Bare ground. It is only an order when the hero is actually selected,
+    // so a misjudged tap cannot walk him off his post.
+    if (this.heroSelected) {
+      this.orderHero(p.worldX, p.worldY)
+      return
+    }
     this.clearSelection()
-    this.hero.setRally(p.worldX, p.worldY)
-    this.pingRally(p.worldX, p.worldY)
+  }
+
+  private selectHero(): void {
+    if (this.hero.down) {
+      this.status.message = `${this.hero.def.name} is down for this encounter.`
+      return
+    }
+    this.menu.close()
+    this.selected = null
+    this.heroSelected = true
+    this.showRange(this.hero.x, this.hero.y, this.hero.def.attackRange, 0x4fa3e3)
+    this.status.message = `${this.hero.def.name} selected — click where he should hold.`
+  }
+
+  private orderHero(x: number, y: number): void {
+    this.hero.setRally(x, y)
+    this.pingRally(x, y)
+    this.heroSelected = false
+    this.rangeRing.clear()
+    this.status.message = `${this.hero.def.name} is moving up.`
   }
 
   // ---------------------------------------------------------------- build UI
 
-  /** Towers are hit-tested by distance now that there is no grid. */
+  /** The topmost tower under a point, so overlapping art picks the front one. */
   private towerAt(x: number, y: number): Tower | undefined {
-    return this.towers.find((t) => Math.hypot(t.x - x, t.y - y) <= MAP.spotRadius)
+    let best: Tower | undefined
+    for (const t of this.towers) {
+      if (!t.hits(x, y)) continue
+      if (!best || t.y > best.y) best = t
+    }
+    return best
   }
 
   private openBuildMenu(spot: BuildSpot): void {
@@ -258,7 +358,7 @@ export class GameScene extends Phaser.Scene {
       spot.x, spot.y, this.status.gold,
       (id) => this.place(id, spot),
       (id) => {
-        if (id) this.showRange(spot.x, spot.y, TOWERS[id])
+        if (id) this.showTowerRange(spot.x, spot.y, TOWERS[id])
         else this.rangeRing.clear()
       },
     )
@@ -268,7 +368,13 @@ export class GameScene extends Phaser.Scene {
 
   private place(id: string, spot: BuildSpot): void {
     const def = TOWERS[id]
-    if (!this.build.isFree(spot.index) || this.status.gold < def.cost) return
+    if (!this.build.isFree(spot.index)) return
+    if (this.status.gold < def.cost) {
+      // Silence here reads as a broken button, so say what is missing.
+      this.status.message = `${def.name} costs ${def.cost}g — ${def.cost - this.status.gold}g short.`
+      play(this, 'sfx-leak', 0.25)
+      return
+    }
 
     this.status.gold -= def.cost
     this.build.occupy(spot.index)
@@ -285,7 +391,7 @@ export class GameScene extends Phaser.Scene {
     this.menu.close()
     this.drawSpots()
     this.selected = tower
-    this.showRange(tower.x, tower.y, tower.def)
+    this.showTowerRange(tower.x, tower.y, tower.def)
     const bonus = tower.supportBonus > 0 ? `  (+${Math.round(tower.supportBonus * 100)}% sheltered)` : ''
     this.status.message = `${tower.def.name} — ${tower.def.flavor}${bonus}`
   }
@@ -294,17 +400,21 @@ export class GameScene extends Phaser.Scene {
     this.menu.close()
     this.selected = null
     this.restructuring = null
+    this.heroSelected = false
     this.status.mode = 'normal'
     this.status.pendingAbility = null
     this.rangeRing.clear()
     this.targetRing.clear()
     this.drawSpots()
-    this.status.message = 'Click a building spot to build. Click open ground to rally Cory.'
+    this.status.message = this.idleHint()
   }
 
-  private showRange(x: number, y: number, def: TowerDef): void {
-    const radius = def.supportRadius > 0 ? def.supportRadius : def.range
-    const colour = def.supportRadius > 0 ? 0x8fd07a : 0xf6ecd9
+  private showTowerRange(x: number, y: number, def: TowerDef): void {
+    const support = def.supportRadius > 0
+    this.showRange(x, y, support ? def.supportRadius : def.range, support ? 0x8fd07a : 0xf6ecd9)
+  }
+
+  private showRange(x: number, y: number, radius: number, colour: number): void {
     this.rangeRing.clear()
     if (radius <= 0) return
     this.rangeRing.fillStyle(colour, 0.1).fillCircle(x, y, radius)
@@ -326,7 +436,7 @@ export class GameScene extends Phaser.Scene {
     const tower = this.towerAt(p.worldX, p.worldY)
     if (tower) {
       if (this.hoverSpot) { this.hoverSpot = null; this.drawSpots() }
-      if (!this.selected) this.showRange(tower.x, tower.y, tower.def)
+      if (!this.selected) this.showTowerRange(tower.x, tower.y, tower.def)
       return
     }
     if (!this.selected) this.rangeRing.clear()
@@ -337,6 +447,22 @@ export class GameScene extends Phaser.Scene {
       this.hoverSpot = next
       this.drawSpots()
     }
+  }
+
+  /** The one line of guidance shown when nothing more specific is happening. */
+  private idleHint(): string {
+    if (this.hero.down && this.status.phase === 'ready') {
+      return `${this.hero.def.name} is out for this encounter. The towers are on their own.`
+    }
+    if (this.build.freeSpots().length === 0) {
+      return 'Every pad is built. Press R to restructure, or START WAVE.'
+    }
+    if (this.status.phase === 'ready') {
+      return this.towers.length === 0
+        ? 'Click a glowing pad to build a tower, then START WAVE.'
+        : 'Build on another pad, move Cory, or START WAVE when you are ready.'
+    }
+    return 'Click a pad to build. Click Cory to move him.'
   }
 
   private pingRally(x: number, y: number): void {
@@ -459,7 +585,7 @@ export class GameScene extends Phaser.Scene {
         return
       }
       this.restructuring = tower
-      this.showRange(tower.x, tower.y, tower.def)
+      this.showTowerRange(tower.x, tower.y, tower.def)
       this.status.message = `Moving ${tower.def.name}. Click a free spot.`
       return
     }
@@ -488,6 +614,7 @@ export class GameScene extends Phaser.Scene {
 
   startWave(): void {
     if (this.status.phase !== 'ready') return
+    this.clearSelection()
     this.spawner.begin(WAVES.waves[this.status.wave])
     this.status.phase = 'wave'
     this.status.waveName = WAVES.waves[this.status.wave].name
@@ -508,7 +635,9 @@ export class GameScene extends Phaser.Scene {
     }
     this.status.phase = 'ready'
     this.status.waveName = WAVES.waves[this.status.wave].name
-    this.status.message = `Wave cleared. +${RULES.goldPerWaveCleared} gold.`
+    this.announce('WAVE CLEARED', COLOR.good)
+    this.status.message =
+      `Wave cleared, +${RULES.goldPerWaveCleared}g. Build or reposition, then START WAVE ${this.status.wave + 1}.`
   }
 
   /** A 3rd tower after wave 4 and a 4th after wave 8, drawn from the reserve. */
@@ -528,6 +657,8 @@ export class GameScene extends Phaser.Scene {
     if (this.status.phase === 'won' || this.status.phase === 'lost') return
     this.status.phase = phase
     this.clearSelection()
+    this.markerLayer.clear()
+    this.spotLayer.clear()
 
     const won = phase === 'won'
     this.status.message = won ? 'Filed on time. Press R for the title screen.' : 'Overrun. Press R for the title screen.'
@@ -580,7 +711,11 @@ export class GameScene extends Phaser.Scene {
     )
     this.hero.tick(dt, this.enemies, (e, dmg) => this.damageEnemy(e, dmg, this.hero.def.ignoresArmor))
 
-    if (this.selected) this.showRange(this.selected.x, this.selected.y, this.selected.def)
+    if (this.selected) this.showTowerRange(this.selected.x, this.selected.y, this.selected.def)
+    else if (this.heroSelected) {
+      this.showRange(this.hero.x, this.hero.y, this.hero.def.attackRange, 0x4fa3e3)
+    }
+    this.drawHeroMarkers()
 
     this.status.heroHealth = this.hero.health
     this.status.heroDown = this.hero.down
@@ -626,8 +761,9 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------- combat
 
   private fire(tower: Tower, target: Enemy): void {
+    const m = tower.muzzle(tower.aimAt(target.x, target.centreY))
     this.shots.push(
-      new Projectile(this, tower.x, tower.y - 10, tower.def.shot, target, tower.def.projectileSpeed, (hit) => {
+      new Projectile(this, m.x, m.y, tower.def.shot, target, tower.def.projectileSpeed, (hit) => {
         this.impactSpark(hit.x, hit.target.centreY)
         if (tower.def.splashRadius > 0) {
           this.blast(hit.x, hit.y, tower.def.splashRadius)

@@ -15,6 +15,7 @@ export class TitleScene extends Phaser.Scene {
   private selectedHero = 'cory'
   private cards: Array<{ id: string; frame: Phaser.GameObjects.Graphics; x: number; y: number; w: number; h: number }> = []
   private blurb!: Phaser.GameObjects.Text
+  private kit!: Phaser.GameObjects.Text
 
   constructor() {
     super('Title')
@@ -58,17 +59,20 @@ export class TitleScene extends Phaser.Scene {
     const totalW = ids.length * cardW + (ids.length - 1) * gap
     ids.forEach((id, i) => this.heroCard(id, W / 2 - totalW / 2 + i * (cardW + gap), 282, cardW, 190))
 
-    this.blurb = this.add.text(W / 2, 494, '', {
+    // The description and the kit are separate blocks: as one wrapped string
+    // the kit line ran under the START RUN button.
+    this.blurb = this.add.text(W / 2, 486, '', {
       fontFamily: FONT_UI, fontSize: '13px', color: COLOR.dim,
-      align: 'center', wordWrap: { width: 660 },
+      align: 'center', wordWrap: { width: 680 },
     }).setOrigin(0.5, 0)
 
-    button(this, W / 2, 598, 260, 58, 'START RUN', () => this.start(), 24)
-    button(this, W / 2, 660, 190, 40, 'CREDITS', () => this.scene.start('Credits'), 15)
+    this.kit = this.add.text(W / 2, 552, '', {
+      fontFamily: FONT_UI, fontSize: '12px', color: COLOR.good,
+      align: 'center', wordWrap: { width: 780 },
+    }).setOrigin(0.5, 0)
 
-    this.add.text(W / 2, 700, 'click a hero, then start', {
-      fontFamily: FONT_UI, fontSize: '11px', color: COLOR.dim,
-    }).setOrigin(0.5).setAlpha(0.6)
+    button(this, W / 2, 622, 260, 58, 'START RUN', () => this.start(), 24)
+    button(this, W / 2, 680, 190, 38, 'CREDITS', () => this.scene.start('Credits'), 15)
 
     this.select(this.selectedHero)
   }
@@ -118,7 +122,9 @@ export class TitleScene extends Phaser.Scene {
         .strokeRoundedRect(c.x, c.y, c.w, c.h, 10)
     }
     const def = HEROES[id]
-    this.blurb.setText(`${def.flavor}\n${def.blurb}\n\n${def.passive.name}: ${def.passive.flavor}    ·    ${def.haymaker.name}    ·    ${def.restructure.name}    ·    Last Stand: ${def.lastStand.name}`)
+    this.blurb.setText(`${def.flavor}\n${def.blurb}`)
+    this.kit.setText(`${def.passive.name}: ${def.passive.flavor}    ·    ${def.haymaker.name}` +
+      `    ·    ${def.restructure.name}    ·    Last Stand: ${def.lastStand.name}`)
   }
 
   private start(): void {

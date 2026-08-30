@@ -31,10 +31,10 @@ the map.** The splash runs about two seconds and any click or key skips it.
 
 | Input | Does |
 |---|---|
-| Click a highlighted spot | Open the build menu for that spot |
+| Click a building pad | Open the build menu for that pad |
 | Hover a menu option | Preview that tower's range |
 | Click a built tower | Select it and show its range |
-| Click the road or scenery | Set Cory's rally point |
+| Click Cory, then a spot | Send him there; he walks, holds, and fights what comes |
 | `Q` / `W` or the HUD slots | Cast a drafted ability (click to place it) |
 | `E` | Haymaker — huge single-target hit with knockback |
 | `R` | Restructure — move a built tower for free |
@@ -78,8 +78,15 @@ src/ui/                       Theme, build menu
 src/data/                     All tuneable numbers, as JSON
 tests/                        Logic, balance, draft and content tests
 tools/mksfx.py                Regenerates the sound cues
-tools/trace_map.py            Re-derives the lane and build spots from the map art
+tools/trace_map.py            Re-derives the lane and build pads from the map art
+tools/measure_art.py          Re-derives the art manifest's anchors and sizes
+tools/harness/                Plays the game in headless Chromium and screenshots it
 ```
+
+There is no npm registry in the build environment, so there is no local
+`vite dev`. `tools/harness/` compiles the shipping source and runs it in
+headless Chromium instead, driving it with real input events — see its README.
+Looking at a frame is the only way some of these bugs are visible at all.
 
 The map is a **single painted plate** scaled to fill the canvas, so canvas
 pixels are the map's own coordinate space. Sprites on top are sorted by Y
@@ -106,9 +113,27 @@ changes. The painted spur to the tavern door is decoration and is not part of
 the route; the route search ignores it because a detour into a dead end costs
 distance and buys nothing.
 
-Build spots are hand-sized circles rather than tiles, and they are only drawn
-while the player is placing: a soft cream disc for each free spot, brighter
-under the cursor. Nothing marks the map otherwise.
+There are **seven building pads**, hand-sized ellipses rather than tiles, and
+they are drawn on the map at all times: a player cannot choose where to build
+if finding a pad means tapping the grass at random. They brighten while a build
+menu is open and brighter still under the cursor. Seven is deliberate — with
+this much map, two dozen pads meant almost every choice covered the same
+ground, and each pad is now further apart than a tower's own range, so it owns
+its stretch of the walk.
+
+Pads sit low enough that a tower standing on one clears the HUD bar; the
+tracer enforces that, using `display.hudHeight`.
+
+## Cory
+
+He is not a cursor. Click him to select — a ring appears at his feet and his
+reach is shown — then click where he should hold. He walks there at his own
+speed, stops, and fights whatever comes into range; a flag marks the standing
+order. He does not move again until told to.
+
+Bare ground does nothing unless he is selected, which is what stops a misjudged
+tap walking him off his post mid-wave. Building pads take a tap before the
+ground does, and before the hero.
 
 ## Audio
 

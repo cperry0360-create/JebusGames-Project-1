@@ -121,19 +121,44 @@ test('anchors stay well inside the frame', () => {
 
 test('a ground shadow covers the footprint and not the whole sprite', () => {
   // This is the assertion that catches the mistake the anchor check cannot:
-  // measuring the widest row instead of the feet. The brute's leaf blower runs
-  // to 95% of his width, so a shadow that swallowed it would fail here while
-  // still sitting at a perfectly central-looking anchor.
-  let checked = 0
+  // measuring the widest row instead of the feet. The bound differs by what
+  // the art is. A tower is a building whose widest part IS its base, so its
+  // shadow legitimately spans nearly its whole width; a character holding a
+  // leaf blower must never do that, or the measurement caught the blower.
+  let characters = 0
+  let buildings = 0
   for (const [key, cfg] of Object.entries(art.render) as [string, any][]) {
     if (cfg.shadowWidth === undefined || !cfg.contentWidth || !cfg.contentHeight) continue
-    checked++
     const onScreenWidth = (cfg.contentWidth / cfg.contentHeight) * cfg.displayHeight
     const share = cfg.shadowWidth / onScreenWidth
     assert.ok(share > 0.25, `${key} shadow is only ${(share * 100).toFixed(0)}% of its width; too small to stand on`)
-    assert.ok(share < 0.85, `${key} shadow is ${(share * 100).toFixed(0)}% of its width; it has swallowed something the art is holding`)
+
+    const isCharacter = /^enemies\//.test(art.files[key])
+    if (isCharacter) {
+      characters++
+      assert.ok(share < 0.85,
+        `${key} shadow is ${(share * 100).toFixed(0)}% of its width; it has swallowed something the art is holding`)
+    } else {
+      buildings++
+      // The thin obelisk's base IS its widest row, so its share is exactly 1
+      // before the manifest's one-decimal rounding is taken into account.
+      assert.ok(share <= 1.02, `${key} shadow is wider than the art it belongs to`)
+    }
   }
-  assert.ok(checked >= 3, `only ${checked} sprites carry a measured footprint`)
+  assert.ok(characters >= 3, `only ${characters} characters carry a measured footprint`)
+  assert.ok(buildings >= 6, `only ${buildings} buildings carry a measured footprint`)
+})
+
+test('towers are sized so a stone base reads against the road', () => {
+  // The brief: a base a little over the painted road's width, 90-110px. The
+  // thin obelisk is deliberately narrower — it is one tower, not the set.
+  const towers = JSON.parse(readFileSync(url('../src/data/towers.json'), 'utf8'))
+  const bases = Object.values(towers).map((t: any) => art.render[t.sprite].shadowWidth).sort((a, b) => a - b)
+  const median = bases[Math.floor(bases.length / 2)]
+  assert.ok(median >= 90 && median <= 110,
+    `the median tower base is ${median}px; the map wants 90-110px`)
+  const heights = new Set(Object.values(towers).map((t: any) => art.render[t.sprite].displayHeight))
+  assert.equal(heights.size, 1, 'towers must share one scale, or the artist\'s proportions are lost')
 })
 
 test('swapping the manifest to another pack needs no code edit', () => {

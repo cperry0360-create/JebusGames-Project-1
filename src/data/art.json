@@ -41,38 +41,50 @@
     "turret-escalation": {
       "anchorX": 0.5054,
       "anchorY": 0.998,
-      "displayHeight": 72.8,
-      "shadowWidth": 64.6
+      "displayHeight": 114.6,
+      "shadowWidth": 101.6,
+      "contentWidth": 461,
+      "contentHeight": 510
     },
     "turret-extension": {
       "anchorX": 0.4987,
       "anchorY": 1.0,
-      "displayHeight": 72.8,
-      "shadowWidth": 55.3
+      "displayHeight": 114.6,
+      "shadowWidth": 87.0,
+      "contentWidth": 389,
+      "contentHeight": 512
     },
     "turret-rounding": {
       "anchorX": 0.4792,
       "anchorY": 1.0,
-      "displayHeight": 72.8,
-      "shadowWidth": 28.6
+      "displayHeight": 114.6,
+      "shadowWidth": 45.0,
+      "contentWidth": 201,
+      "contentHeight": 512
     },
     "turret-shelter": {
       "anchorX": 0.4988,
       "anchorY": 1.0,
-      "displayHeight": 72.8,
-      "shadowWidth": 61.0
+      "displayHeight": 114.6,
+      "shadowWidth": 96.0,
+      "contentWidth": 429,
+      "contentHeight": 512
     },
     "turret-ledger": {
       "anchorX": 0.4988,
       "anchorY": 1.0,
-      "displayHeight": 72.8,
-      "shadowWidth": 59.0
+      "displayHeight": 114.6,
+      "shadowWidth": 92.9,
+      "contentWidth": 415,
+      "contentHeight": 512
     },
     "turret-writeoff": {
       "anchorX": 0.5008,
       "anchorY": 0.9902,
-      "displayHeight": 72.8,
-      "shadowWidth": 66.0
+      "displayHeight": 114.6,
+      "shadowWidth": 103.8,
+      "contentWidth": 464,
+      "contentHeight": 506
     },
     "brand-studio-card": {
       "anchorX": 0.4896,

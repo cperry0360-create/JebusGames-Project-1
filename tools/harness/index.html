@@ -1,0 +1,301 @@
+<!doctype html><html><head><meta charset="utf-8">
+<style>
+ html,body{margin:0;background:#111;}
+ @font-face{font-family:KenneyFuture;src:url(assets/fonts/KenneyFuture.ttf);}
+ @font-face{font-family:KenneyFutureNarrow;src:url(assets/fonts/KenneyFutureNarrow.ttf);}
+ @font-face{font-family:KenneyMiniSquare;src:url(assets/fonts/KenneyMiniSquare.ttf);}
+ #game{width:1280px;height:720px;}
+ #game canvas{width:1280px !important;height:720px !important;}
+</style></head><body>
+<div id="game"></div>
+<script src="phaser.min.js"></script>
+<script type="module">
+// Test director. Drives the real game with real input events, in real time,
+// and uploads what it sees. No game logic lives here.
+const post = (path, body) => fetch(path, { method: 'POST', body }).catch(() => {})
+const log = []
+const note = (m) => { log.push(m); post('/log', m) }
+addEventListener('error', (e) => note('PAGE ERROR ' + e.message + ' @' + e.lineno))
+addEventListener('unhandledrejection', (e) => note('REJECT ' + (e.reason?.message || e.reason)))
+
+import { gameConfig } from './js/config.js'
+import { setRunState } from './js/systems/RunState.js'
+const MAP = (await import('./js/data/map.json', { with: { type: 'json' } })).default
+const SPOTS = MAP.buildSpots
+
+const q = new URLSearchParams(location.search)
+const scenario = q.get('s') || 'game'
+await document.fonts.ready.catch(() => {})
+
+// A fixed run, so every scenario starts from the same hand.
+setRunState({
+  heroId: 'cory', abilities: ['explosion', 'freezeField'],
+  openingTowers: ['withholding', 'writeoff'],
+  reserveTowers: ['escalation', 'rounding', 'extension', 'shelter'], seed: 7,
+})
+
+const game = new Phaser.Game({ ...gameConfig, scale: { mode: Phaser.Scale.NONE } })
+window.game = game
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const scene = (k) => game.scene.getScene(k)
+const running = (k) => game.scene.isActive(k)
+async function until(fn, ms = 10000) {
+  for (let w = 0; w < ms; w += 40) { if (fn()) return true; await sleep(40) }
+  return fn()
+}
+
+// Real DOM input, so the scene's own hit-testing and precedence are exercised.
+// Phaser 3 listens for mouse events, not pointer events.
+function mouse(type, x, y, btn = 0) {
+  const c = game.canvas, r = c.getBoundingClientRect()
+  c.dispatchEvent(new MouseEvent(type, {
+    clientX: r.left + x, clientY: r.top + y, button: btn,
+    buttons: type === 'mouseup' ? 0 : (btn === 2 ? 2 : 1),
+    view: window, bubbles: true, cancelable: true,
+  }))
+}
+async function move(x, y) { mouse('mousemove', x, y); await sleep(100) }
+async function click(x, y, btn = 0) {
+  await move(x, y)
+  mouse('mousedown', x, y, btn); await sleep(90)
+  mouse('mouseup', x, y, btn); await sleep(160)
+}
+const KEYS = {
+  Space: { key: ' ', code: 'Space', keyCode: 32 }, KeyR: { key: 'r', code: 'KeyR', keyCode: 82 },
+  KeyE: { key: 'e', code: 'KeyE', keyCode: 69 }, KeyQ: { key: 'q', code: 'KeyQ', keyCode: 81 },
+  KeyW: { key: 'w', code: 'KeyW', keyCode: 87 }, Escape: { key: 'Escape', code: 'Escape', keyCode: 27 },
+}
+async function key(name) {
+  const k = KEYS[name]
+  window.dispatchEvent(new KeyboardEvent('keydown', { ...k, bubbles: true, cancelable: true }))
+  await sleep(60)
+  window.dispatchEvent(new KeyboardEvent('keyup', { ...k, bubbles: true, cancelable: true }))
+  await sleep(80)
+}
+async function shot(name) {
+  await sleep(140)
+  await post('/shot/' + name, game.canvas.toDataURL('image/png'))
+}
+
+// Everything visible, recursively, so a screenshot is never the only evidence.
+function walk(o, out, px, py, lvl) {
+  if (o.visible === false || (o.alpha ?? 1) <= 0.02) return
+  const x = px + (o.x || 0), y = py + (o.y || 0)
+  out.push({
+    t: o.type, k: o.texture?.key ?? (o.text !== undefined ? 'TEXT:' + String(o.text).slice(0, 44) : ''),
+    x: Math.round(x), y: Math.round(y),
+    w: Math.round(o.displayWidth || 0), h: Math.round(o.displayHeight || 0),
+    sc: +(o.scaleX ?? 1).toFixed(3), lvl,
+  })
+  if (o.list) for (const c of o.list) walk(c, out, x, y, lvl + 1)
+}
+function dumpScenes() {
+  const r = {}
+  for (const sc of game.scene.scenes) {
+    if (!game.scene.isActive(sc.scene.key)) continue
+    const out = []
+    for (const o of sc.children.list) walk(o, out, 0, 0, 0)
+    r[sc.scene.key] = out
+  }
+  return r
+}
+
+async function toTitle() {
+  await until(() => game.textures.exists('map-level1') && game.textures.exists('enemy-notice'), 30000)
+  const ok = await until(() => running('Title'), 15000)
+  note('splash -> title: ' + ok)
+  return ok
+}
+async function startRun() {
+  for (const k of ['Title', 'Draft', 'Splash', 'Credits', 'Boot']) game.scene.stop(k)
+  game.scene.start('Game'); game.scene.start('Hud')
+  await until(() => running('Game') && scene('Game').status.heroName !== '', 10000)
+  await sleep(500)
+  return scene('Game')
+}
+async function build(spotIndex, towerIndex = 0) {
+  const g = scene('Game')
+  const [x, y] = SPOTS[spotIndex]
+  await click(x, y)
+  if (!g.menu?.isOpen) { note(`build@${spotIndex}: menu did not open`); return false }
+  const hit = g.menu.hitAreas?.[towerIndex]
+  if (!hit) { note(`build@${spotIndex}: no option ${towerIndex}`); return false }
+  const b = hit.getBounds()
+  await click(b.centerX, b.centerY)
+  return true
+}
+
+let g = null
+async function run() {
+  const okTitle = await toTitle()
+  if (scenario === 'title') { await shot('title'); return }
+  if (scenario === 'draft') {
+    if (okTitle) { scene('Title').scene.start('Draft'); await sleep(900); await shot('draft') }
+    return
+  }
+  if (scenario === 'credits') {
+    if (okTitle) { scene('Title').scene.start('Credits'); await sleep(900); await shot('credits') }
+    return
+  }
+  g = await startRun()
+
+  if (scenario === 'game') { await shot('01-fresh'); return }
+
+  if (scenario === 'ui') {
+    await shot('ui-01-fresh')
+    await move(SPOTS[4][0], SPOTS[4][1]); await shot('ui-02-hover-spot')
+    await click(SPOTS[4][0], SPOTS[4][1]); await shot('ui-03-menu')
+    let hit = g.menu.hitAreas?.[0]
+    if (hit) { const b = hit.getBounds(); await move(b.centerX, b.centerY); await shot('ui-04-menu-hover-range') }
+    if (hit) { const b = hit.getBounds(); await click(b.centerX, b.centerY) }
+    await shot('ui-05-built')
+    note('after build: towers=' + g.towers.length + ' gold=' + g.status.gold)
+    await click(SPOTS[4][0], SPOTS[4][1]); await shot('ui-06-select-tower')
+
+    // Hero control: a ground tap alone must do nothing.
+    const before = [Math.round(g.hero.x), Math.round(g.hero.y)]
+    await click(400, 620)
+    const afterGround = [Math.round(g.hero.x), Math.round(g.hero.y)]
+    await sleep(900)
+    note(`ground tap with hero UNSELECTED: ${before} -> ${afterGround} -> ${[Math.round(g.hero.x), Math.round(g.hero.y)]} (must not move)`)
+    await shot('ui-07-ground-tap-unselected')
+
+    await click(g.hero.x, g.hero.y)
+    note('hero selected: ' + g.heroSelected + ' msg="' + g.status.message + '"')
+    await shot('ui-08-hero-selected')
+    await click(400, 620)
+    note('after order: selected=' + g.heroSelected + ' rally=' + JSON.stringify(g.hero.rally))
+    await shot('ui-09-rally-ordered')
+    await sleep(2500)
+    note(`hero walked to ${[Math.round(g.hero.x), Math.round(g.hero.y)]} atRally=${g.hero.atRally}`)
+    await shot('ui-10-hero-arrived')
+
+    // A tap on a pad must beat a rally order aimed at the same pixel.
+    await click(g.hero.x, g.hero.y)
+    await click(SPOTS[2][0], SPOTS[2][1])
+    note('pad vs ground precedence: menuOpen=' + g.menu.isOpen + ' heroRally=' + JSON.stringify(g.hero.rally))
+    await shot('ui-11-pad-beats-ground')
+    await click(20, 700)
+
+    await key('KeyR'); await shot('ui-12-restructure')
+    await key('Escape')
+    await key('KeyQ'); await move(700, 430); await shot('ui-13-ability-target')
+    await key('Escape')
+    return
+  }
+
+  if (scenario === 'combat') {
+    for (let i = 0; i < 4; i++) await build(i, i % 2)
+    await shot('c-01-towers')
+    await key('Space')
+    await sleep(3000); await shot('c-02-wave-early')
+    await sleep(4000); await shot('c-03-wave-mid')
+    note('mid: enemies=' + g.enemies.length + ' gold=' + g.status.gold + ' lives=' + g.status.lives)
+    await until(() => g.status.phase !== 'wave', 90000)
+    await shot('c-04-wave-cleared')
+    note('cleared: phase=' + g.status.phase + ' gold=' + g.status.gold + ' msg=' + g.status.message)
+    return
+  }
+
+  if (scenario === 'poor') {
+    // Insufficient gold: does the game say why nothing happened?
+    g.status.gold = 5
+    await click(SPOTS[1][0], SPOTS[1][1])
+    const hit = g.menu.hitAreas?.[0]
+    if (hit) { const b = hit.getBounds(); await click(b.centerX, b.centerY) }
+    note('poor: towers=' + g.towers.length + ' msg="' + g.status.message + '" menuOpen=' + g.menu.isOpen)
+    await shot('poor')
+    return
+  }
+
+  if (scenario === 'lost') {
+    await key('Space')
+    await until(() => g.status.phase === 'lost', 240000)
+    await sleep(600); await shot('lost')
+    note('lost: msg=' + g.status.message)
+    return
+  }
+
+  if (scenario === 'skilled') {
+    // A competent player: towers spread along the walk, the hero posted on the
+    // lane, abilities spent whenever they are up.
+    const order = [3, 1, 5, 0, 2, 4, 6]
+    let guard = 0
+    let last = -1
+    const shots = new Set()
+    while (g.status.phase !== 'won' && g.status.phase !== 'lost' && guard++ < 2500) {
+      if (g.status.phase === 'ready') {
+        for (const i of order) {
+          if (!g.build.isFree(i)) continue
+          const before = g.towers.length
+          await build(i, 0)
+          if (g.towers.length === before) { await click(20, 700); break }
+        }
+        if (g.status.wave !== last) {
+          last = g.status.wave
+          note(`wave ${g.status.wave + 1}: gold=${g.status.gold} lives=${g.status.lives} towers=${g.towers.length}`)
+          if ([0, 5, 11].includes(g.status.wave) && !shots.has(g.status.wave)) {
+            shots.add(g.status.wave)
+            await shot('s-wave' + (g.status.wave + 1))
+          }
+        }
+        // Post the hero on the lane, halfway along.
+        const mid = g.lane.pointAt(g.lane.totalLength * 0.55)
+        if (Math.hypot(g.hero.rally.x - mid.x, g.hero.rally.y - mid.y) > 30 && !g.hero.down) {
+          await click(g.hero.x, g.hero.y)
+          await click(mid.x, mid.y)
+        }
+        await key('Space')
+      } else {
+        // Spend abilities on whatever is furthest along.
+        const live = g.enemies.filter((e) => e.alive)
+        if (live.length >= 3) {
+          const t = live.reduce((a, b) => (a.distance > b.distance ? a : b))
+          for (const slot of ['KeyQ', 'KeyW']) {
+            if (g.status.mode === 'targeting') break
+            await key(slot)
+            if (g.status.mode === 'targeting') { await click(t.x, t.y) }
+          }
+          await key('KeyE')
+        }
+      }
+      await sleep(220)
+    }
+    note(`RESULT: ${g.status.phase} at wave ${g.status.wave}/12, lives ${g.status.lives}, gold ${g.status.gold}, towers ${g.towers.length}`)
+    await sleep(700)
+    await shot('s-end')
+    return
+  }
+
+  if (scenario === 'full') {
+    let guard = 0
+    let shotWave4 = false
+    while (g.status.phase !== 'won' && g.status.phase !== 'lost' && guard++ < 1400) {
+      if (g.status.phase === 'ready') {
+        for (let i = 0; i < SPOTS.length && g.towers.length < 4; i++) {
+          if (!g.build.isFree(i)) continue
+          if (!(await build(i, 0))) break
+        }
+        if (g.status.wave === 3 && !shotWave4) { await shot('f-01-wave4'); shotWave4 = true }
+        await key('Space')
+      }
+      await sleep(400)
+    }
+    note('final: phase=' + g.status.phase + ' wave=' + g.status.wave + ' lives=' + g.status.lives + ' towers=' + g.towers.length)
+    await sleep(600)
+    await shot('f-99-end')
+    return
+  }
+}
+
+try { await run() } catch (e) { note('DIRECTOR ERROR: ' + e.message + ' | ' + String(e.stack).slice(0, 400)) }
+
+const gs = scene('Game')
+await post('/done', JSON.stringify({
+  scenario, log,
+  status: gs?.status ?? null,
+  towers: gs?.towers?.length, enemies: gs?.enemies?.length, spots: SPOTS.length,
+  heroAt: gs?.hero ? [Math.round(gs.hero.x), Math.round(gs.hero.y)] : null,
+  scenes: dumpScenes(),
+}, null, 1))
+</script></body></html>

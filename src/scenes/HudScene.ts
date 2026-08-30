@@ -2,6 +2,7 @@ import Phaser from 'phaser'
 import displayData from '../data/display.json'
 import { GameScene } from './GameScene.ts'
 import { COLOR, FONT_DISPLAY, FONT_UI, panel } from '../ui/Theme.ts'
+import { fitInBox } from '../systems/Art.ts'
 
 interface SlotView {
   id: string
@@ -15,7 +16,10 @@ interface SlotView {
   y: number
 }
 
-const BAR_H = 72
+const SHADOW_H = 6
+/** The bar itself; display.hudHeight is the bar plus its shadow, which is the
+ *  line the rest of the game has to keep clear. */
+const BAR_H = displayData.hudHeight - SHADOW_H
 const SLOT = 56
 
 /** UI lives in its own scene so the world can Y-sort freely without the HUD
@@ -33,6 +37,9 @@ export class HudScene extends Phaser.Scene {
   private startHit!: Phaser.GameObjects.Rectangle
   private slots: SlotView[] = []
   private slotsBuilt = false
+  /** Last drawn values, so a change can be shown rather than just displayed. */
+  private lastGold = -1
+  private lastLives = -1
 
   constructor() {
     super('Hud')
@@ -42,11 +49,13 @@ export class HudScene extends Phaser.Scene {
     this.world = this.scene.get('Game') as GameScene
     this.slots = []
     this.slotsBuilt = false
+    this.lastGold = -1
+    this.lastLives = -1
     const W = displayData.width
 
     panel(this, -4, -6, W + 8, BAR_H + 6, { radius: 0, alpha: 0.97, shadow: false })
     // The bar is flush to the top edge, so its shadow is drawn below it only.
-    this.add.rectangle(0, BAR_H, W, 6, 0x000000, 0.3).setOrigin(0, 0)
+    this.add.rectangle(0, BAR_H, W, SHADOW_H, 0x000000, 0.3).setOrigin(0, 0)
 
     this.goldText = this.add.text(18, 12, '', {
       fontFamily: FONT_DISPLAY, fontSize: '22px', color: COLOR.gold,
@@ -57,8 +66,11 @@ export class HudScene extends Phaser.Scene {
     this.waveText = this.add.text(288, 12, '', {
       fontFamily: FONT_DISPLAY, fontSize: '22px', color: COLOR.ink,
     })
-    this.message = this.add.text(18, 44, '', {
-      fontFamily: FONT_UI, fontSize: '13px', color: COLOR.dim,
+    // Under the bar rather than inside it: at 13px the guidance line ran
+    // straight into the ability slots and lost its second half.
+    this.message = this.add.text(18, BAR_H + 12, '', {
+      fontFamily: FONT_UI, fontSize: '14px', color: COLOR.ink,
+      stroke: '#0d1016', strokeThickness: 4,
     })
 
     this.buildStartButton(W - 208, 10)
@@ -103,7 +115,10 @@ export class HudScene extends Phaser.Scene {
       const x = startX + i * (SLOT + 10)
       const y = 8
       const frame = this.add.graphics()
-      const icon = this.add.image(x + SLOT / 2, y + SLOT / 2 - 4, d.icon).setScale(0.72)
+      // Sized through the manifest: these icons come from Kenney tiles and
+      // painted towers alike, and a bare scale factor sizes only one of them.
+      const icon = this.add.image(x + SLOT / 2, y + SLOT / 2 - 4, d.icon)
+      fitInBox(icon, d.icon, SLOT - 18)
       const sweep = this.add.graphics()
       const timer = this.add.text(x + SLOT / 2, y + SLOT / 2, '', {
         fontFamily: FONT_DISPLAY, fontSize: '17px', color: COLOR.ink,
@@ -136,12 +151,44 @@ export class HudScene extends Phaser.Scene {
 
     this.goldText.setText(`${s.gold}g`)
     this.livesText.setText(`${s.lives} HP`)
+    // Money and lives are the two numbers a player watches, so a change has to
+    // announce itself rather than quietly appear.
+    if (this.lastGold >= 0 && s.gold !== this.lastGold) {
+      this.bump(this.goldText, s.gold > this.lastGold ? '#ffffff' : COLOR.danger, COLOR.gold)
+      if (s.gold > this.lastGold) this.floatUp(`+${s.gold - this.lastGold}g`, COLOR.gold)
+    }
+    if (this.lastLives >= 0 && s.lives < this.lastLives) {
+      this.bump(this.livesText, '#ffffff', COLOR.danger)
+    }
+    this.lastGold = s.gold
+    this.lastLives = s.lives
     this.waveText.setText(`WAVE ${Math.min(s.wave + 1, s.waveCount)}/${s.waveCount}`)
     this.message.setText(s.message)
 
     this.drawStartButton(s)
     this.drawSlots(s)
     this.drawHeroBar(s)
+  }
+
+  /** A short pop on a number that just changed, then back to its own colour. */
+  private bump(text: Phaser.GameObjects.Text, flash: string, base: string): void {
+    this.tweens.killTweensOf(text)
+    text.setColor(flash)
+    text.setScale(1)
+    this.tweens.add({
+      targets: text, scale: 1.25, duration: 90, yoyo: true, ease: 'Quad.easeOut',
+      onComplete: () => text.setColor(base),
+    })
+  }
+
+  private floatUp(label: string, colour: string): void {
+    const t = this.add.text(this.goldText.x + 6, 34, label, {
+      fontFamily: FONT_DISPLAY, fontSize: '15px', color: colour,
+    })
+    this.tweens.add({
+      targets: t, y: 14, alpha: 0, duration: 700, ease: 'Quad.easeOut',
+      onComplete: () => t.destroy(),
+    })
   }
 
   private drawStartButton(s: GameScene['status']): void {

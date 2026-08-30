@@ -48,6 +48,25 @@ export function fitContentHeight(
   sprite.setScale(targetHeight / (cfg.contentHeight ?? sprite.height))
 }
 
+/**
+ * Fits art inside a square box, from the manifest alone.
+ *
+ * Icons are drawn from every art source in the game at once — a 64px Kenney
+ * tile beside a 616px painted tower — so an icon must never be sized by a bare
+ * scale factor. Doing that is what put a 444px tower in a 56px HUD slot.
+ */
+export function fitInBox(
+  sprite: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image,
+  key: string,
+  box: number,
+): void {
+  const cfg = renderFor(key)
+  const w = cfg.contentWidth ?? sprite.width
+  const h = cfg.contentHeight ?? sprite.height
+  sprite.setOrigin(0.5, 0.5)
+  sprite.setScale(Math.min(box / w, box / h))
+}
+
 /** On-screen width of art fitted to a given content height. */
 export function contentWidthAt(key: string, targetHeight: number): number {
   const cfg = renderFor(key)

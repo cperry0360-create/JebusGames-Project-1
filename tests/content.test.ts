@@ -95,6 +95,28 @@ test('health bars are sized from the sprite, not fixed', () => {
     'the clamp collapses two enemies to the same bar width')
 })
 
+test('every icon the UI shows can be sized from the manifest', () => {
+  // The HUD, the build menu and the draft screen all draw icons from the same
+  // manifest, mixing 64px pack tiles with 512px painted art. Anything painted
+  // has to record its content box or the UI cannot fit it to a slot — that is
+  // how a 616px tower ended up drawn at 444px across the middle of the map.
+  const icons: Array<[string, string]> = []
+  for (const [id, a] of Object.entries(abilities) as [string, any][]) icons.push([`ability ${id}`, a.icon])
+  for (const [id, h] of Object.entries(heroes) as [string, any][]) {
+    icons.push([`hero ${id} haymaker`, h.haymaker.icon], [`hero ${id} restructure`, h.restructure.icon])
+  }
+  for (const [id, t] of Object.entries(towers) as [string, any][]) icons.push([`tower ${id}`, t.sprite])
+
+  for (const [where, key] of icons) {
+    const path = art.files[key]
+    assert.ok(path, `${where} references unknown sprite key "${key}"`)
+    if (/^kenney\//.test(path)) continue
+    const cfg = art.render[key]
+    assert.ok(cfg && cfg.contentWidth > 0 && cfg.contentHeight > 0,
+      `${where} uses painted art ("${key}") with no measured content box, so no slot can size it`)
+  }
+})
+
 test('the fonts and sound cues are bundled', () => {
   for (const f of ['KenneyFuture.ttf', 'KenneyFutureNarrow.ttf', 'KenneyMiniSquare.ttf', 'License.txt']) {
     assert.ok(existsSync(url(`../public/assets/fonts/${f}`)), `missing font asset ${f}`)

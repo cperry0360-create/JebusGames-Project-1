@@ -10,3 +10,10 @@ dist-ssr/
 # Python bytecode from tools/
 __pycache__/
 *.pyc
+
+# The harness stages a compiled copy of the game and its screenshots.
+tools/harness/stage/
+tools/harness/tssrc/
+tools/harness/shots/
+tools/harness/profile/
+tools/harness/*.log

@@ -97,7 +97,15 @@ export function button(
   text: string,
   onClick: () => void,
   size = 18,
-): { hit: Phaser.GameObjects.Rectangle; setEnabled: (on: boolean) => void; text: Phaser.GameObjects.Text } {
+): {
+  hit: Phaser.GameObjects.Rectangle
+  setEnabled: (on: boolean) => void
+  text: Phaser.GameObjects.Text
+  /** Every piece, in draw order. A caller putting a button inside a container
+   *  must add all of them: leaving the panel behind in the scene draws it over
+   *  the label, because the container was added to the display list first. */
+  parts: Phaser.GameObjects.GameObject[]
+} {
   const g = panel(scene, x - w / 2, y - h / 2, w, h, { fill: 0x2f6b38, edge: COLOR.accent })
   const t = scene.add
     .text(x, y, text, { fontFamily: FONT_DISPLAY, fontSize: `${size}px`, color: COLOR.ink })
@@ -116,6 +124,7 @@ export function button(
   return {
     hit,
     text: t,
+    parts: [g, t, hit],
     setEnabled: (on: boolean) => {
       enabled = on
       t.setColor(on ? COLOR.ink : '#6f7a86')

@@ -135,10 +135,34 @@ test('distanceTo measures to the lane, not to a waypoint', () => {
 
 // ------------------------------------------------------------ buildable spots
 
-test('there are enough hand-placed spots to build a real defence', () => {
-  assert.ok(spots.length >= 10 && spots.length <= 14,
-    `${spots.length} build spots; the map wants 10 to 14`)
-  assert.ok(map.spotRadius > 16, 'a spot smaller than this is hard to click')
+test('there are seven pads, so placement is a decision', () => {
+  // With a four-tower cap, two dozen pads meant almost every choice covered
+  // the same ground. Seven means picking a stretch to defend.
+  assert.equal(spots.length, 7, `${spots.length} build pads; the map is designed for 7`)
+  assert.ok(map.spotRadius > 16, 'a pad smaller than this is hard to click')
+})
+
+test('each pad owns its own stretch of the walk', () => {
+  // Two pads close enough to cover the same bend are one decision spent twice.
+  const towerRange = Math.min(...Object.values(read('towers')).map((t: any) => t.range))
+  for (let i = 0; i < spots.length; i++) {
+    for (let j = i + 1; j < spots.length; j++) {
+      const d = Math.hypot(spots[i][0] - spots[j][0], spots[i][1] - spots[j][1])
+      assert.ok(d > towerRange, `pads ${i} and ${j} are ${d.toFixed(0)}px apart, inside one tower's ${towerRange}px range`)
+    }
+  }
+})
+
+test('a tower on any pad stays clear of the HUD bar', () => {
+  // Towers are anchored at their base and drawn upwards, so a pad too high on
+  // the map hides a tower's roof behind the HUD.
+  const art = read('art')
+  const tallest = Math.max(...Object.values(read('towers'))
+    .map((t: any) => art.render[t.sprite].displayHeight))
+  for (const [i, [, y]] of spots.entries()) {
+    assert.ok(y - tallest > display.hudHeight,
+      `pad ${i} at y=${y} puts a ${tallest}px tower behind the ${display.hudHeight}px HUD`)
+  }
 })
 
 test('every spot sits on open ground beside the road, never on it', () => {
@@ -171,9 +195,11 @@ test('spots cover the whole walk, not just the near end', () => {
 
   assert.ok(fractions[0] < visibleStart + 0.1, 'nothing guards the entrance')
   assert.ok(fractions[fractions.length - 1] > visibleEnd - 0.1, 'nothing guards the gate')
+  // Seven pads across roughly three quarters of the visible walk leaves real
+  // gaps by design; what matters is that no gap is big enough to be a hole.
   for (let i = 1; i < fractions.length; i++) {
-    assert.ok(fractions[i] - fractions[i - 1] < 0.2,
-      `a ${((fractions[i] - fractions[i - 1]) * 100).toFixed(0)}% stretch of the walk has no spot beside it`)
+    assert.ok(fractions[i] - fractions[i - 1] < 0.28,
+      `a ${((fractions[i] - fractions[i - 1]) * 100).toFixed(0)}% stretch of the walk has no pad beside it`)
   }
   console.log(`   spots: ${spots.length} covering ${(fractions[0] * 100).toFixed(0)}%` +
     `-${(fractions[fractions.length - 1] * 100).toFixed(0)}% of the walk`)

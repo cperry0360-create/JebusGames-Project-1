@@ -1,6 +1,6 @@
 {
   "towersAtStart": 2,
-  "towerCap": 4,
+  "unlockedTypeCap": 4,
   "unlockAfterWave": [4, 8],
   "abilitiesDrawn": 2,
   "damageArchetypes": ["single-target"],

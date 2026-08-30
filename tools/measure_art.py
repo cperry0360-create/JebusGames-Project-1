@@ -14,11 +14,16 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import png
 
 ALPHA = 16
-TILE = 64
 # All six are drawn at one consistent scale inside a 512-tall frame, so a
-# uniform scale preserves their intended sizes relative to each other. It is
-# set so the widest base slightly overlaps its tile, which reads as presence.
-WIDEST_BASE_ON_TILE = 66.0
+# uniform scale preserves their intended sizes relative to each other. The
+# scale is set from the *median* stone base rather than the widest, so one
+# unusually thin or wide tower cannot drag the whole set.
+#
+# 96px puts a tower's base a little over 1.5x the painted road's width. The
+# road measures 61px on the 1280px canvas, so a literal "1.2x the path" would
+# be 73px; 96 is the size that actually reads against the tavern and stands
+# about two and a half times the soldier enemy.
+MEDIAN_BASE_ON_SCREEN = 96.0
 
 KEY = {
     'tower_withholding.png': 'turret-ledger',
@@ -29,20 +34,31 @@ KEY = {
     'tower_tax.png':         'turret-shelter',
 }
 
-# First pass: find the widest base across the set, which sets the scale.
-widest = 0
-for f in sorted(glob.glob('public/assets/towers/tower_*.png')):
-    w, h, px = png.read(f)
+def base_width(path):
+    """The stone base: the widest opaque row in the bottom third of the art."""
+    w, h, px = png.read(path)
+    spans = []
     for y in range(h):
         lo, hi, b = w, -1, y * w * 4
         for x in range(w):
             if px[b + x * 4 + 3] > ALPHA:
                 if x < lo: lo = x
                 if x > hi: hi = x
-        if hi >= 0 and y > h * 0.6:
-            widest = max(widest, hi - lo + 1)
-SCALE = WIDEST_BASE_ON_TILE / widest
-print(f'widest base across the set: {widest}px  ->  uniform scale {SCALE:.4f}\n')
+        spans.append((lo, hi) if hi >= 0 else None)
+    ys = [y for y, sp in enumerate(spans) if sp]
+    top, bot = ys[0], ys[-1]
+    lo_y = top + int((bot - top + 1) * 0.66)
+    row = max(range(lo_y, bot + 1), key=lambda y: (spans[y][1] - spans[y][0]) if spans[y] else -1)
+    return spans[row][1] - spans[row][0] + 1
+
+
+# First pass: the median base across the set sets the scale for all six.
+bases = sorted(base_width(f) for f in glob.glob('public/assets/towers/tower_*.png'))
+median = bases[len(bases) // 2]
+SCALE = MEDIAN_BASE_ON_SCREEN / median
+print(f'bases at source scale: {bases}')
+print(f'median {median}px -> uniform scale {SCALE:.4f} '
+      f'(on-screen bases {[round(b * SCALE, 1) for b in bases]})\n')
 
 rows_out, files, render = [], {}, {}
 for f in sorted(glob.glob('public/assets/towers/tower_*.png')):
@@ -60,6 +76,11 @@ for f in sorted(glob.glob('public/assets/towers/tower_*.png')):
     ys = [y for y, s in enumerate(spans) if s]
     top, bot = ys[0], ys[-1]
     contentH = bot - top + 1
+    # The artwork's own bounds, which is not the base row: half these canvases
+    # carry transparent padding, and two are widest well above the base.
+    contentL = min(s[0] for s in spans if s)
+    contentR = max(s[1] for s in spans if s)
+    contentW = contentR - contentL + 1
 
     # The base ellipse: widest opaque row in the bottom third of the artwork.
     lo_y = top + int(contentH * 0.66)
@@ -79,8 +100,11 @@ for f in sorted(glob.glob('public/assets/towers/tower_*.png')):
     key = KEY[name]
     files[key] = f'towers/{name}'
     render[key] = {'anchorX': anchorX, 'anchorY': anchorY,
-                   'displayHeight': displayHeight, 'shadowWidth': shadowWidth}
-    rows_out.append((name, key, f'{w}x{h}', f'{bh-bl+1}x{contentH}', baseRow,
+                   'displayHeight': displayHeight, 'shadowWidth': shadowWidth,
+                   # Recorded so an icon can be fitted to a box from the
+                   # manifest alone, without loading the image to measure it.
+                   'contentWidth': contentW, 'contentHeight': contentH}
+    rows_out.append((name, key, f'{w}x{h}', f'{contentW}x{contentH}', baseRow,
                      baseW, round(scale, 4), displayHeight,
                      round(contentH * scale, 1), shadowWidth, anchorX, anchorY))
 

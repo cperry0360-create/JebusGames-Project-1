@@ -112,9 +112,10 @@ export class BuildMenu {
         cell.setFillStyle(0x232a34, 0.95)
         onPreview(null)
       })
-      hit.on('pointerdown', () => {
-        if (affordable) onPick(opt.id)
-      })
+      // An unaffordable pick still reports: swallowing the click here is what
+      // made a greyed-out tower look like a broken button. The scene decides
+      // whether the purchase happens and says why when it does not.
+      hit.on('pointerdown', () => onPick(opt.id))
 
       this.hitAreas.push(hit)
       c.add([cell, name, ...icon, cost, hit])
