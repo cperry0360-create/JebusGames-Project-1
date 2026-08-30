@@ -535,7 +535,7 @@ export class GameScene extends Phaser.Scene {
     const moving = this.restructuring
     this.build.release(moving.col, moving.row)
     this.build.occupy(col, row)
-    moving.moveTo(this.grid.centreX(col), this.grid.centreY(row), col, row)
+    moving.relocate(this.grid.centreX(col), this.grid.centreY(row), col, row)
     this.refreshSupport()
     this.cooldowns.start('restructure')
     play(this, 'sfx-build', 0.5)

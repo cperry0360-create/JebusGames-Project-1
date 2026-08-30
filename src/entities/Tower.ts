@@ -49,7 +49,7 @@ export class Tower extends Phaser.GameObjects.Container {
   }
 
   /** Restructure moves a built tower without rebuilding it. */
-  moveTo(x: number, y: number, col: number, row: number): void {
+  relocate(x: number, y: number, col: number, row: number): void {
     this.col = col
     this.row = row
     this.setPosition(x, y)
