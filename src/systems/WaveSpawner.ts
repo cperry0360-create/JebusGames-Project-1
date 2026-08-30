@@ -3,42 +3,45 @@
 
 import type { WaveDef } from '../types.ts'
 
-export interface PendingSpawn {
+interface Group {
   enemy: string
   remaining: number
   interval: number
+  /** Counts down the group's start delay first, then the spawn interval. */
   timer: number
 }
 
 export class WaveSpawner {
-  private queue: PendingSpawn[] = []
+  private groups: Group[] = []
 
-  /** Load a wave. Nothing spawns until update() runs. */
   begin(wave: WaveDef): void {
-    this.queue = wave.spawns.map((s) => ({
+    this.groups = wave.spawns.map((s) => ({
       enemy: s.enemy,
       remaining: s.count,
       interval: s.interval,
-      // First unit of each group arrives immediately.
-      timer: 0,
+      timer: s.delay,
     }))
   }
 
   get done(): boolean {
-    return this.queue.every((q) => q.remaining <= 0)
+    return this.groups.every((g) => g.remaining <= 0)
+  }
+
+  get remaining(): number {
+    return this.groups.reduce((a, g) => a + Math.max(0, g.remaining), 0)
   }
 
   /** Advances the clock and reports every enemy id that should spawn now. */
   update(dt: number): string[] {
     const spawned: string[] = []
-    for (const q of this.queue) {
-      if (q.remaining <= 0) continue
-      q.timer -= dt
+    for (const g of this.groups) {
+      if (g.remaining <= 0) continue
+      g.timer -= dt
       // A long frame can owe more than one unit; pay them all out.
-      while (q.timer <= 0 && q.remaining > 0) {
-        spawned.push(q.enemy)
-        q.remaining--
-        q.timer += q.interval
+      while (g.timer <= 0 && g.remaining > 0) {
+        spawned.push(g.enemy)
+        g.remaining--
+        g.timer += g.interval
       }
     }
     return spawned

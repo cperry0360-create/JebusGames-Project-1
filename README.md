@@ -28,15 +28,24 @@ npm run preview  # serve the built dist/ locally
 
 | Input | Does |
 |---|---|
-| `1` / `2` or the HUD buttons | Pick a tower to build |
-| Left click on grass | Place the selected tower |
-| Left click with nothing selected | Set Cory's rally point |
-| Right click or `Esc` | Cancel building |
+| Click an empty plot | Open the build menu for that tile |
+| Hover a menu option | Preview that tower's range |
+| Click a built tower | Select it and show its range |
+| Click the road or scenery | Set Cory's rally point |
+| `Space` or the HUD button | Start the next wave |
+| Right click or `Esc` | Cancel |
 | `R` | Restart, once the run is over |
 
-Six waves of Late Filers walk one lane. Leaks cost lives. Cory holds up to
-three enemies at a time and fights them; at 25% health he goes into **DAD
-MODE**, and if he drops he stays down for the rest of the encounter.
+Eight named waves of Late Filers, Shredders and Final Notices walk one winding
+lane. Leaks cost lives. Waves start when you say so, so build first.
+
+Cory holds up to three enemies at a time and fights them; at 25% health he goes
+into **DAD MODE**, and if he drops he stays down for the rest of the encounter.
+
+Six towers, each with its own job: a cheap single-target starter, an
+armour-piercing sniper, two splash options at different ranges, a slow, and a
+support tower that buffs everything near it. Armour makes the wrong tower
+almost useless against Final Notices, which is the point.
 
 ## Layout
 
@@ -60,24 +69,22 @@ DESIGN.md.
 
 ## Art
 
-Phase 1 art is meant to be Kenney's free CC0
-[Tower Defense (Top-Down)](https://kenney.nl/assets/tower-defense-top-down)
-pack. **Those files are not in this repo yet**, so the game generates its own
-placeholder shapes at boot and runs fine without them.
+Kenney's **Tower Defense (Top-Down)** pack, CC0. All 299 sprites live in
+`public/assets/kenney/` with the pack's own `License.txt`; the game loads the
+~49 it uses.
 
-To use the real pack:
+Gameplay code never names a file. `src/data/art.json` maps a logical key to the
+real filename, so a sprite swap is a one-line data change:
 
-1. Download it from kenney.nl and unzip it.
-2. Copy eight sprites into `public/assets/kenney/`, renamed to these keys:
+```json
+"turret-ledger": "towerDefense_tile203.png"
+```
 
-   `tile-grass.png`, `tile-grass-alt.png`, `tile-path.png`,
-   `tower-withholding.png`, `tower-rounding.png`, `enemy-latefiler.png`,
-   `hero-cory.png`, `projectile.png`
-
-3. Set `"useKenneyPack": true` in `src/data/art.json`.
-
-Any file that is missing or fails to load falls back to its placeholder, so a
-partial copy still boots. The keys are listed in `art.json`.
+The road is drawn by an autotiler (`src/systems/Autotile.ts`) that picks the
+right edge, outer-corner or inner-corner sprite for each road tile. That is why
+the lane is two tiles wide: the pack ships grass-over-dirt transitions rather
+than a one-tile road, so a narrower lane would need a tile the pack does not
+have. A test enforces it.
 
 ## Deployment
 

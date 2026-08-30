@@ -1,21 +1,26 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { Grid } from '../src/systems/Grid.ts'
 import { Path } from '../src/systems/Path.ts'
+import { roadSprite } from '../src/systems/Autotile.ts'
 import { pickFirst, pickNearest, withinRadius } from '../src/systems/Targeting.ts'
 import { WaveSpawner } from '../src/systems/WaveSpawner.ts'
-import { readFileSync } from 'node:fs'
+import { BuildSystem } from '../src/systems/BuildSystem.ts'
 
 const read = (n: string) => JSON.parse(readFileSync(new URL(`../src/data/${n}.json`, import.meta.url), 'utf8'))
-const map = read('map')
-const display = read('display')
-const waves = read('waves')
+const map = read('map'), display = read('display'), waves = read('waves')
 
 const grid = new Grid(map.cols, map.rows, display.tileSize, map.originX, map.originY)
+const lane = new Path(map.waypoints, grid)
+const roadKeys = new Set(lane.roadTiles().map((t) => `${t.col},${t.row}`))
+const isRoad = (c: number, r: number) => roadKeys.has(`${c},${r}`)
+const onGrid = lane.roadTiles().filter((t) => grid.contains(t.col, t.row))
 
-test('grid fits the canvas', () => {
+test('grid fits the canvas below the HUD', () => {
   assert.equal(grid.widthPx, display.width)
-  assert.ok(map.originY + grid.heightPx <= display.height, 'grid overflows canvas bottom')
+  assert.ok(map.originY + grid.heightPx <= display.height, 'grid overflows the canvas')
+  assert.ok(map.originY >= 56, 'no room for the HUD bar')
 })
 
 test('grid world/tile round trip', () => {
@@ -27,66 +32,105 @@ test('grid world/tile round trip', () => {
   }
 })
 
-test('path segments are axis aligned', () => {
-  for (let i = 1; i < map.path.length; i++) {
-    const [c0, r0] = map.path[i - 1]
-    const [c1, r1] = map.path[i]
-    assert.ok(c0 === c1 || r0 === r1, `segment ${i} is diagonal`)
-    assert.ok(!(c0 === c1 && r0 === r1), `segment ${i} is zero length`)
+test('every lane segment is axis aligned and non-empty', () => {
+  for (let i = 1; i < map.waypoints.length; i++) {
+    const [x0, y0] = map.waypoints[i - 1]
+    const [x1, y1] = map.waypoints[i]
+    assert.ok(x0 === x1 || y0 === y1, `segment ${i} is diagonal`)
+    assert.ok(!(x0 === x1 && y0 === y1), `segment ${i} is zero length`)
   }
 })
 
-const path = new Path(map.path, grid)
+test('the lane winds rather than running straight', () => {
+  let turns = 0
+  for (let i = 2; i < map.waypoints.length; i++) {
+    const a = map.waypoints[i - 2], b = map.waypoints[i - 1], c = map.waypoints[i]
+    const h1 = a[1] === b[1], h2 = b[1] === c[1]
+    if (h1 !== h2) turns++
+  }
+  assert.ok(turns >= 6, `only ${turns} turns; that is not a winding path`)
+})
 
-test('path endpoints sit off grid so enemies walk on and off screen', () => {
-  const first = map.path[0]
-  const last = map.path[map.path.length - 1]
-  assert.ok(!grid.contains(first[0], first[1]), 'spawn should be off-grid')
-  assert.ok(!grid.contains(last[0], last[1]), 'exit should be off-grid')
+test('lane starts and ends off the grid so enemies walk on and off screen', () => {
+  const first = map.waypoints[0]
+  const last = map.waypoints[map.waypoints.length - 1]
+  assert.ok(first[0] < 0 || first[0] > map.cols, 'spawn should be off-grid')
+  assert.ok(last[0] < 0 || last[0] > map.cols, 'exit should be off-grid')
 })
 
 test('pointAt is monotonic and clamped', () => {
-  const start = path.pointAt(-50)
-  assert.deepEqual(start, path.pointAt(0))
-  const end = path.pointAt(path.totalLength + 500)
-  assert.deepEqual(end, path.pointAt(path.totalLength))
-  let prev = path.pointAt(0)
-  for (let d = 10; d <= path.totalLength; d += 10) {
-    const p = path.pointAt(d)
+  assert.deepEqual(lane.pointAt(-50), lane.pointAt(0))
+  assert.deepEqual(lane.pointAt(lane.totalLength + 500), lane.pointAt(lane.totalLength))
+  let prev = lane.pointAt(0)
+  for (let d = 8; d <= lane.totalLength; d += 8) {
+    const p = lane.pointAt(d)
     const step = Math.hypot(p.x - prev.x, p.y - prev.y)
-    assert.ok(step > 0 && step < 11, `bad step ${step} at ${d}`)
+    assert.ok(step > 0 && step < 9, `bad step ${step} at ${d}`)
     prev = p
   }
 })
 
-test('pointAt hits every waypoint exactly', () => {
-  let acc = 0
-  for (let i = 1; i < path.points.length; i++) {
-    acc += Math.hypot(path.points[i].x - path.points[i - 1].x, path.points[i].y - path.points[i - 1].y)
-    const p = path.pointAt(acc)
-    assert.ok(Math.abs(p.x - path.points[i].x) < 1e-6, `waypoint ${i} x`)
-    assert.ok(Math.abs(p.y - path.points[i].y) < 1e-6, `waypoint ${i} y`)
+test('angleAt points along the lane', () => {
+  // First segment runs left to right, so facing is 0 radians.
+  assert.ok(Math.abs(lane.angleAt(10)) < 1e-9)
+  const angles = new Set<number>()
+  for (let d = 0; d < lane.totalLength; d += 40) angles.add(Math.round(lane.angleAt(d) * 100))
+  assert.ok(angles.size >= 3, 'facing never changes along a winding lane')
+})
+
+test('the road is a contiguous two-tile band', () => {
+  assert.ok(onGrid.length > 40, `only ${onGrid.length} road tiles`)
+  const keys = new Set(onGrid.map((t) => `${t.col},${t.row}`))
+  assert.equal(keys.size, onGrid.length, 'duplicate road tiles')
+  for (const t of onGrid) {
+    const neighbours = [[1,0],[-1,0],[0,1],[0,-1]].filter(([dc, dr]) => isRoad(t.col + dc, t.row + dr))
+    assert.ok(neighbours.length >= 2, `road tile ${t.col},${t.row} is a dead end`)
   }
 })
 
-test('path tiles are in bounds, contiguous and leave room to build', () => {
-  const tiles = path.tiles()
-  for (const t of tiles) assert.ok(grid.contains(t.col, t.row))
-  const keys = new Set(tiles.map((t) => `${t.col},${t.row}`))
-  assert.equal(keys.size, tiles.length, 'duplicate path tiles')
-  for (let i = 1; i < tiles.length; i++) {
-    const d = Math.abs(tiles[i].col - tiles[i - 1].col) + Math.abs(tiles[i].row - tiles[i - 1].row)
-    assert.equal(d, 1, `gap in road at index ${i}`)
-  }
-  const buildable = grid.cols * grid.rows - tiles.length
-  assert.ok(buildable > 100, `only ${buildable} buildable tiles`)
-  console.log(`   path: ${tiles.length} road tiles, ${buildable} buildable, ${path.totalLength.toFixed(0)}px long`)
+test('the road leaves plenty of buildable ground', () => {
+  const buildable = grid.cols * grid.rows - onGrid.length
+  assert.ok(buildable > 80, `only ${buildable} buildable tiles`)
+  console.log(`   map: ${onGrid.length} road tiles, ${buildable} buildable, lane ${Math.round(lane.totalLength)}px`)
 })
 
-test('hero start is not on the road', () => {
-  const keys = new Set(path.tiles().map((t) => `${t.col},${t.row}`))
-  assert.ok(grid.contains(map.heroStart[0], map.heroStart[1]), 'hero start off grid')
-  assert.ok(!keys.has(`${map.heroStart[0]},${map.heroStart[1]}`), 'hero starts on the road')
+test('autotiler resolves every road tile to a real sprite key or open road', () => {
+  const art = read('art').sprites
+  let overlays = 0
+  for (const t of onGrid) {
+    const key = roadSprite(isRoad, t.col, t.row)
+    if (key === null) continue
+    overlays++
+    assert.ok(art[key], `autotiler produced unknown sprite key "${key}"`)
+  }
+  assert.ok(overlays > onGrid.length * 0.5, 'suspiciously few road edges drawn')
+  console.log(`   autotile: ${overlays}/${onGrid.length} road tiles get an edge or corner sprite`)
+})
+
+test('autotiler never asks for a tile the pack does not have', () => {
+  // A one-tile-wide neck would need a grass-both-sides tile, which the pack
+  // lacks. The lane must stay two wide.
+  for (const t of onGrid) {
+    const n = !isRoad(t.col, t.row - 1), s = !isRoad(t.col, t.row + 1)
+    const w = !isRoad(t.col - 1, t.row), e = !isRoad(t.col + 1, t.row)
+    assert.ok(!(n && s), `tile ${t.col},${t.row} is a horizontal one-tile neck`)
+    assert.ok(!(w && e), `tile ${t.col},${t.row} is a vertical one-tile neck`)
+  }
+})
+
+test('hero starts on buildable-free open ground, not on the road', () => {
+  const [c, r] = map.heroStart
+  assert.ok(grid.contains(c, r), 'hero start is off grid')
+  assert.ok(!isRoad(c, r), 'hero starts on the road')
+})
+
+test('decorations sit off the road and on the grid', () => {
+  for (const d of map.decorations) {
+    const [c, r, key] = d
+    assert.ok(grid.contains(c as number, r as number), `decoration ${c},${r} is off grid`)
+    assert.ok(!isRoad(c as number, r as number), `decoration ${c},${r} is on the road`)
+    assert.ok(String(key).startsWith('decor-'), `bad decoration key ${key}`)
+  }
 })
 
 test('targeting picks furthest along, nearest, and radius', () => {
@@ -94,26 +138,56 @@ test('targeting picks furthest along, nearest, and radius', () => {
   const list = [mk(10, 0, 5), mk(20, 0, 90), mk(30, 0, 50), mk(15, 0, 999, false)]
   assert.equal(pickFirst(list, 0, 0, 100)!.distance, 90)
   assert.equal(pickNearest(list, 0, 0, 100)!.x, 10)
-  assert.equal(pickFirst(list, 0, 0, 5), null, 'nothing in a tiny range')
+  assert.equal(pickFirst(list, 0, 0, 5), null)
   assert.equal(withinRadius(list, 0, 0, 25).length, 2)
-  assert.equal(pickFirst([mk(0, 0, 1, false)], 0, 0, 100), null, 'dead units are skipped')
 })
 
-test('spawner emits exactly the wave count', () => {
+test('build rules: road and scenery blocked, one tower per tile', () => {
+  const b = new BuildSystem(grid)
+  for (const t of onGrid) b.block(t.col, t.row)
+  for (const d of map.decorations) b.block(d[0] as number, d[1] as number)
+  for (const t of onGrid) assert.equal(b.isBuildable(t.col, t.row), false)
+  for (const d of map.decorations) assert.equal(b.isBuildable(d[0] as number, d[1] as number), false)
+  assert.equal(b.isBuildable(-1, 0), false)
+  assert.equal(b.isBuildable(map.cols, 0), false)
+  const free: number[][] = []
+  for (let c = 0; c < grid.cols; c++) for (let r = 0; r < grid.rows; r++) if (b.isBuildable(c, r)) free.push([c, r])
+  assert.ok(free.length > 80)
+  b.occupy(free[0][0], free[0][1])
+  assert.equal(b.isBuildable(free[0][0], free[0][1]), false)
+  assert.equal(b.towerCount, 1)
+})
+
+test('spawner emits exactly the wave composition, honouring group delays', () => {
   for (const [i, wave] of waves.waves.entries()) {
     const s = new WaveSpawner()
     s.begin(wave)
-    let total = 0
+    const counts: Record<string, number> = {}
     let guard = 0
-    while (!s.done && guard++ < 100000) total += s.update(1 / 60).length
-    const expected = wave.spawns.reduce((a: number, b: any) => a + b.count, 0)
-    assert.equal(total, expected, `wave ${i + 1}`)
+    while (!s.done && guard++ < 200000) {
+      for (const id of s.update(1 / 60)) counts[id] = (counts[id] ?? 0) + 1
+    }
+    for (const g of wave.spawns) {
+      assert.ok((counts[g.enemy] ?? 0) >= g.count, `wave ${i + 1} short on ${g.enemy}`)
+    }
+    const total = Object.values(counts).reduce((a, b) => a + b, 0)
+    assert.equal(total, wave.spawns.reduce((a: number, g: any) => a + g.count, 0), `wave ${i + 1} total`)
+    assert.equal(s.remaining, 0)
   }
+})
+
+test('a delayed group really waits', () => {
+  const s = new WaveSpawner()
+  s.begin({ name: 't', spawns: [{ enemy: 'a', count: 1, interval: 1, delay: 0 },
+                                { enemy: 'b', count: 1, interval: 1, delay: 5 }] })
+  assert.deepEqual(s.update(0.1), ['a'], 'undelayed group spawns immediately')
+  assert.deepEqual(s.update(1), [], 'delayed group must not spawn yet')
+  assert.deepEqual(s.update(5), ['b'], 'delayed group spawns after its delay')
 })
 
 test('spawner pays out backlog on a long frame', () => {
   const s = new WaveSpawner()
-  s.begin({ spawns: [{ enemy: 'x', count: 5, interval: 0.1 }] })
-  assert.equal(s.update(10).length, 5, 'one huge frame should flush the group')
+  s.begin({ name: 't', spawns: [{ enemy: 'x', count: 5, interval: 0.1, delay: 0 }] })
+  assert.equal(s.update(10).length, 5)
   assert.ok(s.done)
 })

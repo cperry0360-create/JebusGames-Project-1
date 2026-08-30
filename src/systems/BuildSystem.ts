@@ -12,9 +12,13 @@ export class BuildSystem {
     this.grid = grid
   }
 
-  /** Marks a tile as permanently unbuildable — the road, for now. */
+  /** Marks a tile permanently unbuildable — the road and scenery. */
   block(col: number, row: number): void {
     this.blocked.add(this.grid.key(col, row))
+  }
+
+  isBlocked(col: number, row: number): boolean {
+    return this.blocked.has(this.grid.key(col, row))
   }
 
   isBuildable(col: number, row: number): boolean {

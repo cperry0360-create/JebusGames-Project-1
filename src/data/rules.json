@@ -1,7 +1,5 @@
 {
-  "startingGold": 220,
+  "startingGold": 260,
   "startingLives": 20,
-  "goldPerWaveCleared": 25,
-  "timeBetweenWaves": 8,
-  "firstWaveDelay": 6
+  "goldPerWaveCleared": 35
 }

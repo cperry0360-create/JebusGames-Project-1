@@ -13,24 +13,32 @@ export interface MapDef {
   rows: number
   originX: number
   originY: number
-  /** Waypoints in tile coordinates. Segments are axis-aligned. The first and
-   *  last may sit outside the grid so enemies walk on and off screen. */
-  path: number[][]
+  /** How many tiles wide the road is. The autotiler assumes 2. */
+  laneWidthTiles: number
+  /**
+   * Centreline of the road, in tile-lattice coordinates (corners, not centres).
+   * Every segment is axis-aligned and the road spreads one tile either side,
+   * which is what lets the Kenney edge and corner tiles line up. The first and
+   * last points sit off-grid so enemies walk on and off screen.
+   */
+  waypoints: number[][]
   heroStart: number[]
+  /** [col, row, spriteKey] scenery on non-road tiles. */
+  decorations: (number | string)[][]
 }
 
 export interface RulesDef {
   startingGold: number
   startingLives: number
   goldPerWaveCleared: number
-  timeBetweenWaves: number
-  firstWaveDelay: number
 }
 
 export interface TowerDef {
   name: string
   flavor: string
+  archetype: string
   sprite: string
+  shot: string
   cost: number
   range: number
   damage: number
@@ -38,6 +46,13 @@ export interface TowerDef {
   projectileSpeed: number
   /** 0 means single target. */
   splashRadius: number
+  ignoresArmor: boolean
+  /** 0 means no slow. 0.45 means targets move at 45% speed. */
+  slowFactor: number
+  slowSeconds: number
+  /** Non-zero marks a support tower: it never fires, it buffs towers in radius. */
+  supportRadius: number
+  supportDamageBonus: number
   /** Tier 1 is instant. Tiers 2 and 3 will use this once upgrades exist. */
   buildTime: number
 }
@@ -45,8 +60,12 @@ export interface TowerDef {
 export interface EnemyDef {
   name: string
   flavor: string
+  role: string
   sprite: string
+  spriteScale: number
   maxHealth: number
+  /** Flat damage subtracted per hit, unless the attacker ignores armour. */
+  armor: number
   speed: number
   goldReward: number
   livesCost: number
@@ -68,7 +87,8 @@ export interface HeroDef {
   name: string
   title: string
   flavor: string
-  sprite: string
+  bodySprite: string
+  gunSprite: string
   maxHealth: number
   moveSpeed: number
   attackRange: number
@@ -78,6 +98,7 @@ export interface HeroDef {
   blockCapacity: number
   damage: number
   attackInterval: number
+  ignoresArmor: boolean
   lastStand: LastStandDef
 }
 
@@ -85,9 +106,12 @@ export interface WaveSpawnDef {
   enemy: string
   count: number
   interval: number
+  /** Seconds after the wave starts before this group begins spawning. */
+  delay: number
 }
 
 export interface WaveDef {
+  name: string
   spawns: WaveSpawnDef[]
 }
 
@@ -95,18 +119,9 @@ export interface WavesDef {
   waves: WaveDef[]
 }
 
-export interface PlaceholderDef {
-  shape: string
-  color: string
-  accent: string
-}
-
-export interface SpriteDef {
-  placeholder: PlaceholderDef
-}
-
 export interface ArtDef {
-  useKenneyPack: boolean
-  kenneyPath: string
-  sprites: Record<string, SpriteDef>
+  basePath: string
+  credit: string
+  /** Logical key -> real filename in public/assets/kenney. */
+  sprites: Record<string, string>
 }

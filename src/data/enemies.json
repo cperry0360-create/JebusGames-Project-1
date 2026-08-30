@@ -2,13 +2,46 @@
   "lateFiler": {
     "name": "Late Filer",
     "flavor": "Shambling, penalised, and still technically compliant.",
-    "sprite": "enemy-latefiler",
-    "maxHealth": 58,
-    "speed": 62,
-    "goldReward": 6,
+    "role": "basic",
+    "sprite": "enemy-filer",
+    "spriteScale": 1.4,
+    "maxHealth": 72,
+    "armor": 0,
+    "speed": 58,
+    "goldReward": 7,
     "livesCost": 1,
     "damage": 7,
     "attackInterval": 1,
-    "engageRange": 42
+    "engageRange": 44
+  },
+  "shredder": {
+    "name": "Shredder",
+    "flavor": "Fast, loud, and legally required to destroy the evidence.",
+    "role": "fast",
+    "sprite": "enemy-shredder",
+    "spriteScale": 1.15,
+    "maxHealth": 44,
+    "armor": 0,
+    "speed": 122,
+    "goldReward": 6,
+    "livesCost": 1,
+    "damage": 5,
+    "attackInterval": 0.7,
+    "engageRange": 40
+  },
+  "finalNotice": {
+    "name": "Final Notice",
+    "flavor": "Bold red lettering. Structurally reinforced. Deeply unreasonable.",
+    "role": "armored",
+    "sprite": "enemy-notice",
+    "spriteScale": 1.6,
+    "maxHealth": 165,
+    "armor": 7,
+    "speed": 40,
+    "goldReward": 15,
+    "livesCost": 2,
+    "damage": 12,
+    "attackInterval": 1.3,
+    "engageRange": 48
   }
 }

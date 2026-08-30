@@ -20,7 +20,8 @@ export class Hero extends Phaser.GameObjects.Container {
   down = false
   lastStandActive = false
 
-  private readonly art: Phaser.GameObjects.Sprite
+  private readonly body_: Phaser.GameObjects.Sprite
+  private readonly gun: Phaser.GameObjects.Sprite
   private readonly bar: Phaser.GameObjects.Graphics
   private rallyX: number
   private rallyY: number
@@ -34,9 +35,10 @@ export class Hero extends Phaser.GameObjects.Container {
     this.rallyX = x
     this.rallyY = y
 
-    this.art = scene.add.sprite(0, 0, def.sprite).setOrigin(0.5, 0.9).setScale(1.15)
+    this.body_ = scene.add.sprite(0, 0, def.bodySprite)
+    this.gun = scene.add.sprite(0, -2, def.gunSprite)
     this.bar = scene.add.graphics()
-    this.add([this.art, this.bar])
+    this.add([this.body_, this.gun, this.bar])
     scene.add.existing(this)
     this.drawBar()
     ySort(this)
@@ -74,27 +76,22 @@ export class Hero extends Phaser.GameObjects.Container {
       if (dist > step) {
         this.x += (dx / dist) * step
         this.y += (dy / dist) * step
-        this.art.flipX = dx < 0
+        this.faceTowards(this.rallyX, this.rallyY)
       } else if (dist > 0) {
         this.setPosition(this.rallyX, this.rallyY)
       }
     } else {
+      this.faceTowards(target.x, target.y)
       this.attackTimer -= dt
       if (this.attackTimer <= 0) {
         this.attackTimer = this.attackInterval
-        this.art.flipX = target.x < this.x
-        // DAD MODE swings wildly at everything in range rather than picking
-        // a target, which is the whole point of losing precision.
-        const victims = this.def.lastStand.hitsAllInRange && this.lastStandActive
+        // DAD MODE swings wildly at everything in range rather than picking a
+        // target, which is the whole point of losing precision.
+        const victims = this.lastStandActive && this.def.lastStand.hitsAllInRange
           ? withinRadius(enemies, this.x, this.y, this.def.attackRange)
           : [target]
         for (const v of victims) onHit(v, this.damage)
-        this.scene.tweens.add({
-          targets: this.art,
-          scaleX: 1.35,
-          duration: 80,
-          yoyo: true,
-        })
+        this.scene.tweens.add({ targets: this.gun, scaleX: 1.3, duration: 80, yoyo: true })
       }
     }
 
@@ -113,25 +110,23 @@ export class Hero extends Phaser.GameObjects.Container {
       this.goDown()
       return 'down'
     }
-
     if (shouldTrigger(this.health, this.def.maxHealth, this.def.lastStand, this.lastStandUsed)) {
       this.triggerLastStand()
       return 'lastStand'
     }
-
     return 'none'
+  }
+
+  private faceTowards(x: number, y: number): void {
+    // The pack's gun sprite points east.
+    this.gun.setRotation(Math.atan2(y - this.y, x - this.x))
   }
 
   private triggerLastStand(): void {
     this.lastStandUsed = true
     this.lastStandActive = true
-    this.art.setTint(0xff5a3c)
-    this.scene.tweens.add({
-      targets: this.art,
-      scale: 1.55,
-      duration: 260,
-      ease: 'Back.easeOut',
-    })
+    this.body_.setTint(0xff5a3c)
+    this.scene.tweens.add({ targets: this, scale: 1.35, duration: 260, ease: 'Back.easeOut' })
     this.drawBar()
   }
 
@@ -139,20 +134,18 @@ export class Hero extends Phaser.GameObjects.Container {
     this.down = true
     this.lastStandActive = false
     this.bar.setVisible(false)
-    this.scene.tweens.add({
-      targets: this.art,
-      angle: 90,
-      alpha: 0.35,
-      duration: 400,
-      ease: 'Quad.easeIn',
-    })
+    this.scene.tweens.add({ targets: this, angle: 90, alpha: 0.35, duration: 400, ease: 'Quad.easeIn' })
   }
 
   private drawBar(): void {
-    const w = 44
+    const w = 46
+    const y = -34
     const ratio = Phaser.Math.Clamp(this.health / this.def.maxHealth, 0, 1)
     this.bar.clear()
-    this.bar.fillStyle(0x1a1a1a, 0.85).fillRect(-w / 2 - 1, -62, w + 2, 7)
-    this.bar.fillStyle(this.lastStandActive ? 0xff5a3c : 0x4fa3e3, 1).fillRect(-w / 2, -61, w * ratio, 5)
+    this.bar.fillStyle(0x14181f, 0.9).fillRect(-w / 2 - 1, y - 1, w + 2, 7)
+    this.bar.fillStyle(this.lastStandActive ? 0xff5a3c : 0x4fa3e3, 1).fillRect(-w / 2, y, w * ratio, 5)
+    // The 25% mark, so the Last Stand threshold is legible before it fires.
+    const markX = -w / 2 + w * this.def.lastStand.healthThreshold
+    this.bar.lineStyle(1, 0xf6ecd9, 0.7).lineBetween(markX, y, markX, y + 5)
   }
 }

@@ -2,6 +2,7 @@ import Phaser from 'phaser'
 import type { EnemyDef } from '../types.ts'
 import { Path } from '../systems/Path.ts'
 import { ySort } from '../systems/DepthSort.ts'
+import { damageAfterArmor, slowedSpeed } from '../systems/Combat.ts'
 
 export type EnemyState = 'walking' | 'fighting' | 'dead'
 
@@ -19,6 +20,8 @@ export class Enemy extends Phaser.GameObjects.Container {
   private readonly art: Phaser.GameObjects.Sprite
   private readonly bar: Phaser.GameObjects.Graphics
   private attackTimer = 0
+  private slowFactor = 0
+  private slowRemaining = 0
 
   constructor(scene: Phaser.Scene, def: EnemyDef, lane: Path) {
     super(scene, 0, 0)
@@ -27,7 +30,7 @@ export class Enemy extends Phaser.GameObjects.Container {
     this.maxHealth = def.maxHealth
     this.health = def.maxHealth
 
-    this.art = scene.add.sprite(0, 0, def.sprite).setOrigin(0.5, 0.9)
+    this.art = scene.add.sprite(0, 0, def.sprite).setScale(def.spriteScale)
     this.bar = scene.add.graphics()
     this.add([this.art, this.bar])
 
@@ -41,9 +44,25 @@ export class Enemy extends Phaser.GameObjects.Container {
     return this.status !== 'dead'
   }
 
+  get slowed(): boolean {
+    return this.slowRemaining > 0
+  }
+
+  applySlow(factor: number, seconds: number): void {
+    if (factor <= 0 || seconds <= 0) return
+    // A stronger slow replaces a weaker one; equal slows just refresh.
+    if (factor <= this.slowFactor || this.slowRemaining <= 0) this.slowFactor = factor
+    this.slowRemaining = Math.max(this.slowRemaining, seconds)
+  }
+
   /** Returns true once the enemy has walked off the far end of the lane. */
   tick(dt: number, onAttackHero: (damage: number) => void): boolean {
     if (this.status === 'dead') return false
+
+    if (this.slowRemaining > 0) {
+      this.slowRemaining -= dt
+      if (this.slowRemaining <= 0) this.slowFactor = 0
+    }
 
     if (this.engaged) {
       this.status = 'fighting'
@@ -51,34 +70,29 @@ export class Enemy extends Phaser.GameObjects.Container {
       if (this.attackTimer <= 0) {
         this.attackTimer = this.def.attackInterval
         onAttackHero(this.def.damage)
-        this.scene.tweens.add({
-          targets: this.art,
-          scaleX: 1.15,
-          scaleY: 0.9,
-          duration: 90,
-          yoyo: true,
-        })
+        this.scene.tweens.add({ targets: this.art, scaleX: this.def.spriteScale * 1.2, duration: 90, yoyo: true })
       }
     } else {
       this.status = 'walking'
       this.attackTimer = 0
-      this.distance += this.def.speed * dt
+      this.distance += slowedSpeed(this.def.speed, this.slowFactor, this.slowed) * dt
       const p = this.lane.pointAt(this.distance)
-      this.art.flipX = p.x < this.x
       this.setPosition(p.x, p.y)
+      // Pack sprites face east, so the lane angle is the sprite rotation.
+      this.art.setRotation(this.lane.angleAt(this.distance))
       if (this.distance >= this.lane.totalLength) return true
     }
 
+    this.art.setTint(this.slowed ? 0x8fd0ff : 0xffffff)
     ySort(this)
     return false
   }
 
   /** Returns true if this hit killed it. */
-  hurt(amount: number): boolean {
+  hurt(damage: number, ignoresArmor: boolean): boolean {
     if (this.status === 'dead') return false
-    this.health -= amount
+    this.health -= damageAfterArmor(damage, this.def.armor, ignoresArmor)
     this.drawBar()
-    this.scene.tweens.add({ targets: this.art, alpha: 0.5, duration: 60, yoyo: true })
     if (this.health <= 0) {
       this.die()
       return true
@@ -86,17 +100,16 @@ export class Enemy extends Phaser.GameObjects.Container {
     return false
   }
 
-  /** Falls over, spins, and gives up. */
   die(): void {
     if (this.status === 'dead') return
     this.status = 'dead'
     this.bar.setVisible(false)
     this.scene.tweens.add({
       targets: this,
-      angle: Phaser.Math.Between(-180, 180),
-      scale: 0.2,
+      angle: Phaser.Math.Between(-200, 200),
+      scale: 0.15,
       alpha: 0,
-      duration: 320,
+      duration: 300,
       ease: 'Quad.easeIn',
       onComplete: () => this.destroy(),
     })
@@ -105,9 +118,10 @@ export class Enemy extends Phaser.GameObjects.Container {
   private drawBar(): void {
     const w = 30
     const ratio = Phaser.Math.Clamp(this.health / this.maxHealth, 0, 1)
+    const y = -26
     this.bar.clear()
-    if (ratio >= 1) return
-    this.bar.fillStyle(0x1a1a1a, 0.85).fillRect(-w / 2 - 1, -50, w + 2, 6)
-    this.bar.fillStyle(ratio > 0.4 ? 0x66c24a : 0xc9563a, 1).fillRect(-w / 2, -49, w * ratio, 4)
+    this.bar.fillStyle(0x14181f, 0.9).fillRect(-w / 2 - 1, y - 1, w + 2, 6)
+    const col = ratio > 0.5 ? 0x6cc24a : ratio > 0.25 ? 0xe8c33c : 0xd44b32
+    this.bar.fillStyle(col, 1).fillRect(-w / 2, y, w * ratio, 4)
   }
 }

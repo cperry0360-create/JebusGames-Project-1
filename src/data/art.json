@@ -1,14 +1,63 @@
 {
-  "useKenneyPack": false,
-  "kenneyPath": "assets/kenney/",
+  "basePath": "assets/kenney/",
+  "credit": "Kenney Tower Defense (Top-Down), CC0. See public/assets/kenney/License.txt",
   "sprites": {
-    "tile-grass":         { "placeholder": { "shape": "tile", "color": "#407a33", "accent": "#376a2c" } },
-    "tile-grass-alt":     { "placeholder": { "shape": "tile", "color": "#3b722f", "accent": "#336228" } },
-    "tile-path":          { "placeholder": { "shape": "tile", "color": "#b7975f", "accent": "#9d7f4c" } },
-    "tower-withholding":  { "placeholder": { "shape": "tower", "color": "#93a1b0", "accent": "#5c6675" } },
-    "tower-rounding":     { "placeholder": { "shape": "tower", "color": "#b08f63", "accent": "#755c3d" } },
-    "enemy-latefiler":    { "placeholder": { "shape": "unit", "color": "#c9563a", "accent": "#8c3626" } },
-    "hero-cory":          { "placeholder": { "shape": "unit", "color": "#4180cc", "accent": "#2a568d" } },
-    "projectile":         { "placeholder": { "shape": "dot", "color": "#f6ecd9", "accent": "#c2ab84" } }
+    "ground-grass":     "towerDefense_tile119.png",
+    "ground-grass-alt": "towerDefense_tile157.png",
+    "ground-grass-alt2":"towerDefense_tile162.png",
+    "road":             "towerDefense_tile050.png",
+    "road-alt":         "towerDefense_tile158.png",
+    "road-alt2":        "towerDefense_tile167.png",
+
+    "road-edge-n":      "towerDefense_tile047.png",
+    "road-edge-s":      "towerDefense_tile001.png",
+    "road-edge-w":      "towerDefense_tile025.png",
+    "road-edge-e":      "towerDefense_tile023.png",
+    "road-outer-nw":    "towerDefense_tile003.png",
+    "road-outer-ne":    "towerDefense_tile004.png",
+    "road-outer-sw":    "towerDefense_tile026.png",
+    "road-outer-se":    "towerDefense_tile027.png",
+    "road-inner-nw":    "towerDefense_tile096.png",
+    "road-inner-ne":    "towerDefense_tile095.png",
+    "road-inner-sw":    "towerDefense_tile073.png",
+    "road-inner-se":    "towerDefense_tile072.png",
+
+    "plot":             "towerDefense_tile015.png",
+    "plot-hover":       "towerDefense_tile018.png",
+
+    "tower-base":       "towerDefense_tile181.png",
+    "turret-ledger":    "towerDefense_tile203.png",
+    "turret-writeoff":  "towerDefense_tile204.png",
+    "turret-rounding":  "towerDefense_tile205.png",
+    "turret-escalation":"towerDefense_tile206.png",
+    "turret-extension": "towerDefense_tile249.png",
+    "turret-shelter":   "towerDefense_tile250.png",
+
+    "enemy-filer":      "towerDefense_tile247.png",
+    "enemy-shredder":   "towerDefense_tile246.png",
+    "enemy-notice":     "towerDefense_tile248.png",
+
+    "hero-body":        "towerDefense_tile268.png",
+    "hero-gun":         "towerDefense_tile291.png",
+
+    "shot-small":       "towerDefense_tile272.png",
+    "shot-ring":        "towerDefense_tile273.png",
+    "shot-heavy":       "towerDefense_tile274.png",
+    "shot-pale":        "towerDefense_tile275.png",
+    "shot-rocket":      "towerDefense_tile251.png",
+    "shot-rocket-big":  "towerDefense_tile252.png",
+
+    "fx-spark":         "towerDefense_tile022.png",
+    "fx-flame-small":   "towerDefense_tile295.png",
+    "fx-flame":         "towerDefense_tile296.png",
+    "fx-flame-thin":    "towerDefense_tile297.png",
+    "fx-flame-wide":    "towerDefense_tile298.png",
+
+    "decor-bush":       "towerDefense_tile130.png",
+    "decor-shrub":      "towerDefense_tile131.png",
+    "decor-plant":      "towerDefense_tile134.png",
+    "decor-rock":       "towerDefense_tile135.png",
+    "decor-rock2":      "towerDefense_tile136.png",
+    "decor-rock3":      "towerDefense_tile137.png"
   }
 }

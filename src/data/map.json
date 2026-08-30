@@ -2,16 +2,17 @@
   "cols": 20,
   "rows": 10,
   "originX": 0,
-  "originY": 56,
-  "path": [
-    [-1, 4],
-    [3, 4],
-    [3, 1],
-    [9, 1],
-    [9, 7],
-    [15, 7],
-    [15, 3],
-    [20, 3]
+  "originY": 64,
+  "laneWidthTiles": 2,
+  "waypoints": [
+    [-1, 2], [5, 2], [5, 5], [2, 5], [2, 8],
+    [10, 8], [10, 3], [15, 3], [15, 7], [21, 7]
   ],
-  "heroStart": [5, 5]
+  "heroStart": [8, 5],
+  "decorations": [
+    [1, 0, "decor-bush"], [17, 0, "decor-rock"], [18, 9, "decor-shrub"],
+    [4, 9, "decor-rock2"], [8, 4, "decor-plant"], [13, 9, "decor-bush"],
+    [0, 6, "decor-rock3"], [12, 0, "decor-shrub"], [6, 3, "decor-rock"],
+    [19, 4, "decor-plant"], [7, 9, "decor-rock3"], [16, 5, "decor-bush"]
+  ]
 }
