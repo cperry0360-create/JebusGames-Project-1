@@ -9,7 +9,8 @@ export const FONT_UI = 'KenneyFutureNarrow, KenneyFuture, monospace'
 export const COLOR = {
   ink: '#f6ecd9',
   dim: '#a4b0bd',
-  gold: '#f2d06b',
+  /** A warm yellow. Named for the colour, not for a currency. */
+  amber: '#f2d06b',
   danger: '#ff8f7a',
   good: '#8fd07a',
   fire: '#ff5a3c',

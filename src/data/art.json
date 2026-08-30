@@ -13,8 +13,6 @@
     "enemy-filer": "enemies/enemy_soldier.png",
     "enemy-shredder": "enemies/enemy_scout.png",
     "enemy-notice": "enemies/enemy_brute.png",
-    "hero-body": "kenney/towerDefense_tile268.png",
-    "hero-gun": "kenney/towerDefense_tile291.png",
     "shot-small": "kenney/towerDefense_tile272.png",
     "shot-ring": "kenney/towerDefense_tile273.png",
     "shot-heavy": "kenney/towerDefense_tile274.png",
@@ -35,54 +33,58 @@
     "brand-studio-card": "branding/logo_studio_card.png",
     "brand-jebusgames": "branding/logo_jebusgames.png",
     "brand-cpplays": "branding/logo_cpplays.png",
-    "map-level1": "maps/map_level1.png"
+    "map-level1": "maps/map_level1.png",
+    "hero-cory": "hero/hero_cory.png",
+    "hero-cory-ultimate": "hero/hero_cory_ultimate.png",
+    "ui-title-bg": "ui/title_bg.png",
+    "fighter-body": "kenney/towerDefense_tile291.png"
   },
   "render": {
     "turret-escalation": {
       "anchorX": 0.5054,
       "anchorY": 0.998,
-      "displayHeight": 114.6,
-      "shadowWidth": 101.6,
+      "displayHeight": 87.1,
+      "shadowWidth": 77.3,
       "contentWidth": 461,
       "contentHeight": 510
     },
     "turret-extension": {
       "anchorX": 0.4987,
       "anchorY": 1.0,
-      "displayHeight": 114.6,
-      "shadowWidth": 87.0,
+      "displayHeight": 87.1,
+      "shadowWidth": 66.2,
       "contentWidth": 389,
       "contentHeight": 512
     },
     "turret-rounding": {
       "anchorX": 0.4792,
       "anchorY": 1.0,
-      "displayHeight": 114.6,
-      "shadowWidth": 45.0,
+      "displayHeight": 87.1,
+      "shadowWidth": 34.2,
       "contentWidth": 201,
       "contentHeight": 512
     },
     "turret-shelter": {
       "anchorX": 0.4988,
       "anchorY": 1.0,
-      "displayHeight": 114.6,
-      "shadowWidth": 96.0,
+      "displayHeight": 87.1,
+      "shadowWidth": 73.0,
       "contentWidth": 429,
       "contentHeight": 512
     },
     "turret-ledger": {
       "anchorX": 0.4988,
       "anchorY": 1.0,
-      "displayHeight": 114.6,
-      "shadowWidth": 92.9,
+      "displayHeight": 87.1,
+      "shadowWidth": 70.6,
       "contentWidth": 415,
       "contentHeight": 512
     },
     "turret-writeoff": {
       "anchorX": 0.5008,
       "anchorY": 0.9902,
-      "displayHeight": 114.6,
-      "shadowWidth": 103.8,
+      "displayHeight": 87.1,
+      "shadowWidth": 79.0,
       "contentWidth": 464,
       "contentHeight": 506
     },
@@ -127,20 +129,36 @@
       "shadowWidth": 25.0,
       "contentWidth": 366,
       "contentHeight": 339
+    },
+    "hero-cory": {
+      "anchorX": 0.6036,
+      "anchorY": 1.0,
+      "displayHeight": 60.6,
+      "shadowWidth": 35.4,
+      "contentWidth": 449,
+      "contentHeight": 470
+    },
+    "hero-cory-ultimate": {
+      "anchorX": 0.5378,
+      "anchorY": 1.0,
+      "displayHeight": 83.2,
+      "shadowWidth": 127.3,
+      "contentWidth": 900,
+      "contentHeight": 588
     }
   },
   "map": {
     "level1": "map-level1"
   },
   "ui": {
-    "towerBase": null
+    "towerBase": null,
+    "titleBackdrop": "ui-title-bg"
   },
   "fx": {
     "spark": "fx-spark",
     "blast": "fx-flame",
     "ember": "fx-flame-small",
-    "muzzle": "fx-flame-small",
-    "coin": "shot-small"
+    "muzzle": "fx-flame-small"
   },
   "decor": [
     "decor-bush",

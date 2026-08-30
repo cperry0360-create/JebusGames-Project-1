@@ -13,6 +13,9 @@ export interface DisplayDef {
 export interface MapDef {
   /** Key into art.json's map section. */
   plate: string
+  /** The painted road's width in canvas pixels, measured by tools/trace_map.py.
+   *  Tower bases are sized against it. */
+  roadWidth: number
   note: string
   heroStart: number[]
   /** Click tolerance and highlight size for a build spot, in canvas pixels. */
@@ -28,9 +31,9 @@ export interface MapDef {
 }
 
 export interface RulesDef {
-  startingGold: number
+  startingPeanuts: number
   startingLives: number
-  goldPerWaveCleared: number
+  peanutsPerWaveCleared: number
 }
 
 export interface TowerDef {
@@ -66,7 +69,7 @@ export interface EnemyDef {
   /** Flat damage subtracted per hit, unless the attacker ignores armour. */
   armor: number
   speed: number
-  goldReward: number
+  peanutReward: number
   livesCost: number
   damage: number
   attackInterval: number
@@ -80,6 +83,16 @@ export interface LastStandDef {
   attackIntervalMultiplier: number
   damageTakenMultiplier: number
   hitsAllInRange: boolean
+  /** In the vehicle: reach, block radius and speed all grow, and contact with
+   *  the vehicle hurts and shoves. */
+  attackRangeMultiplier: number
+  blockRangeMultiplier: number
+  moveSpeedMultiplier: number
+  rammingDamage: number
+  rammingKnockbackPixels: number
+  transformShakeMs: number
+  transformFlashMs: number
+  transformPauseMs: number
 }
 
 export interface PassiveDef {
@@ -114,8 +127,11 @@ export interface HeroDef {
   flavor: string
   blurb: string
   bodySprite: string
-  gunSprite: string
+  /** The Last Stand form. Cory does not get angrier; he gets into an SUV. */
+  ultimateSprite: string
   portraitSprite: string
+  /** The sprite a summoned fighter wears. Not the hero's own. */
+  fighterSprite: string
   maxHealth: number
   moveSpeed: number
   attackRange: number
@@ -133,6 +149,12 @@ export interface HeroDef {
 }
 
 export interface BrandingDef {
+  /** How much dark wash sits over the painted title illustration, so the type
+   *  on top of it stays readable. */
+  titleBackdropDim: number
+  /** Width of the settling column behind the title's text, which keeps the
+   *  illustration's towers at the edges undimmed. */
+  titleColumnWidth: number
   splash: {
     backgroundColor: string
     cardHeight: number
@@ -173,7 +195,11 @@ export interface AbilityDef {
   /** Repeated impacts (Meteor Barrage) or jumps (Chain Lightning). */
   ticks: number
   slowFactor: number
-  gold: number
+  /** Scratch Ticket only: the payout is rolled from this range. */
+  payoutMin: number
+  payoutMax: number
+  /** How long the ticket waits before scratching itself, in seconds. */
+  autoRevealSeconds: number
   summonCount: number
 }
 
@@ -237,6 +263,8 @@ export interface ArtDef {
   ui: {
     /** null once towers ship as one sprite carrying their own base. */
     towerBase: string | null
+    /** The painted title illustration. null falls back to a flat panel. */
+    titleBackdrop: string | null
   }
   fx: {
     spark: string

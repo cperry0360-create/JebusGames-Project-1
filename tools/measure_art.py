@@ -19,11 +19,9 @@ ALPHA = 16
 # scale is set from the *median* stone base rather than the widest, so one
 # unusually thin or wide tower cannot drag the whole set.
 #
-# 96px puts a tower's base a little over 1.5x the painted road's width. The
-# road measures 61px on the 1280px canvas, so a literal "1.2x the path" would
-# be 73px; 96 is the size that actually reads against the tavern and stands
-# about two and a half times the soldier enemy.
-MEDIAN_BASE_ON_SCREEN = 96.0
+# A tower's stone base is 1.2x the painted road's width. The road measures
+# 61px on the 1280px canvas, so that is 73px.
+MEDIAN_BASE_ON_SCREEN = 73.0
 
 KEY = {
     'tower_withholding.png': 'turret-ledger',
@@ -195,3 +193,74 @@ for f in sorted(glob.glob('public/assets/enemies/enemy_*.png')):
           f'on screen {round(w*escale,1)}x{round(h*escale,1)}, '
           f'anchorX {erender[key]["anchorX"]}, shadowWidth {erender[key]["shadowWidth"]}')
 json.dump({'files': efiles, 'render': erender}, open('/tmp/enemypatch.json', 'w'), indent=2)
+
+
+# ------------------------------------------------------------------- hero
+
+# Cory is drawn at the same scale as the enemies, so he reuses their factor
+# rather than getting one of his own. His Last Stand form is a vehicle and is
+# sized by WIDTH instead: it is meant to be wider than the road it drives over,
+# and matching its height to his would make it a toy.
+ULTIMATE_WIDTH_MULTIPLE = 2.2
+
+HERO_KEY = {
+    'hero_cory.png':          ('hero-cory', 0.80, None),
+    'hero_cory_ultimate.png': ('hero-cory-ultimate', 0.82, 'body'),
+}
+# As with the enemies, the second value is where the foot band starts. Cory
+# stands in a wide lunge, so the cut has to reach up past his trailing shoe.
+#
+# The third is a footprint rule. The vehicle needs one, and not the one you
+# would guess: sized to its wheelbase the shadow is invisible, because unlike
+# a pair of legs the body overhangs the contact patches and covers it whole.
+# A vehicle's shadow is cast by its body anyway, so 'body' spans the full
+# artwork and the shadow reads at the front and rear where it should.
+
+
+def footprint(w, h, px, band, rule):
+    """Where the art stands, and how wide a shadow it casts.
+
+    They are the same span for a person and different for a vehicle: it stands
+    on its wheels but shadows under its whole body.
+    """
+    low = ground_silhouette(w, h, px)
+    deepest = foot_groups(low, int(h * 0.94))
+    groups = foot_groups(low, int(h * band))
+    lo = min(g[0] for g in groups)
+    hi = max(g[1] for g in groups)
+    if rule == 'body':
+        # The ram hangs below the axle line ahead of the front wheel, so the
+        # stance runs from the front wheel to the rear one.
+        lo = min(g[0] for g in deepest)
+    stand = (lo, hi)
+    shadow = (0, w - 1) if rule == 'body' else stand
+    return stand, shadow, groups
+
+
+print('\n\nhero')
+hfiles, hrender = {}, {}
+bw, bh, bpx = png.read('public/assets/hero/hero_cory.png')
+base_on_screen_w = bw * escale
+print(f'base hero: {bw}x{bh} -> {round(bw * escale, 1)}x{round(bh * escale, 1)} at the enemy scale {escale:.4f}')
+
+for name in ('hero_cory.png', 'hero_cory_ultimate.png'):
+    key, band, rule = HERO_KEY[name]
+    path = f'public/assets/hero/{name}'
+    w, h, px = png.read(path)
+    (lo, hi), (slo, shi), groups = footprint(w, h, px, band, rule)
+    scale = escale if name == 'hero_cory.png' else (base_on_screen_w * ULTIMATE_WIDTH_MULTIPLE) / w
+    bot = max(ground_silhouette(w, h, px))
+
+    hfiles[key] = f'hero/{name}'
+    hrender[key] = {
+        'anchorX': round(((lo + hi) / 2) / w, 4),
+        'anchorY': round((bot + 1) / h, 4),
+        'displayHeight': round(h * scale, 1),
+        'shadowWidth': round((shi - slo + 1) * scale, 1),
+        'contentWidth': w,
+        'contentHeight': h,
+    }
+    print(f'{name:24s} {w}x{h} cut y{int(h * band)} groups {groups}')
+    print(f'{"":24s} -> {key}: stands x{lo}-{hi}, shadow x{slo}-{shi}, scale {scale:.4f}, '
+          f'on screen {round(w * scale, 1)}x{round(h * scale, 1)}, {hrender[key]}')
+json.dump({'files': hfiles, 'render': hrender}, open('/tmp/heropatch.json', 'w'), indent=2)

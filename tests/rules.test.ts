@@ -178,22 +178,22 @@ test('every wave references a real enemy and introduces types gradually', () => 
 test('the opening buys a real choice but not the whole board', () => {
   const costs = towerList.map(([, t]) => t.cost)
   const cheapest = Math.min(...costs)
-  assert.ok(rules.startingGold >= cheapest * 2, 'cannot open with two towers')
-  assert.ok(rules.startingGold < cheapest * 5, 'the opening is too rich to be a decision')
+  assert.ok(rules.startingPeanuts >= cheapest * 2, 'cannot open with two towers')
+  assert.ok(rules.startingPeanuts < cheapest * 5, 'the opening is too rich to be a decision')
 })
 
 test('the board grows at a sane rate across the run', () => {
   const avg = towerList.reduce((a, [, t]) => a + t.cost, 0) / towerList.length
   const payout = (i: number) =>
-    waves.waves[i].spawns.reduce((a: number, s: any) => a + s.count * enemies[s.enemy].goldReward, 0) +
-    rules.goldPerWaveCleared
+    waves.waves[i].spawns.reduce((a: number, s: any) => a + s.count * enemies[s.enemy].peanutReward, 0) +
+    rules.peanutsPerWaveCleared
   const cheapest = Math.min(...towerList.map(([, t]) => t.cost))
   assert.ok(payout(0) + payout(1) >= cheapest, 'waves 1-2 do not fund another tower')
-  const total = rules.startingGold + waves.waves.map((_: any, i: number) => payout(i))
+  const total = rules.startingPeanuts + waves.waves.map((_: any, i: number) => payout(i))
     .reduce((a: number, b: number) => a + b, 0)
   const affordable = total / avg
   assert.ok(affordable > 8 && affordable < 30, `run affords ~${affordable.toFixed(1)} towers, which is off`)
-  console.log(`   economy: open ${rules.startingGold}g, run total ${total}g (~${affordable.toFixed(1)} towers)`)
+  console.log(`   economy: open ${rules.startingPeanuts}g, run total ${total}g (~${affordable.toFixed(1)} towers)`)
 })
 
 test('leaking matters but one mistake is not fatal', () => {
@@ -209,7 +209,7 @@ test('every sprite key referenced by data exists in the art manifest', () => {
   const referenced: string[] = []
   for (const [, t] of towerList) referenced.push(t.sprite, t.shot)
   for (const [, e] of enemyList) referenced.push(e.sprite)
-  referenced.push(heroes.cory.bodySprite, heroes.cory.gunSprite)
+  referenced.push(heroes.cory.bodySprite, heroes.cory.ultimateSprite, heroes.cory.fighterSprite)
   for (const k of referenced) assert.ok(keys.has(k), `data references unknown sprite key "${k}"`)
 })
 

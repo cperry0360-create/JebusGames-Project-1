@@ -32,6 +32,7 @@ import { Hero } from '../entities/Hero.ts'
 import { Fighter } from '../entities/Fighter.ts'
 import { Projectile } from '../entities/Projectile.ts'
 import { BuildMenu } from '../ui/BuildMenu.ts'
+import { ScratchCard } from '../ui/ScratchCard.ts'
 import { COLOR, FONT_DISPLAY } from '../ui/Theme.ts'
 
 const MAP = mapData as MapDef
@@ -48,7 +49,7 @@ export type Phase = 'ready' | 'wave' | 'won' | 'lost'
 export type Mode = 'normal' | 'targeting' | 'restructure'
 
 export interface GameStatus {
-  gold: number
+  peanuts: number
   lives: number
   wave: number
   waveCount: number
@@ -68,12 +69,14 @@ export interface GameStatus {
 }
 
 const OVERLAY_DEPTH = 150000
+/** Above everything the world draws, including announcements. */
+const TICKET_DEPTH = 190000
 /** Ground markings are ellipses, not circles: the map is painted in 3/4. */
 const PAD_SQUASH = 0.62
 
 export class GameScene extends Phaser.Scene {
   readonly status: GameStatus = {
-    gold: 0, lives: 0, wave: 0, waveCount: WAVES.waves.length, waveName: '',
+    peanuts: 0, lives: 0, wave: 0, waveCount: WAVES.waves.length, waveName: '',
     phase: 'ready', mode: 'normal', enemiesLeft: 0,
     heroName: '', heroHealth: 0, heroMax: 0, heroDown: false, lastStand: false,
     unlockedTowers: [], abilities: [], pendingAbility: null, message: '',
@@ -100,6 +103,7 @@ export class GameScene extends Phaser.Scene {
   private targetRing!: Phaser.GameObjects.Graphics
   private selected: Tower | null = null
   private restructuring: Tower | null = null
+  private ticket: ScratchCard | null = null
 
   constructor() {
     super('Game')
@@ -116,6 +120,8 @@ export class GameScene extends Phaser.Scene {
     this.selected = null
     this.restructuring = null
     this.heroSelected = false
+    this.ticket?.destroy()
+    this.ticket = null
 
     const run = runState()
     const heroDef = HEROES[run.heroId] ?? HEROES.cory
@@ -133,7 +139,7 @@ export class GameScene extends Phaser.Scene {
 
     this.hero = new Hero(this, MAP.heroStart[0], MAP.heroStart[1], heroDef)
 
-    this.status.gold = RULES.startingGold
+    this.status.peanuts = RULES.startingPeanuts
     this.status.lives = RULES.startingLives
     this.status.wave = 0
     this.status.phase = 'ready'
@@ -235,14 +241,27 @@ export class GameScene extends Phaser.Scene {
     this.markerLayer.fillTriangle(r.x + 1, r.y - 40, r.x + 22, r.y - 34, r.x + 1, r.y - 28)
 
     if (this.heroSelected) {
-      // At his feet and wider than he is: drawn on his centre it disappeared
-      // behind the sprite, because ground markings sort below the world.
-      const w = this.hero.pickRadius * 2.4
+      // Deliberately not the rally marker's shape or colour: that is a blue
+      // flag planted on the ground, this is a green bracket around him. Sized
+      // from his own art so it fits the SUV as well as the man.
+      const w = this.hero.halfFootprint * 2 + 16
+      const h = w * PAD_SQUASH
       const y = this.hero.y + this.hero.footOffsetY
-      this.markerLayer.fillStyle(0x8fd07a, 0.18)
-      this.markerLayer.fillEllipse(this.hero.x, y, w, w * PAD_SQUASH)
+      this.markerLayer.fillStyle(0x8fd07a, 0.16)
+      this.markerLayer.fillEllipse(this.hero.x, y, w, h)
       this.markerLayer.lineStyle(3, 0x8fd07a, 0.95)
-      this.markerLayer.strokeEllipse(this.hero.x, y, w, w * PAD_SQUASH)
+      this.markerLayer.strokeEllipse(this.hero.x, y, w, h)
+      // Corner ticks, which a plain ring does not have.
+      const hx = w / 2
+      const hy = h / 2
+      for (const sx of [-1, 1]) {
+        for (const sy of [-1, 1]) {
+          this.markerLayer.lineBetween(this.hero.x + sx * hx, y + sy * hy * 0.55,
+            this.hero.x + sx * hx, y + sy * hy)
+          this.markerLayer.lineBetween(this.hero.x + sx * hx * 0.6, y + sy * hy,
+            this.hero.x + sx * hx, y + sy * hy)
+        }
+      }
     }
   }
 
@@ -255,6 +274,8 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.updateHover(p))
     this.input.on('pointerdown', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
       if (this.menu.isOpen && this.menu.ownsAny(over)) return
+      // The ticket takes its own drags; the world must not also act on them.
+      if (this.ticket?.active && this.ticket.owns(over)) return
       this.onClick(p)
     })
     this.input.keyboard?.on('keydown-ESC', () => this.clearSelection())
@@ -328,7 +349,7 @@ export class GameScene extends Phaser.Scene {
     this.menu.close()
     this.selected = null
     this.heroSelected = true
-    this.showRange(this.hero.x, this.hero.y, this.hero.def.attackRange, 0x4fa3e3)
+    this.showRange(this.hero.x, this.hero.y, this.hero.attackRange, 0x4fa3e3)
     this.status.message = `${this.hero.def.name} selected — click where he should hold.`
   }
 
@@ -355,7 +376,7 @@ export class GameScene extends Phaser.Scene {
   private openBuildMenu(spot: BuildSpot): void {
     this.selected = null
     this.menu.open(
-      spot.x, spot.y, this.status.gold,
+      spot.x, spot.y, this.status.peanuts,
       (id) => this.place(id, spot),
       (id) => {
         if (id) this.showTowerRange(spot.x, spot.y, TOWERS[id])
@@ -369,14 +390,14 @@ export class GameScene extends Phaser.Scene {
   private place(id: string, spot: BuildSpot): void {
     const def = TOWERS[id]
     if (!this.build.isFree(spot.index)) return
-    if (this.status.gold < def.cost) {
+    if (this.status.peanuts < def.cost) {
       // Silence here reads as a broken button, so say what is missing.
-      this.status.message = `${def.name} costs ${def.cost}g — ${def.cost - this.status.gold}g short.`
+      this.status.message = `${def.name} costs ${def.cost} peanuts — ${def.cost - this.status.peanuts} short.`
       play(this, 'sfx-leak', 0.25)
       return
     }
 
-    this.status.gold -= def.cost
+    this.status.peanuts -= def.cost
     this.build.occupy(spot.index)
     this.towers.push(new Tower(this, spot.x, spot.y, id, def, spot.index))
     this.refreshSupport()
@@ -505,14 +526,29 @@ export class GameScene extends Phaser.Scene {
       scene: this,
       enemies: () => this.enemies,
       damage: (e, amount, pierce) => this.damageEnemy(e, amount, pierce),
-      addGold: (amount) => { this.status.gold += amount },
+      addPeanuts: (amount) => { this.status.peanuts += amount },
       summon: (sx, sy, count, seconds) => this.summonFighters(sx, sy, count, seconds),
+      scratchTicket: (payout, seconds) => this.showTicket(payout, seconds),
       overlayDepth: OVERLAY_DEPTH,
     })
     this.status.mode = 'normal'
     this.status.pendingAbility = null
     this.targetRing.clear()
     this.status.message = `${def.name}!`
+  }
+
+  /** The ticket sits over the board and never pauses it. */
+  private showTicket(payout: number, autoRevealSeconds: number): void {
+    this.ticket?.destroy()
+    this.ticket = new ScratchCard(this, displayData.width / 2, displayData.height / 2, TICKET_DEPTH, {
+      payout,
+      autoRevealSeconds,
+      onCollect: (amount) => {
+        this.status.peanuts += amount
+        this.status.message = `Scratch Ticket: ${amount} peanuts.`
+        play(this, 'sfx-cast', 0.5)
+      },
+    })
   }
 
   private summonFighters(x: number, y: number, count: number, seconds: number): void {
@@ -528,7 +564,7 @@ export class GameScene extends Phaser.Scene {
         h.attackRange * 0.8,
         h.attackInterval,
         seconds,
-        h.gunSprite,
+        h.fighterSprite,
       ))
     }
   }
@@ -625,7 +661,7 @@ export class GameScene extends Phaser.Scene {
     if (this.status.phase !== 'wave') return
     if (!this.spawner.done || this.enemies.length > 0) return
 
-    this.status.gold += RULES.goldPerWaveCleared
+    this.status.peanuts += RULES.peanutsPerWaveCleared
     this.status.wave++
     this.grantTowerUnlocks()
 
@@ -637,7 +673,7 @@ export class GameScene extends Phaser.Scene {
     this.status.waveName = WAVES.waves[this.status.wave].name
     this.announce('WAVE CLEARED', COLOR.good)
     this.status.message =
-      `Wave cleared, +${RULES.goldPerWaveCleared}g. Build or reposition, then START WAVE ${this.status.wave + 1}.`
+      `Wave cleared, +${RULES.peanutsPerWaveCleared} peanuts. Build or reposition, then START WAVE ${this.status.wave + 1}.`
   }
 
   /** A 3rd tower after wave 4 and a 4th after wave 8, drawn from the reserve. */
@@ -649,7 +685,7 @@ export class GameScene extends Phaser.Scene {
       if (!next) break
       this.status.unlockedTowers.push(next)
       this.refreshMenuOptions()
-      this.announce(`NEW TOWER: ${TOWERS[next].name.toUpperCase()}`, COLOR.gold)
+      this.announce(`NEW TOWER: ${TOWERS[next].name.toUpperCase()}`, COLOR.amber)
     }
   }
 
@@ -713,7 +749,7 @@ export class GameScene extends Phaser.Scene {
 
     if (this.selected) this.showTowerRange(this.selected.x, this.selected.y, this.selected.def)
     else if (this.heroSelected) {
-      this.showRange(this.hero.x, this.hero.y, this.hero.def.attackRange, 0x4fa3e3)
+      this.showRange(this.hero.x, this.hero.y, this.hero.attackRange, 0x4fa3e3)
     }
     this.drawHeroMarkers()
 
@@ -732,7 +768,7 @@ export class GameScene extends Phaser.Scene {
 
     const holders: Array<{ who: Blocker; range: number; capacity: number }> = []
     if (this.hero.alive) {
-      holders.push({ who: this.hero, range: this.hero.def.blockRange, capacity: this.hero.def.blockCapacity })
+      holders.push({ who: this.hero, range: this.hero.blockRange, capacity: this.hero.def.blockCapacity })
     }
     for (const f of this.fighters) {
       if (f.alive) holders.push({ who: f, range: this.hero.def.blockRange, capacity: 1 })
@@ -798,7 +834,7 @@ export class GameScene extends Phaser.Scene {
 
   private damageEnemy(enemy: Enemy, damage: number, ignoresArmor: boolean): void {
     if (!enemy.alive) return
-    if (enemy.hurt(damage, ignoresArmor)) this.status.gold += enemy.def.goldReward
+    if (enemy.hurt(damage, ignoresArmor)) this.status.peanuts += enemy.def.peanutReward
   }
 
   /** Routes an enemy's melee to whatever is actually holding it. */

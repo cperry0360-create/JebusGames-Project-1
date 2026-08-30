@@ -11,13 +11,15 @@
     "duration": 0,
     "ticks": 0,
     "slowFactor": 0,
-    "gold": 0,
-    "summonCount": 0
+    "summonCount": 0,
+    "payoutMin": 0,
+    "payoutMax": 0,
+    "autoRevealSeconds": 0
   },
   "twoFighters": {
     "name": "Two Fighters",
     "flavor": "Two temps from the agency. No questions asked.",
-    "icon": "hero-gun",
+    "icon": "fighter-body",
     "targeting": "ground",
     "cooldown": 26,
     "radius": 46,
@@ -26,8 +28,10 @@
     "duration": 18,
     "ticks": 0,
     "slowFactor": 0,
-    "gold": 0,
-    "summonCount": 2
+    "summonCount": 2,
+    "payoutMin": 0,
+    "payoutMax": 0,
+    "autoRevealSeconds": 0
   },
   "freezeField": {
     "name": "Freeze Field",
@@ -41,8 +45,10 @@
     "duration": 5,
     "ticks": 0,
     "slowFactor": 0.25,
-    "gold": 0,
-    "summonCount": 0
+    "summonCount": 0,
+    "payoutMin": 0,
+    "payoutMax": 0,
+    "autoRevealSeconds": 0
   },
   "meteorBarrage": {
     "name": "Meteor Barrage",
@@ -56,8 +62,10 @@
     "duration": 3,
     "ticks": 6,
     "slowFactor": 0,
-    "gold": 0,
-    "summonCount": 0
+    "summonCount": 0,
+    "payoutMin": 0,
+    "payoutMax": 0,
+    "autoRevealSeconds": 0
   },
   "chainLightning": {
     "name": "Chain Lightning",
@@ -71,12 +79,14 @@
     "duration": 0,
     "ticks": 5,
     "slowFactor": 0,
-    "gold": 0,
-    "summonCount": 0
+    "summonCount": 0,
+    "payoutMin": 0,
+    "payoutMax": 0,
+    "autoRevealSeconds": 0
   },
-  "goldRain": {
-    "name": "Gold Rain",
-    "flavor": "Found money. Do not ask where.",
+  "scratchTicket": {
+    "name": "Scratch Ticket",
+    "flavor": "Bought at the counter. Odds are terrible. Worth it.",
     "icon": "shot-small",
     "targeting": "instant",
     "cooldown": 34,
@@ -86,7 +96,9 @@
     "duration": 0,
     "ticks": 0,
     "slowFactor": 0,
-    "gold": 150,
-    "summonCount": 0
+    "summonCount": 0,
+    "payoutMin": 60,
+    "payoutMax": 320,
+    "autoRevealSeconds": 3.5
   }
 }

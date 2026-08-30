@@ -355,7 +355,10 @@ def main():
     build_spots = [to_canvas(p) for p in spots]
     print(f'  {len(waypoints)} waypoints after simplify')
 
-    print(json.dumps({'waypoints': waypoints, 'buildSpots': build_spots}, indent=1))
+    road_width = round(widest * 2 * K * scale, 1)
+    print(f'  road is {road_width} canvas px wide')
+    print(json.dumps({'roadWidth': road_width, 'waypoints': waypoints,
+                      'buildSpots': build_spots}, indent=1))
 
     if args.overlay:
         write_overlay(args.overlay, w, h, px, waypoints, build_spots, args.spot_radius)

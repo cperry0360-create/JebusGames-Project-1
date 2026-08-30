@@ -1,5 +1,6 @@
 {
  "plate": "level1",
+ "roadWidth": 61.2,
  "note": "Waypoints and build spots are canvas pixels, traced from the painted plate by tools/trace_map.py. The plate is 16:9 and fills the canvas, so canvas pixels are the map's own coordinate space.",
  "heroStart": [
   640,

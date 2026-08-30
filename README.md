@@ -26,6 +26,9 @@ npm run preview  # serve the built dist/ locally
 
 ## Playing it
 
+The currency is **peanuts**. Towers cost peanuts, kills pay peanuts, and the
+HUD counts them.
+
 A run goes: **studio splash → title and hero pick → ability draft → tower draft →
 the map.** The splash runs about two seconds and any click or key skips it.
 
@@ -35,6 +38,7 @@ the map.** The splash runs about two seconds and any click or key skips it.
 | Hover a menu option | Preview that tower's range |
 | Click a built tower | Select it and show its range |
 | Click Cory, then a spot | Send him there; he walks, holds, and fights what comes |
+| Drag across a Scratch Ticket | Reveal the payout. It scratches itself if you don't |
 | `Q` / `W` or the HUD slots | Cast a drafted ability (click to place it) |
 | `E` | Haymaker — huge single-target hit with knockback |
 | `R` | Restructure — move a built tower for free |
@@ -126,10 +130,20 @@ tracer enforces that, using `display.hudHeight`.
 
 ## Cory
 
-He is not a cursor. Click him to select — a ring appears at his feet and his
-reach is shown — then click where he should hold. He walks there at his own
-speed, stops, and fights whatever comes into range; a flag marks the standing
-order. He does not move again until told to.
+He is not a cursor. Click him to select — a green bracket closes around him and
+his reach is shown — then click where he should hold. He walks there at his own
+speed, stops, and fights whatever comes into range; a blue flag marks the
+standing order. The bracket and the flag are deliberately different shapes and
+colours: one is "this is selected", the other is "go here".
+
+He does not move again until told to.
+
+**DAD MODE.** At 25% health he does not become an angrier man. The screen
+shakes, everything goes white, and half a second later he is driving an
+armoured SUV. In that form he is wider than the road, ignores it entirely,
+drives over anything in his way and shoves it back down the lane. His reach,
+his hold and his speed all grow. He reverts on foot at the next encounter,
+because a fresh Hero is built with the run.
 
 Bare ground does nothing unless he is selected, which is what stops a misjudged
 tap walking him off his post mid-wave. Building pads take a tap before the
@@ -147,8 +161,9 @@ python3 tools/mksfx.py public/assets/audio
 
 ## Art
 
-The map plate, the six towers and the three enemies are painted art, in
-`public/assets/maps/`, `towers/` and `enemies/`. What is left of Kenney's
+The map plate, the six towers, the three enemies, Cory in both his forms and
+the title illustration are painted art, in `public/assets/maps/`, `towers/`,
+`enemies/`, `hero/` and `ui/`. What is left of Kenney's
 **Tower Defense (Top-Down)** pack is the projectiles, the effects, the scenery
 on the title and credits backdrops, and Cory himself; the **Kenney font
 package** supplies the type. Both are CC0. All 299 sprites live in

@@ -46,7 +46,7 @@ export class BuildMenu {
   open(
     worldX: number,
     worldY: number,
-    gold: number,
+    peanuts: number,
     onPick: (id: string) => void,
     onPreview: (id: string | null) => void,
   ): void {
@@ -72,7 +72,7 @@ export class BuildMenu {
     this.options.forEach((opt, i) => {
       const cx = PAD + (i % COLS) * CELL_W
       const cy = PAD + 22 + Math.floor(i / COLS) * CELL_H
-      const affordable = gold >= opt.def.cost
+      const affordable = peanuts >= opt.def.cost
 
       const cell = this.scene.add
         .rectangle(cx, cy, CELL_W - 6, CELL_H - 6, 0x232a34, 0.95)
@@ -84,7 +84,7 @@ export class BuildMenu {
       if (!affordable) for (const part of icon) part.setAlpha(0.35)
 
       const cost = this.scene.add
-        .text(iconX, cy + 56, `${opt.def.cost}g`, {
+        .text(iconX, cy + 56, `${opt.def.cost}p`, {
           fontFamily: 'monospace', fontSize: '13px',
           color: affordable ? '#f2d06b' : '#7d7568',
         })

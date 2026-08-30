@@ -43,7 +43,7 @@ export function makeShadow(scene: Phaser.Scene, spriteKey: string, scale = 1): P
   return img
 }
 
-/** Rising damage number. Crits (or anything flagged big) read larger and gold. */
+/** Rising damage number. Crits (or anything flagged big) read larger and amber. */
 export function floatingDamage(
   scene: Phaser.Scene,
   x: number,

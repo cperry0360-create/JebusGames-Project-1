@@ -1,5 +1,5 @@
 {
-  "startingGold": 260,
+  "startingPeanuts": 260,
   "startingLives": 20,
-  "goldPerWaveCleared": 35
+  "peanutsPerWaveCleared": 35
 }

@@ -115,13 +115,13 @@ export class DraftScene extends Phaser.Scene {
       align: 'center', wordWrap: { width: w - 40 },
     }).setOrigin(0.5, 0))
     this.layer.add(this.add.text(x + w / 2, y + 236, this.abilityStats(def), {
-      fontFamily: FONT_UI, fontSize: '13px', color: COLOR.gold, align: 'center',
+      fontFamily: FONT_UI, fontSize: '13px', color: COLOR.amber, align: 'center',
     }).setOrigin(0.5))
   }
 
   private abilityStats(def: AbilityDef): string {
     const bits: string[] = [`${def.cooldown}s cooldown`]
-    if (def.gold > 0) bits.push(`+${def.gold} gold`)
+    if (def.payoutMax > 0) bits.push(`${def.payoutMin}-${def.payoutMax} peanuts`)
     if (def.damage > 0) bits.push(`${def.damage} damage`)
     if (def.summonCount > 0) bits.push(`${def.summonCount} fighters`)
     if (def.slowFactor > 0) bits.push(`slow to ${Math.round(def.slowFactor * 100)}%`)
@@ -144,10 +144,10 @@ export class DraftScene extends Phaser.Scene {
       align: 'center', wordWrap: { width: w - 40 },
     }).setOrigin(0.5, 0))
     const stats = def.supportRadius > 0
-      ? `${def.cost}g   ·   +${Math.round(def.supportDamageBonus * 100)}% nearby`
-      : `${def.cost}g   ·   ${def.damage} dmg   ·   ${def.range} range`
+      ? `${def.cost}p   ·   +${Math.round(def.supportDamageBonus * 100)}% nearby`
+      : `${def.cost}p   ·   ${def.damage} dmg   ·   ${def.range} range`
     this.layer.add(this.add.text(x + w / 2, y + 250, stats, {
-      fontFamily: FONT_UI, fontSize: '13px', color: COLOR.gold,
+      fontFamily: FONT_UI, fontSize: '13px', color: COLOR.amber,
     }).setOrigin(0.5))
   }
 }

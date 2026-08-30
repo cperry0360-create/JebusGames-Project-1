@@ -9,9 +9,9 @@ shape of each one — add a field there when you add one here.
 |---|---|
 | `display.json` | Canvas size, HUD bar height, background colour |
 | `map.json` | Which painted plate to draw, the traced lane, the build spots, hero start |
-| `rules.json` | Starting gold and lives, wave payout |
+| `rules.json` | Starting peanuts and lives, wave payout |
 | `towers.json` | The six towers: cost, range, damage, fire rate, splash, slow, support |
-| `enemies.json` | The three enemies: health, armour, speed, reward, melee. Their on-screen size lives in `art.json` |
+| `enemies.json` | The three enemies: health, armour, speed, peanut reward, melee. Their on-screen size lives in `art.json` |
 | `heroes.json` | Cory's stats and the whole Last Stand block |
 | `waves.json` | Twelve waves: composition, spawn pacing, per-group delays |
 | `abilities.json` | The six active abilities: cooldown, radius, damage, duration |
@@ -37,6 +37,16 @@ shape of each one — add a field there when you add one here.
   traced out of the painted artwork by `tools/trace_map.py`; re-run it when the
   art changes rather than nudging numbers by hand. The first and last waypoints
   sit off-screen so enemies walk in through the arch and out through the gate.
+- **The currency is peanuts.** Not gold. `rules.startingPeanuts`,
+  `enemies.*.peanutReward`, `towers.*.cost`. A test fails if the word "gold"
+  reappears anywhere in the shipped data.
+- **`abilities.scratchTicket` has a payout *range*, not a payout.**
+  `payoutMin`/`payoutMax` are rolled when the card appears, and
+  `autoRevealSeconds` is how long it waits before scratching itself. The
+  ticket never pauses the wave, so that timer has to stay short.
+- **`heroes.cory.lastStand` carries the whole vehicle form.** The multipliers
+  for reach, hold and speed, the ramming damage and knockback, and the three
+  timings of the transformation. Nothing about DAD MODE is in code.
 - **`draft.unlockedTypeCap` is a cap on tower *types*, not on towers.** It is
   how many different towers the build menu ever offers. How many towers can
   stand on the map is `map.json.buildSpots.length` — seven. The field used to
@@ -105,11 +115,11 @@ scale in a 512-tall frame, so `displayHeight` is the same for every one.
 Normalising each tower's base to a common width instead would have stretched
 the thin obelisk against the others, undoing the artist's proportions.
 
-The scale is set from the set's *median* base — 96px on screen — so one
-unusually wide or narrow tower cannot drag the rest. Worth naming: the painted
-road is 61px wide on the 1280px canvas, so a literal "base 1.2x the path" would
-be 73px. 96px is what actually reads against the tavern and against a 44px
-soldier, and it is the size the brief asked for in pixels.
+The scale is set from the set's *median* base, so one unusually wide or narrow
+tower cannot drag the rest. The target is 1.2x the painted road's width —
+`map.json.roadWidth`, measured by the tracer — which is 73px. A test checks the
+median base against the road rather than against a remembered number, so a new
+map with a wider road resizes the towers with it.
 
 ### How the enemy values were measured
 
@@ -161,6 +171,33 @@ roller-skating goblin the same size as an armoured brute.
   below this threshold the current facing is kept. This map's steepest leg
   drifts 3px west over 92px; `tests/logic.test.ts` checks the dead zone covers
   it.
+
+### How the hero values were measured
+
+`tools/measure_art.py` measures Cory the same way it measures the enemies, and
+his two forms need different rules.
+
+| | canvas | stands on | shadow | on screen |
+|---|---|---|---|---|
+| Cory on foot | 449x470 | x134-408 (both shoes) | same | 57.9x60.6 |
+| Cory in the SUV | 900x588 | x216-752 (the wheels) | the whole body | 127.3x83.2 |
+
+**He is drawn at the enemy scale, not his own.** The art arrived sized against
+the enemies, so he reuses their factor. Giving him a separate one would let the
+two drift apart the next time either changed.
+
+**The SUV is sized by width, not height.** 2.2x his on-screen width. Matched to
+his height instead it would be a toy; the whole point is that it is wider than
+the 61px road and does not fit in the lane.
+
+**A vehicle's shadow is not its wheelbase.** Measured from the wheels, the
+shadow was invisible: unlike a pair of legs, the body overhangs the contact
+patches and covers it completely. It spans the whole artwork instead, which is
+both what a car actually shadows and the only version you can see. The anchor
+still comes from the wheels, so he sits on the road rather than floating.
+
+**Both hero sprites face LEFT**, the opposite of the enemy art. `Facing.ts` is
+asked about the reversed heading rather than being given a second rule.
 
 - **`art.json` is the only place a sprite is named.** Code asks for a *role*
   (`ART.fx.blast`, `ART.map.level1`, `ART.ui.towerBase`) and

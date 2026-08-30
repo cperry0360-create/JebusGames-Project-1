@@ -61,7 +61,7 @@ Why this beats the old model: the run gets an arc. Early game is tense and const
 
 Economy is deliberately absent from this pool. It lives off-path in Holdings. See below.
 
-Each tower has 2 gold-purchased upgrade tiers plus a branching tier-3 choice between two mutually exclusive specializations.
+Each tower has 2 peanut-purchased upgrade tiers plus a branching tier-3 choice between two mutually exclusive specializations.
 
 **Build time scales with tier.** Tier 1 places instantly. Tier 2 and tier 3 upgrades take time to complete, during which the tower fires at reduced rate. This creates a real mid-wave decision: upgrade now and go soft for eight seconds, or hold and upgrade during the gap.
 
@@ -71,19 +71,19 @@ Each tower has 2 gold-purchased upgrade tiers plus a branching tier-3 choice bet
 
 Separate plots, scattered away from the path, visually distinct from tower slots. **They cannot target enemies.** They do not consume tower slots.
 
-This solves a problem the earlier draft had: with a cap of 2 to 4 combat towers, nobody would ever spend a slot on an economy tower. Moving economy off-path means it competes for gold and space rather than for defense.
+This solves a problem the earlier draft had: with a cap of 2 to 4 combat towers, nobody would ever spend a slot on an economy tower. Moving economy off-path means it competes for peanuts and space rather than for defense.
 
 Holdings pool, pick from what the map offers:
 
-- **Counting House** — generates gold each wave
+- **Counting House** — generates peanuts each wave
 - **Workshop** — reduces ability cooldowns
 - **Beacon** — large radius aura, buffs any towers inside it. Placement is the whole puzzle, since the plot is fixed and far away.
 - **Depot** — tower upgrades cost less
-- **Mine** — accumulates gold that you must **tap to collect** before it caps out
+- **Mine** — accumulates peanuts that you must **tap to collect** before it caps out
 
 The Mine is the interaction hook. Some Holdings should require active attention rather than passive income, so the player has something to manage between spawns.
 
-Core tension: Holdings cost gold now for payoff later, in a game where you might not survive this wave. That is the decision.
+Core tension: Holdings cost peanuts now for payoff later, in a game where you might not survive this wave. That is the decision.
 
 **Siege enemies ignore Holdings.** They are off-path and out of reach. Keeps the threat model clean.
 
@@ -110,7 +110,7 @@ Mild-mannered tax advisor with the power of pure strength. Not an auditor. Never
 - Passive: *Depreciation* — enemies near Cory lose armor over time
 - Active 1: *Haymaker* — massive single-target hit with knockback
 - Active 2: *Restructure* — instantly relocate one tower anywhere on the map, free
-- **Last Stand: DAD MODE** — cracks a beer, damage doubles, swings wildly at everything in range. Defense and precision drop. Pure haymakers.
+- **Last Stand: DAD MODE** — he does not become an angrier man, he gets into an armoured SUV. Damage doubles, reach and speed grow, and he drives over the lane rather than along it, shoving aside anything he touches. Defense and precision drop. Pure haymakers.
 
 **Courtland — The Mind**
 Telepathic and brilliant. He will outsmart you in a second.
@@ -144,7 +144,7 @@ Small brindled dog. Kind, sweet, and soooo fast.
 
 Four more for Phase 4, built for mechanical variety rather than family flavor:
 
-- **The Broker** — starts with 50% more gold, towers cost more
+- **The Broker** — starts with 50% more peanuts, towers cost more
 - **The Warden** — leaks cost half as much life, but you cap at 3 towers
 - **The Engineer** — towers upgrade one tier cheaper, no hero combat ability
 - **The Gambler** — draws an extra tower at every milestone, but one is random and locked
@@ -165,7 +165,7 @@ Cooldown-based, player-triggered, placed anywhere on the map.
 2. **Two Fighters** — summon melee blockers *(built)*
 3. **Freeze Field** — area slow plus damage vulnerability
 4. **Poison Cloud** — damage over time, lingers
-5. **Gold Rain** — instant gold injection
+5. **Scratch Ticket** — instant peanuts, but the payout is a random range and you must scratch the card to collect it. It auto-reveals after a few seconds so it never stalls a wave.
 6. **Meteor Barrage** — repeated AOE over several seconds
 7. **Overclock** — target tower doubles fire rate briefly
 8. **Barricade** — temporary wall, blocks or reroutes
@@ -180,7 +180,7 @@ Always on, no button. These shape how the whole run plays.
 
 1. **Undead** — enemies killed near your towers rise as weak allies for 10 seconds
 2. **Overgrowth** — roots creep along the path; enemies slow progressively the further they walk
-3. **Interest** — unspent gold generates a small return each wave
+3. **Interest** — unspent peanuts generate a small return each wave
 4. **Scavenger** — every 10th kill drops a random consumable
 5. **Momentum** — each consecutive kill without a leak adds stacking damage
 6. **Insurance** — first tower destroyed each act is rebuilt free
@@ -221,9 +221,9 @@ Reference design, the **Rolling Bomb**:
 - Slow, high health, ignores everything until it reaches its target
 - Visible fuse or wind-up so the player can count down
 - If it connects, the tower is **destroyed on its tile**
-- The tower type stays in your loadout. You rebuild by paying gold.
+- The tower type stays in your loadout. You rebuild by paying peanuts.
 
-That last line matters. With a cap of 2 to 4 towers, permanently losing a tower type would end runs unfairly. Losing the placement and the gold is punishing enough.
+That last line matters. With a cap of 2 to 4 towers, permanently losing a tower type would end runs unfairly. Losing the placement and the peanuts is punishing enough.
 
 Second siege type should threaten differently: something fast that **disables** a tower for 10 seconds rather than destroying it, so the answer is control rather than burst.
 
@@ -266,7 +266,7 @@ Runs award **Banner Points** based on depth reached, not just victory. A failed 
 Constellation-style tree, four branches: Offense, Control, Economy, Command.
 
 Node rules:
-- Mix flat passives (+range, +gold per kill) with **behavior changers** (Explosion leaves burning ground; slows also amplify damage)
+- Mix flat passives (+range, +peanuts per kill) with **behavior changers** (Explosion leaves burning ground; slows also amplify damage)
 - Gate branches behind usage (win with Bailey, finish a run using an economy tower) to push variety
 - Include mutually exclusive pairs
 - Hero unlocks and the 5th tower slot live here
@@ -279,7 +279,7 @@ Node rules:
 
 Temporary, this run only. Offered after elites and bosses, 1 of 3.
 
-Examples: +2 tower range, abilities cost 30% less, first tower each wave is free, enemies drop 25% more gold but move 10% faster.
+Examples: +2 tower range, abilities cost 30% less, first tower each wave is free, enemies drop 25% more peanuts but move 10% faster.
 
 Both layers matter. Boons create the "this run is broken in a fun way" feeling. The Banner creates the reason to come back.
 
@@ -330,7 +330,11 @@ Classes are Phase 4. Not before.
 - **Animation:** Rive, or two-frame bob plus squash-stretch for v1
 - **Audio:** freesound.org and Kenney's free audio packs
 
-**Critical rule:** all balance numbers live in JSON config under `/src/data/`. Tower stats, enemy stats, wave composition, ability values, hero stats, Last Stand thresholds, node costs. Never hardcode a number you will want to tune.
+**The currency is peanuts.** Not gold, not coins — peanuts. Towers cost
+peanuts, kills pay peanuts, and the HUD says so. It is the joke that the whole
+economy is denominated in what the work actually pays.
+
+**Critical rule:** all balance numbers live in JSON config under `/src/data/`. Tower stats, enemy stats, wave composition, ability values (including the Scratch Ticket's payout range and auto-reveal timer), hero stats, Last Stand thresholds and multipliers, node costs. Never hardcode a number you will want to tune.
 
 ---
 

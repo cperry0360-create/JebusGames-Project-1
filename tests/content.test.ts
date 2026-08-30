@@ -15,9 +15,9 @@ test('every sprite key referenced anywhere resolves to a real file', () => {
   for (const [id, e] of Object.entries(enemies) as [string, any][]) refs.push([`enemy ${id}`, e.sprite])
   for (const [id, a] of Object.entries(abilities) as [string, any][]) refs.push([`ability ${id}`, a.icon])
   for (const [id, h] of Object.entries(heroes) as [string, any][]) {
-    refs.push([`hero ${id} body`, h.bodySprite], [`hero ${id} gun`, h.gunSprite],
-      [`hero ${id} portrait`, h.portraitSprite], [`hero ${id} haymaker`, h.haymaker.icon],
-      [`hero ${id} restructure`, h.restructure.icon])
+    refs.push([`hero ${id} body`, h.bodySprite], [`hero ${id} ultimate`, h.ultimateSprite],
+      [`hero ${id} portrait`, h.portraitSprite], [`hero ${id} fighter`, h.fighterSprite],
+      [`hero ${id} haymaker`, h.haymaker.icon], [`hero ${id} restructure`, h.restructure.icon])
   }
   refs.push([`map plate ${map.plate}`, art.map[map.plate]])
   for (const [where, key] of refs) {
@@ -41,6 +41,46 @@ test('the sprite keys the scenes ask for by role are all in the manifest', () =>
     'decor-bush', 'decor-shrub', 'decor-plant', 'decor-rock', 'decor-rock2', 'decor-rock3',
   ]
   for (const k of hardcoded) assert.ok(ART_KEYS.has(k), `code uses sprite key "${k}" which art.json lacks`)
+})
+
+test('Cory is painted art in two forms, both standing on the ground', () => {
+  const c = heroes.cory
+  for (const [what, key] of [['on foot', c.bodySprite], ['in the SUV', c.ultimateSprite]] as [string, string][]) {
+    assert.match(art.files[key], /^hero\//, `Cory ${what} is not using the painted hero art`)
+    const cfg = art.render[key]
+    assert.ok(cfg, `Cory ${what} has no render entry`)
+    assert.equal(cfg.anchorY, 1, `Cory ${what} must stand on his own base`)
+    assert.ok(cfg.shadowWidth > 0, `Cory ${what} casts no shadow`)
+  }
+})
+
+test('the Last Stand form is sized by width, and is wider than the road', () => {
+  // It is a vehicle, not a bigger man. Matching its height to his would make
+  // it a toy; the point is that it does not fit in the lane.
+  const c = heroes.cory
+  const onFoot = art.render[c.bodySprite]
+  const suv = art.render[c.ultimateSprite]
+  const footW = (onFoot.contentWidth / onFoot.contentHeight) * onFoot.displayHeight
+  const suvW = (suv.contentWidth / suv.contentHeight) * suv.displayHeight
+  const multiple = suvW / footW
+  assert.ok(Math.abs(multiple - 2.2) < 0.15,
+    `the SUV is ${multiple.toFixed(2)}x his width; the design asks for about 2.2x`)
+  assert.ok(suvW > map.roadWidth,
+    `the SUV is ${suvW.toFixed(0)}px against a ${map.roadWidth}px road; it is supposed to not fit`)
+})
+
+test('DAD MODE grows every number it is supposed to grow', () => {
+  const ls = heroes.cory.lastStand
+  for (const k of ['attackRangeMultiplier', 'blockRangeMultiplier', 'moveSpeedMultiplier']) {
+    assert.ok(ls[k] > 1, `${k} is ${ls[k]}; the vehicle form should be bigger in every sense`)
+  }
+  assert.ok(ls.damageMultiplier > 1 && ls.damageTakenMultiplier > 1,
+    'DAD MODE should hit harder and take more')
+  assert.ok(ls.rammingDamage > 0 && ls.rammingKnockbackPixels > 0,
+    'driving through someone should hurt and shove them')
+  assert.ok(ls.transformPauseMs >= 300 && ls.transformPauseMs <= 900,
+    'the pause before he reappears is the beat; it must be short but real')
+  assert.ok(ls.transformShakeMs > 0 && ls.transformFlashMs > 0, 'the swap needs a shake and a flash')
 })
 
 test('the three enemies are the painted art, standing on the ground', () => {
@@ -117,6 +157,15 @@ test('every icon the UI shows can be sized from the manifest', () => {
   }
 })
 
+test('nothing in the shipped data calls the currency gold', () => {
+  // The currency is peanuts. A stray "gold" in a flavour line or a field name
+  // is the kind of thing that survives a rename and then ships.
+  for (const name of ['rules', 'towers', 'enemies', 'heroes', 'abilities', 'waves', 'draft', 'credits']) {
+    const raw = readFileSync(url(`../src/data/${name}.json`), 'utf8')
+    assert.ok(!/gold/i.test(raw), `src/data/${name}.json still says gold`)
+  }
+})
+
 test('the fonts and sound cues are bundled', () => {
   for (const f of ['KenneyFuture.ttf', 'KenneyFutureNarrow.ttf', 'KenneyMiniSquare.ttf', 'License.txt']) {
     assert.ok(existsSync(url(`../public/assets/fonts/${f}`)), `missing font asset ${f}`)
@@ -130,7 +179,7 @@ test('the fonts and sound cues are bundled', () => {
 test('all six actives exist and each does something distinct', () => {
   const ids = Object.keys(abilities)
   assert.deepEqual(new Set(ids), new Set([
-    'explosion', 'twoFighters', 'freezeField', 'meteorBarrage', 'chainLightning', 'goldRain',
+    'explosion', 'twoFighters', 'freezeField', 'meteorBarrage', 'chainLightning', 'scratchTicket',
   ]))
   const a = abilities
   assert.ok(a.explosion.damage > 0 && a.explosion.radius > 0, 'Explosion needs damage in an area')
@@ -140,7 +189,9 @@ test('all six actives exist and each does something distinct', () => {
   assert.ok(a.meteorBarrage.ticks > 1 && a.meteorBarrage.duration > 0, 'a barrage is repeated impacts over time')
   assert.ok(a.chainLightning.ticks > 1, 'chain lightning needs jumps')
   assert.ok(a.chainLightning.ignoresArmor, 'lightning should not care about armour')
-  assert.ok(a.goldRain.gold > 0 && a.goldRain.targeting === 'instant', 'Gold Rain pays out immediately')
+  assert.ok(a.scratchTicket.payoutMax > a.scratchTicket.payoutMin,
+    'a Scratch Ticket with a fixed payout is not a scratch ticket')
+  assert.equal(a.scratchTicket.targeting, 'instant', 'the ticket is not aimed anywhere')
   for (const [id, def] of Object.entries(a) as [string, any][]) {
     assert.ok(def.cooldown > 0, `${id} has no cooldown`)
     assert.ok(['ground', 'instant'].includes(def.targeting), `${id} has bad targeting "${def.targeting}"`)
@@ -152,11 +203,15 @@ test('ability cooldowns are spread, so they are not interchangeable', () => {
   assert.ok(Math.max(...cds) >= Math.min(...cds) * 2, 'every ability has roughly the same cooldown')
 })
 
-test('Gold Rain pays less than it would cost to just hand over a tower board', () => {
-  const cheapest = Math.min(...Object.values(towers).map((t: any) => t.cost))
-  const dearest = Math.max(...Object.values(towers).map((t: any) => t.cost))
-  assert.ok(abilities.goldRain.gold >= cheapest, 'Gold Rain should buy at least one tower')
-  assert.ok(abilities.goldRain.gold <= dearest * 2, 'Gold Rain should not hand over the whole board')
+test('a Scratch Ticket can disappoint, and cannot hand over the board', () => {
+  const t = abilities.scratchTicket
+  const cheapest = Math.min(...Object.values(towers).map((tw: any) => tw.cost))
+  const dearest = Math.max(...Object.values(towers).map((tw: any) => tw.cost))
+  assert.ok(t.payoutMin < cheapest, 'every ticket buying a tower removes the gamble')
+  assert.ok(t.payoutMax >= cheapest, 'no ticket ever buying a tower removes the point')
+  assert.ok(t.payoutMax <= dearest * 3, 'a ticket should not hand over the whole board')
+  assert.ok(t.autoRevealSeconds > 0 && t.autoRevealSeconds <= 6,
+    'the ticket must reveal itself, and fast enough not to stall the wave')
 })
 
 test("Cory's kit matches the design doc", () => {

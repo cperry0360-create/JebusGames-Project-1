@@ -4,9 +4,8 @@
     "title": "The Optimizer",
     "flavor": "Mild-mannered tax advisor with the power of pure strength. Not an auditor.",
     "blurb": "Holds the line in person. Shreds armour just by standing near it, and hits like a filing deadline.",
-    "bodySprite": "hero-body",
-    "gunSprite": "hero-gun",
-    "portraitSprite": "hero-body",
+    "bodySprite": "hero-cory",
+    "portraitSprite": "hero-cory",
     "maxHealth": 360,
     "moveSpeed": 104,
     "attackRange": 86,
@@ -44,7 +43,17 @@
       "damageMultiplier": 2,
       "attackIntervalMultiplier": 0.8,
       "damageTakenMultiplier": 1.5,
-      "hitsAllInRange": true
-    }
+      "hitsAllInRange": true,
+      "attackRangeMultiplier": 1.9,
+      "blockRangeMultiplier": 2.2,
+      "moveSpeedMultiplier": 1.35,
+      "rammingDamage": 26,
+      "rammingKnockbackPixels": 54,
+      "transformShakeMs": 420,
+      "transformFlashMs": 260,
+      "transformPauseMs": 500
+    },
+    "ultimateSprite": "hero-cory-ultimate",
+    "fighterSprite": "fighter-body"
   }
 }

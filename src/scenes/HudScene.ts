@@ -26,7 +26,7 @@ const SLOT = 56
  *  ever landing in the middle of the sort order. */
 export class HudScene extends Phaser.Scene {
   private world!: GameScene
-  private goldText!: Phaser.GameObjects.Text
+  private peanutsText!: Phaser.GameObjects.Text
   private livesText!: Phaser.GameObjects.Text
   private waveText!: Phaser.GameObjects.Text
   private message!: Phaser.GameObjects.Text
@@ -38,7 +38,7 @@ export class HudScene extends Phaser.Scene {
   private slots: SlotView[] = []
   private slotsBuilt = false
   /** Last drawn values, so a change can be shown rather than just displayed. */
-  private lastGold = -1
+  private lastPeanuts = -1
   private lastLives = -1
 
   constructor() {
@@ -49,7 +49,7 @@ export class HudScene extends Phaser.Scene {
     this.world = this.scene.get('Game') as GameScene
     this.slots = []
     this.slotsBuilt = false
-    this.lastGold = -1
+    this.lastPeanuts = -1
     this.lastLives = -1
     const W = displayData.width
 
@@ -57,8 +57,8 @@ export class HudScene extends Phaser.Scene {
     // The bar is flush to the top edge, so its shadow is drawn below it only.
     this.add.rectangle(0, BAR_H, W, SHADOW_H, 0x000000, 0.3).setOrigin(0, 0)
 
-    this.goldText = this.add.text(18, 12, '', {
-      fontFamily: FONT_DISPLAY, fontSize: '22px', color: COLOR.gold,
+    this.peanutsText = this.add.text(18, 12, '', {
+      fontFamily: FONT_DISPLAY, fontSize: '22px', color: COLOR.amber,
     })
     this.livesText = this.add.text(158, 12, '', {
       fontFamily: FONT_DISPLAY, fontSize: '22px', color: COLOR.danger,
@@ -149,18 +149,18 @@ export class HudScene extends Phaser.Scene {
       this.slotsBuilt = true
     }
 
-    this.goldText.setText(`${s.gold}g`)
+    this.peanutsText.setText(`${s.peanuts}p`)
     this.livesText.setText(`${s.lives} HP`)
     // Money and lives are the two numbers a player watches, so a change has to
     // announce itself rather than quietly appear.
-    if (this.lastGold >= 0 && s.gold !== this.lastGold) {
-      this.bump(this.goldText, s.gold > this.lastGold ? '#ffffff' : COLOR.danger, COLOR.gold)
-      if (s.gold > this.lastGold) this.floatUp(`+${s.gold - this.lastGold}g`, COLOR.gold)
+    if (this.lastPeanuts >= 0 && s.peanuts !== this.lastPeanuts) {
+      this.bump(this.peanutsText, s.peanuts > this.lastPeanuts ? '#ffffff' : COLOR.danger, COLOR.amber)
+      if (s.peanuts > this.lastPeanuts) this.floatUp(`+${s.peanuts - this.lastPeanuts}p`, COLOR.amber)
     }
     if (this.lastLives >= 0 && s.lives < this.lastLives) {
       this.bump(this.livesText, '#ffffff', COLOR.danger)
     }
-    this.lastGold = s.gold
+    this.lastPeanuts = s.peanuts
     this.lastLives = s.lives
     this.waveText.setText(`WAVE ${Math.min(s.wave + 1, s.waveCount)}/${s.waveCount}`)
     this.message.setText(s.message)
@@ -182,7 +182,7 @@ export class HudScene extends Phaser.Scene {
   }
 
   private floatUp(label: string, colour: string): void {
-    const t = this.add.text(this.goldText.x + 6, 34, label, {
+    const t = this.add.text(this.peanutsText.x + 6, 34, label, {
       fontFamily: FONT_DISPLAY, fontSize: '15px', color: colour,
     })
     this.tweens.add({

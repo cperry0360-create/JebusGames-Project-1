@@ -5,14 +5,16 @@ import Phaser from 'phaser'
 import type { AbilityDef } from '../types.ts'
 import { withinRadius } from './Targeting.ts'
 import { Enemy } from '../entities/Enemy.ts'
-import { floatingDamage } from './Presentation.ts'
 import { ART } from './Art.ts'
 
 export interface AbilityContext {
   scene: Phaser.Scene
   enemies: () => Enemy[]
   damage: (enemy: Enemy, amount: number, ignoresArmor: boolean) => void
-  addGold: (amount: number) => void
+  addPeanuts: (amount: number) => void
+  /** Hands a rolled payout to the UI, which shows the ticket and pays out
+   *  when it is scratched or when it reveals itself. */
+  scratchTicket: (payout: number, autoRevealSeconds: number) => void
   summon: (x: number, y: number, count: number, seconds: number) => void
   overlayDepth: number
 }
@@ -24,7 +26,7 @@ export function castAbility(id: string, def: AbilityDef, x: number, y: number, c
     case 'freezeField':    return freezeField(def, x, y, ctx)
     case 'meteorBarrage':  return meteorBarrage(def, x, y, ctx)
     case 'chainLightning': return chainLightning(def, x, y, ctx)
-    case 'goldRain':       return goldRain(def, ctx)
+    case 'scratchTicket':  return scratchTicket(def, ctx)
     default:               return explosion(def, x, y, ctx)
   }
 }
@@ -121,23 +123,11 @@ function chainLightning(def: AbilityDef, x: number, y: number, ctx: AbilityConte
   ctx.scene.tweens.add({ targets: bolts, alpha: 0, duration: 260, onComplete: () => bolts.destroy() })
 }
 
-function goldRain(def: AbilityDef, ctx: AbilityContext): void {
-  ctx.addGold(def.gold)
-  const cam = ctx.scene.cameras.main
-  for (let i = 0; i < 14; i++) {
-    const coin = ctx.scene.add
-      .image(Phaser.Math.Between(60, cam.width - 60), Phaser.Math.Between(90, 160), ART.fx.coin)
-      .setDepth(ctx.overlayDepth)
-      .setScale(1.2)
-    ctx.scene.tweens.add({
-      targets: coin,
-      y: coin.y + Phaser.Math.Between(220, 420),
-      alpha: 0,
-      angle: 360,
-      duration: Phaser.Math.Between(600, 1100),
-      ease: 'Quad.easeIn',
-      onComplete: () => coin.destroy(),
-    })
-  }
-  floatingDamage(ctx.scene, cam.width / 2, 200, def.gold, true)
+/**
+ * Scratch Ticket. The payout is a range, not a number, and it is rolled here
+ * rather than in the UI: the card uncovers a result that already exists.
+ */
+function scratchTicket(def: AbilityDef, ctx: AbilityContext): void {
+  const payout = Phaser.Math.Between(def.payoutMin, def.payoutMax)
+  ctx.scratchTicket(payout, def.autoRevealSeconds)
 }

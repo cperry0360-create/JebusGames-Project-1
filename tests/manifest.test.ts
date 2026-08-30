@@ -29,13 +29,17 @@ test('art.json is the only place a sprite is named', () => {
 })
 
 test('no source file names an art file or directory directly', () => {
+  // Matched against string literals that *begin* with an asset directory. A
+  // bare substring search cannot be used: assets live in a directory called
+  // `ui/` and so does half the source, so every `'../ui/Theme.ts'` import
+  // looked like a hardcoded asset path.
   const offenders: string[] = []
   const dirs = new Set(Object.values(art.files).map((p: any) => String(p).split('/')[0]))
   for (const f of sourceFiles('../src')) {
     const src = readFileSync(url(f), 'utf8')
     if (/towerDefense_tile\d{3}/.test(src)) offenders.push(`${f} names a pack filename`)
     for (const d of dirs) {
-      if (src.includes(`${d}/`)) offenders.push(`${f} names the "${d}/" asset directory`)
+      if (new RegExp(`['"\`]${d}/`).test(src)) offenders.push(`${f} names the "${d}/" asset directory`)
     }
   }
   assert.deepEqual(offenders, [], 'paths belong in art.json, not in code')
@@ -133,7 +137,10 @@ test('a ground shadow covers the footprint and not the whole sprite', () => {
     const share = cfg.shadowWidth / onScreenWidth
     assert.ok(share > 0.25, `${key} shadow is only ${(share * 100).toFixed(0)}% of its width; too small to stand on`)
 
-    const isCharacter = /^enemies\//.test(art.files[key])
+    // Feet-measured art: the enemies and Cory on foot. Their shadow must not
+    // reach the width of what they are carrying. A tower's base and a vehicle's
+    // body legitimately span the whole sprite, so they are judged separately.
+    const isCharacter = /^enemies\/|^hero\/hero_cory\.png$/.test(art.files[key])
     if (isCharacter) {
       characters++
       assert.ok(share < 0.85,
@@ -149,14 +156,17 @@ test('a ground shadow covers the footprint and not the whole sprite', () => {
   assert.ok(buildings >= 6, `only ${buildings} buildings carry a measured footprint`)
 })
 
-test('towers are sized so a stone base reads against the road', () => {
-  // The brief: a base a little over the painted road's width, 90-110px. The
-  // thin obelisk is deliberately narrower — it is one tower, not the set.
+test('a tower base is 1.2x the width of the road it guards', () => {
+  // Measured against the painted road rather than a remembered number, so the
+  // rule survives a new map. The thin obelisk is deliberately narrower — it is
+  // one tower, not the set, so the median is what is checked.
+  const map = JSON.parse(readFileSync(url('../src/data/map.json'), 'utf8'))
   const towers = JSON.parse(readFileSync(url('../src/data/towers.json'), 'utf8'))
   const bases = Object.values(towers).map((t: any) => art.render[t.sprite].shadowWidth).sort((a, b) => a - b)
   const median = bases[Math.floor(bases.length / 2)]
-  assert.ok(median >= 90 && median <= 110,
-    `the median tower base is ${median}px; the map wants 90-110px`)
+  const want = map.roadWidth * 1.2
+  assert.ok(Math.abs(median - want) < want * 0.08,
+    `the median tower base is ${median}px; 1.2x the ${map.roadWidth}px road is ${want.toFixed(1)}px`)
   const heights = new Set(Object.values(towers).map((t: any) => art.render[t.sprite].displayHeight))
   assert.equal(heights.size, 1, 'towers must share one scale, or the artist\'s proportions are lost')
 })

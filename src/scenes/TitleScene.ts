@@ -5,7 +5,7 @@ import heroesData from '../data/heroes.json'
 import brandingData from '../data/branding.json'
 import { setRunState } from '../systems/RunState.ts'
 import { COLOR, FONT_DISPLAY, FONT_UI, button, panel } from '../ui/Theme.ts'
-import { ART, fitContentHeight } from '../systems/Art.ts'
+import { ART, fitContentHeight, fitInBox } from '../systems/Art.ts'
 
 const HEROES = heroesData as Record<string, HeroDef>
 const BRANDING = brandingData as BrandingDef
@@ -28,8 +28,7 @@ export class TitleScene extends Phaser.Scene {
     const W = displayData.width
     const H = displayData.height
 
-    this.add.rectangle(0, 0, W, H, 0x10161d).setOrigin(0, 0)
-    this.decorateBackdrop()
+    this.drawBackdrop(W, H)
 
     const mark = BRANDING.titleMark
     const logo = this.add.image(mark.x, mark.y, ART.brand.jebusGames)
@@ -41,16 +40,18 @@ export class TitleScene extends Phaser.Scene {
     }).setOrigin(0.5)
 
     this.add.text(W / 2, 158, 'D E F E N S E', {
-      fontFamily: FONT_DISPLAY, fontSize: '30px', color: COLOR.gold,
+      fontFamily: FONT_DISPLAY, fontSize: '30px', color: COLOR.amber,
       stroke: '#0d1016', strokeThickness: 6,
     }).setOrigin(0.5)
 
     this.add.text(W / 2, 196, 'A serious tower defense in a very silly world.', {
-      fontFamily: FONT_UI, fontSize: '15px', color: COLOR.dim,
+      fontFamily: FONT_UI, fontSize: '15px', color: COLOR.ink,
+      stroke: '#0d1016', strokeThickness: 4,
     }).setOrigin(0.5)
 
     this.add.text(W / 2, 252, 'CHOOSE YOUR HERO', {
-      fontFamily: FONT_UI, fontSize: '15px', color: COLOR.dim,
+      fontFamily: FONT_UI, fontSize: '15px', color: COLOR.ink,
+      stroke: '#0d1016', strokeThickness: 4,
     }).setOrigin(0.5)
 
     const ids = Object.keys(HEROES)
@@ -62,19 +63,58 @@ export class TitleScene extends Phaser.Scene {
     // The description and the kit are separate blocks: as one wrapped string
     // the kit line ran under the START RUN button.
     this.blurb = this.add.text(W / 2, 486, '', {
-      fontFamily: FONT_UI, fontSize: '13px', color: COLOR.dim,
-      align: 'center', wordWrap: { width: 680 },
+      fontFamily: FONT_UI, fontSize: '13px', color: COLOR.ink,
+      stroke: '#0d1016', strokeThickness: 4,
+      align: 'center', wordWrap: { width: 620 },
     }).setOrigin(0.5, 0)
 
     this.kit = this.add.text(W / 2, 552, '', {
       fontFamily: FONT_UI, fontSize: '12px', color: COLOR.good,
-      align: 'center', wordWrap: { width: 780 },
+      stroke: '#0d1016', strokeThickness: 4,
+      align: 'center', wordWrap: { width: 740 },
     }).setOrigin(0.5, 0)
 
     button(this, W / 2, 622, 260, 58, 'START RUN', () => this.start(), 24)
     button(this, W / 2, 680, 190, 38, 'CREDITS', () => this.scene.start('Credits'), 15)
 
     this.select(this.selectedHero)
+  }
+
+  /**
+   * The painted title illustration, scaled to cover the canvas, with a dark
+   * wash over it so type stays readable. The illustration keeps its middle
+   * open on purpose and puts towers at the left and right edges, which is why
+   * every element on this screen is inside the central column.
+   *
+   * If the image is not in the build, the old flat panel is used instead: a
+   * title screen that fails to draw is worse than a plain one.
+   */
+  private drawBackdrop(W: number, H: number): void {
+    const key = ART.ui.titleBackdrop
+    if (key === null || !this.textures.exists(key)) {
+      this.add.rectangle(0, 0, W, H, 0x10161d).setOrigin(0, 0)
+      this.decorateBackdrop()
+      return
+    }
+    const bg = this.add.image(W / 2, H / 2, key)
+    // Cover, not fit: fill the canvas and let the overflow crop.
+    const scale = Math.max(W / bg.width, H / bg.height)
+    bg.setScale(scale)
+    this.add.rectangle(0, 0, W, H, 0x0b0e13, BRANDING.titleBackdropDim).setOrigin(0, 0)
+
+    // The flat wash alone leaves the smaller copy fighting the village behind
+    // it. A soft column behind the middle settles that without dimming the
+    // towers at the edges, which are the part worth seeing.
+    const col = this.add.graphics()
+    const colW = BRANDING.titleColumnWidth
+    // Stacked wide and faint, and running off the top and bottom edges, so it
+    // fades out sideways with no seam anywhere on screen.
+    for (let i = 0; i < 12; i++) {
+      const t = i / 12
+      col.fillStyle(0x0b0e13, 0.05)
+      col.fillRoundedRect(W / 2 - (colW / 2) * (1 - t * 0.42), -40,
+        colW * (1 - t * 0.42), H + 80, 120)
+    }
   }
 
   /** A few pack sprites scattered behind the title so it is not a flat slab. */
@@ -94,15 +134,15 @@ export class TitleScene extends Phaser.Scene {
     const def = HEROES[id]
     const frame = panel(this, x, y, w, h, { fill: COLOR.panelHi })
 
-    // Portrait built from the hero's own sprites, scaled up.
-    this.add.image(x + w / 2, y + 74, def.portraitSprite).setScale(1.7)
-    this.add.image(x + w / 2, y + 70, def.gunSprite).setScale(1.7)
+    // The hero's own art, fitted to the card rather than scaled by a factor.
+    const portrait = this.add.image(x + w / 2, y + 74, def.portraitSprite)
+    fitInBox(portrait, def.portraitSprite, 108)
 
     this.add.text(x + w / 2, y + 122, def.name.toUpperCase(), {
       fontFamily: FONT_DISPLAY, fontSize: '26px', color: COLOR.ink,
     }).setOrigin(0.5)
     this.add.text(x + w / 2, y + 152, def.title, {
-      fontFamily: FONT_UI, fontSize: '13px', color: COLOR.gold,
+      fontFamily: FONT_UI, fontSize: '13px', color: COLOR.amber,
     }).setOrigin(0.5)
 
     const hit = this.add.rectangle(x + w / 2, y + h / 2, w, h, 0xffffff, 0.001)

@@ -29,7 +29,7 @@ export class CreditsScene extends Phaser.Scene {
     }).setOrigin(0.5)
 
     this.add.text(W / 2, 126, CREDITS.subheading, {
-      fontFamily: FONT_UI, fontSize: '16px', color: COLOR.gold,
+      fontFamily: FONT_UI, fontSize: '16px', color: COLOR.amber,
     }).setOrigin(0.5)
 
     // Both marks side by side, spaced from their real on-screen widths.

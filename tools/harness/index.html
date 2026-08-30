@@ -149,7 +149,7 @@ async function run() {
     if (hit) { const b = hit.getBounds(); await move(b.centerX, b.centerY); await shot('ui-04-menu-hover-range') }
     if (hit) { const b = hit.getBounds(); await click(b.centerX, b.centerY) }
     await shot('ui-05-built')
-    note('after build: towers=' + g.towers.length + ' gold=' + g.status.gold)
+    note('after build: towers=' + g.towers.length + ' peanuts=' + g.status.peanuts)
     await click(SPOTS[4][0], SPOTS[4][1]); await shot('ui-06-select-tower')
 
     // Hero control: a ground tap alone must do nothing.
@@ -184,16 +184,77 @@ async function run() {
     return
   }
 
+  if (scenario === 'ultimate') {
+    // Build a couple of towers, post Cory on the lane, then hurt him to 26%
+    // and let the wave push him through the threshold for real.
+    for (const i of [3, 1]) await build(i, 0)
+    const mid = g.lane.pointAt(g.lane.totalLength * 0.5)
+    await click(g.hero.x, g.hero.y)
+    await click(mid.x, mid.y)
+    await until(() => g.hero.atRally, 12000)
+    await shot('u-01-on-foot')
+    note('on foot: h=' + Math.round(g.hero.body_?.displayHeight || 0) + ' w=' + Math.round(g.hero.body_?.displayWidth || 0)
+      + ' facingRight=' + g.hero.facingRight)
+    await key('Space')
+    // Take him to just above the threshold, then let the enemies finish it.
+    g.hero.health = Math.ceil(g.hero.def.maxHealth * 0.26)
+    await until(() => g.hero.lastStandActive, 90000)
+    await sleep(120); await shot('u-02-flash')
+    await sleep(520); await shot('u-03-transformed')
+    note('in SUV: h=' + Math.round(g.hero.body_.displayHeight) + ' w=' + Math.round(g.hero.body_.displayWidth)
+      + ' halfFootprint=' + Math.round(g.hero.halfFootprint) + ' attackRange=' + Math.round(g.hero.attackRange))
+    await sleep(2000); await shot('u-04-driving')
+    // Drive him along the road and see him plough through.
+    const p2 = g.lane.pointAt(g.lane.totalLength * 0.22)
+    await click(g.hero.x, g.hero.y)
+    await click(p2.x, p2.y)
+    await sleep(2200); await shot('u-05-ramming')
+    await sleep(2200); await shot('u-06-ramming2')
+    note('after ramming: lives=' + g.status.lives + ' enemies=' + g.enemies.length + ' heroHp=' + Math.round(g.hero.health))
+    return
+  }
+
+  if (scenario === 'ticket') {
+    g.status.peanuts = 100
+    // Force the ticket into the drafted hand so Q casts it.
+    g.status.abilities = ['scratchTicket', 'freezeField']
+    g.cooldowns.register('scratchTicket', 1)
+    await key('KeyQ')
+    await sleep(400); await shot('t-01-card')
+    note('card up: ' + !!g.ticket + ' peanuts=' + g.status.peanuts)
+    // Scratch it: drag across the middle.
+    for (let i = 0; i < 22; i++) {
+      const x = 500 + i * 13, y = 330 + (i % 5) * 14
+      if (i === 0) mouse('mousedown', x, y)
+      mouse('mousemove', x, y)
+      await sleep(28)
+    }
+    await shot('t-02-scratched')
+    mouse('mouseup', 500 + 21 * 13, 330)
+    await sleep(700); await shot('t-03-paid')
+    note('after scratch: peanuts=' + g.status.peanuts + ' msg=' + g.status.message)
+    // And the hands-off path.
+    g.cooldowns.register('scratchTicket', 1)
+    await sleep(1200)
+    await key('KeyQ')
+    await sleep(400); await shot('t-04-untouched')
+    const before = g.status.peanuts
+    await sleep(4200)
+    note('auto-reveal paid: ' + (g.status.peanuts > before) + ' (' + before + ' -> ' + g.status.peanuts + ')')
+    await shot('t-05-auto')
+    return
+  }
+
   if (scenario === 'combat') {
     for (let i = 0; i < 4; i++) await build(i, i % 2)
     await shot('c-01-towers')
     await key('Space')
     await sleep(3000); await shot('c-02-wave-early')
     await sleep(4000); await shot('c-03-wave-mid')
-    note('mid: enemies=' + g.enemies.length + ' gold=' + g.status.gold + ' lives=' + g.status.lives)
+    note('mid: enemies=' + g.enemies.length + ' peanuts=' + g.status.peanuts + ' lives=' + g.status.lives)
     await until(() => g.status.phase !== 'wave', 90000)
     await shot('c-04-wave-cleared')
-    note('cleared: phase=' + g.status.phase + ' gold=' + g.status.gold + ' msg=' + g.status.message)
+    note('cleared: phase=' + g.status.phase + ' peanuts=' + g.status.peanuts + ' msg=' + g.status.message)
     return
   }
 
@@ -233,7 +294,7 @@ async function run() {
         }
         if (g.status.wave !== last) {
           last = g.status.wave
-          note(`wave ${g.status.wave + 1}: gold=${g.status.gold} lives=${g.status.lives} towers=${g.towers.length}`)
+          note(`wave ${g.status.wave + 1}: peanuts=${g.status.peanuts} lives=${g.status.lives} towers=${g.towers.length}`)
           if ([0, 5, 11].includes(g.status.wave) && !shots.has(g.status.wave)) {
             shots.add(g.status.wave)
             await shot('s-wave' + (g.status.wave + 1))
@@ -261,7 +322,7 @@ async function run() {
       }
       await sleep(220)
     }
-    note(`RESULT: ${g.status.phase} at wave ${g.status.wave}/12, lives ${g.status.lives}, gold ${g.status.gold}, towers ${g.towers.length}`)
+    note(`RESULT: ${g.status.phase} at wave ${g.status.wave}/12, lives ${g.status.lives}, peanuts ${g.status.peanuts}, towers ${g.towers.length}`)
     await sleep(700)
     await shot('s-end')
     return

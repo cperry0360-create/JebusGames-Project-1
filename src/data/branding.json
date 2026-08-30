@@ -18,5 +18,7 @@
     "logoY": 242,
     "textTop": 372,
     "lineHeight": 24
-  }
+  },
+  "titleBackdropDim": 0.35,
+  "titleColumnWidth": 760
 }
