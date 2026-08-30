@@ -39,13 +39,16 @@ export function roadRole(isRoad: IsRoad, col: number, row: number): RoadRole | n
   }
 
   if (sides === 0) {
+    // Annotate the literal on its own line: chaining .filter() straight off it
+    // widens `role` to string and loses the RoadRole type.
     const corners: Array<{ grass: boolean; role: RoadRole }> = [
       { grass: !isRoad(col - 1, row - 1), role: 'inner-nw' },
       { grass: !isRoad(col + 1, row - 1), role: 'inner-ne' },
       { grass: !isRoad(col - 1, row + 1), role: 'inner-sw' },
       { grass: !isRoad(col + 1, row + 1), role: 'inner-se' },
-    ].filter((c) => c.grass)
-    if (corners.length === 1) return corners[0].role
+    ]
+    const grassCorners = corners.filter((c) => c.grass)
+    if (grassCorners.length === 1) return grassCorners[0].role
     return null
   }
 
