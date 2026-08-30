@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { Grid } from '../src/systems/Grid.ts'
 import { Path } from '../src/systems/Path.ts'
-import { roadSprite } from '../src/systems/Autotile.ts'
+import { roadRole } from '../src/systems/Autotile.ts'
 import { pickFirst, pickNearest, withinRadius } from '../src/systems/Targeting.ts'
 import { WaveSpawner } from '../src/systems/WaveSpawner.ts'
 import { BuildSystem } from '../src/systems/BuildSystem.ts'
@@ -94,14 +94,16 @@ test('the road leaves plenty of buildable ground', () => {
   console.log(`   map: ${onGrid.length} road tiles, ${buildable} buildable, lane ${Math.round(lane.totalLength)}px`)
 })
 
-test('autotiler resolves every road tile to a real sprite key or open road', () => {
-  const art = read('art').sprites
+test('autotiler resolves every road tile to a mapped role or open road', () => {
+  const art = read('art')
   let overlays = 0
   for (const t of onGrid) {
-    const key = roadSprite(isRoad, t.col, t.row)
-    if (key === null) continue
+    const role = roadRole(isRoad, t.col, t.row)
+    if (role === null) continue
     overlays++
-    assert.ok(art[key], `autotiler produced unknown sprite key "${key}"`)
+    const key = art.autotile[role]
+    assert.ok(key, `autotiler produced role "${role}" with no entry in art.json`)
+    assert.ok(art.files[key], `autotile role "${role}" maps to unknown sprite key "${key}"`)
   }
   assert.ok(overlays > onGrid.length * 0.5, 'suspiciously few road edges drawn')
   console.log(`   autotile: ${overlays}/${onGrid.length} road tiles get an edge or corner sprite`)

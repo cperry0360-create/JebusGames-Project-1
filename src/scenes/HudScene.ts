@@ -44,7 +44,9 @@ export class HudScene extends Phaser.Scene {
     this.slotsBuilt = false
     const W = displayData.width
 
-    panel(this, -4, -6, W + 8, BAR_H + 6, { radius: 0, alpha: 0.97 })
+    panel(this, -4, -6, W + 8, BAR_H + 6, { radius: 0, alpha: 0.97, shadow: false })
+    // The bar is flush to the top edge, so its shadow is drawn below it only.
+    this.add.rectangle(0, BAR_H, W, 6, 0x000000, 0.3).setOrigin(0, 0)
 
     this.goldText = this.add.text(18, 12, '', {
       fontFamily: FONT_DISPLAY, fontSize: '22px', color: COLOR.gold,

@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import type { TowerDef } from '../types.ts'
+import { ART } from '../systems/Art.ts'
 
 export interface BuildOption {
   id: string
@@ -86,7 +87,7 @@ export class BuildMenu {
         .setStrokeStyle(1, 0x3b4552)
 
       const iconX = cx + (CELL_W - 6) / 2
-      const base = this.scene.add.image(iconX, cy + 30, 'tower-base').setScale(0.62)
+      const base = this.scene.add.image(iconX, cy + 30, ART.ui.towerBase).setScale(0.62)
       const turret = this.scene.add.image(iconX, cy + 27, opt.def.sprite).setScale(0.62)
       if (!affordable) {
         base.setAlpha(0.35)

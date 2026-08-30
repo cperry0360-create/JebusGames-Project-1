@@ -24,6 +24,7 @@ export class Fighter extends Phaser.GameObjects.Container {
     range: number,
     interval: number,
     lifeSeconds: number,
+    spriteKey: string,
   ) {
     super(scene, x, y)
     this.health = health
@@ -32,8 +33,8 @@ export class Fighter extends Phaser.GameObjects.Container {
     this.interval = interval
     this.life = lifeSeconds
 
-    this.art = scene.add.sprite(0, 0, 'hero-gun').setScale(0.9)
-    this.add([makeShadow(scene, 'hero-gun', 0.9), this.art])
+    this.art = scene.add.sprite(0, 0, spriteKey).setScale(0.9)
+    this.add([makeShadow(scene, spriteKey, 0.9), this.art])
     scene.add.existing(this)
     ySort(this)
     this.setScale(0.2)

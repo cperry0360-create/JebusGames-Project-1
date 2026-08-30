@@ -7,7 +7,7 @@ const read = (n: string) => JSON.parse(readFileSync(url(`../src/data/${n}.json`)
 const art = read('art'), abilities = read('abilities'), heroes = read('heroes')
 const towers = read('towers'), enemies = read('enemies'), map = read('map'), pres = read('presentation')
 
-const ART_KEYS = new Set(Object.keys(art.sprites))
+const ART_KEYS = new Set(Object.keys(art.files))
 
 test('every sprite key referenced anywhere resolves to a real file', () => {
   const refs: Array<[string, string]> = []
@@ -26,7 +26,7 @@ test('every sprite key referenced anywhere resolves to a real file', () => {
 })
 
 test('the art manifest points at files that exist on disk', () => {
-  for (const [key, file] of Object.entries(art.sprites) as [string, string][]) {
+  for (const [key, file] of Object.entries(art.files) as [string, string][]) {
     assert.match(file, /^towerDefense_tile\d{3}\.png$/, `${key} -> ${file} is not a pack filename`)
     assert.ok(existsSync(url(`../public/assets/kenney/${file}`)), `${key} -> ${file} is missing from public/assets`)
   }

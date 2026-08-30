@@ -50,7 +50,8 @@ after wave 8. The tower draw is weighted and guaranteed to open with at least
 one damage option and one AOE or control option.
 
 Cory holds up to three enemies at a time and fights them; at 25% health he goes
-into **DAD MODE**, and if he drops he stays down for the rest of the encounter.
+into **DAD MODE**, and if he drops he stays down for the rest of the encounter,
+returning at full health for the next one.
 
 Six towers, each with its own job: a cheap single-target starter, an
 armour-piercing sniper, two splash options at different ranges, a slow, and a
@@ -98,12 +99,20 @@ package** for type, both CC0. All 299 sprites live in
 `public/assets/kenney/` with the pack's own `License.txt`; the game loads the
 ~49 it uses.
 
-Gameplay code never names a file. `src/data/art.json` maps a logical key to the
-real filename, so a sprite swap is a one-line data change:
+**`src/data/art.json` is the only place a sprite is named.** It holds the
+key-to-filename map plus every *role* the game draws — weighted ground
+variants, the twelve autotile roles, UI chrome, effects and scenery:
 
 ```json
-"turret-ledger": "towerDefense_tile203.png"
+"files":    { "turret-ledger": "towerDefense_tile203.png" },
+"ground":   { "grass": [{ "key": "ground-grass", "weight": 6 }, ...] },
+"autotile": { "outer-nw": "road-outer-nw", ... },
+"fx":       { "blast": "fx-flame", "spark": "fx-spark", ... }
 ```
+
+Code asks `src/systems/Art.ts` for a role and never mentions a key or a
+filename. `tests/manifest.test.ts` fails the build if any `.ts` file does,
+naming the offender — so dropping in a new art pack stays a config change.
 
 The road is drawn by an autotiler (`src/systems/Autotile.ts`) that picks the
 right edge, outer-corner or inner-corner sprite for each road tile. That is why

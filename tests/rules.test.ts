@@ -205,7 +205,7 @@ test('leaking matters but one mistake is not fatal', () => {
 // ------------------------------------------------------------------ art wiring
 
 test('every sprite key referenced by data exists in the art manifest', () => {
-  const keys = new Set(Object.keys(art.sprites))
+  const keys = new Set(Object.keys(art.files))
   const referenced: string[] = []
   for (const [, t] of towerList) referenced.push(t.sprite, t.shot)
   for (const [, e] of enemyList) referenced.push(e.sprite)
@@ -215,7 +215,7 @@ test('every sprite key referenced by data exists in the art manifest', () => {
 })
 
 test('the art manifest points at real Kenney filenames', () => {
-  for (const [key, file] of Object.entries(art.sprites) as [string, string][]) {
+  for (const [key, file] of Object.entries(art.files) as [string, string][]) {
     assert.match(file, /^towerDefense_tile\d{3}\.png$/, `${key} -> ${file} is not a pack filename`)
   }
 })

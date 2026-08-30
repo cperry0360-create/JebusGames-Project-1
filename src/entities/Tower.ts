@@ -4,6 +4,7 @@ import { ySort } from '../systems/DepthSort.ts'
 import { pickFirst } from '../systems/Targeting.ts'
 import { boostedDamage } from '../systems/Combat.ts'
 import { makeShadow, muzzleFlash, PRESENTATION } from '../systems/Presentation.ts'
+import { ART } from '../systems/Art.ts'
 import { Enemy } from './Enemy.ts'
 
 export class Tower extends Phaser.GameObjects.Container {
@@ -25,8 +26,8 @@ export class Tower extends Phaser.GameObjects.Container {
     this.col = col
     this.row = row
 
-    this.shadow = makeShadow(scene, 'tower-base')
-    const base = scene.add.sprite(0, 0, 'tower-base')
+    this.shadow = makeShadow(scene, ART.ui.towerBase)
+    const base = scene.add.sprite(0, 0, ART.ui.towerBase)
     this.turret = scene.add.sprite(0, -4, def.sprite)
     this.add([this.shadow, base, this.turret])
     scene.add.existing(this)

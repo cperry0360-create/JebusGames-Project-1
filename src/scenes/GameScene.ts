@@ -14,11 +14,12 @@ import draftData from '../data/draft.json'
 
 import { Grid } from '../systems/Grid.ts'
 import { Path } from '../systems/Path.ts'
-import { roadSprite } from '../systems/Autotile.ts'
+import { roadRole } from '../systems/Autotile.ts'
 import { BuildSystem } from '../systems/BuildSystem.ts'
 import { WaveSpawner } from '../systems/WaveSpawner.ts'
 import { withinRadius, pickNearest } from '../systems/Targeting.ts'
 import { GROUND_DEPTH } from '../systems/DepthSort.ts'
+import { ART, pickVariant, roadSpriteFor } from '../systems/Art.ts'
 import { Cooldowns } from '../systems/Cooldowns.ts'
 import { unlockedTowerCount } from '../systems/Draft.ts'
 import { runState } from '../systems/RunState.ts'
@@ -68,11 +69,6 @@ export interface GameStatus {
 }
 
 const OVERLAY_DEPTH = 150000
-const GRASS_KEYS = ['ground-grass', 'ground-grass', 'ground-grass', 'ground-grass', 'ground-grass',
-  'ground-grass', 'ground-grass-alt', 'ground-grass-alt2', 'ground-grass-alt', 'ground-grass-alt2']
-const ROAD_KEYS = ['road', 'road', 'road', 'road', 'road', 'road', 'road', 'road',
-  'road-alt', 'road-alt2', 'road-alt', 'road-alt2']
-const DECOR_KEYS = ['decor-bush', 'decor-shrub', 'decor-plant', 'decor-rock', 'decor-rock2', 'decor-rock3']
 
 export class GameScene extends Phaser.Scene {
   readonly status: GameStatus = {
@@ -130,7 +126,7 @@ export class GameScene extends Phaser.Scene {
     this.drawGround()
     this.scatterDecoration()
 
-    this.hoverPlot = this.add.image(-999, -999, 'plot-hover').setDepth(GROUND_DEPTH + 5).setVisible(false)
+    this.hoverPlot = this.add.image(-999, -999, ART.ui.plotHover).setDepth(GROUND_DEPTH + 5).setVisible(false)
     this.rangeRing = this.add.graphics().setDepth(OVERLAY_DEPTH)
     this.targetRing = this.add.graphics().setDepth(OVERLAY_DEPTH + 1)
 
@@ -187,14 +183,14 @@ export class GameScene extends Phaser.Scene {
         const x = this.grid.centreX(c)
         const y = this.grid.centreY(r)
         if (isRoad(c, r)) {
-          this.add.image(x, y, rng.pick(ROAD_KEYS)).setDepth(GROUND_DEPTH)
-          const overlay = roadSprite(isRoad, c, r)
-          if (overlay) this.add.image(x, y, overlay).setDepth(GROUND_DEPTH + 1)
+          this.add.image(x, y, pickVariant(ART.ground.road, rng.frac())).setDepth(GROUND_DEPTH)
+          const role = roadRole(isRoad, c, r)
+          if (role) this.add.image(x, y, roadSpriteFor(role)).setDepth(GROUND_DEPTH + 1)
         } else {
-          this.add.image(x, y, rng.pick(GRASS_KEYS)).setDepth(GROUND_DEPTH)
+          this.add.image(x, y, pickVariant(ART.ground.grass, rng.frac())).setDepth(GROUND_DEPTH)
           if (this.build.isBuildable(c, r)) {
             this.plotMarkers.push(
-              this.add.image(x, y, 'plot').setDepth(GROUND_DEPTH + 2).setAlpha(0.4).setVisible(false),
+              this.add.image(x, y, ART.ui.plot).setDepth(GROUND_DEPTH + 2).setAlpha(0.4).setVisible(false),
             )
           }
         }
@@ -223,7 +219,7 @@ export class GameScene extends Phaser.Scene {
         if (this.nearRoad(roadKeys, c, r, cfg.minDistanceFromRoad)) continue
         this.build.block(c, r)
         this.add
-          .image(this.grid.centreX(c), this.grid.centreY(r), rng.pick(DECOR_KEYS))
+          .image(this.grid.centreX(c), this.grid.centreY(r), ART.decor[rng.between(0, ART.decor.length - 1)])
           .setDepth(DECOR_DEPTH)
           .setScale(rng.realInRange(0.7, 1.05))
           .setAngle(rng.between(-18, 18))
@@ -465,6 +461,7 @@ export class GameScene extends Phaser.Scene {
         h.attackRange * 0.8,
         h.attackInterval,
         seconds,
+        h.gunSprite,
       ))
     }
   }
@@ -490,7 +487,7 @@ export class GameScene extends Phaser.Scene {
     target.knockBack(hm.knockbackPixels)
     const s = PRESENTATION.shake
     this.cameras.main.shake(s.haymakerMs, s.haymakerIntensity)
-    const punch = this.add.image(target.x, target.y, 'fx-spark').setDepth(target.y + 8).setScale(1.2)
+    const punch = this.add.image(target.x, target.y, ART.fx.spark).setDepth(target.y + 8).setScale(1.2)
     this.tweens.add({
       targets: punch, scale: 0.2, alpha: 0, angle: 200, duration: 300, onComplete: () => punch.destroy(),
     })
@@ -706,7 +703,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private impactSpark(x: number, y: number): void {
-    const spark = this.add.image(x, y, 'fx-spark').setDepth(y + 2).setScale(0.5)
+    const spark = this.add.image(x, y, ART.fx.spark).setDepth(y + 2).setScale(0.5)
     this.tweens.add({
       targets: spark, scale: 0.95, alpha: 0, angle: 90,
       duration: 200, ease: 'Quad.easeOut', onComplete: () => spark.destroy(),
@@ -715,7 +712,7 @@ export class GameScene extends Phaser.Scene {
 
   private blast(x: number, y: number, radius: number): void {
     const scale = radius / 40
-    const flame = this.add.image(x, y, 'fx-flame').setDepth(y + 3).setScale(scale * 0.5)
+    const flame = this.add.image(x, y, ART.fx.blast).setDepth(y + 3).setScale(scale * 0.5)
     this.tweens.add({
       targets: flame, scale, alpha: 0, duration: 280, ease: 'Quad.easeOut',
       onComplete: () => flame.destroy(),

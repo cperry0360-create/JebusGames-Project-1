@@ -3,20 +3,13 @@
 // so gameplay code never mentions towerDefense_tileNNN.png directly.
 
 import Phaser from 'phaser'
-import type { ArtDef } from '../types.ts'
-import artData from '../data/art.json'
+import { ART, SPRITE_KEYS } from './Art.ts'
 
-const art = artData as ArtDef
-
-export const SPRITE_KEYS = Object.keys(art.sprites)
-export const ART_CREDIT = art.credit
+export { SPRITE_KEYS }
+export const ART_CREDIT = ART.credit
 
 export function queueArt(scene: Phaser.Scene): void {
-  for (const [key, file] of Object.entries(art.sprites)) {
-    scene.load.image(key, `${art.basePath}${file}`)
+  for (const [key, file] of Object.entries(ART.files)) {
+    scene.load.image(key, `${ART.basePath}${file}`)
   }
-}
-
-export function fileFor(key: string): string {
-  return art.sprites[key]
 }

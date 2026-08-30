@@ -24,9 +24,40 @@ export interface PanelOptions {
   edge?: number
   alpha?: number
   radius?: number
+  /** Set false for chrome flush against an edge, where a shadow reads wrong. */
+  shadow?: boolean
 }
 
+/** Offset and softness of the drop shadow under every panel. */
+const PANEL_SHADOW = { offsetY: 4, spread: 2, alpha: 0.34, layers: 3 }
+
 /** Rounded panel used by every bit of chrome in the game. */
+/** Paints a panel onto an existing Graphics, so redraws keep their shadow. */
+export function paintPanel(
+  g: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  opts: PanelOptions = {},
+): void {
+  g.clear()
+  const radius = opts.radius ?? 10
+
+  // Stacked translucent rounded rects fake a soft shadow without a blur pass.
+  if (opts.shadow !== false) {
+    const { offsetY, spread, alpha, layers } = PANEL_SHADOW
+    for (let i = layers; i >= 1; i--) {
+      const grow = spread * i
+      g.fillStyle(0x000000, alpha / layers)
+      g.fillRoundedRect(x - grow, y - grow + offsetY, w + grow * 2, h + grow * 2, radius + grow)
+    }
+  }
+
+  g.fillStyle(opts.fill ?? COLOR.panel, opts.alpha ?? 0.96).fillRoundedRect(x, y, w, h, radius)
+  g.lineStyle(2, opts.edge ?? COLOR.panelEdge, 1).strokeRoundedRect(x, y, w, h, radius)
+}
+
 export function panel(
   scene: Phaser.Scene,
   x: number,
@@ -36,11 +67,7 @@ export function panel(
   opts: PanelOptions = {},
 ): Phaser.GameObjects.Graphics {
   const g = scene.add.graphics()
-  const fill = opts.fill ?? COLOR.panel
-  const edge = opts.edge ?? COLOR.panelEdge
-  const radius = opts.radius ?? 10
-  g.fillStyle(fill, opts.alpha ?? 0.96).fillRoundedRect(x, y, w, h, radius)
-  g.lineStyle(2, edge, 1).strokeRoundedRect(x, y, w, h, radius)
+  paintPanel(g, x, y, w, h, opts)
   return g
 }
 
@@ -79,9 +106,7 @@ export function button(
 
   let enabled = true
   const redraw = (fill: number, edge: number): void => {
-    g.clear()
-    g.fillStyle(fill, 0.96).fillRoundedRect(x - w / 2, y - h / 2, w, h, 10)
-    g.lineStyle(2, edge, 1).strokeRoundedRect(x - w / 2, y - h / 2, w, h, 10)
+    paintPanel(g, x - w / 2, y - h / 2, w, h, { fill, edge })
   }
 
   hit.on('pointerover', () => { if (enabled) redraw(0x3f8a4a, COLOR.accent) })

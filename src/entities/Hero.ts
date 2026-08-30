@@ -10,9 +10,13 @@ import { Enemy } from './Enemy.ts'
  * Cory. Rally-point control, not free movement: tap a spot, he walks there and
  * fights whatever arrives.
  *
- * Two design rules are load-bearing here and both come from DESIGN.md:
+ * Three design rules are load-bearing here and all come from DESIGN.md:
  *   - Last Stand fires once at 25% health, and cannot re-arm inside an encounter.
- *   - When he goes down he stays down for the rest of the encounter.
+ *   - When he goes down he stays down for the rest of the encounter: `down`
+ *     gates movement, attacking and further damage, with no respawn timer.
+ *   - He returns at full health at the next encounter. That is why this class
+ *     holds no cross-encounter state and the scene builds a fresh Hero in
+ *     create(); healing is the absence of carry-over, not a heal step.
  * Together they make every hero death a climax rather than a respawn timer.
  */
 export class Hero extends Phaser.GameObjects.Container {

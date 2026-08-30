@@ -4,6 +4,7 @@
 import Phaser from 'phaser'
 import presentationData from '../data/presentation.json'
 import { GROUND_DEPTH } from './DepthSort.ts'
+import { ART } from './Art.ts'
 
 export const PRESENTATION = presentationData
 
@@ -52,7 +53,7 @@ export function deathPuff(scene: Phaser.Scene, x: number, y: number, tint = 0xf6
   for (let i = 0; i < 3; i++) {
     const a = Math.random() * Math.PI * 2
     const puff = scene.add
-      .image(x, y, 'fx-spark')
+      .image(x, y, ART.fx.spark)
       .setTint(tint)
       .setDepth(y + 3)
       .setScale(0.35)
@@ -74,7 +75,7 @@ export function deathPuff(scene: Phaser.Scene, x: number, y: number, tint = 0xf6
 /** Brief flash at a tower's muzzle when it fires. */
 export function muzzleFlash(scene: Phaser.Scene, x: number, y: number, angle: number): void {
   const flash = scene.add
-    .image(x, y, 'fx-flame-small')
+    .image(x, y, ART.fx.muzzle)
     .setDepth(y + 4)
     .setScale(PRESENTATION.muzzleFlashScale)
     .setRotation(angle)

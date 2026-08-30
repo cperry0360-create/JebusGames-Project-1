@@ -17,7 +17,7 @@ shape of each one — add a field there when you add one here.
 | `abilities.json` | The six active abilities: cooldown, radius, damage, duration |
 | `draft.json` | Draw weights, opening hand size, tower cap, unlock waves |
 | `presentation.json` | Shadows, idle bob, recoil, damage numbers, shake, scatter |
-| `art.json` | Logical sprite key to real Kenney filename |
+| `art.json` | **Every sprite in the game.** Files, ground variants, autotile roles, UI, effects, scenery |
 
 ## Notes on specific numbers
 
@@ -44,6 +44,11 @@ shape of each one — add a field there when you add one here.
 - **`presentation.decoration.minDistanceFromRoad` protects the plots that
   matter.** Scattered scenery blocks the tile it lands on, so it is kept away
   from the lane; every plot able to cover the road survives at any density.
+- **`art.json` is the only place a sprite is named.** Code asks for a *role*
+  (`ART.fx.blast`, `ART.ui.towerBase`, a weighted `ART.ground.grass` variant,
+  an autotile role) and `src/systems/Art.ts` resolves it. No `.ts` file may
+  contain a sprite key or a filename; `tests/manifest.test.ts` fails if one
+  does, naming the file. Swapping art packs is an edit to this file alone.
 - **`art.json` filenames are real files** in `public/assets/kenney`. A test
   asserts every key resolves and that nothing references a sprite that is not
   in the manifest.

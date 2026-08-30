@@ -178,9 +178,37 @@ export interface WavesDef {
   waves: WaveDef[]
 }
 
+export interface WeightedSprite {
+  key: string
+  weight: number
+}
+
+/**
+ * The one manifest every sprite comes from. `files` maps a logical key to a
+ * filename; everything below maps a *role* the code asks for to a logical key,
+ * so swapping art packs never touches a .ts file.
+ */
 export interface ArtDef {
   basePath: string
   credit: string
-  /** Logical key -> real filename in public/assets/kenney. */
-  sprites: Record<string, string>
+  note: string
+  files: Record<string, string>
+  ground: {
+    grass: WeightedSprite[]
+    road: WeightedSprite[]
+  }
+  autotile: Record<string, string>
+  ui: {
+    plot: string
+    plotHover: string
+    towerBase: string
+  }
+  fx: {
+    spark: string
+    blast: string
+    ember: string
+    muzzle: string
+    coin: string
+  }
+  decor: string[]
 }

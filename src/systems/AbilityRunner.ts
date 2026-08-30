@@ -6,6 +6,7 @@ import type { AbilityDef } from '../types.ts'
 import { withinRadius } from './Targeting.ts'
 import { Enemy } from '../entities/Enemy.ts'
 import { floatingDamage } from './Presentation.ts'
+import { ART } from './Art.ts'
 
 export interface AbilityContext {
   scene: Phaser.Scene
@@ -29,14 +30,14 @@ export function castAbility(id: string, def: AbilityDef, x: number, y: number, c
 }
 
 function boom(ctx: AbilityContext, x: number, y: number, radius: number, tint = 0xffffff): void {
-  const flame = ctx.scene.add.image(x, y, 'fx-flame').setDepth(y + 5).setScale(radius / 90).setTint(tint)
+  const flame = ctx.scene.add.image(x, y, ART.fx.blast).setDepth(y + 5).setScale(radius / 90).setTint(tint)
   ctx.scene.tweens.add({
     targets: flame, scale: radius / 44, alpha: 0, duration: 320,
     ease: 'Quad.easeOut', onComplete: () => flame.destroy(),
   })
   for (let i = 0; i < 6; i++) {
     const a = (Math.PI * 2 * i) / 6
-    const s = ctx.scene.add.image(x, y, 'fx-flame-small').setDepth(y + 5).setScale(0.7).setTint(tint)
+    const s = ctx.scene.add.image(x, y, ART.fx.ember).setDepth(y + 5).setScale(0.7).setTint(tint)
     ctx.scene.tweens.add({
       targets: s, x: x + Math.cos(a) * radius * 0.8, y: y + Math.sin(a) * radius * 0.8,
       alpha: 0, scale: 0.2, duration: 380, onComplete: () => s.destroy(),
@@ -109,7 +110,7 @@ function chainLightning(def: AbilityDef, x: number, y: number, ctx: AbilityConte
     bolts.lineBetween(fromX, fromY, next.x, next.y)
     hit.add(next)
     ctx.damage(next, def.damage, def.ignoresArmor)
-    const spark = ctx.scene.add.image(next.x, next.y, 'fx-spark').setDepth(next.y + 6).setScale(0.7)
+    const spark = ctx.scene.add.image(next.x, next.y, ART.fx.spark).setDepth(next.y + 6).setScale(0.7)
     ctx.scene.tweens.add({
       targets: spark, scale: 0.1, alpha: 0, duration: 240, onComplete: () => spark.destroy(),
     })
@@ -125,7 +126,7 @@ function goldRain(def: AbilityDef, ctx: AbilityContext): void {
   const cam = ctx.scene.cameras.main
   for (let i = 0; i < 14; i++) {
     const coin = ctx.scene.add
-      .image(Phaser.Math.Between(60, cam.width - 60), Phaser.Math.Between(90, 160), 'shot-small')
+      .image(Phaser.Math.Between(60, cam.width - 60), Phaser.Math.Between(90, 160), ART.fx.coin)
       .setDepth(ctx.overlayDepth)
       .setScale(1.2)
     ctx.scene.tweens.add({

@@ -7,6 +7,7 @@ import draftData from '../data/draft.json'
 import { draftAbilities, draftOpeningTowers, makeRng, reserveTowers } from '../systems/Draft.ts'
 import { runState, setRunState } from '../systems/RunState.ts'
 import { COLOR, FONT_DISPLAY, FONT_UI, button, panel } from '../ui/Theme.ts'
+import { ART } from '../systems/Art.ts'
 
 const TOWERS = towersData as Record<string, TowerDef>
 const ABILITIES = abilitiesData as Record<string, AbilityDef>
@@ -126,7 +127,7 @@ export class DraftScene extends Phaser.Scene {
     const def = TOWERS[id]
     const h = 280
     this.layer.add(panel(this, x, y, w, h, { fill: COLOR.panelHi }))
-    this.layer.add(this.add.image(x + w / 2, y + 78, 'tower-base').setScale(1.6))
+    this.layer.add(this.add.image(x + w / 2, y + 78, ART.ui.towerBase).setScale(1.6))
     this.layer.add(this.add.image(x + w / 2, y + 72, def.sprite).setScale(1.6))
     this.layer.add(this.add.text(x + w / 2, y + 132, def.name.toUpperCase(), {
       fontFamily: FONT_DISPLAY, fontSize: '22px', color: COLOR.ink,

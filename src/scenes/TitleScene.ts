@@ -4,6 +4,7 @@ import displayData from '../data/display.json'
 import heroesData from '../data/heroes.json'
 import { setRunState } from '../systems/RunState.ts'
 import { COLOR, FONT_DISPLAY, FONT_UI, button, panel } from '../ui/Theme.ts'
+import { ART } from '../systems/Art.ts'
 
 const HEROES = heroesData as Record<string, HeroDef>
 
@@ -68,7 +69,7 @@ export class TitleScene extends Phaser.Scene {
   /** A few pack sprites scattered behind the title so it is not a flat slab. */
   private decorateBackdrop(): void {
     const rng = new Phaser.Math.RandomDataGenerator(['title'])
-    const keys = ['decor-bush', 'decor-shrub', 'decor-rock', 'decor-rock2', 'decor-rock3', 'decor-plant']
+    const keys = ART.decor
     for (let i = 0; i < 26; i++) {
       this.add
         .image(rng.between(20, displayData.width - 20), rng.between(20, displayData.height - 20), rng.pick(keys))
