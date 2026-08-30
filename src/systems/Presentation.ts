@@ -35,9 +35,11 @@ export function ensureShadowTexture(scene: Phaser.Scene): void {
  */
 export function makeShadow(scene: Phaser.Scene, spriteKey: string, scale = 1): Phaser.GameObjects.Image {
   const s = PRESENTATION.shadow
+  // shadowWidth is the ellipse itself, measured from the art's base, so the
+  // shadow reaches slightly past the base rather than hiding behind it.
   const width = (renderFor(spriteKey).shadowWidth ?? s.defaultWidth) * scale
   const img = scene.add.image(0, s.offsetY, ART.generated.groundShadow).setAlpha(s.alpha)
-  img.setDisplaySize(width * s.widthFactor, width * s.heightFactor)
+  img.setDisplaySize(width, width * s.heightRatio)
   return img
 }
 

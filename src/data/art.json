@@ -24,12 +24,12 @@
     "plot": "kenney/towerDefense_tile015.png",
     "plot-hover": "kenney/towerDefense_tile018.png",
     "tower-base": "kenney/towerDefense_tile181.png",
-    "turret-ledger": "kenney/towerDefense_tile203.png",
-    "turret-writeoff": "kenney/towerDefense_tile204.png",
-    "turret-rounding": "kenney/towerDefense_tile205.png",
-    "turret-escalation": "kenney/towerDefense_tile206.png",
-    "turret-extension": "kenney/towerDefense_tile249.png",
-    "turret-shelter": "kenney/towerDefense_tile250.png",
+    "turret-ledger": "towers/tower_withholding.png",
+    "turret-writeoff": "towers/tower_writeoff.png",
+    "turret-rounding": "towers/tower_rounding.png",
+    "turret-escalation": "towers/tower_escalation.png",
+    "turret-extension": "towers/tower_filing.png",
+    "turret-shelter": "towers/tower_tax.png",
     "enemy-filer": "kenney/towerDefense_tile247.png",
     "enemy-shredder": "kenney/towerDefense_tile246.png",
     "enemy-notice": "kenney/towerDefense_tile248.png",
@@ -53,7 +53,44 @@
     "decor-rock2": "kenney/towerDefense_tile136.png",
     "decor-rock3": "kenney/towerDefense_tile137.png"
   },
-  "render": {},
+  "render": {
+    "turret-escalation": {
+      "anchorX": 0.5054,
+      "anchorY": 0.998,
+      "displayHeight": 72.8,
+      "shadowWidth": 64.6
+    },
+    "turret-extension": {
+      "anchorX": 0.4987,
+      "anchorY": 1.0,
+      "displayHeight": 72.8,
+      "shadowWidth": 55.3
+    },
+    "turret-rounding": {
+      "anchorX": 0.4792,
+      "anchorY": 1.0,
+      "displayHeight": 72.8,
+      "shadowWidth": 28.6
+    },
+    "turret-shelter": {
+      "anchorX": 0.4988,
+      "anchorY": 1.0,
+      "displayHeight": 72.8,
+      "shadowWidth": 61.0
+    },
+    "turret-ledger": {
+      "anchorX": 0.4988,
+      "anchorY": 1.0,
+      "displayHeight": 72.8,
+      "shadowWidth": 59.0
+    },
+    "turret-writeoff": {
+      "anchorX": 0.5008,
+      "anchorY": 0.9902,
+      "displayHeight": 72.8,
+      "shadowWidth": 66.0
+    }
+  },
   "ground": {
     "grass": [
       {
@@ -101,7 +138,7 @@
   "ui": {
     "plot": "plot",
     "plotHover": "plot-hover",
-    "towerBase": "tower-base"
+    "towerBase": null
   },
   "fx": {
     "spark": "fx-spark",

@@ -6,3 +6,7 @@ dist-ssr/
 .vscode/*
 !.vscode/extensions.json
 *.log
+
+# Python bytecode from tools/
+__pycache__/
+*.pyc

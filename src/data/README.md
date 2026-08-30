@@ -57,35 +57,39 @@ the work:
   art's bottom edge on the tile's ground line, which is what stops a tall sprite
   floating. A test fails if anything taller than a tile is not base-anchored.
 
-### The pending tower swap
+### How the tower values were measured
 
-The six painted towers are not in the repo yet. Once
-`public/assets/towers/tower_*.png` are committed, this is the whole change:
+The six painted towers are in `public/assets/towers/`. Their `render` values are
+measured from the art, not guessed. `tools/measure_art.py` reproduces them.
 
-```jsonc
-"files": {
-  "turret-ledger":     "towers/tower_withholding.png",   // Withholding Tower
-  "turret-writeoff":   "towers/tower_writeoff.png",      // Write-Off
-  "turret-rounding":   "towers/tower_rounding.png",      // Rounding Error
-  "turret-escalation": "towers/tower_escalation.png",    // Escalation Clause
-  "turret-extension":  "towers/tower_filing.png",        // Filing Extension
-  "turret-shelter":    "towers/tower_tax.png"            // Tax Shelter
-},
-"render": {
-  "turret-ledger":     { "anchorY": 1, "displayHeight": 92, "shadowWidth": 46 },
-  "turret-writeoff":   { "anchorY": 1, "displayHeight": 92, "shadowWidth": 46 },
-  "turret-rounding":   { "anchorY": 1, "displayHeight": 92, "shadowWidth": 46 },
-  "turret-escalation": { "anchorY": 1, "displayHeight": 96, "shadowWidth": 50 },
-  "turret-extension":  { "anchorY": 1, "displayHeight": 92, "shadowWidth": 46 },
-  "turret-shelter":    { "anchorY": 1, "displayHeight": 92, "shadowWidth": 46 }
-},
-"ui": { "towerBase": null }
-```
+| | canvas | artwork | base ellipse | shadowWidth |
+|---|---|---|---|---|
+| Withholding Tower | 415x512 | 415x512 | 415px @ row 444 | 59.0 |
+| Write-Off | 616x512 | 464x506 | 464px @ row 382 | 66.0 |
+| Rounding Error | 336x512 | 201x512 | 201px @ row 433 | 28.6 |
+| Escalation Clause | 462x512 | 454x510 | 454px @ row 397 | 64.6 |
+| Filing Extension | 389x512 | 389x512 | 389px @ row 362 | 55.3 |
+| Tax Shelter | 429x512 | 429x512 | 429px @ row 356 | 61.0 |
 
-`displayHeight` around 92 on a 64px tile gives a tower roughly 1.4 tiles tall —
-present without swamping its neighbours. Tune per sprite once they can be seen;
-the widths are guesses until someone looks at the art. Setting `towerBase` to
-`null` drops the Kenney plate, since the painted towers carry their own base.
+Three things the measurements settled:
+
+**Half of them are not trimmed.** Rounding Error has 135px of transparent
+padding across its width; Write-Off has 152px and 6 rows below the art. Anchors
+are therefore computed from the *artwork's* bounds, not the canvas: `anchorY` is
+`(contentBottom + 1) / canvasHeight`, which is 0.9902 for Write-Off rather than
+1.0. Anchoring those at a flat 1.0 would float them by the padding.
+
+**The bottom row is not the base.** Each tower is a 3/4 view, so its stone base
+is an ellipse: the artwork widens to a maximum around 76-88% down and then
+narrows to the ellipse's front edge. `shadowWidth` is the widest row in the
+bottom third — the ellipse's true width — not the width at the bottom.
+
+**The scale is uniform, not per-sprite.** All six are drawn at one consistent
+scale in a 512-tall frame, so `displayHeight` is 72.8 for every one. Normalising
+each tower's base to the same width instead would have stretched the thin
+obelisk to 120px against the others' 66-79px, undoing the artist's proportions.
+72.8 puts the widest base (Write-Off) at 66px against a 64px tile — a slight
+overlap that reads as presence rather than crowding.
 
 - **`art.json` is the only place a sprite is named.** Code asks for a *role*
   (`ART.fx.blast`, `ART.ui.towerBase`, a weighted `ART.ground.grass` variant,

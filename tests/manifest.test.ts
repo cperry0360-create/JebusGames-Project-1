@@ -46,7 +46,10 @@ test('every role in the manifest resolves to a file that exists', () => {
   const keys = new Set(Object.keys(art.files))
   const roleRefs: Array<[string, string]> = []
   for (const [role, key] of Object.entries(art.autotile) as [string, string][]) roleRefs.push([`autotile.${role}`, key])
-  for (const [role, key] of Object.entries(art.ui) as [string, string][]) roleRefs.push([`ui.${role}`, key])
+  for (const [role, key] of Object.entries(art.ui) as [string, string | null][]) {
+    // A null role is a deliberate opt-out, e.g. towers that carry their own base.
+    if (key !== null) roleRefs.push([`ui.${role}`, key])
+  }
   for (const [role, key] of Object.entries(art.fx) as [string, string][]) roleRefs.push([`fx.${role}`, key])
   art.decor.forEach((key: string, i: number) => roleRefs.push([`decor[${i}]`, key]))
   for (const g of ['grass', 'road']) {
@@ -119,12 +122,25 @@ test('art from any source size can be placed without touching code', () => {
 })
 
 test('a sprite anchored at its base is what makes it stand on the tile', () => {
-  // anchorY 1 puts the art's bottom edge on the tile's ground line. Anything
-  // taller than a tile must use it or it floats.
+  // The anchor puts the artwork's bottom on the tile's ground line. It is not
+  // always exactly 1: a canvas with transparent padding below the art needs a
+  // slightly smaller value, or the art floats by the height of that padding.
   const tall = Object.entries(art.render).filter(([, c]: [string, any]) =>
     c.displayHeight !== undefined && c.displayHeight > 64)
+  assert.ok(tall.length > 0, 'no tall art is configured, so this proves nothing')
   for (const [key, cfg] of tall as [string, any][]) {
-    assert.equal(cfg.anchorY, 1, `${key} is taller than a tile but is not anchored at its base`)
+    assert.ok(cfg.anchorY >= 0.95,
+      `${key} is taller than a tile but anchors at ${cfg.anchorY}; it will float or sink`)
+  }
+})
+
+test('anchors sit near the horizontal centre', () => {
+  // A canvas padded unevenly needs an anchor off 0.5 to put the art's base
+  // over the tile centre, but never far off — that would mean a bad measurement.
+  for (const [key, cfg] of Object.entries(art.render) as [string, any][]) {
+    if (cfg.anchorX === undefined) continue
+    assert.ok(Math.abs(cfg.anchorX - 0.5) < 0.1,
+      `${key} anchorX ${cfg.anchorX} is far off centre; check the measurement`)
   }
 })
 

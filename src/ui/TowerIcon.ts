@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { ART, applyRender } from '../systems/Art.ts'
+import { ART, applyRender, renderFor } from '../systems/Art.ts'
 
 /**
  * One tower portrait, used by the build menu and the draft screen so both
@@ -22,7 +22,10 @@ export function towerIcon(
     out.push(base)
   }
 
-  const art = scene.add.image(x, baselineY, spriteKey).setOrigin(0.5, 1)
+  // Same anchor the world uses, so art with padded canvases lines up in the
+  // menu exactly as it does on a tile. Only the scale differs.
+  const cfg = renderFor(spriteKey)
+  const art = scene.add.image(x, baselineY, spriteKey).setOrigin(cfg.anchorX, cfg.anchorY)
   art.setScale((boxHeight * 0.86) / art.height)
   out.push(art)
 

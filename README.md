@@ -94,8 +94,9 @@ python3 tools/mksfx.py public/assets/audio
 
 ## Art
 
-Kenney's **Tower Defense (Top-Down)** pack for art and the **Kenney font
-package** for type, both CC0. All 299 sprites live in
+Towers are painted art in `public/assets/towers/`. Everything else — tiles,
+enemies, effects, scenery — is still Kenney's **Tower Defense (Top-Down)** pack,
+with the **Kenney font package** for type, both CC0. All 299 sprites live in
 `public/assets/kenney/` with the pack's own `License.txt`; the game loads the
 ~49 it uses.
 

@@ -120,7 +120,7 @@ test('Depreciation strips armour but cannot go past the toughest enemy', () => {
 
 test('presentation numbers are present and sane', () => {
   assert.ok(pres.shadow.alpha > 0 && pres.shadow.alpha < 1)
-  assert.ok(pres.shadow.heightFactor < pres.shadow.widthFactor,
+  assert.ok(pres.shadow.heightRatio > 0 && pres.shadow.heightRatio < 1,
     'a ground shadow should be an ellipse, wider than it is tall')
   assert.ok(pres.shadow.softLayers > 1, 'a single layer gives a hard edge, not a soft shadow')
   assert.ok(pres.shadow.defaultWidth > 0)
