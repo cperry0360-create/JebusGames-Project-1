@@ -1,43 +1,51 @@
-// Placement rules. Kept free of Phaser so the rules can be tested directly:
-// a tile is buildable when it is on the grid, off the road, and empty.
+// Placement rules for a painted map: towers go on hand-placed spots rather
+// than on a grid. A spot is buildable when it exists and nothing stands there.
 
-import { Grid } from './Grid.ts'
+export interface BuildSpot {
+  index: number
+  x: number
+  y: number
+}
 
 export class BuildSystem {
-  private readonly grid: Grid
-  private readonly blocked = new Set<string>()
-  private readonly occupied = new Set<string>()
+  readonly spots: BuildSpot[]
+  private readonly radius: number
+  private readonly occupied = new Set<number>()
 
-  constructor(grid: Grid) {
-    this.grid = grid
+  constructor(spots: number[][], radius: number) {
+    this.spots = spots.map((s, index) => ({ index, x: s[0], y: s[1] }))
+    this.radius = radius
   }
 
-  /** Marks a tile permanently unbuildable — the road and scenery. */
-  block(col: number, row: number): void {
-    this.blocked.add(this.grid.key(col, row))
+  /** The nearest spot within the click radius, free or not, or null. */
+  spotAt(x: number, y: number): BuildSpot | null {
+    let best: BuildSpot | null = null
+    let bestDist = this.radius
+    for (const s of this.spots) {
+      const d = Math.hypot(s.x - x, s.y - y)
+      if (d <= bestDist) {
+        best = s
+        bestDist = d
+      }
+    }
+    return best
   }
 
-  isBlocked(col: number, row: number): boolean {
-    return this.blocked.has(this.grid.key(col, row))
+  isFree(index: number): boolean {
+    return index >= 0 && index < this.spots.length && !this.occupied.has(index)
   }
 
-  isBuildable(col: number, row: number): boolean {
-    if (!this.grid.contains(col, row)) return false
-    const key = this.grid.key(col, row)
-    return !this.blocked.has(key) && !this.occupied.has(key)
+  occupy(index: number): void {
+    this.occupied.add(index)
   }
 
-  occupy(col: number, row: number): void {
-    this.occupied.add(this.grid.key(col, row))
+  /** Frees a spot again — Restructure moves a tower off one. */
+  release(index: number): void {
+    this.occupied.delete(index)
   }
 
-  /** Frees a tile again — Restructure moves a tower off its plot. */
-  release(col: number, row: number): void {
-    this.occupied.delete(this.grid.key(col, row))
-  }
-
-  isOccupied(col: number, row: number): boolean {
-    return this.occupied.has(this.grid.key(col, row))
+  freeSpots(): BuildSpot[] {
+    return this.spots.filter((s) => this.isFree(s.index))
   }
 
   get towerCount(): number {

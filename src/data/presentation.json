@@ -31,10 +31,5 @@
     "lastStandIntensity": 0.011,
     "haymakerMs": 180,
     "haymakerIntensity": 0.007
-  },
-  "decoration": {
-    "densityPercent": 34,
-    "minDistanceFromRoad": 1,
-    "seed": "courjahan"
   }
 }

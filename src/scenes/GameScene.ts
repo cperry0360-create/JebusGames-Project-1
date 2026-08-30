@@ -12,14 +12,13 @@ import wavesData from '../data/waves.json'
 import abilitiesData from '../data/abilities.json'
 import draftData from '../data/draft.json'
 
-import { Grid } from '../systems/Grid.ts'
 import { Path } from '../systems/Path.ts'
-import { roadRole } from '../systems/Autotile.ts'
 import { BuildSystem } from '../systems/BuildSystem.ts'
+import type { BuildSpot } from '../systems/BuildSystem.ts'
 import { WaveSpawner } from '../systems/WaveSpawner.ts'
 import { withinRadius, pickNearest } from '../systems/Targeting.ts'
 import { GROUND_DEPTH } from '../systems/DepthSort.ts'
-import { ART, pickVariant, roadSpriteFor } from '../systems/Art.ts'
+import { ART } from '../systems/Art.ts'
 import { Cooldowns } from '../systems/Cooldowns.ts'
 import { unlockedTowerCount } from '../systems/Draft.ts'
 import { runState } from '../systems/RunState.ts'
@@ -80,7 +79,6 @@ export class GameScene extends Phaser.Scene {
 
   readonly cooldowns = new Cooldowns()
 
-  private grid!: Grid
   private lane!: Path
   private build!: BuildSystem
   private spawner!: WaveSpawner
@@ -92,8 +90,8 @@ export class GameScene extends Phaser.Scene {
   private shots: Projectile[] = []
   private fighters: Fighter[] = []
 
-  private plotMarkers: Phaser.GameObjects.Image[] = []
-  private hoverPlot!: Phaser.GameObjects.Image
+  private spotLayer!: Phaser.GameObjects.Graphics
+  private hoverSpot: BuildSpot | null = null
   private rangeRing!: Phaser.GameObjects.Graphics
   private targetRing!: Phaser.GameObjects.Graphics
   private selected: Tower | null = null
@@ -110,32 +108,24 @@ export class GameScene extends Phaser.Scene {
     this.towers = []
     this.shots = []
     this.fighters = []
-    this.plotMarkers = []
+    this.hoverSpot = null
     this.selected = null
     this.restructuring = null
 
     const run = runState()
     const heroDef = HEROES[run.heroId] ?? HEROES.cory
 
-    this.grid = new Grid(MAP.cols, MAP.rows, displayData.tileSize, MAP.originX, MAP.originY)
-    this.lane = new Path(MAP.waypoints, this.grid)
-    this.build = new BuildSystem(this.grid)
+    this.lane = new Path(MAP.waypoints)
+    this.build = new BuildSystem(MAP.buildSpots, MAP.spotRadius)
     this.spawner = new WaveSpawner()
 
-    this.blockScenery()
-    this.drawGround()
-    this.scatterDecoration()
+    this.drawPlate()
 
-    this.hoverPlot = this.add.image(-999, -999, ART.ui.plotHover).setDepth(GROUND_DEPTH + 5).setVisible(false)
+    this.spotLayer = this.add.graphics().setDepth(GROUND_DEPTH + 5)
     this.rangeRing = this.add.graphics().setDepth(OVERLAY_DEPTH)
     this.targetRing = this.add.graphics().setDepth(OVERLAY_DEPTH + 1)
 
-    this.hero = new Hero(
-      this,
-      this.grid.centreX(MAP.heroStart[0]),
-      this.grid.centreY(MAP.heroStart[1]),
-      heroDef,
-    )
+    this.hero = new Hero(this, MAP.heroStart[0], MAP.heroStart[1], heroDef)
 
     this.status.gold = RULES.startingGold
     this.status.lives = RULES.startingLives
@@ -152,7 +142,7 @@ export class GameScene extends Phaser.Scene {
     this.status.pendingAbility = null
     this.status.abilities = [...run.abilities]
     this.status.unlockedTowers = run.openingTowers.slice(0, DRAFT.towersAtStart)
-    this.status.message = 'Click a plot to build. Click the road to rally Cory.'
+    this.status.message = 'Click a building spot to build. Click open ground to rally Cory.'
 
     for (const id of this.status.abilities) this.cooldowns.register(id, ABILITIES[id].cooldown)
     this.cooldowns.register('haymaker', heroDef.haymaker.cooldown)
@@ -161,88 +151,36 @@ export class GameScene extends Phaser.Scene {
     this.menu = new BuildMenu(this, [])
     this.refreshMenuOptions()
     this.setupInput()
-    this.showPlots(false)
+    this.drawSpots()
   }
 
   // ---------------------------------------------------------------- setup
 
-  /** Scenery occupies its tile, so it has to be blocked before the ground
-   *  layer decides which tiles get a build-plot marker. */
-  private blockScenery(): void {
-    for (const t of this.lane.roadTiles()) this.build.block(t.col, t.row)
-    for (const d of MAP.decorations) this.build.block(d[0] as number, d[1] as number)
+  /**
+   * The map is one painted plate rather than tiles. It is 16:9 like the
+   * canvas, so it scales to fill with no letterboxing and canvas pixels are
+   * the map's own coordinate space.
+   */
+  private drawPlate(): void {
+    const plate = this.add.image(0, 0, ART.map[MAP.plate]).setOrigin(0, 0).setDepth(GROUND_DEPTH)
+    plate.setDisplaySize(displayData.width, displayData.height)
   }
 
-  private drawGround(): void {
-    const road = new Set(this.lane.roadTiles().map((t) => this.grid.key(t.col, t.row)))
-    const isRoad = (c: number, r: number): boolean => road.has(this.grid.key(c, r))
-    const rng = new Phaser.Math.RandomDataGenerator([PRESENTATION.decoration.seed])
-
-    for (let r = 0; r < this.grid.rows; r++) {
-      for (let c = 0; c < this.grid.cols; c++) {
-        const x = this.grid.centreX(c)
-        const y = this.grid.centreY(r)
-        if (isRoad(c, r)) {
-          this.add.image(x, y, pickVariant(ART.ground.road, rng.frac())).setDepth(GROUND_DEPTH)
-          const role = roadRole(isRoad, c, r)
-          if (role) this.add.image(x, y, roadSpriteFor(role)).setDepth(GROUND_DEPTH + 1)
-        } else {
-          this.add.image(x, y, pickVariant(ART.ground.grass, rng.frac())).setDepth(GROUND_DEPTH)
-          if (this.build.isBuildable(c, r)) {
-            this.plotMarkers.push(
-              this.add.image(x, y, ART.ui.plot).setDepth(GROUND_DEPTH + 2).setAlpha(0.4).setVisible(false),
-            )
-          }
-        }
-      }
-    }
+  /** Spots show only while the player is placing something. No standing grid. */
+  private get placing(): boolean {
+    return this.menu.isOpen || this.status.mode === 'restructure'
   }
 
-  /** Hand-placed scenery from the map, plus a seeded scatter so the field is
-   *  not an empty lawn. Scattered pieces block their tile like any other. */
-  private scatterDecoration(): void {
-    for (const d of MAP.decorations) {
-      const col = d[0] as number
-      const row = d[1] as number
-      if (!this.grid.contains(col, row)) continue
-      const dy = this.grid.centreY(row)
-      this.add.image(this.grid.centreX(col), dy, d[2] as string).setDepth(dy)
+  private drawSpots(): void {
+    this.spotLayer.clear()
+    if (!this.placing) return
+    const r = MAP.spotRadius
+    for (const spot of this.build.freeSpots()) {
+      const hot = this.hoverSpot?.index === spot.index
+      this.spotLayer.fillStyle(0xf6ecd9, hot ? 0.22 : 0.1).fillCircle(spot.x, spot.y, r)
+      this.spotLayer.lineStyle(hot ? 3 : 2, hot ? 0x8fd07a : 0xf6ecd9, hot ? 0.95 : 0.45)
+      this.spotLayer.strokeCircle(spot.x, spot.y, r)
     }
-
-    const cfg = PRESENTATION.decoration
-    const rng = new Phaser.Math.RandomDataGenerator([`${cfg.seed}-scatter`])
-    const roadKeys = new Set(this.lane.roadTiles().map((t) => this.grid.key(t.col, t.row)))
-    for (let r = 0; r < this.grid.rows; r++) {
-      for (let c = 0; c < this.grid.cols; c++) {
-        if (!this.build.isBuildable(c, r)) continue
-        if (rng.between(1, 100) > cfg.densityPercent) continue
-        // Keep clear of the road so the lane stays readable.
-        if (this.nearRoad(roadKeys, c, r, cfg.minDistanceFromRoad)) continue
-        this.build.block(c, r)
-        // Depth is the tile's ground line, so a unit lower on the screen
-        // walks in front of scenery and a unit higher walks behind it.
-        const sy = this.grid.centreY(r)
-        this.add
-          .image(this.grid.centreX(c), sy, ART.decor[rng.between(0, ART.decor.length - 1)])
-          .setDepth(sy)
-          .setScale(rng.realInRange(0.7, 1.05))
-          .setAngle(rng.between(-18, 18))
-      }
-    }
-  }
-
-  private nearRoad(roadKeys: Set<string>, col: number, row: number, distance: number): boolean {
-    for (let dc = -distance; dc <= distance; dc++) {
-      for (let dr = -distance; dr <= distance; dr++) {
-        if (roadKeys.has(this.grid.key(col + dc, row + dr))) return true
-      }
-    }
-    return false
-  }
-
-  /** The grid only shows while the player is actually placing something. */
-  private showPlots(on: boolean): void {
-    for (const m of this.plotMarkers) m.setVisible(on)
   }
 
   private refreshMenuOptions(): void {
@@ -274,16 +212,13 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.status.phase === 'won' || this.status.phase === 'lost') return
 
-    const col = this.grid.colAt(p.worldX)
-    const row = this.grid.rowAt(p.worldY)
-
     if (this.status.mode === 'targeting' && this.status.pendingAbility) {
       this.fireAbility(this.status.pendingAbility, p.worldX, p.worldY)
       return
     }
 
     if (this.status.mode === 'restructure') {
-      this.doRestructure(col, row)
+      this.doRestructure(p.worldX, p.worldY)
       return
     }
 
@@ -291,18 +226,20 @@ export class GameScene extends Phaser.Scene {
       this.clearSelection()
       return
     }
-    if (!this.grid.contains(col, row)) return
 
-    const tower = this.towers.find((t) => t.col === col && t.row === row)
+    const tower = this.towerAt(p.worldX, p.worldY)
     if (tower) {
       this.selectTower(tower)
       return
     }
-    if (this.build.isBuildable(col, row)) {
-      this.openBuildMenu(col, row)
+
+    const spot = this.build.spotAt(p.worldX, p.worldY)
+    if (spot && this.build.isFree(spot.index)) {
+      this.openBuildMenu(spot)
       return
     }
 
+    // Anywhere else on the map is a rally order.
     this.clearSelection()
     this.hero.setRally(p.worldX, p.worldY)
     this.pingRally(p.worldX, p.worldY)
@@ -310,39 +247,43 @@ export class GameScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- build UI
 
-  private openBuildMenu(col: number, row: number): void {
+  /** Towers are hit-tested by distance now that there is no grid. */
+  private towerAt(x: number, y: number): Tower | undefined {
+    return this.towers.find((t) => Math.hypot(t.x - x, t.y - y) <= MAP.spotRadius)
+  }
+
+  private openBuildMenu(spot: BuildSpot): void {
     this.selected = null
-    this.showPlots(true)
     this.menu.open(
-      this.grid.centreX(col), this.grid.centreY(row), col, row, this.status.gold,
-      (id) => this.place(id, col, row),
+      spot.x, spot.y, this.status.gold,
+      (id) => this.place(id, spot),
       (id) => {
-        if (id) this.showRange(this.grid.centreX(col), this.grid.centreY(row), TOWERS[id])
+        if (id) this.showRange(spot.x, spot.y, TOWERS[id])
         else this.rangeRing.clear()
       },
     )
-    this.hoverPlot.setVisible(false)
+    this.drawSpots()
     this.status.message = 'Pick a tower, or click away to cancel.'
   }
 
-  private place(id: string, col: number, row: number): void {
+  private place(id: string, spot: BuildSpot): void {
     const def = TOWERS[id]
-    if (!this.build.isBuildable(col, row) || this.status.gold < def.cost) return
+    if (!this.build.isFree(spot.index) || this.status.gold < def.cost) return
 
     this.status.gold -= def.cost
-    this.build.occupy(col, row)
-    this.towers.push(new Tower(this, this.grid.centreX(col), this.grid.centreY(row), id, def, col, row))
+    this.build.occupy(spot.index)
+    this.towers.push(new Tower(this, spot.x, spot.y, id, def, spot.index))
     this.refreshSupport()
     play(this, 'sfx-build', 0.5)
     this.menu.close()
     this.rangeRing.clear()
-    this.showPlots(false)
+    this.drawSpots()
     this.status.message = `${def.name} — ${def.flavor}`
   }
 
   private selectTower(tower: Tower): void {
     this.menu.close()
-    this.showPlots(false)
+    this.drawSpots()
     this.selected = tower
     this.showRange(tower.x, tower.y, tower.def)
     const bonus = tower.supportBonus > 0 ? `  (+${Math.round(tower.supportBonus * 100)}% sheltered)` : ''
@@ -357,8 +298,8 @@ export class GameScene extends Phaser.Scene {
     this.status.pendingAbility = null
     this.rangeRing.clear()
     this.targetRing.clear()
-    this.showPlots(false)
-    this.status.message = 'Click a plot to build. Click the road to rally Cory.'
+    this.drawSpots()
+    this.status.message = 'Click a building spot to build. Click open ground to rally Cory.'
   }
 
   private showRange(x: number, y: number, def: TowerDef): void {
@@ -382,24 +323,20 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.menu.isOpen) return
 
-    const col = this.grid.colAt(p.worldX)
-    const row = this.grid.rowAt(p.worldY)
-    const tower = this.towers.find((t) => t.col === col && t.row === row)
-
+    const tower = this.towerAt(p.worldX, p.worldY)
     if (tower) {
-      this.hoverPlot.setVisible(false)
+      if (this.hoverSpot) { this.hoverSpot = null; this.drawSpots() }
       if (!this.selected) this.showRange(tower.x, tower.y, tower.def)
       return
     }
     if (!this.selected) this.rangeRing.clear()
 
-    if (this.status.mode === 'restructure') {
-      this.hoverPlot
-        .setPosition(this.grid.centreX(col), this.grid.centreY(row))
-        .setVisible(this.build.isBuildable(col, row))
-      return
+    const spot = this.build.spotAt(p.worldX, p.worldY)
+    const next = spot && this.build.isFree(spot.index) ? spot : null
+    if (next?.index !== this.hoverSpot?.index) {
+      this.hoverSpot = next
+      this.drawSpots()
     }
-    this.hoverPlot.setVisible(false)
   }
 
   private pingRally(x: number, y: number): void {
@@ -510,40 +447,40 @@ export class GameScene extends Phaser.Scene {
     this.menu.close()
     this.status.mode = 'restructure'
     this.restructuring = null
-    this.showPlots(true)
-    this.status.message = `${this.hero.def.restructure.name}: click a tower, then an empty plot.`
+    this.drawSpots()
+    this.status.message = `${this.hero.def.restructure.name}: click a tower, then a free spot.`
   }
 
-  private doRestructure(col: number, row: number): void {
-    const tower = this.towers.find((t) => t.col === col && t.row === row)
-
+  private doRestructure(x: number, y: number): void {
     if (!this.restructuring) {
+      const tower = this.towerAt(x, y)
       if (!tower) {
         this.status.message = 'Click one of your towers first.'
         return
       }
       this.restructuring = tower
       this.showRange(tower.x, tower.y, tower.def)
-      this.status.message = `Moving ${tower.def.name}. Click an empty plot.`
+      this.status.message = `Moving ${tower.def.name}. Click a free spot.`
       return
     }
 
-    if (!this.build.isBuildable(col, row)) {
-      this.status.message = 'That plot is not free.'
+    const spot = this.build.spotAt(x, y)
+    if (!spot || !this.build.isFree(spot.index)) {
+      this.status.message = 'That spot is not free.'
       return
     }
 
     const moving = this.restructuring
-    this.build.release(moving.col, moving.row)
-    this.build.occupy(col, row)
-    moving.relocate(this.grid.centreX(col), this.grid.centreY(row), col, row)
+    this.build.release(moving.spot)
+    this.build.occupy(spot.index)
+    moving.relocate(spot.x, spot.y, spot.index)
     this.refreshSupport()
     this.cooldowns.start('restructure')
     play(this, 'sfx-build', 0.5)
     this.status.message = `${moving.def.name} restructured. No charge.`
     this.restructuring = null
     this.status.mode = 'normal'
-    this.showPlots(false)
+    this.drawSpots()
     this.rangeRing.clear()
   }
 

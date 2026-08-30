@@ -10,8 +10,8 @@ import { Enemy } from './Enemy.ts'
 export class Tower extends Phaser.GameObjects.Container {
   readonly def: TowerDef
   readonly id: string
-  col: number
-  row: number
+  /** Which build spot it stands on, so Restructure can free the old one. */
+  spot: number
   /** Summed bonus from Tax Shelters in range, refreshed when towers change. */
   supportBonus = 0
 
@@ -19,12 +19,11 @@ export class Tower extends Phaser.GameObjects.Container {
   private readonly shadow: Phaser.GameObjects.Image
   private cooldown = 0
 
-  constructor(scene: Phaser.Scene, x: number, y: number, id: string, def: TowerDef, col: number, row: number) {
+  constructor(scene: Phaser.Scene, x: number, y: number, id: string, def: TowerDef, spot: number) {
     super(scene, x, y)
     this.id = id
     this.def = def
-    this.col = col
-    this.row = row
+    this.spot = spot
 
     // The base plate is optional: art that carries its own base sets
     // ui.towerBase to null in the manifest and this drops out.
@@ -61,9 +60,8 @@ export class Tower extends Phaser.GameObjects.Container {
   }
 
   /** Restructure moves a built tower without rebuilding it. */
-  relocate(x: number, y: number, col: number, row: number): void {
-    this.col = col
-    this.row = row
+  relocate(x: number, y: number, spot: number): void {
+    this.spot = spot
     this.setPosition(x, y)
     ySort(this)
     this.popIn()

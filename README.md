@@ -31,7 +31,7 @@ the map.** The splash runs about two seconds and any click or key skips it.
 
 | Input | Does |
 |---|---|
-| Click an empty plot | Open the build menu for that tile |
+| Click a highlighted spot | Open the build menu for that spot |
 | Hover a menu option | Preview that tower's range |
 | Click a built tower | Select it and show its range |
 | Click the road or scenery | Set Cory's rally point |
@@ -78,12 +78,37 @@ src/ui/                       Theme, build menu
 src/data/                     All tuneable numbers, as JSON
 tests/                        Logic, balance, draft and content tests
 tools/mksfx.py                Regenerates the sound cues
+tools/trace_map.py            Re-derives the lane and build spots from the map art
 ```
 
-Rendering is a **flat square grid** with sprites sorted by Y position, so
-things lower on the screen draw in front. There is no isometric coordinate
-math anywhere, and none should be added — see the orientation section of
-DESIGN.md.
+The map is a **single painted plate** scaled to fill the canvas, so canvas
+pixels are the map's own coordinate space. Sprites on top are sorted by Y
+position, so things lower on the screen draw in front. There is no isometric
+coordinate math anywhere, and none should be added — see the orientation
+section of DESIGN.md.
+
+## The map
+
+`public/assets/maps/map_level1.png` is one hand-painted 1672x941 image. There
+is no tile grid: the lane and the buildable spots were traced out of the
+artwork itself by `tools/trace_map.py`, which classifies every pixel as road,
+grass or blocked, walks the road from the arch on the left edge to the gate on
+the right, and picks open grass beside it for towers.
+
+```bash
+python3 tools/trace_map.py --overlay /tmp/overlay.png
+```
+
+It prints the `waypoints` and `buildSpots` that live in `src/data/map.json`
+and, given `--overlay`, draws them over the real plate — the only honest way to
+check that a traced route follows a painted road. Re-run it when the art
+changes. The painted spur to the tavern door is decoration and is not part of
+the route; the route search ignores it because a detour into a dead end costs
+distance and buys nothing.
+
+Build spots are hand-sized circles rather than tiles, and they are only drawn
+while the player is placing: a soft cream disc for each free spot, brighter
+under the cursor. Nothing marks the map otherwise.
 
 ## Audio
 
@@ -97,22 +122,21 @@ python3 tools/mksfx.py public/assets/audio
 
 ## Art
 
-Towers are painted art in `public/assets/towers/`. Everything else — tiles,
-enemies, effects, scenery — is still Kenney's **Tower Defense (Top-Down)** pack,
-with the **Kenney font package** for type, both CC0. All 299 sprites live in
-`public/assets/kenney/` with the pack's own `License.txt`; the game loads the
-~49 it uses.
+The map plate is in `public/assets/maps/` and the towers are painted art in
+`public/assets/towers/`. Everything else — enemies, effects, scenery — is still
+Kenney's **Tower Defense (Top-Down)** pack, with the **Kenney font package** for
+type, both CC0. All 299 sprites live in `public/assets/kenney/` with the pack's
+own `License.txt`; the game loads the handful it still uses.
 
 **`src/data/art.json` is the only place a sprite is named.** It holds the
-key-to-filename map plus every *role* the game draws — weighted ground
-variants, the twelve autotile roles, UI chrome, effects and scenery:
+key-to-filename map plus every *role* the game draws — map plates, UI chrome,
+effects and scenery:
 
 ```json
 "assetRoot": "assets/",
 "files":     { "turret-ledger": "kenney/towerDefense_tile203.png" },
 "render":    { "turret-ledger": { "anchorY": 1, "displayHeight": 92 } },
-"ground":    { "grass": [{ "key": "ground-grass", "weight": 6 }, ...] },
-"autotile":  { "outer-nw": "road-outer-nw", ... },
+"map":       { "level1": "map-level1" },
 "fx":        { "blast": "fx-flame", "spark": "fx-spark", ... }
 ```
 
@@ -124,12 +148,6 @@ width, so source art of any size lands correctly — see **Swapping art** in
 Code asks `src/systems/Art.ts` for a role and never mentions a key or a
 filename. `tests/manifest.test.ts` fails the build if any `.ts` file does,
 naming the offender — so dropping in a new art pack stays a config change.
-
-The road is drawn by an autotiler (`src/systems/Autotile.ts`) that picks the
-right edge, outer-corner or inner-corner sprite for each road tile. That is why
-the lane is two tiles wide: the pack ships grass-over-dirt transitions rather
-than a one-tile road, so a narrower lane would need a tile the pack does not
-have. A test enforces it.
 
 ## Deployment
 

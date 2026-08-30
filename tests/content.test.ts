@@ -19,7 +19,7 @@ test('every sprite key referenced anywhere resolves to a real file', () => {
       [`hero ${id} portrait`, h.portraitSprite], [`hero ${id} haymaker`, h.haymaker.icon],
       [`hero ${id} restructure`, h.restructure.icon])
   }
-  for (const d of map.decorations) refs.push([`decoration ${d[0]},${d[1]}`, d[2]])
+  refs.push([`map plate ${map.plate}`, art.map[map.plate]])
   for (const [where, key] of refs) {
     assert.ok(ART_KEYS.has(key), `${where} references unknown sprite key "${key}"`)
   }
@@ -32,15 +32,11 @@ test('the art manifest points at files that exist on disk', () => {
   }
 })
 
-test('the sprite keys the code hardcodes are all in the manifest', () => {
-  // Ground, road and effect keys are named directly by scenes rather than data.
+test('the sprite keys the scenes ask for by role are all in the manifest', () => {
+  // Effect and backdrop keys are named by scenes through Art.ts rather than by
+  // data files, so nothing else checks that they resolve.
   const hardcoded = [
-    'ground-grass', 'ground-grass-alt', 'ground-grass-alt2',
-    'road', 'road-alt', 'road-alt2',
-    'road-edge-n', 'road-edge-s', 'road-edge-w', 'road-edge-e',
-    'road-outer-nw', 'road-outer-ne', 'road-outer-sw', 'road-outer-se',
-    'road-inner-nw', 'road-inner-ne', 'road-inner-sw', 'road-inner-se',
-    'plot', 'plot-hover', 'tower-base',
+    'map-level1',
     'fx-spark', 'fx-flame', 'fx-flame-small',
     'decor-bush', 'decor-shrub', 'decor-plant', 'decor-rock', 'decor-rock2', 'decor-rock3',
   ]
@@ -131,5 +127,4 @@ test('presentation numbers are present and sane', () => {
   assert.ok(pres.damageNumbers.critFontSize > pres.damageNumbers.fontSize)
   assert.ok(pres.shake.lastStandIntensity > pres.shake.leakIntensity,
     'Last Stand should shake harder than a leak')
-  assert.ok(pres.decoration.densityPercent > 0 && pres.decoration.densityPercent < 50)
 })

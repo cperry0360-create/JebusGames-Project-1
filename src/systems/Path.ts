@@ -1,35 +1,24 @@
-// The lane enemies walk. Waypoints are tile-lattice coordinates (tile corners)
-// rather than tile centres, because the road is two tiles wide and its
-// centreline therefore runs along the boundary between two rows or columns.
-// Every segment is axis-aligned, which keeps both the road tiling and the
-// distance math trivial.
-
-import { Grid } from './Grid.ts'
+// The lane enemies walk, in canvas pixels.
+//
+// The map is a single painted plate that fills the canvas, so canvas pixels
+// are the map's own coordinate space and no tile conversion is involved. The
+// waypoints were traced from the painted road by tools/trace_map.py; the first
+// and last sit off-screen so enemies walk in through the arch and out through
+// the gate.
 
 export interface PathPoint {
   x: number
   y: number
 }
 
-export interface TileRef {
-  col: number
-  row: number
-}
-
 export class Path {
   readonly points: PathPoint[]
   readonly totalLength: number
   private readonly cumulative: number[]
-  private readonly waypoints: number[][]
 
-  constructor(waypoints: number[][], grid: Grid) {
+  constructor(waypoints: number[][]) {
     if (waypoints.length < 2) throw new Error('Path needs at least two waypoints')
-    this.waypoints = waypoints
-
-    this.points = waypoints.map((w) => ({
-      x: grid.originX + w[0] * grid.tileSize,
-      y: grid.originY + w[1] * grid.tileSize,
-    }))
+    this.points = waypoints.map((w) => ({ x: w[0], y: w[1] }))
 
     this.cumulative = [0]
     let total = 0
@@ -69,37 +58,18 @@ export class Path {
     return Math.atan2(b.y - a.y, b.x - a.x)
   }
 
-  /**
-   * Every tile the road covers, including tiles just off the grid so the
-   * autotiler sees correct neighbours at the spawn and exit edges.
-   */
-  roadTiles(): TileRef[] {
-    const seen = new Set<string>()
-    const out: TileRef[] = []
-    const push = (col: number, row: number): void => {
-      const key = `${col},${row}`
-      if (seen.has(key)) return
-      seen.add(key)
-      out.push({ col, row })
+  /** Shortest distance from a point to the lane, for checking clearances. */
+  distanceTo(x: number, y: number): number {
+    let best = Infinity
+    for (let i = 1; i < this.points.length; i++) {
+      const a = this.points[i - 1]
+      const b = this.points[i]
+      const dx = b.x - a.x
+      const dy = b.y - a.y
+      const len2 = dx * dx + dy * dy
+      const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / len2))
+      best = Math.min(best, Math.hypot(x - (a.x + dx * t), y - (a.y + dy * t)))
     }
-
-    for (let i = 1; i < this.waypoints.length; i++) {
-      const [x0, y0] = this.waypoints[i - 1]
-      const [x1, y1] = this.waypoints[i]
-      if (y0 === y1) {
-        const [a, b] = x0 < x1 ? [x0, x1] : [x1, x0]
-        for (let x = a; x < b; x++) {
-          push(x, y0 - 1)
-          push(x, y0)
-        }
-      } else {
-        const [a, b] = y0 < y1 ? [y0, y1] : [y1, y0]
-        for (let y = a; y < b; y++) {
-          push(x0 - 1, y)
-          push(x0, y)
-        }
-      }
-    }
-    return out
+    return best
   }
 }

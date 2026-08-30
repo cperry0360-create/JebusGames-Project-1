@@ -14,19 +14,15 @@
 import Phaser from 'phaser'
 import type { ArtDef, SpriteRender } from '../types.ts'
 import artData from '../data/art.json'
-import type { RoadRole } from './SpritePicker.ts'
 
 const art = artData as ArtDef
-
-export { pickVariant, ROAD_ROLES } from './SpritePicker.ts'
-export type { RoadRole } from './SpritePicker.ts'
 
 export const ART = {
   assetRoot: art.assetRoot,
   credit: art.credit,
   /** Logical key -> path under assetRoot. Only the loader should need this. */
   files: art.files,
-  ground: art.ground,
+  map: art.map,
   ui: art.ui,
   fx: art.fx,
   decor: art.decor,
@@ -35,10 +31,6 @@ export const ART = {
 }
 
 export const SPRITE_KEYS = Object.keys(art.files)
-
-export function roadSpriteFor(role: RoadRole): string {
-  return art.autotile[role]
-}
 
 /**
  * Scales a sprite so its *artwork* is `targetHeight` tall, ignoring any

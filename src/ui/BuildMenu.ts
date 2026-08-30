@@ -24,9 +24,6 @@ export class BuildMenu {
   private container?: Phaser.GameObjects.Container
   private hitAreas: Phaser.GameObjects.Rectangle[] = []
 
-  col = -1
-  row = -1
-
   constructor(scene: Phaser.Scene, options: BuildOption[]) {
     this.scene = scene
     this.options = options
@@ -49,15 +46,11 @@ export class BuildMenu {
   open(
     worldX: number,
     worldY: number,
-    col: number,
-    row: number,
     gold: number,
     onPick: (id: string) => void,
     onPreview: (id: string | null) => void,
   ): void {
     this.close(onPreview)
-    this.col = col
-    this.row = row
 
     const rows = Math.ceil(this.options.length / COLS)
     const w = COLS * CELL_W + PAD * 2
@@ -134,8 +127,6 @@ export class BuildMenu {
     this.container?.destroy(true)
     this.container = undefined
     this.hitAreas = []
-    this.col = -1
-    this.row = -1
     onPreview?.(null)
   }
 }

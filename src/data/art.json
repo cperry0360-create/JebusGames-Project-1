@@ -1,28 +1,8 @@
 {
   "assetRoot": "assets/",
-  "credit": "Kenney Tower Defense (Top-Down), CC0. See public/assets/kenney/License.txt",
+  "credit": "Enemies, effects and scenery from Kenney Tower Defense (Top-Down), CC0. See public/assets/kenney/License.txt. The level map and the towers are original art.",
   "note": "Every sprite the game draws is named here. `files` maps a key to a path under assetRoot, so a new art pack is a path change. `render` gives a key its anchor and on-screen height, so art of any source size drops in without touching code.",
   "files": {
-    "ground-grass": "kenney/towerDefense_tile119.png",
-    "ground-grass-alt": "kenney/towerDefense_tile157.png",
-    "ground-grass-alt2": "kenney/towerDefense_tile162.png",
-    "road": "kenney/towerDefense_tile050.png",
-    "road-alt": "kenney/towerDefense_tile158.png",
-    "road-alt2": "kenney/towerDefense_tile167.png",
-    "road-edge-n": "kenney/towerDefense_tile047.png",
-    "road-edge-s": "kenney/towerDefense_tile001.png",
-    "road-edge-w": "kenney/towerDefense_tile025.png",
-    "road-edge-e": "kenney/towerDefense_tile023.png",
-    "road-outer-nw": "kenney/towerDefense_tile003.png",
-    "road-outer-ne": "kenney/towerDefense_tile004.png",
-    "road-outer-sw": "kenney/towerDefense_tile026.png",
-    "road-outer-se": "kenney/towerDefense_tile027.png",
-    "road-inner-nw": "kenney/towerDefense_tile096.png",
-    "road-inner-ne": "kenney/towerDefense_tile095.png",
-    "road-inner-sw": "kenney/towerDefense_tile073.png",
-    "road-inner-se": "kenney/towerDefense_tile072.png",
-    "plot": "kenney/towerDefense_tile015.png",
-    "plot-hover": "kenney/towerDefense_tile018.png",
     "tower-base": "kenney/towerDefense_tile181.png",
     "turret-ledger": "towers/tower_withholding.png",
     "turret-writeoff": "towers/tower_writeoff.png",
@@ -54,7 +34,8 @@
     "decor-rock3": "kenney/towerDefense_tile137.png",
     "brand-studio-card": "branding/logo_studio_card.png",
     "brand-jebusgames": "branding/logo_jebusgames.png",
-    "brand-cpplays": "branding/logo_cpplays.png"
+    "brand-cpplays": "branding/logo_cpplays.png",
+    "map-level1": "maps/map_level1.png"
   },
   "render": {
     "turret-escalation": {
@@ -112,53 +93,10 @@
       "contentHeight": 592
     }
   },
-  "ground": {
-    "grass": [
-      {
-        "key": "ground-grass",
-        "weight": 6
-      },
-      {
-        "key": "ground-grass-alt",
-        "weight": 2
-      },
-      {
-        "key": "ground-grass-alt2",
-        "weight": 2
-      }
-    ],
-    "road": [
-      {
-        "key": "road",
-        "weight": 8
-      },
-      {
-        "key": "road-alt",
-        "weight": 2
-      },
-      {
-        "key": "road-alt2",
-        "weight": 2
-      }
-    ]
-  },
-  "autotile": {
-    "edge-n": "road-edge-n",
-    "edge-s": "road-edge-s",
-    "edge-w": "road-edge-w",
-    "edge-e": "road-edge-e",
-    "outer-nw": "road-outer-nw",
-    "outer-ne": "road-outer-ne",
-    "outer-sw": "road-outer-sw",
-    "outer-se": "road-outer-se",
-    "inner-nw": "road-inner-nw",
-    "inner-ne": "road-inner-ne",
-    "inner-sw": "road-inner-sw",
-    "inner-se": "road-inner-se"
+  "map": {
+    "level1": "map-level1"
   },
   "ui": {
-    "plot": "plot",
-    "plotHover": "plot-hover",
     "towerBase": null
   },
   "fx": {

@@ -7,17 +7,17 @@ shape of each one — add a field there when you add one here.
 
 | File | Contents |
 |---|---|
-| `display.json` | Canvas size, grid tile size, background colour |
-| `map.json` | Grid size and origin, lane waypoints, hero start, scenery |
+| `display.json` | Canvas size, background colour |
+| `map.json` | Which painted plate to draw, the traced lane, the build spots, hero start |
 | `rules.json` | Starting gold and lives, wave payout |
 | `towers.json` | The six towers: cost, range, damage, fire rate, splash, slow, support |
 | `enemies.json` | The three enemies: health, armour, speed, reward, melee |
 | `heroes.json` | Cory's stats and the whole Last Stand block |
-| `waves.json` | Eight waves: composition, spawn pacing, per-group delays |
+| `waves.json` | Twelve waves: composition, spawn pacing, per-group delays |
 | `abilities.json` | The six active abilities: cooldown, radius, damage, duration |
 | `draft.json` | Draw weights, opening hand size, tower cap, unlock waves |
-| `presentation.json` | Shadows, idle bob, recoil, damage numbers, shake, scatter |
-| `art.json` | **Every sprite in the game.** Files, ground variants, autotile roles, UI, effects, scenery, brand marks |
+| `presentation.json` | Shadows, idle bob, recoil, damage numbers, shake |
+| `art.json` | **Every sprite in the game.** Files, map plates, UI, effects, scenery, brand marks |
 | `branding.json` | Splash timing, corner-mark size and placement, credits layout |
 | `credits.json` | Every line of credit copy, so adding a name never touches code |
 
@@ -31,11 +31,17 @@ shape of each one — add a field there when you add one here.
   it adds `supportDamageBonus` to every tower in radius. Bonuses stack.
 - **`enemies.*.armor` is flat damage reduction**, floored at 1 damage per hit so
   nothing is ever fully immune. `ignoresArmor` on a tower bypasses it entirely.
-- **`map.json.waypoints` are tile-lattice coordinates, not tile centres.** The
-  road is two tiles wide and its centreline runs along the boundary between two
-  rows or columns. Segments must stay axis-aligned, and the lane must never
-  narrow to one tile — the Kenney pack has no grass-on-both-sides tile, and
-  `tests/logic.test.ts` fails if the lane pinches.
+- **`map.json.waypoints` and `buildSpots` are canvas pixels.** The plate is
+  16:9 and scaled to fill the canvas, so canvas pixels are the map's own
+  coordinate space and there is no tile conversion anywhere. Both lists were
+  traced out of the painted artwork by `tools/trace_map.py`; re-run it when the
+  art changes rather than nudging numbers by hand. The first and last waypoints
+  sit off-screen so enemies walk in through the arch and out through the gate.
+- **`map.json.spotRadius` is the click target and the highlight, in one.** A
+  spot is a circle, not a tile. `tests/logic.test.ts` fails if two spots are
+  closer than twice this — overlapping highlights would make a click ambiguous
+  — or if any spot sits within `spotRadius + 20` of the lane, which would put a
+  tower in the road.
 - **`draft.damageArchetypes` / `answerArchetypes` drive the opening-hand rule.**
   DESIGN.md requires the opening two to cover a damage option and an AOE or
   control option. With a two-card hand that means a support tower can never
@@ -43,9 +49,7 @@ shape of each one — add a field there when you add one here.
   bug. `tests/draft.test.ts` checks 3000 seeds.
 - **`draft.unlockAfterWave` is `[4, 8]`** and both must land before the last
   wave or the unlock never happens; a test enforces that.
-- **`presentation.decoration.minDistanceFromRoad` protects the plots that
-  matter.** Scattered scenery blocks the tile it lands on, so it is kept away
-  from the lane; every plot able to cover the road survives at any density.
+
 ## Swapping art
 
 `art.json` is built so new art is a change to this file alone. Two fields carry
@@ -56,8 +60,8 @@ the work:
   `"kenney/towerDefense_tile203.png"` with no code change.
 - **`render`** gives a key its anchor, on-screen height and shadow width, so art
   authored at 512px lands beside art authored at 64px. `anchorY: 1` puts the
-  art's bottom edge on the tile's ground line, which is what stops a tall sprite
-  floating. A test fails if anything taller than a tile is not base-anchored.
+  art's bottom edge on its build spot's ground line, which is what stops a tall
+  sprite floating. A test fails if tall art is not base-anchored.
 
 ### How the tower values were measured
 
@@ -90,14 +94,14 @@ bottom third — the ellipse's true width — not the width at the bottom.
 scale in a 512-tall frame, so `displayHeight` is 72.8 for every one. Normalising
 each tower's base to the same width instead would have stretched the thin
 obelisk to 120px against the others' 66-79px, undoing the artist's proportions.
-72.8 puts the widest base (Write-Off) at 66px against a 64px tile — a slight
-overlap that reads as presence rather than crowding.
+72.8 puts the widest base (Write-Off) at 66px, just under the 68px build-spot
+circle — it fills its spot without spilling onto its neighbours.
 
 - **`art.json` is the only place a sprite is named.** Code asks for a *role*
-  (`ART.fx.blast`, `ART.ui.towerBase`, a weighted `ART.ground.grass` variant,
-  an autotile role) and `src/systems/Art.ts` resolves it. No `.ts` file may
+  (`ART.fx.blast`, `ART.map.level1`, `ART.ui.towerBase`) and
+  `src/systems/Art.ts` resolves it. No `.ts` file may
   contain a sprite key or a filename; `tests/manifest.test.ts` fails if one
   does, naming the file. Swapping art packs is an edit to this file alone.
-- **`art.json` filenames are real files** in `public/assets/kenney`. A test
+- **`art.json` filenames are real files** under `public/assets/`. A test
   asserts every key resolves and that nothing references a sprite that is not
   in the manifest.

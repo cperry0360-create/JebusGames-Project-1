@@ -2,7 +2,6 @@
 // front. One rule, applied every frame, instead of an isometric sort.
 
 export const GROUND_DEPTH = -1000
-export const GRID_DEPTH = -999
 /** Nudges an object above others sharing its baseline (projectiles, effects). */
 export const ABOVE = 0.5
 

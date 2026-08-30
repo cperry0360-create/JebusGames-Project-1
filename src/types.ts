@@ -4,27 +4,24 @@
 export interface DisplayDef {
   width: number
   height: number
-  tileSize: number
   backgroundColor: string
 }
 
 export interface MapDef {
-  cols: number
-  rows: number
-  originX: number
-  originY: number
-  /** How many tiles wide the road is. The autotiler assumes 2. */
-  laneWidthTiles: number
+  /** Key into art.json's map section. */
+  plate: string
+  note: string
+  heroStart: number[]
+  /** Click tolerance and highlight size for a build spot, in canvas pixels. */
+  spotRadius: number
   /**
-   * Centreline of the road, in tile-lattice coordinates (corners, not centres).
-   * Every segment is axis-aligned and the road spreads one tile either side,
-   * which is what lets the Kenney edge and corner tiles line up. The first and
-   * last points sit off-grid so enemies walk on and off screen.
+   * Both are canvas pixels, traced from the painted plate. The plate is 16:9
+   * and fills the canvas, so canvas pixels are the map's own coordinate space.
+   * The first and last waypoints sit off-screen, so enemies walk in through
+   * the arch and out through the gate.
    */
   waypoints: number[][]
-  heroStart: number[]
-  /** [col, row, spriteKey] scenery on non-road tiles. */
-  decorations: (number | string)[][]
+  buildSpots: number[][]
 }
 
 export interface RulesDef {
@@ -205,11 +202,6 @@ export interface WavesDef {
   waves: WaveDef[]
 }
 
-export interface WeightedSprite {
-  key: string
-  weight: number
-}
-
 /** Where a sprite sits and how big it draws. Absent fields take defaults. */
 export interface SpriteRender {
   anchorX: number
@@ -237,14 +229,9 @@ export interface ArtDef {
   note: string
   files: Record<string, string>
   render: Record<string, Partial<SpriteRender>>
-  ground: {
-    grass: WeightedSprite[]
-    road: WeightedSprite[]
-  }
-  autotile: Record<string, string>
+  /** Painted level plates, one per level. */
+  map: Record<string, string>
   ui: {
-    plot: string
-    plotHover: string
     /** null once towers ship as one sprite carrying their own base. */
     towerBase: string | null
   }

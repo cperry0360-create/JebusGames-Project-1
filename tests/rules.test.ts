@@ -6,7 +6,7 @@ import { damageAfterArmor, boostedDamage, slowedSpeed } from '../src/systems/Com
 
 const read = (n: string) => JSON.parse(readFileSync(new URL(`../src/data/${n}.json`, import.meta.url), 'utf8'))
 const heroes = read('heroes'), towers = read('towers'), enemies = read('enemies')
-const rules = read('rules'), waves = read('waves'), art = read('art'), map = read('map')
+const rules = read('rules'), waves = read('waves'), art = read('art')
 
 const towerList = Object.entries(towers) as [string, any][]
 const enemyList = Object.entries(enemies) as [string, any][]
@@ -210,7 +210,6 @@ test('every sprite key referenced by data exists in the art manifest', () => {
   for (const [, t] of towerList) referenced.push(t.sprite, t.shot)
   for (const [, e] of enemyList) referenced.push(e.sprite)
   referenced.push(heroes.cory.bodySprite, heroes.cory.gunSprite)
-  for (const d of map.decorations) referenced.push(d[2] as string)
   for (const k of referenced) assert.ok(keys.has(k), `data references unknown sprite key "${k}"`)
 })
 
