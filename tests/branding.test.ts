@@ -68,30 +68,91 @@ test('both credits logos fit side by side with the configured gap', () => {
   assert.ok(c.logoGap > 40, 'the two marks need breathing room between them')
 })
 
+/** Where the credits block ends, laid out exactly as CreditsScene lays it. */
+function creditsBottom(): number {
+  const c = branding.credits
+  let y = c.textTop
+  for (const section of credits.sections) {
+    y += c.sectionGap
+    y += section.entries.length * c.lineHeight
+    y += c.sectionGap
+  }
+  return y + credits.notes.length * 18
+}
+
 test('the credits text has room below the logos and does not overflow', () => {
   const c = branding.credits
+  // The heading block sits above the logos, which sit above the text.
+  assert.ok(c.subheadingY > c.headingY, 'the subheading is above the heading')
+  assert.ok(c.logoY - c.logoHeight / 2 > c.subheadingY + 12,
+    'the logos would sit on top of the subheading')
   const logoBottom = c.logoY + c.logoHeight / 2
   assert.ok(c.textTop > logoBottom, 'credit text would overlap the logos')
-  const lastLine = c.textTop + (credits.lines.length - 1) * c.lineHeight
-  assert.ok(lastLine < display.height - 110,
-    `credits run to y=${lastLine}, leaving no room for the footer and back button`)
+  const bottom = creditsBottom()
+  assert.ok(bottom < display.height - 110,
+    `credits run to y=${bottom}, leaving no room for the footer and back button`)
 })
 
+const allEntries = () => credits.sections.flatMap((s: any) => s.entries)
+
 test('the credits name Kenney and say CC0', () => {
-  const all = [credits.subheading, ...credits.lines, credits.footer].join(' ')
-  assert.match(all, /Kenney/, 'the CC0 art has to be credited by name')
-  assert.match(all, /CC0/, 'the licence has to be named')
-  assert.ok(credits.lines.some((l: string) => l.includes('Kenney') && l.includes('CC0')),
-    'one line should credit Kenney and its licence together')
+  const names = allEntries().map((e: any) => e.name)
+  assert.ok(names.some((n: string) => n.includes('Kenney') && n.includes('CC0')),
+    'one credit should name Kenney and its licence together')
 })
 
 test('credits copy is data, so adding a name never touches code', () => {
-  assert.ok(credits.lines.length >= 3, 'not much of a credits screen')
+  assert.ok(credits.sections.length >= 3, 'not much of a credits screen')
   assert.ok(credits.heading && credits.subheading && credits.footer)
-  for (const line of credits.lines) assert.equal(typeof line, 'string')
+  for (const s of credits.sections) {
+    assert.ok(s.title, 'a section with no title')
+    assert.ok(s.entries.length > 0, `section "${s.title}" has no entries`)
+    for (const e of s.entries) {
+      assert.equal(typeof e.role, 'string')
+      assert.equal(typeof e.name, 'string')
+      assert.ok(e.role && e.name, 'a credit needs both a role and a name')
+    }
+  }
+})
+
+test('the three kids are credited together, and the joke lands on two of them', () => {
+  // The contrast is the point: Courtland's real job beside the other two's
+  // total absence, in the same department.
+  const dept = credits.sections.find((s: any) =>
+    s.entries.some((e: any) => e.name.includes('Courtland')))
+  assert.ok(dept, 'Courtland is not credited')
+  const names = dept.entries.map((e: any) => e.name).join(' ')
+  assert.match(names, /Eli/, 'Eli should sit in the same department as Courtland')
+  assert.match(names, /Han/, 'Han should sit in the same department as Courtland')
+
+  const courtland = dept.entries.find((e: any) => e.name.includes('Courtland'))
+  assert.match(courtland.role, /Tester/i, "Courtland's real contribution should be his role")
+  const absent = dept.entries.find((e: any) => e.name.includes('Eli'))
+  assert.match(absent.role, /Hershey/i, 'the theme-park joke is the whole credit')
+  assert.match(credits.notes.join(' '), /Hershey/i, 'the closing note should land the joke')
+})
+
+test('everyone the brief asks for is credited', () => {
+  const all = allEntries()
+  const find = (name: string) => all.find((e: any) => e.name.includes(name))
+  for (const [name, role] of [['Claude', /Programmer/i], ['ChatGPT', /Art/i], ['Gemini', /Concept/i]] as const) {
+    const entry = find(name)
+    assert.ok(entry, `${name} is not credited`)
+    assert.match(entry.role, role, `${name} is credited with the wrong job`)
+  }
 })
 
 test('Cory works in tax, and the credits still say so', () => {
   assert.match(credits.footer, /tax/i)
   assert.doesNotMatch(credits.footer, /audit/i)
+})
+
+test('the dedication sits between the closing note and the back button', () => {
+  // It was written into the data long before anything drew it, which is how it
+  // went missing from the screen while every test still passed.
+  const c = branding.credits
+  assert.ok(c.footerY > creditsBottom(),
+    `the dedication at y=${c.footerY} would land on the closing note`)
+  assert.ok(c.footerY < display.height - 80,
+    'the dedication would land on the back button')
 })

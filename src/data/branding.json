@@ -13,11 +13,16 @@
     "y": 108
   },
   "credits": {
-    "logoHeight": 200,
-    "logoGap": 170,
-    "logoY": 242,
-    "textTop": 372,
-    "lineHeight": 24
+    "headingY": 58,
+    "subheadingY": 102,
+    "logoHeight": 100,
+    "logoGap": 150,
+    "logoY": 180,
+    "textTop": 246,
+    "lineHeight": 20,
+    "sectionGap": 18,
+    "columnGap": 14,
+    "footerY": 610
   },
   "titleBackdropDim": 0.35,
   "titleColumnWidth": 760

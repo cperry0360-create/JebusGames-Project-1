@@ -204,18 +204,39 @@ export interface BrandingDef {
   }
   titleMark: { height: number; x: number; y: number }
   credits: {
+    headingY: number
+    subheadingY: number
     logoHeight: number
     logoGap: number
     logoY: number
     textTop: number
     lineHeight: number
+    /** Space above and below a section's title. */
+    sectionGap: number
+    /** Half the gap between the role column and the name column. */
+    columnGap: number
+    /** The dedication line, sat between the closing note and the back button. */
+    footerY: number
   }
+
+}
+
+export interface CreditEntry {
+  role: string
+  name: string
+}
+
+export interface CreditSection {
+  title: string
+  entries: CreditEntry[]
 }
 
 export interface CreditsDef {
   heading: string
   subheading: string
-  lines: string[]
+  sections: CreditSection[]
+  /** The closing joke, under the credits proper. */
+  notes: string[]
   footer: string
 }
 

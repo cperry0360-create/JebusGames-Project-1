@@ -1,17 +1,62 @@
 {
   "heading": "CREDITS",
   "subheading": "Courjahan Defense",
-  "lines": [
-    "A JebusGames project, in collaboration with CP Plays.",
-    "",
-    "Projectiles, effects, scenery and the hero:",
-    "Kenney Tower Defense (Top-Down) pack — CC0",
-    "Type: Kenney Font Package — CC0",
-    "kenney.nl",
-    "",
-    "Level map, tower and enemy art: original.",
-    "Sound cues: synthesised for this project.",
-    "Built with Phaser 3."
+  "sections": [
+    {
+      "title": "MADE BY",
+      "entries": [
+        {
+          "role": "Lead Programmer",
+          "name": "Claude"
+        },
+        {
+          "role": "Art",
+          "name": "ChatGPT"
+        },
+        {
+          "role": "Early Concept Art",
+          "name": "Gemini"
+        }
+      ]
+    },
+    {
+      "title": "THE TESTING DEPARTMENT",
+      "entries": [
+        {
+          "role": "Lead Game Tester, CP Plays",
+          "name": "Courtland"
+        },
+        {
+          "role": "Field Research, Hersheypark Division",
+          "name": "Eli and Han"
+        }
+      ]
+    },
+    {
+      "title": "ASSETS",
+      "entries": [
+        {
+          "role": "Projectiles, effects and scenery",
+          "name": "Kenney Tower Defense (Top-Down) \u2014 CC0"
+        },
+        {
+          "role": "Type",
+          "name": "Kenney Font Package \u2014 CC0"
+        },
+        {
+          "role": "Sound",
+          "name": "Synthesised for this project"
+        },
+        {
+          "role": "Engine",
+          "name": "Phaser 3"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Field Research was conducted on location, all day, at Hersheypark.",
+    "No findings were submitted. The rides were reportedly excellent."
   ],
   "footer": "Heroes are named after the family. Cory works in tax."
 }

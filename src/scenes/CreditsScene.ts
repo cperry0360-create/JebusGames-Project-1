@@ -23,12 +23,12 @@ export class CreditsScene extends Phaser.Scene {
     this.add.rectangle(0, 0, W, H, 0x10161d).setOrigin(0, 0)
     this.decorateBackdrop()
 
-    this.add.text(W / 2, 74, CREDITS.heading, {
+    this.add.text(W / 2, c.headingY, CREDITS.heading, {
       fontFamily: FONT_DISPLAY, fontSize: '46px', color: COLOR.ink,
       stroke: '#0d1016', strokeThickness: 6,
     }).setOrigin(0.5)
 
-    this.add.text(W / 2, 126, CREDITS.subheading, {
+    this.add.text(W / 2, c.subheadingY, CREDITS.subheading, {
       fontFamily: FONT_UI, fontSize: '16px', color: COLOR.amber,
     }).setOrigin(0.5)
 
@@ -44,25 +44,40 @@ export class CreditsScene extends Phaser.Scene {
     const right = this.add.image(rightX, c.logoY, ART.brand.cpPlays)
     fitContentHeight(right, ART.brand.cpPlays, c.logoHeight)
 
-    this.add.text(W / 2, c.logoY, '×', {
-      fontFamily: FONT_DISPLAY, fontSize: '30px', color: COLOR.dim,
-    }).setOrigin(0.5).setAlpha(0.7)
-
-    // Room for text credits below; lines live in credits.json so adding a
-    // name never means touching code.
-    CREDITS.lines.forEach((line, i) => {
-      if (line === '') return
-      const isAttribution = line.includes('CC0')
-      this.add.text(W / 2, c.textTop + i * c.lineHeight, line, {
-        fontFamily: FONT_UI,
-        fontSize: isAttribution ? '15px' : '14px',
-        color: isAttribution ? COLOR.ink : COLOR.dim,
+    // Credits proper: a role on the left of the centre line and a name on the
+    // right, so the three kids read as one department and the difference
+    // between Courtland's contribution and the other two's is the whole joke.
+    let y = c.textTop
+    for (const section of CREDITS.sections) {
+      this.add.text(W / 2, y, section.title, {
+        fontFamily: FONT_DISPLAY, fontSize: '15px', color: COLOR.amber,
       }).setOrigin(0.5)
+      y += c.sectionGap
+
+      for (const entry of section.entries) {
+        this.add.text(W / 2 - c.columnGap, y, entry.role, {
+          fontFamily: FONT_UI, fontSize: '13px', color: COLOR.dim,
+        }).setOrigin(1, 0.5)
+        this.add.text(W / 2 + c.columnGap, y, entry.name, {
+          fontFamily: FONT_UI, fontSize: '14px', color: COLOR.ink,
+        }).setOrigin(0, 0.5)
+        y += c.lineHeight
+      }
+      y += c.sectionGap
+    }
+
+    // The closing note, which is the punchline rather than a credit.
+    CREDITS.notes.forEach((note, i) => {
+      this.add.text(W / 2, y + i * 18, note, {
+        fontFamily: FONT_UI, fontSize: '12px', color: COLOR.good,
+      }).setOrigin(0.5).setAlpha(0.85)
     })
 
-    this.add.text(W / 2, H - 96, CREDITS.footer, {
-      fontFamily: FONT_UI, fontSize: '12px', color: COLOR.dim,
-    }).setOrigin(0.5).setAlpha(0.65)
+    // The dedication. It is the sign-off, so it sits on its own above the
+    // button rather than joining the list of credits.
+    this.add.text(W / 2, c.footerY, CREDITS.footer, {
+      fontFamily: FONT_UI, fontSize: '13px', color: COLOR.ink,
+    }).setOrigin(0.5).setAlpha(0.7)
 
     button(this, W / 2, H - 46, 200, 46, 'BACK', () => this.scene.start('Title'), 18)
     this.input.keyboard?.on('keydown-ESC', () => this.scene.start('Title'))
