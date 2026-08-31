@@ -4,6 +4,7 @@
 import Phaser from 'phaser'
 import presentationData from '../data/presentation.json'
 import { ART, renderFor } from './Art.ts'
+import { EFFECT_MS, playEffect } from './Effects.ts'
 
 export const PRESENTATION = presentationData
 
@@ -85,28 +86,20 @@ export function floatingDamage(
   })
 }
 
-/** Puff left behind when something dies. */
+/**
+ * What is left where something died.
+ *
+ * One animation, not three sprites thrown outward: the old version faked a
+ * spread by scattering three copies of a single tile, and the sheet already
+ * contains that spread in its frames.
+ */
 export function deathPuff(scene: Phaser.Scene, x: number, y: number, tint = 0xf6ecd9): void {
-  for (let i = 0; i < 3; i++) {
-    const a = Math.random() * Math.PI * 2
-    const puff = scene.add
-      .image(x, y, ART.fx.spark)
-      .setTint(tint)
-      .setDepth(y + 3)
-      .setScale(0.35)
-      .setAlpha(0.9)
-    scene.tweens.add({
-      targets: puff,
-      x: x + Math.cos(a) * 20,
-      y: y + Math.sin(a) * 20 - 8,
-      scale: 0.05,
-      alpha: 0,
-      angle: 140,
-      duration: PRESENTATION.deathPuffMs,
-      ease: 'Quad.easeOut',
-      onComplete: () => puff.destroy(),
-    })
-  }
+  playEffect(scene, ART.fx.puff, x, y - 8, {
+    size: EFFECT_MS.deathPuffSize,
+    depth: y + 3,
+    durationMs: EFFECT_MS.deathPuffMs,
+    tint: tint === 0xf6ecd9 ? undefined : tint,
+  })
 }
 
 /** Brief flash at a tower's muzzle when it fires. */

@@ -1,6 +1,6 @@
 {
   "assetRoot": "assets/",
-  "credit": "Projectiles, effects and scenery from Kenney Tower Defense (Top-Down), CC0. See public/assets/kenney/License.txt. The level map, the towers, the enemies, the hero and the gnomes are original art.",
+  "credit": "Projectiles, the muzzle flash and the title scenery from Kenney Tower Defense (Top-Down), CC0. See public/assets/kenney/License.txt. The level map, the towers, the enemies, the hero, the gnomes and the effect animations are original art.",
   "note": "Every sprite the game draws is named here. `files` maps a key to a path under assetRoot, so a new art pack is a path change. `render` gives a key its anchor and on-screen height, so art of any source size drops in without touching code.",
   "files": {
     "turret-ledger": "towers/tower_withholding.png",
@@ -17,14 +17,12 @@
     "shot-small": "kenney/towerDefense_tile272.png",
     "shot-ring": "kenney/towerDefense_tile273.png",
     "shot-heavy": "kenney/towerDefense_tile274.png",
-    "shot-pale": "kenney/towerDefense_tile275.png",
     "shot-rocket": "kenney/towerDefense_tile251.png",
     "shot-rocket-big": "kenney/towerDefense_tile252.png",
-    "fx-spark": "kenney/towerDefense_tile022.png",
+    "fx-explosion": "fx/fx_explosion.png",
+    "fx-hit-spark": "fx/fx_hit_spark.png",
+    "fx-death-puff": "fx/fx_death_puff.png",
     "fx-flame-small": "kenney/towerDefense_tile295.png",
-    "fx-flame": "kenney/towerDefense_tile296.png",
-    "fx-flame-thin": "kenney/towerDefense_tile297.png",
-    "fx-flame-wide": "kenney/towerDefense_tile298.png",
     "decor-bush": "kenney/towerDefense_tile130.png",
     "decor-shrub": "kenney/towerDefense_tile131.png",
     "decor-plant": "kenney/towerDefense_tile134.png",
@@ -349,6 +347,27 @@
       "shadowWidth": 24.0,
       "contentWidth": 258,
       "contentHeight": 300
+    },
+    "fx-explosion": {
+      "sheet": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "frames": 6
+      }
+    },
+    "fx-hit-spark": {
+      "sheet": {
+        "frameWidth": 192,
+        "frameHeight": 192,
+        "frames": 4
+      }
+    },
+    "fx-death-puff": {
+      "sheet": {
+        "frameWidth": 192,
+        "frameHeight": 192,
+        "frames": 4
+      }
     }
   },
   "map": {
@@ -371,8 +390,9 @@
     "panel": "ui-panel-dialog"
   },
   "fx": {
-    "spark": "fx-spark",
-    "blast": "fx-flame",
+    "spark": "fx-hit-spark",
+    "blast": "fx-explosion",
+    "puff": "fx-death-puff",
     "ember": "fx-flame-small",
     "muzzle": "fx-flame-small"
   },

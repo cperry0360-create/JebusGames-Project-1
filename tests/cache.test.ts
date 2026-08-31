@@ -36,7 +36,10 @@ test('runtime assets are stamped, because Vite does not hash them', () => {
   // without a query stamp a phone keeps last week's art and audio.
   const artLoader = read('../src/systems/ArtLoader.ts')
   const audio = read('../src/systems/Audio.ts')
-  assert.match(artLoader, /load\.image\([^,]+,\s*stamped\(/, 'art URLs are not stamped')
+  // One stamped URL, used for both a plain image and a spritesheet.
+  assert.match(artLoader, /const url = stamped\(/, 'art URLs are not stamped')
+  assert.match(artLoader, /load\.image\(key, url\)/, 'plain images do not use the stamped URL')
+  assert.match(artLoader, /load\.spritesheet\(key, url,/, 'sheets do not use the stamped URL')
   assert.match(audio, /load\.audio\([^,]+,\s*stamped\(/, 'audio URLs are not stamped')
 })
 

@@ -377,7 +377,10 @@ test('letting the boss through is nearly the run, but not quite', () => {
 test('every sprite key referenced by data exists in the art manifest', () => {
   const keys = new Set(Object.keys(art.files))
   const referenced: string[] = []
-  for (const [, t] of towerList) referenced.push(t.sprite, t.shot)
+  for (const [, t] of towerList) {
+    referenced.push(t.sprite)
+    if (t.shot) referenced.push(t.shot)
+  }
   for (const [, e] of enemyList) referenced.push(e.sprite)
   referenced.push(heroes.cory.bodySprite, heroes.cory.ultimateSprite, ...heroes.cory.fighterSprites)
   for (const k of referenced) assert.ok(keys.has(k), `data references unknown sprite key "${k}"`)

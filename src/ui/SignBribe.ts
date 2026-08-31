@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import type { SignBribeDef, SpriteRender } from '../types.ts'
+import { EFFECT_MS, playEffect } from '../systems/Effects.ts'
 import { ART, renderFor } from '../systems/Art.ts'
 import { COLOR, FONT_UI } from './Theme.ts'
 
@@ -122,15 +123,17 @@ export class SignBribe {
       yoyo: true, ease: 'Back.easeOut',
     })
 
-    for (let i = 0; i < 10; i++) {
-      const a = (i / 10) * Math.PI * 2
-      const bit = this.scene.add.image(x, y, ART.fx.spark).setScale(0.5).setDepth(this.sprite.depth + 1)
-      this.scene.tweens.add({
-        targets: bit,
-        x: x + Math.cos(a) * 42,
-        y: y + Math.sin(a) * 42 - 10,
-        alpha: 0, scale: 0.1, duration: 520, ease: 'Quad.easeOut',
-        onComplete: () => bit.destroy(),
+    // A ring of sparks around the board. Each one is the hit-spark animation
+    // rather than a tile flung outward and shrunk, so they pop where they land.
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2
+      this.scene.time.delayedCall(i * 34, () => {
+        playEffect(this.scene, ART.fx.spark,
+          x + Math.cos(a) * 40, y + Math.sin(a) * 40 - 10, {
+            size: EFFECT_MS.bribeSparkSize,
+            depth: this.sprite.depth + 1,
+            durationMs: EFFECT_MS.hitSparkMs,
+          })
       })
     }
 

@@ -784,6 +784,146 @@ async function run() {
     return
   }
 
+  if (scenario === 'fx') {
+    // The new effect sheets, on the board.
+    const ART = (await import('./js/data/art.json', { with: { type: 'json' } })).default
+    for (const k of ['fx-explosion', 'fx-hit-spark', 'fx-death-puff']) {
+      const tex = game.textures.get(k)
+      note(k + ': ' + tex.frameTotal + ' frames (incl __BASE), anim registered=' +
+        game.anims.exists(k) + ', frame size ' +
+        JSON.stringify(ART.render[k].sheet))
+    }
+
+    g.status.peanuts = 99999
+    const cam0 = g.cameras.main
+    const spot = SPOTS.findIndex((p) => cam0.worldView.contains(p[0], p[1]))
+    const [px, py] = toScreen(SPOTS[spot][0], SPOTS[spot][1])
+    await click(px, py); await sleep(350)
+    const b = g.menu.hitAreas[0].getBounds()
+    await move(b.centerX, b.centerY)
+    mouse('mousedown', b.centerX, b.centerY); await sleep(300)
+    mouse('mouseup', b.centerX, b.centerY); await sleep(600)
+    // A splash tower, so blast() runs.
+    const t = g.towers[0]
+    t.def = g.towerDefs.escalation
+    note('tower: ' + t.def.name + ' splash=' + t.splashRadius)
+
+    g.startWave()
+    await until(() => g.enemies.length > 1, 30000)
+    await sleep(400)
+    const e = g.enemies.reduce((a, b2) => (a.distance > b2.distance ? a : b2))
+    g.cameras.main.centerOn(e.x, e.y)
+
+    // Every call site, one at a time, with a frame captured mid-animation.
+    g.blast(e.x, e.y, t.splashRadius)
+    await sleep(90); await shot('fx-01-tower-splash')
+    await sleep(400)
+
+    g.impactSpark(e.x, e.y)
+    await sleep(80); await shot('fx-02-hit-spark')
+    await sleep(300)
+
+    const P = await import('./js/systems/Presentation.js')
+    P.deathPuff(g, e.x, e.y)
+    await sleep(120); await shot('fx-03-death-puff')
+    await sleep(300)
+
+    // And an ability blast, which is the big one.
+    g.status.abilities = ['molotov', 'glacier']
+    g.cooldowns.register('molotov', 1)
+    g.cooldowns.reset('molotov')
+    g.fireAbility('molotov', e.x, e.y)
+    await sleep(120); await shot('fx-04-molotov')
+    await sleep(400)
+
+    // Hold each effect on its peak frame so the art can actually be seen: a
+    // screenshot round trip is slower than a 280ms animation.
+    const FX = await import('./js/systems/Effects.js')
+    const holds = [
+      ['fx-05-explosion-peak', 'fx-explosion', FX.sizeForRadius(88), 2],
+      ['fx-06-hit-spark-peak', 'fx-hit-spark', 46, 1],
+      ['fx-07-death-puff-peak', 'fx-death-puff', 62, 1],
+    ]
+    for (const [name, key, size, frame] of holds) {
+      const sp = FX.playEffect(g, key, e.x, e.y, { size, depth: 99999, durationMs: 4000 })
+      g.syncCameras()
+      await sleep(120)
+      sp.anims.pause(sp.anims.currentAnim.frames[frame])
+      await sleep(120)
+      note(name + ': frame ' + frame + ' at ' + Math.round(sp.displayWidth) + 'x' +
+        Math.round(sp.displayHeight) + ' world px')
+      await shot(name)
+      sp.destroy()
+      await sleep(120)
+    }
+
+    // Nothing left behind: an effect that does not clean itself up leaks.
+    const before = g.children.list.length
+    for (let i = 0; i < 12; i++) { g.impactSpark(e.x + i * 4, e.y); await sleep(30) }
+    await sleep(900)
+    note('sprites left after 12 sparks: ' + (g.children.list.length - before) + ' (must be 0)')
+    note('page errors: ' + log.filter((l) => l.startsWith('PAGE ERROR')).length)
+    return
+  }
+
+  if (scenario === 'herohp') {
+    // "Cory dies almost immediately." Measured: what actually lands on him,
+    // against what the data says should.
+    const E = (await import('./js/data/enemies.json', { with: { type: 'json' } })).default
+    const H = (await import('./js/data/heroes.json', { with: { type: 'json' } })).default.cory
+    note('hero maxHealth=' + H.maxHealth + ' blockCapacity=' + H.blockCapacity +
+      ' blockRange=' + H.blockRange)
+
+    // Post him on the lane, where the tester has him.
+    const post = g.lane.pointAt(g.lane.totalLength * 0.5)
+    g.hero.setRally(post.x, post.y)
+    await sleep(2500)
+
+    // Count every blow that lands on him, and what it cost.
+    const hits = []
+    const realHurt = g.hero.hurt.bind(g.hero)
+    g.hero.hurt = (amt) => { hits.push({ t: performance.now(), amt }); return realHurt(amt) }
+
+    const waveToTest = Number(q.get('wave') || 4) - 1
+    g.status.wave = waveToTest
+    g.status.peanuts = 99999
+    g.startWave()
+    const t0 = performance.now()
+    await until(() => g.enemies.some((e) => Math.hypot(e.x - g.hero.x, e.y - g.hero.y) < H.blockRange), 40000)
+    const engaged = performance.now()
+    note('wave ' + (waveToTest + 1) + ' (' + g.status.waveName + ') — first contact at ' +
+      ((engaged - t0) / 1000).toFixed(1) + 's')
+
+    let peakBlocked = 0
+    let peakNear = 0
+    while (g.hero.health > 0 && !g.hero.down && performance.now() - engaged < 30000) {
+      const near = g.enemies.filter((e) => e.alive &&
+        Math.hypot(e.x - g.hero.x, e.y - g.hero.y) < H.blockRange).length
+      const blocked = g.enemies.filter((e) => e.blocker === g.hero).length
+      if (near > peakNear) peakNear = near
+      if (blocked > peakBlocked) peakBlocked = blocked
+      await sleep(100)
+    }
+    const died = performance.now()
+    const secs = (died - engaged) / 1000
+    const total = hits.reduce((a, b) => a + b.amt, 0)
+    note('Cory took ' + hits.length + ' hits for ' + Math.round(total) + ' damage in ' +
+      secs.toFixed(1) + 's real (' + (secs * 1.4).toFixed(1) + ' game-seconds)')
+    note('  = ' + (total / (secs * 1.4)).toFixed(1) + ' damage per game-second, ' +
+      'from at most ' + peakBlocked + ' blocked and ' + peakNear + ' within block range')
+    note('  down=' + g.hero.down + ' health=' + Math.round(g.hero.health))
+    // What the data says it should have been.
+    const worst = Math.max(...Object.values(E).map((x) => x.damage / (x.attackInterval || 99)))
+    note('  data says: at most ' + H.blockCapacity + ' attackers x ' + worst.toFixed(1) +
+      ' dps = ' + (worst * H.blockCapacity).toFixed(1) + ' damage per game-second, ' +
+      'so ' + (H.maxHealth / (worst * H.blockCapacity)).toFixed(0) + ' game-seconds to kill him')
+    // The gap between those two numbers is the bug.
+    const gaps = []
+    for (let i = 1; i < hits.length; i++) gaps.push(Math.round(hits[i].t - hits[i - 1].t))
+    note('  gaps between hits (ms): ' + JSON.stringify(gaps.slice(0, 30)))
+    return
+  }
+
   if (scenario === 'revive') {
     // He goes down, a marker counts him down where he comes back, and he
     // walks back on at full health.

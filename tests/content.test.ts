@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { specPoints, specSummary } from '../src/systems/Upgrades.ts'
 
 const url = (p: string) => new URL(p, import.meta.url)
@@ -13,7 +13,11 @@ const ART_KEYS = new Set(Object.keys(art.files))
 
 test('every sprite key referenced anywhere resolves to a real file', () => {
   const refs: Array<[string, string]> = []
-  for (const [id, t] of Object.entries(towers) as [string, any][]) refs.push([`tower ${id}`, t.sprite], [`tower ${id} shot`, t.shot])
+  for (const [id, t] of Object.entries(towers) as [string, any][]) {
+    refs.push([`tower ${id}`, t.sprite])
+    // A support tower never fires and names no projectile.
+    if (t.shot) refs.push([`tower ${id} shot`, t.shot])
+  }
   for (const [id, e] of Object.entries(enemies) as [string, any][]) refs.push([`enemy ${id}`, e.sprite])
   for (const [id, a] of Object.entries(abilities) as [string, any][]) refs.push([`ability ${id}`, a.icon])
   for (const [id, h] of Object.entries(heroes) as [string, any][]) {
@@ -40,7 +44,7 @@ test('the sprite keys the scenes ask for by role are all in the manifest', () =>
   // data files, so nothing else checks that they resolve.
   const hardcoded = [
     'map-level1',
-    'fx-spark', 'fx-flame', 'fx-flame-small',
+    'fx-explosion', 'fx-hit-spark', 'fx-death-puff', 'fx-flame-small',
     'decor-bush', 'decor-shrub', 'decor-plant', 'decor-rock', 'decor-rock2', 'decor-rock3',
   ]
   for (const k of hardcoded) assert.ok(ART_KEYS.has(k), `code uses sprite key "${k}" which art.json lacks`)
@@ -238,7 +242,7 @@ test('nothing in the shipped data calls the currency gold', () => {
 })
 
 test('the fonts and sound cues are bundled', () => {
-  for (const f of ['KenneyFuture.ttf', 'KenneyFutureNarrow.ttf', 'KenneyMiniSquare.ttf', 'License.txt']) {
+  for (const f of ['KenneyFuture.ttf', 'License.txt']) {
     assert.ok(existsSync(url(`../public/assets/fonts/${f}`)), `missing font asset ${f}`)
   }
   for (const s of ['sfx-dadmode', 'sfx-build', 'sfx-leak', 'sfx-cast']) {
@@ -684,4 +688,37 @@ test('cutting the wave counts did not quietly cut the economy with them', () => 
   const ratio = totalIncome / totalHealth
   assert.ok(ratio >= 0.13,
     `the run pays ${ratio.toFixed(3)} peanuts per point of enemy health, which is too thin`)
+})
+
+test('nothing ships a font or a pack file the game never asks for', () => {
+  // 282 unused pack PNGs, two preloaded faces no style referenced, and an art
+  // reference sheet were all being copied into the deploy. Public/ is copied
+  // verbatim, so anything left in it is bytes a phone downloads for nothing.
+  const html = readFileSync(url('../index.html'), 'utf8')
+  const faces = [...html.matchAll(/font-family:\s*'([^']+)'/g)].map((m) => m[1])
+  const files = readdirSync(url('../public/assets/fonts')).filter((f) => f.endsWith('.ttf'))
+  for (const f of files) {
+    const face = f.replace('.ttf', '')
+    assert.ok(faces.includes(face), `${f} ships but no @font-face declares it`)
+  }
+  for (const face of faces) {
+    assert.ok(files.includes(`${face}.ttf`), `@font-face declares ${face} with no file`)
+  }
+
+  // Every pack file left under public/ must be one the manifest names.
+  const named = new Set(Object.values(art.files as Record<string, string>)
+    .filter((p) => p.startsWith('kenney/'))
+    .map((p) => p.slice('kenney/'.length)))
+  for (const f of readdirSync(url('../public/assets/kenney'))) {
+    if (f === 'License.txt') continue
+    assert.ok(named.has(f), `public/assets/kenney/${f} is not in the manifest`)
+  }
+
+  // And nothing under public/ is a working file: an underscore prefix is how
+  // the art references were marked, and they belong in reference/.
+  for (const dir of ['fx', 'units', 'props', 'hero', 'enemies', 'towers']) {
+    for (const f of readdirSync(url(`../public/assets/${dir}`))) {
+      assert.ok(!f.startsWith('_'), `public/assets/${dir}/${f} is a reference file in the deploy`)
+    }
+  }
 })

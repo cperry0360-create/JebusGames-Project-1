@@ -2,6 +2,7 @@ import Phaser from 'phaser'
 import displayData from '../data/display.json'
 import { queueArt, SPRITE_KEYS } from '../systems/ArtLoader.ts'
 import { initAudio, queueAudio } from '../systems/Audio.ts'
+import { registerEffectAnims } from '../systems/Effects.ts'
 import { ensureShadowTexture } from '../systems/Presentation.ts'
 import { ensureGrey } from '../systems/Desaturate.ts'
 import { ART } from '../systems/Art.ts'
@@ -52,6 +53,9 @@ export class BootScene extends Phaser.Scene {
     }
     // Every ground shadow reuses one generated texture; build it once here.
     ensureShadowTexture(this)
+    // Phaser's animation manager is global, so the effect animations are
+    // registered once and every scene can play them.
+    registerEffectAnims(this)
     // Greyed copies of anything the UI shows as unavailable, built once rather
     // than per frame.
     for (const key of ART.greyable) ensureGrey(this, key)

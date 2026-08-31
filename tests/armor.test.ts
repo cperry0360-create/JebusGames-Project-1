@@ -169,3 +169,29 @@ test('a stun is not routed through the slow system', () => {
   assert.match(enemy, /if \(this\.stunRemaining > 0\) \{/,
     'a stunned enemy can still act')
 })
+
+test('losing a block slot for a frame does not buy a free swing', () => {
+  // Measured before this was fixed: Cory took 48 hits for 336 damage in 5.1
+  // game-seconds against a data ceiling of 27.7 per second — twenty
+  // consecutive hits 17ms apart, one per frame. A blocked enemy stops
+  // advancing while the ones behind it walk past, so the block slot changes
+  // hands constantly, and resetting the swing timer on every unblocked frame
+  // turned each handover into an instant attack.
+  const enemy = readFileSync(new URL('../src/entities/Enemy.ts', import.meta.url), 'utf8')
+  const walking = enemy.slice(enemy.indexOf("this.status = 'walking'"),
+    enemy.indexOf('if (this.distance >= this.lane.totalLength)'))
+  assert.ok(walking.length > 0, "the walking branch was not found")
+  assert.ok(!/this\.attackTimer = 0/.test(walking),
+    'the swing timer is reset when an enemy stops fighting, which pays for a free hit on re-engaging')
+})
+
+test('the hero can survive the wave he is posted on', () => {
+  // Not a balance claim, a sanity floor: with every attacker the design allows
+  // on him at once, he has to last long enough for a player to react.
+  const cory = heroes.cory
+  const worst = Math.max(...Object.values(enemies as Record<string, any>)
+    .map((e) => (e.attackInterval > 0 ? e.damage / e.attackInterval : 0)))
+  const seconds = cory.maxHealth / (worst * cory.blockCapacity)
+  assert.ok(seconds >= 10,
+    `${cory.name} lasts ${seconds.toFixed(1)}s against ${cory.blockCapacity} of the heaviest attacker`)
+})

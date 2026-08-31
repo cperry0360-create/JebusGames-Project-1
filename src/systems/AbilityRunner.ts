@@ -6,6 +6,7 @@ import type { AbilityDef, ServerNukeDef } from '../types.ts'
 import { withinRadius } from './Targeting.ts'
 import { Enemy } from '../entities/Enemy.ts'
 import { ART } from './Art.ts'
+import { EFFECT_MS, playEffect, sizeForRadius } from './Effects.ts'
 
 export interface AbilityContext {
   scene: Phaser.Scene
@@ -35,15 +36,17 @@ export function castAbility(id: string, def: AbilityDef, x: number, y: number, c
   }
 }
 
-function boom(ctx: AbilityContext, x: number, y: number, radius: number, tint = 0xffffff): void {
-  const flame = ctx.scene.add.image(x, y, ART.fx.blast).setDepth(y + 5).setScale(radius / 90).setTint(tint)
-  ctx.scene.tweens.add({
-    targets: flame, scale: radius / 44, alpha: 0, duration: 320,
-    ease: 'Quad.easeOut', onComplete: () => flame.destroy(),
+function boom(ctx: AbilityContext, x: number, y: number, radius: number, tint?: number): void {
+  // Sized to the blast it is doing and then left alone — the frames grow and
+  // decay themselves. Untinted by default: the explosion art is already
+  // orange, and tinting it orange again only muddies it.
+  playEffect(ctx.scene, ART.fx.blast, x, y, {
+    size: sizeForRadius(radius), depth: y + 5, durationMs: EFFECT_MS.blastMs, tint,
   })
   for (let i = 0; i < 6; i++) {
     const a = (Math.PI * 2 * i) / 6
-    const s = ctx.scene.add.image(x, y, ART.fx.ember).setDepth(y + 5).setScale(0.7).setTint(tint)
+    const s = ctx.scene.add.image(x, y, ART.fx.ember).setDepth(y + 5).setScale(0.7)
+    if (tint !== undefined) s.setTint(tint)
     ctx.scene.tweens.add({
       targets: s, x: x + Math.cos(a) * radius * 0.8, y: y + Math.sin(a) * radius * 0.8,
       alpha: 0, scale: 0.2, duration: 380, onComplete: () => s.destroy(),
@@ -143,7 +146,7 @@ function meteor(def: AbilityDef, x: number, y: number, ctx: AbilityContext): voi
     ctx.scene.time.delayedCall(i * gap, () => {
       telegraph(ctx, mx, my, blast, lead)
       ctx.scene.time.delayedCall(lead, () => {
-        boom(ctx, mx, my, blast, 0xffc07a)
+        boom(ctx, mx, my, blast)
         ctx.scene.cameras.main.shake(120, 0.004)
         for (const e of withinRadius(ctx.enemies(), mx, my, blast)) {
           ctx.damage(e, def.damage, def.ignoresArmor)
@@ -170,9 +173,8 @@ function chain(def: AbilityDef, x: number, y: number, ctx: AbilityContext): void
     bolts.lineBetween(fromX, fromY, next.x, next.y)
     hit.add(next)
     ctx.damage(next, def.damage, def.ignoresArmor)
-    const spark = ctx.scene.add.image(next.x, next.y, ART.fx.spark).setDepth(next.y + 6).setScale(0.7)
-    ctx.scene.tweens.add({
-      targets: spark, scale: 0.1, alpha: 0, duration: 240, onComplete: () => spark.destroy(),
+    playEffect(ctx.scene, ART.fx.spark, next.x, next.y, {
+      size: EFFECT_MS.chainSparkSize, depth: next.y + 6, durationMs: EFFECT_MS.hitSparkMs,
     })
     fromX = next.x
     fromY = next.y

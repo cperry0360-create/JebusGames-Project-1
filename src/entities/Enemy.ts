@@ -204,7 +204,18 @@ export class Enemy extends Phaser.GameObjects.Container {
       }
     } else {
       this.status = 'walking'
-      this.attackTimer = 0
+      // The swing timer is NOT reset here, and that is the whole point.
+      //
+      // Resetting it meant an enemy that lost its block slot for one frame and
+      // regained it on the next attacked instantly, for free — and the slot
+      // changes hands constantly, because a blocked enemy stops advancing
+      // while the ones behind it keep walking and overtake it. Cory was
+      // measured taking 48 hits for 336 damage in 5.1 game-seconds against a
+      // data ceiling of 27.7 damage per second: twenty consecutive hits 17ms
+      // apart, one per frame. Carrying the timer means a swing costs the same
+      // whether or not the target shuffled out of range in the middle of it.
+      //
+      // The field starts at 0, so a first engagement still lands immediately.
       this.distance += slowedSpeed(this.def.speed, this.slowFactor, this.slowed) * dt
       const p = this.lane.pointAt(this.distance)
       this.setPosition(p.x, p.y)

@@ -25,9 +25,10 @@ logEvent('boot', VERSION_LABEL)
  */
 async function waitForFonts(): Promise<void> {
   if (!('fonts' in document)) return
-  const faces = ['KenneyFuture', 'KenneyFutureNarrow', 'KenneyMiniSquare']
+  // One face. The other two in the Kenney package were declared, preloaded
+  // and never referenced by a style — 58 KB the player waited on for nothing.
   try {
-    await Promise.all(faces.map((f) => document.fonts.load(`16px ${f}`)))
+    await document.fonts.load('16px KenneyFuture')
     await document.fonts.ready
   } catch {
     // A missing font is a cosmetic problem, not a reason to refuse to boot.

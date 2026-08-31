@@ -9,6 +9,17 @@
     "textureWidth": 128,
     "textureHeight": 52
   },
+  "effects": {
+    "blastMs": 320,
+    "splashMs": 280,
+    "hitSparkMs": 200,
+    "deathPuffMs": 300,
+    "hitSparkSize": 46,
+    "chainSparkSize": 42,
+    "haymakerSparkSize": 68,
+    "bribeSparkSize": 34,
+    "deathPuffSize": 62
+  },
   "facing": {
     "deadZone": 0.15
   },
@@ -38,7 +49,6 @@
     "fontSize": 15,
     "critFontSize": 21
   },
-  "deathPuffMs": 340,
   "shake": {
     "leakMs": 160,
     "leakIntensity": 0.005,

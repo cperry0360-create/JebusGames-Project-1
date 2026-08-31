@@ -248,7 +248,6 @@
     "name": "Tax Shelter",
     "archetype": "support",
     "sprite": "turret-shelter",
-    "shot": "shot-pale",
     "cost": 140,
     "range": 0,
     "damage": 0,

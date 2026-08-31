@@ -19,6 +19,7 @@ import { WaveSpawner } from '../systems/WaveSpawner.ts'
 import { withinRadius, pickNearest } from '../systems/Targeting.ts'
 import { GROUND_DEPTH } from '../systems/DepthSort.ts'
 import { ART, applyRender } from '../systems/Art.ts'
+import { EFFECT_MS, playEffect, sizeForRadius } from '../systems/Effects.ts'
 import { Cooldowns } from '../systems/Cooldowns.ts'
 import { unlockedTowerCount } from '../systems/Draft.ts'
 import { runState, setRunState } from '../systems/RunState.ts'
@@ -1445,9 +1446,9 @@ this.armReadyCountdown()
     target.knockBack(hm.knockbackPixels)
     const s = PRESENTATION.shake
     this.cameras.main.shake(s.haymakerMs, s.haymakerIntensity)
-    const punch = this.add.image(target.x, target.centreY, ART.fx.spark).setDepth(target.y + 8).setScale(1.2)
-    this.tweens.add({
-      targets: punch, scale: 0.2, alpha: 0, angle: 200, duration: 300, onComplete: () => punch.destroy(),
+    playEffect(this, ART.fx.spark, target.x, target.centreY, {
+      size: EFFECT_MS.haymakerSparkSize, depth: target.y + 8,
+      durationMs: EFFECT_MS.hitSparkMs + 80,
     })
     this.status.message = `${hm.name}!`
   }
@@ -1935,19 +1936,17 @@ this.armReadyCountdown()
   }
 
   private impactSpark(x: number, y: number): void {
-    const spark = this.add.image(x, y, ART.fx.spark).setDepth(y + 2).setScale(0.5)
-    this.tweens.add({
-      targets: spark, scale: 0.95, alpha: 0, angle: 90,
-      duration: 200, ease: 'Quad.easeOut', onComplete: () => spark.destroy(),
+    playEffect(this, ART.fx.spark, x, y, {
+      size: EFFECT_MS.hitSparkSize, depth: y + 2, durationMs: EFFECT_MS.hitSparkMs,
     })
   }
 
   private blast(x: number, y: number, radius: number): void {
-    const scale = radius / 40
-    const flame = this.add.image(x, y, ART.fx.blast).setDepth(y + 3).setScale(scale * 0.5)
-    this.tweens.add({
-      targets: flame, scale, alpha: 0, duration: 280, ease: 'Quad.easeOut',
-      onComplete: () => flame.destroy(),
+    // Sized to the splash it is actually doing, and then left alone: the
+    // frames grow and fade by themselves. The old version tweened one tile
+    // from half size to full, which read as a balloon inflating.
+    playEffect(this, ART.fx.blast, x, y, {
+      size: sizeForRadius(radius), depth: y + 3, durationMs: EFFECT_MS.splashMs,
     })
   }
 

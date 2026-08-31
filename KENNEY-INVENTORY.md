@@ -3,9 +3,17 @@
 Everything still coming from Kenney's free CC0 packs rather than from painted
 art, where it appears, how big it renders and how often anyone sees it.
 
-Diagnosis only. Nothing in this pass changes code, data or assets.
+**Status: acted on.** The dead keys, the unused pack files, the two unused
+fonts and the reference sheets under `public/` are gone, and the explosion,
+hit spark and death puff have been replaced with painted animations. What is
+left of Kenney in the game is five projectile tiles, one muzzle-flash tile,
+six title-screen shapes at 12% opacity, one font and the audio.
 
-**Read at:** commit `9b8279b`, after the gnome swap.
+The recommendations below are kept as written so the reasoning survives; the
+sections they refer to are marked where they no longer describe the build.
+
+**Written at:** commit `9b8279b`, after the gnome swap. **Acted on at:** the
+effects and cleanup commit that follows it.
 
 ---
 
@@ -28,14 +36,14 @@ For reference at the same zoom: **a tower renders 150px tall, a Late Filer
 
 ## Summary
 
-| Category | Kenney assets still in use | Verdict |
-|---|---|---|
-| Projectiles | 5 (a sixth is dead) | **replace first** |
-| Particles and effects | 3 tiles doing 8 jobs | **replace second** |
-| Terrain and scenery | 6 | **not worth replacing** |
-| UI elements | **none left** | — |
-| Fonts | 1 in use, 2 dead | **keep** |
-| Audio | 32 of 38 cues | **keep** |
+| Category | Kenney assets, then | Now | Verdict |
+|---|---|---|---|
+| Projectiles | 5 (a sixth was dead) | **5** | replace when there is art |
+| Particles and effects | 3 tiles doing 8 jobs | **1 tile, 1 job** (the muzzle flash) | ~~replace second~~ **done** |
+| Terrain and scenery | 6 | **6** | not worth replacing |
+| UI elements | none left | none | — |
+| Fonts | 1 in use, 2 dead | **1** | keep |
+| Audio | 32 of 38 cues | 32 of 38 | keep |
 
 Seventeen pack sprites are named in the manifest. Two of those are wired to
 nothing, and one more is wired to a tower that never fires — so **fourteen
@@ -212,7 +220,7 @@ of that shape.
 
 ---
 
-## Dead weight — safe to delete
+## Dead weight — ~~safe to delete~~ **deleted**
 
 ### Referenced in the manifest, used by nothing
 
@@ -236,8 +244,16 @@ of that shape.
 | `public/assets/kenney/` — 282 of 298 PNGs | **622 KB** | The whole pack is committed and copied into the deploy; the manifest names 17 of them, of which 14 are ever drawn. The unused 282 are tower tiles, road tiles, enemy sprites and HUD numbers from the era before the painted art. Keep `License.txt` and the files the manifest names; the rest is deploy weight nobody downloads. |
 | `public/assets/units/_gnome_scale.png` | 196 KB | The artist's scale reference sheet — the two gnomes beside the goblin, Cory and the brute. Genuinely useful to keep in the repo, but it should not be under `public/`, where it is copied into the build. |
 
-Deleting all of the above removes roughly **875 KB** from the deploy and three
-keys from the manifest, and changes nothing a player sees.
+**Done.** 286 pack PNGs (631 KB), two fonts (58 KB) and every `_`-prefixed art
+reference sheet under `public/` (1128 KB — there were more than the gnome one)
+are out of the deploy, and the three dead keys are out of the manifest. The
+reference sheets moved to `reference/art/`, where they are still in the repo
+and no longer shipped. `public/assets/` went from 15.9 MB to 14 MB.
+
+A test now fails if a manifest key is bound to no role and named by no data
+file, if a font ships without an `@font-face` or vice versa, if a pack file
+under `public/` is not in the manifest, or if an underscore-prefixed reference
+file appears under `public/` again.
 
 ---
 
@@ -247,7 +263,12 @@ The question is value per piece commissioned. Two things drive it: how many
 times a frame the asset is drawn, and how big it is when it is. A 28px blob
 seen four times a second is worth more than a 100px rock seen once a session.
 
-### 1. The explosion — `fx-flame` — **do this first**
+### 1. ~~The explosion~~ — **done**
+
+Replaced by `fx-explosion`, a painted six-frame sheet played at a display size
+derived from the blast radius. The reasoning that made it first is below.
+
+#### Why it was first
 
 One tile, and it is every explosion in the game: both splash towers, the
 Molotov and all six of the Meteor's impacts. It renders between **82px and
@@ -261,7 +282,13 @@ Commission a proper blast: a few frames rather than one, or one high-resolution
 sprite the game can scale up without going to mush. The call sites already pass
 a radius, so nothing needs rewiring.
 
-### 2. The impact spark and the death puff — `fx-spark`
+### 2. ~~The impact spark and the death puff~~ — **done**
+
+Replaced by `fx-hit-spark` and `fx-death-puff`, two four-frame sheets, split
+exactly as recommended: one for a landed hit, one for a death. The death puff
+is now a single animation rather than three tiles thrown outward.
+
+#### Why it was second
 
 The busiest asset in the game: it fires on every landed shot and three times on
 every death, so on a full board it is on screen essentially always. It is small
@@ -273,7 +300,7 @@ puff**, because they are doing different jobs and the pack tile is a compromise
 between them. The Haymaker punch and the chain arc can keep reusing the hit
 spark.
 
-### 3. The two rockets — `shot-rocket`, `shot-rocket-big`
+### 3. The two rockets — `shot-rocket`, `shot-rocket-big` — **next**
 
 At **60px and 69px tall** these are the projectiles anyone can actually see;
 the round shots are 28px and read as dots at any zoom. They also belong to the

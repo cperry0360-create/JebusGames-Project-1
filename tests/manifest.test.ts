@@ -243,3 +243,36 @@ test('every manifest section is re-exported by ART', () => {
     assert.ok(exported.has(section), `art.json has a "${section}" section that ART never exports`)
   }
 })
+
+test('every file in the manifest is bound to something that draws it', () => {
+  // Three keys survived a swap by being in `files` and in nothing else:
+  // fx-flame-thin and fx-flame-wide were bound to no role at all, and
+  // shot-pale was the Tax Shelter's projectile — for a support tower that
+  // returns before it can fire. The existing tests check that every *role*
+  // resolves to a file; nothing checked the other direction, so a dead key
+  // could sit in the manifest and ship in the deploy forever.
+  const claimed = new Set<string>()
+  const claim = (k: unknown) => { if (typeof k === 'string') claimed.add(k) }
+
+  for (const section of ['map', 'ui', 'fx', 'prop', 'brand'] as const) {
+    for (const v of Object.values(art[section] ?? {})) {
+      if (v && typeof v === 'object') Object.values(v as Record<string, string>).forEach(claim)
+      else claim(v)
+    }
+  }
+  for (const k of art.decor ?? []) claim(k)
+  for (const k of art.greyable ?? []) claim(k)
+
+  // Anything the data files name: tower sprites and shots, enemies, ability
+  // icons, hero art, the gnomes.
+  for (const name of ['towers', 'enemies', 'abilities', 'heroes', 'map']) {
+    const body = readFileSync(url(`../src/data/${name}.json`), 'utf8')
+    for (const key of Object.keys(art.files)) {
+      if (new RegExp(`"${key}"`).test(body)) claimed.add(key)
+    }
+  }
+
+  const orphans = Object.keys(art.files).filter((k) => !claimed.has(k))
+  assert.deepEqual(orphans, [],
+    'these manifest keys are named by no role and no data file, so nothing can ever draw them')
+})

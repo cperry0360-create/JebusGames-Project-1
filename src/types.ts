@@ -118,7 +118,9 @@ export interface TowerDef {
   name: string
   archetype: string
   sprite: string
-  shot: string
+  /** The projectile. Absent on a support tower, which never fires: the Tax
+   *  Shelter named one for years and no player ever saw it. */
+  shot?: string
   cost: number
   range: number
   damage: number
@@ -472,6 +474,14 @@ export interface SpriteRender {
   boardRight?: number
   boardTop?: number
   boardBottom?: number
+  /**
+   * Effect animations only: this file is a strip of equal cells rather than
+   * one picture, so the loader has to cut it up before anything can draw it.
+   * Every frame is centred in its cell and the relative sizes across the
+   * sequence are part of the art, which is why an effect is played at one
+   * fixed display size and the frames do the growing.
+   */
+  sheet?: { frameWidth: number; frameHeight: number; frames: number }
   /** Button plates only: the end-cap sizes in source pixels. A plate is drawn
    *  by slicing at these, so the metal caps keep their proportions at any
    *  width and only the plain middle stretches. */
@@ -514,8 +524,12 @@ export interface ArtDef {
     buildPad: string
   }
   fx: {
+    /** Landed hit: a projectile, a chain link, the Haymaker, the sign bribe. */
     spark: string
+    /** Every explosion: both splash towers, the Molotov and each Meteor. */
     blast: string
+    /** What is left where something died. */
+    puff: string
     ember: string
     muzzle: string
   }
