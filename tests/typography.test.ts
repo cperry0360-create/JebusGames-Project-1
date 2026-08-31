@@ -63,7 +63,7 @@ test('no UI text is set below the legible minimum', () => {
   // Menu scenes are fitted from the 1280x720 design box down to the viewport,
   // so their floor is much higher: on a phone in landscape the fit is about
   // 0.55, and a 13px menu label was seven real pixels.
-  const MENU = ['scenes/TitleScene.ts', 'scenes/DraftScene.ts', 'scenes/CreditsScene.ts', 'scenes/SplashScene.ts']
+  const MENU = ['scenes/TitleScene.ts', 'scenes/LoadoutScene.ts', 'scenes/CreditsScene.ts', 'scenes/SplashScene.ts']
   for (const { path, body } of ALL) {
     if (path === 'scenes/BootScene.ts') continue // the missing-art dump, not UI
     const floor = MENU.includes(path) ? type.minMenuSize : type.minUiSize

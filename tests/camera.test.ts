@@ -111,7 +111,7 @@ test('fit and cover are opposites, and cover is never the smaller', () => {
 })
 
 test('every menu scene uses the fixed camera and none takes a gesture', () => {
-  for (const scene of ['TitleScene', 'DraftScene', 'CreditsScene', 'SplashScene']) {
+  for (const scene of ['TitleScene', 'LoadoutScene', 'CreditsScene', 'SplashScene']) {
     const body = src(`scenes/${scene}.ts`)
     assert.match(body, /fitCameraToDesign\(this\)/, `${scene} does not fit its camera to the viewport`)
     assert.doesNotMatch(body, /CameraRig/, `${scene} must not bind pan or zoom gestures`)

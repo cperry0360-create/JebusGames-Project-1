@@ -87,7 +87,7 @@ test('every unlock lands before the run ends', () => {
   }
 })
 
-/** Exactly what DraftScene offers: everything flagged draftable. */
+/** Exactly what the loadout screen offers: everything flagged draftable. */
 const draftPool = (): string[] =>
   Object.entries(abilities).filter(([, a]: [string, any]) => a.draftable).map(([id]) => id)
 

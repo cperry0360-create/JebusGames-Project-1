@@ -2,7 +2,7 @@
   "cory": {
     "name": "Cory",
     "title": "The Optimizer",
-    "blurb": "Holds the line in person and shreds armour just by standing near it.",
+    "blurb": "Holds the line in person and shreds armour nearby.",
     "bodySprite": "hero-cory",
     "portraitSprite": "hero-cory",
     "maxHealth": 360,

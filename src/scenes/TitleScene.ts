@@ -1,25 +1,21 @@
 import Phaser from 'phaser'
-import type { BrandingDef, HeroDef } from '../types.ts'
+import type { BrandingDef } from '../types.ts'
 import displayData from '../data/display.json'
-import heroesData from '../data/heroes.json'
 import brandingData from '../data/branding.json'
 import { setRunState } from '../systems/RunState.ts'
 import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
-import { plateButton, platePanel } from '../ui/Plate.ts'
+import { plateButton } from '../ui/Plate.ts'
 import { AudioToggle } from '../ui/AudioToggle.ts'
 import { unlockAudio } from '../systems/Audio.ts'
 import { VERSION_LABEL } from '../systems/Build.ts'
-import { ART, fitContentHeight, fitInBox } from '../systems/Art.ts'
+import { ART, fitContentHeight } from '../systems/Art.ts'
 import { fitCameraToDesign } from '../ui/FitCamera.ts'
 
-const HEROES = heroesData as Record<string, HeroDef>
 const BRANDING = brandingData as BrandingDef
 
 /** Title, hero selection, and the only place a run can begin. */
 export class TitleScene extends Phaser.Scene {
   private selectedHero = 'cory'
-  private cards: Array<{ id: string; frame: Phaser.GameObjects.Image[] }> = []
-  private blurb!: Phaser.GameObjects.Text
 
   constructor() {
     super('Title')
@@ -32,7 +28,6 @@ export class TitleScene extends Phaser.Scene {
 
     // Defensive: the HUD must never survive into the title screen.
     this.scene.stop('Hud')
-    this.cards = []
     const W = displayData.width
     const H = displayData.height
 
@@ -52,34 +47,13 @@ export class TitleScene extends Phaser.Scene {
       stroke: '#0d1016', strokeThickness: 6,
     }).setOrigin(0.5)
 
-    this.add.text(W / 2, 200, 'A serious tower defense in a very silly world.', {
+    this.add.text(W / 2, 214, 'A serious tower defense in a very silly world.', {
       fontFamily: FONT_UI, fontSize: '24px', color: COLOR.ink,
       stroke: '#0d1016', strokeThickness: 4, ...BODY_SPACING,
     }).setOrigin(0.5)
 
-    this.add.text(W / 2, 242, 'CHOOSE YOUR HERO', {
-      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.amber,
-      stroke: '#0d1016', strokeThickness: 4, letterSpacing: 2,
-    }).setOrigin(0.5)
-
-    const ids = Object.keys(HEROES)
-    const cardW = 210
-    const gap = 24
-    const totalW = ids.length * cardW + (ids.length - 1) * gap
-    ids.forEach((id, i) => this.heroCard(id, W / 2 - totalW / 2 + i * (cardW + gap), 264, cardW, 190))
-
-    // One short line. The hero used to carry a flavour line, a mechanical
-    // line and a kit line; three blocks of copy on a screen with one hero to
-    // choose from is not information, it is noise.
-    this.blurb = this.add.text(W / 2, 468, '', {
-      fontFamily: FONT_UI, fontSize: '24px', color: COLOR.ink,
-      stroke: '#0d1016', strokeThickness: 4, ...BODY_SPACING,
-      align: 'center', wordWrap: { width: 1140 },
-    }).setOrigin(0.5, 0)
-
-
-    plateButton(this, W / 2, 566, 300, 62, 'START RUN', () => this.start(), 26)
-    plateButton(this, W / 2, 636, 250, 52, 'CREDITS', () => this.scene.start('Credits'), 22, 'secondary')
+    plateButton(this, W / 2, 386, 320, 68, 'START RUN', () => this.start(), 28)
+    plateButton(this, W / 2, 470, 260, 56, 'CREDITS', () => this.scene.start('Credits'), 22, 'secondary')
 
     // Which build this is. Small and out of the way, but readable without
     // squinting: this is the line that answers "did my deploy actually reach
@@ -109,7 +83,6 @@ export class TitleScene extends Phaser.Scene {
     // Design-box coordinates, not viewport: this screen is fitted.
     new AudioToggle(this, 44, H - 44, 40, H)
 
-    this.select(this.selectedHero)
   }
 
   /**
@@ -162,43 +135,11 @@ export class TitleScene extends Phaser.Scene {
     }
   }
 
-  private heroCard(id: string, x: number, y: number, w: number, h: number): void {
-    const def = HEROES[id]
-    const frame = platePanel(this, x, y, w, h)
 
-    // The hero's own art, fitted to the card rather than scaled by a factor.
-    const portrait = this.add.image(x + w / 2, y + 74, def.portraitSprite)
-    fitInBox(portrait, def.portraitSprite, 108)
-
-    this.add.text(x + w / 2, y + 124, def.name.toUpperCase(), {
-      fontFamily: FONT_DISPLAY, fontSize: '30px', color: COLOR.ink,
-    }).setOrigin(0.5)
-    this.add.text(x + w / 2, y + 158, def.title, {
-      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.amber,
-    }).setOrigin(0.5)
-
-    const hit = this.add.rectangle(x + w / 2, y + h / 2, w, h, 0xffffff, 0.001)
-      .setInteractive({ useHandCursor: true })
-    hit.on('pointerdown', () => this.select(id))
-
-    this.cards.push({ id, frame })
-  }
-
-  private select(id: string): void {
-    this.selectedHero = id
-    // The plate is painted, so the picked card is the bright one and the rest
-    // sit back: a tint can only darken, so selection is the absence of one.
-    for (const c of this.cards) {
-      const tint = c.id === id ? 0xffffff : 0x8b939c
-      c.frame.forEach((p) => p.setTint(tint))
-    }
-    const def = HEROES[id]
-    this.blurb.setText(def.blurb)
-  }
 
   private start(): void {
     // A fresh seed per run, so the draft differs each time.
     setRunState({ heroId: this.selectedHero, seed: Date.now() >>> 0 })
-    this.scene.start('Draft')
+    this.scene.start('Loadout')
   }
 }
