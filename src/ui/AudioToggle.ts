@@ -64,10 +64,13 @@ export class AudioToggle {
     const down = step(size * 0.78, '−', -0.1)
     const up = step(size * 1.32, '+', 0.1)
 
-    this.readout = scene.add.text(x + size * 1.05, y + size * 0.52, '', {
+    // On the same line as the two step buttons rather than under them. Below
+    // them it ran into the minus sign at small plate sizes, and cost a second
+    // row of height in a band that does not have one.
+    this.readout = scene.add.text(x + size * 1.72, y, '', {
       fontFamily: FONT_UI, fontSize: '15px', color: COLOR.dim,
       stroke: '#0d1016', strokeThickness: 3,
-    }).setOrigin(0.5, 0)
+    }).setOrigin(0, 0.5)
     // The toggle sits in the bottom-left corner, and the readout hangs below
     // it — far enough below, at some sizes, to fall off the bottom of the
     // screen. Clamped here rather than by tuning each caller's Y, so it cannot

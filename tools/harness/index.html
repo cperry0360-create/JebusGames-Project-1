@@ -4,8 +4,9 @@
  @font-face{font-family:KenneyFuture;src:url(assets/fonts/KenneyFuture.ttf);}
  @font-face{font-family:KenneyFutureNarrow;src:url(assets/fonts/KenneyFutureNarrow.ttf);}
  @font-face{font-family:KenneyMiniSquare;src:url(assets/fonts/KenneyMiniSquare.ttf);}
- #game{width:1280px;height:720px;}
- #game canvas{width:1280px !important;height:720px !important;}
+ html,body{width:100%;height:100%;overflow:hidden;}
+ #game{width:100vw;height:100vh;}
+ #game canvas{display:block;}
 </style></head><body>
 <div id="game"></div>
 <script src="phaser.min.js"></script>
@@ -25,6 +26,17 @@ const SPOTS = MAP.buildSpots
 
 const q = new URLSearchParams(location.search)
 const scenario = q.get('s') || 'game'
+// The window is sized by --window-size, and the canvas follows it through
+// Phaser's RESIZE mode exactly as it does on a real phone. Reading it back
+// here so the log says what was actually tested.
+const vpArg = q.get('vp')
+if (vpArg) {
+  const [vw, vh] = vpArg.split('x').map(Number)
+  const box = document.getElementById('game')
+  box.style.width = vw + 'px'
+  box.style.height = vh + 'px'
+}
+const VP = { w: document.getElementById('game').clientWidth, h: document.getElementById('game').clientHeight }
 await document.fonts.ready.catch(() => {})
 
 // A fixed run, so every scenario starts from the same hand.
@@ -34,7 +46,10 @@ setRunState({
   reserveTowers: ['escalation', 'rounding', 'extension', 'shelter'], seed: 7,
 })
 
-const game = new Phaser.Game({ ...gameConfig, scale: { mode: Phaser.Scale.NONE } })
+// The shipping scale config, not an override: on a phone the whole point is
+// that the canvas *is* the viewport, and pinning it to 1280x720 hides every
+// layout collision this harness exists to find.
+const game = new Phaser.Game(gameConfig)
 window.game = game
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const scene = (k) => game.scene.getScene(k)
@@ -101,6 +116,75 @@ function dumpScenes() {
   return r
 }
 
+note('viewport ' + VP.w + 'x' + VP.h)
+// Every visible object in a scene as a screen-space rectangle.
+function rectsFor(key) {
+  const sc = scene(key)
+  if (!sc || !game.scene.isActive(key)) return []
+  const out = []
+  const walkR = (o, px, py) => {
+    if (o.visible === false || (o.alpha ?? 1) <= 0.02) return
+    const x = px + (o.x || 0), y = py + (o.y || 0)
+    if (o.list) { for (const c of o.list) walkR(c, x, y); return }
+    const w = o.displayWidth || 0, h = o.displayHeight || 0
+    if (w <= 0 || h <= 0) return
+    const ox = (o.originX ?? 0.5), oy = (o.originY ?? 0.5)
+    out.push({
+      name: o.text !== undefined ? 'TEXT:' + String(o.text).slice(0, 30) : (o.texture?.key || o.type),
+      l: x - w * ox, t: y - h * oy, r: x - w * ox + w, b: y - h * oy + h,
+    })
+  }
+  for (const o of sc.children.list) walkR(o, 0, 0)
+  return out
+}
+const overlap = (a, b) =>
+  a.l < b.r - 2 && b.l < a.r - 2 && a.t < b.b - 2 && b.t < a.b - 2
+
+// The bands are enforced by the world camera's viewport, so the checks that
+// matter are: the viewport really is the band-free strip, and no HUD element
+// leaves the band it was laid out in or lands on top of another one.
+function dumpOverlaps(label) {
+  const g2 = scene('Game')
+  const cam = g2.cameras.main
+  const b = g2.bands
+  const H = game.scale.height, W = game.scale.width
+  const viewportOk = cam.y === b.worldTop && cam.height === b.worldHeight &&
+    cam.x === 0 && cam.width === W
+  note(`${label}: bands top=${b.top} bottom=${b.bottom} world=${b.worldTop}..${b.worldTop + b.worldHeight}` +
+    ` viewport=${cam.x},${cam.y} ${cam.width}x${cam.height} ${viewportOk ? 'OK' : 'MISMATCH'}`)
+
+  const hud = rectsFor('Hud').filter((r) => r.r > r.l && r.b > r.t)
+  // Which band each element belongs to, and whether it stayed there.
+  let strays = 0
+  for (const r of hud) {
+    const inTop = r.b <= b.top + 1
+    const inBottom = r.t >= H - b.bottom - 1
+    if (!inTop && !inBottom) {
+      if (strays++ < 10) note(`  ${label} STRAY ${r.name} y=${Math.round(r.t)}..${Math.round(r.b)}`)
+    }
+  }
+  note(`${label}: HUD elements outside a band = ${strays} (of ${hud.length})`)
+
+  // And nothing in the HUD may sit on top of anything else in it. Plates and
+  // the numbers printed into them are meant to overlap, so a text drawn inside
+  // a plate is not a collision; two plates or two texts are.
+  let clashes = 0
+  for (let i = 0; i < hud.length; i++) {
+    for (let j = i + 1; j < hud.length; j++) {
+      const a = hud[i], c = hud[j]
+      if (!overlap(a, c)) continue
+      const nested = (p, q) => p.l <= q.l + 1 && p.t <= q.t + 1 && p.r >= q.r - 1 && p.b >= q.b - 1
+      if (nested(a, c) || nested(c, a)) continue
+      // A label drawn on its own button plate is composition, not collision:
+      // the plate is three images, so the label is never inside any one of them.
+      const pair = (x, y) => /^ui-btn-/.test(x.name) && /^TEXT:/.test(y.name)
+      if (pair(a, c) || pair(c, a)) continue
+      if (clashes++ < 10) note(`  ${label} CLASH ${a.name} x ${c.name}`)
+    }
+  }
+  note(`${label}: HUD overlaps = ${clashes}`)
+}
+
 async function toTitle() {
   await until(() => game.textures.exists('map-level1') && game.textures.exists('enemy-notice'), 30000)
   const ok = await until(() => running('Title'), 15000)
@@ -119,7 +203,9 @@ async function startRun() {
 // goes through here.
 function toScreen(wx, wy) {
   const cam = scene('Game').cameras.main
-  return [(wx - cam.worldView.x) * cam.zoom, (wy - cam.worldView.y) * cam.zoom]
+  // The world camera's viewport is inset by the reserved HUD band, so its
+  // origin is not the top-left of the screen any more.
+  return [(wx - cam.worldView.x) * cam.zoom + cam.x, (wy - cam.worldView.y) * cam.zoom + cam.y]
 }
 async function build(spotIndex, towerIndex = 0) {
   const g = scene('Game')
@@ -188,27 +274,27 @@ async function run() {
 
   if (scenario === 'ui') {
     await shot('ui-01-fresh')
-    await move(SPOTS[4][0], SPOTS[4][1]); await shot('ui-02-hover-spot')
-    await click(SPOTS[4][0], SPOTS[4][1]); await shot('ui-03-menu')
+    await move(...toScreen(SPOTS[4][0], SPOTS[4][1])); await shot('ui-02-hover-spot')
+    await click(...toScreen(SPOTS[4][0], SPOTS[4][1])); await shot('ui-03-menu')
     let hit = g.menu.hitAreas?.[0]
     if (hit) { const b = hit.getBounds(); await move(b.centerX, b.centerY); await shot('ui-04-menu-hover-range') }
     if (hit) { const b = hit.getBounds(); await click(b.centerX, b.centerY) }
     await shot('ui-05-built')
     note('after build: towers=' + g.towers.length + ' peanuts=' + g.status.peanuts)
-    await click(SPOTS[4][0], SPOTS[4][1]); await shot('ui-06-select-tower')
+    await click(...toScreen(SPOTS[4][0], SPOTS[4][1])); await shot('ui-06-select-tower')
 
     // Hero control: a ground tap alone must do nothing.
     const before = [Math.round(g.hero.x), Math.round(g.hero.y)]
-    await click(400, 620)
+    await click(...toScreen(400, 620))
     const afterGround = [Math.round(g.hero.x), Math.round(g.hero.y)]
     await sleep(900)
     note(`ground tap with hero UNSELECTED: ${before} -> ${afterGround} -> ${[Math.round(g.hero.x), Math.round(g.hero.y)]} (must not move)`)
     await shot('ui-07-ground-tap-unselected')
 
-    await click(g.hero.x, g.hero.y)
+    await click(...toScreen(g.hero.x, g.hero.y))
     note('hero selected: ' + g.heroSelected + ' msg="' + g.status.message + '"')
     await shot('ui-08-hero-selected')
-    await click(400, 620)
+    await click(...toScreen(400, 620))
     note('after order: selected=' + g.heroSelected + ' rally=' + JSON.stringify(g.hero.rally))
     await shot('ui-09-rally-ordered')
     await sleep(2500)
@@ -216,7 +302,7 @@ async function run() {
     await shot('ui-10-hero-arrived')
 
     // A tap on a pad must beat a rally order aimed at the same pixel.
-    await click(g.hero.x, g.hero.y)
+    await click(...toScreen(g.hero.x, g.hero.y))
     await click(SPOTS[2][0], SPOTS[2][1])
     note('pad vs ground precedence: menuOpen=' + g.menu.isOpen + ' heroRally=' + JSON.stringify(g.hero.rally))
     await shot('ui-11-pad-beats-ground')
@@ -234,7 +320,7 @@ async function run() {
     // and let the wave push him through the threshold for real.
     for (const i of [3, 1]) await build(i, 0)
     const mid = g.lane.pointAt(g.lane.totalLength * 0.5)
-    await click(g.hero.x, g.hero.y)
+    await click(...toScreen(g.hero.x, g.hero.y))
     await click(mid.x, mid.y)
     await until(() => g.hero.atRally, 12000)
     await shot('u-01-on-foot')
@@ -251,7 +337,7 @@ async function run() {
     await sleep(2000); await shot('u-04-driving')
     // Drive him along the road and see him plough through.
     const p2 = g.lane.pointAt(g.lane.totalLength * 0.22)
-    await click(g.hero.x, g.hero.y)
+    await click(...toScreen(g.hero.x, g.hero.y))
     await click(p2.x, p2.y)
     await sleep(2200); await shot('u-05-ramming')
     await sleep(2200); await shot('u-06-ramming2')
@@ -419,6 +505,125 @@ async function run() {
         ' hudAlpha=' + scene('Hud').cameras.main.alpha +
         ' hudRunning=' + running('Hud'))
     }
+    return
+  }
+
+  // Does a boss that walks off the end cost lives, and does the wave still
+  // count as cleared? Driven directly rather than by playing thirteen waves.
+  if (scenario === 'bossleak') {
+    g.status.wave = g.status.waveCount - 1
+    g.startWave()
+    const has = (t) => g.enemies.find((e) => e.def.tier === t)
+    await until(() => has('boss'), 60000)
+    const boss = has('boss')
+    note('boss spawned: ' + (boss ? boss.def.name : 'NONE'))
+    if (!boss) return
+    // Isolate him: nothing else on the field, nothing left to spawn.
+    g.spawner.groups = []
+    for (const e of g.enemies) if (e !== boss) e.die()
+    await sleep(600)
+    note('field: ' + g.enemies.length + ' enemies, spawner.done=' + g.spawner.done)
+    const before = { lives: g.status.lives, wave: g.status.wave, phase: g.status.phase }
+    note('before: ' + JSON.stringify(before) + ' bossLivesCost=' + boss.def.livesCost)
+    // Walk him to the exit.
+    boss.distance = g.lane.totalLength - 12
+    await until(() => g.status.phase !== 'wave' || g.enemies.length === 0, 20000)
+    await sleep(900)
+    note('after:  ' + JSON.stringify({ lives: g.status.lives, wave: g.status.wave, phase: g.status.phase }))
+    note('VERDICT lives lost=' + (before.lives - g.status.lives) +
+      ' waveAdvanced=' + (g.status.wave > before.wave) + ' phase=' + g.status.phase)
+    await shot('bossleak')
+    return
+  }
+
+  // The three moments the layout has to survive, at whatever viewport the
+  // window was opened at. Every visible object is dumped with its bounds so
+  // overlap is measured rather than eyeballed.
+  if (scenario === 'phone') {
+    const cam = g.cameras.main
+    const inView = SPOTS.map((p, i) => [i, p])
+      .filter(([, p]) => cam.worldView.contains(p[0], p[1])).map(([i]) => i)
+
+    // 1. Tower placement: the menu open over a pad.
+    const [px, py] = toScreen(SPOTS[inView[0]][0], SPOTS[inView[0]][1])
+    await click(px, py)
+    await sleep(400)
+    await shot('phone-1-placing')
+    note('placing: menuOpen=' + !!g.menu?.isOpen)
+    dumpOverlaps('placing')
+
+    // Hold a finger on an option: the ghost belongs on the pad while the
+    // player is deciding, which on a touch device is only ever during a press.
+    const hit = g.menu.hitAreas?.[0]
+    if (hit) {
+      const b = hit.getBounds()
+      await move(b.centerX, b.centerY)
+      mouse('mousedown', b.centerX, b.centerY)
+      await sleep(320)
+      note('ghost while pressed: ' + (g.ghost ? 'yes alpha=' + g.ghost.alpha +
+        ' at ' + Math.round(g.ghost.x) + ',' + Math.round(g.ghost.y) : 'NONE'))
+      await shot('phone-1b-ghost')
+      mouse('mouseup', b.centerX, b.centerY)
+      await sleep(260)
+      note('after release: towers=' + g.towers.length + ' ghost=' + (g.ghost ? 'still up' : 'cleared'))
+    }
+    await sleep(300)
+    g.startWave()
+    await until(() => g.enemies.length > 2, 40000)
+    await sleep(400)
+    await shot('phone-2-wave')
+    note('wave: enemies=' + g.enemies.length)
+    dumpOverlaps('wave')
+
+    // 3. The boss. Clear the field first — killing the last enemy while the
+    // wave is live ends it and advances the index out from under us.
+    g.spawner.groups = []
+    for (const e of g.enemies) e.die()
+    await until(() => g.status.phase !== 'wave', 20000)
+    await sleep(300)
+    g.status.wave = g.status.waveCount - 1
+    g.status.phase = 'ready'
+    g.startWave()
+    await until(() => g.enemies.some((e) => e.def.tier === 'boss'), 60000)
+    await sleep(1800)
+    await shot('phone-3-boss')
+    note('boss: name=' + g.status.bossName + ' enemies=' + g.enemies.length)
+    dumpOverlaps('boss')
+    return
+  }
+
+  // Pan and pinch with the world camera inset by the top band: its viewport no
+  // longer starts at the top of the screen, so anything anchored on a raw
+  // pointer coordinate is off by a band's height.
+  if (scenario === 'gestures') {
+    const cam = g.cameras.main
+    note('viewport ' + cam.x + ',' + cam.y + ' ' + cam.width + 'x' + cam.height)
+
+    // A tap in the middle of the board has to land where it looks.
+    const [sx, sy] = toScreen(SPOTS[2][0], SPOTS[2][1])
+    const w = cam.getWorldPoint(sx, sy)
+    note('round trip: pad ' + SPOTS[2] + ' -> screen ' + [Math.round(sx), Math.round(sy)] +
+      ' -> world ' + [Math.round(w.x), Math.round(w.y)])
+
+    // Pan: drag and check the camera actually moved that far.
+    const before = { x: Math.round(cam.scrollX), y: Math.round(cam.scrollY) }
+    mouse('mousedown', 400, 200)
+    for (let i = 1; i <= 8; i++) { mouse('mousemove', 400 - i * 14, 200 - i * 6); await sleep(24) }
+    mouse('mouseup', 288, 152)
+    await sleep(700)
+    note('pan ' + JSON.stringify(before) + ' -> ' +
+      JSON.stringify({ x: Math.round(cam.scrollX), y: Math.round(cam.scrollY) }))
+
+    // Wheel zoom anchored on a point: the world under the cursor should stay
+    // under the cursor. That is the calculation the band offset breaks.
+    const at = { x: 500, y: 200 }
+    const wBefore = cam.getWorldPoint(at.x, at.y)
+    game.canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, clientX: at.x, clientY: at.y, bubbles: true }))
+    await sleep(900)
+    const wAfter = cam.getWorldPoint(at.x, at.y)
+    const drift = Math.round(Math.hypot(wAfter.x - wBefore.x, wAfter.y - wBefore.y))
+    note('zoom anchor drift ' + drift + 'px (zoom ' + cam.zoom.toFixed(3) + ')')
+    await shot('gestures')
     return
   }
 

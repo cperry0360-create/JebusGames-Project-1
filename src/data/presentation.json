@@ -60,7 +60,15 @@
       0.6,
       0.3
     ],
-    "bossBarTop": 10
+    "bossBarTop": 10,
+    "bands": {
+      "marginY": 8,
+      "plateHeight": 44,
+      "rowGap": 4,
+      "rowHeight": 24,
+      "iconHeight": 64,
+      "minWorldHeight": 170
+    }
   },
   "typography": {
     "minUiSize": 15,
@@ -71,18 +79,18 @@
     "letterSpacing": 0.5
   },
   "towerTier": {
-    "pipRadius": 7,
-    "pipGap": 19,
-    "pipRiseAboveTop": 12,
+    "pipRadius": 6,
+    "pipGap": 15,
     "pipColour": "#ffd23f",
     "pipEmptyColour": "#39424e",
     "scalePerTier": 0.07,
-    "tintPerTier": 0.12
+    "tintPerTier": 0.12,
+    "pipDropBelowBase": 9
   },
   "abilityBar": {
-    "draftedPitch": 56,
+    "draftedPitch": 72,
     "draftedIcon": 64,
-    "heroPitch": 72,
+    "heroPitch": 76,
     "heroIcon": 64,
     "groupGap": 26
   }

@@ -356,8 +356,8 @@ export class CameraRig {
     this.velY = 0
     this.pinchDist = Math.max(Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y), 1)
     this.pinchZoom = this.targetZoom
-    this.pinchMidX = (a.x + b.x) / 2
-    this.pinchMidY = (a.y + b.y) / 2
+    this.pinchMidX = (a.x + b.x) / 2 - cam.x
+    this.pinchMidY = (a.y + b.y) / 2 - cam.y
     this.pinchWorldX = worldAt(this.pinchMidX, this.targetCenterX, cam.width, this.targetZoom)
     this.pinchWorldY = worldAt(this.pinchMidY, this.targetCenterY, cam.height, this.targetZoom)
     this.consumed = true
@@ -448,8 +448,9 @@ export class CameraRig {
     if (!a || !b) return
     const dist = Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y)
     if (dist <= 0) return
-    this.pinchMidX = (a.x + b.x) / 2
-    this.pinchMidY = (a.y + b.y) / 2
+    const vp = this.scene.cameras.main
+    this.pinchMidX = (a.x + b.x) / 2 - vp.x
+    this.pinchMidY = (a.y + b.y) / 2 - vp.y
     this.targetZoom = this.clampZ(
       this.pinchZoom * pinchScale(dist / this.pinchDist, this.limits.pinchDamping),
     )
@@ -532,15 +533,31 @@ export class CameraRig {
     this.targetZoom = this.clampZ(before * (dy > 0 ? 0.88 : 1.14))
     // Keep the world under the cursor under the cursor, solved against the
     // zoom being aimed at rather than the one on screen.
-    const wx = worldAt(at.x, this.targetCenterX, cam.width, before)
-    const wy = worldAt(at.y, this.targetCenterY, cam.height, before)
-    this.targetCenterX = anchorCenter(wx, at.x, cam.width, this.targetZoom)
-    this.targetCenterY = anchorCenter(wy, at.y, cam.height, this.targetZoom)
+    // In the camera's own space: its viewport no longer starts at the top of
+    // the screen, so a raw pointer y would anchor a band's height too low.
+    const ax = at.x - cam.x
+    const ay = at.y - cam.y
+    const wx = worldAt(ax, this.targetCenterX, cam.width, before)
+    const wy = worldAt(ay, this.targetCenterY, cam.height, before)
+    this.targetCenterX = anchorCenter(wx, ax, cam.width, this.targetZoom)
+    this.targetCenterY = anchorCenter(wy, ay, cam.height, this.targetZoom)
   }
 
   private onResize = (): void => {
     // Cover zoom depends on the viewport's shape, so a rotate can leave the
     // camera below the floor and showing blank space past the map.
+    this.viewportChanged()
+  }
+
+  /**
+   * The camera's viewport is no longer the whole screen.
+   *
+   * The world camera is inset by the reserved HUD bands, so its width and
+   * height — which every clamp here is computed from — change without the
+   * window changing size at all. Re-clamping zoom is what stops a shorter
+   * viewport from leaving the map floating in a gap it no longer fills.
+   */
+  viewportChanged(): void {
     this.targetZoom = this.clampZ(this.targetZoom)
     this.scene.cameras.main.setZoom(this.targetZoom)
   }

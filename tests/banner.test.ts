@@ -12,13 +12,13 @@ const WAVES = (JSON.parse(src('data/waves.json')) as { waves: unknown[] }).waves
 const LIVES = rules.startingLives
 
 const run = (o: Partial<RunOutcome>): RunOutcome => ({
-  wavesCleared: 0, cleared: false, livesRemaining: 0, maxLives: LIVES, ...o,
+  wavesReached: 0, cleared: false, livesRemaining: 0, maxLives: LIVES, ...o,
 })
 
 test('a lost run still pays, because depth is the term that counts', () => {
   // The whole point of replacing stars with the Banner: a run that ends at
   // wave nine is progress, and a defeat that banks nothing ends the session.
-  const died = run({ wavesCleared: 8 })
+  const died = run({ wavesReached: 8 })
   const points = bannerPointsFor(died, CFG)
   assert.ok(points > 0, 'dying at wave nine paid nothing')
   assert.equal(points, 8 * CFG.perWaveCleared)
@@ -27,54 +27,54 @@ test('a lost run still pays, because depth is the term that counts', () => {
 test('deeper is always worth more', () => {
   let last = -1
   for (let w = 0; w <= WAVES; w++) {
-    const p = bannerPointsFor(run({ wavesCleared: w }), CFG)
+    const p = bannerPointsFor(run({ wavesReached: w }), CFG)
     assert.ok(p > last, `wave ${w} paid no more than wave ${w - 1}`)
     last = p
   }
 })
 
 test('winning beats dying on the last wave', () => {
-  const nearly = bannerPointsFor(run({ wavesCleared: WAVES - 1 }), CFG)
+  const nearly = bannerPointsFor(run({ wavesReached: WAVES - 1 }), CFG)
   const won = bannerPointsFor(
-    run({ wavesCleared: WAVES, cleared: true, livesRemaining: 0 }), CFG)
+    run({ wavesReached: WAVES, cleared: true, livesRemaining: 0 }), CFG)
   assert.ok(won > nearly, 'clearing the run paid no more than dying one wave short')
 })
 
 test('lives only matter to a survivor, and need no special case', () => {
   // A run is lost at zero lives, so the lives term is already zero on a loss.
-  const lost = run({ wavesCleared: 5, livesRemaining: 0 })
+  const lost = run({ wavesReached: 5, livesRemaining: 0 })
   assert.equal(bannerPointsFor(lost, CFG), 5 * CFG.perWaveCleared)
-  const clean = run({ wavesCleared: WAVES, cleared: true, livesRemaining: LIVES })
-  const scraped = run({ wavesCleared: WAVES, cleared: true, livesRemaining: 1 })
+  const clean = run({ wavesReached: WAVES, cleared: true, livesRemaining: LIVES })
+  const scraped = run({ wavesReached: WAVES, cleared: true, livesRemaining: 1 })
   assert.ok(bannerPointsFor(clean, CFG) > bannerPointsFor(scraped, CFG),
     'a flawless clear paid the same as a one-life clear')
 })
 
 test('nothing pays negative, and nothing pays a fraction', () => {
-  const junk = run({ wavesCleared: -4, livesRemaining: -9 })
+  const junk = run({ wavesReached: -4, livesRemaining: -9 })
   assert.equal(bannerPointsFor(junk, CFG), 0)
-  const odd = run({ wavesCleared: 3.7, livesRemaining: 2.2, cleared: true })
+  const odd = run({ wavesReached: 3.7, livesRemaining: 2.2, cleared: true })
   assert.equal(bannerPointsFor(odd, CFG) % 1, 0, 'a fractional payout reached the bank')
 })
 
 test('a perfect run is worth a meaningful multiple of a bad one', () => {
   const best = bannerPointsFor(
-    run({ wavesCleared: WAVES, cleared: true, livesRemaining: LIVES }), CFG)
-  const early = bannerPointsFor(run({ wavesCleared: 2 }), CFG)
+    run({ wavesReached: WAVES, cleared: true, livesRemaining: LIVES }), CFG)
+  const early = bannerPointsFor(run({ wavesReached: 2 }), CFG)
   assert.ok(best / Math.max(early, 1) >= 5,
     `a perfect run pays ${best} against ${early} for a wave-2 death; the spread is too flat to reward playing well`)
 })
 
 test('the verdict names what actually happened', () => {
-  assert.equal(verdictFor(run({ wavesCleared: 4 }), CFG), CFG.verdicts.lost)
+  assert.equal(verdictFor(run({ wavesReached: 4 }), CFG), CFG.verdicts.lost)
   assert.equal(
-    verdictFor(run({ wavesCleared: WAVES, cleared: true, livesRemaining: LIVES }), CFG),
+    verdictFor(run({ wavesReached: WAVES, cleared: true, livesRemaining: LIVES }), CFG),
     CFG.verdicts.flawless)
   assert.equal(
-    verdictFor(run({ wavesCleared: WAVES, cleared: true, livesRemaining: LIVES - 2 }), CFG),
+    verdictFor(run({ wavesReached: WAVES, cleared: true, livesRemaining: LIVES - 2 }), CFG),
     CFG.verdicts.clean)
   assert.equal(
-    verdictFor(run({ wavesCleared: WAVES, cleared: true, livesRemaining: 1 }), CFG),
+    verdictFor(run({ wavesReached: WAVES, cleared: true, livesRemaining: 1 }), CFG),
     CFG.verdicts.narrow)
 })
 

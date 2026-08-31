@@ -26,6 +26,9 @@ const TITLE_H = 28
  * whole reason to pick one over another.
  */
 export class BuildMenu {
+  /** Which cell the finger went down on, so the release can only buy the
+   *  thing it was pressed on. */
+  private pressed: string | null = null
   private readonly scene: Phaser.Scene
   private options: BuildOption[]
   private container?: Phaser.GameObjects.Container
@@ -70,12 +73,18 @@ export class BuildMenu {
     peanuts: number,
     onPick: (id: string) => void,
     onPreview: (id: string | null) => void,
+    /** The strip of screen the board occupies. The panel is clamped into it so
+     *  it can never cover a counter, the start button or the ability bar. */
+    band?: { top: number; height: number },
   ): void {
     this.close(onPreview)
 
-    // Size to the options actually offered: a fixed three columns left a wide
-    // empty panel whenever fewer towers were unlocked.
-    const cols = Math.max(1, Math.min(MAX_COLS, this.options.length))
+    // Size to the options actually offered, and prefer a wide, short panel:
+    // on a phone the board is about 220px tall, and a two-row grid does not
+    // fit inside it. Rows are what push the panel into the HUD.
+    const roomy = Math.max(1, Math.min(this.options.length, MAX_COLS))
+    const short = !band || band.height < CELL_H * 2 + PAD * 2 + TITLE_H + 20
+    const cols = short ? Math.max(1, this.options.length) : roomy
     const rows = Math.ceil(this.options.length / cols)
     const w = cols * CELL_W + PAD * 2
     const h = rows * CELL_H + PAD * 2 + TITLE_H
@@ -85,8 +94,32 @@ export class BuildMenu {
     // coordinates and then clamping those against the camera's *pixel* size
     // mixed two coordinate systems, and under zoom it landed off screen.
     const view = this.scene.scale
-    const x = Phaser.Math.Clamp(screenX - w / 2, 6, view.width - w - 6)
-    const y = Phaser.Math.Clamp(screenY - h - 40, 6, view.height - h - 6)
+    const top = band ? band.top : 0
+    const bottom = band ? band.top + band.height : view.height
+
+    // Above the pad by preference, because that is where a panel belongs
+    // relative to the thing it is about. When the board is not tall enough for
+    // that — a phone leaves about 220px between the bands — it goes beside the
+    // pad instead of on top of it: the ghost tower and the range ring are both
+    // drawn *on* the pad, and a panel covering them makes the preview useless.
+    const gap = 40
+    const clampX = (v: number): number =>
+      Phaser.Math.Clamp(v, 6, Math.max(6, view.width - w - 6))
+    const clampY = (v: number): number =>
+      Phaser.Math.Clamp(v, top + 4, Math.max(top + 4, bottom - h - 4))
+
+    let x: number
+    let y: number
+    if (screenY - h - gap >= top + 4) {
+      x = clampX(screenX - w / 2)
+      y = screenY - h - gap
+    } else {
+      y = clampY(screenY - h / 2)
+      // Whichever side has room, preferring the side with more of it.
+      const right = screenX + gap
+      const left = screenX - w - gap
+      x = clampX(right + w <= view.width - 6 || screenX < view.width / 2 ? right : left)
+    }
 
     play(this.scene, 'open')
     const c = this.scene.add.container(x, y).setDepth(PANEL_DEPTH)
@@ -139,12 +172,29 @@ export class BuildMenu {
       })
       hit.on('pointerout', () => {
         cell.setActive(false)
+        this.pressed = null
         onPreview(null)
       })
-      // An unaffordable pick still reports: swallowing the click here is what
+      // Press previews, release buys.
+      //
+      // A phone has no hover, so building on the press meant the tower was
+      // bought before the player had seen anything about it — the range ring
+      // and the ghost on the pad both existed and neither was ever visible on
+      // the device the game is for. Holding a finger on a cell now shows both,
+      // on the pad the tower would stand on, and lifting commits.
+      hit.on('pointerdown', () => {
+        this.pressed = opt.id
+        cell.setActive(true)
+        onPreview(opt.id)
+      })
+      // An unaffordable pick still reports: swallowing the release here is what
       // made a greyed-out tower look like a broken button. The scene decides
       // whether the purchase happens and says why when it does not.
-      hit.on('pointerdown', () => onPick(opt.id))
+      hit.on('pointerup', () => {
+        if (this.pressed !== opt.id) return
+        this.pressed = null
+        onPick(opt.id)
+      })
 
       this.hitAreas.push(hit)
       c.add([...cell.parts, name, ...icon, cost, hit])
@@ -154,6 +204,7 @@ export class BuildMenu {
   }
 
   close(onPreview?: (id: string | null) => void): void {
+    this.pressed = null
     if (this.container) play(this.scene, 'close')
     this.container?.destroy(true)
     this.container = undefined

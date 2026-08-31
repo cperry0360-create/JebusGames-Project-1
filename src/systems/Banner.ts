@@ -13,9 +13,12 @@
 import type { BannerDef } from '../types.ts'
 
 export interface RunOutcome {
-  /** Waves fully cleared. On a defeat this is the wave the player reached
-   *  minus the one they were standing in when it ended. */
-  wavesCleared: number
+  /**
+   * Depth: waves that ended with the field empty, cleared or merely survived.
+   * `DESIGN.md` awards on depth reached, so a wave the player lived through
+   * with leaks still counts — the leaks are already paid for in lives.
+   */
+  wavesReached: number
   /** True only if the last wave was cleared. */
   cleared: boolean
   livesRemaining: number
@@ -29,7 +32,7 @@ export interface RunOutcome {
  * that term is already zero on every loss.
  */
 export function bannerPointsFor(o: RunOutcome, cfg: BannerDef): number {
-  const depth = Math.max(0, Math.floor(o.wavesCleared)) * cfg.perWaveCleared
+  const depth = Math.max(0, Math.floor(o.wavesReached)) * cfg.perWaveCleared
   const finish = o.cleared ? cfg.clearBonus : 0
   const held = Math.max(0, Math.floor(o.livesRemaining)) * cfg.perLifeRemaining
   return depth + finish + held

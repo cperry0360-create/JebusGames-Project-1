@@ -169,6 +169,11 @@ export interface PlateButton {
 /** Resting tint. The plates are painted, and Phaser's tint multiplies, so
  *  hover cannot brighten one — it rests slightly dimmed and clears to full
  *  instead, which reads as the button lighting up. */
+/** How much of a plate's width its two end caps occupy. */
+const CAP_INSET = 62
+/** A label may shrink this far to fit and no further. */
+const MIN_LABEL_SCALE = 0.72
+
 const REST = 0xd2d8de
 
 /**
@@ -225,11 +230,29 @@ export function plateButton(
     onClick()
   })
 
+  /**
+   * Fits the label to the plate.
+   *
+   * The nine-slice's end caps eat about 62px of the button's width, so a label
+   * sized against `w` runs out over them — the start-wave button carries a
+   * wave number, a countdown and a bonus, and at a phone's width all three
+   * spilled past both ends of the plate. Scaling is bounded: past the floor
+   * the label is genuinely too long and the call site has to shorten it, but
+   * it will never draw outside its own button.
+   */
+  const usable = Math.max(24, w - CAP_INSET)
+  const fitLabel = (s: string): void => {
+    t.setScale(1)
+    t.setText(s)
+    if (t.width > usable) t.setScale(Math.max(MIN_LABEL_SCALE, usable / t.width))
+  }
+  fitLabel(text)
+
   return {
     hit,
     text: t,
     parts: [...on, ...off, t, hit],
-    setLabel: (s: string) => t.setText(s),
+    setLabel: fitLabel,
     setEnabled: (v: boolean) => {
       enabled = v
       on.forEach((p) => p.setVisible(v))

@@ -3,7 +3,7 @@ import { GameScene } from './GameScene.ts'
 import type { RulesDef } from '../types.ts'
 import presentationData from '../data/presentation.json'
 import rulesData from '../data/rules.json'
-import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
+import { COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { ART, fitInBox, renderFor } from '../systems/Art.ts'
 import { greyKey } from '../systems/Desaturate.ts'
 import { plateButton, type PlateButton } from '../ui/Plate.ts'
@@ -11,6 +11,7 @@ import { AudioToggle } from '../ui/AudioToggle.ts'
 import { iconPlate } from '../ui/Plate.ts'
 import { Dialog } from '../ui/Dialog.ts'
 import { play } from '../systems/Audio.ts'
+import { bandsFor, rowRegions, type Bands } from '../systems/Bands.ts'
 
 interface SlotView {
   id: string
@@ -44,9 +45,18 @@ export class HudScene extends Phaser.Scene {
   private message!: Phaser.GameObjects.Text
   private heroLabel!: Phaser.GameObjects.Text
   private heroBar!: Phaser.GameObjects.Graphics
-  /** Where the counter plates end. The boss block and the wave message both
-   *  hang off this rather than off the top of the screen. */
-  private countersBottom = 0
+  private bands: Bands = { top: 0, bottom: 0, worldTop: 0, worldHeight: 0 }
+  /** Top of the second row of the top band, shared by the message, the boss
+   *  bar and the hero readout. */
+  private row2Y = 0
+  private regions = { left: { x: 0, width: 0 }, right: { x: 0, width: 0 } }
+  /** Top of the ability icons, inside the bottom band. */
+  private abilityTop = 0
+  /** Width of each counter plate's printable field, so a number that outgrows
+   *  it shrinks instead of running off the plate. */
+  private peanutsField = 999
+  private livesField = 999
+  private waveField = 999
   private bossBar!: Phaser.GameObjects.Graphics
   private bossLabel!: Phaser.GameObjects.Text
   private startBtn!: PlateButton
@@ -78,47 +88,76 @@ export class HudScene extends Phaser.Scene {
     this.lastPeanuts = -1
     this.lastLives = -1
     const W = this.scale.width
+    const H = this.scale.height
+    // The same numbers the world camera is clipped by, from the same function,
+    // so the HUD cannot lay itself out against a band the world does not
+    // respect. Everything below is placed inside one of these two strips.
+    this.bands = bandsFor(H, HUD.bands)
+    const B = HUD.bands
+    const row2Y = B.marginY + B.plateHeight + B.rowGap
+    const regions = rowRegions(W, HUD.marginX)
+    this.row2Y = row2Y
+    this.regions = regions
 
-    // Three painted counters in the top-left corner, and nothing behind them.
-    // The map runs to the full canvas now; there is no bar to crop it.
-    const row = this.buildCounters()
-    this.countersBottom = row.bottom
+    // The bands are painted before anything is laid into them. Without a
+    // ground of their own they read as the map having been cropped rather
+    // than as the HUD owning that strip.
+    const chrome = this.add.graphics()
+    for (const [y, h] of [[0, this.bands.top], [H - this.bands.bottom, this.bands.bottom]]) {
+      chrome.fillStyle(0x10161d, 0.94).fillRect(0, y, W, h)
+    }
+    chrome.lineStyle(2, 0x3d4a59, 0.7)
+    chrome.lineBetween(0, this.bands.top, W, this.bands.top)
+    chrome.lineBetween(0, H - this.bands.bottom, W, H - this.bands.bottom)
 
-    this.message = this.add.text(HUD.marginX, row.bottom + 8, '', {
-      fontFamily: FONT_UI, fontSize: '17px', color: COLOR.ink,
-      stroke: '#0d1016', strokeThickness: 4, ...BODY_SPACING,
+    // --- top band, row 1: counters left, start-wave button right.
+    // The button takes what the counters leave. Fixed at 240px it ran into the
+    // wave counter on a 568px screen, which is an iPhone SE in landscape.
+    const countersRight = this.buildCounters(B.marginY)
+    const spare = W - countersRight - HUD.marginX * 2
+    const startW = Phaser.Math.Clamp(spare, HudScene.START_MIN_W, HudScene.START_W)
+    this.buildStartButton(W - startW - HUD.marginX, B.marginY, startW)
+
+    // --- top band, row 2, left region: the wave message, or the boss bar.
+    // They are never both up: while a boss is on the field the bar *is* the
+    // message. Sharing one region by rule is what keeps them from stacking.
+    this.message = this.add.text(regions.left.x, row2Y, '', {
+      fontFamily: FONT_UI, fontSize: '15px', color: COLOR.ink,
+      stroke: '#0d1016', strokeThickness: 4,
+      // One line. A wrapped sentence would grow out of the band.
+      wordWrap: { width: regions.left.width },
+      maxLines: 1,
     })
+    this.bossBar = this.add.graphics()
+    this.bossLabel = this.add.text(0, 0, '', {
+      fontFamily: FONT_UI, fontSize: '15px', color: COLOR.ink,
+      fontStyle: 'bold', stroke: '#0d1016', strokeThickness: 4, letterSpacing: 1,
+    }).setOrigin(0.5, 0.5)
 
-    // Start button in the opposite corner, standing on its own.
-    this.buildStartButton(W - HudScene.START_W - HUD.marginX, HUD.marginY)
-
-    this.buildPauseButton(W - 34, this.scale.height - 34)
-
-    // Mute is reachable mid-run, bottom-left, clear of the ability slots.
-    new AudioToggle(this, 36, this.scale.height - 36, 34)
-
-    // The hero stays top-right where he was, moved down clear of the button.
-    this.heroLabel = this.add.text(W - HUD.marginX, HUD.marginY + 54, '', {
-      fontFamily: FONT_UI, fontSize: '16px', color: COLOR.ink,
+    // --- top band, row 2, right region: the hero's name and health.
+    this.heroLabel = this.add.text(regions.right.x + regions.right.width, row2Y, '', {
+      fontFamily: FONT_UI, fontSize: '15px', color: COLOR.ink,
       stroke: '#0d1016', strokeThickness: 4,
     }).setOrigin(1, 0)
     this.heroBar = this.add.graphics()
 
-    // The boss bar sits across the top between the two corners: the counters
-    // own the left and the start button the right, so it takes the middle.
-    this.bossBar = this.add.graphics()
-    this.bossLabel = this.add.text(W / 2, 0, '', {
-      fontFamily: FONT_UI, fontSize: '18px', color: COLOR.fire,
-      fontStyle: 'bold', stroke: '#0d1016', strokeThickness: 5, letterSpacing: 1,
-    }).setOrigin(0.5, 0)
+    // --- bottom band: mute at the left end, abilities centred, pause at the
+    // right end. The ability slots are built later, from the run's hand, and
+    // land on the same baseline.
+    this.abilityTop = H - this.bands.bottom + B.marginY
+    new AudioToggle(this, 26, H - 26, 30)
+    this.buildPauseButton(W - 26, H - 26)
+    // The Kenney line is gone from the play screen. It was the only element
+    // here with no gameplay function, it sat over the board on a phone, and
+    // the attribution it carried is already a credit of its own in the roll.
+  }
 
-    // Above the ability bar rather than beside the pause button: at a legible
-    // size this line is wide enough to run underneath the button, and on a
-    // narrower phone it would reach the ability slots too. Nothing else is
-    // drawn at this height, at any width.
-    this.add.text(W - 12, this.scale.height - 84, 'art, fonts and audio: Kenney, CC0', {
-      fontFamily: FONT_UI, fontSize: '15px', color: COLOR.ink,
-    }).setOrigin(1, 1).setAlpha(0.4)
+  /** A counter number, scaled down if it no longer fits its plate's field. */
+  private setCounter(t: Phaser.GameObjects.Text, value: string, field: number): void {
+    if (t.text === value) return
+    t.setScale(1)
+    t.setText(value)
+    if (t.width > field) t.setScale(Math.max(0.6, field / t.width))
   }
 
   /**
@@ -126,7 +165,8 @@ export class HudScene extends Phaser.Scene {
    * the number goes in that field, whose position is measured in the manifest
    * rather than guessed, so a replaced plate needs no code change.
    */
-  private buildCounters(): { bottom: number } {
+  /** Lays the counter plates out and reports where the row ends. */
+  private buildCounters(top: number): number {
     const keys = ART.ui.counters
     const order: Array<[string, () => Phaser.GameObjects.Text, string]> = [
       ['peanuts', () => this.peanutsText, COLOR.amber],
@@ -134,38 +174,41 @@ export class HudScene extends Phaser.Scene {
       ['wave', () => this.waveText, COLOR.ink],
     ]
     let x = HUD.marginX
-    let bottom = HUD.marginY
     for (const [name, , colour] of order) {
       const key = keys[name]
       const cfg = renderFor(key)
       const scale = HUD.plateHeight / (cfg.contentHeight ?? 96)
       const plateW = (cfg.contentWidth ?? 232) * scale
 
-      const plate = this.add.image(x, HUD.marginY, key).setOrigin(0, 0)
+      const plate = this.add.image(x, top, key).setOrigin(0, 0)
       plate.setScale(scale)
 
       // Defaults only matter for a plate whose field was never measured; the
       // three real ones all carry theirs.
       const text = this.add.text(
         x + (cfg.fieldLeft ?? 0.3) * plateW + HUD.numberMargin,
-        HUD.marginY + (cfg.fieldCentreY ?? 0.5) * HUD.plateHeight,
+        top + (cfg.fieldCentreY ?? 0.5) * HUD.plateHeight,
         '',
         { fontFamily: FONT_DISPLAY, fontSize: `${HUD.numberSize}px`, color: colour },
       ).setOrigin(0, 0.5)
 
-      if (name === 'peanuts') this.peanutsText = text
-      else if (name === 'lives') this.livesText = text
-      else this.waveText = text
+      // The field the number is printed into, so a five-glyph wave counter
+      // cannot run off the end of its own plate.
+      const field = plateW * (1 - (cfg.fieldLeft ?? 0.3)) - HUD.numberMargin * 2
+      if (name === 'peanuts') { this.peanutsText = text; this.peanutsField = field }
+      else if (name === 'lives') { this.livesText = text; this.livesField = field }
+      else { this.waveText = text; this.waveField = field }
 
       x += plateW + HUD.plateGap
-      bottom = Math.max(bottom, HUD.marginY + HUD.plateHeight)
     }
-    return { bottom }
+    return x - HUD.plateGap
   }
 
   /** Width is declared here so the caller can place the button by its own
    *  size rather than by a number that has to be kept in step with it. */
   private static readonly START_W = 240
+  /** Below this the plate's own end caps leave no room for a label at all. */
+  private static readonly START_MIN_W = 150
   private static readonly START_H = 50
 
   /**
@@ -242,8 +285,8 @@ export class HudScene extends Phaser.Scene {
     this.scene.restart()
   }
 
-  private buildStartButton(x: number, y: number): void {
-    const w = HudScene.START_W
+  private buildStartButton(x: number, y: number, width: number): void {
+    const w = width
     const h = HudScene.START_H
     this.startBtn = plateButton(this, x + w / 2, y + h / 2, w, h, '',
       () => this.world.startWave(), 16)
@@ -290,7 +333,8 @@ export class HudScene extends Phaser.Scene {
     // Along the bottom centre, where a hero's actives belong, clear of the
     // counters entirely.
     let x = (this.scale.width - totalW) / 2
-    const bottomY = this.scale.height - ICON_H - 14
+    // Inside the bottom band, on the baseline the band was sized for.
+    const bottomY = this.abilityTop
     defs.forEach((d, i) => {
       if (i > 0 && d.hero && !defs[i - 1]!.hero) x += bar.groupGap
       const pitch = pitchOf(d)
@@ -320,12 +364,6 @@ export class HudScene extends Phaser.Scene {
     })
   }
 
-  /** The wave message steps down out of the boss block's way while one is up. */
-  private placeMessage(hasBoss: boolean): void {
-    const drop = hasBoss ? HUD.bossBarTop + HUD.bossBarHeight + 30 : 8
-    this.message.setY(this.countersBottom + drop)
-  }
-
   update(): void {
     // The HUD is a separate scene and renders after the world, so a dialog the
     // world owns cannot cover it — the wave message ran straight through the
@@ -336,7 +374,6 @@ export class HudScene extends Phaser.Scene {
     this.cameras.main.setAlpha(this.world.modalOpen ? 0.3 : 1)
 
     const s = this.world.status
-    this.placeMessage(Boolean(s.bossName))
 
     // A refusal is consumed once: the world raises it, the HUD shows it.
     if (s.alert) {
@@ -352,8 +389,8 @@ export class HudScene extends Phaser.Scene {
       this.slotsBuilt = true
     }
 
-    this.peanutsText.setText(`${s.peanuts}`)
-    this.livesText.setText(`${s.lives}`)
+    this.setCounter(this.peanutsText, `${s.peanuts}`, this.peanutsField)
+    this.setCounter(this.livesText, `${s.lives}`, this.livesField)
     // Money and lives are the two numbers a player watches, so a change has to
     // announce itself rather than quietly appear.
     if (this.lastPeanuts >= 0 && s.peanuts !== this.lastPeanuts) {
@@ -365,7 +402,7 @@ export class HudScene extends Phaser.Scene {
     }
     this.lastPeanuts = s.peanuts
     this.lastLives = s.lives
-    this.waveText.setText(`${Math.min(s.wave + 1, s.waveCount)}/${s.waveCount}`)
+    this.setCounter(this.waveText, `${Math.min(s.wave + 1, s.waveCount)}/${s.waveCount}`, this.waveField)
     this.message.setText(s.message)
 
     this.drawBossBar(s)
@@ -374,25 +411,33 @@ export class HudScene extends Phaser.Scene {
     this.drawHeroBar(s)
   }
 
-  /** Across the top while a boss is on the field, and gone the rest of the
-   *  time. Nothing else may occupy the middle of that strip. */
+  /**
+   * The boss bar, in the left region of the top band's second row.
+   *
+   * It takes the same region the wave message uses, and the message is hidden
+   * while it is up: a full-width bar centred across the top used to run
+   * through the wave counter on one side and the start button on the other,
+   * and pushing the message out of its way pushed it into the board.
+   *
+   * The name is drawn *inside* the bar rather than under it, because a label
+   * on its own line is another row the band would have to be tall enough for.
+   */
   private drawBossBar(s: GameScene['status']): void {
     this.bossBar.clear()
-    if (!s.bossName) {
+    const boss = Boolean(s.bossName)
+    // One region, one occupant.
+    this.message.setVisible(!boss)
+    if (!boss) {
       this.bossLabel.setText('')
       return
     }
-    // Under the counters, not across them, and never wider than the screen.
-    // Centred at the very top against a fixed 560px it ran through the wave
-    // counter on one side and the start button on the other.
-    const w = Math.min(HUD.bossBarWidth, this.scale.width - HUD.marginX * 4)
-    const h = HUD.bossBarHeight
-    const x = (this.scale.width - w) / 2
-    const y = this.countersBottom + HUD.bossBarTop
+    const region = this.regions.left
+    const h = HUD.bands.rowHeight - 4
+    const x = region.x
+    const y = this.row2Y
+    const w = region.width
     const ratio = Phaser.Math.Clamp(s.bossHealth / Math.max(s.bossMax, 1), 0, 1)
 
-    this.bossLabel.setText(s.bossName.toUpperCase())
-    this.bossLabel.setY(y + h + 5)
     this.bossBar.fillStyle(0x0d1016, 0.82).fillRoundedRect(x - 3, y - 3, w + 6, h + 6, 5)
     this.bossBar.fillStyle(0x3a1f1c, 1).fillRect(x, y, w, h)
     this.bossBar.fillStyle(0xff5a3c, 1).fillRect(x, y, w * ratio, h)
@@ -401,6 +446,8 @@ export class HudScene extends Phaser.Scene {
     for (const t of HUD.bossPhaseMarks) {
       this.bossBar.lineStyle(2, 0x0d1016, 0.8).lineBetween(x + w * t, y, x + w * t, y + h)
     }
+    this.bossLabel.setText(s.bossName.toUpperCase())
+    this.bossLabel.setPosition(x + w / 2, y + h / 2)
   }
 
   /**
@@ -413,7 +460,7 @@ export class HudScene extends Phaser.Scene {
    */
   private toast(text: string): void {
     this.activeToast?.destroy()
-    const label = this.add.text(this.scale.width / 2, this.scale.height - ICON_H - 40, text, {
+    const label = this.add.text(this.scale.width / 2, this.abilityTop - 6, text, {
       fontFamily: FONT_UI, fontSize: '17px', color: COLOR.ink,
       fontStyle: 'bold', align: 'center',
       wordWrap: { width: this.scale.width - 80 },
@@ -469,7 +516,9 @@ export class HudScene extends Phaser.Scene {
       const left = Math.ceil(s.readyCountdown)
       if (left > 0) {
         const bonus = Math.floor(s.readyCountdown) * RULES.pacing.earlyStartPeanutsPerSecond
-        this.startBtn.setLabel(`START WAVE ${n}  ${left}s${bonus > 0 ? `  +${bonus}` : ''}`)
+        // Three things on one plate. Separated by middots rather than double
+        // spaces so the line is as short as it can be and still parse.
+        this.startBtn.setLabel(`WAVE ${n} · ${left}s${bonus > 0 ? ` · +${bonus}` : ''}`)
       } else {
         this.startBtn.setLabel(`START WAVE ${n}`)
       }
@@ -538,25 +587,35 @@ export class HudScene extends Phaser.Scene {
     return s.abilities.includes(slot.id)
   }
 
+  /**
+   * The hero's name and health, in the right region of the second row.
+   *
+   * Name on the bar rather than above it, for the same reason the boss's is:
+   * a second line is a taller band, and on a phone the band is taken out of
+   * the board.
+   */
   private drawHeroBar(s: GameScene['status']): void {
-    const w = 200
-    const x = this.scale.width - HUD.marginX - w
-    const y = HUD.marginY + 72
+    const region = this.regions.right
+    const x = region.x
+    const w = region.width
+    const h = HUD.bands.rowHeight - 4
+    const y = this.row2Y
 
     let state = ''
-    if (s.heroDown) state = ' — DOWN'
-    else if (s.lastStand) state = ' — DAD MODE'
+    if (s.heroDown) state = ' · DOWN'
+    else if (s.lastStand) state = ' · DAD MODE'
     this.heroLabel.setText(`${s.heroName}${state}`)
     this.heroLabel.setColor(s.lastStand ? COLOR.fire : COLOR.ink)
-    this.heroLabel.setX(x + w)
+    this.heroLabel.setPosition(x + w - 4, y + h / 2)
+    this.heroLabel.setOrigin(1, 0.5)
 
     const ratio = Phaser.Math.Clamp(s.heroHealth / Math.max(s.heroMax, 1), 0, 1)
     this.heroBar.clear()
-    this.heroBar.fillStyle(0x000000, 0.55).fillRoundedRect(x, y, w, 13, 5)
+    this.heroBar.fillStyle(0x000000, 0.55).fillRoundedRect(x, y, w, h, 5)
     this.heroBar.fillStyle(s.heroDown ? 0x5a5a5a : s.lastStand ? 0xff5a3c : 0x4fa3e3, 1)
-    this.heroBar.fillRoundedRect(x + 2, y + 2, Math.max(0, (w - 4) * ratio), 9, 4)
+    this.heroBar.fillRoundedRect(x + 2, y + 2, Math.max(0, (w - 4) * ratio), h - 4, 4)
     // The 25% mark, so the Last Stand threshold is legible before it fires.
     const markX = x + 2 + (w - 4) * 0.25
-    this.heroBar.lineStyle(1, COLOR.panelEdge, 0.9).lineBetween(markX, y, markX, y + 13)
+    this.heroBar.lineStyle(1, COLOR.panelEdge, 0.9).lineBetween(markX, y, markX, y + h)
   }
 }

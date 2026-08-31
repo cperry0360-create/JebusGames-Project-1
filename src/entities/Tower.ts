@@ -97,7 +97,12 @@ export class Tower extends Phaser.GameObjects.Container {
   private drawTier(): void {
     const t = PRESENTATION.towerTier
     const total = maxTier(this.def)
-    const top = -this.turret.displayHeight - t.pipRiseAboveTop
+    // On the base, not above the head. Floating a row of pips a tower's full
+    // height above its origin put them out over the map, unattached to
+    // anything the player could see them belonging to, and close enough to the
+    // next tower's row to collide with it. Down here they sit inside the
+    // tower's own footprint and cannot reach a neighbour.
+    const top = t.pipDropBelowBase
     const span = (total - 1) * t.pipGap
     this.pips.clear()
     for (let i = 0; i < total; i++) {

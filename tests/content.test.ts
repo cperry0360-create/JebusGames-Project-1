@@ -487,6 +487,23 @@ test('tier is visible on the board without opening a panel', () => {
   const build = tower.slice(tower.indexOf('private tickBuild'))
   assert.match(build.slice(0, build.indexOf('\n  ', 40) + 400), /drawTier\(\)/,
     'finishing a tier never redraws the indicator')
+
+  // On the base, not floating above the tower's head. A row hung a full
+  // sprite-height above the origin sat out over the map belonging to nothing,
+  // and was close enough to the next tower's row to run into it.
+  assert.ok(typeof t.pipDropBelowBase === 'number' && t.pipDropBelowBase > 0,
+    'the pips are not anchored below the tower base')
+  assert.equal(t.pipRiseAboveTop, undefined,
+    'the pips still float above the tower art')
+  const draw = /private drawTier\(\)[\s\S]*?\n  \}/.exec(tower)![0]
+  assert.doesNotMatch(draw, /turret\.displayHeight/,
+    'the pip row is still positioned from the height of the art')
+  // And the row has to fit inside a tower's own footprint, or two towers side
+  // by side collide.
+  const span = (3 - 1) * t.pipGap + t.pipRadius * 2
+  const shadow = read('presentation').shadow.defaultWidth
+  assert.ok(span <= shadow * 2.6,
+    `a ${span}px pip row is wider than the tower it belongs to`)
 })
 
 /* --------------------------------------- hero abilities have their own art */

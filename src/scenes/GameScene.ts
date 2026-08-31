@@ -18,7 +18,7 @@ import type { BuildSpot } from '../systems/BuildSystem.ts'
 import { WaveSpawner } from '../systems/WaveSpawner.ts'
 import { withinRadius, pickNearest } from '../systems/Targeting.ts'
 import { GROUND_DEPTH } from '../systems/DepthSort.ts'
-import { ART } from '../systems/Art.ts'
+import { ART, applyRender } from '../systems/Art.ts'
 import { Cooldowns } from '../systems/Cooldowns.ts'
 import { unlockedTowerCount } from '../systems/Draft.ts'
 import { runState, setRunState } from '../systems/RunState.ts'
@@ -42,6 +42,8 @@ import { maxTier, nextStep, sellValue, specSummary, statAt } from '../systems/Up
 import { canAffordAny, openingPurse } from '../systems/Economy.ts'
 import { addBannerPoints, hasClearedARun, recordRunCleared } from '../systems/Save.ts'
 import { bannerPointsFor, verdictFor, type RunOutcome } from '../systems/Banner.ts'
+import { waveOutcome } from '../systems/Wave.ts'
+import { bandsFor, type Bands } from '../systems/Bands.ts'
 
 const MAP = mapData as MapDef
 const RULES = rulesData as RulesDef
@@ -130,6 +132,9 @@ export class GameScene extends Phaser.Scene {
   /** Everything drawn in screen space rather than on the map. The main
    *  camera ignores it, so it neither pans nor zooms. */
   private uiCam!: Phaser.Cameras.Scene2D.Camera
+  /** The reserved HUD strips. Public so the HUD lays out against the same
+   *  numbers the world camera is clipped by, rather than a parallel guess. */
+  bands: Bands = { top: 0, bottom: 0, worldTop: 0, worldHeight: 0 }
   private readonly screenSpace: Phaser.GameObjects.GameObject[] = []
   /** Set at press time when the press belonged to a menu, ticket or dialog. */
   private pressTakenByUi = false
@@ -159,6 +164,12 @@ export class GameScene extends Phaser.Scene {
   private ticket: ScratchCard | null = null
   /** One Server Nuke per run, dropped or not. */
   private nukeUsed = false
+  /** Enemies that reached the exit during the current wave. Reset at its
+   *  start; non-zero means the wave was survived rather than cleared. */
+  private escapedThisWave = 0
+  /** The half-opacity tower shown on the pad while a build option is chosen.
+   *  Never drawn without a pad to stand on. */
+  private ghost?: Phaser.GameObjects.Image
   private casting = false
 
   constructor() {
@@ -187,7 +198,11 @@ export class GameScene extends Phaser.Scene {
     // Created before anything registers itself as screen space.
     this.uiCam = this.cameras.add(0, 0, this.scale.width, this.scale.height)
     this.uiCam.setName('ui')
-    this.scale.on('resize', () => this.uiCam.setSize(this.scale.width, this.scale.height))
+    this.applyBands()
+    this.scale.on('resize', () => {
+      this.uiCam.setSize(this.scale.width, this.scale.height)
+      this.applyBands()
+    })
 
     this.lane = new Path(MAP.waypoints)
     this.build = new BuildSystem(MAP.buildSpots, MAP.spotRadius)
@@ -244,7 +259,10 @@ this.armReadyCountdown()
     // Arming an ability or a restructure used to be escapable only with ESC or
     // a right-click, neither of which exists on a touch device: once armed, the
     // player was stuck casting. This is the way out.
-    this.cancelBtn = plateButton(this, this.scale.width / 2, this.scale.height - 96,
+    // Just above the bottom band, not over it: at `height - 96` this sat on
+    // the ability icons on a phone, which is where the thumb already is.
+    this.cancelBtn = plateButton(this, this.scale.width / 2,
+      this.scale.height - this.bands.bottom - 32,
       190, 44, 'CANCEL', () => this.clearSelection(), 16, 'secondary')
     for (const part of this.cancelBtn.parts) {
       (part as Phaser.GameObjects.Image).setDepth?.(OVERLAY_DEPTH + 5)
@@ -343,6 +361,40 @@ this.armReadyCountdown()
         },
       },
     })
+  }
+
+  /**
+   * The reserved strips, and the world viewport between them.
+   *
+   * This is the whole of PROTOTYPE-GAP item 16, and it is one call: the world
+   * camera is given the strip between the bands as its *viewport*, so Phaser
+   * clips everything it draws to that rectangle. A tower, an enemy, a build
+   * pad or a floating damage number cannot reach the HUD, at any depth, at any
+   * zoom, because they are not drawn outside the viewport at all.
+   *
+   * The UI camera keeps the whole screen, which is how the HUD gets to use the
+   * bands that the world cannot.
+   */
+  private applyBands(): void {
+    const W = this.scale.width
+    const H = this.scale.height
+    this.bands = bandsFor(H, PRESENTATION.hud.bands)
+    this.cameras.main.setViewport(0, this.bands.worldTop, W, this.bands.worldHeight)
+    // Bounds and zoom are computed from the viewport, so the rig has to be
+    // told the view got shorter or it will clamp against the old height.
+    this.rig?.viewportChanged()
+  }
+
+  /**
+   * A pointer's position on the map.
+   *
+   * Not `pointer.worldX`: that is resolved against whichever camera Phaser
+   * decided the pointer was over, and this scene has two — with the world
+   * camera now inset by the top band, picking the wrong one puts every tap a
+   * band's height out. Asking the world camera directly cannot be ambiguous.
+   */
+  private worldAt(p: Phaser.Input.Pointer): { x: number; y: number } {
+    return this.cameras.main.getWorldPoint(p.x, p.y)
   }
 
   /**
@@ -565,14 +617,15 @@ this.armReadyCountdown()
       return
     }
     if (this.status.phase === 'won' || this.status.phase === 'lost') return
+    const w = this.worldAt(p)
 
     if (this.status.mode === 'targeting' && this.status.pendingAbility) {
-      this.fireAbility(this.status.pendingAbility, p.worldX, p.worldY)
+      this.fireAbility(this.status.pendingAbility, w.x, w.y)
       return
     }
 
     if (this.status.mode === 'restructure') {
-      this.doRestructure(p.worldX, p.worldY)
+      this.doRestructure(w.x, w.y)
       return
     }
 
@@ -587,7 +640,7 @@ this.armReadyCountdown()
     // target: it must never lose a tap to the ground underneath it, and it
     // takes the tap even when a menu is already open, so a click on the next
     // pad moves the menu there rather than being spent dismissing it.
-    const spot = this.build.spotAt(p.worldX, p.worldY)
+    const spot = this.build.spotAt(w.x, w.y)
     if (spot && this.build.isFree(spot.index)) {
       this.openBuildMenu(spot)
       return
@@ -598,13 +651,13 @@ this.armReadyCountdown()
       return
     }
 
-    const tower = this.towerAt(p.worldX, p.worldY)
+    const tower = this.towerAt(w.x, w.y)
     if (tower) {
       this.selectTower(tower)
       return
     }
 
-    if (this.hero.hits(p.worldX, p.worldY)) {
+    if (this.hero.hits(w.x, w.y)) {
       this.selectHero()
       return
     }
@@ -612,7 +665,7 @@ this.armReadyCountdown()
     // Bare ground. It is only an order when the hero is actually selected,
     // so a misjudged tap cannot walk him off his post.
     if (this.heroSelected) {
-      this.orderHero(p.worldX, p.worldY)
+      this.orderHero(w.x, w.y)
       return
     }
     this.clearSelection()
@@ -623,6 +676,7 @@ this.armReadyCountdown()
       this.status.message = `${this.hero.def.name} is down for this encounter.`
       return
     }
+    this.clearGhost()
     this.menu.close()
     this.selected = null
     this.heroSelected = true
@@ -660,13 +714,48 @@ this.armReadyCountdown()
       sx, sy, this.status.peanuts,
       (id) => this.place(id, spot),
       (id) => {
-        if (id) this.showTowerRange(spot.x, spot.y, TOWERS[id])
-        else this.rangeRing.clear()
+        if (id) {
+          this.showTowerRange(spot.x, spot.y, TOWERS[id])
+          this.showGhost(id, spot)
+        } else {
+          this.rangeRing.clear()
+          this.clearGhost()
+        }
       },
+      { top: this.bands.worldTop, height: this.bands.worldHeight },
     )
     this.asScreenSpace(this.menu.objects)
     this.drawSpots()
     this.status.message = 'Pick a tower, or click away to cancel.'
+  }
+
+  /**
+   * A half-transparent tower standing on the pad it would be built on.
+   *
+   * It is a *world* object, so it is drawn by the world camera and therefore
+   * clipped to the board: it cannot reach the HUD however tall the sprite is.
+   * And it is only ever created against a pad, so there is no preview to draw
+   * when no pad is targeted.
+   */
+  private showGhost(id: string, spot: BuildSpot): void {
+    const def = TOWERS[id]
+    if (!def) return
+    this.clearGhost()
+    if (!this.textures.exists(def.sprite)) return
+    const g = this.add.image(spot.x, spot.y, def.sprite).setAlpha(0.5)
+    // The same anchor and scale a built tower gets, so the ghost stands where
+    // the real one will rather than near it.
+    applyRender(g, def.sprite)
+    // Under the HUD's depth and above the ground, on the pad's own row so it
+    // sorts against neighbours exactly as the built tower will.
+    g.setDepth(spot.y - 1)
+    this.ghost = g
+    this.syncCameras()
+  }
+
+  private clearGhost(): void {
+    this.ghost?.destroy()
+    this.ghost = undefined
   }
 
   private place(id: string, spot: BuildSpot): void {
@@ -686,6 +775,7 @@ this.armReadyCountdown()
     this.towers.push(tower)
     this.refreshSupport()
     play(this, 'build')
+    this.clearGhost()
     this.menu.close()
     this.rangeRing.clear()
     this.drawSpots()
@@ -693,6 +783,7 @@ this.armReadyCountdown()
   }
 
   private selectTower(tower: Tower): void {
+    this.clearGhost()
     this.menu.close()
     this.drawSpots()
     this.selected = tower
@@ -892,6 +983,7 @@ this.armReadyCountdown()
 
   private clearSelection(): void {
     this.setCancelVisible(false)
+    this.clearGhost()
     this.menu.close()
     this.selected = null
     this.restructuring = null
@@ -939,22 +1031,23 @@ this.armReadyCountdown()
   }
 
   private updateHover(p: Phaser.Input.Pointer): void {
+    const w = this.worldAt(p)
     if (this.status.mode === 'targeting' && this.status.pendingAbility) {
       const def = ABILITIES[this.status.pendingAbility]
       this.targetRing.clear()
-      const ok = this.validCastPoint(def, p.worldX, p.worldY)
+      const ok = this.validCastPoint(def, w.x, w.y)
       // Green where the cast will land, red where it will be refused, so the
       // restriction is visible before the tap rather than after it.
       const tint = ok ? 0xff9d5a : 0xff5a3c
       if (def.radius > 0) {
-        this.targetRing.fillStyle(tint, ok ? 0.16 : 0.1).fillCircle(p.worldX, p.worldY, def.radius)
-        this.targetRing.lineStyle(2, tint, 0.9).strokeCircle(p.worldX, p.worldY, def.radius)
+        this.targetRing.fillStyle(tint, ok ? 0.16 : 0.1).fillCircle(w.x, w.y, def.radius)
+        this.targetRing.lineStyle(2, tint, 0.9).strokeCircle(w.x, w.y, def.radius)
       }
       return
     }
     if (this.menu.isOpen) return
 
-    const tower = this.towerAt(p.worldX, p.worldY)
+    const tower = this.towerAt(w.x, w.y)
     if (tower) {
       if (this.hoverSpot) { this.hoverSpot = null; this.drawSpots() }
       if (!this.selected) this.showTowerRange(tower.x, tower.y, tower)
@@ -962,7 +1055,7 @@ this.armReadyCountdown()
     }
     if (!this.selected) this.rangeRing.clear()
 
-    const spot = this.build.spotAt(p.worldX, p.worldY)
+    const spot = this.build.spotAt(w.x, w.y)
     const next = spot && this.build.isFree(spot.index) ? spot : null
     if (next?.index !== this.hoverSpot?.index) {
       this.hoverSpot = next
@@ -1030,6 +1123,7 @@ this.armReadyCountdown()
       this.fireAbility(id, 0, 0)
       return
     }
+    this.clearGhost()
     this.menu.close()
     this.status.mode = 'targeting'
     this.status.pendingAbility = id
@@ -1131,7 +1225,8 @@ this.armReadyCountdown()
   /** The ticket sits over the board and never pauses it. */
   private showTicket(payout: number, autoRevealSeconds: number): void {
     this.ticket?.destroy()
-    this.ticket = new ScratchCard(this, this.scale.width / 2, this.scale.height / 2, TICKET_DEPTH, {
+    this.ticket = new ScratchCard(this, this.scale.width / 2,
+      this.bands.worldTop + this.bands.worldHeight / 2, TICKET_DEPTH, {
       payout,
       autoRevealSeconds,
       onCollect: (amount) => {
@@ -1198,6 +1293,7 @@ this.armReadyCountdown()
       this.refuse('Build a tower first, then you can move it.')
       return
     }
+    this.clearGhost()
     this.menu.close()
     this.status.mode = 'restructure'
     this.restructuring = null
@@ -1274,6 +1370,7 @@ this.armReadyCountdown()
     const saved = Math.floor(this.status.readyCountdown)
     const bonus = saved * RULES.pacing.earlyStartPeanutsPerSecond
     this.status.readyCountdown = 0
+    this.escapedThisWave = 0
     this.clearSelection()
     this.spawner.begin(WAVES.waves[this.status.wave])
     this.status.phase = 'wave'
@@ -1288,25 +1385,46 @@ this.armReadyCountdown()
     }
   }
 
-  private checkWaveCleared(): void {
+  /**
+   * A wave ends when the field is empty and there is nothing left to spawn.
+   * Whether it was *cleared* is a separate question, and the one the game used
+   * to get wrong: an enemy that escaped was removed from the field exactly
+   * like one that died, so the wave cleared either way — and walking the boss
+   * off the end finished the run as a win.
+   */
+  private checkWaveOver(): void {
     if (this.status.phase !== 'wave') return
     if (!this.spawner.done || this.enemies.length > 0) return
 
-    play(this, 'wave-cleared')
-    this.earn(RULES.peanutsPerWaveCleared)
+    const escaped = this.escapedThisWave
+    const last = this.status.wave + 1 >= WAVES.waves.length
+    const { cleared, runEnds } = waveOutcome(escaped, last)
+
+    if (cleared) {
+      play(this, 'wave-cleared')
+      this.earn(RULES.peanutsPerWaveCleared)
+    }
     this.status.wave++
     this.grantTowerUnlocks()
 
-    if (this.status.wave >= WAVES.waves.length) {
-      this.endRun('won')
+    if (runEnds) {
+      this.endRun(runEnds)
       return
     }
     this.status.phase = 'ready'
     this.status.waveName = WAVES.waves[this.status.wave].name
     this.armReadyCountdown()
-    this.announce('WAVE CLEARED', COLOR.good)
-    this.status.message =
-      `Wave cleared, +${RULES.peanutsPerWaveCleared} peanuts. Build or reposition — the next wave starts on its own.`
+    if (cleared) {
+      this.announce('WAVE CLEARED', COLOR.good)
+      this.status.message =
+        `Wave cleared, +${RULES.peanutsPerWaveCleared} peanuts. Build or reposition — the next wave starts on its own.`
+    } else {
+      // Not a clear, and it should not sound like one.
+      const n = escaped === 1 ? 'ONE GOT THROUGH' : `${escaped} GOT THROUGH`
+      this.announce(n, COLOR.fire)
+      this.status.message =
+        `Wave survived, not cleared: ${escaped} reached the cabinet. No clear bonus.`
+    }
   }
 
   /** A 3rd tower after wave 4 and a 4th after wave 8, drawn from the reserve. */
@@ -1338,7 +1456,7 @@ this.armReadyCountdown()
     // something: DESIGN.md replaced the three-star rating with the Banner
     // precisely so that a run ending at wave nine is still progress.
     const outcome: RunOutcome = {
-      wavesCleared: this.status.wave,
+      wavesReached: this.status.wave,
       cleared: won,
       livesRemaining: this.status.lives,
       maxLives: RULES.startingLives,
@@ -1389,7 +1507,10 @@ this.armReadyCountdown()
   }
 
   private announce(text: string, color: string): void {
-    const t = this.add.text(this.scale.width / 2, this.scale.height * 0.3, text, {
+    // Over the board, measured from the world strip: a third of the way down
+    // the *screen* is inside the top band on a phone.
+    const t = this.add.text(this.scale.width / 2,
+      this.bands.worldTop + this.bands.worldHeight * 0.28, text, {
       fontFamily: FONT_DISPLAY, fontSize: '40px', color, stroke: '#0d1016', strokeThickness: 7,
     }).setOrigin(0.5).setDepth(OVERLAY_DEPTH + 20).setScale(0.5)
     this.asScreenSpace([t])
@@ -1453,7 +1574,7 @@ this.armReadyCountdown()
     this.status.lastStand = this.hero.lastStandActive
     this.status.enemiesLeft = this.enemies.length + this.spawner.remaining
 
-    this.checkWaveCleared()
+    this.checkWaveOver()
   }
 
   /**
@@ -1488,21 +1609,24 @@ this.armReadyCountdown()
 
   private announceBoss(boss: Enemy): void {
     const W = this.scale.width
-    const H = this.scale.height
+    // The middle of the *board*, not of the screen. The card is 156px tall and
+    // a phone's board is about 220, so centring it on the screen pushed it
+    // through both reserved bands.
+    const mid = this.bands.worldTop + this.bands.worldHeight / 2
     play(this, 'boss', 0.95)
     this.cameras.main.shake(600, 0.007)
 
     // The dialog plate, run the full width of the screen. Its corners scale
     // down to fit a band this shallow, so the chrome reads without the frame
     // swallowing the boss's name.
-    const card = platePanel(this, 0, H / 2 - 78, W, 156)
+    const card = platePanel(this, 0, mid - 78, W, 156)
     card.forEach((p) => p.setDepth(TICKET_DEPTH))
 
-    const name = this.add.text(W / 2, H / 2 - 34, boss.def.name.toUpperCase(), {
+    const name = this.add.text(W / 2, mid - 34, boss.def.name.toUpperCase(), {
       fontFamily: FONT_DISPLAY, fontSize: '56px', color: COLOR.fire,
       stroke: '#0d1016', strokeThickness: 9,
     }).setOrigin(0.5, 0).setDepth(TICKET_DEPTH + 1)
-    const sub = this.add.text(W / 2, H / 2 + 34, boss.def.flavor, {
+    const sub = this.add.text(W / 2, mid + 34, boss.def.flavor, {
       fontFamily: FONT_UI, fontSize: '17px', color: COLOR.ink, ...BODY_SPACING,
       align: 'center', wordWrap: { width: W - 80 },
     }).setOrigin(0.5, 0).setDepth(TICKET_DEPTH + 1)
@@ -1678,7 +1802,9 @@ this.armReadyCountdown()
     play(this, 'cast-servernuke', 0.8)
 
     const W = this.scale.width
-    const y = this.scale.height * 0.3
+    // Measured from the board, not the screen: on a phone a third of the way
+    // down the screen is inside the reserved HUD band.
+    const y = this.bands.worldTop + this.bands.worldHeight * 0.3
     // Not full width, and high rather than centred. This fires *mid-wave* off
     // a kill, so it must not hide the lane at the moment it hands the player a
     // decision — the boss card can afford to, arriving at the start of a wave.
@@ -1732,6 +1858,9 @@ this.armReadyCountdown()
   }
 
   private leak(enemy: Enemy): void {
+    // Counted, not just charged for: an escape is what stops a wave being a
+    // clear, and stops the last wave being a win.
+    this.escapedThisWave++
     this.status.lives -= enemy.def.livesCost
     floatingDamage(this, enemy.x, enemy.centreY, enemy.def.livesCost, true)
     enemy.destroy()
