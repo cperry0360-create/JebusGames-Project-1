@@ -77,6 +77,16 @@ export class Tower extends Phaser.GameObjects.Container {
    * a tower stands about 115px tall, so a base-sized hit area misses most of
    * what the player is actually aiming at.
    */
+  /** How tall the tower stands above its base, so a panel anchored beside it
+   *  can flip clear of the whole thing rather than half of it. */
+  get artHeight(): number {
+    return this.turret.displayHeight
+  }
+
+  get artWidth(): number {
+    return this.turret.displayWidth
+  }
+
   hits(x: number, y: number): boolean {
     const halfW = this.turret.displayWidth / 2
     const top = this.y - this.turret.displayHeight

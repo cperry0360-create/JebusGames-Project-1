@@ -39,6 +39,7 @@ import { platePanel, plateButton, type PlateButton } from '../ui/Plate.ts'
 import { SignBribe } from '../ui/SignBribe.ts'
 import { CameraRig } from '../systems/CameraRig.ts'
 import { Dialog, type DialogChoice, type DialogOptions, type DialogRow } from '../ui/Dialog.ts'
+import { TowerPanel } from '../ui/TowerPanel.ts'
 import { maxTier, nextStep, sellValue, specPoints, statAt } from '../systems/Upgrades.ts'
 import { canAffordAny, openingPurse } from '../systems/Economy.ts'
 import { addBannerPoints, hasClearedARun, recordRunCleared } from '../systems/Save.ts'
@@ -134,6 +135,12 @@ export class GameScene extends Phaser.Scene {
   private sign!: SignBribe
   private cancelBtn!: PlateButton
   private dialog?: Dialog
+  /** The tower panel. Non-modal and anchored beside its tower, so the range
+   *  ring it is asking about stays visible behind it. */
+  private panel?: TowerPanel
+  /** True while the upgrade button is hovered or held, which brightens the
+   *  projected range ring. */
+  private previewingUpgrade = false
   /** Public so a harness run can read the camera's state. */
   rig!: CameraRig
   /** Everything drawn in screen space rather than on the map. The main
@@ -162,6 +169,9 @@ export class GameScene extends Phaser.Scene {
   /** One marker per build spot, created once and then shown or hidden. */
   private pads: Phaser.GameObjects.Image[] = []
   private markerLayer!: Phaser.GameObjects.Graphics
+  /** The dashed circle showing what an upgrade would make this tower's reach.
+   *  Its own layer, because rangeRing is cleared and redrawn constantly. */
+  private projectedRing!: Phaser.GameObjects.Graphics
   /** The seconds left on the revive, drawn on the spot he comes back to.
    *  A Text rather than part of markerLayer, which can only draw shapes. */
   private reviveLabel!: Phaser.GameObjects.Text
@@ -243,6 +253,7 @@ export class GameScene extends Phaser.Scene {
     this.buildSign()
 
     this.markerLayer = this.add.graphics().setDepth(GROUND_DEPTH + 6)
+    this.projectedRing = this.add.graphics().setDepth(GROUND_DEPTH + 5)
     this.reviveLabel = this.add.text(0, 0, '', {
       fontFamily: FONT_UI, fontSize: '20px', fontStyle: 'bold', color: COLOR.ink,
       stroke: '#0d1016', strokeThickness: 5,
@@ -679,6 +690,16 @@ this.armReadyCountdown()
     this.markerLayer.fillStyle(0x4fa3e3, a)
     this.markerLayer.fillTriangle(r.x + 1, r.y - 40, r.x + 22, r.y - 34, r.x + 1, r.y - 28)
 
+    // Pulling out of a fight costs him: while the window is open he takes
+    // extra damage, and the player has to be able to see that it is open.
+    if (this.hero.retreatVulnerableFor > 0) {
+      const w = this.hero.halfFootprint * 2 + 22
+      const y = this.hero.y + this.hero.footOffsetY
+      const beat = 0.5 + 0.5 * Math.sin(this.time.now / 110)
+      this.markerLayer.lineStyle(3, 0xff8f7a, 0.45 + beat * 0.4)
+      this.markerLayer.strokeEllipse(this.hero.x, y, w, w * PAD_SQUASH)
+    }
+
     if (this.heroSelected) {
       // Deliberately not the rally marker's shape or colour: that is a blue
       // flag planted on the ground, this is a green bracket around him. Sized
@@ -737,6 +758,7 @@ this.armReadyCountdown()
         this.menu.ownsAny(over)
         || (this.ticket?.active === true && this.ticket.owns(over))
         || this.dialog?.owns(over) === true
+        || this.panel?.owns(over) === true
       void p
     })
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
@@ -820,6 +842,7 @@ this.armReadyCountdown()
   }
 
   private selectHero(): void {
+    this.deselectTower()
     if (this.hero.down) {
       this.status.message =
         `${this.hero.def.name} is down — back in ${Math.max(1, Math.ceil(this.hero.reviveIn))}s.`
@@ -834,11 +857,23 @@ this.armReadyCountdown()
   }
 
   private orderHero(x: number, y: number): void {
+    // Asked before the order, because the order is what ends the fight.
+    const wasFighting = this.hero.engaged
     this.hero.setRally(x, y)
     this.pingRally(x, y)
     this.heroSelected = false
     this.rangeRing.clear()
-    this.status.message = `${this.hero.def.name} is moving up.`
+    // Say which of the two things just happened. Breaking off a fight is a
+    // decision with a cost and should not read the same as walking up an
+    // empty lane.
+    if (wasFighting) {
+      play(this, 'hero-hit', 0.5)
+      logEvent('hero', `disengaged to ${Math.round(x)},${Math.round(y)}`)
+      this.status.message =
+        `${this.hero.def.name} breaks off — exposed while he pulls out.`
+    } else {
+      this.status.message = `${this.hero.def.name} is moving up.`
+    }
   }
 
   // ---------------------------------------------------------------- build UI
@@ -854,7 +889,7 @@ this.armReadyCountdown()
   }
 
   private openBuildMenu(spot: BuildSpot): void {
-    this.selected = null
+    this.deselectTower()
     // The pad is a world position; the menu is screen-space chrome.
     const cam = this.cameras.main
     const sx = (spot.x - cam.worldView.x) * cam.zoom
@@ -934,15 +969,83 @@ this.armReadyCountdown()
     this.status.message = `${def.name} built.`
   }
 
+  /** Drops the current tower selection and everything drawn for it. */
+  private deselectTower(): void {
+    this.panel?.close()
+    this.selected = null
+    this.projectedRing.clear()
+    this.pathBand.clear()
+  }
+
   private selectTower(tower: Tower): void {
     this.clearGhost()
     this.menu.close()
     this.drawSpots()
     this.selected = tower
-    this.showTowerRange(tower.x, tower.y, tower)
+    this.previewingUpgrade = false
+    this.drawSelectedRange(tower)
+    // The stretch of lane this tower actually covers. "Is it in the right
+    // place?" is the other half of "should I upgrade it?", and a circle over
+    // grass does not answer it on its own.
+    this.drawCoveredLane(tower)
     const bonus = tower.supportBonus > 0 ? `  ·  +${Math.round(tower.supportBonus * 100)}% sheltered` : ''
     this.status.message = `${tower.def.name}, tier ${tower.tier}${bonus}`
     this.openTowerPanel(tower)
+  }
+
+  /**
+   * The range ring, and — when there is an upgrade to buy — what the upgrade
+   * would make it.
+   *
+   * Two circles, styled differently on purpose: the solid one is what this
+   * tower does now, the dashed one is what the money buys. That comparison is
+   * the whole question the panel is asking, and it used to be behind the
+   * panel.
+   */
+  private drawSelectedRange(tower: Tower): void {
+    this.showTowerRange(tower.x, tower.y, tower)
+    this.projectedRing.clear()
+    if (tower.upgrading) return
+    const step = nextStep(tower.def, tower.tier)
+    if (!step) return
+    const now = tower.isSupport ? tower.supportRadius : tower.range
+    const next = statAt(tower.def, tower.tier + 1,
+      tower.isSupport ? 'supportRadius' : 'range', tower.spec)
+    if (next <= now + 0.5) return
+    this.dashedCircle(tower.x, tower.y, next, 0xf2d06b, this.previewingUpgrade ? 1 : 0.6)
+  }
+
+  /**
+   * The stretch of lane a tower covers, painted on the road itself.
+   *
+   * Reuses the band the summon-targeting overlay draws, because it is the
+   * same question in a different direction: which part of the path is inside
+   * this circle.
+   */
+  private drawCoveredLane(tower: Tower): void {
+    this.pathBand.clear()
+    if (tower.isSupport) return
+    const r = tower.range
+    const step = 14
+    this.pathBand.fillStyle(0xf6ecd9, 0.14)
+    for (let d = 0; d <= this.lane.totalLength; d += step) {
+      const pt = this.lane.pointAt(d)
+      if (Math.hypot(pt.x - tower.x, pt.y - tower.y) > r) continue
+      this.pathBand.fillCircle(pt.x, pt.y, 15)
+    }
+  }
+
+  /** A ring of dashes, so the projected range cannot be mistaken for the
+   *  current one at a glance. */
+  private dashedCircle(x: number, y: number, r: number, colour: number, alpha: number): void {
+    const dashes = Math.max(16, Math.round(r / 7))
+    const arc = (Math.PI * 2) / dashes
+    this.projectedRing.lineStyle(3, colour, alpha)
+    for (let i = 0; i < dashes; i += 2) {
+      this.projectedRing.beginPath()
+      this.projectedRing.arc(x, y, r, i * arc, (i + 1) * arc, false)
+      this.projectedRing.strokePath()
+    }
   }
 
   /**
@@ -970,7 +1073,11 @@ this.armReadyCountdown()
       return `${a} → ${n(next, digits)}`
     }
 
-    const rows: DialogRow[] = [{ label: 'Tier', value: `${tower.tier} of ${maxTier(def)}` }]
+    // Only what answers "should I upgrade this?". The panel is anchored beside
+    // the tower on a phone screen 390px tall, so every row it does not need is
+    // a row that would push it over the board it is supposed to be beside.
+    // The tier goes in the subtitle, and the two prices go on their buttons.
+    const rows: DialogRow[] = []
     if (support) {
       const nextBonus = after('supportDamageBonus')
       rows.push({
@@ -998,10 +1105,12 @@ this.armReadyCountdown()
     if (tower.upgrading) {
       rows.push({ label: 'Upgrading', value: `${Math.round(tower.buildProgress * 100)}%`, accent: true })
     } else if (step) {
-      rows.push({ label: `Tier ${tower.tier + 1}`, value: `${step.cost} peanuts`, accent: true })
-      rows.push({ label: 'Takes', value: `${step.buildSeconds}s at reduced rate` })
+      rows.push({ label: 'Build time', value: `${step.buildSeconds}s at reduced rate` })
     }
-    rows.push({ label: 'Sell for', value: `${refund} peanuts` })
+
+    const bonus = tower.supportBonus > 0
+      ? `  ·  +${Math.round(tower.supportBonus * 100)}% sheltered` : ''
+    const subtitle = `TIER ${tower.tier} OF ${maxTier(def)}${bonus}`
 
     // The upgrade button is the confirm slot; selling is its own button, so
     // neither can be hit by aiming for the other.
@@ -1011,8 +1120,13 @@ this.armReadyCountdown()
       ? this.status.peanuts >= specPrice
       : step !== null && this.status.peanuts >= step.cost
 
-    this.openDialog({
+    // Non-modal, and beside the tower rather than over it. There is no CLOSE
+    // button: a tap anywhere off the panel closes it, which is one fewer
+    // thing to aim at on a phone.
+    this.panel?.close()
+    this.panel = new TowerPanel(this, TICKET_DEPTH, {
       title: def.name.toUpperCase(),
+      subtitle,
       rows,
       confirm: (choosing || (step !== null && !tower.upgrading))
         ? {
@@ -1023,15 +1137,40 @@ this.armReadyCountdown()
           onPick: () => (choosing ? this.openSpecChoice(tower) : this.upgradeTower(tower)),
         }
         : undefined,
-      cancelLabel: 'CLOSE',
-      // Barely dimmed: this one can be opened mid-wave, and the player still
-      // needs to see what is walking down the lane behind it.
-      dim: 0.22,
       extra: {
-        label: 'SELL',
+        label: `SELL · ${refund}`,
         onPick: () => this.sellTower(tower),
       },
+      onPreview: (on) => {
+        this.previewingUpgrade = on
+        if (this.selected) this.drawSelectedRange(this.selected)
+      },
+      onClose: () => {
+        this.panel = undefined
+        this.previewingUpgrade = false
+      },
     })
+    this.asScreenSpace(this.panel.objects)
+    this.positionPanel(tower)
+  }
+
+  /**
+   * Keeps the panel beside its tower.
+   *
+   * Called on open and every frame after, because the world camera pans and
+   * zooms underneath it — a panel anchored once would drift off its tower the
+   * moment the player moved the board.
+   */
+  private positionPanel(tower: Tower): void {
+    if (!this.panel?.active) return
+    const cam = this.cameras.main
+    const base = (tower.y - cam.worldView.y) * cam.zoom + cam.y
+    this.panel.moveTo({
+      x: (tower.x - cam.worldView.x) * cam.zoom + cam.x,
+      base,
+      top: base - tower.artHeight * cam.zoom,
+      halfWidth: (tower.artWidth / 2) * cam.zoom,
+    }, this.layout.panelArea)
   }
 
   /**
@@ -1138,7 +1277,9 @@ this.armReadyCountdown()
     this.setCancelVisible(false)
     this.clearGhost()
     this.menu.close()
+    this.panel?.close()
     this.selected = null
+    this.projectedRing.clear()
     this.restructuring = null
     this.heroSelected = false
     this.status.mode = 'normal'
@@ -1743,8 +1884,12 @@ this.armReadyCountdown()
     )
     this.hero.tick(dt, this.enemies, (e, dmg) => this.damageEnemy(e, dmg, this.hero.def.ignoresArmor))
 
-    if (this.selected) this.showTowerRange(this.selected.x, this.selected.y, this.selected)
-    else if (this.heroSelected) {
+    if (this.selected) {
+      // Redrawn every frame with the panel: the tower can finish an upgrade
+      // while its own panel is open, and the ring has to say so.
+      this.drawSelectedRange(this.selected)
+      this.positionPanel(this.selected)
+    } else if (this.heroSelected) {
       this.showRange(this.hero.x, this.hero.y, this.hero.attackRange, 0x4fa3e3)
     }
     this.drawHeroMarkers()
@@ -1866,6 +2011,11 @@ this.armReadyCountdown()
   // ---------------------------------------------------------------- combat
 
   private fire(tower: Tower, target: Enemy): void {
+    // A support tower has no projectile and never reaches here, but the type
+    // says so now rather than the comment.
+    const shot = tower.def.shot
+    if (!shot) return
+
     play(this, `tower-${tower.id}`)
     const m = tower.muzzle(tower.aimAt(target.x, target.centreY))
     // Locked in at fire time, not at impact: the ramp is the reward for the
@@ -1873,7 +2023,7 @@ this.armReadyCountdown()
     // enough that reading it on arrival would credit the wrong shot.
     const power = tower.damage * tower.rampMultiplier
     this.shots.push(
-      new Projectile(this, m.x, m.y, tower.def.shot, target, tower.def.projectileSpeed, (hit) => {
+      new Projectile(this, m.x, m.y, shot, target, tower.def.projectileSpeed, (hit) => {
         this.impactSpark(hit.x, hit.target.centreY)
         if (tower.splashRadius > 0) {
           this.blast(hit.x, hit.y, tower.splashRadius)

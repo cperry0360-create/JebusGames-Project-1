@@ -13,6 +13,11 @@
     "blockCapacity": 3,
     "damage": 18,
     "attackInterval": 0.85,
+    "retreat": {
+      "vulnerableSeconds": 2.5,
+      "damageTakenMultiplier": 1.5,
+      "readySeconds": 1.0
+    },
     "ignoresArmor": false,
     "passive": {
       "name": "Depreciation",

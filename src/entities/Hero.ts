@@ -43,6 +43,9 @@ export class Hero extends Phaser.GameObjects.Container {
   lastStandActive = false
   /** Seconds until he walks back on, or 0 whenever he is up. */
   reviveIn = 0
+  /** Seconds left of the window where breaking off a fight costs extra
+   *  damage. The scene draws a marker while this is running. */
+  retreatVulnerableFor = 0
 
   private readonly body_: Phaser.GameObjects.Sprite
   private shadow: Phaser.GameObjects.Image
@@ -55,10 +58,17 @@ export class Hero extends Phaser.GameObjects.Container {
    *  a flip, exactly as the enemies do it. */
   private artOffset = 0
   private facingRight = false
+  /** Whatever he swung at last frame, so `engaged` can be asked before the
+   *  order is carried out rather than after. */
+  private lastTarget: Enemy | null = null
   /** Set while the transformation plays, so he neither moves nor fights. */
   private transforming = false
   /** Enemies currently under the vehicle, so one pass is one hit each. */
   private readonly rammed = new Set<Enemy>()
+  /** Set when he is ordered away mid-fight, applied when he arrives: he
+   *  cannot swing for a moment after pulling out of one fight and into
+   *  another. */
+  private arrivalDelay = 0
   /** Where he came onto the map, and where he comes back on. */
   private readonly homeX: number
   private readonly homeY: number
@@ -143,10 +153,36 @@ export class Hero extends Phaser.GameObjects.Container {
     return Math.hypot(this.x - x, this.y - y) <= this.pickRadius
   }
 
+  /**
+   * An order, obeyed immediately.
+   *
+   * It overrides whatever he is doing, including a fight. The old rule was
+   * that he only moved when nothing was in range, which on a lane full of
+   * enemies meant he never moved at all: the player tapped, nothing happened,
+   * and the rally point looked broken.
+   *
+   * Breaking off is not free. Pulling out of a fight opens a window where he
+   * takes extra damage, and he cannot swing for a moment after arriving.
+   */
   setRally(x: number, y: number): void {
     if (this.down) return
+    const wasFighting = this.engaged
     this.rallyX = x
     this.rallyY = y
+    // Turn on the spot, this frame, before he has taken a step. The tap has to
+    // produce a visible answer or the player taps again.
+    this.faceTowards(x, y)
+    if (wasFighting && !this.atRally) {
+      const r = this.def.retreat
+      this.retreatVulnerableFor = r.vulnerableSeconds
+      this.arrivalDelay = r.readySeconds
+      this.emit('retreat')
+    }
+  }
+
+  /** True when something is close enough for him to be swinging at it. */
+  get engaged(): boolean {
+    return this.lastTarget !== null
   }
 
   tick(dt: number, enemies: Enemy[], onHit: (enemy: Enemy, damage: number) => void): void {
@@ -157,22 +193,30 @@ export class Hero extends Phaser.GameObjects.Container {
     }
     if (this.transforming) return
 
-    const target = pickNearest(enemies, this.x, this.y, this.attackRange)
+    if (this.retreatVulnerableFor > 0) this.retreatVulnerableFor -= dt
 
-    // Standing and fighting beats walking: he only moves when nothing is on him.
-    if (!target) {
-      const dx = this.rallyX - this.x
-      const dy = this.rallyY - this.y
-      const dist = Math.hypot(dx, dy)
+    const target = pickNearest(enemies, this.x, this.y, this.attackRange)
+    this.lastTarget = target
+
+    // The order wins. He walks whenever he is not where he was told to be,
+    // and fights only once he is standing there — which is what makes a rally
+    // point a retreat as well as an advance.
+    const dx = this.rallyX - this.x
+    const dy = this.rallyY - this.y
+    const dist = Math.hypot(dx, dy)
+    if (dist > 0.5) {
       const step = this.moveSpeed * dt
       if (dist > step) {
         this.x += (dx / dist) * step
         this.y += (dy / dist) * step
         this.faceTowards(this.rallyX, this.rallyY)
-      } else if (dist > 0) {
+      } else {
         this.setPosition(this.rallyX, this.rallyY)
+        // Arrived: he needs a moment before he can swing again.
+        this.attackTimer = Math.max(this.attackTimer, this.arrivalDelay)
+        this.arrivalDelay = 0
       }
-    } else {
+    } else if (target) {
       this.faceTowards(target.x, target.y)
       this.attackTimer -= dt
       if (this.attackTimer <= 0) {
@@ -226,7 +270,8 @@ export class Hero extends Phaser.GameObjects.Container {
   hurt(amount: number): 'none' | 'lastStand' | 'down' {
     if (this.down) return 'none'
 
-    this.health -= incomingDamage(amount, this.def.lastStand, this.lastStandActive)
+    const exposed = this.retreatVulnerableFor > 0 ? this.def.retreat.damageTakenMultiplier : 1
+    this.health -= incomingDamage(amount, this.def.lastStand, this.lastStandActive) * exposed
     this.drawBar()
 
     if (this.health <= 0) {
@@ -329,6 +374,9 @@ export class Hero extends Phaser.GameObjects.Container {
     this.health = this.def.maxHealth
     this.lastStandActive = false
     this.transforming = false
+    this.retreatVulnerableFor = 0
+    this.arrivalDelay = 0
+    this.lastTarget = null
     this.rammed.clear()
 
     // Back on foot. If he went down in the SUV the vehicle art is still on the

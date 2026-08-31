@@ -784,6 +784,180 @@ async function run() {
     return
   }
 
+  if (scenario === 'towerpanel') {
+    // PROTOTYPE-GAP 11: the panel was covering the range ring it was asking
+    // about. Non-modal, anchored, rings visible.
+    g.status.peanuts = 99999
+    const cam0 = g.cameras.main
+    const spot = SPOTS.findIndex((p) => cam0.worldView.contains(p[0], p[1]))
+    const [px, py] = toScreen(SPOTS[spot][0], SPOTS[spot][1])
+    await click(px, py); await sleep(350)
+    const b = g.menu.hitAreas[0].getBounds()
+    await move(b.centerX, b.centerY)
+    mouse('mousedown', b.centerX, b.centerY); await sleep(300)
+    mouse('mouseup', b.centerX, b.centerY); await sleep(700)
+    const t = g.towers[0]
+    note('built ' + t.def.name + ' range=' + Math.round(t.range))
+
+    await click(...toScreen(t.x, t.y))
+    await sleep(500)
+    note('panel open=' + !!g.panel + ' modalOpen=' + g.modalOpen +
+      ' (must be false — the board stays live)')
+    const pl = g.panel.layer
+    const pb = pl.getBounds()
+    const W = game.scale.width, H = game.scale.height
+    const area = g.layout.panelArea
+    note('panel ' + Math.round(pb.width) + 'x' + Math.round(pb.height) + ' at ' +
+      Math.round(pb.x) + ',' + Math.round(pb.y) + ' in ' + W + 'x' + H)
+    note('inside the free area (' + Math.round(area.x) + ',' + Math.round(area.y) + ' ' +
+      Math.round(area.width) + 'x' + Math.round(area.height) + '): ' +
+      (pb.x >= area.x - 1 && pb.y >= area.y - 1 &&
+       pb.right <= area.x + area.width + 1 && pb.bottom <= area.y + area.height + 1))
+
+    // The tower's own screen position, and whether the panel covers it.
+    const cam = g.cameras.main
+    const tsx = (t.x - cam.worldView.x) * cam.zoom + cam.x
+    const tsy = (t.y - cam.worldView.y) * cam.zoom + cam.y
+    note('tower on screen at ' + Math.round(tsx) + ',' + Math.round(tsy) +
+      ' — panel covers its base: ' + pb.contains(tsx, tsy) + ' (must be false)')
+    // The ring is the thing the panel must not hide.
+    const ringR = t.range * cam.zoom
+    let covered = 0
+    for (let i = 0; i < 36; i++) {
+      const a = (i / 36) * Math.PI * 2
+      if (pb.contains(tsx + Math.cos(a) * ringR, tsy + Math.sin(a) * ringR)) covered++
+    }
+    note('range ring: ' + covered + ' of 36 points on it are behind the panel')
+
+    // The rings. Solid = now, dashed = what the upgrade buys.
+    note('range ring drawn: ' + (g.rangeRing.commandBuffer.length > 0) +
+      ' | projected ring drawn: ' + (g.projectedRing.commandBuffer.length > 0) +
+      ' | covered lane drawn: ' + (g.pathBand.commandBuffer.length > 0))
+    await shot('panel-01-open')
+
+    // Hovering the upgrade button brightens the projected ring.
+    const up = g.panel.layer.list.find((o) => o.text && o.text.startsWith('UPGRADE'))
+    if (up) {
+      const ub = up.getBounds()
+      await move(ub.centerX, ub.centerY)
+      await sleep(300)
+      note('previewing on hover: ' + g.previewingUpgrade)
+      await shot('panel-02-preview')
+      await move(W / 2, 10)
+      await sleep(200)
+    }
+
+    // Panning must keep it stuck to its tower.
+    const beforePan = g.panel.layer.x
+    mouse('mousedown', W * 0.5, H * 0.5)
+    for (let i = 0; i < 8; i++) { mouse('mousemove', W * 0.5 - i * 12, H * 0.5); await sleep(30) }
+    mouse('mouseup', W * 0.5 - 96, H * 0.5)
+    await sleep(700)
+    note('panel followed the pan: ' + (Math.round(g.panel.layer.x) !== Math.round(beforePan)) +
+      ' (' + Math.round(beforePan) + ' -> ' + Math.round(g.panel.layer.x) + ')')
+
+    // Zoomed out, so both rings fit on the glass and can be told apart.
+    for (let i = 0; i < 26; i++) {
+      game.canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, clientX: 422, clientY: 195, bubbles: true }))
+    }
+    await sleep(1200)
+    note('zoomed to ' + g.cameras.main.zoom.toFixed(2) + ' — both rings on screen')
+    await shot('panel-02b-both-rings')
+
+    // A tap off the panel closes it.
+    await click(W * 0.86, H * 0.28)
+    await sleep(400)
+    note('tap off the panel closed it: ' + !g.panel + ' selected=' + !!g.selected)
+    note('rings cleared: ' + (g.projectedRing.commandBuffer.length === 0))
+    await shot('panel-03-closed')
+
+    // And a tower near the bottom must flip the panel above itself.
+    const low = g.build.spots.reduce((a, c) => (c.y > a.y ? c : a))
+    g.cameras.main.centerOn(low.x, low.y - 60)
+    await sleep(600)
+    g.place('withholding', low)
+    await sleep(600)
+    const t2 = g.towers[g.towers.length - 1]
+    g.selectTower(t2)
+    await sleep(500)
+    const c2 = g.cameras.main
+    const t2y = (t2.y - c2.worldView.y) * c2.zoom + c2.y
+    const p2 = g.panel.layer.getBounds()
+    note('low tower at y=' + Math.round(t2y) + ', panel at y=' + Math.round(p2.y) +
+      '..' + Math.round(p2.bottom) + ' — clear of the tower: ' +
+      !g.panel.coversAnchor({ x: (t2.x - c2.worldView.x) * c2.zoom + c2.x, base: t2y, top: 0, halfWidth: 0 }))
+    await shot('panel-04-flipped')
+    return
+  }
+
+  if (scenario === 'retreat') {
+    // "Once Cory is engaged, setting a new rally point does nothing."
+    const H = (await import('./js/data/heroes.json', { with: { type: 'json' } })).default.cory
+    note('retreat cost: ' + JSON.stringify(H.retreat))
+
+    const mid = g.lane.pointAt(g.lane.totalLength * 0.5)
+    g.hero.setRally(mid.x, mid.y)
+    g.startWave()
+    await until(() => g.hero.engaged, 40000)
+    await sleep(600)
+    note('engaged: ' + g.hero.engaged + ' enemies in attack range=' +
+      g.enemies.filter((e) => Math.hypot(e.x - g.hero.x, e.y - g.hero.y) < g.hero.attackRange).length +
+      ' blocked by him=' + g.enemies.filter((e) => e.blocker === g.hero).length)
+    g.cameras.main.centerOn(g.hero.x, g.hero.y)
+    await shot('retreat-01-engaged')
+
+    // The order, mid-fight.
+    const from = [Math.round(g.hero.x), Math.round(g.hero.y)]
+    const held = g.enemies.filter((e) => e.blocker === g.hero)
+    const heldDistances = held.map((e) => Math.round(e.distance))
+    const away = g.lane.pointAt(g.lane.totalLength * 0.5)
+    const dest = [away.x - 170, away.y - 150]
+    const t0 = performance.now()
+    g.orderHero(dest[0], dest[1])
+
+    // Feedback has to be immediate, not after the fight ends.
+    await sleep(120)
+    const moved120 = Math.hypot(g.hero.x - from[0], g.hero.y - from[1])
+    note('120ms after the order: moved ' + Math.round(moved120) + 'px, facing set, ' +
+      'vulnerable=' + g.hero.retreatVulnerableFor.toFixed(1) + 's, msg="' + g.status.message + '"')
+    await shot('retreat-02-breaking-off')
+
+    await until(() => g.hero.atRally, 15000)
+    const arrived = performance.now()
+    note('arrived at ' + Math.round(g.hero.x) + ',' + Math.round(g.hero.y) +
+      ' (asked for ' + Math.round(dest[0]) + ',' + Math.round(dest[1]) + ') after ' +
+      ((arrived - t0) / 1000).toFixed(1) + 's')
+    note('enemies he was holding resumed walking: ' +
+      held.map((e, i) => Math.round(e.distance) - heldDistances[i]).join(',') + 'px advanced' +
+      ' | any of THOSE still blocked by him: ' + held.filter((e) => e.blocker === g.hero).length)
+    await shot('retreat-03-arrived')
+
+    // He must pick a fight again on his own once something walks into him.
+    const before = g.enemies.map((e) => Math.round(e.health))
+    await until(() => g.hero.engaged, 30000)
+    note('re-engaged without another tap: ' + g.hero.engaged)
+    await sleep(2500)
+    const after = g.enemies.map((e) => Math.round(e.health))
+    note('he is swinging again: ' + (JSON.stringify(before) !== JSON.stringify(after)))
+
+    // And the same thing in the vehicle.
+    g.hero.setRally(g.hero.x, g.hero.y)
+    // Just over the threshold, then a nudge: a single huge hit takes him down
+    // instead of transforming him.
+    g.hero.health = g.hero.def.maxHealth * 0.3
+    g.damageHero(20)
+    await sleep(1400)
+    note('last stand: ' + g.hero.lastStandActive + ' sprite=' + g.hero.list[1].texture.key)
+    await until(() => g.hero.engaged, 30000)
+    const vFrom = [Math.round(g.hero.x), Math.round(g.hero.y)]
+    g.orderHero(vFrom[0] - 200, vFrom[1] - 120)
+    await sleep(400)
+    const vMoved = Math.hypot(g.hero.x - vFrom[0], g.hero.y - vFrom[1])
+    note('in the SUV, 400ms after the order: moved ' + Math.round(vMoved) + 'px')
+    await shot('retreat-04-vehicle')
+    return
+  }
+
   if (scenario === 'fx') {
     // The new effect sheets, on the board.
     const ART = (await import('./js/data/art.json', { with: { type: 'json' } })).default

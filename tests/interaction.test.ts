@@ -332,3 +332,72 @@ test('Meteor lands where it is aimed, and says so first', () => {
     `the ring says ${m.radius} but the barrage reaches ${m.impactSpread + m.impactRadius}`)
   assert.ok(m.telegraphSeconds >= 0.25, 'the warning is too short to read')
 })
+
+test('a new rally point overrides combat', () => {
+  // The tester: "once Cory is engaged, setting a new rally point does
+  // nothing." He only moved when nothing was in range, which on a lane full
+  // of enemies meant never — the player tapped, got no answer, and the rally
+  // point looked broken.
+  const hero = src('entities/Hero.ts')
+  assert.ok(!/Standing and fighting beats walking/.test(hero),
+    'the old "only move when nothing is in range" rule is still there')
+  assert.ok(!/if \(!target\) \{/.test(hero),
+    'movement is still gated on having no target')
+  // Walking is decided by distance to the rally point and nothing else.
+  assert.match(hero, /if \(dist > 0\.5\) \{/, 'movement is not driven by the rally point alone')
+  // The tap has to produce an answer on the frame it lands.
+  const setRally = hero.slice(hero.indexOf('setRally(x: number, y: number)'),
+    hero.indexOf('get engaged()'))
+  assert.match(setRally, /this\.faceTowards\(x, y\)/,
+    'he does not turn until his first step, so a tap looks ignored')
+})
+
+test('breaking off a fight costs something, from JSON', () => {
+  const heroes = JSON.parse(readFileSync(url('../src/data/heroes.json'), 'utf8'))
+  for (const [id, h] of Object.entries(heroes) as [string, any][]) {
+    const r = h.retreat
+    assert.ok(r, `${id} can retreat for free`)
+    assert.ok(r.vulnerableSeconds > 0, `${id}'s retreat opens no window`)
+    assert.ok(r.damageTakenMultiplier > 1, `${id} takes no extra damage while pulling out`)
+    assert.ok(r.readySeconds > 0, `${id} can swing the instant he arrives`)
+    // A cost, not a punishment: it must not be most of a wave.
+    assert.ok(r.vulnerableSeconds <= 5, `${id} is exposed for ${r.vulnerableSeconds}s, which is a trap`)
+  }
+  const hero = src('entities/Hero.ts')
+  assert.match(hero, /this\.def\.retreat\.damageTakenMultiplier/,
+    'the vulnerability window is declared but never applied')
+  assert.match(hero, /this\.attackTimer = Math\.max\(this\.attackTimer, this\.arrivalDelay\)/,
+    'the arrival delay is never applied')
+})
+
+test('the tower panel does not cover the ring it is asking about', () => {
+  // PROTOTYPE-GAP item 11, and the clearest UX regression against the
+  // prototype: the panel asking "should I upgrade this?" was a centred modal
+  // over a dimmed screen, hiding the range circle that answers it.
+  const panel = src('ui/TowerPanel.ts')
+  // No blocker, no dim, no centring. Checked against code rather than prose:
+  // the full-screen rectangle is what a modal is made of.
+  assert.ok(!/scene\.add\s*\.?\s*rectangle\(/.test(panel),
+    'the panel builds a full-screen rectangle, which is what swallows the board')
+  assert.ok(!/scale\.width \* 2/.test(panel), 'the panel still covers the screen')
+  assert.ok(!/opts\.dim/.test(panel), 'the panel still dims the board behind it')
+  assert.match(panel, /moveTo\(anchor: PanelAnchor, area: Rect\)/,
+    'the panel is not anchored to anything')
+  // Below, then above, then beside — and always inside the free area.
+  assert.match(panel, /anchor\.base \+ GAP \+ this\.height <= areaBottom/, 'it never tries below')
+  assert.match(panel, /anchor\.top - GAP - this\.height >= area\.y/, 'it never flips above')
+  assert.match(panel, /Phaser\.Math\.Clamp\(top, area\.y/, 'it is not clamped to the board')
+
+  const game = src('scenes/GameScene.ts')
+  assert.match(game, /new TowerPanel\(/, 'the tower still opens a modal dialog')
+  // The two rings, and the lane the tower covers.
+  assert.match(game, /private drawSelectedRange/, 'nothing draws the projected range')
+  assert.match(game, /private dashedCircle/, 'the projected ring is not styled differently')
+  assert.match(game, /private drawCoveredLane/, 'the covered stretch of path is not shown')
+  // It follows the tower as the board pans under it.
+  assert.match(game, /this\.positionPanel\(this\.selected\)/,
+    'the panel does not follow its tower when the camera moves')
+  // And it is not a modal, so the HUD does not dim and panning stays live.
+  const modal = game.slice(game.indexOf('get modalOpen()'), game.indexOf('get modalOpen()') + 160)
+  assert.ok(!/panel/.test(modal), 'the anchored panel counts as a modal')
+})

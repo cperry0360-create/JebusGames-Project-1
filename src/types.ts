@@ -311,6 +311,20 @@ export interface HeroDef {
   blockCapacity: number
   damage: number
   attackInterval: number
+  /**
+   * What it costs to break off a fight.
+   *
+   * A new rally point always overrides combat — a hero who ignores the order
+   * until everything near him is dead makes the rally point look broken. So
+   * the order is obeyed instantly and paid for instead: he takes more damage
+   * for `vulnerableSeconds` while he pulls out, and cannot swing for
+   * `readySeconds` after he arrives.
+   */
+  retreat: {
+    vulnerableSeconds: number
+    damageTakenMultiplier: number
+    readySeconds: number
+  }
   ignoresArmor: boolean
   passive: PassiveDef
   haymaker: HaymakerDef
