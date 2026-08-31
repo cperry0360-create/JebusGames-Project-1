@@ -33,7 +33,10 @@ test('no interaction anywhere in the game is keyboard-only', () => {
   assert.match(game, /'CANCEL'/,
     'an armed ability can only be cancelled with a key')
   assert.match(hud, /plateButton\(/, 'the HUD start-wave button is not a button')
-  assert.match(credits, /plateButton\(/, 'the credits screen has no back button')
+  // The credits are a scroll, not a page, so the pointer route is the whole
+  // screen rather than a button in a corner of a roll that is moving.
+  assert.match(credits, /setInteractive[\s\S]{0,120}pointerdown/,
+    'the credits roll can only be left with a key')
   assert.match(splash, /pointerdown/, 'the splash can only be skipped with a key')
 })
 

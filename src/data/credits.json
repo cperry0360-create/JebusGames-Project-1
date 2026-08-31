@@ -1,66 +1,581 @@
 {
-  "heading": "CREDITS",
-  "subheading": "Courjahan Defense",
-  "sections": [
+  "scrollSeconds": 60,
+  "names": [
     {
-      "title": "MADE BY",
-      "entries": [
-        {
-          "role": "Lead Programmer",
-          "name": "Claude"
-        },
-        {
-          "role": "Art",
-          "name": "ChatGPT"
-        },
-        {
-          "role": "Early Concept Art",
-          "name": "Gemini"
-        }
-      ]
+      "lit": "COUR",
+      "rest": "tland"
     },
     {
-      "title": "THE TESTING DEPARTMENT",
-      "entries": [
-        {
-          "role": "Lead Game Tester, CP Plays",
-          "name": "Courtland"
-        },
-        {
-          "role": "Field Research, Hersheypark Division",
-          "name": "Eli and Han"
-        }
-      ]
+      "pre": "eli",
+      "lit": "JA",
+      "rest": "h"
     },
     {
-      "title": "ASSETS",
-      "entries": [
-        {
-          "role": "Projectiles, effects and scenery",
-          "name": "Kenney Tower Defense (Top-Down) \u2014 CC0"
-        },
-        {
-          "role": "Type",
-          "name": "Kenney Font Package \u2014 CC0"
-        },
-        {
-          "role": "Sound",
-          "name": "Kenney Audio Packs \u2014 CC0"
-        },
-        {
-          "role": "Stings",
-          "name": "Synthesised for this project"
-        },
-        {
-          "role": "Engine",
-          "name": "Phaser 3"
-        }
-      ]
+      "lit": "HAN",
+      "rest": ""
     }
   ],
-  "notes": [
-    "Field Research was conducted on location, all day, at Hersheypark.",
-    "No findings were submitted. The rides were reportedly excellent."
-  ],
-  "footer": "Heroes are named after the family. Cory works in tax."
+  "blocks": [
+    {
+      "kind": "gap",
+      "height": 120
+    },
+    {
+      "kind": "logo",
+      "art": "jebusGames",
+      "height": 190
+    },
+    {
+      "kind": "gap",
+      "height": 46
+    },
+    {
+      "kind": "label",
+      "text": "IN COLLABORATION WITH"
+    },
+    {
+      "kind": "gap",
+      "height": 46
+    },
+    {
+      "kind": "logo",
+      "art": "cpPlays",
+      "height": 190
+    },
+    {
+      "kind": "gap",
+      "height": 150
+    },
+    {
+      "kind": "heading",
+      "text": "CAST AND CREW"
+    },
+    {
+      "kind": "gap",
+      "height": 28
+    },
+    {
+      "kind": "credit",
+      "role": "Lead Programmer",
+      "name": "CLAUDE",
+      "accent": "claude"
+    },
+    {
+      "kind": "credit",
+      "role": "Art",
+      "name": "CHATGPT"
+    },
+    {
+      "kind": "credit",
+      "role": "Early Concept Art",
+      "name": "GEMINI"
+    },
+    {
+      "kind": "credit",
+      "role": "Executive Producer",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Associate Executive Producer",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Assistant to the Associate Executive Producer",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Semicolon Placement",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Semicolon Removal",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Semicolon Reinstatement",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Tabs Versus Spaces Arbitration",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Chief Peanut Officer",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Peanut Supply Chain",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Peanut Quality Assurance",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Head of Peanut Compliance",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Peanut Compliance (Appeals)",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Tower Placement Ergonomics",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Tower Placement Ergonomics (Reshoots)",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Gnome Wrangler",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Gnome Union Liaison",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Second Gnome from the Left",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Deadline Enforcement",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Deadline Extension",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Deadline Extension, Denied",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Lead Game Tester, CP Plays",
+      "name": "COURTLAND"
+    },
+    {
+      "kind": "credit",
+      "role": "Filing Cabinet Continuity",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Armour Shredding Supervisor",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Armour Shredding Supervisor's Supervisor",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Best Boy",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Second Best Boy",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Third Best Boy, Held in Reserve",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Key Grip",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Spare Grip",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Foley: Peanuts",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Foley: Distant Paperwork",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Foley: Nearby Paperwork",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Additional Rustling",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Field Research, Hersheypark Division",
+      "name": "ELI AND HAN"
+    },
+    {
+      "kind": "note",
+      "text": "Field research was conducted on location, all day, at Hersheypark."
+    },
+    {
+      "kind": "note",
+      "text": "No findings were submitted. The rides were reportedly excellent."
+    },
+    {
+      "kind": "credit",
+      "role": "DAD MODE Technical Advisor",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "DAD MODE Stunt Double",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "SUV Wrangler",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Minivan Consultant (Uncredited)",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Basketball Hoop Placement",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Garden Hose Placement",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Barbecue Continuity",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Clothesline Supervision",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Flag Fluttering",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Cloud Movement",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Additional Clouds",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Grass",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "More Grass",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "The Path",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Assets",
+      "name": "KENNEY \u2014 CC0"
+    },
+    {
+      "kind": "note",
+      "text": "Projectiles, scenery, fonts and audio. Thank you, Kenney."
+    },
+    {
+      "kind": "credit",
+      "role": "The Politician: Speech Coach",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Percentage Taken",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Percentage Returned",
+      "name": "NOBODY"
+    },
+    {
+      "kind": "credit",
+      "role": "Audit Defence",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Reminder That Cory Works in Tax, Not Audit",
+      "name": "CORY"
+    },
+    {
+      "kind": "note",
+      "text": "Heroes are named after the family. Cory works in tax."
+    },
+    {
+      "kind": "credit",
+      "role": "Legal",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Legal: Footnotes",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Footnote Removal",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Footnote Reinstatement",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Catering",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Catering: Peanuts",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Morale",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Morale, Declining",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Person Who Said \"Just Ship It\"",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Person Who Said \"Not Like That\"",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Person Who Said It Again, Louder",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Wave 7",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Wave 8 (Reshoots)",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Person Still Reading the Credits",
+      "name": "CORY"
+    },
+    {
+      "kind": "gap",
+      "height": 90
+    },
+    {
+      "kind": "shout",
+      "lines": [
+        "WHY DID YOU SIT THROUGH",
+        "ALL THOSE SELF-AGGRANDIZING",
+        "CREDITS????"
+      ]
+    },
+    {
+      "kind": "gap",
+      "height": 110
+    },
+    {
+      "kind": "heading",
+      "text": "SPECIAL THANKS"
+    },
+    {
+      "kind": "gap",
+      "height": 28
+    },
+    {
+      "kind": "credit",
+      "role": "Everyone who tapped a glowing pad",
+      "name": "YOU"
+    },
+    {
+      "kind": "credit",
+      "role": "Hersheypark",
+      "name": "FOR THE RIDES"
+    },
+    {
+      "kind": "credit",
+      "role": "Kenney",
+      "name": "FOR GIVING IT ALL AWAY"
+    },
+    {
+      "kind": "credit",
+      "role": "Phaser",
+      "name": "FOR RUNNING IT"
+    },
+    {
+      "kind": "credit",
+      "role": "Anyone who ever said \"you should make a game\"",
+      "name": "THIS IS YOUR FAULT"
+    },
+    {
+      "kind": "credit",
+      "role": "Peanuts",
+      "name": "FOR EVERYTHING"
+    },
+    {
+      "kind": "gap",
+      "height": 150
+    },
+    {
+      "kind": "heading",
+      "text": "DEDICATION"
+    },
+    {
+      "kind": "gap",
+      "height": 60
+    },
+    {
+      "kind": "shout",
+      "lines": [
+        "THAT'S IT!"
+      ]
+    },
+    {
+      "kind": "gap",
+      "height": 50
+    },
+    {
+      "kind": "shout",
+      "lines": [
+        "YOU PEOPLE HAVE STOOD IN MY WAY",
+        "LONG ENOUGH."
+      ]
+    },
+    {
+      "kind": "gap",
+      "height": 50
+    },
+    {
+      "kind": "shout",
+      "lines": [
+        "I'M GOING TO CLOWN COLLEGE."
+      ]
+    },
+    {
+      "kind": "gap",
+      "height": 140
+    },
+    {
+      "kind": "shout",
+      "lines": [
+        "JUST KIDDING."
+      ]
+    },
+    {
+      "kind": "gap",
+      "height": 140
+    },
+    {
+      "kind": "shout",
+      "lines": [
+        "LOVE YOU BOYS."
+      ]
+    },
+    {
+      "kind": "gap",
+      "height": 240
+    },
+    {
+      "kind": "names"
+    },
+    {
+      "kind": "gap",
+      "height": 64
+    },
+    {
+      "kind": "big",
+      "text": "COURJAHAN"
+    },
+    {
+      "kind": "gap",
+      "height": 270
+    },
+    {
+      "kind": "shout",
+      "lines": [
+        "THIS ONE IS FOR YOU!!"
+      ]
+    },
+    {
+      "kind": "gap",
+      "height": 190
+    },
+    {
+      "kind": "logo",
+      "art": "jebusGames",
+      "height": 200
+    },
+    {
+      "kind": "gap",
+      "height": 260
+    }
+  ]
 }
