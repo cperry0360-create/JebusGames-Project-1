@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import type { EnemyDef } from '../types.ts'
+import type { EnemyDef, TaxPhase } from '../types.ts'
 import { Path } from '../systems/Path.ts'
 import { ySort } from '../systems/DepthSort.ts'
 import { damageAfterArmor, slowedSpeed } from '../systems/Combat.ts'
@@ -29,6 +29,8 @@ export class Enemy extends Phaser.GameObjects.Container {
   blocker: Blocker | null = null
   /** Armour stripped by Cory's Depreciation passive. */
   armorShred = 0
+  /** Counts down to the next tax. Only The Politician uses it. */
+  private taxTimer = 0
 
   private readonly lane: Path
   private readonly art: Phaser.GameObjects.Sprite
@@ -72,6 +74,39 @@ export class Enemy extends Phaser.GameObjects.Container {
 
   get slowed(): boolean {
     return this.slowRemaining > 0
+  }
+
+  /** Nothing holds a boss: it walks through the line. */
+  get blockable(): boolean {
+    return this.def.blockable
+  }
+
+  get healthFraction(): number {
+    return this.maxHealth <= 0 ? 0 : this.health / this.maxHealth
+  }
+
+  /** The tax phase in force right now, or null for anything that does not tax.
+   *  Phases are ordered healthiest first, so the first match is the one. */
+  get taxPhase(): TaxPhase | null {
+    const tax = this.def.tax
+    if (!tax) return null
+    const f = this.healthFraction
+    return tax.phases.find((p) => f > p.aboveHealth) ?? tax.phases[tax.phases.length - 1]
+  }
+
+  /**
+   * Ticks the tax clock and reports how much to take, or 0. The amount is a
+   * share of what the player is *holding*, which is the whole point: hoarding
+   * is what he feeds on.
+   */
+  tickTax(dt: number, currentPeanuts: number): number {
+    const phase = this.taxPhase
+    if (!phase || !this.alive) return 0
+    this.taxTimer -= dt
+    if (this.taxTimer > 0) return 0
+    this.taxTimer = phase.intervalSeconds
+    const take = Math.floor(currentPeanuts * phase.percent)
+    return Math.min(currentPeanuts, Math.max(this.def.tax!.minimumTake, take))
   }
 
   /** Armour after Cory's passive has been chewing on it. */

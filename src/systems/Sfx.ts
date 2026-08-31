@@ -3,7 +3,7 @@
 
 import Phaser from 'phaser'
 
-export const SFX_KEYS = ['sfx-dadmode', 'sfx-build', 'sfx-leak', 'sfx-cast'] as const
+export const SFX_KEYS = ['sfx-dadmode', 'sfx-build', 'sfx-leak', 'sfx-cast', 'sfx-tax', 'sfx-boss'] as const
 export type SfxKey = (typeof SFX_KEYS)[number]
 
 export function queueSfx(scene: Phaser.Scene): void {

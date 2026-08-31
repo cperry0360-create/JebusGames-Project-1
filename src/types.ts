@@ -74,6 +74,21 @@ export interface TowerDef {
   buildTime: number
 }
 
+export interface TaxPhase {
+  /** Applies while the boss is above this share of its maximum health. */
+  aboveHealth: number
+  /** Share of the player's *current* peanuts taken each time. */
+  percent: number
+  intervalSeconds: number
+}
+
+export interface TaxDef {
+  /** Ordered from healthiest to weakest; the first match applies. */
+  phases: TaxPhase[]
+  /** So a broke player still feels it. */
+  minimumTake: number
+}
+
 export interface EnemyDef {
   name: string
   flavor: string
@@ -81,6 +96,12 @@ export interface EnemyDef {
   /** What kind of thing this is, for rules that key off importance rather
    *  than behaviour. Only elites and bosses can drop a Server Nuke. */
   tier: string
+  /** False for a boss that walks through the line rather than being held by
+   *  it. Holding one would let a player park it and ignore the fight. */
+  blockable: boolean
+  /** Present only on The Politician: he takes a share of the player's
+   *  peanuts instead of attacking anything. */
+  tax?: TaxDef
   sprite: string
   maxHealth: number
   /** Flat damage subtracted per hit, unless the attacker ignores armour. */
@@ -243,6 +264,9 @@ export interface WaveSpawnDef {
 
 export interface WaveDef {
   name: string
+  /** The enemy id of this wave's boss, if it has one. Drives the name card
+   *  and the health bar across the top. */
+  boss?: string
   spawns: WaveSpawnDef[]
 }
 

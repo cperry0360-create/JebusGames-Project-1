@@ -174,6 +174,34 @@ Cooldown-based, player-triggered, placed anywhere on the map.
 11. **Decoy** — enemies attack a fake target and stop advancing
 12. **Rooted** — vines erupt and hold enemies in place; they take bonus damage while held
 
+### Act one boss: The Politician
+
+He is not a wall of health with a big attack. He does not attack at all.
+
+- **Very high health, no armour, very slow.** Every tower hurts him; none of
+  them hurt him enough on their own.
+- **He taxes.** Every few seconds he takes a *percentage of the peanuts the
+  player is currently holding*. He never touches a tower or the hero.
+- **That percentage is the counterplay.** Hoarding is punished and spending is
+  rewarded: peanuts on the board cannot be taxed, peanuts in the bank can. A
+  player who sat on a pile all run has the worst possible fight.
+- **He escalates.** At 60% and 30% health the share he takes goes up and the
+  interval between takes goes down, so a slow kill costs more than a fast one.
+- **Nothing holds him.** He walks through the line rather than being blocked,
+  or a player could park him off-screen and never have the fight.
+- **Killing him pays a large lump sum**, which is what makes racing him worth
+  it rather than merely surviving him.
+- **He arrives with a small escort of standard enemies**, not another wave. He
+  is the fight.
+
+Full boss treatment: name card on entrance, a health bar across the top marked
+at both phase thresholds, and his own sound sting. The tax itself gets a cue,
+a red flash on the peanuts counter and a rising "-N PEANUTS" off him, because
+a resource vanishing quietly is the one thing a player will not forgive.
+
+Tax percentages, intervals, phase thresholds and the kill payout are all in
+`enemies.json`; the wave and its escort are in `waves.json`.
+
 ### The rare drop: Server Nuke
 
 Outside the draft pool entirely. It cannot be drawn at run start and cannot be

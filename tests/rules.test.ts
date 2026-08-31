@@ -116,13 +116,16 @@ test('damage per second spread is wide enough for the choice to matter', () => {
 
 // ------------------------------------------------------------------ enemies
 
-test('there are three enemy types covering basic, fast and armoured', () => {
-  assert.equal(enemyList.length, 3)
-  assert.deepEqual(new Set(enemyList.map(([, e]) => e.role)), new Set(['basic', 'fast', 'armored']))
+test('there are three fightable enemy types, plus the boss', () => {
+  const rank = enemyList.filter(([, e]) => e.tier !== 'boss')
+  assert.equal(rank.length, 3)
+  assert.deepEqual(new Set(rank.map(([, e]) => e.role)), new Set(['basic', 'fast', 'armored']))
+  assert.equal(enemyList.filter(([, e]) => e.tier === 'boss').length, 1, 'act one has one boss')
 })
 
 test('each enemy role is actually different', () => {
-  const byRole = Object.fromEntries(enemyList.map(([, e]) => [e.role, e]))
+  const byRole = Object.fromEntries(enemyList.filter(([, e]) => e.tier !== 'boss')
+    .map(([, e]) => [e.role, e]))
   assert.ok(byRole.fast.speed > byRole.basic.speed * 1.5, 'the fast enemy is not fast')
   assert.ok(byRole.armored.armor > 0, 'the armoured enemy has no armour')
   assert.equal(byRole.basic.armor, 0)
@@ -143,8 +146,8 @@ test('armour is a real problem for the wrong tower and no problem for the right 
 
 // ------------------------------------------------------------------ waves
 
-test('there are twelve waves and each is named', () => {
-  assert.equal(waves.waves.length, 12)
+test('there are twelve waves and a boss wave, each named', () => {
+  assert.equal(waves.waves.length, 13)
   const names = waves.waves.map((w: any) => w.name)
   for (const n of names) assert.ok(n && n.length > 0)
   assert.equal(new Set(names).size, names.length, 'two waves share a name')
@@ -169,8 +172,73 @@ test('every wave references a real enemy and introduces types gradually', () => 
       seen.add(s.enemy)
     }
   })
-  assert.equal(seen.size, 3, 'not every enemy type appears')
+  assert.equal(seen.size, Object.keys(enemies).length, 'not every enemy type appears')
   assert.equal(waves.waves[0].spawns.length, 1, 'wave 1 should teach one thing')
+})
+
+test('the run ends on a boss, escorted but not buried', () => {
+  const last = waves.waves[waves.waves.length - 1]
+  assert.ok(last.boss, 'the last wave is not a boss wave')
+  const boss = enemies[last.boss]
+  assert.ok(boss, `wave names an unknown boss "${last.boss}"`)
+  assert.equal(boss.tier, 'boss')
+
+  const bossSpawn = last.spawns.find((s: any) => s.enemy === last.boss)
+  assert.ok(bossSpawn, 'the boss wave does not spawn its boss')
+  assert.equal(bossSpawn.count, 1, 'there is one of him')
+
+  // An escort, not another wave: he has to be the fight.
+  const escort = last.spawns.filter((s: any) => s.enemy !== last.boss)
+    .reduce((a: number, s: any) => a + s.count, 0)
+  const busiest = Math.max(...waves.waves.slice(0, -1)
+    .map((w: any) => w.spawns.reduce((a: number, s: any) => a + s.count, 0)))
+  assert.ok(escort > 0, 'he arrives alone')
+  assert.ok(escort < busiest / 2, `an escort of ${escort} against a normal wave's ${busiest} is a second wave`)
+  for (const s of last.spawns) {
+    if (s.enemy === last.boss) continue
+    assert.equal(enemies[s.enemy].tier, 'basic', 'the escort should be standard enemies')
+  }
+})
+
+test('only the boss taxes, and only the boss walks through the line', () => {
+  for (const [id, e] of Object.entries(enemies) as [string, any][]) {
+    if (e.tier === 'boss') {
+      assert.equal(e.blockable, false, `${id} is a boss that can be held in place`)
+      assert.ok(e.tax, `${id} is a boss with no tax`)
+      assert.equal(e.damage, 0, 'the boss does not attack towers or the hero')
+    } else {
+      assert.equal(e.blockable, true, `${id} should be holdable`)
+      assert.equal(e.tax, undefined, `${id} should not tax the player`)
+    }
+  }
+})
+
+test('the tax escalates as the boss is worn down, and always bites', () => {
+  const boss = Object.values(enemies).find((e: any) => e.tier === 'boss') as any
+  const phases = boss.tax.phases
+  assert.ok(phases.length >= 3, 'the design asks for thresholds at 60% and 30%')
+  assert.deepEqual(phases.map((p: any) => p.aboveHealth), [0.6, 0.3, 0],
+    'the phase thresholds should be 60%, 30% and the rest')
+  for (let i = 1; i < phases.length; i++) {
+    assert.ok(phases[i].percent > phases[i - 1].percent,
+      'each phase should take a larger share')
+    assert.ok(phases[i].intervalSeconds < phases[i - 1].intervalSeconds,
+      'each phase should take it more often')
+  }
+  assert.ok(phases[phases.length - 1].percent < 0.5,
+    'a tax over half your holdings each tick is not a tax, it is a wipe')
+  assert.ok(boss.tax.minimumTake > 0, 'a broke player should still feel it')
+})
+
+test('killing the boss pays enough to be worth racing for', () => {
+  const boss = Object.values(enemies).find((e: any) => e.tier === 'boss') as any
+  const dearest = Math.max(...Object.values(towers).map((t: any) => t.cost))
+  const bestOther = Math.max(...Object.values(enemies)
+    .filter((e: any) => e.tier !== 'boss').map((e: any) => e.peanutReward))
+  assert.ok(boss.peanutReward > bestOther * 10, 'the payout is not a lump sum')
+  assert.ok(boss.peanutReward >= dearest * 3, 'the payout should buy a real answer')
+  assert.ok(boss.livesCost > 1, 'letting a boss through should hurt')
+  assert.equal(boss.armor, 0, 'the boss has no armour by design')
 })
 
 // ------------------------------------------------------------------ economy
@@ -189,17 +257,32 @@ test('the board grows at a sane rate across the run', () => {
     rules.peanutsPerWaveCleared
   const cheapest = Math.min(...towerList.map(([, t]) => t.cost))
   assert.ok(payout(0) + payout(1) >= cheapest, 'waves 1-2 do not fund another tower')
-  const total = rules.startingPeanuts + waves.waves.map((_: any, i: number) => payout(i))
-    .reduce((a: number, b: number) => a + b, 0)
+  // Measured over the waves you actually build through. The boss's lump sum
+  // lands at the very end, when there is nothing left to spend it on, so
+  // counting it here would say the run is richer than it plays.
+  const buildable = waves.waves.length - 1
+  const total = rules.startingPeanuts
+    + [...Array(buildable).keys()].map((i) => payout(i)).reduce((a, b) => a + b, 0)
   const affordable = total / avg
   assert.ok(affordable > 8 && affordable < 30, `run affords ~${affordable.toFixed(1)} towers, which is off`)
-  console.log(`   economy: open ${rules.startingPeanuts}g, run total ${total}g (~${affordable.toFixed(1)} towers)`)
+  console.log(`   economy: open ${rules.startingPeanuts}p, through wave ${buildable} ${total}p `
+    + `(~${affordable.toFixed(1)} towers)`)
 })
 
 test('leaking matters but one mistake is not fatal', () => {
-  const worst = Math.max(...enemyList.map(([, e]) => e.livesCost))
+  // Measured on the rank and file. A boss is meant to hurt badly when he gets
+  // through, which is a different rule and checked below.
+  const worst = Math.max(...enemyList.filter(([, e]) => e.tier !== 'boss').map(([, e]) => e.livesCost))
   assert.ok(rules.startingLives >= worst * 5, 'too few lives for the leak cost')
   assert.ok(rules.startingLives <= 40, 'so many lives that leaks stop mattering')
+})
+
+test('letting the boss through is nearly the run, but not quite', () => {
+  const boss = Object.values(enemies).find((e: any) => e.tier === 'boss') as any
+  assert.ok(boss.livesCost < rules.startingLives,
+    'one boss leak from full ends the run outright, which leaves no fight to have')
+  assert.ok(boss.livesCost >= rules.startingLives * 0.4,
+    `a boss costing ${boss.livesCost} of ${rules.startingLives} lives is not a boss`)
 })
 
 // ------------------------------------------------------------------ art wiring

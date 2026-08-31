@@ -66,6 +66,10 @@ export interface GameStatus {
   abilities: string[]
   /** The rare drop, once it has dropped. Null before, and again after use. */
   rareAbility: string | null
+  /** The boss on the field, for the bar across the top. Null when there is none. */
+  bossName: string
+  bossHealth: number
+  bossMax: number
   pendingAbility: string | null
   message: string
 }
@@ -82,6 +86,7 @@ export class GameScene extends Phaser.Scene {
     phase: 'ready', mode: 'normal', enemiesLeft: 0,
     heroName: '', heroHealth: 0, heroMax: 0, heroDown: false, lastStand: false,
     unlockedTowers: [], abilities: [], rareAbility: null, pendingAbility: null, message: '',
+    bossName: '', bossHealth: 0, bossMax: 0,
   }
 
   readonly cooldowns = new Cooldowns()
@@ -160,6 +165,9 @@ export class GameScene extends Phaser.Scene {
     this.status.abilities = [...run.abilities]
     // The rare drop does not survive a run, and is never drafted into one.
     this.status.rareAbility = null
+    this.status.bossName = ''
+    this.status.bossHealth = 0
+    this.status.bossMax = 0
     this.nukeUsed = false
     this.status.unlockedTowers = run.openingTowers.slice(0, DRAFT.towersAtStart)
     this.status.message = 'Click a glowing pad to build a tower, then START WAVE.'
@@ -798,9 +806,15 @@ export class GameScene extends Phaser.Scene {
     if (this.status.phase === 'wave') {
       for (const id of this.spawner.update(dt)) {
         const def = ENEMIES[id]
-        if (def) this.enemies.push(new Enemy(this, def, this.lane))
+        if (!def) continue
+        const enemy = new Enemy(this, def, this.lane)
+        this.enemies.push(enemy)
+        if (def.tier === 'boss') this.announceBoss(enemy)
       }
     }
+
+    this.tickTax(dt)
+    this.trackBoss()
 
     this.tickEngagement()
     this.tickEnemies(dt)
@@ -825,6 +839,62 @@ export class GameScene extends Phaser.Scene {
     this.checkWaveCleared()
   }
 
+  /**
+   * The Politician's tax. He never touches a tower or the hero; he takes a
+   * share of what the player is holding, on a clock that speeds up as he is
+   * worn down. Spending is the counterplay, so the number he takes has to be
+   * unmissable.
+   */
+  private tickTax(dt: number): void {
+    for (const e of this.enemies) {
+      const take = e.tickTax(dt, this.status.peanuts)
+      if (take <= 0) continue
+      this.status.peanuts = Math.max(0, this.status.peanuts - take)
+      floatingDamage(this, e.x, e.centreY, take, true, `-${take} PEANUTS`)
+      play(this, 'sfx-tax', 0.7)
+      this.cameras.main.shake(140, 0.004)
+      this.status.message = `${e.def.name} taxed you ${take} peanuts. Spend it or lose it.`
+    }
+  }
+
+  /** Feeds the bar across the top, and clears it when the boss is gone. */
+  private trackBoss(): void {
+    const boss = this.enemies.find((e) => e.alive && e.def.tier === 'boss')
+    if (!boss) {
+      this.status.bossName = ''
+      return
+    }
+    this.status.bossName = boss.def.name
+    this.status.bossHealth = boss.health
+    this.status.bossMax = boss.maxHealth
+  }
+
+  private announceBoss(boss: Enemy): void {
+    const W = displayData.width
+    const H = displayData.height
+    play(this, 'sfx-boss', 0.95)
+    this.cameras.main.shake(600, 0.007)
+
+    const card = this.add.graphics().setDepth(TICKET_DEPTH)
+    card.fillStyle(0x0d1016, 0.88).fillRect(0, H / 2 - 74, W, 148)
+    card.lineStyle(3, 0xff5a3c, 1).lineBetween(0, H / 2 - 74, W, H / 2 - 74)
+    card.lineStyle(3, 0xff5a3c, 1).lineBetween(0, H / 2 + 74, W, H / 2 + 74)
+
+    const name = this.add.text(W / 2, H / 2 - 34, boss.def.name.toUpperCase(), {
+      fontFamily: FONT_DISPLAY, fontSize: '56px', color: COLOR.fire,
+      stroke: '#0d1016', strokeThickness: 9,
+    }).setOrigin(0.5, 0).setDepth(TICKET_DEPTH + 1)
+    const sub = this.add.text(W / 2, H / 2 + 30, boss.def.flavor, {
+      fontFamily: FONT_UI, fontSize: '15px', color: COLOR.ink,
+    }).setOrigin(0.5, 0).setDepth(TICKET_DEPTH + 1)
+
+    this.tweens.add({ targets: name, scale: { from: 0.7, to: 1 }, duration: 380, ease: 'Back.easeOut' })
+    for (const o of [card, name, sub]) {
+      this.tweens.add({ targets: o, alpha: 0, delay: 2200, duration: 700, onComplete: () => o.destroy() })
+    }
+    this.status.message = `${boss.def.name} is here. He does not attack — he taxes. Spend your peanuts.`
+  }
+
   /** The hero and any summoned fighters hold enemies up. Whoever is closest
    *  to the exit gets held first, since they are the real threat. */
   private tickEngagement(): void {
@@ -839,7 +909,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     for (const h of holders) {
-      const near = withinRadius(this.enemies, h.who.x, h.who.y, h.range).filter((e) => e.blocker === null)
+      const near = withinRadius(this.enemies, h.who.x, h.who.y, h.range)
+        .filter((e) => e.blocker === null && e.blockable)
       near.sort((a, b) => b.distance - a.distance)
       for (const e of near.slice(0, h.capacity)) e.blocker = h.who
     }

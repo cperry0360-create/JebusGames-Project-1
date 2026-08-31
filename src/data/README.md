@@ -46,6 +46,12 @@ shape of each one — add a field there when you add one here.
 - **`rules.serverNuke` holds the rare drop's whole rule set**: the per-kill
   chance, which enemy tiers can drop it, the share of max health a boss loses
   instead of dying, and the cast wind-up.
+- **`enemies.politician.tax` is the whole boss mechanic.** Phases ordered
+  healthiest first, each with the share of *current* peanuts he takes and how
+  often; the first phase whose `aboveHealth` the boss is still above applies.
+  `minimumTake` means a broke player still feels it. `blockable: false` keeps
+  him walking through the line — held in place, he could be parked off-screen
+  and ignored, which is the one thing the tax must not allow.
 - **`enemies.*.tier` is `basic`, `elite` or `boss`.** It keys rules that care
   about importance rather than behaviour, which `role` already covers. Only
   elites and bosses can drop the nuke. There is no boss in Phase 1, so that

@@ -47,7 +47,8 @@
     "ability-servernuke": "abilities/ability_servernuke.png",
     "hud-peanuts": "ui/hud_peanuts.png",
     "hud-lives": "ui/hud_lives.png",
-    "hud-wave": "ui/hud_wave.png"
+    "hud-wave": "ui/hud_wave.png",
+    "enemy-politician": "enemies/enemy_boss_politician.png"
   },
   "render": {
     "turret-escalation": {
@@ -218,6 +219,14 @@
       "fieldLeft": 0.319,
       "fieldRight": 0.9353,
       "fieldCentreY": 0.4948
+    },
+    "enemy-politician": {
+      "anchorX": 0.6033,
+      "anchorY": 1.0,
+      "displayHeight": 82.5,
+      "shadowWidth": 62.1,
+      "contentWidth": 639,
+      "contentHeight": 640
     }
   },
   "map": {

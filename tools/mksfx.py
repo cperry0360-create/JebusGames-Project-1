@@ -61,8 +61,28 @@ def cast(i, n):
     f = 540 + 300 * math.sin(t * 26)
     return (saw(f * t) * 0.5 + math.sin(2 * math.pi * f * 2 * t) * 0.3) * env(i, n, 0.004, 0.18)
 
+# The Politician taxes you: a cash-register clunk with the money going the
+# wrong way, so it never reads as a reward.
+def tax(i, n):
+    t = i / SR
+    ding = math.sin(2 * math.pi * 880 * t) * math.exp(-t * 26)
+    drop = math.sin(2 * math.pi * (420 - 260 * min(1.0, t / 0.35)) * t)
+    clunk = (rnd.random() * 2 - 1) * 0.22 * math.exp(-t * 30)
+    return (ding * 0.45 + drop * 0.5 + clunk) * env(i, n, 0.003, 0.22)
+
+
+# Boss entrance: a low horn swell under a slow bell, more arrival than threat.
+def boss(i, n):
+    t = i / SR
+    horn = (saw(72 * t) * 0.34 + saw(108 * t) * 0.22) * min(1.0, t / 0.45)
+    bell = math.sin(2 * math.pi * 330 * t) * math.exp(-t * 2.2) * 0.3
+    return (horn + bell) * env(i, n, 0.05, 0.5)
+
+
 out = sys.argv[1]
 render(os.path.join(out, 'sfx-dadmode.wav'), dadmode, 1.15, 0.72)
 render(os.path.join(out, 'sfx-build.wav'), build, 0.16, 0.42)
 render(os.path.join(out, 'sfx-leak.wav'), leak, 0.36, 0.5)
 render(os.path.join(out, 'sfx-cast.wav'), cast, 0.28, 0.4)
+render(os.path.join(out, 'sfx-tax.wav'), tax, 0.5, 0.55)
+render(os.path.join(out, 'sfx-boss.wav'), boss, 1.6, 0.66)

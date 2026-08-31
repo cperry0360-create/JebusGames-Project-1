@@ -52,6 +52,13 @@
     "marginX": 12,
     "marginY": 10,
     "numberSize": 22,
-    "numberMargin": 9
+    "numberMargin": 9,
+    "bossBarWidth": 560,
+    "bossBarHeight": 16,
+    "bossPhaseMarks": [
+      0.6,
+      0.3
+    ],
+    "bossBarTop": 28
   }
 }

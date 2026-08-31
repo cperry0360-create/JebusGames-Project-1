@@ -12,7 +12,8 @@
     "livesCost": 1,
     "damage": 7,
     "attackInterval": 1,
-    "engageRange": 44
+    "engageRange": 44,
+    "blockable": true
   },
   "shredder": {
     "name": "Shredder",
@@ -27,7 +28,8 @@
     "livesCost": 1,
     "damage": 5,
     "attackInterval": 0.7,
-    "engageRange": 40
+    "engageRange": 40,
+    "blockable": true
   },
   "finalNotice": {
     "name": "Final Notice",
@@ -42,6 +44,43 @@
     "livesCost": 2,
     "damage": 12,
     "attackInterval": 1.3,
-    "engageRange": 48
+    "engageRange": 48,
+    "blockable": true
+  },
+  "politician": {
+    "name": "The Politician",
+    "flavor": "Here to listen. Here to help. Here to take a percentage.",
+    "role": "boss",
+    "tier": "boss",
+    "sprite": "enemy-politician",
+    "maxHealth": 6200,
+    "armor": 0,
+    "speed": 22,
+    "peanutReward": 900,
+    "livesCost": 10,
+    "damage": 0,
+    "attackInterval": 99,
+    "engageRange": 0,
+    "blockable": false,
+    "tax": {
+      "phases": [
+        {
+          "aboveHealth": 0.6,
+          "percent": 0.1,
+          "intervalSeconds": 4
+        },
+        {
+          "aboveHealth": 0.3,
+          "percent": 0.16,
+          "intervalSeconds": 3
+        },
+        {
+          "aboveHealth": 0.0,
+          "percent": 0.24,
+          "intervalSeconds": 2
+        }
+      ],
+      "minimumTake": 5
+    }
   }
 }

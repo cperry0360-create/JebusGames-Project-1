@@ -215,6 +215,40 @@ async function run() {
     return
   }
 
+  if (scenario === 'boss') {
+    // Jump to the boss wave and watch him tax.
+    for (const i of [3, 1, 5]) await build(i, 0)
+    g.status.wave = 12
+    g.status.peanuts = 900
+    await key('Space')
+    await until(() => g.enemies.some((e) => e.def.tier === 'boss'), 40000)
+    await sleep(200); await shot('b-01-name-card')
+    await sleep(2600); await shot('b-02-bar')
+    const boss = g.enemies.find((e) => e.def.tier === 'boss')
+    note('boss on field: hp=' + boss.maxHealth + ' blockable=' + boss.blockable
+      + ' phase=' + JSON.stringify(boss.taxPhase))
+    let p0 = g.status.peanuts
+    await sleep(4600)
+    note(`tax tick: ${p0} -> ${g.status.peanuts} peanuts`)
+    await shot('b-03-taxed')
+    // Wear him down past both thresholds and check the phases move.
+    boss.health = boss.maxHealth * 0.55
+    await sleep(200)
+    note('at 55%: phase=' + JSON.stringify(boss.taxPhase))
+    boss.health = boss.maxHealth * 0.25
+    await sleep(200)
+    note('at 25%: phase=' + JSON.stringify(boss.taxPhase))
+    await sleep(2600); await shot('b-04-late-phase')
+    // He must not be holdable.
+    note('blocker after hero contact: ' + boss.blocker)
+    p0 = g.status.peanuts
+    g.damageEnemy(boss, 999999, true)
+    await sleep(400)
+    note(`kill payout: ${p0} -> ${g.status.peanuts} peanuts; bossName="${g.status.bossName}"`)
+    await shot('b-05-killed')
+    return
+  }
+
   if (scenario === 'nuke') {
     // Force the drop, then watch the wind-up and the payload.
     for (const i of [3, 1]) await build(i, 0)

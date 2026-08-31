@@ -35,6 +35,8 @@ export class HudScene extends Phaser.Scene {
   private message!: Phaser.GameObjects.Text
   private heroLabel!: Phaser.GameObjects.Text
   private heroBar!: Phaser.GameObjects.Graphics
+  private bossBar!: Phaser.GameObjects.Graphics
+  private bossLabel!: Phaser.GameObjects.Text
   private startBox!: Phaser.GameObjects.Graphics
   private startLabel!: Phaser.GameObjects.Text
   private startHit!: Phaser.GameObjects.Rectangle
@@ -77,6 +79,14 @@ export class HudScene extends Phaser.Scene {
       stroke: '#0d1016', strokeThickness: 4,
     }).setOrigin(1, 0)
     this.heroBar = this.add.graphics()
+
+    // The boss bar sits across the top between the two corners: the counters
+    // own the left and the start button the right, so it takes the middle.
+    this.bossBar = this.add.graphics()
+    this.bossLabel = this.add.text(W / 2, HUD.marginY + 2, '', {
+      fontFamily: FONT_DISPLAY, fontSize: '16px', color: COLOR.fire,
+      stroke: '#0d1016', strokeThickness: 5,
+    }).setOrigin(0.5, 0)
 
     this.add.text(W - 12, displayData.height - 16, 'art and fonts: Kenney, CC0', {
       fontFamily: FONT_UI, fontSize: '11px', color: COLOR.ink,
@@ -226,9 +236,35 @@ export class HudScene extends Phaser.Scene {
     this.waveText.setText(`${Math.min(s.wave + 1, s.waveCount)}/${s.waveCount}`)
     this.message.setText(s.message)
 
+    this.drawBossBar(s)
     this.drawStartButton(s)
     this.drawSlots(s)
     this.drawHeroBar(s)
+  }
+
+  /** Across the top while a boss is on the field, and gone the rest of the
+   *  time. Nothing else may occupy the middle of that strip. */
+  private drawBossBar(s: GameScene['status']): void {
+    this.bossBar.clear()
+    if (!s.bossName) {
+      this.bossLabel.setText('')
+      return
+    }
+    const w = HUD.bossBarWidth
+    const h = HUD.bossBarHeight
+    const x = (displayData.width - w) / 2
+    const y = HUD.marginY + HUD.bossBarTop
+    const ratio = Phaser.Math.Clamp(s.bossHealth / Math.max(s.bossMax, 1), 0, 1)
+
+    this.bossLabel.setText(s.bossName.toUpperCase())
+    this.bossBar.fillStyle(0x0d1016, 0.82).fillRoundedRect(x - 3, y - 3, w + 6, h + 6, 5)
+    this.bossBar.fillStyle(0x3a1f1c, 1).fillRect(x, y, w, h)
+    this.bossBar.fillStyle(0xff5a3c, 1).fillRect(x, y, w * ratio, h)
+    this.bossBar.lineStyle(2, 0xff8f7a, 1).strokeRoundedRect(x - 3, y - 3, w + 6, h + 6, 5)
+    // The two marks where he starts taxing harder, so the phases are legible.
+    for (const t of HUD.bossPhaseMarks) {
+      this.bossBar.lineStyle(2, 0x0d1016, 0.8).lineBetween(x + w * t, y, x + w * t, y + h)
+    }
   }
 
   /** A short pop on a number that just changed, then back to its own colour. */

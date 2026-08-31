@@ -50,10 +50,12 @@ export function floatingDamage(
   y: number,
   amount: number,
   big = false,
+  /** Overrides the number, for things that are not damage. */
+  label?: string,
 ): void {
   const d = PRESENTATION.damageNumbers
   const text = scene.add
-    .text(x, y - 18, String(Math.max(1, Math.round(amount))), {
+    .text(x, y - 18, label ?? String(Math.max(1, Math.round(amount))), {
       fontFamily: 'KenneyFuture, monospace',
       fontSize: `${big ? d.critFontSize : d.fontSize}px`,
       color: big ? '#ffd45e' : '#ffffff',
@@ -62,6 +64,10 @@ export function floatingDamage(
     })
     .setOrigin(0.5)
     .setDepth(y + 800)
+
+  // Kept on screen: a long label on something near the edge was half cut off.
+  const half = text.width / 2 + 6
+  text.x = Phaser.Math.Clamp(text.x, half, scene.cameras.main.width - half)
 
   scene.tweens.add({
     targets: text,

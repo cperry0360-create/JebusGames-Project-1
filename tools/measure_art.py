@@ -123,9 +123,10 @@ json.dump({'files': files, 'render': render}, open('/tmp/towerpatch.json', 'w'),
 BRUTE_ON_SCREEN = 66.0
 
 ENEMY_KEY = {
-    'enemy_brute.png':   ('enemy-notice',   0.90),
-    'enemy_soldier.png': ('enemy-filer',    0.87),
-    'enemy_scout.png':   ('enemy-shredder', 0.84),
+    'enemy_brute.png':           ('enemy-notice',   0.90),
+    'enemy_soldier.png':         ('enemy-filer',    0.87),
+    'enemy_scout.png':           ('enemy-shredder', 0.84),
+    'enemy_boss_politician.png': ('enemy-politician', 0.80),
 }
 # The second value is where the foot band starts, as a fraction of the sprite's
 # height. It cannot be one number for all three: the brute's leaf blower hangs
@@ -207,6 +208,10 @@ HERO_KEY = {
     'hero_cory.png':          ('hero-cory', 0.80, None),
     'hero_cory_ultimate.png': ('hero-cory-ultimate', 0.82, 'body'),
 }
+# The Politician is an entourage, not a figure: two aides trail him carrying
+# the briefcase. His band reaches high enough to catch their feet too, so the
+# group is anchored and shadowed as one unit and walks the lane together.
+#
 # As with the enemies, the second value is where the foot band starts. Cory
 # stands in a wide lunge, so the cut has to reach up past his trailing shoe.
 #
