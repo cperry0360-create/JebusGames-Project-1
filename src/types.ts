@@ -4,9 +4,9 @@
 export interface DisplayDef {
   width: number
   height: number
-  /** Height of the strip the counters occupy in the top corner. There is no
-   *  HUD bar any more, but the world still draws underneath the counters, so
-   *  nothing that must stay readable may sit above this line. */
+  /** The strip the corner counters occupy. No build pad may sit under it, or a
+   *  tower would be drawn behind the HUD. The map tracer and the layout tests
+   *  both hold to this; runtime code has no reason to read it. */
   hudHeight: number
   backgroundColor: string
   /** How the camera sits over the map. Zooms are multiples of cover zoom —
@@ -95,9 +95,18 @@ export interface TowerDef {
   /** Non-zero marks a support tower: it never fires, it buffs towers in radius. */
   supportRadius: number
   supportDamageBonus: number
-  /** The upgrade path. One entry per tier above the first, so a two-entry
-   *  list means the tower tops out at tier 3. */
+  /** The linear part of the upgrade path: tier 2. */
   tiers: TowerTier[]
+  /** Tier 3 is a choice, not a step. Two mutually exclusive specializations;
+   *  picking one closes the other off for the life of the tower. */
+  specializations: TowerSpec[]
+}
+
+/** One of a tower's two tier-3 specializations. */
+export interface TowerSpec extends TowerTier {
+  id: string
+  name: string
+  flavor: string
 }
 
 /**
@@ -165,7 +174,6 @@ export interface EnemyDef {
   livesCost: number
   damage: number
   attackInterval: number
-  engageRange: number
 }
 
 export interface LastStandDef {
@@ -293,7 +301,6 @@ export interface AudioDef {
   credit: string
   /** Path prefix under the site root. */
   root: string
-  defaultVolume: number
   cues: Record<string, AudioCue>
 }
 

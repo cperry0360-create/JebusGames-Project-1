@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
 import {
-  BASE_TIER, isMaxed, maxTier, nextStep, sellValue, statAt,
+  atSpecChoice, BASE_TIER, isMaxed, maxTier, nextStep, sellValue, statAt,
 } from '../src/systems/Upgrades.ts'
 
 const url = (p: string) => new URL(p, import.meta.url)
@@ -98,27 +98,34 @@ test('tier 1 is what you build and every tier above it costs time', () => {
   for (const [id, def] of towerList) {
     assert.equal(BASE_TIER, 1)
     assert.equal(maxTier(def), 3, `${id} should top out at tier 3`)
+    // Tier 3 is a choice, so nextStep runs out one tier early by design.
+    assert.ok(atSpecChoice(def, 2), `${id} tier 3 should be a specialization choice`)
     assert.equal(nextStep(def, maxTier(def)), null, `${id} offers an upgrade past its top tier`)
     assert.ok(isMaxed(def, maxTier(def)))
     assert.ok(!isMaxed(def, BASE_TIER))
-    for (let t = BASE_TIER; t < maxTier(def); t++) {
-      assert.ok(nextStep(def, t)!.buildSeconds > 0, `${id} tier ${t + 1} would be instant`)
+    assert.ok(nextStep(def, BASE_TIER)!.buildSeconds > 0, `${id} tier 2 would be instant`)
+    for (const spec of def.specializations) {
+      assert.ok(spec.buildSeconds > 0, `${id}'s ${spec.name} would be instant`)
     }
   }
 })
 
 test('a tier actually makes the tower better', () => {
   for (const [id, def] of towerList) {
-    if (def.supportRadius > 0) {
-      assert.ok(statAt(def, 3, 'supportDamageBonus') > statAt(def, 1, 'supportDamageBonus'),
-        `${id} tier 3 does not buff harder`)
-      continue
+    // Every specialization has to be a real step up on the tier it comes from.
+    for (const spec of def.specializations) {
+      const gains = def.supportRadius > 0
+        ? [['supportDamageBonus', 'supportRadius']]
+        : [['damage', 'range', 'fireInterval', 'splashRadius', 'slowSeconds', 'armorPierce']]
+      const better = gains[0].some((k) => {
+        const at2 = statAt(def, 2, k as never)
+        const at3 = statAt(def, 3, k as never, spec.id)
+        return k === 'fireInterval' ? at3 < at2 : at3 > at2
+      })
+      assert.ok(better, `${id}'s ${spec.name} is not better than tier 2 at anything`)
     }
+    if (def.supportRadius > 0) continue
     assert.ok(statAt(def, 2, 'damage') > statAt(def, 1, 'damage'), `${id} tier 2 is not stronger`)
-    assert.ok(statAt(def, 3, 'damage') > statAt(def, 2, 'damage'), `${id} tier 3 is not stronger`)
-    assert.ok(statAt(def, 3, 'fireInterval') < statAt(def, 1, 'fireInterval'),
-      `${id} does not fire faster at tier 3`)
-    assert.ok(statAt(def, 3, 'range') > statAt(def, 1, 'range'), `${id} does not reach further`)
   }
 })
 
@@ -135,9 +142,11 @@ test('selling always loses money', () => {
   const refund = rules.towerUpgrades.sellRefund
   for (const [id, def] of towerList) {
     for (let t = 1; t <= maxTier(def); t++) {
+      const spec = t === 3 ? def.specializations[0].id : null
       let paid = def.cost
-      for (let k = 1; k < t; k++) paid += def.tiers[k - 1].cost
-      const back = sellValue(def, t, refund)
+      for (let k = 1; k < Math.min(t, 3); k++) paid += def.tiers[k - 1]?.cost ?? 0
+      if (spec) paid += def.specializations[0].cost
+      const back = sellValue(def, t, refund, spec)
       assert.ok(back < paid, `${id} at tier ${t} sells for ${back} against ${paid} paid`)
       assert.ok(back > 0, `${id} at tier ${t} sells for nothing`)
     }

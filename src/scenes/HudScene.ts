@@ -103,7 +103,7 @@ export class HudScene extends Phaser.Scene {
       stroke: '#0d1016', strokeThickness: 5,
     }).setOrigin(0.5, 0)
 
-    this.add.text(W - 12, this.scale.height - 16, 'art and fonts: Kenney, CC0', {
+    this.add.text(W - 12, this.scale.height - 16, 'art, fonts and audio: Kenney, CC0', {
       fontFamily: FONT_UI, fontSize: '11px', color: COLOR.ink,
     }).setOrigin(1, 0).setAlpha(0.35)
   }

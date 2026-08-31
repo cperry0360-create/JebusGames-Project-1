@@ -638,7 +638,7 @@ export class GameScene extends Phaser.Scene {
     const def = tower.def
     const step = nextStep(def, tower.tier)
     const refund = sellValue(def, tower.tier + (tower.upgrading ? 1 : 0),
-      RULES.towerUpgrades.sellRefund)
+      RULES.towerUpgrades.sellRefund, tower.spec)
     const support = tower.isSupport
 
     const n = (v: number, digits = 0): string => v.toFixed(digits)
@@ -663,16 +663,21 @@ export class GameScene extends Phaser.Scene {
 
     // The upgrade button is the confirm slot; selling is its own button, so
     // neither can be hit by aiming for the other.
-    const affordable = step !== null && this.status.peanuts >= step.cost
+    const specPrice = def.specializations[0]?.cost ?? 0
+    const choosing = tower.atSpecChoice && !tower.upgrading
+    const affordable = choosing
+      ? this.status.peanuts >= specPrice
+      : step !== null && this.status.peanuts >= step.cost
+
     this.openDialog({
       title: def.name.toUpperCase(),
       subtitle: def.flavor,
       rows,
-      confirm: step && !tower.upgrading
+      confirm: (choosing || (step !== null && !tower.upgrading))
         ? {
-          label: 'UPGRADE',
+          label: choosing ? 'SPECIALIZE' : 'UPGRADE',
           enabled: affordable,
-          onPick: () => this.upgradeTower(tower),
+          onPick: () => (choosing ? this.openSpecChoice(tower) : this.upgradeTower(tower)),
         }
         : undefined,
       cancelLabel: 'CLOSE',
@@ -684,6 +689,57 @@ export class GameScene extends Phaser.Scene {
         onPick: () => this.sellTower(tower),
       },
     })
+  }
+
+  /**
+   * Tier 3. Two specializations, mutually exclusive and permanent for this
+   * tower, so they get their own panel explaining what each one does rather
+   * than two cryptic buttons crowded onto the stats panel.
+   */
+  private openSpecChoice(tower: Tower): void {
+    const def = tower.def
+    const [a, b] = def.specializations
+    if (!a || !b) return
+    const afford = (c: number): boolean => this.status.peanuts >= c
+
+    this.openDialog({
+      title: `${def.name.toUpperCase()} — TIER 3`,
+      subtitle: 'One or the other, for the life of this tower. There is no going back.',
+      rows: [
+        { label: a.name, value: a.flavor },
+        { label: b.name, value: b.flavor },
+        { label: 'Cost', value: `${a.cost} peanuts`, accent: true },
+        { label: 'Takes', value: `${a.buildSeconds}s at reduced rate` },
+      ],
+      confirm: {
+        label: a.name.toUpperCase(),
+        enabled: afford(a.cost),
+        onPick: () => this.specialize(tower, a.id),
+      },
+      extra: {
+        label: b.name.toUpperCase(),
+        enabled: afford(b.cost),
+        onPick: () => this.specialize(tower, b.id),
+      },
+      cancelLabel: 'NOT YET',
+      dim: 0.4,
+    })
+  }
+
+  /** Public so a harness run can drive the choice without the dialog. */
+  specialize(tower: Tower, specId: string): void {
+    const spec = tower.def.specializations.find((x) => x.id === specId)
+    if (!spec || tower.upgrading || !tower.atSpecChoice) return
+    if (this.status.peanuts < spec.cost) {
+      play(this, 'broke')
+      this.status.message =
+        `${spec.name} costs ${spec.cost} peanuts — ${spec.cost - this.status.peanuts} short.`
+      return
+    }
+    this.status.peanuts -= spec.cost
+    tower.beginUpgrade(specId)
+    play(this, 'upgrade')
+    this.status.message = `${tower.def.name} becoming ${spec.name}. ${spec.flavor}`
   }
 
   private upgradeTower(tower: Tower): void {
@@ -706,7 +762,7 @@ export class GameScene extends Phaser.Scene {
     // towards the refund. Otherwise selling mid-build quietly eats the cost of
     // the upgrade the player just bought.
     const paidTier = tower.tier + (tower.upgrading ? 1 : 0)
-    const refund = sellValue(tower.def, paidTier, RULES.towerUpgrades.sellRefund)
+    const refund = sellValue(tower.def, paidTier, RULES.towerUpgrades.sellRefund, tower.spec)
     this.status.peanuts += refund
     this.build.release(tower.spot)
     this.towers = this.towers.filter((t) => t !== tower)
@@ -826,6 +882,7 @@ export class GameScene extends Phaser.Scene {
     if (this.casting) return
     if (id === RULES.serverNuke.abilityId && this.status.rareAbility !== id) return
     if (!this.cooldowns.ready(id)) {
+      play(this, 'error')
       this.status.message = `${ABILITIES[id].name} is still on cooldown.`
       return
     }
@@ -1322,15 +1379,19 @@ export class GameScene extends Phaser.Scene {
 
     const W = displayData.width
     const y = displayData.height / 2 - 90
-    const banner = platePanel(this, 0, y - 38, W, 96)
+    // Not full width, and high rather than centred. This fires *mid-wave* off
+    // a kill, so it must not hide the lane at the moment it hands the player a
+    // decision — the boss card can afford to, arriving at the start of a wave.
+    const bw = 520
+    const banner = platePanel(this, W / 2 - bw / 2, y - 34, bw, 88)
     banner.forEach((p) => p.setDepth(TICKET_DEPTH))
 
-    const title = this.add.text(W / 2, y - 22, name.toUpperCase(), {
-      fontFamily: FONT_DISPLAY, fontSize: '46px', color: '#8fd0ff',
-      stroke: '#0d1016', strokeThickness: 8,
+    const title = this.add.text(W / 2, y - 16, name.toUpperCase(), {
+      fontFamily: FONT_DISPLAY, fontSize: '30px', color: '#8fd0ff',
+      stroke: '#0d1016', strokeThickness: 6,
     }).setOrigin(0.5, 0).setDepth(TICKET_DEPTH + 1)
-    const sub = this.add.text(W / 2, y + 28, 'RARE DROP — ONE USE', {
-      fontFamily: FONT_UI, fontSize: '15px', color: COLOR.ink,
+    const sub = this.add.text(W / 2, y + 20, 'RARE DROP — ONE USE', {
+      fontFamily: FONT_UI, fontSize: '13px', color: COLOR.ink,
     }).setOrigin(0.5, 0).setDepth(TICKET_DEPTH + 1)
 
     const pieces: Phaser.GameObjects.GameObject[] = [...banner, title, sub]

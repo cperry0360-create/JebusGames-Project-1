@@ -10,12 +10,15 @@ const towers = read('towers'), enemies = read('enemies'), heroes = read('heroes'
 const brute = enemies.finalNotice
 const list = Object.entries(towers) as [string, any][]
 
-const dpsVs = (t: any, tier: number, armor: number): number => {
-  const dmg = statAt(t, tier, 'damage')
-  const pierce = statAt(t, tier, 'armorPierce')
+const dpsVs = (t: any, tier: number, armor: number, spec: string | null = null): number => {
+  const dmg = statAt(t, tier, 'damage', spec)
+  const pierce = statAt(t, tier, 'armorPierce', spec)
   const eff = damageAfterArmor(dmg, armor, t.ignoresArmor, pierce)
-  return eff / statAt(t, tier, 'fireInterval')
+  return eff / statAt(t, tier, 'fireInterval', spec)
 }
+/** Tier 3 is a choice, so "at tier 3" means "with the better of the two". */
+const bestT3 = (t: any, armor: number): number =>
+  Math.max(...t.specializations.map((s: any) => dpsVs(t, 3, armor, s.id)))
 
 test('a hit always lands at least 1, so nothing is ever immune', () => {
   assert.equal(damageAfterArmor(4, 99, false, 0), 1)
@@ -55,10 +58,10 @@ test('upgrading a single-target tower is a reachable answer to armour', () => {
   for (const [id, t] of list) {
     if (t.archetype !== 'single-target' || t.ignoresArmor) continue
     const t1 = dpsVs(t, 1, brute.armor)
-    const t3 = dpsVs(t, 3, brute.armor)
+    const t3 = bestT3(t, brute.armor)
     assert.ok(t3 > t1 * 3, `${id} tier 3 only does ${(t3 / t1).toFixed(1)}x its tier 1 DPS against armour`)
-    assert.ok(statAt(t, 3, 'armorPierce') >= brute.armor,
-      `${id} should fully pierce the brute by tier 3`)
+    const pierce = Math.max(...t.specializations.map((s: any) => statAt(t, 3, 'armorPierce', s.id)))
+    assert.ok(pierce >= brute.armor, `${id} should fully pierce the brute by tier 3`)
   }
 })
 
@@ -81,7 +84,7 @@ test('every tower is worth building against the enemies it is for', () => {
 test('upgrading answers armour for every tower that survives to tier 3', () => {
   for (const [id, t] of list) {
     if (t.damage === 0) continue
-    const secs = brute.maxHealth / dpsVs(t, 3, brute.armor)
+    const secs = brute.maxHealth / bestT3(t, brute.armor)
     assert.ok(secs < 20, `${id} still needs ${secs.toFixed(0)}s per brute when fully upgraded`)
   }
 })

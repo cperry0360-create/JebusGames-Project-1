@@ -329,3 +329,29 @@ test('presentation numbers are present and sane', () => {
   assert.ok(pres.shake.lastStandIntensity > pres.shake.leakIntensity,
     'Last Stand should shake harder than a leak')
 })
+
+test("the hero's own actives use ability art, not a tower or a placeholder", () => {
+  // Haymaker drew the Write-Off tower and Restructure drew a leftover Kenney
+  // pad tile, sitting beside two real ability cards in the same HUD row.
+  const heroes = JSON.parse(readFileSync(new URL('../src/data/heroes.json', import.meta.url), 'utf8'))
+  const art = JSON.parse(readFileSync(new URL('../src/data/art.json', import.meta.url), 'utf8'))
+  for (const hero of Object.values(heroes) as any[]) {
+    for (const slot of ['haymaker', 'restructure'] as const) {
+      const key = hero[slot].icon
+      const path = art.files[key]
+      assert.ok(path, `${hero.name}'s ${slot} points at unknown art key "${key}"`)
+      assert.match(path, /^abilities\//,
+        `${hero.name}'s ${slot} draws ${path}, which is not an ability icon`)
+    }
+  }
+})
+
+test('the retired tower-base placeholder is gone from the manifest', () => {
+  // Kenney's projectiles, effects, decor and the summoned fighter are all
+  // still in use and legitimate. This is about one specific leftover: the pad
+  // tile that ui.towerBase pointed at before the towers gained their own
+  // bases. It outlived its role and was still being loaded at boot.
+  const art = JSON.parse(readFileSync(new URL('../src/data/art.json', import.meta.url), 'utf8'))
+  assert.equal(art.files['tower-base'], undefined, 'tower-base is still loaded')
+  assert.equal(art.ui.towerBase, null, 'the towers carry their own bases now')
+})

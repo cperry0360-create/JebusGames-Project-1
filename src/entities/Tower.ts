@@ -5,7 +5,7 @@ import { pickFirst } from '../systems/Targeting.ts'
 import { boostedDamage } from '../systems/Combat.ts'
 import { makeShadow, muzzleFlash, PRESENTATION } from '../systems/Presentation.ts'
 import { ART, applyRender } from '../systems/Art.ts'
-import { BASE_TIER, isMaxed, nextStep, statAt } from '../systems/Upgrades.ts'
+import { atSpecChoice, BASE_TIER, isMaxed, nextStep, specById, statAt } from '../systems/Upgrades.ts'
 import rulesData from '../data/rules.json'
 import type { RulesDef } from '../types.ts'
 import { Enemy } from './Enemy.ts'
@@ -21,6 +21,10 @@ export class Tower extends Phaser.GameObjects.Container {
   supportBonus = 0
   /** 1 when built. Tiers 2 and 3 are bought and take time to raise. */
   tier = BASE_TIER
+  /** The tier-3 specialization, once chosen. Permanent for this tower. */
+  spec: string | null = null
+  /** Held while tier 3 is being raised, applied when the work finishes. */
+  private pendingSpec: string | null = null
 
   private readonly turret: Phaser.GameObjects.Sprite
   private readonly shadow: Phaser.GameObjects.Image
@@ -77,39 +81,39 @@ export class Tower extends Phaser.GameObjects.Container {
    *  Consumers read these, never `def`, or an upgraded tower would keep firing
    *  with its tier 1 numbers. */
   get damage(): number {
-    return boostedDamage(statAt(this.def, this.tier, 'damage'), this.supportBonus)
+    return boostedDamage(statAt(this.def, this.tier, 'damage', this.spec), this.supportBonus)
   }
 
   get range(): number {
-    return statAt(this.def, this.tier, 'range')
+    return statAt(this.def, this.tier, 'range', this.spec)
   }
 
   /** Slower while a tier is going up: that is the cost of upgrading mid-wave. */
   get fireInterval(): number {
-    const base = statAt(this.def, this.tier, 'fireInterval')
+    const base = statAt(this.def, this.tier, 'fireInterval', this.spec)
     return this.upgrading ? base / UPGRADES.buildFireRate : base
   }
 
   /** How much of a target's armour this tower gets through. Climbs with tier,
    *  so upgrading a single-target tower is the reachable answer to armour. */
   get armorPierce(): number {
-    return statAt(this.def, this.tier, 'armorPierce')
+    return statAt(this.def, this.tier, 'armorPierce', this.spec)
   }
 
   get splashRadius(): number {
-    return statAt(this.def, this.tier, 'splashRadius')
+    return statAt(this.def, this.tier, 'splashRadius', this.spec)
   }
 
   get slowSeconds(): number {
-    return statAt(this.def, this.tier, 'slowSeconds')
+    return statAt(this.def, this.tier, 'slowSeconds', this.spec)
   }
 
   get supportRadius(): number {
-    return statAt(this.def, this.tier, 'supportRadius')
+    return statAt(this.def, this.tier, 'supportRadius', this.spec)
   }
 
   get supportDamageBonus(): number {
-    return statAt(this.def, this.tier, 'supportDamageBonus')
+    return statAt(this.def, this.tier, 'supportDamageBonus', this.spec)
   }
 
   get upgrading(): boolean {
@@ -130,12 +134,25 @@ export class Tower extends Phaser.GameObjects.Container {
    * tower under construction keeps its old stats and its reduced rate rather
    * than getting the new ones for free while it builds.
    */
-  beginUpgrade(): void {
-    const step = nextStep(this.def, this.tier)
-    if (!step || this.upgrading) return
+  beginUpgrade(specId: string | null = null): void {
+    if (this.upgrading) return
+    // Tier 3 is a choice; every other tier is a step.
+    const step = specId ? specById(this.def, specId) : nextStep(this.def, this.tier)
+    if (!step) return
+    if (specId && !atSpecChoice(this.def, this.tier)) return
+    this.pendingSpec = specId
     this.buildTotal = step.buildSeconds
     this.buildLeft = step.buildSeconds
     this.drawScaffold()
+  }
+
+  /** True when the next purchase is the mutually exclusive tier-3 choice. */
+  get atSpecChoice(): boolean {
+    return atSpecChoice(this.def, this.tier)
+  }
+
+  get specName(): string | null {
+    return specById(this.def, this.spec)?.name ?? null
   }
 
   /** Tier 1 places instantly (buildTime is 0); the pop is feedback, not a timer. */
@@ -193,6 +210,10 @@ export class Tower extends Phaser.GameObjects.Container {
     }
     this.buildLeft = 0
     this.tier++
+    if (this.pendingSpec) {
+      this.spec = this.pendingSpec
+      this.pendingSpec = null
+    }
     this.scaffold?.destroy()
     this.scaffold = undefined
     this.popIn()

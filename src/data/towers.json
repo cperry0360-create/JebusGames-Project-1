@@ -18,23 +18,35 @@
     "supportDamageBonus": 0,
     "tiers": [
       {
-        "cost": 96,
+        "cost": 112,
         "buildSeconds": 4.0,
         "damage": 1.8,
         "range": 1.08,
         "fireInterval": 0.9,
         "armorPierce": 1.6
-      },
-      {
-        "cost": 176,
-        "buildSeconds": 7.0,
-        "damage": 1.85,
-        "range": 1.08,
-        "fireInterval": 0.88,
-        "armorPierce": 1.6
       }
     ],
-    "armorPierce": 5
+    "armorPierce": 5,
+    "specializations": [
+      {
+        "id": "garnishment",
+        "name": "Garnishment",
+        "flavor": "Takes more, and takes it through armour.",
+        "cost": 320,
+        "buildSeconds": 9.0,
+        "damage": 1.9,
+        "armorPierce": 2.0
+      },
+      {
+        "id": "payroll",
+        "name": "Payroll",
+        "flavor": "Takes less, far more often. Nobody notices.",
+        "cost": 320,
+        "buildSeconds": 9.0,
+        "fireInterval": 0.55,
+        "damage": 1.15
+      }
+    ]
   },
   "writeoff": {
     "name": "Write-Off",
@@ -55,21 +67,34 @@
     "supportDamageBonus": 0,
     "tiers": [
       {
-        "cost": 180,
+        "cost": 210,
         "buildSeconds": 4.0,
         "damage": 1.8,
         "range": 1.08,
         "fireInterval": 0.9
-      },
-      {
-        "cost": 330,
-        "buildSeconds": 7.0,
-        "damage": 1.85,
-        "range": 1.08,
-        "fireInterval": 0.88
       }
     ],
-    "armorPierce": 0
+    "armorPierce": 0,
+    "specializations": [
+      {
+        "id": "totalloss",
+        "name": "Total Loss",
+        "flavor": "One enormous number in the right box.",
+        "cost": 600,
+        "buildSeconds": 9.0,
+        "damage": 2.2,
+        "fireInterval": 1.15
+      },
+      {
+        "id": "carryforward",
+        "name": "Carryforward",
+        "flavor": "Keeps going, and reaches further.",
+        "cost": 600,
+        "buildSeconds": 9.0,
+        "fireInterval": 0.6,
+        "range": 1.2
+      }
+    ]
   },
   "rounding": {
     "name": "Rounding Error",
@@ -90,23 +115,35 @@
     "supportDamageBonus": 0,
     "tiers": [
       {
-        "cost": 150,
+        "cost": 175,
         "buildSeconds": 4.0,
         "damage": 1.8,
         "range": 1.08,
         "fireInterval": 0.9,
         "splashRadius": 1.12
-      },
-      {
-        "cost": 275,
-        "buildSeconds": 7.0,
-        "damage": 1.85,
-        "range": 1.08,
-        "fireInterval": 0.88,
-        "splashRadius": 1.12
       }
     ],
-    "armorPierce": 0
+    "armorPierce": 0,
+    "specializations": [
+      {
+        "id": "bankers",
+        "name": "Bankers",
+        "flavor": "Rounds everything in a much wider circle.",
+        "cost": 500,
+        "buildSeconds": 9.0,
+        "splashRadius": 1.6,
+        "damage": 1.35
+      },
+      {
+        "id": "materiality",
+        "name": "Materiality",
+        "flavor": "Only large errors, but it hurts them.",
+        "cost": 500,
+        "buildSeconds": 9.0,
+        "damage": 2.3,
+        "splashRadius": 0.85
+      }
+    ]
   },
   "escalation": {
     "name": "Escalation Clause",
@@ -127,23 +164,35 @@
     "supportDamageBonus": 0,
     "tiers": [
       {
-        "cost": 264,
+        "cost": 308,
         "buildSeconds": 4.0,
         "damage": 1.8,
         "range": 1.08,
         "fireInterval": 0.9,
         "splashRadius": 1.12
-      },
-      {
-        "cost": 484,
-        "buildSeconds": 7.0,
-        "damage": 1.85,
-        "range": 1.08,
-        "fireInterval": 0.88,
-        "splashRadius": 1.12
       }
     ],
-    "armorPierce": 0
+    "armorPierce": 0,
+    "specializations": [
+      {
+        "id": "compound",
+        "name": "Compound",
+        "flavor": "Interest on the interest.",
+        "cost": 880,
+        "buildSeconds": 9.0,
+        "damage": 2.1,
+        "fireInterval": 0.9
+      },
+      {
+        "id": "penalty",
+        "name": "Penalty",
+        "flavor": "Lands wider and reaches the whole queue.",
+        "cost": 880,
+        "buildSeconds": 9.0,
+        "splashRadius": 1.55,
+        "range": 1.2
+      }
+    ]
   },
   "extension": {
     "name": "Filing Extension",
@@ -164,25 +213,36 @@
     "supportDamageBonus": 0,
     "tiers": [
       {
-        "cost": 120,
+        "cost": 140,
         "buildSeconds": 4.0,
         "damage": 1.8,
         "range": 1.08,
         "fireInterval": 0.9,
         "slowSeconds": 1.2,
         "armorPierce": 1.6
-      },
-      {
-        "cost": 220,
-        "buildSeconds": 7.0,
-        "damage": 1.85,
-        "range": 1.08,
-        "fireInterval": 0.88,
-        "slowSeconds": 1.2,
-        "armorPierce": 1.6
       }
     ],
-    "armorPierce": 3
+    "armorPierce": 3,
+    "specializations": [
+      {
+        "id": "deferral",
+        "name": "Deferral",
+        "flavor": "The hold lasts considerably longer.",
+        "cost": 400,
+        "buildSeconds": 9.0,
+        "slowSeconds": 2.0,
+        "range": 1.15
+      },
+      {
+        "id": "amendment",
+        "name": "Amendment",
+        "flavor": "A shorter hold that actually hurts.",
+        "cost": 400,
+        "buildSeconds": 9.0,
+        "damage": 2.6,
+        "armorPierce": 2.0
+      }
+    ]
   },
   "shelter": {
     "name": "Tax Shelter",
@@ -203,18 +263,31 @@
     "supportDamageBonus": 0.3,
     "tiers": [
       {
-        "cost": 168,
+        "cost": 196,
         "buildSeconds": 4.0,
-        "supportDamageBonus": 1.55,
-        "supportRadius": 1.1
-      },
-      {
-        "cost": 308,
-        "buildSeconds": 7.0,
         "supportDamageBonus": 1.55,
         "supportRadius": 1.1
       }
     ],
-    "armorPierce": 0
+    "armorPierce": 0,
+    "specializations": [
+      {
+        "id": "offshore",
+        "name": "Offshore",
+        "flavor": "Shelters a much larger area.",
+        "cost": 560,
+        "buildSeconds": 9.0,
+        "supportRadius": 1.5
+      },
+      {
+        "id": "loophole",
+        "name": "Loophole",
+        "flavor": "Shelters less ground, far more effectively.",
+        "cost": 560,
+        "buildSeconds": 9.0,
+        "supportDamageBonus": 1.9,
+        "supportRadius": 0.9
+      }
+    ]
   }
 }

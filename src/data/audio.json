@@ -2,7 +2,6 @@
   "note": "Every sound the game plays. gain is the cue mixed against the others; maxVoices caps how many copies can sound at once, so a busy wave does not turn to noise.",
   "credit": "Kenney CC0 audio packs (Impact Sounds, Interface Sounds, UI Audio, RPG Audio). The multi-second stings are synthesised for this project by tools/mksfx.py.",
   "root": "assets/audio/",
-  "defaultVolume": 0.7,
   "cues": {
     "tower-withholding": {
       "file": "sfx-tower-withholding",

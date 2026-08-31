@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { platePanel, plateButton } from './Plate.ts'
 import { COLOR, FONT_DISPLAY, FONT_UI } from './Theme.ts'
+import { play } from '../systems/Audio.ts'
 
 /**
  * A modal panel on the dialog plate.
@@ -74,6 +75,7 @@ export class Dialog {
 
     this.layer = scene.add.container(x, y).setDepth(depth).setScale(0.86)
     scene.tweens.add({ targets: this.layer, scale: 1, duration: 170, ease: 'Back.easeOut' })
+    play(scene, 'open')
 
     // The body is built first and measured, then the plate is sized around it.
     // Assuming a one-line subtitle put a wrapped flavour line through the first
@@ -188,6 +190,7 @@ export class Dialog {
   close(): void {
     if (this.closed) return
     this.closed = true
+    play(this.scene, 'close')
     this.closedHandler?.()
     this.blocker.destroy()
     this.scene.tweens.add({

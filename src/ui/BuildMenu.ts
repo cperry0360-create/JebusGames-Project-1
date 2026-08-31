@@ -152,6 +152,7 @@ export class BuildMenu {
   }
 
   close(onPreview?: (id: string | null) => void): void {
+    if (this.container) play(this.scene, 'close')
     this.container?.destroy(true)
     this.container = undefined
     // hitAreas is not cleared here: see ownsAny. open() replaces it.
