@@ -263,3 +263,18 @@ test('nothing exempts the boss from abilities', () => {
     assert.ok(!/tier === 'boss'/.test(body), `${fn} treats the boss as a special case`)
   }
 })
+
+test('a 3/4 gnome faces its target rather than rotating toward it', () => {
+  // The placeholder was a top-down tile and was rotated to point at whatever
+  // it was hitting. Rotating art drawn from the side lays the gnome down.
+  const f = src('entities/Fighter.ts')
+  assert.ok(!/setRotation/.test(f), 'the gnome still rotates toward its target')
+  assert.match(f, /facesLeft\(/, 'the gnome does not use the shared facing rule')
+  assert.match(f, /setFlipX\(left\)/, 'the gnome never mirrors')
+  // Drawn facing right, like the enemies: the flag it keeps is "facing left".
+  assert.match(f, /facingLeft = false/, 'the gnome does not start facing right')
+  // On its feet, with a shadow, sorted like everything else on the board.
+  assert.match(f, /applyGroundRender\(/, 'the gnome is not placed on its feet')
+  assert.match(f, /makeShadow\(/, 'the gnome casts no shadow')
+  assert.match(f, /ySort\(this\)/, 'the gnome is not depth-sorted')
+})

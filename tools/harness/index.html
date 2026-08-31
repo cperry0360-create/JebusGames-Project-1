@@ -648,6 +648,91 @@ async function run() {
     return
   }
 
+  if (scenario === 'gnomes') {
+    // Two gnomes, two sprites, on the lane only.
+    g.status.abilities = ['gnomes', 'glacier']
+    g.cooldowns.register('gnomes', 1)
+    g.cooldowns.reset('gnomes')
+    g.startWave()
+    await until(() => g.enemies.length > 1, 30000)
+    await sleep(600)
+
+    // Off the path first: a gnome in a field blocks nothing, so the cast has
+    // to be refused rather than wasted.
+    const off = [g.build.spots[0].x, g.build.spots[0].y]
+    note('off-path distance to lane: ' + Math.round(g.lane.distanceTo(off[0], off[1])) +
+      ' (limit ' + g.abilityDef('gnomes').pathOnlyWithin + ')')
+    g.fireAbility('gnomes', off[0], off[1])
+    await sleep(300)
+    note('off-path cast: fighters=' + g.fighters.length + ' msg="' + g.status.message + '"' +
+      ' cooldownReady=' + g.cooldowns.ready('gnomes'))
+
+    // Then on the lane, just ahead of the lead enemy, so the pair actually
+    // meets something and the size comparison is a frame, not arithmetic.
+    const lead = g.enemies.reduce((a, b) => (a.distance > b.distance ? a : b))
+    const on = g.lane.pointAt(lead.distance + 70)
+    g.cooldowns.reset('gnomes')
+    g.fireAbility('gnomes', on.x, on.y)
+    note('on-path cast: fighters=' + g.fighters.length + ' msg="' + g.status.message + '"')
+
+    // Held up for the pictures. A director-side cheat: they are dead in under
+    // a second otherwise, which is measured separately below.
+    for (const f of g.fighters) f.health = 99999
+    await sleep(500)
+    for (const f of g.fighters) {
+      const a = f.art
+      note('  gnome ' + a.texture.key + ' ' + Math.round(a.displayWidth) + 'x' +
+        Math.round(a.displayHeight) + ' origin ' + a.originX + ',' + a.originY +
+        ' rot=' + a.rotation.toFixed(2) + ' depth=' + Math.round(f.depth) +
+        ' shadow=' + (f.list[0]?.texture?.key ?? 'NONE'))
+    }
+    const keys = g.fighters.map((f) => f.art.texture.key)
+    note('distinct sprites: ' + new Set(keys).size + ' of ' + keys.length)
+
+    // Sizes on the glass, against what they stand beside.
+    const z = g.cameras.main.zoom
+    const soldier = g.enemies.find((e) => e.def.tier === 'basic')
+    note('on screen at zoom ' + z.toFixed(2) + ': gnome ' +
+      Math.round(g.fighters[0].art.displayHeight * z) + 'px, ' + soldier.def.name + ' ' +
+      Math.round(soldier.art.displayHeight * z) + 'px, hero ' +
+      Math.round(g.hero.list[1].displayHeight * z) + 'px')
+
+    // Facing: right by default, mirrored for a target on the left.
+    const f0 = g.fighters[0]
+    f0.face(0)
+    note('facing a target to the right: flipX=' + f0.art.flipX + ' artX=' + f0.art.x.toFixed(1))
+    f0.face(Math.PI)
+    note('facing a target to the left:  flipX=' + f0.art.flipX + ' artX=' + f0.art.x.toFixed(1))
+
+    g.cameras.main.centerOn(on.x, on.y)
+    await sleep(300)
+    await shot('gnomes-01-on-path')
+    await until(() => g.enemies.some((e) => Math.hypot(e.x - on.x, e.y - on.y) < 34), 20000)
+    await sleep(500)
+    note('under fire: flipX=' + g.fighters.map((f) => f.art.flipX).join(',') +
+      ' depths=' + g.fighters.map((f) => Math.round(f.depth)).join(','))
+    await shot('gnomes-02-fighting')
+
+    // And now the honest one: real health, and how long two gnomes last.
+    for (const f of g.fighters) f.health = 0
+    await sleep(300)
+    g.cooldowns.reset('gnomes')
+    const lead2 = g.enemies.reduce((a, b) => (a.distance > b.distance ? a : b))
+    const on2 = g.lane.pointAt(lead2.distance + 50)
+    g.fireAbility('gnomes', on2.x, on2.y)
+    const hits = []
+    for (const f of g.fighters) {
+      const orig = f.hurt.bind(f)
+      f.hurt = (amt) => { hits.push(amt); return orig(amt) }
+    }
+    const t0 = performance.now()
+    await until(() => g.fighters.length === 0, 20000)
+    note('survivability: 2 gnomes (90hp each) gone in ' +
+      Math.round(performance.now() - t0) + 'ms after ' + hits.length + ' hits for ' +
+      hits.reduce((a, b) => a + b, 0) + ' damage; a Late Filer does 7 every 1.0s')
+    return
+  }
+
   if (scenario === 'nuke') {
     // Force the drop, then watch the wind-up and the payload.
     for (const i of [3, 1]) await build(i, 0)

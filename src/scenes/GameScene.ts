@@ -1373,9 +1373,12 @@ this.armReadyCountdown()
         h.attackRange * 0.8,
         h.attackInterval,
         seconds,
-        h.fighterSprite,
+        // One sprite per gnome, cycled. A pair drawn from a single sprite
+        // reads as one gnome printed twice rather than as two of them.
+        h.fighterSprites[i % h.fighterSprites.length],
       ))
     }
+    logEvent('summon', `${count} gnomes at ${Math.round(x)},${Math.round(y)} for ${seconds}s`)
   }
 
   castHaymaker(): void {

@@ -18,8 +18,9 @@ test('every sprite key referenced anywhere resolves to a real file', () => {
   for (const [id, a] of Object.entries(abilities) as [string, any][]) refs.push([`ability ${id}`, a.icon])
   for (const [id, h] of Object.entries(heroes) as [string, any][]) {
     refs.push([`hero ${id} body`, h.bodySprite], [`hero ${id} ultimate`, h.ultimateSprite],
-      [`hero ${id} portrait`, h.portraitSprite], [`hero ${id} fighter`, h.fighterSprite],
+      [`hero ${id} portrait`, h.portraitSprite],
       [`hero ${id} haymaker`, h.haymaker.icon], [`hero ${id} restructure`, h.restructure.icon])
+    h.fighterSprites.forEach((s: string, i: number) => refs.push([`hero ${id} gnome ${i}`, s]))
   }
   refs.push([`map plate ${map.plate}`, art.map[map.plate]])
   for (const [where, key] of refs) {
@@ -605,4 +606,49 @@ test('the ability bar groups the hero medallions and spaces them apart', () => {
   // And the armed outline follows the shape rather than boxing a circle.
   assert.match(hud, /slot\.hero[\s\S]{0,120}strokeCircle/,
     'a round medallion is outlined with a rectangle when armed')
+})
+
+test('the summoned gnomes are two gnomes, not one gnome twice', () => {
+  const sprites = heroes.cory.fighterSprites as string[]
+  assert.equal(sprites.length, new Set(sprites).size, 'the pair shares a sprite')
+  assert.ok(sprites.length >= abilities.gnomes.summonCount,
+    `${abilities.gnomes.summonCount} gnomes are summoned but only ${sprites.length} sprites exist`)
+})
+
+test('a gnome is smaller than the enemy it stands in front of', () => {
+  // The art was drawn to a shared scale — 300px against Cory's 470 — and the
+  // manifest has to keep that relationship or the joke reads as a bug.
+  const gnome = art.render[heroes.cory.fighterSprites[0]]
+  const soldier = art.render.enemyFiler ?? art.render[enemies.lateFiler.sprite]
+  const hero = art.render[heroes.cory.bodySprite]
+  for (const key of heroes.cory.fighterSprites as string[]) {
+    const cfg = art.render[key]
+    assert.ok(cfg, `${key} has no render config`)
+    assert.ok(cfg.displayHeight < soldier.displayHeight,
+      `a gnome at ${cfg.displayHeight}px is not smaller than the soldier at ${soldier.displayHeight}px`)
+    // Bottom-anchored, so it stands on the ground rather than floating.
+    assert.equal(cfg.anchorY, 1.0, `${key} is not anchored on its feet`)
+    assert.ok(cfg.shadowWidth > 0, `${key} casts no ground shadow`)
+  }
+  const ratio = gnome.displayHeight / hero.displayHeight
+  assert.ok(ratio > 0.55 && ratio < 0.72,
+    `a gnome is ${ratio.toFixed(2)} of Cory; the art was drawn at two thirds`)
+})
+
+test('the gnomes replaced the Kenney placeholder outright', () => {
+  // The old summon wore a top-down pack tile. Leaving it in the manifest is
+  // how an unused asset survives a swap.
+  for (const [key, path] of Object.entries(art.files) as [string, string][]) {
+    assert.ok(!/^kenney\/.*tile291/.test(path), `${key} still points at the fighter placeholder`)
+  }
+})
+
+test('gnomes can only be dropped on the lane', () => {
+  // A gnome in a field blocks nothing, so the cast is refused rather than
+  // wasted. It is the only ability with the restriction.
+  assert.ok(abilities.gnomes.pathOnlyWithin > 0, 'the summon is not restricted to the path')
+  const restricted = Object.entries(abilities as Record<string, any>)
+    .filter(([, a]) => a.pathOnlyWithin !== undefined && a.pathOnlyWithin > 0)
+    .map(([id]) => id)
+  assert.deepEqual(restricted, ['gnomes'], 'only the summon should be path-only')
 })

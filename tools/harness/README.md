@@ -45,6 +45,7 @@ screenshots are the evidence.
 | `diag` | five taps on the version stamp, a thrown error, and a stalled loop |
 | `stuckcast` | a run abandoned mid-wind-up, and whether abilities work in the next one |
 | `bossability` | every ability plus the nuke, cast at the Politician, with the damage each one did |
+| `gnomes` | the summon refused off the lane and allowed on it, both gnome sprites, their size beside a soldier, and how long they actually survive |
 
 ## Notes
 

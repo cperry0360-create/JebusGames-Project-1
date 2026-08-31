@@ -50,6 +50,6 @@
       "transformPauseMs": 500
     },
     "ultimateSprite": "hero-cory-ultimate",
-    "fighterSprite": "fighter-body"
+    "fighterSprites": ["unit-gnome-trowel", "unit-gnome-rake"]
   }
 }

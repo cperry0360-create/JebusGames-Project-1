@@ -281,8 +281,10 @@ export interface HeroDef {
   /** The Last Stand form. Cory does not get angrier; he gets into an SUV. */
   ultimateSprite: string
   portraitSprite: string
-  /** The sprite a summoned fighter wears. Not the hero's own. */
-  fighterSprite: string
+  /** The sprites the summoned gnomes wear, one per gnome, cycled. Two entries
+   *  because the ability summons two: a pair drawn from one sprite reads as
+   *  the same gnome printed twice. */
+  fighterSprites: string[]
   maxHealth: number
   moveSpeed: number
   attackRange: number

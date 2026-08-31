@@ -1,6 +1,6 @@
 {
   "assetRoot": "assets/",
-  "credit": "Projectiles, effects, scenery and the hero from Kenney Tower Defense (Top-Down), CC0. See public/assets/kenney/License.txt. The level map, the towers and the enemies are original art.",
+  "credit": "Projectiles, effects and scenery from Kenney Tower Defense (Top-Down), CC0. See public/assets/kenney/License.txt. The level map, the towers, the enemies, the hero and the gnomes are original art.",
   "note": "Every sprite the game draws is named here. `files` maps a key to a path under assetRoot, so a new art pack is a path change. `render` gives a key its anchor and on-screen height, so art of any source size drops in without touching code.",
   "files": {
     "turret-ledger": "towers/tower_withholding.png",
@@ -12,6 +12,8 @@
     "enemy-filer": "enemies/enemy_soldier.png",
     "enemy-shredder": "enemies/enemy_scout.png",
     "enemy-notice": "enemies/enemy_brute.png",
+    "unit-gnome-trowel": "units/gnome_trowel.png",
+    "unit-gnome-rake": "units/gnome_rake.png",
     "shot-small": "kenney/towerDefense_tile272.png",
     "shot-ring": "kenney/towerDefense_tile273.png",
     "shot-heavy": "kenney/towerDefense_tile274.png",
@@ -36,7 +38,6 @@
     "hero-cory": "hero/hero_cory.png",
     "hero-cory-ultimate": "hero/hero_cory_ultimate.png",
     "ui-title-bg": "ui/title_bg.png",
-    "fighter-body": "kenney/towerDefense_tile291.png",
     "ability-molotov": "abilities/ability_molotov.png",
     "ability-gnomes": "abilities/ability_gnomes.png",
     "ability-glacier": "abilities/ability_glacier.png",
@@ -332,6 +333,22 @@
       "contentWidth": 320,
       "contentHeight": 290,
       "displayHeight": 72
+    },
+    "unit-gnome-rake": {
+      "anchorX": 0.5647,
+      "anchorY": 1.0,
+      "displayHeight": 38.7,
+      "shadowWidth": 22.4,
+      "contentWidth": 201,
+      "contentHeight": 300
+    },
+    "unit-gnome-trowel": {
+      "anchorX": 0.5252,
+      "anchorY": 1.0,
+      "displayHeight": 38.7,
+      "shadowWidth": 24.0,
+      "contentWidth": 258,
+      "contentHeight": 300
     }
   },
   "map": {

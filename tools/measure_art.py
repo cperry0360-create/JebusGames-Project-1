@@ -430,3 +430,44 @@ for name in ('sign_moes', 'sign_courjahan'):
     print(f'  {key}: {w}x{h}, board x{x0}-{x1} y{y0}-{y1} '
           f'({x1 - x0 + 1}x{y1 - y0 + 1})')
 json.dump({'files': sfiles, 'render': srender}, open('/tmp/signpatch.json', 'w'), indent=2)
+
+
+# ----------------------------------------------------------------- gnomes
+
+# The two summoned gnomes. They are drawn at the same scale as the enemies and
+# the hero — 300px tall against Cory's 470 — so they reuse the enemy factor
+# rather than getting one of their own, and the two-thirds-of-Cory relationship
+# the artist drew survives into the game.
+#
+# The foot band has to reach past the rake: its pole rests on the ground
+# between the gnome's boots, and a shallower cut reads it as a third foot and
+# drags the anchor sideways.
+GNOME_KEY = {
+    'gnome_trowel.png': ('unit-gnome-trowel', 0.90),
+    'gnome_rake.png':   ('unit-gnome-rake', 0.90),
+}
+
+print('\n\ngnomes')
+gfiles, grender = {}, {}
+for name, (key, band) in sorted(GNOME_KEY.items()):
+    path = f'public/assets/units/{name}'
+    w, h, px = png.read(path)
+    low = ground_silhouette(w, h, px)
+    bot = max(low)
+    groups = foot_groups(low, int(h * band))
+    lo = min(g[0] for g in groups)
+    hi = max(g[1] for g in groups)
+    footW = hi - lo + 1
+    gfiles[key] = f'units/{name}'
+    grender[key] = {
+        'anchorX': round(((lo + hi) / 2) / w, 4),
+        'anchorY': round((bot + 1) / h, 4),
+        'displayHeight': round(h * escale, 1),
+        'shadowWidth': round(footW * escale, 1),
+        'contentWidth': w,
+        'contentHeight': h,
+    }
+    print(f'{name:20s} {w}x{h}  cut y{int(h * band):4d}  feet {groups}')
+    print(f'{"":20s} -> {key}: footprint x{lo}-{hi} ({footW}px), '
+          f'on screen {round(w * escale, 1)}x{round(h * escale, 1)}, {grender[key]}')
+json.dump({'files': gfiles, 'render': grender}, open('/tmp/gnomepatch.json', 'w'), indent=2)

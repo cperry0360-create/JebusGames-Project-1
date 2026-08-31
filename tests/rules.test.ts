@@ -379,7 +379,7 @@ test('every sprite key referenced by data exists in the art manifest', () => {
   const referenced: string[] = []
   for (const [, t] of towerList) referenced.push(t.sprite, t.shot)
   for (const [, e] of enemyList) referenced.push(e.sprite)
-  referenced.push(heroes.cory.bodySprite, heroes.cory.ultimateSprite, heroes.cory.fighterSprite)
+  referenced.push(heroes.cory.bodySprite, heroes.cory.ultimateSprite, ...heroes.cory.fighterSprites)
   for (const k of referenced) assert.ok(keys.has(k), `data references unknown sprite key "${k}"`)
 })
 
