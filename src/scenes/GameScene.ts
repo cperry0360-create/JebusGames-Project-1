@@ -38,7 +38,8 @@ import { platePanel, plateButton, type PlateButton } from '../ui/Plate.ts'
 import { SignBribe } from '../ui/SignBribe.ts'
 import { CameraRig } from '../systems/CameraRig.ts'
 import { Dialog, type DialogOptions, type DialogRow } from '../ui/Dialog.ts'
-import { maxTier, nextStep, sellValue } from '../systems/Upgrades.ts'
+import { maxTier, nextStep, sellValue, specSummary } from '../systems/Upgrades.ts'
+import { canAffordAny, openingPurse } from '../systems/Economy.ts'
 
 const MAP = mapData as MapDef
 const RULES = rulesData as RulesDef
@@ -77,6 +78,15 @@ export interface GameStatus {
   bossMax: number
   pendingAbility: string | null
   message: string
+  /**
+   * A refusal the player needs to see *now*, raised where their finger is
+   * rather than in the guidance line. The HUD shows it once and clears it.
+   *
+   * Tapping a hero ability that could not fire used to set only `message`, a
+   * small line in the opposite corner of the screen — so the tap looked like
+   * it had done nothing at all and the slot read as dead.
+   */
+  alert: string
 }
 
 const OVERLAY_DEPTH = 150000
@@ -91,6 +101,7 @@ export class GameScene extends Phaser.Scene {
     phase: 'ready', mode: 'normal', enemiesLeft: 0,
     heroName: '', heroHealth: 0, heroMax: 0, heroDown: false, lastStand: false,
     unlockedTowers: [], abilities: [], rareAbility: null, pendingAbility: null, message: '',
+    alert: '',
     bossName: '', bossHealth: 0, bossMax: 0,
   }
 
@@ -175,7 +186,13 @@ export class GameScene extends Phaser.Scene {
 
     this.hero = new Hero(this, MAP.heroStart[0], MAP.heroStart[1], heroDef)
 
-    this.status.peanuts = RULES.startingPeanuts
+    // A floor rather than a constant: the opening instruction is to build a
+    // tower, so the purse has to cover the cheapest one this run actually drew.
+    this.status.peanuts = openingPurse(
+      RULES.startingPeanuts,
+      RULES.startingPeanutsMargin,
+      run.openingTowers.map((id) => TOWERS[id].cost),
+    )
     this.status.lives = RULES.startingLives
     this.status.wave = 0
     this.status.phase = 'ready'
@@ -196,7 +213,7 @@ export class GameScene extends Phaser.Scene {
     this.status.bossMax = 0
     this.nukeUsed = false
     this.status.unlockedTowers = run.openingTowers.slice(0, DRAFT.towersAtStart)
-    this.status.message = 'Click a glowing pad to build a tower, then START WAVE.'
+    this.status.message = this.idleHint()
 
     for (const id of this.status.abilities) this.cooldowns.register(id, ABILITIES[id].cooldown)
     this.cooldowns.register(RULES.serverNuke.abilityId, ABILITIES[RULES.serverNuke.abilityId].cooldown)
@@ -339,6 +356,17 @@ export class GameScene extends Phaser.Scene {
     if (ui.length > 0) this.cameras.main.ignore(ui)
     if (world.length > 0) this.uiCam.ignore(world)
     this.splitAt = this.children.list.length
+  }
+
+  /**
+   * Says no, visibly. Sets the guidance line and raises an alert the HUD
+   * surfaces as a toast, so a tap that cannot do anything still looks like it
+   * was received.
+   */
+  private refuse(text: string): void {
+    this.status.message = text
+    this.status.alert = text
+    play(this, 'error')
   }
 
   /** True while a modal owned by the world is up. The HUD dims behind it. */
@@ -629,7 +657,7 @@ export class GameScene extends Phaser.Scene {
     this.menu.close()
     this.rangeRing.clear()
     this.drawSpots()
-    this.status.message = `${def.name} — ${def.flavor}`
+    this.status.message = `${def.name} built.`
   }
 
   private selectTower(tower: Tower): void {
@@ -637,8 +665,8 @@ export class GameScene extends Phaser.Scene {
     this.drawSpots()
     this.selected = tower
     this.showTowerRange(tower.x, tower.y, tower)
-    const bonus = tower.supportBonus > 0 ? `  (+${Math.round(tower.supportBonus * 100)}% sheltered)` : ''
-    this.status.message = `${tower.def.name} — ${tower.def.flavor}${bonus}`
+    const bonus = tower.supportBonus > 0 ? `  ·  +${Math.round(tower.supportBonus * 100)}% sheltered` : ''
+    this.status.message = `${tower.def.name}, tier ${tower.tier}${bonus}`
     this.openTowerPanel(tower)
   }
 
@@ -683,7 +711,6 @@ export class GameScene extends Phaser.Scene {
 
     this.openDialog({
       title: def.name.toUpperCase(),
-      subtitle: def.flavor,
       rows,
       confirm: (choosing || (step !== null && !tower.upgrading))
         ? {
@@ -718,8 +745,8 @@ export class GameScene extends Phaser.Scene {
       title: `${def.name.toUpperCase()} — TIER 3`,
       subtitle: 'One or the other, for the life of this tower. There is no going back.',
       rows: [
-        { label: a.name, value: a.flavor },
-        { label: b.name, value: b.flavor },
+        { label: a.name, value: specSummary(a) },
+        { label: b.name, value: specSummary(b) },
         { label: 'Cost', value: `${a.cost} peanuts`, accent: true },
         { label: 'Takes', value: `${a.buildSeconds}s at reduced rate` },
       ],
@@ -751,7 +778,7 @@ export class GameScene extends Phaser.Scene {
     this.status.peanuts -= spec.cost
     tower.beginUpgrade(specId)
     play(this, 'upgrade')
-    this.status.message = `${tower.def.name} becoming ${spec.name}. ${spec.flavor}`
+    this.status.message = `${tower.def.name} becoming ${spec.name}.`
   }
 
   private upgradeTower(tower: Tower): void {
@@ -858,20 +885,36 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** The one line of guidance shown when nothing more specific is happening. */
+  /**
+   * The one line of guidance shown when nothing more specific is happening.
+   *
+   * It has to describe the game as it actually is. Telling the player to build
+   * a tower while they cannot afford one is worse than saying nothing: it
+   * reads as the game being broken, and on the opening screen it is the first
+   * thing they are told.
+   */
   private idleHint(): string {
     if (this.hero.down && this.status.phase === 'ready') {
       return `${this.hero.def.name} is out for this encounter. The towers are on their own.`
     }
+    const affordable = canAffordAny(
+      this.status.peanuts,
+      this.status.unlockedTowers.map((id) => TOWERS[id].cost),
+    )
     if (this.build.freeSpots().length === 0) {
       return 'Every pad is built. Tap a tower to upgrade it, or START WAVE.'
     }
     if (this.status.phase === 'ready') {
+      if (!affordable) {
+        return this.towers.length === 0
+          ? 'Not enough peanuts to build yet. START WAVE to earn some.'
+          : 'Nothing you can afford yet. START WAVE to earn more peanuts.'
+      }
       return this.towers.length === 0
-        ? 'Click a glowing pad to build a tower, then START WAVE.'
+        ? 'Tap a glowing pad to build a tower, then START WAVE.'
         : 'Build on another pad, move Cory, or START WAVE when you are ready.'
     }
-    return 'Click a pad to build. Click Cory to move him.'
+    return affordable ? 'Tap a pad to build. Tap Cory to move him.' : 'Tap Cory to move him.'
   }
 
   private pingRally(x: number, y: number): void {
@@ -1016,16 +1059,16 @@ export class GameScene extends Phaser.Scene {
   castHaymaker(): void {
     const hm = this.hero.def.haymaker
     if (!this.cooldowns.ready('haymaker')) {
-      this.status.message = `${hm.name} is still on cooldown.`
+      this.refuse(`${hm.name} is still recharging.`)
       return
     }
     if (this.hero.down) {
-      this.status.message = `${this.hero.def.name} is down.`
+      this.refuse(`${this.hero.def.name} is down.`)
       return
     }
     const target = pickNearest(this.enemies, this.hero.x, this.hero.y, hm.range)
     if (!target) {
-      this.status.message = `${hm.name}: nothing in reach.`
+      this.refuse(`${hm.name}: nothing in reach.`)
       return
     }
     this.cooldowns.start('haymaker')
@@ -1043,11 +1086,11 @@ export class GameScene extends Phaser.Scene {
 
   armRestructure(): void {
     if (!this.cooldowns.ready('restructure')) {
-      this.status.message = `${this.hero.def.restructure.name} is still on cooldown.`
+      this.refuse(`${this.hero.def.restructure.name} is still recharging.`)
       return
     }
     if (this.towers.length === 0) {
-      this.status.message = 'Nothing to restructure yet.'
+      this.refuse('Build a tower first, then you can move it.')
       return
     }
     this.menu.close()

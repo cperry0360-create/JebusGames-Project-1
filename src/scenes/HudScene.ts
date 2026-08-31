@@ -17,7 +17,6 @@ interface SlotView {
   sweep: Phaser.GameObjects.Graphics
   icon: Phaser.GameObjects.Image
   timer: Phaser.GameObjects.Text
-  key: Phaser.GameObjects.Text
   hit: Phaser.GameObjects.Rectangle
   x: number
   y: number
@@ -249,22 +248,24 @@ export class HudScene extends Phaser.Scene {
   private buildSlots(): void {
     for (const s of this.slots) {
       s.frame.destroy(); s.sweep.destroy(); s.icon.destroy()
-      s.timer.destroy(); s.key.destroy(); s.hit.destroy()
+      s.timer.destroy(); s.hit.destroy()
     }
     this.slots = []
 
     const s = this.world.status
     const hero = this.world.heroDef()
-    const defs: Array<{ id: string; kind: SlotView['kind']; icon: string; key: string }> = []
-    s.abilities.forEach((id, i) => {
+    // No key letters. This is a touch game; Q W E R meant nothing on a phone
+    // and the labels were four more things crowding a 64px icon.
+    const defs: Array<{ id: string; kind: SlotView['kind']; icon: string }> = []
+    s.abilities.forEach((id) => {
       const def = this.world.abilityDef(id)
-      if (def) defs.push({ id, kind: 'ability', icon: def.icon, key: i === 0 ? 'Q' : 'W' })
+      if (def) defs.push({ id, kind: 'ability', icon: def.icon })
     })
-    defs.push({ id: 'haymaker', kind: 'haymaker', icon: hero.haymaker.icon, key: 'E' })
-    defs.push({ id: 'restructure', kind: 'restructure', icon: hero.restructure.icon, key: 'R' })
+    defs.push({ id: 'haymaker', kind: 'haymaker', icon: hero.haymaker.icon })
+    defs.push({ id: 'restructure', kind: 'restructure', icon: hero.restructure.icon })
     if (s.rareAbility) {
       const def = this.world.abilityDef(s.rareAbility)
-      if (def) defs.push({ id: s.rareAbility, kind: 'ability', icon: def.icon, key: 'F' })
+      if (def) defs.push({ id: s.rareAbility, kind: 'ability', icon: def.icon })
     }
     this.slotKeys = defs.map((d) => d.id).join(',')
 
@@ -284,13 +285,6 @@ export class HudScene extends Phaser.Scene {
         fontFamily: FONT_DISPLAY, fontSize: '19px', color: COLOR.ink,
         stroke: '#0d1016', strokeThickness: 5,
       }).setOrigin(0.5)
-      // Over the card's lower edge rather than under it: the bar is only just
-      // taller than a 64px icon, and below it the letters met the bar's edge.
-      const key = this.add.text(x + SLOT_PITCH / 2, y + ICON_H - 15, d.key, {
-        fontFamily: FONT_UI, fontSize: '15px', color: COLOR.ink,
-        fontStyle: 'bold', stroke: '#0d1016', strokeThickness: 4,
-      }).setOrigin(0.5, 0)
-
       const hit = this.add.rectangle(x + SLOT_PITCH / 2, y + ICON_H / 2, SLOT_PITCH, ICON_H, 0xffffff, 0.001)
         .setInteractive({ useHandCursor: true })
       hit.on('pointerdown', () => {
@@ -299,7 +293,7 @@ export class HudScene extends Phaser.Scene {
         else this.world.armRestructure()
       })
 
-      this.slots.push({ id: d.id, kind: d.kind, frame, sweep, icon, timer, key, hit, x, y })
+      this.slots.push({ id: d.id, kind: d.kind, frame, sweep, icon, timer, hit, x, y })
     })
   }
 
@@ -320,6 +314,12 @@ export class HudScene extends Phaser.Scene {
 
     const s = this.world.status
     this.placeMessage(Boolean(s.bossName))
+
+    // A refusal is consumed once: the world raises it, the HUD shows it.
+    if (s.alert) {
+      this.toast(s.alert)
+      s.alert = ''
+    }
     // Scene creation order is not guaranteed, so wait for the game scene to
     // have populated its status before drawing anything that depends on it.
     if (s.heroName === '') return
@@ -379,6 +379,37 @@ export class HudScene extends Phaser.Scene {
       this.bossBar.lineStyle(2, 0x0d1016, 0.8).lineBetween(x + w * t, y, x + w * t, y + h)
     }
   }
+
+  /**
+   * A refusal, shown above the ability bar where the tap happened.
+   *
+   * The guidance line lives in the opposite corner and is easy to miss, so a
+   * tap that could not do anything looked like a dead button. This puts the
+   * reason under the player's own thumb for a moment and then gets out of the
+   * way.
+   */
+  private toast(text: string): void {
+    this.activeToast?.destroy()
+    const label = this.add.text(this.scale.width / 2, this.scale.height - ICON_H - 40, text, {
+      fontFamily: FONT_UI, fontSize: '17px', color: COLOR.ink,
+      fontStyle: 'bold', align: 'center',
+      wordWrap: { width: this.scale.width - 80 },
+    }).setOrigin(0.5, 1).setDepth(500)
+    const pad = 14
+    const pill = this.add.rectangle(
+      label.x, label.y - label.height / 2,
+      label.width + pad * 2, label.height + pad * 0.8,
+      0x0d1016, 0.82,
+    ).setOrigin(0.5).setDepth(499)
+    const parts: Phaser.GameObjects.GameObject[] = [pill, label]
+    this.activeToast = this.add.container(0, 0, parts).setDepth(499)
+    this.tweens.add({
+      targets: this.activeToast, alpha: 0, delay: 1500, duration: 420,
+      onComplete: () => { this.activeToast?.destroy(); this.activeToast = undefined },
+    })
+  }
+
+  private activeToast?: Phaser.GameObjects.Container
 
   /** A short pop on a number that just changed, then back to its own colour. */
   private bump(text: Phaser.GameObjects.Text, flash: string, base: string): void {

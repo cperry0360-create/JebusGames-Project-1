@@ -1,7 +1,6 @@
 {
   "withholding": {
     "name": "Withholding Tower",
-    "flavor": "Takes a little off the top. Every single time.",
     "archetype": "single-target",
     "sprite": "turret-ledger",
     "shot": "shot-small",
@@ -31,7 +30,6 @@
       {
         "id": "garnishment",
         "name": "Garnishment",
-        "flavor": "Takes more, and takes it through armour.",
         "cost": 320,
         "buildSeconds": 9.0,
         "damage": 1.9,
@@ -40,7 +38,6 @@
       {
         "id": "payroll",
         "name": "Payroll",
-        "flavor": "Takes less, far more often. Nobody notices.",
         "cost": 320,
         "buildSeconds": 9.0,
         "fireInterval": 0.55,
@@ -50,7 +47,6 @@
   },
   "writeoff": {
     "name": "Write-Off",
-    "flavor": "Reduces the value of anything it touches. Ignores armour entirely.",
     "archetype": "single-target",
     "sprite": "turret-writeoff",
     "shot": "shot-heavy",
@@ -79,7 +75,6 @@
       {
         "id": "totalloss",
         "name": "Total Loss",
-        "flavor": "One enormous number in the right box.",
         "cost": 600,
         "buildSeconds": 9.0,
         "damage": 2.2,
@@ -88,7 +83,6 @@
       {
         "id": "carryforward",
         "name": "Carryforward",
-        "flavor": "Keeps going, and reaches further.",
         "cost": 600,
         "buildSeconds": 9.0,
         "fireInterval": 0.6,
@@ -98,7 +92,6 @@
   },
   "rounding": {
     "name": "Rounding Error",
-    "flavor": "Individually negligible. Collectively catastrophic.",
     "archetype": "aoe",
     "sprite": "turret-rounding",
     "shot": "shot-rocket",
@@ -128,7 +121,6 @@
       {
         "id": "bankers",
         "name": "Bankers",
-        "flavor": "Rounds everything in a much wider circle.",
         "cost": 500,
         "buildSeconds": 9.0,
         "splashRadius": 1.6,
@@ -137,7 +129,6 @@
       {
         "id": "materiality",
         "name": "Materiality",
-        "flavor": "Only large errors, but it hurts them.",
         "cost": 500,
         "buildSeconds": 9.0,
         "damage": 2.3,
@@ -147,7 +138,6 @@
   },
   "escalation": {
     "name": "Escalation Clause",
-    "flavor": "Every year it gets worse and there is nothing you can do about it.",
     "archetype": "aoe",
     "sprite": "turret-escalation",
     "shot": "shot-rocket-big",
@@ -177,7 +167,6 @@
       {
         "id": "compound",
         "name": "Compound",
-        "flavor": "Interest on the interest.",
         "cost": 880,
         "buildSeconds": 9.0,
         "damage": 2.1,
@@ -186,7 +175,6 @@
       {
         "id": "penalty",
         "name": "Penalty",
-        "flavor": "Lands wider and reaches the whole queue.",
         "cost": 880,
         "buildSeconds": 9.0,
         "splashRadius": 1.55,
@@ -196,7 +184,6 @@
   },
   "extension": {
     "name": "Filing Extension",
-    "flavor": "Nothing is cancelled. Everything just takes longer now.",
     "archetype": "control",
     "sprite": "turret-extension",
     "shot": "shot-ring",
@@ -227,7 +214,6 @@
       {
         "id": "deferral",
         "name": "Deferral",
-        "flavor": "The hold lasts considerably longer.",
         "cost": 400,
         "buildSeconds": 9.0,
         "slowSeconds": 2.0,
@@ -236,7 +222,6 @@
       {
         "id": "amendment",
         "name": "Amendment",
-        "flavor": "A shorter hold that actually hurts.",
         "cost": 400,
         "buildSeconds": 9.0,
         "damage": 2.6,
@@ -246,7 +231,6 @@
   },
   "shelter": {
     "name": "Tax Shelter",
-    "flavor": "Protects everything nearby. Entirely legally. Do not read the footnotes.",
     "archetype": "support",
     "sprite": "turret-shelter",
     "shot": "shot-pale",
@@ -274,7 +258,6 @@
       {
         "id": "offshore",
         "name": "Offshore",
-        "flavor": "Shelters a much larger area.",
         "cost": 560,
         "buildSeconds": 9.0,
         "supportRadius": 1.5
@@ -282,7 +265,6 @@
       {
         "id": "loophole",
         "name": "Loophole",
-        "flavor": "Shelters less ground, far more effectively.",
         "cost": 560,
         "buildSeconds": 9.0,
         "supportDamageBonus": 1.9,

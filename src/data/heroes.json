@@ -2,8 +2,7 @@
   "cory": {
     "name": "Cory",
     "title": "The Optimizer",
-    "flavor": "Mild-mannered tax advisor with the power of pure strength. Not an auditor.",
-    "blurb": "Holds the line in person. Shreds armour just by standing near it, and hits like a filing deadline.",
+    "blurb": "Holds the line in person and shreds armour just by standing near it.",
     "bodySprite": "hero-cory",
     "portraitSprite": "hero-cory",
     "maxHealth": 360,
@@ -16,14 +15,12 @@
     "ignoresArmor": false,
     "passive": {
       "name": "Depreciation",
-      "flavor": "Everything near him loses value.",
       "armorShredRadius": 96,
       "armorShredPerSecond": 1.6,
       "maxArmorShred": 7
     },
     "haymaker": {
       "name": "Haymaker",
-      "flavor": "One punch. Filed under 'other income'.",
       "icon": "ability-meteor",
       "cooldown": 12,
       "range": 120,
@@ -33,7 +30,6 @@
     },
     "restructure": {
       "name": "Restructure",
-      "flavor": "The tower was always going to be over there.",
       "icon": "ability-gnomes",
       "cooldown": 22
     },

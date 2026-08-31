@@ -91,3 +91,35 @@ export function sellValue(
 ): number {
   return Math.floor(investedIn(def, tier, specId) * refund)
 }
+
+/**
+ * What a specialization actually does, in numbers.
+ *
+ * The two tier-3 options used to be told apart by a line of flavour text
+ * ("Takes more, and takes it through armour"), which is charming and tells the
+ * player almost nothing about a choice they can never undo. This reads the
+ * multipliers instead, so the panel describes the mechanic rather than joking
+ * about it, and it cannot drift out of date when the numbers are retuned.
+ */
+export function specSummary(spec: TowerSpec): string {
+  const parts: string[] = []
+  const pct = (m: number): string => `${m > 1 ? '+' : ''}${Math.round((m - 1) * 100)}%`
+  const stats: Array<[keyof TowerTier, string]> = [
+    ['damage', 'damage'],
+    ['range', 'range'],
+    ['splashRadius', 'splash'],
+    ['slowSeconds', 'slow'],
+    ['armorPierce', 'armour pierce'],
+    ['supportRadius', 'support range'],
+    ['supportDamageBonus', 'support bonus'],
+  ]
+  // Fire *interval* is the stored stat and lower is better, so a 0.8x interval
+  // has to read as "+25% fire rate" or the panel says the opposite of the truth.
+  const interval = spec.fireInterval
+  if (typeof interval === 'number' && interval !== 1) parts.push(`${pct(1 / interval)} fire rate`)
+  for (const [key, label] of stats) {
+    const m = spec[key]
+    if (typeof m === 'number' && m !== 1) parts.push(`${pct(m)} ${label}`)
+  }
+  return parts.length > 0 ? parts.join(' · ') : 'No change'
+}

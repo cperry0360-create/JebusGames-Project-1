@@ -3,10 +3,13 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { shouldTrigger, atThreshold, outgoingDamage, attackInterval, incomingDamage } from '../src/systems/LastStand.ts'
 import { damageAfterArmor, boostedDamage, slowedSpeed } from '../src/systems/Combat.ts'
+import { openingPurse } from '../src/systems/Economy.ts'
 
 const read = (n: string) => JSON.parse(readFileSync(new URL(`../src/data/${n}.json`, import.meta.url), 'utf8'))
 const heroes = read('heroes'), towers = read('towers'), enemies = read('enemies')
 const rules = read('rules'), waves = read('waves'), art = read('art')
+
+const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), 'utf8')
 
 const towerList = Object.entries(towers) as [string, any][]
 const enemyList = Object.entries(enemies) as [string, any][]
@@ -393,4 +396,52 @@ test('towers, enemies and the hero all look different from each other', () => {
     heroes.cory.bodySprite,
   ]
   assert.equal(new Set(sprites).size, sprites.length, 'two units share a sprite')
+})
+
+/* ------------------------------------------------- the opening purse */
+
+test('the run always starts able to build the cheapest tower it drew', () => {
+  // The opening instruction is "tap a glowing pad to build a tower". A fixed
+  // 100 peanuts against a draw of Write-Off (150) and Escalation (220) made
+  // that instruction impossible on the very first screen.
+  const costs = Object.values(towers).map((t: any) => t.cost as number)
+  const margin = rules.startingPeanutsMargin
+  const base = rules.startingPeanuts
+
+  // Every pair the draft could hand out, not just the ones it usually does.
+  for (let i = 0; i < costs.length; i++) {
+    for (let j = i + 1; j < costs.length; j++) {
+      const drawn = [costs[i], costs[j]]
+      const purse = openingPurse(base, margin, drawn)
+      const cheapest = Math.min(...drawn)
+      assert.ok(purse >= cheapest,
+        `a draw of ${drawn} leaves ${purse} peanuts against a cheapest tower of ${cheapest}`)
+      assert.ok(purse - cheapest > 0,
+        `a draw of ${drawn} leaves nothing over after the first tower`)
+    }
+  }
+})
+
+test('a cheap draw is not made richer than the tuning intends', () => {
+  // The purse is a floor, not a scale: only a draw that would strand the
+  // player moves it, so the economy stays where it was tuned.
+  const cheapest = Math.min(...Object.values(towers).map((t: any) => t.cost as number))
+  assert.equal(openingPurse(rules.startingPeanuts, rules.startingPeanutsMargin, [cheapest]),
+    Math.max(rules.startingPeanuts, Math.ceil(cheapest * rules.startingPeanutsMargin)))
+  assert.equal(openingPurse(500, 1.3, [80]), 500, 'a generous base should not be pulled down')
+})
+
+test('the margin leaves room to do something after the first tower', () => {
+  assert.ok(rules.startingPeanutsMargin > 1,
+    'a margin of 1 buys the tower and leaves the player with nothing')
+  assert.ok(rules.startingPeanutsMargin < 2, 'more than double is not a margin, it is a second tower')
+})
+
+test('the guidance line never tells the player to do something they cannot', () => {
+  const game = src('scenes/GameScene.ts')
+  assert.match(game, /canAffordAny\(/, 'the hint never checks whether anything is buyable')
+  // The opening message must come from the same function as every later one,
+  // or it can contradict the state it is describing.
+  assert.match(game, /this\.status\.message = this\.idleHint\(\)/,
+    'the opening message is hardcoded rather than derived from the game state')
 })

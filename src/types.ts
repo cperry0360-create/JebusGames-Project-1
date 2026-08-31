@@ -64,6 +64,8 @@ export interface SignBribeDef {
 
 export interface RulesDef {
   startingPeanuts: number
+  /** Multiplied by the cheapest drawn tower to floor the opening purse. */
+  startingPeanutsMargin: number
   startingLives: number
   peanutsPerWaveCleared: number
   serverNuke: ServerNukeDef
@@ -73,7 +75,6 @@ export interface RulesDef {
 
 export interface TowerDef {
   name: string
-  flavor: string
   archetype: string
   sprite: string
   shot: string
@@ -106,7 +107,6 @@ export interface TowerDef {
 export interface TowerSpec extends TowerTier {
   id: string
   name: string
-  flavor: string
 }
 
 /**
@@ -197,7 +197,6 @@ export interface LastStandDef {
 
 export interface PassiveDef {
   name: string
-  flavor: string
   armorShredRadius: number
   armorShredPerSecond: number
   maxArmorShred: number
@@ -205,7 +204,6 @@ export interface PassiveDef {
 
 export interface HaymakerDef {
   name: string
-  flavor: string
   icon: string
   cooldown: number
   range: number
@@ -216,7 +214,6 @@ export interface HaymakerDef {
 
 export interface RestructureDef {
   name: string
-  flavor: string
   icon: string
   cooldown: number
 }
@@ -224,7 +221,6 @@ export interface RestructureDef {
 export interface HeroDef {
   name: string
   title: string
-  flavor: string
   blurb: string
   bodySprite: string
   /** The Last Stand form. Cory does not get angrier; he gets into an SUV. */
@@ -325,7 +321,6 @@ export interface CreditsDef {
 
 export interface AbilityDef {
   name: string
-  flavor: string
   /** False for the rare drop, which is never in the run-start pool. */
   draftable: boolean
   icon: string

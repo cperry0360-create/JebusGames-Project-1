@@ -290,7 +290,18 @@ test("Cory's kit matches the design doc", () => {
   const c = heroes.cory
   assert.equal(c.name, 'Cory')
   assert.equal(c.title, 'The Optimizer')
-  assert.match(c.flavor, /[Nn]ot an auditor/, 'Cory works in tax, not audit, and the flavour should say so')
+  assert.equal((c as any).flavor, undefined, 'the hero card is one short line now, not two')
+  assert.ok(c.blurb.length <= 90, `the hero blurb is ${c.blurb.length} characters; it should be one short line`)
+  // Cory works in tax, not audit. The line that used to say so was flavour on
+  // the hero card and has been cut, so the fact now has to hold where it still
+  // appears — the credits — and nothing anywhere may call him an auditor.
+  const credits = read('credits')
+  const allCredits = JSON.stringify(credits)
+  assert.match(allCredits, /works in tax/, 'nothing in the game says Cory works in tax any more')
+  for (const [name, blob] of [['heroes', heroes], ['credits', credits]] as const) {
+    assert.doesNotMatch(JSON.stringify(blob).replace(/[Nn]ot an auditor/g, ''), /auditor/i,
+      `${name} calls Cory an auditor`)
+  }
   assert.equal(c.passive.name, 'Depreciation')
   assert.equal(c.haymaker.name, 'Haymaker')
   assert.equal(c.restructure.name, 'Restructure')

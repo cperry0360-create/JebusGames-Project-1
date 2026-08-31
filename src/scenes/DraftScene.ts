@@ -116,7 +116,7 @@ export class DraftScene extends Phaser.Scene {
 
   private abilityCard(x: number, y: number, w: number, id: string): void {
     const def = ABILITIES[id]
-    const h = 340
+    const h = 266
     this.layer.add(platePanel(this, x, y, w, h))
     // The cards carry their own frames, so nothing is drawn behind them.
     const icon = this.add.image(x + w / 2, y + 88, def.icon)
@@ -125,10 +125,6 @@ export class DraftScene extends Phaser.Scene {
     this.layer.add(this.add.text(x + w / 2, y + 158, def.name.toUpperCase(), {
       fontFamily: FONT_DISPLAY, fontSize: '30px', color: COLOR.ink,
     }).setOrigin(0.5))
-    this.layer.add(this.add.text(x + w / 2, y + 194, def.flavor, {
-      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.dim, ...BODY_SPACING,
-      align: 'center', wordWrap: { width: w - 48 },
-    }).setOrigin(0.5, 0))
     this.layer.add(this.add.text(x + w / 2, y + h - CARD_FOOT, this.abilityStats(def), {
       fontFamily: FONT_UI, fontSize: '22px', color: COLOR.amber, align: 'center',
     }).setOrigin(0.5))
@@ -145,7 +141,7 @@ export class DraftScene extends Phaser.Scene {
 
   private towerCard(x: number, y: number, w: number, id: string): void {
     const def = TOWERS[id]
-    const h = 386
+    const h = 300
     this.layer.add(platePanel(this, x, y, w, h))
     this.layer.add(towerIcon(this, x + w / 2, y + 96, def.sprite, 104))
     this.layer.add(this.add.text(x + w / 2, y + 160, def.name.toUpperCase(), {
@@ -154,10 +150,6 @@ export class DraftScene extends Phaser.Scene {
     this.layer.add(this.add.text(x + w / 2, y + 194, def.archetype, {
       fontFamily: FONT_UI, fontSize: '22px', color: COLOR.good,
     }).setOrigin(0.5))
-    this.layer.add(this.add.text(x + w / 2, y + 226, def.flavor, {
-      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.dim, ...BODY_SPACING,
-      align: 'center', wordWrap: { width: w - 48 },
-    }).setOrigin(0.5, 0))
     const stats = def.supportRadius > 0
       ? `${def.cost}p   ·   +${Math.round(def.supportDamageBonus * 100)}% nearby`
       : `${def.cost}p   ·   ${def.damage} dmg   ·   ${def.range} range`

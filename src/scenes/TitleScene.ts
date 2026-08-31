@@ -20,7 +20,6 @@ export class TitleScene extends Phaser.Scene {
   private selectedHero = 'cory'
   private cards: Array<{ id: string; frame: Phaser.GameObjects.Image[] }> = []
   private blurb!: Phaser.GameObjects.Text
-  private kit!: Phaser.GameObjects.Text
 
   constructor() {
     super('Title')
@@ -69,22 +68,18 @@ export class TitleScene extends Phaser.Scene {
     const totalW = ids.length * cardW + (ids.length - 1) * gap
     ids.forEach((id, i) => this.heroCard(id, W / 2 - totalW / 2 + i * (cardW + gap), 264, cardW, 190))
 
-    // The description and the kit are separate blocks: as one wrapped string
-    // the kit line ran under the START RUN button.
+    // One short line. The hero used to carry a flavour line, a mechanical
+    // line and a kit line; three blocks of copy on a screen with one hero to
+    // choose from is not information, it is noise.
     this.blurb = this.add.text(W / 2, 468, '', {
       fontFamily: FONT_UI, fontSize: '24px', color: COLOR.ink,
       stroke: '#0d1016', strokeThickness: 4, ...BODY_SPACING,
       align: 'center', wordWrap: { width: 1140 },
     }).setOrigin(0.5, 0)
 
-    this.kit = this.add.text(W / 2, 538, '', {
-      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.good,
-      stroke: '#0d1016', strokeThickness: 4, ...BODY_SPACING,
-      align: 'center', wordWrap: { width: 1140 },
-    }).setOrigin(0.5, 0)
 
-    plateButton(this, W / 2, 606, 300, 62, 'START RUN', () => this.start(), 26)
-    plateButton(this, W / 2, 670, 250, 52, 'CREDITS', () => this.scene.start('Credits'), 22, 'secondary')
+    plateButton(this, W / 2, 566, 300, 62, 'START RUN', () => this.start(), 26)
+    plateButton(this, W / 2, 636, 250, 52, 'CREDITS', () => this.scene.start('Credits'), 22, 'secondary')
 
     // Which build this is. Small and out of the way, but readable without
     // squinting: this is the line that answers "did my deploy actually reach
@@ -111,7 +106,8 @@ export class TitleScene extends Phaser.Scene {
     unlockAudio(this)
 
     // Settings: mute and volume, bottom-left and out of the way.
-    new AudioToggle(this, 44, H - 44)
+    // Design-box coordinates, not viewport: this screen is fitted.
+    new AudioToggle(this, 44, H - 44, 40, H)
 
     this.select(this.selectedHero)
   }
@@ -197,9 +193,7 @@ export class TitleScene extends Phaser.Scene {
       c.frame.forEach((p) => p.setTint(tint))
     }
     const def = HEROES[id]
-    this.blurb.setText(`${def.flavor}\n${def.blurb}`)
-    this.kit.setText(`${def.passive.name}: ${def.passive.flavor}    ·    ${def.haymaker.name}` +
-      `    ·    ${def.restructure.name}    ·    Last Stand: ${def.lastStand.name}`)
+    this.blurb.setText(def.blurb)
   }
 
   private start(): void {

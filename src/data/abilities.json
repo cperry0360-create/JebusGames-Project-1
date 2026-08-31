@@ -1,7 +1,6 @@
 {
   "molotov": {
     "name": "Molotov",
-    "flavor": "The oldest trick in the book, and the book is on fire.",
     "draftable": true,
     "icon": "ability-molotov",
     "targeting": "ground",
@@ -19,7 +18,6 @@
   },
   "gnomes": {
     "name": "Gnomes",
-    "flavor": "Two garden gnomes, contracted at short notice. No questions asked.",
     "draftable": true,
     "icon": "ability-gnomes",
     "targeting": "ground",
@@ -37,7 +35,6 @@
   },
   "glacier": {
     "name": "Glacier",
-    "flavor": "Everything stops. Interest does not.",
     "draftable": true,
     "icon": "ability-glacier",
     "targeting": "ground",
@@ -55,7 +52,6 @@
   },
   "meteor": {
     "name": "Meteor",
-    "flavor": "Six impacts, no appeals process.",
     "draftable": true,
     "icon": "ability-meteor",
     "targeting": "ground",
@@ -73,7 +69,6 @@
   },
   "chain": {
     "name": "Chain",
-    "flavor": "Jumps between liabilities until it runs out of them.",
     "draftable": true,
     "icon": "ability-chain",
     "targeting": "ground",
@@ -91,7 +86,6 @@
   },
   "scratchTicket": {
     "name": "Scratch Ticket",
-    "flavor": "Bought at the counter. Odds are terrible. Worth it.",
     "draftable": true,
     "icon": "ability-scratchticket",
     "targeting": "instant",
@@ -109,7 +103,6 @@
   },
   "serverNuke": {
     "name": "Server Nuke",
-    "flavor": "Everything on the network, gone. Nobody signed off on this.",
     "draftable": false,
     "icon": "ability-servernuke",
     "targeting": "instant",
