@@ -104,6 +104,28 @@ export function sellValue(
 export function specSummary(spec: TowerSpec): string {
   const parts: string[] = []
   const pct = (m: number): string => `${m > 1 ? '+' : ''}${Math.round((m - 1) * 100)}%`
+
+  // The behaviour first, in plain words. It is the reason to pick this one;
+  // the percentages underneath are the fine print.
+  if (spec.ignoresArmor) parts.push('ignores armour entirely')
+  if (spec.chainTargets) {
+    parts.push(`hits ${spec.chainTargets} more enemy${spec.chainTargets > 1 ? 'ies' : ''}`)
+  }
+  if (spec.executeBelowPercent) {
+    parts.push(`kills anything under ${Math.round(spec.executeBelowPercent * 100)}% health`)
+  }
+  if (spec.rampPerShot) {
+    parts.push(`+${Math.round(spec.rampPerShot * 100)}% damage per shot on one target, ` +
+      `up to +${Math.round((spec.rampMax ?? 0) * 100)}%`)
+  }
+  if (spec.splashSlowSeconds) parts.push(`splash also slows for ${spec.splashSlowSeconds}s`)
+  if (spec.bonusVsArmored) parts.push(`${pct(spec.bonusVsArmored)} damage to armoured`)
+  if (spec.stunSeconds) parts.push(`stops the target for ${spec.stunSeconds}s`)
+  if (spec.supportRangeBonus) {
+    parts.push(`neighbours also gain ${pct(1 + spec.supportRangeBonus)} range`)
+  }
+  if (spec.grantsPierce) parts.push(`neighbours also pierce ${spec.grantsPierce} armour`)
+
   const stats: Array<[keyof TowerTier, string]> = [
     ['damage', 'damage'],
     ['range', 'range'],

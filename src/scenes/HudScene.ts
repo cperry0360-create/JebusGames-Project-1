@@ -1,6 +1,8 @@
 import Phaser from 'phaser'
 import { GameScene } from './GameScene.ts'
+import type { RulesDef } from '../types.ts'
 import presentationData from '../data/presentation.json'
+import rulesData from '../data/rules.json'
 import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { ART, fitInBox, renderFor } from '../systems/Art.ts'
 import { greyKey } from '../systems/Desaturate.ts'
@@ -23,6 +25,7 @@ interface SlotView {
 }
 
 const HUD = presentationData.hud
+const RULES = rulesData as unknown as RulesDef
 /** Icons are drawn 64px tall, as the art was made for. They carry their own
  *  frames, so nothing is drawn behind them. */
 const ICON_H = 64
@@ -438,7 +441,19 @@ export class HudScene extends Phaser.Scene {
     // exactly what the disabled plate is for.
     this.startBtn.setEnabled(s.phase === 'ready')
 
-    if (s.phase === 'ready') this.startBtn.setLabel(`START WAVE ${Math.min(s.wave + 1, s.waveCount)}`)
+    if (s.phase === 'ready') {
+      const n = Math.min(s.wave + 1, s.waveCount)
+      // The clock is on the button because the button is the thing it is
+      // counting down to, and the bonus is beside it because that is the whole
+      // argument for pressing it now rather than letting it run out.
+      const left = Math.ceil(s.readyCountdown)
+      if (left > 0) {
+        const bonus = Math.floor(s.readyCountdown) * RULES.pacing.earlyStartPeanutsPerSecond
+        this.startBtn.setLabel(`START WAVE ${n}  ${left}s${bonus > 0 ? `  +${bonus}` : ''}`)
+      } else {
+        this.startBtn.setLabel(`START WAVE ${n}`)
+      }
+    }
     else if (s.phase === 'wave') this.startBtn.setLabel(`${s.waveName} · ${s.enemiesLeft} left`)
     else this.startBtn.setLabel(s.phase === 'won' ? 'CLEARED' : 'OVERRUN')
   }

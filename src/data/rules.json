@@ -3,6 +3,12 @@
   "startingPeanutsMargin": 1.3,
   "startingLives": 20,
   "peanutsPerWaveCleared": 35,
+  "pacing": {
+    "gameSpeed": 1.4,
+    "readySeconds": 15,
+    "firstReadySeconds": 30,
+    "earlyStartPeanutsPerSecond": 2
+  },
   "serverNuke": {
     "abilityId": "serverNuke",
     "dropChance": 0.02,

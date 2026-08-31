@@ -38,7 +38,7 @@ import { platePanel, plateButton, type PlateButton } from '../ui/Plate.ts'
 import { SignBribe } from '../ui/SignBribe.ts'
 import { CameraRig } from '../systems/CameraRig.ts'
 import { Dialog, type DialogOptions, type DialogRow } from '../ui/Dialog.ts'
-import { maxTier, nextStep, sellValue, specSummary } from '../systems/Upgrades.ts'
+import { maxTier, nextStep, sellValue, specSummary, statAt } from '../systems/Upgrades.ts'
 import { canAffordAny, openingPurse } from '../systems/Economy.ts'
 import { hasClearedARun, recordRunCleared } from '../systems/Save.ts'
 
@@ -78,6 +78,8 @@ export interface GameStatus {
   bossHealth: number
   bossMax: number
   pendingAbility: string | null
+  /** Seconds until the next wave starts by itself. 0 when nothing is counting. */
+  readyCountdown: number
   message: string
   /**
    * A refusal the player needs to see *now*, raised where their finger is
@@ -95,13 +97,17 @@ const OVERLAY_DEPTH = 150000
 const TICKET_DEPTH = 190000
 /** Ground markings are ellipses, not circles: the map is painted in 3/4. */
 const PAD_SQUASH = 0.62
+/** Speed multiplier that reads as a full stop. Not zero: applySlow treats
+ *  zero as "no slow at all" and would drop the stun entirely. */
+const STUN_FACTOR = 0.02
 
 export class GameScene extends Phaser.Scene {
   readonly status: GameStatus = {
     peanuts: 0, lives: 0, wave: 0, waveCount: WAVES.waves.length, waveName: '',
     phase: 'ready', mode: 'normal', enemiesLeft: 0,
     heroName: '', heroHealth: 0, heroMax: 0, heroDown: false, lastStand: false,
-    unlockedTowers: [], abilities: [], rareAbility: null, pendingAbility: null, message: '',
+    unlockedTowers: [], abilities: [], rareAbility: null, pendingAbility: null,
+    readyCountdown: 0, message: '',
     alert: '',
     bossName: '', bossHealth: 0, bossMax: 0,
   }
@@ -219,7 +225,8 @@ export class GameScene extends Phaser.Scene {
     this.status.bossMax = 0
     this.nukeUsed = false
     this.status.unlockedTowers = run.openingTowers.slice(0, DRAFT.towersAtStart)
-    this.status.message = this.idleHint()
+this.armReadyCountdown()
+        this.status.message = this.idleHint()
 
     for (const id of this.status.abilities) this.cooldowns.register(id, ABILITIES[id].cooldown)
     this.cooldowns.register(RULES.serverNuke.abilityId, ABILITIES[RULES.serverNuke.abilityId].cooldown)
@@ -687,15 +694,42 @@ export class GameScene extends Phaser.Scene {
     const support = tower.isSupport
 
     const n = (v: number, digits = 0): string => v.toFixed(digits)
+    // What the next tier would make each stat, so the panel answers "is this
+    // worth it?" rather than only "what is it now?". Null at the top, and at
+    // the specialization branch, where there are two answers rather than one.
+    const nextTier = tower.upgrading || step === null ? null : tower.tier + 1
+    const after = (key: Parameters<typeof statAt>[2]): number | null =>
+      nextTier === null ? null : statAt(def, nextTier, key, tower.spec)
+    /** "19.8 → 27.7" when the number moves, plain when it does not. */
+    const shift = (now: number, next: number | null, digits = 0): string => {
+      const a = n(now, digits)
+      if (next === null || Math.abs(next - now) < 0.05) return a
+      return `${a} → ${n(next, digits)}`
+    }
+
     const rows: DialogRow[] = [{ label: 'Tier', value: `${tower.tier} of ${maxTier(def)}` }]
     if (support) {
-      rows.push({ label: 'Nearby damage', value: `+${Math.round(tower.supportDamageBonus * 100)}%` })
-      rows.push({ label: 'Radius', value: n(tower.supportRadius) })
+      const nextBonus = after('supportDamageBonus')
+      rows.push({
+        label: 'Nearby damage',
+        value: nextBonus === null
+          ? `+${Math.round(tower.supportDamageBonus * 100)}%`
+          : `+${Math.round(tower.supportDamageBonus * 100)}% → +${Math.round(nextBonus * 100)}%`,
+      })
+      rows.push({ label: 'Radius', value: shift(tower.supportRadius, after('supportRadius')) })
     } else {
-      rows.push({ label: 'Damage', value: n(tower.damage, 1) })
-      rows.push({ label: 'Range', value: n(tower.range) })
-      rows.push({ label: 'Rate', value: `${n(1 / tower.fireInterval, 2)}/s` })
-      if (tower.splashRadius > 0) rows.push({ label: 'Splash', value: n(tower.splashRadius) })
+      rows.push({ label: 'Damage', value: shift(tower.damage, after('damage'), 1) })
+      rows.push({ label: 'Range', value: shift(tower.range, after('range')) })
+      const nextInterval = after('fireInterval')
+      rows.push({
+        label: 'Rate',
+        value: nextInterval === null
+          ? `${n(1 / tower.fireInterval, 2)}/s`
+          : `${n(1 / tower.fireInterval, 2)}/s → ${n(1 / nextInterval, 2)}/s`,
+      })
+      if (tower.splashRadius > 0) {
+        rows.push({ label: 'Splash', value: shift(tower.splashRadius, after('splashRadius')) })
+      }
     }
 
     if (tower.upgrading) {
@@ -719,7 +753,9 @@ export class GameScene extends Phaser.Scene {
       rows,
       confirm: (choosing || (step !== null && !tower.upgrading))
         ? {
-          label: choosing ? 'SPECIALIZE' : 'UPGRADE',
+          // The price is on the button. A cost buried in a row above it is a
+          // cost the player has to go looking for before they can decide.
+          label: choosing ? `SPECIALIZE · ${specPrice}` : `UPGRADE · ${step?.cost ?? 0}`,
           enabled: affordable,
           onPick: () => (choosing ? this.openSpecChoice(tower) : this.upgradeTower(tower)),
         }
@@ -1185,14 +1221,51 @@ export class GameScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- waves
 
+  /**
+   * The gap between waves, on a clock.
+   *
+   * A tower defense where the player can sit in the build phase forever has no
+   * pressure in it: every decision can be deferred until it is obvious. The
+   * countdown runs on real seconds rather than the scaled game clock, because
+   * "15 seconds" should mean fifteen seconds however fast the game is set to
+   * run.
+   */
+  private tickReadyCountdown(realDt: number): void {
+    if (this.status.phase !== 'ready') {
+      this.status.readyCountdown = 0
+      return
+    }
+    if (this.status.readyCountdown <= 0) return
+    this.status.readyCountdown = Math.max(0, this.status.readyCountdown - realDt)
+    if (this.status.readyCountdown === 0) this.startWave()
+  }
+
+  /** Restarts the clock for the wave that is now pending. */
+  private armReadyCountdown(): void {
+    const p = RULES.pacing
+    this.status.readyCountdown = this.status.wave === 0 ? p.firstReadySeconds : p.readySeconds
+  }
+
   startWave(): void {
     if (this.status.phase !== 'ready') return
+    // Whatever is left on the clock is the reward for not using it. An
+    // auto-started wave has nothing left, so it pays nothing — the same
+    // expression covers both cases without asking who called.
+    const saved = Math.floor(this.status.readyCountdown)
+    const bonus = saved * RULES.pacing.earlyStartPeanutsPerSecond
+    this.status.readyCountdown = 0
     this.clearSelection()
     this.spawner.begin(WAVES.waves[this.status.wave])
     this.status.phase = 'wave'
     play(this, 'wave-start')
     this.status.waveName = WAVES.waves[this.status.wave].name
-    this.status.message = `Wave ${this.status.wave + 1}: ${this.status.waveName}`
+    if (bonus > 0) {
+      this.status.peanuts += bonus
+      play(this, 'peanuts')
+      this.status.message = `Wave ${this.status.wave + 1}: ${this.status.waveName}  ·  +${bonus} for starting early`
+    } else {
+      this.status.message = `Wave ${this.status.wave + 1}: ${this.status.waveName}`
+    }
   }
 
   private checkWaveCleared(): void {
@@ -1210,9 +1283,10 @@ export class GameScene extends Phaser.Scene {
     }
     this.status.phase = 'ready'
     this.status.waveName = WAVES.waves[this.status.wave].name
+    this.armReadyCountdown()
     this.announce('WAVE CLEARED', COLOR.good)
     this.status.message =
-      `Wave cleared, +${RULES.peanutsPerWaveCleared} peanuts. Build or reposition, then START WAVE ${this.status.wave + 1}.`
+      `Wave cleared, +${RULES.peanutsPerWaveCleared} peanuts. Build or reposition — the next wave starts on its own.`
   }
 
   /** A 3rd tower after wave 4 and a 4th after wave 8, drawn from the reserve. */
@@ -1285,15 +1359,20 @@ export class GameScene extends Phaser.Scene {
     if (this.children.list.length !== this.splitAt) this.syncCameras()
 
     // A backgrounded tab hands back a huge delta; cap it so nothing teleports.
-    const dt = Math.min(delta / 1000, 0.05)
+    const real = Math.min(delta / 1000, 0.05)
+    // Everything the simulation does runs on a scaled clock: enemies walk,
+    // spawners spawn, towers fire and cooldowns tick, all at the same multiple.
+    // Scaling the clock rather than each speed in turn is what makes the game
+    // faster without moving any part of the tuning relative to another.
+    const dt = real * RULES.pacing.gameSpeed
 
-    // The camera eases toward its target every frame, including on the run-end
-    // screen: it is what stops a released pan from halting dead, and a glide
-    // that is still running when the last enemy dies has to finish.
-    this.rig.update(dt)
+    // The camera runs on real time. It is feel, not simulation, and a camera
+    // that eased 40% faster would read as twitchy rather than as brisk.
+    this.rig.update(real)
 
     if (this.status.phase === 'won' || this.status.phase === 'lost') return
 
+    this.tickReadyCountdown(real)
     this.cooldowns.tick(dt)
 
     if (this.status.phase === 'wave') {
@@ -1433,21 +1512,67 @@ export class GameScene extends Phaser.Scene {
   private fire(tower: Tower, target: Enemy): void {
     play(this, `tower-${tower.id}`)
     const m = tower.muzzle(tower.aimAt(target.x, target.centreY))
+    // Locked in at fire time, not at impact: the ramp is the reward for the
+    // shot the tower just took, and the projectile is in the air for long
+    // enough that reading it on arrival would credit the wrong shot.
+    const power = tower.damage * tower.rampMultiplier
     this.shots.push(
       new Projectile(this, m.x, m.y, tower.def.shot, target, tower.def.projectileSpeed, (hit) => {
         this.impactSpark(hit.x, hit.target.centreY)
         if (tower.splashRadius > 0) {
           this.blast(hit.x, hit.y, tower.splashRadius)
           for (const e of withinRadius(this.enemies, hit.x, hit.y, tower.splashRadius)) {
-            this.damageEnemy(e, tower.damage, tower.def.ignoresArmor, tower.armorPierce)
-            e.applySlow(tower.def.slowFactor, tower.slowSeconds)
+            this.hitWith(tower, e, power)
           }
         } else {
-          this.damageEnemy(hit.target, tower.damage, tower.def.ignoresArmor, tower.armorPierce)
-          hit.target.applySlow(tower.def.slowFactor, tower.slowSeconds)
+          this.hitWith(tower, hit.target, power)
+          this.chainFrom(tower, hit.target, power)
         }
       }),
     )
+  }
+
+  /**
+   * One tower's shot landing on one enemy, with whatever its specialization
+   * does to that. Every behaviour that changes an impact lives here, so a
+   * splash hit, a direct hit and a chained hit all get the same treatment.
+   */
+  private hitWith(tower: Tower, enemy: Enemy, power: number): void {
+    if (!enemy.alive) return
+    const b = tower.behaviour
+
+    // Execute: anything already this badly hurt simply dies. Checked before
+    // damage so it reads as a finisher rather than as a big number.
+    const cut = b.executeBelowPercent ?? 0
+    if (cut > 0 && enemy.health <= enemy.maxHealth * cut) {
+      this.damageEnemy(enemy, enemy.health + 1, true)
+      return
+    }
+
+    const armoured = enemy.effectiveArmor > 0
+    const amount = power * (armoured ? (b.bonusVsArmored ?? 1) : 1)
+    this.damageEnemy(enemy, amount, tower.def.ignoresArmor || b.ignoresArmor === true, tower.armorPierce)
+
+    const slow = tower.slowSeconds || (tower.splashRadius > 0 ? (b.splashSlowSeconds ?? 0) : 0)
+    if (slow > 0) enemy.applySlow(tower.def.slowFactor || 0.5, slow)
+    // A stun goes through the slow system rather than adding a second one:
+    // `applySlow` ignores a factor of zero, so "stopped" is expressed as very
+    // nearly stopped, which looks identical and needs no new machinery.
+    if ((b.stunSeconds ?? 0) > 0) enemy.applySlow(STUN_FACTOR, b.stunSeconds as number)
+  }
+
+  /** Specs that hit more than one thing per shot. */
+  private chainFrom(tower: Tower, from: Enemy, power: number): void {
+    const extra = tower.behaviour.chainTargets ?? 0
+    if (extra <= 0) return
+    const falloff = tower.behaviour.chainFalloff ?? 0.6
+    const near = withinRadius(this.enemies, from.x, from.y, tower.range * 0.55)
+      .filter((e) => e !== from && e.alive)
+      .slice(0, extra)
+    for (const e of near) {
+      this.impactSpark(e.x, e.centreY)
+      this.hitWith(tower, e, power * falloff)
+    }
   }
 
   private impactSpark(x: number, y: number): void {
@@ -1580,13 +1705,21 @@ export class GameScene extends Phaser.Scene {
     for (const t of this.towers) {
       if (t.isSupport) continue
       let bonus = 0
+      let range = 0
+      let pierce = 0
       for (const s of this.towers) {
         if (!s.isSupport || s === t) continue
         if (Phaser.Math.Distance.Between(s.x, s.y, t.x, t.y) <= s.supportRadius) {
           bonus += s.supportDamageBonus
+          // A specialized Shelter gives its neighbours something beyond raw
+          // damage, which is what makes its tier-3 choice a choice.
+          range += s.supportRangeBonus
+          pierce += s.grantsPierce
         }
       }
       t.supportBonus = bonus
+      t.grantedRange = range
+      t.grantedPierce = pierce
     }
   }
 

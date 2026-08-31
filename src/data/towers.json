@@ -33,7 +33,8 @@
         "cost": 320,
         "buildSeconds": 9.0,
         "damage": 1.9,
-        "armorPierce": 2.0
+        "armorPierce": 2.0,
+        "ignoresArmor": true
       },
       {
         "id": "payroll",
@@ -41,7 +42,9 @@
         "cost": 320,
         "buildSeconds": 9.0,
         "fireInterval": 0.55,
-        "damage": 1.15
+        "damage": 1.15,
+        "chainTargets": 1,
+        "chainFalloff": 0.6
       }
     ]
   },
@@ -78,7 +81,8 @@
         "cost": 600,
         "buildSeconds": 9.0,
         "damage": 2.2,
-        "fireInterval": 1.15
+        "fireInterval": 1.15,
+        "executeBelowPercent": 0.18
       },
       {
         "id": "carryforward",
@@ -86,7 +90,9 @@
         "cost": 600,
         "buildSeconds": 9.0,
         "fireInterval": 0.6,
-        "range": 1.2
+        "range": 1.2,
+        "rampPerShot": 0.14,
+        "rampMax": 1.1
       }
     ]
   },
@@ -124,7 +130,8 @@
         "cost": 500,
         "buildSeconds": 9.0,
         "splashRadius": 1.6,
-        "damage": 1.35
+        "damage": 1.35,
+        "splashSlowSeconds": 0.7
       },
       {
         "id": "materiality",
@@ -132,7 +139,8 @@
         "cost": 500,
         "buildSeconds": 9.0,
         "damage": 2.3,
-        "splashRadius": 0.85
+        "splashRadius": 0.85,
+        "bonusVsArmored": 1.9
       }
     ]
   },
@@ -170,7 +178,9 @@
         "cost": 880,
         "buildSeconds": 9.0,
         "damage": 2.1,
-        "fireInterval": 0.9
+        "fireInterval": 0.9,
+        "rampPerShot": 0.22,
+        "rampMax": 1.6
       },
       {
         "id": "penalty",
@@ -178,7 +188,9 @@
         "cost": 880,
         "buildSeconds": 9.0,
         "splashRadius": 1.55,
-        "range": 1.2
+        "range": 1.2,
+        "chainTargets": 2,
+        "chainFalloff": 0.5
       }
     ]
   },
@@ -217,7 +229,9 @@
         "cost": 400,
         "buildSeconds": 9.0,
         "slowSeconds": 2.0,
-        "range": 1.15
+        "range": 1.15,
+        "chainTargets": 1,
+        "chainFalloff": 1.0
       },
       {
         "id": "amendment",
@@ -225,7 +239,8 @@
         "cost": 400,
         "buildSeconds": 9.0,
         "damage": 2.6,
-        "armorPierce": 2.0
+        "armorPierce": 2.0,
+        "stunSeconds": 0.6
       }
     ]
   },
@@ -260,7 +275,8 @@
         "name": "Offshore",
         "cost": 560,
         "buildSeconds": 9.0,
-        "supportRadius": 1.5
+        "supportRadius": 1.5,
+        "supportRangeBonus": 0.2
       },
       {
         "id": "loophole",
@@ -268,7 +284,8 @@
         "cost": 560,
         "buildSeconds": 9.0,
         "supportDamageBonus": 1.9,
-        "supportRadius": 0.9
+        "supportRadius": 0.9,
+        "grantsPierce": 5
       }
     ]
   }

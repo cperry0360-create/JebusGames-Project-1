@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, existsSync } from 'node:fs'
+import { specSummary } from '../src/systems/Upgrades.ts'
 
 const url = (p: string) => new URL(p, import.meta.url)
 const read = (n: string) => JSON.parse(readFileSync(url(`../src/data/${n}.json`), 'utf8'))
@@ -408,4 +409,69 @@ test('a support tower can actually reach another build pad', () => {
         `below the ${closest.toFixed(0)}px gap between the closest pads`)
     }
   }
+})
+
+/* ------------------------------------------- tier 3 is a choice, not a number */
+
+test('every specialization changes behaviour, not just a percentage', () => {
+  // A tier-3 pick that only scaled numbers was not a decision: both options
+  // were "more damage" and one of them was simply larger. Each one now does
+  // something the other cannot.
+  const BEHAVIOURS = [
+    'ignoresArmor', 'chainTargets', 'executeBelowPercent', 'rampPerShot',
+    'splashSlowSeconds', 'bonusVsArmored', 'stunSeconds',
+    'supportRangeBonus', 'grantsPierce',
+  ]
+  for (const [id, t] of Object.entries(towers) as [string, any][]) {
+    for (const spec of t.specializations ?? []) {
+      const has = BEHAVIOURS.filter((k) => spec[k])
+      assert.ok(has.length > 0,
+        `${id}/${spec.id} only multiplies stats; it needs something the other option cannot do`)
+    }
+  }
+})
+
+test('the two specializations of a tower do different things', () => {
+  const BEHAVIOURS = [
+    'ignoresArmor', 'chainTargets', 'executeBelowPercent', 'rampPerShot',
+    'splashSlowSeconds', 'bonusVsArmored', 'stunSeconds',
+    'supportRangeBonus', 'grantsPierce',
+  ]
+  for (const [id, t] of Object.entries(towers) as [string, any][]) {
+    const specs = t.specializations ?? []
+    if (specs.length < 2) continue
+    const sets = specs.map((s: any) => BEHAVIOURS.filter((k) => s[k]).join('+'))
+    assert.notEqual(sets[0], sets[1],
+      `${id}: both specializations do "${sets[0]}", so the branch has only one real option`)
+  }
+})
+
+test('a specialization explains itself in mechanics, not in jokes', () => {
+  for (const [id, t] of Object.entries(towers) as [string, any][]) {
+    for (const spec of t.specializations ?? []) {
+      assert.equal(spec.flavor, undefined, `${id}/${spec.id} still carries flavour text`)
+      const line = specSummary(spec)
+      assert.notEqual(line, 'No change', `${id}/${spec.id} summarises to nothing at all`)
+      // It has to name a real effect, not just read as prose.
+      assert.match(line, /%|armour|enemy|enemies|health|slows|stops|pierce/,
+        `${id}/${spec.id} summarises as "${line}", which tells the player nothing`)
+    }
+  }
+})
+
+test('tier is visible on the board without opening a panel', () => {
+  // All three tiers share one sprite, so an upgraded tower looked exactly like
+  // one still at tier 1. Until per-tier art exists the pips carry it.
+  const t = read('presentation').towerTier
+  assert.ok(t, 'no tier indicator configured at all')
+  assert.ok(t.pipRadius >= 6, `${t.pipRadius}px pips are too small to read over the art`)
+  assert.ok(t.pipGap > t.pipRadius * 2, 'the pips would overlap each other')
+  assert.ok(t.scalePerTier > 0 && t.tintPerTier > 0,
+    'an upgraded tower should also read as bigger and brighter, not only by counting pips')
+  const tower = readFileSync(url('../src/entities/Tower.ts'), 'utf8')
+  assert.match(tower, /private drawTier\(\)/, 'nothing draws the tier')
+  // Redrawn when a tier actually lands, or the pips describe the old tower.
+  const build = tower.slice(tower.indexOf('private tickBuild'))
+  assert.match(build.slice(0, build.indexOf('\n  ', 40) + 400), /drawTier\(\)/,
+    'finishing a tier never redraws the indicator')
 })

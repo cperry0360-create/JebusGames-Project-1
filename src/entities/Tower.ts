@@ -1,11 +1,11 @@
 import Phaser from 'phaser'
-import type { TowerDef } from '../types.ts'
+import type { TowerDef, TowerSpec } from '../types.ts'
 import { ySort } from '../systems/DepthSort.ts'
 import { pickFirst } from '../systems/Targeting.ts'
 import { boostedDamage } from '../systems/Combat.ts'
 import { makeShadow, muzzleFlash, PRESENTATION } from '../systems/Presentation.ts'
 import { ART, applyRender } from '../systems/Art.ts'
-import { atSpecChoice, BASE_TIER, isMaxed, nextStep, specById, statAt } from '../systems/Upgrades.ts'
+import { atSpecChoice, BASE_TIER, isMaxed, maxTier, nextStep, specById, statAt } from '../systems/Upgrades.ts'
 import rulesData from '../data/rules.json'
 import type { RulesDef } from '../types.ts'
 import { Enemy } from './Enemy.ts'
@@ -33,6 +33,16 @@ export class Tower extends Phaser.GameObjects.Container {
   private buildLeft = 0
   private buildTotal = 0
   private scaffold?: Phaser.GameObjects.Graphics
+  /** Tier pips, drawn above the tower. Placeholder until tier art exists. */
+  private pips!: Phaser.GameObjects.Graphics
+  /** The turret's scale as the manifest set it, before any per-tier lift. */
+  private baseScale = 1
+  /** Consecutive shots landed on the same target, for the ramping specs. */
+  private rampTarget: Enemy | null = null
+  private rampStacks = 0
+  /** Granted by neighbouring support towers, alongside the damage bonus. */
+  grantedRange = 0
+  grantedPierce = 0
 
   constructor(scene: Phaser.Scene, x: number, y: number, id: string, def: TowerDef, spot: number) {
     super(scene, x, y)
@@ -53,10 +63,14 @@ export class Tower extends Phaser.GameObjects.Container {
     // Anchor and on-screen height come from the manifest, so a 512px tower and
     // a 64px turret both sit on the tile at the size the manifest asks for.
     applyRender(this.turret, def.sprite)
+    this.baseScale = this.turret.scaleX
     parts.push(this.turret)
+    this.pips = scene.add.graphics()
+    parts.push(this.pips)
     this.add(parts)
     scene.add.existing(this)
     ySort(this)
+    this.drawTier()
     this.popIn()
   }
 
@@ -73,6 +87,72 @@ export class Tower extends Phaser.GameObjects.Container {
     return x >= this.x - halfW && x <= this.x + halfW && y >= top && y <= this.y + 8
   }
 
+  /**
+   * The tier, made visible.
+   *
+   * All three tiers share one sprite, so without this an upgraded tower is
+   * indistinguishable from one still at tier 1 — the player cannot see what
+   * they have bought. Pips above the tower say exactly which tier it is; the
+   * scale and brightness make it readable at a glance without counting.
+   *
+   * This is placeholder art by intent. When per-tier sprites exist the pips
+   * can go and only this method changes.
+   */
+  private drawTier(): void {
+    const t = PRESENTATION.towerTier
+    const total = maxTier(this.def)
+    const top = -this.turret.displayHeight - t.pipRiseAboveTop
+    const span = (total - 1) * t.pipGap
+    this.pips.clear()
+    for (let i = 0; i < total; i++) {
+      const x = -span / 2 + i * t.pipGap
+      const filled = i < this.tier
+      // A dark seat and a dark rim, so the row reads over grass, dirt path and
+      // tower art alike rather than only over whatever it was tested on.
+      this.pips.fillStyle(0x0d1016, 0.85).fillCircle(x, top, t.pipRadius + 3)
+      this.pips.fillStyle(
+        Phaser.Display.Color.HexStringToColor(filled ? t.pipColour : t.pipEmptyColour).color,
+        1,
+      )
+      this.pips.fillCircle(x, top, t.pipRadius)
+      this.pips.lineStyle(2, 0x0d1016, 0.9).strokeCircle(x, top, t.pipRadius)
+    }
+
+    const steps = this.tier - 1
+    this.turret.setScale(this.baseScale * (1 + steps * t.scalePerTier))
+    // Tint can only darken in Phaser, so brightness comes from lightening the
+    // rest of the range toward white rather than from a multiplier above 1.
+    const lift = Math.round(255 - (1 - steps * t.tintPerTier) * 40)
+    const c = Math.min(255, Math.max(0, lift))
+    this.turret.setTint(Phaser.Display.Color.GetColor(c, c, c))
+  }
+
+  /**
+   * The specialization's behaviour, or an empty object at tiers 1 and 2.
+   *
+   * Read through one accessor so every consumer asks the same question and a
+   * tower without a specialization answers "nothing" rather than undefined.
+   */
+  get behaviour(): Partial<TowerSpec> {
+    return specById(this.def, this.spec) ?? {}
+  }
+
+  /** How much the ramp is adding right now, as a multiplier on damage. */
+  get rampMultiplier(): number {
+    const per = this.behaviour.rampPerShot ?? 0
+    if (per <= 0) return 1
+    return 1 + Math.min(this.rampStacks * per, this.behaviour.rampMax ?? 0)
+  }
+
+  /** Support only: what this tower grants a neighbour beyond raw damage. */
+  get grantsPierce(): number {
+    return this.behaviour.grantsPierce ?? 0
+  }
+
+  get supportRangeBonus(): number {
+    return this.behaviour.supportRangeBonus ?? 0
+  }
+
   get isSupport(): boolean {
     return this.def.supportRadius > 0
   }
@@ -85,7 +165,7 @@ export class Tower extends Phaser.GameObjects.Container {
   }
 
   get range(): number {
-    return statAt(this.def, this.tier, 'range', this.spec)
+    return statAt(this.def, this.tier, 'range', this.spec) * (1 + this.grantedRange)
   }
 
   /** Slower while a tier is going up: that is the cost of upgrading mid-wave. */
@@ -97,7 +177,7 @@ export class Tower extends Phaser.GameObjects.Container {
   /** How much of a target's armour this tower gets through. Climbs with tier,
    *  so upgrading a single-target tower is the reachable answer to armour. */
   get armorPierce(): number {
-    return statAt(this.def, this.tier, 'armorPierce', this.spec)
+    return statAt(this.def, this.tier, 'armorPierce', this.spec) + this.grantedPierce
   }
 
   get splashRadius(): number {
@@ -180,6 +260,15 @@ export class Tower extends Phaser.GameObjects.Container {
     if (!target) return
 
     this.cooldown = this.fireInterval
+    // Ramping specs reward staying on one target, so switching resets the
+    // stack. Tracked on the tower rather than the enemy: the point is the
+    // tower settling into a rhythm, and an enemy that dies takes it with it.
+    if (this.rampTarget !== target) {
+      this.rampTarget = target
+      this.rampStacks = 0
+    } else {
+      this.rampStacks++
+    }
     // A painted tower is a building, not a swivelling turret: rotating it lays
     // it on its side. Aim reads from the muzzle flash and the recoil instead.
     const dir = Math.atan2(target.y - this.y, target.x - this.x)
@@ -216,6 +305,7 @@ export class Tower extends Phaser.GameObjects.Container {
     }
     this.scaffold?.destroy()
     this.scaffold = undefined
+    this.drawTier()
     this.popIn()
     // A Tax Shelter that just grew its radius has to be recomputed against
     // every tower it now covers, and support is only recalculated when the

@@ -68,6 +68,12 @@ export interface RulesDef {
   startingPeanutsMargin: number
   startingLives: number
   peanutsPerWaveCleared: number
+  pacing: {
+    gameSpeed: number
+    readySeconds: number
+    firstReadySeconds: number
+    earlyStartPeanutsPerSecond: number
+  }
   serverNuke: ServerNukeDef
   signBribe: SignBribeDef
   towerUpgrades: TowerUpgradeDef
@@ -107,6 +113,32 @@ export interface TowerDef {
 export interface TowerSpec extends TowerTier {
   id: string
   name: string
+  /**
+   * What this specialization *does*, as distinct from what it multiplies.
+   * A tier-3 choice that only scaled numbers was not a choice, so each of
+   * these changes how the tower behaves. All optional; a spec carries one.
+   */
+  /** Shots ignore armour entirely, not merely pierce some of it. */
+  ignoresArmor?: boolean
+  /** Extra enemies each shot also hits, at `chainFalloff` of the damage. */
+  chainTargets?: number
+  chainFalloff?: number
+  /** Anything below this fraction of its maximum health dies on hit. */
+  executeBelowPercent?: number
+  /** Damage grows by this much per consecutive shot at the same target, up to
+   *  `rampMax` extra. Resets when the tower changes target. */
+  rampPerShot?: number
+  rampMax?: number
+  /** Splash also slows for this long. */
+  splashSlowSeconds?: number
+  /** Damage multiplier against anything with armour left. */
+  bonusVsArmored?: number
+  /** Freezes the target outright for this long. */
+  stunSeconds?: number
+  /** Support only: neighbours also gain this fraction of extra range. */
+  supportRangeBonus?: number
+  /** Support only: neighbours also gain this much armour pierce. */
+  grantsPierce?: number
 }
 
 /**

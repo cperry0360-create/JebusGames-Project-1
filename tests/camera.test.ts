@@ -257,7 +257,10 @@ test('nothing writes to the camera from an input handler', () => {
   assert.doesNotMatch(body, /cam\.setZoom\(/, 'a handler zooms the camera directly')
   assert.match(rig, /update\(dt: number\)/, 'the rig has no per-frame ease')
   const game = src('scenes/GameScene.ts')
-  assert.match(game, /this\.rig\.update\(dt\)/, 'the scene never ticks the rig, so nothing ever eases')
+  // On real time, not the scaled game clock: the camera is feel, not
+  // simulation, and easing it 40% faster reads as twitchy rather than brisk.
+  assert.match(game, /this\.rig\.update\(real\)/,
+    'the scene never ticks the rig on real time, so nothing eases or it eases at game speed')
 })
 
 test('the rig owns its clamp instead of handing it to Phaser', () => {

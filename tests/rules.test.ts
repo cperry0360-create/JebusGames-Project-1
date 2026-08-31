@@ -445,3 +445,37 @@ test('the guidance line never tells the player to do something they cannot', () 
   assert.match(game, /this\.status\.message = this\.idleHint\(\)/,
     'the opening message is hardcoded rather than derived from the game state')
 })
+
+/* ------------------------------------------------------------ pacing */
+
+test('the game clock is faster than real time but still a game', () => {
+  const p = rules.pacing
+  assert.ok(p.gameSpeed > 1, `a game speed of ${p.gameSpeed} is not faster than before`)
+  assert.ok(p.gameSpeed <= 2, `${p.gameSpeed}x is a fast-forward button, not a pace`)
+})
+
+test('a wave always starts on its own, and starting it early pays', () => {
+  const p = rules.pacing
+  assert.ok(p.readySeconds > 0, 'without a countdown the player can sit in the build phase forever')
+  assert.ok(p.readySeconds >= 8 && p.readySeconds <= 30,
+    `${p.readySeconds}s between waves is either panic or a nap`)
+  // The opening is the one place nothing is built and the screen is still new.
+  assert.ok(p.firstReadySeconds >= p.readySeconds,
+    'the first wave should not arrive sooner than every later one')
+  assert.ok(p.earlyStartPeanutsPerSecond > 0, 'starting early has to be worth something')
+
+  const game = src('scenes/GameScene.ts')
+  assert.match(game, /tickReadyCountdown/, 'nothing counts down')
+  assert.match(game, /armReadyCountdown\(\)/, 'the countdown is never started')
+  // The bonus has to fall out of the clock rather than out of who called
+  // startWave, or an auto-started wave pays out too.
+  assert.match(game, /Math\.floor\(this\.status\.readyCountdown\)/,
+    'the early-start bonus is not derived from the time actually saved')
+})
+
+test('the countdown runs on real seconds, not the scaled clock', () => {
+  // "15 seconds" has to mean fifteen seconds whatever the game speed is set to.
+  const game = src('scenes/GameScene.ts')
+  assert.match(game, /this\.tickReadyCountdown\(real\)/,
+    'the countdown is fed the scaled clock, so its length changes with game speed')
+})
