@@ -3,7 +3,7 @@
 
 import Phaser from 'phaser'
 import presentationData from '../data/presentation.json'
-import { ART, renderFor } from './Art.ts'
+import { applyRender, ART, renderFor } from './Art.ts'
 import { EFFECT_MS, playEffect } from './Effects.ts'
 
 export const PRESENTATION = presentationData
@@ -102,18 +102,28 @@ export function deathPuff(scene: Phaser.Scene, x: number, y: number, tint = 0xf6
   })
 }
 
-/** Brief flash at a tower's muzzle when it fires. */
+/**
+ * Brief flash at a tower's muzzle when it fires.
+ *
+ * Anchored on the base of the flame rather than its middle, so it comes out
+ * of the barrel instead of straddling it, and turned a quarter more than the
+ * firing angle because the art points up while the angle is measured from the
+ * +x axis. The pack tile it replaces also pointed up and was rotated by the
+ * bare angle, so every muzzle flash in the game has been ninety degrees out
+ * since it was written — invisible at 24px for a tenth of a second, and wrong.
+ */
 export function muzzleFlash(scene: Phaser.Scene, x: number, y: number, angle: number): void {
-  const flash = scene.add
-    .image(x, y, ART.fx.muzzle)
-    .setDepth(y + 4)
-    .setScale(PRESENTATION.muzzleFlashScale)
-    .setRotation(angle)
+  const flash = scene.add.image(x, y, ART.fx.muzzle).setDepth(y + 4)
+  applyRender(flash, ART.fx.muzzle)
+  flash.setRotation(angle + Math.PI / 2)
+  // It grows as it fades. Sized from the manifest, so this is a multiple of
+  // whatever size that asked for rather than an absolute scale.
+  const base = flash.scale
   scene.tweens.add({
     targets: flash,
     alpha: 0,
-    scale: PRESENTATION.muzzleFlashScale * 1.5,
-    duration: PRESENTATION.muzzleFlashMs,
+    scale: base * PRESENTATION.effects.muzzleGrow,
+    duration: PRESENTATION.effects.muzzleMs,
     onComplete: () => flash.destroy(),
   })
 }

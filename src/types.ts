@@ -544,7 +544,7 @@ export interface ArtDef {
     blast: string
     /** What is left where something died. */
     puff: string
-    ember: string
+    /** The flash at a tower's barrel when it fires. */
     muzzle: string
   }
   decor: string[]

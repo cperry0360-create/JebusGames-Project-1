@@ -44,7 +44,7 @@ test('the sprite keys the scenes ask for by role are all in the manifest', () =>
   // data files, so nothing else checks that they resolve.
   const hardcoded = [
     'map-level1',
-    'fx-explosion', 'fx-hit-spark', 'fx-death-puff', 'fx-flame-small',
+    'fx-explosion', 'fx-hit-spark', 'fx-death-puff', 'fx-muzzle',
     'decor-bush', 'decor-shrub', 'decor-plant', 'decor-rock', 'decor-rock2', 'decor-rock3',
   ]
   for (const k of hardcoded) assert.ok(ART_KEYS.has(k), `code uses sprite key "${k}" which art.json lacks`)
@@ -759,4 +759,41 @@ test('the projectile pack tiles are gone', () => {
   for (const f of ['towerDefense_tile251.png', 'towerDefense_tile252.png']) {
     assert.ok(!existsSync(url(`../public/assets/kenney/${f}`)), `${f} still ships`)
   }
+})
+
+test('the muzzle flash comes out of the barrel, not through it', () => {
+  const cfg = art.render['fx-muzzle']
+  assert.ok(cfg, 'the muzzle flash has no render entry')
+  assert.match(art.files['fx-muzzle'], /^fx\//, 'the muzzle flash is not the painted art')
+  // Anchored on the base of the flame. The flash is rotated about its origin
+  // to the firing angle, so a centred origin straddles the muzzle instead of
+  // emerging from it.
+  assert.equal(cfg.anchorY, 1, 'the flash is anchored through its middle')
+  assert.ok(Math.abs(cfg.anchorX - 0.5) < 0.02, 'the flash is not anchored on its own centre line')
+  assert.ok(cfg.displayHeight > 0, 'the flash has no on-screen height')
+
+  // The art points up and the firing angle is measured from the +x axis, so
+  // the rotation needs the quarter turn. The pack tile pointed up too and was
+  // rotated by the bare angle, which was ninety degrees out for years.
+  const pres = readFileSync(url('../src/systems/Presentation.ts'), 'utf8')
+  const fn = pres.slice(pres.indexOf('export function muzzleFlash'))
+  assert.match(fn, /setRotation\(angle \+ Math\.PI \/ 2\)/,
+    'the flash is not turned to point along the barrel')
+  assert.match(fn, /applyRender\(flash/, 'the flash is not sized from the manifest')
+})
+
+test('the blast throws no separate embers, because its own frames do', () => {
+  // Six Kenney tiles were thrown outward from every ability blast. The painted
+  // sheet carries debris in frames four and five, and the same Molotov with
+  // and without them was indistinguishable — so they were six more sprites a
+  // frame and the last Kenney tile in the effects.
+  const runner = readFileSync(url('../src/systems/AbilityRunner.ts'), 'utf8')
+  assert.ok(!/ART\.fx\.ember/.test(runner), 'the ember loop is still there')
+  assert.equal((art.fx as Record<string, string>).ember, undefined,
+    'the ember role is still in the manifest')
+  for (const path of Object.values(art.files) as string[]) {
+    assert.ok(!/towerDefense_tile295/.test(path), 'the ember tile is still in the manifest')
+  }
+  assert.ok(!existsSync(url('../public/assets/kenney/towerDefense_tile295.png')),
+    'the ember tile still ships')
 })

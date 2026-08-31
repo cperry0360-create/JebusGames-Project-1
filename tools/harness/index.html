@@ -836,6 +836,88 @@ async function run() {
     return
   }
 
+  if (scenario === 'muzzle') {
+    // The new muzzle flash, and the open question about the embers.
+    const ART = (await import('./js/data/art.json', { with: { type: 'json' } })).default
+    const r = ART.render['fx-muzzle']
+    note('fx-muzzle -> ' + ART.files['fx-muzzle'] + ' anchor ' + r.anchorX + ',' + r.anchorY +
+      ' displayHeight=' + r.displayHeight + ' world px (' +
+      Math.round(r.displayHeight * 1.72) + ' on screen, growing to ' +
+      Math.round(r.displayHeight * 1.5 * 1.72) + ')')
+
+    g.status.peanuts = 99999
+    const ok = await build(0, 0)
+    const t = g.towers[0]
+    note('built ' + t.def.name + ' (' + ok + ')')
+
+    g.startWave()
+    await until(() => g.enemies.length > 1, 30000)
+    await sleep(400)
+    const e = g.enemies.reduce((a, b2) => (a.distance > b2.distance ? a : b2))
+    e.health = 999999
+    await lookAt(t.x, t.y)
+
+    // Hold a flash on screen long enough to photograph, at each of four
+    // firing angles, so the rotation can be checked rather than assumed.
+    const P = await import('./js/systems/Presentation.js')
+    const A = await import('./js/systems/Art.js')
+    const held = []
+    for (const [i, deg] of [0, 90, 180, 270].entries()) {
+      const a = (deg * Math.PI) / 180
+      const ox = t.x + Math.cos(a) * 60
+      const oy = t.y + Math.sin(a) * 60
+      const f = g.add.image(ox, oy, 'fx-muzzle').setDepth(99999)
+      A.applyRender(f, 'fx-muzzle')
+      f.setRotation(a + Math.PI / 2)
+      f.setScale(f.scale * 3)
+      held.push(f)
+      void i
+    }
+    g.syncCameras()
+    await sleep(400)
+    note('four flashes at 0/90/180/270 degrees, drawn 3x so the direction is legible')
+    await shot('muzzle-01-angles')
+    held.forEach((f) => f.destroy())
+
+    // And a real one, at its real size, from a firing tower.
+    t.cooldown = 0
+    g.fire(t, e)
+    await sleep(50)
+    await shot('muzzle-02-live')
+    await sleep(400)
+
+    // The ember question: a Molotov with the embers, and one without.
+    const AR = await import('./js/systems/AbilityRunner.js')
+    void AR
+    g.status.abilities = ['molotov', 'glacier']
+    g.cooldowns.register('molotov', 1)
+    await lookAt(e.x, e.y)
+    // A/B on the embers: the same blast twice, once as shipped and once with
+    // the six ember tiles killed the instant they spawn. No source or stage
+    // edits — just remove them from the display list.
+    for (const strip of [false, true]) {
+      g.cooldowns.reset('molotov')
+      g.fireAbility('molotov', e.x, e.y)
+      if (strip) {
+        await sleep(20)
+        let n = 0
+        for (const o of [...g.children.list]) {
+          if (o.texture && o.texture.key === 'fx-flame-small') { o.destroy(); n++ }
+        }
+        note('stripped ' + n + ' ember tiles')
+      }
+      const tag = strip ? 'no-embers' : 'with-embers'
+      await sleep(110)
+      await shot('muzzle-03-' + tag + '-peak')
+      await sleep(280)
+      await shot('muzzle-04-' + tag + '-late')
+      await sleep(700)
+    }
+    await sleep(600)
+    note('page errors: ' + log.filter((l) => l.startsWith('PAGE ERROR')).length)
+    return
+  }
+
   if (scenario === 'buildall') {
     // Does the director actually place towers on every pad, at a phone's
     // zoom, where most of them start off screen?

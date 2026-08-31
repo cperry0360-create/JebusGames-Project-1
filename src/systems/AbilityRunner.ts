@@ -36,22 +36,20 @@ export function castAbility(id: string, def: AbilityDef, x: number, y: number, c
   }
 }
 
-function boom(ctx: AbilityContext, x: number, y: number, radius: number, tint?: number): void {
-  // Sized to the blast it is doing and then left alone — the frames grow and
-  // decay themselves. Untinted by default: the explosion art is already
-  // orange, and tinting it orange again only muddies it.
+/**
+ * One explosion, sized to the blast it is doing and then left alone: the
+ * frames grow and decay themselves.
+ *
+ * There used to be six ember tiles thrown outward from here as well. The
+ * painted sheet carries its own debris in frames four and five, and an A/B of
+ * the same Molotov with and without them was indistinguishable — so they were
+ * six more sprites a frame, and the last place a Kenney tile appeared in the
+ * effects. Untinted, too: the art is already fire.
+ */
+function boom(ctx: AbilityContext, x: number, y: number, radius: number): void {
   playEffect(ctx.scene, ART.fx.blast, x, y, {
-    size: sizeForRadius(radius), depth: y + 5, durationMs: EFFECT_MS.blastMs, tint,
+    size: sizeForRadius(radius), depth: y + 5, durationMs: EFFECT_MS.blastMs,
   })
-  for (let i = 0; i < 6; i++) {
-    const a = (Math.PI * 2 * i) / 6
-    const s = ctx.scene.add.image(x, y, ART.fx.ember).setDepth(y + 5).setScale(0.7)
-    if (tint !== undefined) s.setTint(tint)
-    ctx.scene.tweens.add({
-      targets: s, x: x + Math.cos(a) * radius * 0.8, y: y + Math.sin(a) * radius * 0.8,
-      alpha: 0, scale: 0.2, duration: 380, onComplete: () => s.destroy(),
-    })
-  }
 }
 
 function molotov(def: AbilityDef, x: number, y: number, ctx: AbilityContext): void {

@@ -6,10 +6,12 @@ art, where it appears, how big it renders and how often anyone sees it.
 **Status: acted on.** The dead keys, the unused pack files, the two unused
 fonts and the reference sheets under `public/` are gone; the explosion, hit
 spark and death puff have been replaced with painted animations; and both
-rockets are painted. What is left of Kenney in the game is **three 28px
-projectile dots, one muzzle-flash tile, six title-screen shapes at 12%
-opacity, one font and the audio** — ten sprites, of which four are visible
-during play.
+rockets are painted; the muzzle flash is painted; and the ability embers are
+deleted outright. What is left of Kenney in the game is **three 28px
+projectile dots, six title-screen shapes at 12% opacity, one font and the
+audio** — nine sprites, of which three are visible during play.
+
+Every effect in the game is now original art.
 
 The recommendations below are kept as written so the reasoning survives; the
 sections they refer to are marked where they no longer describe the build.
@@ -41,7 +43,7 @@ For reference at the same zoom: **a tower renders 150px tall, a Late Filer
 | Category | Kenney assets, then | Now | Verdict |
 |---|---|---|---|
 | Projectiles | 5 (a sixth was dead) | **3** | ~~replace~~ the two rockets are painted; three 28px dots left |
-| Particles and effects | 3 tiles doing 8 jobs | **1 tile, 1 job** (the muzzle flash) | ~~replace second~~ **done** |
+| Particles and effects | 3 tiles doing 8 jobs | **none** | ~~replace second~~ **done** |
 | Terrain and scenery | 6 | **6** | not worth replacing |
 | UI elements | none left | none | — |
 | Fonts | 1 in use, 2 dead | **1** | keep |
@@ -321,7 +323,15 @@ one in flight.
 Two sprites. Draw them pointing north to match the existing quarter-turn in
 `Projectile.tick`, or drop the offset when you swap them in.
 
-### 4. The muzzle flash — `fx-flame-small` as `fx.muzzle`
+### 4. ~~The muzzle flash~~ — **done**
+
+Replaced by `fx-muzzle`, painted, anchored on the base of the flame so it
+emerges from the barrel. Sizing it from the manifest also turned up that the
+pack tile pointed up while the code rotated it by the bare firing angle — so
+every muzzle flash in the game had been ninety degrees out, invisible at 24px
+for a tenth of a second.
+
+#### Why it was fourth
 
 Drawn on **every shot from every tower** — the highest count of anything in
 this list — but small (24–36px) and gone in 110ms. Cheap to improve and it sits
@@ -339,7 +349,15 @@ changes what the board looks like.
 
 (Do not commission `shot-pale`. Delete it — see above.)
 
-### 6. The ember — `fx-flame-small` as `fx.ember`
+### 6. ~~The ember~~ — **deleted, not replaced**
+
+Exactly as predicted below: the commissioned blast came with its own debris,
+so the six thrown tiles disappeared for free. An A/B of the same Molotov with
+and without them was indistinguishable, which made them six sprites a frame
+buying nothing. The call site, the `fx.ember` role and the `fx-flame-small`
+key are all gone.
+
+#### The prediction
 
 Six per ability blast, 34px, thrown outward and faded in 380ms. If the blast in
 #1 is commissioned with its own debris, this disappears for free. On its own it

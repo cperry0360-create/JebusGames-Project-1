@@ -18,7 +18,9 @@
     "chainSparkSize": 42,
     "haymakerSparkSize": 68,
     "bribeSparkSize": 34,
-    "deathPuffSize": 62
+    "deathPuffSize": 62,
+    "muzzleMs": 110,
+    "muzzleGrow": 1.5
   },
   "facing": {
     "deadZone": 0.15
@@ -41,8 +43,6 @@
     "heightFraction": 0.62,
     "reachPixels": 18
   },
-  "muzzleFlashMs": 110,
-  "muzzleFlashScale": 0.5,
   "damageNumbers": {
     "risePixels": 34,
     "durationMs": 620,

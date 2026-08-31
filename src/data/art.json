@@ -1,6 +1,6 @@
 {
   "assetRoot": "assets/",
-  "credit": "Four projectile tiles, the muzzle flash and the title scenery from Kenney Tower Defense (Top-Down), CC0. See public/assets/kenney/License.txt. The level map, the towers, the enemies, the hero, the gnomes, the rockets and the effect animations are original art.",
+  "credit": "Three projectile tiles and the title scenery from Kenney Tower Defense (Top-Down), CC0. See public/assets/kenney/License.txt. Everything else the game draws is original art.",
   "note": "Every sprite the game draws is named here. `files` maps a key to a path under assetRoot, so a new art pack is a path change. `render` gives a key its anchor and on-screen height, so art of any source size drops in without touching code.",
   "files": {
     "turret-ledger": "towers/tower_withholding.png",
@@ -22,7 +22,7 @@
     "fx-explosion": "fx/fx_explosion.png",
     "fx-hit-spark": "fx/fx_hit_spark.png",
     "fx-death-puff": "fx/fx_death_puff.png",
-    "fx-flame-small": "kenney/towerDefense_tile295.png",
+    "fx-muzzle": "fx/fx_muzzle.png",
     "decor-bush": "kenney/towerDefense_tile130.png",
     "decor-shrub": "kenney/towerDefense_tile131.png",
     "decor-plant": "kenney/towerDefense_tile134.png",
@@ -382,6 +382,13 @@
       "displayHeight": 40.0,
       "contentWidth": 145,
       "contentHeight": 200
+    },
+    "fx-muzzle": {
+      "anchorX": 0.5,
+      "anchorY": 1.0,
+      "displayHeight": 14.0,
+      "contentWidth": 165,
+      "contentHeight": 160
     }
   },
   "map": {
@@ -407,8 +414,7 @@
     "spark": "fx-hit-spark",
     "blast": "fx-explosion",
     "puff": "fx-death-puff",
-    "ember": "fx-flame-small",
-    "muzzle": "fx-flame-small"
+    "muzzle": "fx-muzzle"
   },
   "decor": [
     "decor-bush",
