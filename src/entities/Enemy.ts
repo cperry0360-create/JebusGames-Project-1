@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import type { EnemyDef, TaxPhase } from '../types.ts'
 import { Path } from '../systems/Path.ts'
 import { ySort } from '../systems/DepthSort.ts'
-import { damageAfterArmor, slowedSpeed } from '../systems/Combat.ts'
+import { canStun, damageAfterArmor, slowedSpeed, stunLockoutFor } from '../systems/Combat.ts'
 import { makeShadow, PRESENTATION, floatingDamage, deathPuff } from '../systems/Presentation.ts'
 import { applyGroundRender } from '../systems/Art.ts'
 import { facesLeft } from '../systems/Facing.ts'
@@ -39,6 +39,13 @@ export class Enemy extends Phaser.GameObjects.Container {
   private attackTimer = 0
   private slowFactor = 0
   private slowRemaining = 0
+  /** Seconds left standing still. A stun is not a very strong slow: it stops
+   *  movement *and* attacks, and it cannot be refreshed. */
+  private stunRemaining = 0
+  /** Seconds left before another stun may land, counted from the moment the
+   *  last one did. This is what stops a fast tower turning a 0.6s stop into a
+   *  permanent one by re-applying it every shot. */
+  private stunLockout = 0
   private bobPhase = Math.random() * Math.PI * 2
   /** Distance from the feet to the art's frame centre, negated on a flip. */
   private readonly artOffset: number
@@ -74,6 +81,10 @@ export class Enemy extends Phaser.GameObjects.Container {
 
   get slowed(): boolean {
     return this.slowRemaining > 0
+  }
+
+  get stunned(): boolean {
+    return this.stunRemaining > 0
   }
 
   /** Nothing holds a boss: it walks through the line. */
@@ -127,9 +138,26 @@ export class Enemy extends Phaser.GameObjects.Container {
 
   applySlow(factor: number, seconds: number): void {
     if (factor <= 0 || seconds <= 0) return
-    // A stronger slow replaces a weaker one; equal slows just refresh.
+    // A stronger slow replaces a weaker one; equal slows just refresh. Slows
+    // are allowed to refresh: a slowed enemy still moves, so a tower holding
+    // one at 45% speed indefinitely is the tower doing its job.
     if (factor <= this.slowFactor || this.slowRemaining <= 0) this.slowFactor = factor
     this.slowRemaining = Math.max(this.slowRemaining, seconds)
+  }
+
+  /**
+   * Stops it dead, once, and then leaves it alone for a while.
+   *
+   * Refused outright while a stun is running or its lockout has not expired.
+   * That refusal is the whole fix: the Amendment specialization stops a target
+   * for 0.6s from a tower that fires every 0.81s, and refreshing on each shot
+   * meant nothing it touched ever took another step.
+   */
+  applyStun(seconds: number, lockoutMultiple: number): void {
+    if (seconds <= 0) return
+    if (!canStun(this.stunRemaining, this.stunLockout)) return
+    this.stunRemaining = seconds
+    this.stunLockout = stunLockoutFor(seconds, lockoutMultiple)
   }
 
   /** Haymaker knockback: shoved back along the lane it came from. */
@@ -150,6 +178,18 @@ export class Enemy extends Phaser.GameObjects.Container {
     if (this.slowRemaining > 0) {
       this.slowRemaining -= dt
       if (this.slowRemaining <= 0) this.slowFactor = 0
+    }
+    if (this.stunRemaining > 0) this.stunRemaining -= dt
+    if (this.stunLockout > 0) this.stunLockout -= dt
+
+    // Stopped means stopped: it does not walk and it does not swing. Held here
+    // rather than inside each branch so a stunned enemy cannot leak an attack
+    // through the fighting path.
+    if (this.stunRemaining > 0) {
+      this.bob(dt)
+      this.tintForStatus()
+      ySort(this)
+      return false
     }
 
     if (this.blocker) {
@@ -172,14 +212,23 @@ export class Enemy extends Phaser.GameObjects.Container {
       if (this.distance >= this.lane.totalLength) return true
     }
 
-    // Idle bob, so a stationary crowd still looks alive.
-    const bob = PRESENTATION.enemyBob
-    this.bobPhase += (dt * 1000 * Math.PI * 2) / bob.durationMs
-    this.art.y = Math.sin(this.bobPhase) * bob.amplitudeY
-
-    this.art.setTint(this.slowed ? 0x8fd0ff : 0xffffff)
+    this.bob(dt)
+    this.tintForStatus()
     ySort(this)
     return false
+  }
+
+  /** Idle bob, so a stationary crowd still looks alive. */
+  private bob(dt: number): void {
+    const b = PRESENTATION.enemyBob
+    this.bobPhase += (dt * 1000 * Math.PI * 2) / b.durationMs
+    this.art.y = Math.sin(this.bobPhase) * b.amplitudeY
+  }
+
+  /** Stopped reads paler than slowed, so the two can be told apart on a board
+   *  where both are happening at once. */
+  private tintForStatus(): void {
+    this.art.setTint(this.stunned ? 0xd6ecff : this.slowed ? 0x8fd0ff : 0xffffff)
   }
 
   /** Mirrors the art when the lane turns back to the left. */

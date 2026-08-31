@@ -7,7 +7,7 @@ const url = (p: string) => new URL(p, import.meta.url)
 const read = (n: string) => JSON.parse(readFileSync(url(`../src/data/${n}.json`), 'utf8'))
 const art = read('art'), abilities = read('abilities'), heroes = read('heroes'), rules = read('rules')
 const towers = read('towers'), enemies = read('enemies'), map = read('map'), pres = read('presentation')
-const display = read('display')
+const display = read('display'), waves = read('waves')
 
 const ART_KEYS = new Set(Object.keys(art.files))
 
@@ -651,4 +651,37 @@ test('gnomes can only be dropped on the lane', () => {
     .filter(([, a]) => a.pathOnlyWithin !== undefined && a.pathOnlyWithin > 0)
     .map(([id]) => id)
   assert.deepEqual(restricted, ['gnomes'], 'only the summon should be path-only')
+})
+
+test('the wave curve has no cliff in it', () => {
+  // Two testers failed to clear a run, and the shape of the back half was why:
+  // wave 12 arrived 28% heavier than wave 11 on top of an already steep ramp.
+  // This is the shape, not the absolute numbers, so tuning up later is free.
+  const load = (w: any): number =>
+    w.spawns.reduce((n: number, s: any) => n + s.count * enemies[s.enemy].maxHealth, 0)
+  const totals = waves.waves.map(load)
+  for (let i = 1; i < totals.length; i++) {
+    const step = totals[i] / totals[i - 1] - 1
+    // The boss wave is allowed to spike; that is what a boss is for.
+    const cap = waves.waves[i].boss ? 0.8 : 0.55
+    assert.ok(step <= cap,
+      `wave ${i + 1} is ${Math.round(step * 100)}% heavier than wave ${i}, which is a cliff`)
+    assert.ok(step > 0, `wave ${i + 1} is lighter than wave ${i}`)
+  }
+})
+
+test('cutting the wave counts did not quietly cut the economy with them', () => {
+  // Fewer enemies is fewer kills is fewer peanuts. A difficulty cut that also
+  // takes the player's income away is not a difficulty cut.
+  const income = (w: any): number =>
+    w.spawns.reduce((n: number, s: any) => n + s.count * enemies[s.enemy].peanutReward, 0)
+  const health = (w: any): number =>
+    w.spawns.reduce((n: number, s: any) => n + s.count * enemies[s.enemy].maxHealth, 0)
+  const totalIncome = waves.waves.reduce((n: number, w: any) => n + income(w), 0)
+  const totalHealth = waves.waves.reduce((n: number, w: any) => n + health(w), 0)
+  // Peanuts per point of health the player has to chew through. Below this and
+  // the board cannot be built fast enough to keep up.
+  const ratio = totalIncome / totalHealth
+  assert.ok(ratio >= 0.13,
+    `the run pays ${ratio.toFixed(3)} peanuts per point of enemy health, which is too thin`)
 })

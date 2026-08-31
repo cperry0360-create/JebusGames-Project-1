@@ -77,6 +77,8 @@ export interface GameStatus {
   heroHealth: number
   heroMax: number
   heroDown: boolean
+  /** Seconds until he is back, or 0 when he is up. The HUD counts it down. */
+  heroReviveIn: number
   lastStand: boolean
   unlockedTowers: string[]
   abilities: string[]
@@ -110,15 +112,13 @@ const OVERLAY_DEPTH = 150000
 const TICKET_DEPTH = 190000
 /** Ground markings are ellipses, not circles: the map is painted in 3/4. */
 const PAD_SQUASH = 0.62
-/** Speed multiplier that reads as a full stop. Not zero: applySlow treats
- *  zero as "no slow at all" and would drop the stun entirely. */
-const STUN_FACTOR = 0.02
 
 export class GameScene extends Phaser.Scene {
   readonly status: GameStatus = {
     peanuts: 0, lives: 0, wave: 0, waveCount: WAVES.waves.length, waveName: '',
     phase: 'ready', mode: 'normal', enemiesLeft: 0,
-    heroName: '', heroHealth: 0, heroMax: 0, heroDown: false, lastStand: false,
+    heroName: '', heroHealth: 0, heroMax: 0, heroDown: false, heroReviveIn: 0,
+    lastStand: false,
     unlockedTowers: [], abilities: [], rareAbility: null, pendingAbility: null,
     readyCountdown: 0, message: '',
     kills: 0, peanutsEarned: 0,
@@ -161,6 +161,9 @@ export class GameScene extends Phaser.Scene {
   /** One marker per build spot, created once and then shown or hidden. */
   private pads: Phaser.GameObjects.Image[] = []
   private markerLayer!: Phaser.GameObjects.Graphics
+  /** The seconds left on the revive, drawn on the spot he comes back to.
+   *  A Text rather than part of markerLayer, which can only draw shapes. */
+  private reviveLabel!: Phaser.GameObjects.Text
   /** The legal drop corridor while a path-only summon is armed. Its own layer
    *  because markerLayer is cleared and redrawn every frame by the rally
    *  marker, which wiped the band the moment it was painted. */
@@ -239,11 +242,20 @@ export class GameScene extends Phaser.Scene {
     this.buildSign()
 
     this.markerLayer = this.add.graphics().setDepth(GROUND_DEPTH + 6)
+    this.reviveLabel = this.add.text(0, 0, '', {
+      fontFamily: FONT_UI, fontSize: '20px', fontStyle: 'bold', color: COLOR.ink,
+      stroke: '#0d1016', strokeThickness: 5,
+    }).setOrigin(0.5).setDepth(GROUND_DEPTH + 7).setVisible(false)
     this.pathBand = this.add.graphics().setDepth(GROUND_DEPTH + 4)
     this.rangeRing = this.add.graphics().setDepth(OVERLAY_DEPTH)
     this.targetRing = this.add.graphics().setDepth(OVERLAY_DEPTH + 1)
 
     this.hero = new Hero(this, MAP.heroStart[0], MAP.heroStart[1], heroDef)
+    this.hero.on('revived', () => {
+      play(this, 'build')
+      logEvent('hero', 'revived at the entrance')
+      this.status.message = `${heroDef.name} is back on his feet.`
+    })
 
     // A floor rather than a constant: the opening instruction is to build a
     // tower, so the purse has to cover the cheapest one this run actually drew.
@@ -264,6 +276,7 @@ export class GameScene extends Phaser.Scene {
     this.status.heroMax = heroDef.maxHealth
     this.status.heroHealth = heroDef.maxHealth
     this.status.heroDown = false
+    this.status.heroReviveIn = 0
     this.status.lastStand = false
     this.status.pendingAbility = null
     this.casting = false
@@ -355,6 +368,12 @@ this.armReadyCountdown()
     }))
     setRunActive(true)
     logEvent('scene', 'Game started')
+    // A paused run is not a frozen one. The loop legitimately stops beating
+    // behind the pause dialog, behind the portrait overlay and while the tab
+    // is in the background, and a watchdog that cried freeze at each of those
+    // would bury the one report that matters.
+    this.events.on(Phaser.Scenes.Events.PAUSE, () => setRunActive(false))
+    this.events.on(Phaser.Scenes.Events.RESUME, () => setRunActive(true))
     this.events.once('shutdown', () => {
       setRunActive(false)
       provideState(null)
@@ -619,8 +638,31 @@ this.armReadyCountdown()
    */
   private drawHeroMarkers(): void {
     this.markerLayer.clear()
+    this.reviveLabel.setVisible(false)
     if (this.status.phase === 'won' || this.status.phase === 'lost') return
-    if (this.hero.down) return
+
+    // Down: mark the spot he comes back to and count it down there, so the
+    // player knows both *that* he returns and *where*. PROTOTYPE-GAP 2.6.
+    if (this.hero.down) {
+      const p = this.hero.returnPoint
+      const secs = Math.max(0, Math.ceil(this.hero.reviveIn))
+      // A slow pulse, so a marker on an otherwise still patch of grass reads
+      // as a timer rather than as scenery.
+      const beat = 0.5 + 0.5 * Math.sin(this.time.now / 260)
+      const w = 46 + beat * 6
+      this.markerLayer.fillStyle(0xff8f7a, 0.2 + beat * 0.1)
+      this.markerLayer.fillEllipse(p.x, p.y, w, w * PAD_SQUASH)
+      this.markerLayer.lineStyle(3, 0xff8f7a, 0.7 + beat * 0.3)
+      this.markerLayer.strokeEllipse(p.x, p.y, w, w * PAD_SQUASH)
+      // A world object, so it stays on the spot as the map pans — but scaled
+      // against the camera so it reads the same size at every zoom. Left at
+      // world scale it was 34px on the glass at the default zoom and covered
+      // the build pad beside it.
+      this.reviveLabel.setScale(1 / this.cameras.main.zoom)
+      this.reviveLabel.setText(`BACK IN ${secs}s`)
+      this.reviveLabel.setPosition(p.x, p.y - 22).setVisible(true)
+      return
+    }
 
     const r = this.hero.rally
     const walking = !this.hero.atRally
@@ -778,7 +820,8 @@ this.armReadyCountdown()
 
   private selectHero(): void {
     if (this.hero.down) {
-      this.status.message = `${this.hero.def.name} is down for this encounter.`
+      this.status.message =
+        `${this.hero.def.name} is down — back in ${Math.max(1, Math.ceil(this.hero.reviveIn))}s.`
       return
     }
     this.clearGhost()
@@ -1707,6 +1750,7 @@ this.armReadyCountdown()
 
     this.status.heroHealth = this.hero.health
     this.status.heroDown = this.hero.down
+    this.status.heroReviveIn = this.hero.reviveIn
     this.status.lastStand = this.hero.lastStandActive
     this.noteHeroState()
     this.status.enemiesLeft = this.enemies.length + this.spawner.remaining
@@ -1866,10 +1910,14 @@ this.armReadyCountdown()
 
     const slow = tower.slowSeconds || (tower.splashRadius > 0 ? (b.splashSlowSeconds ?? 0) : 0)
     if (slow > 0) enemy.applySlow(tower.def.slowFactor || 0.5, slow)
-    // A stun goes through the slow system rather than adding a second one:
-    // `applySlow` ignores a factor of zero, so "stopped" is expressed as very
-    // nearly stopped, which looks identical and needs no new machinery.
-    if ((b.stunSeconds ?? 0) > 0) enemy.applySlow(STUN_FACTOR, b.stunSeconds as number)
+    // A stun is its own effect, not a very strong slow. Routing it through
+    // the slow system let it refresh on every shot, and a 0.6s stop refreshed
+    // every 0.81s is a permanent one: Amendment stopped everything it touched
+    // for the rest of the wave. `applyStun` refuses to re-apply until its
+    // lockout has run out.
+    if ((b.stunSeconds ?? 0) > 0) {
+      enemy.applyStun(b.stunSeconds as number, RULES.combat.stunLockoutMultiple)
+    }
   }
 
   /** Specs that hit more than one thing per shot. */
@@ -1983,7 +2031,8 @@ this.armReadyCountdown()
     const result = this.hero.hurt(damage)
     if (result === 'lastStand') this.announceLastStand()
     if (result === 'down') {
-      this.status.message = `${this.hero.def.name} is down. He is out for this encounter.`
+      this.status.message =
+        `${this.hero.def.name} is down. Back at the entrance in ${this.hero.def.reviveSeconds}s.`
       this.cameras.main.shake(240, 0.006)
     }
   }

@@ -49,8 +49,15 @@ setRunState({
 // The shipping scale config, not an override: on a phone the whole point is
 // that the canvas *is* the viewport, and pinning it to 1280x720 hides every
 // layout collision this harness exists to find.
+// The boot wiring main.ts does, so the harness drives the shipping game and
+// not a version of it with the lifecycle and audio guards missing.
+const { guardAudioPromises } = await import('./js/systems/Audio.js')
+guardAudioPromises()
 const game = new Phaser.Game(gameConfig)
 window.game = game
+const { installLifecycle } = await import('./js/systems/Lifecycle.js')
+window.lifecycle = installLifecycle(game)
+note('visibilityState at boot: ' + document.visibilityState)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const scene = (k) => game.scene.getScene(k)
 const running = (k) => game.scene.isActive(k)
@@ -645,6 +652,283 @@ async function run() {
     g.castUntil = 0
     await sleep(300)
     note('backstop cleared a stranded cast: casting=' + g.casting)
+    return
+  }
+
+  if (scenario === 'meteor') {
+    // The complaint: impacts land too far from where the player taps.
+    const ABIL = (await import('./js/data/abilities.json', { with: { type: 'json' } })).default
+    const def = ABIL.meteor
+    note('meteor: ring radius=' + def.radius + ' impactSpread=' + def.impactSpread +
+      ' impactRadius=' + def.impactRadius + ' telegraph=' + def.telegraphSeconds + 's' +
+      ' ticks=' + def.ticks + ' over ' + def.duration + 's')
+
+    g.status.abilities = ['meteor', 'glacier']
+    g.cooldowns.register('meteor', def.cooldown)
+
+    const target = g.lane.pointAt(g.lane.totalLength * 0.45)
+    g.startWave()
+    await until(() => g.enemies.length > 2, 30000)
+    await sleep(400)
+
+    // Park the enemies on the tap and make them unkillable, so a hit is
+    // recorded rather than a corpse.
+    for (const e of g.enemies) {
+      e.health = 999999
+      e.distance = g.lane.totalLength * 0.45
+      e.setPosition(target.x, target.y)
+      // Held still for the length of the barrage, so what is measured is where
+      // the meteors land and not where the enemies walked to.
+      e.applyStun(60, 1)
+    }
+    await sleep(200)
+    note('probes parked on the tap: ' + g.enemies.length + ' at ' +
+      Math.round(target.x) + ',' + Math.round(target.y))
+
+    const hits = []
+    const realDamage = g.damageEnemy.bind(g)
+    g.damageEnemy = (e, amt, pierce) => {
+      hits.push({ t: Math.round(performance.now()), from: Math.round(Math.hypot(e.x - target.x, e.y - target.y)) })
+      return realDamage(e, amt, pierce)
+    }
+
+    const graphicsBefore = g.children.list.filter((o) => o.type === 'Graphics').length
+    g.cameras.main.centerOn(target.x, target.y)
+    g.cooldowns.reset('meteor')
+    g.fireAbility('meteor', target.x, target.y)
+    let peak = 0
+    for (let i = 0; i < 34; i++) {
+      const now = g.children.list.filter((o) => o.type === 'Graphics').length - graphicsBefore
+      if (now > peak) peak = now
+      if (i === 1) await shot('meteor-01-telegraph')
+      if (i === 5) await shot('meteor-02-first-impact')
+      await sleep(150)
+    }
+    await sleep(1000)
+    note('ground telegraphs live at once: peaked at ' + peak)
+    note('impacts that damaged something on the tap: ' + hits.length + ' of ' + def.ticks +
+      ' meteors (' + g.enemies.length + ' targets stacked there)')
+    note('first impact landed ' + (hits.length ? 'on the tap' : 'NOWHERE NEAR IT'))
+    await shot('meteor-03-after')
+    return
+  }
+
+  if (scenario === 'stun') {
+    // The reported bug: the Filing Extension's tier-3 Amendment stopped
+    // everything it touched for the rest of the wave. Measured as movement.
+    const RULES = (await import('./js/data/rules.json', { with: { type: 'json' } })).default
+    g.status.peanuts = 99999
+    const cam0 = g.cameras.main
+    const spot = SPOTS.findIndex((p) => cam0.worldView.contains(p[0], p[1]))
+    const [px, py] = toScreen(SPOTS[spot][0], SPOTS[spot][1])
+    await click(px, py); await sleep(350)
+    const b = g.menu.hitAreas[0].getBounds()
+    await move(b.centerX, b.centerY)
+    mouse('mousedown', b.centerX, b.centerY); await sleep(300)
+    mouse('mouseup', b.centerX, b.centerY); await sleep(600)
+
+    // Whatever was in the first slot becomes a fully specialized Filing
+    // Extension: the panel is not what is under test, the stun is.
+    const t = g.towers[0]
+    t.def = g.towerDefs.extension
+    t.tier = 3
+    t.buildLeft = 0
+    t.spec = 'amendment'
+    note('tower=' + t.def.name + ' tier=' + t.tier + ' spec=' + t.spec +
+      ' stunSeconds=' + t.behaviour.stunSeconds +
+      ' fireInterval=' + t.fireInterval.toFixed(2) +
+      ' lockoutMultiple=' + RULES.combat.stunLockoutMultiple)
+
+    g.startWave()
+    await until(() => g.enemies.length > 0, 30000)
+    await sleep(600)
+    const e = g.enemies.reduce((a, b2) => (a.distance > b2.distance ? a : b2))
+    e.health = 99999
+
+    // Fire the tower at the enemy on its own cadence, which is exactly what
+    // the bug needed: a 0.6s stop re-applied every 0.81s.
+    const interval = (t.fireInterval / 1.4) * 1000
+    const start = e.distance
+    let stunnedTicks = 0
+    let ticks = 0
+    let firing = setInterval(() => g.hitWith(t, e, 1), interval)
+    for (let i = 0; i < 24; i++) {
+      if (e.stunned) stunnedTicks++
+      ticks++
+      await sleep(250)
+    }
+    clearInterval(firing)
+    const moved = Math.round(e.distance - start)
+    const free = Math.round(e.def.speed * 1.4 * 6)
+    note('under a tier-3 Amendment for 6s: moved ' + moved + 'px of the ' + free +
+      'px it would cover unhindered (' + Math.round((moved / free) * 100) + '%), stunned on ' +
+      stunnedTicks + ' of ' + ticks + ' samples')
+
+    // And the invariant itself, without a tower in the way.
+    const e2 = g.enemies.find((x) => x !== e && x.alive) ?? e
+    e2.applyStun(0.6, RULES.combat.stunLockoutMultiple)
+    const first = e2.stunned
+    e2.applyStun(0.6, RULES.combat.stunLockoutMultiple)
+    await sleep(900)
+    const refreshedWhileStunned = e2.stunned
+    e2.applyStun(0.6, RULES.combat.stunLockoutMultiple)
+    const refreshedDuringLockout = e2.stunned
+    await sleep(900)
+    e2.applyStun(0.6, RULES.combat.stunLockoutMultiple)
+    const afterLockout = e2.stunned
+    note('stun landed=' + first + ', still stunned after 0.9s of re-applying=' +
+      refreshedWhileStunned + ', re-applied during lockout=' + refreshedDuringLockout +
+      ', lands again after the lockout=' + afterLockout)
+
+    await shot('stun-01-under-fire')
+    return
+  }
+
+  if (scenario === 'revive') {
+    // He goes down, a marker counts him down where he comes back, and he
+    // walks back on at full health.
+    g.startWave()
+    await until(() => g.enemies.length > 1, 30000)
+    await sleep(400)
+    const home = g.hero.returnPoint
+    note('hero start ' + Math.round(g.hero.x) + ',' + Math.round(g.hero.y) +
+      ' returns to ' + Math.round(home.x) + ',' + Math.round(home.y) +
+      ' reviveSeconds=' + g.hero.def.reviveSeconds)
+
+    // Order him away first, so the return point is provably not where he fell.
+    g.hero.setRally(300, 620)
+    await sleep(2200)
+    // Take him to Last Stand on this life, so the revive can be checked
+    // against re-arming it.
+    g.damageHero(g.hero.def.maxHealth * 0.8)
+    await sleep(900)
+    note('last stand on this life: ' + g.hero.lastStandActive +
+      ' sprite=' + g.hero.list[1].texture.key)
+    const fell = [Math.round(g.hero.x), Math.round(g.hero.y)]
+    g.damageHero(9999)
+    await sleep(600)
+    note('down=' + g.hero.down + ' at ' + JSON.stringify(fell) +
+      ' visible=' + g.hero.visible + ' reviveIn=' + g.hero.reviveIn.toFixed(1) +
+      ' msg="' + g.status.message + '"')
+    note('HUD says: "' + scene('Hud').heroLabel.text + '"')
+    note('marker label: "' + g.reviveLabel.text + '" visible=' + g.reviveLabel.visible +
+      ' at ' + Math.round(g.reviveLabel.x) + ',' + Math.round(g.reviveLabel.y))
+    g.cameras.main.centerOn(home.x, home.y)
+    await sleep(400)
+    await shot('revive-01-down-marker')
+
+    // Abilities and hero orders must be refused while he is away.
+    g.selectHero()
+    note('select while down: heroSelected=' + g.heroSelected + ' msg="' + g.status.message + '"')
+
+    // Short-circuit the wait rather than sit here for 25 seconds.
+    g.hero.reviveIn = 2
+    await until(() => !g.hero.down, 12000)
+    await sleep(500)
+    note('revived: hp=' + Math.round(g.hero.health) + '/' + g.hero.def.maxHealth +
+      ' at ' + Math.round(g.hero.x) + ',' + Math.round(g.hero.y) +
+      ' visible=' + g.hero.visible + ' alpha=' + g.hero.alpha +
+      ' sprite=' + g.hero.list[1].texture.key + ' msg="' + g.status.message + '"')
+    note('marker cleared: ' + !g.reviveLabel.visible)
+    await shot('revive-02-back')
+
+    // And he has to work: orders, and Last Stand must not re-arm.
+    g.hero.setRally(500, 500)
+    await sleep(1500)
+    note('takes orders again: moved=' + (Math.round(g.hero.x) !== Math.round(home.x)))
+    g.damageHero(g.hero.def.maxHealth * 0.8)
+    await sleep(900)
+    note('after dropping him to ' + Math.round(g.hero.health) + ': lastStand=' +
+      g.hero.lastStandActive + ' sprite=' + g.hero.list[1].texture.key +
+      ' (must be false and on foot — one transformation per encounter)')
+    return
+  }
+
+  if (scenario === 'background') {
+    // The reported crash: leave the tab, come back, it breaks. Driven here by
+    // faking what iOS does — a suspended AudioContext whose resume rejects,
+    // plus the visibility events Safari fires around it.
+    const rejections = []
+    addEventListener('unhandledrejection', (e) => rejections.push(String(e.reason?.message || e.reason)))
+    const A = await import('./js/systems/Audio.js')
+    const ctx = game.sound.context
+    note('audio: ' + (ctx ? 'WebAudio, state=' + ctx.state : 'no context') +
+      ' pauseOnBlur=' + game.sound.pauseOnBlur)
+
+    g.startWave()
+    await until(() => g.enemies.length > 1, 30000)
+    await sleep(500)
+    note('before: wave=' + (g.status.wave + 1) + ' enemies=' + g.enemies.length +
+      ' GameRunning=' + running('Game') + ' HudRunning=' + running('Hud'))
+    await shot('bg-01-before')
+
+    // Away.
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+    dispatchEvent(new Event('pagehide'))
+    await sleep(700)
+    const frozenEnemies = g.enemies.map((e) => Math.round(e.distance))
+    note('backgrounded: GameRunning=' + running('Game') + ' HudRunning=' + running('Hud') +
+      ' ctx=' + (ctx ? ctx.state : '-'))
+    await sleep(900)
+    note('board frozen while away: ' +
+      (JSON.stringify(g.enemies.map((e) => Math.round(e.distance))) === JSON.stringify(frozenEnemies)))
+
+    // The iOS failure itself: the next resume rejects.
+    let forced = false
+    if (ctx) {
+      const realResume = ctx.resume.bind(ctx)
+      ctx.resume = () => {
+        if (forced) return realResume()
+        forced = true
+        return Promise.reject(new Error('Failed to start the audio device'))
+      }
+    }
+
+    // Back.
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+    dispatchEvent(new Event('pageshow'))
+    await sleep(1200)
+    note('foregrounded: GameRunning=' + running('Game') + ' HudRunning=' + running('Hud') +
+      ' audioUnavailable=' + A.audioUnavailable())
+    note('unhandled rejections: ' + rejections.length + ' ' + JSON.stringify(rejections))
+    note('crash panel: ' + (document.getElementById('crash') ? 'SHOWN' : 'none'))
+    note('notice: "' + (document.getElementById('toast')?.textContent ?? 'NONE') + '"')
+    await sleep(900)
+    note('board moving again: ' +
+      (JSON.stringify(g.enemies.map((e) => Math.round(e.distance))) !== JSON.stringify(frozenEnemies)))
+    await shot('bg-02-after')
+
+    // Sound must be silently off, not fatal.
+    g.status.message = 'still playing'
+    A.play(g, 'click')
+    note('play() after the failure did not throw')
+
+    // And the pause button has to still work on the far side of all that.
+    const hud = scene('Hud')
+    hud.openPause()
+    await sleep(600)
+    note('pause after backgrounding: GamePaused=' + game.scene.isPaused('Game') +
+      ' panel=' + !!hud.panel)
+    await shot('bg-03-paused')
+    const before = g.enemies.map((e) => Math.round(e.distance))
+    hud.resumeGame()
+    await sleep(900)
+    note('resume after backgrounding: GamePaused=' + game.scene.isPaused('Game') +
+      ' board moving=' + (JSON.stringify(g.enemies.map((e) => Math.round(e.distance))) !== JSON.stringify(before)))
+
+    // A run the player paused must still be paused after a trip away.
+    hud.openPause()
+    await sleep(400)
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+    await sleep(500)
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+    await sleep(800)
+    note('deliberate pause survived a background cycle: GamePaused=' +
+      game.scene.isPaused('Game') + ' HudRunning=' + running('Hud'))
     return
   }
 

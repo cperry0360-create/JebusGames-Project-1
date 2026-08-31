@@ -9,6 +9,9 @@
     "firstReadySeconds": 30,
     "earlyStartPeanutsPerSecond": 2
   },
+  "combat": {
+    "stunLockoutMultiple": 2.5
+  },
   "serverNuke": {
     "abilityId": "serverNuke",
     "dropChance": 0.02,

@@ -74,6 +74,18 @@ export interface RulesDef {
     firstReadySeconds: number
     earlyStartPeanutsPerSecond: number
   }
+  combat: {
+    /**
+     * How long a stun locks a target out of being stunned again, as a
+     * multiple of the stun's own duration — 2.5 means a 0.6s stop is followed
+     * by 0.9s that cannot be stunned.
+     *
+     * Without it a stun whose tower fires faster than the stun lasts is not a
+     * stun at all, it is a permanent stop: the Filing Extension's Amendment
+     * held everything it touched still for the rest of the wave.
+     */
+    stunLockoutMultiple: number
+  }
   serverNuke: ServerNukeDef
   signBribe: SignBribeDef
   towerUpgrades: TowerUpgradeDef
@@ -286,6 +298,9 @@ export interface HeroDef {
    *  the same gnome printed twice. */
   fighterSprites: string[]
   maxHealth: number
+  /** How long he is off the board after going down, before he walks back on
+   *  at full health. Long enough that losing him still costs a wave. */
+  reviveSeconds: number
   moveSpeed: number
   attackRange: number
   /** Enemies this close stop walking and fight. */
@@ -383,6 +398,20 @@ export interface AbilityDef {
   /** Summons only: how far from the lane this may be dropped. Absent means
    *  anywhere. Gnomes exist to block, so a gnome off the path does nothing. */
   pathOnlyWithin?: number
+  /**
+   * Meteor only. `radius` is the ring the player is shown; these three are
+   * what a barrage actually does inside it.
+   *
+   * `impactSpread` is how far one meteor may stray from the tap. It used to be
+   * the whole radius, which meant a targeted ability could put every impact
+   * 150px from where it was aimed and hit nothing.
+   */
+  impactSpread?: number
+  /** The damage radius of a single impact. */
+  impactRadius?: number
+  /** How long the shadow is on the ground before the meteor arrives. The
+   *  warning is the point: it is what lets a player read where it will land. */
+  telegraphSeconds?: number
 }
 
 export interface DraftDef {

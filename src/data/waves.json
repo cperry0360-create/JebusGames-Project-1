@@ -95,13 +95,13 @@
       "spawns": [
         {
           "enemy": "lateFiler",
-          "count": 16,
+          "count": 12,
           "interval": 0.95,
           "delay": 0
         },
         {
           "enemy": "shredder",
-          "count": 12,
+          "count": 10,
           "interval": 0.75,
           "delay": 4
         },
@@ -118,19 +118,19 @@
       "spawns": [
         {
           "enemy": "lateFiler",
-          "count": 19,
+          "count": 16,
           "interval": 0.9,
           "delay": 0
         },
         {
           "enemy": "shredder",
-          "count": 14,
+          "count": 12,
           "interval": 0.7,
           "delay": 4
         },
         {
           "enemy": "finalNotice",
-          "count": 5,
+          "count": 4,
           "interval": 2.6,
           "delay": 8
         }
@@ -141,19 +141,19 @@
       "spawns": [
         {
           "enemy": "finalNotice",
-          "count": 10,
+          "count": 8,
           "interval": 2.1,
           "delay": 0
         },
         {
           "enemy": "shredder",
-          "count": 18,
-          "interval": 0.65,
+          "count": 15,
+          "interval": 0.75,
           "delay": 3
         },
         {
           "enemy": "lateFiler",
-          "count": 15,
+          "count": 13,
           "interval": 0.9,
           "delay": 6
         }
@@ -164,19 +164,19 @@
       "spawns": [
         {
           "enemy": "shredder",
-          "count": 26,
-          "interval": 0.5,
+          "count": 21,
+          "interval": 0.62,
           "delay": 0
         },
         {
           "enemy": "finalNotice",
-          "count": 9,
+          "count": 7,
           "interval": 2,
           "delay": 4
         },
         {
           "enemy": "lateFiler",
-          "count": 19,
+          "count": 16,
           "interval": 0.8,
           "delay": 7
         }
@@ -187,20 +187,20 @@
       "spawns": [
         {
           "enemy": "finalNotice",
-          "count": 12,
+          "count": 10,
           "interval": 1.7,
           "delay": 0
         },
         {
           "enemy": "lateFiler",
-          "count": 20,
-          "interval": 0.75,
+          "count": 17,
+          "interval": 0.85,
           "delay": 3
         },
         {
           "enemy": "shredder",
-          "count": 20,
-          "interval": 0.55,
+          "count": 17,
+          "interval": 0.65,
           "delay": 6
         }
       ]
@@ -210,20 +210,20 @@
       "spawns": [
         {
           "enemy": "finalNotice",
-          "count": 16,
-          "interval": 1.5,
+          "count": 12,
+          "interval": 1.8,
           "delay": 0
         },
         {
           "enemy": "shredder",
-          "count": 26,
-          "interval": 0.45,
+          "count": 21,
+          "interval": 0.6,
           "delay": 3
         },
         {
           "enemy": "lateFiler",
-          "count": 24,
-          "interval": 0.7,
+          "count": 19,
+          "interval": 0.82,
           "delay": 6
         }
       ]

@@ -4,12 +4,17 @@ import { installOrientationGate } from './systems/Orientation.ts'
 import { installErrorPanel, report, setReloadHandler } from './systems/ErrorPanel.ts'
 import { logEvent, setBuildLabel } from './systems/Diagnostics.ts'
 import { installWatchdog } from './systems/Watchdog.ts'
+import { guardAudioPromises } from './systems/Audio.ts'
+import { installLifecycle } from './systems/Lifecycle.ts'
 import { VERSION_LABEL } from './systems/Build.ts'
 
 // First, before anything can throw. A game that dies on the way up has to say
 // so; the alternative is the black screen this replaces.
 installErrorPanel()
 ;(globalThis as unknown as { __errorPanelReady?: boolean }).__errorPanelReady = true
+// Before the game exists, so the engine's own audio calls are already covered
+// by the time it makes any. Sound must never be able to take the game down.
+guardAudioPromises()
 setBuildLabel(VERSION_LABEL)
 logEvent('boot', VERSION_LABEL)
 
@@ -34,6 +39,12 @@ async function start(): Promise<void> {
   document.getElementById('boot')?.remove()
   const game = new Phaser.Game(gameConfig)
   setReloadHandler(() => globalThis.location.reload())
+
+  // Leaving the tab and coming back is a state the game enters deliberately:
+  // the run stops, the audio device is released, and both are picked back up
+  // in a known order. Without this, iOS suspending the AudioContext on the way
+  // out crashed the game on the way in.
+  installLifecycle(game)
 
   // A freeze carries no exception, so nothing else in the diagnostics would
   // notice it. This is the only thing that does.

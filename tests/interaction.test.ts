@@ -278,3 +278,57 @@ test('a 3/4 gnome faces its target rather than rotating toward it', () => {
   assert.match(f, /makeShadow\(/, 'the gnome casts no shadow')
   assert.match(f, /ySort\(this\)/, 'the gnome is not depth-sorted')
 })
+
+test('a downed hero comes back, and says where and when', () => {
+  // The tester asked whether the hero revives. He did not, and there was
+  // nothing on screen to say so either way.
+  const hero = src('entities/Hero.ts')
+  assert.match(hero, /this\.reviveIn = this\.def\.reviveSeconds/,
+    'going down does not start a revive timer')
+  assert.match(hero, /private revive\(\)/, 'nothing brings him back')
+  // Back at the entrance, not where he fell: returning into the fight that
+  // killed him would put him straight back down.
+  assert.match(hero, /this\.setPosition\(this\.homeX, this\.homeY\)/,
+    'he returns somewhere other than where he came in')
+  assert.match(hero, /this\.health = this\.def\.maxHealth/, 'he returns hurt')
+  // Last Stand is once per encounter, revive or no revive.
+  const body = hero.slice(hero.indexOf('private revive(): void {'), hero.indexOf('get returnPoint'))
+  assert.ok(body.length > 0, 'revive() not found')
+  assert.ok(!/lastStandUsed/.test(body),
+    'the revive re-arms Last Stand, which makes it a cooldown rather than a climax')
+
+  const game = src('scenes/GameScene.ts')
+  assert.match(game, /reviveLabel/, 'nothing marks the spot he returns to')
+  assert.match(game, /BACK IN \$\{secs\}s/, 'the ground marker carries no countdown')
+  const hud = src('scenes/HudScene.ts')
+  assert.match(hud, /BACK IN \$\{Math\.max\(0, Math\.ceil\(s\.heroReviveIn\)\)\}s/,
+    'the hero bar does not count him down')
+})
+
+test('the revive timer is data, not a number typed into a scene', () => {
+  const heroes = JSON.parse(readFileSync(url('../src/data/heroes.json'), 'utf8'))
+  for (const [id, h] of Object.entries(heroes) as [string, any][]) {
+    assert.equal(typeof h.reviveSeconds, 'number', `${id} has no revive timer`)
+    // Long enough that losing him still costs most of a wave.
+    assert.ok(h.reviveSeconds >= 15, `${id} is back in ${h.reviveSeconds}s, which costs nothing`)
+  }
+})
+
+test('Meteor lands where it is aimed, and says so first', () => {
+  const runner = src('systems/AbilityRunner.ts')
+  // The spread used to be the ability's whole radius.
+  assert.ok(!/const r = Math\.random\(\) \* def\.radius/.test(runner),
+    'a meteor can still stray the full radius from the tap')
+  assert.match(runner, /def\.impactSpread/, 'the spread is not its own number')
+  assert.match(runner, /i === 0 \? 0 :/, 'no impact is guaranteed to land on the tap')
+  assert.match(runner, /function telegraph/, 'impacts arrive with no warning')
+
+  const abilities = JSON.parse(readFileSync(url('../src/data/abilities.json'), 'utf8'))
+  const m = abilities.meteor
+  assert.ok(m.impactSpread < m.radius, 'the spread is not tighter than the ring')
+  // The ring the player is shown has to be what the barrage can actually
+  // reach, or the preview is a lie in one direction or the other.
+  assert.equal(m.radius, m.impactSpread + m.impactRadius,
+    `the ring says ${m.radius} but the barrage reaches ${m.impactSpread + m.impactRadius}`)
+  assert.ok(m.telegraphSeconds >= 0.25, 'the warning is too short to read')
+})

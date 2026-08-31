@@ -20,20 +20,29 @@ const PRESENTATION = presentationData
  * not care about it. Both are drawn facing LEFT, which is the opposite of the
  * enemy art, so his facing rule is inverted rather than shared.
  *
- * Three design rules are load-bearing here and all come from DESIGN.md:
- *   - Last Stand fires once at 25% health, and cannot re-arm inside an encounter.
- *   - When he goes down he stays down for the rest of the encounter: `down`
- *     gates movement, attacking and further damage, with no respawn timer.
- *   - He returns at full health at the next encounter. That is why this class
- *     holds no cross-encounter state and the scene builds a fresh Hero in
- *     create(); healing is the absence of carry-over, not a heal step.
- * Together they make every hero death a climax rather than a respawn timer.
+ * Three rules are load-bearing here:
+ *   - Last Stand fires once at 25% health, and cannot re-arm inside an
+ *     encounter — not even across a revive. It is the climax of a life, and a
+ *     hero who could transform twice a wave would make it a rotation.
+ *   - Going down takes him off the board for `reviveSeconds`, then he walks
+ *     back on at full health from where he entered. `down` gates movement,
+ *     attacking and further damage for the whole of that.
+ *   - He returns at full health at the next encounter too. That is why this
+ *     class holds no cross-encounter state and the scene builds a fresh Hero
+ *     in create(); healing is the absence of carry-over, not a heal step.
+ *
+ * The revive replaces DESIGN.md's original stay-down-for-the-encounter rule,
+ * on tester feedback: losing Cory at wave four and playing eight more waves
+ * without him read as a broken game rather than as a climax. The timer is long
+ * enough that the loss still costs a wave.
  */
 export class Hero extends Phaser.GameObjects.Container {
   readonly def: HeroDef
   health: number
   down = false
   lastStandActive = false
+  /** Seconds until he walks back on, or 0 whenever he is up. */
+  reviveIn = 0
 
   private readonly body_: Phaser.GameObjects.Sprite
   private shadow: Phaser.GameObjects.Image
@@ -50,6 +59,9 @@ export class Hero extends Phaser.GameObjects.Container {
   private transforming = false
   /** Enemies currently under the vehicle, so one pass is one hit each. */
   private readonly rammed = new Set<Enemy>()
+  /** Where he came onto the map, and where he comes back on. */
+  private readonly homeX: number
+  private readonly homeY: number
 
   constructor(scene: Phaser.Scene, x: number, y: number, def: HeroDef) {
     super(scene, x, y)
@@ -57,6 +69,8 @@ export class Hero extends Phaser.GameObjects.Container {
     this.health = def.maxHealth
     this.rallyX = x
     this.rallyY = y
+    this.homeX = x
+    this.homeY = y
 
     this.shadow = makeShadow(scene, def.bodySprite)
     this.body_ = scene.add.sprite(0, 0, def.bodySprite)
@@ -136,7 +150,12 @@ export class Hero extends Phaser.GameObjects.Container {
   }
 
   tick(dt: number, enemies: Enemy[], onHit: (enemy: Enemy, damage: number) => void): void {
-    if (this.down || this.transforming) return
+    if (this.down) {
+      this.reviveIn -= dt
+      if (this.reviveIn <= 0) this.revive()
+      return
+    }
+    if (this.transforming) return
 
     const target = pickNearest(enemies, this.x, this.y, this.attackRange)
 
@@ -281,6 +300,7 @@ export class Hero extends Phaser.GameObjects.Container {
    */
   private goDown(): void {
     this.down = true
+    this.reviveIn = this.def.reviveSeconds
     this.lastStandActive = false
     this.bar.setVisible(false)
     this.shadow.setVisible(false)
@@ -291,6 +311,58 @@ export class Hero extends Phaser.GameObjects.Container {
       // him can be hit-tested, once the puff has cleared.
       onComplete: () => this.setVisible(false),
     })
+  }
+
+  /**
+   * He walks back on where he came in, at full health, on foot.
+   *
+   * Deliberately not where he fell: returning into the middle of the fight
+   * that just killed him would put him straight back down, and the walk from
+   * the entrance is the part of the cost the timer alone does not carry.
+   *
+   * Last Stand does not re-arm — `lastStandUsed` is not cleared — so the
+   * transformation stays a once-per-encounter beat rather than a cooldown.
+   */
+  private revive(): void {
+    this.reviveIn = 0
+    this.down = false
+    this.health = this.def.maxHealth
+    this.lastStandActive = false
+    this.transforming = false
+    this.rammed.clear()
+
+    // Back on foot. If he went down in the SUV the vehicle art is still on the
+    // sprite, and the vehicle without its Last Stand stats would be a lie.
+    if (this.body_.texture.key !== this.def.bodySprite) {
+      this.body_.setTexture(this.def.bodySprite)
+      this.artOffset = applyGroundRender(this.body_, this.def.bodySprite)
+      this.shadow.destroy()
+      this.shadow = makeShadow(this.scene, this.def.bodySprite)
+      this.addAt(this.shadow, 0)
+    }
+    this.body_.setFlipX(this.facingRight)
+    this.body_.x = this.facingRight ? -this.artOffset : this.artOffset
+
+    this.setPosition(this.homeX, this.homeY)
+    this.rallyX = this.homeX
+    this.rallyY = this.homeY
+    this.setVisible(true)
+    this.setAlpha(1)
+    this.shadow.setVisible(true)
+    this.bar.setVisible(true)
+    this.drawBar()
+    ySort(this)
+
+    this.setScale(0.4)
+    this.scene.tweens.add({
+      targets: this, scale: 1, duration: 260, ease: 'Back.easeOut',
+    })
+    this.emit('revived')
+  }
+
+  /** Where he will come back on, so the scene can mark the spot. */
+  get returnPoint(): { x: number; y: number } {
+    return { x: this.homeX, y: this.homeY }
   }
 
   private drawBar(): void {

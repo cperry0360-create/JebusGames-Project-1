@@ -1,12 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { damageAfterArmor } from '../src/systems/Combat.ts'
+import { canStun, damageAfterArmor, stunLockoutFor } from '../src/systems/Combat.ts'
 import { statAt } from '../src/systems/Upgrades.ts'
 
 const url = (p: string) => new URL(p, import.meta.url)
 const read = (n: string) => JSON.parse(readFileSync(url(`../src/data/${n}.json`), 'utf8'))
 const towers = read('towers'), enemies = read('enemies'), heroes = read('heroes')
+const abilities = read('abilities'), RULES = read('rules')
 const brute = enemies.finalNotice
 const list = Object.entries(towers) as [string, any][]
 
@@ -107,4 +108,64 @@ test('at least one ability answers armour', () => {
     .filter(([, a]) => a.damage > 0 && a.ignoresArmor)
   assert.ok(answers.length > 0,
     'every damaging ability is reduced by armour, so spending everything still has no answer')
+})
+
+// ------------------------------------------------------------------- stuns
+
+test('a stun cannot be refreshed before it expires', () => {
+  // The reported bug: the Filing Extension's tier-3 stop applied faster than
+  // its own duration, so anything it touched never took another step. It was
+  // a permanent stun wearing the word "slow".
+  const lockout = stunLockoutFor(0.6, RULES.combat.stunLockoutMultiple)
+  assert.ok(lockout > 0.6, 'the lockout does not outlast the stun itself')
+  assert.equal(canStun(0.3, lockout), false, 'stunned again while already stunned')
+  assert.equal(canStun(0, 0.4), false, 'stunned again during its own lockout')
+  assert.equal(canStun(0, 0), true, 'a target that is free cannot be stunned at all')
+})
+
+test('no stun in the data can be sustained by the tower that applies it', () => {
+  // The real test is the ratio: a stun whose lockout is shorter than the
+  // firing tower's interval is a permanent stop however it is worded.
+  const multiple = RULES.combat.stunLockoutMultiple
+  const stuns: Array<[string, number]> = []
+  for (const [id, t] of Object.entries(towers) as [string, any][]) {
+    for (const spec of t.specializations ?? []) {
+      if (spec.stunSeconds) stuns.push([`${id}/${spec.id}`, spec.stunSeconds])
+    }
+  }
+  assert.ok(stuns.length > 0, 'no stun in the data to check')
+  for (const [where, seconds] of stuns) {
+    const lockout = stunLockoutFor(seconds, multiple)
+    const uptime = seconds / lockout
+    assert.ok(uptime <= 0.5,
+      `${where} stops its target ${Math.round(uptime * 100)}% of the time; that is a stop, not a stun`)
+  }
+})
+
+test('every slow in the game is a slow, not a disguised stop', () => {
+  // "Stopped" used to be expressed as a 2% speed multiplier through the slow
+  // system, which is what let it refresh. Nothing may do that again: a slow
+  // has to leave the target actually moving.
+  const factors: Array<[string, number]> = []
+  for (const [id, t] of Object.entries(towers) as [string, any][]) {
+    if (t.slowFactor) factors.push([`tower ${id}`, t.slowFactor])
+  }
+  for (const [id, a] of Object.entries(abilities) as [string, any][]) {
+    if (a.slowFactor) factors.push([`ability ${id}`, a.slowFactor])
+  }
+  assert.ok(factors.length > 0, 'nothing slows anything')
+  for (const [where, factor] of factors) {
+    assert.ok(factor >= 0.15,
+      `${where} slows to ${Math.round(factor * 100)}% speed, which reads as a stop`)
+  }
+})
+
+test('a stun is not routed through the slow system', () => {
+  const scene = readFileSync(new URL('../src/scenes/GameScene.ts', import.meta.url), 'utf8')
+  assert.ok(!/STUN_FACTOR/.test(scene), 'the fake-stop constant is back')
+  assert.match(scene, /applyStun\(/, 'the stun no longer goes through its own path')
+  const enemy = readFileSync(new URL('../src/entities/Enemy.ts', import.meta.url), 'utf8')
+  // Stopped means stopped: it must gate the attack path too, not only movement.
+  assert.match(enemy, /if \(this\.stunRemaining > 0\) \{/,
+    'a stunned enemy can still act')
 })

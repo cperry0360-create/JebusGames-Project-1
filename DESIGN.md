@@ -141,7 +141,9 @@ Core tension: Holdings cost peanuts now for payoff later, in a game where you mi
 
 Heroes are field units with health. They fight, and they can go down.
 
-**Death rule: when a hero goes down, they stay down for the rest of the encounter.** They return at full health at the next node. No respawn timer.
+**Death rule: when a hero goes down, they are off the board for `reviveSeconds` (25s for Cory), then walk back on at full health from where they entered the map.** They also return at full health at the next node.
+
+*Revised on tester feedback, Phase 1.* The original rule was stay-down for the whole encounter with no respawn timer. Two testers lost Cory around wave four and then played eight more waves without him; it read as a broken game rather than as a climax, and there was no way to tell whether he was coming back. The revive is deliberately slow — a quarter of a minute is most of a wave — so losing him still costs something, and **Last Stand does not re-arm across it**, which is what keeps the transformation a once-per-encounter beat rather than a cooldown.
 
 This is deliberately punishing within a fight without ending the run. See Open Decisions for why not permadeath-for-the-run.
 
@@ -149,7 +151,7 @@ This is deliberately punishing within a fight without ending the run. See Open D
 
 **The signature mechanic: Last Stand.** Every hero transforms at **25% health**. Once per encounter, which follows automatically from the death and healing rules above. This is the family fingerprint on the game and it should be loud, funny, and genuinely powerful. Screen effect, sound cue, the works.
 
-Design consequence worth naming: Last Stand plus stay-down means every hero death is a climax. You drop to 25%, transform, and either turn the fight or go out swinging. That is a much better beat than a respawn timer, and it is the reason the stay-down rule works.
+Design consequence worth naming: Last Stand fires once per encounter, revive or no revive. You drop to 25%, transform, and either turn the fight or go out swinging — and if you go out, the next 25 seconds are played without him and the transformation does not come back. That is what keeps the death a climax now that the board is not simply short a hero for the rest of the level.
 
 ### Core five
 
@@ -454,7 +456,7 @@ economy is denominated in what the work actually pays.
 ## Decisions made
 
 - **Siege enemies:** yes, but only a small minority. Rolling Bomb targets the tower closest to the exit, destroys the placement, tower type stays in loadout.
-- **Hero death:** stays down for the rest of the encounter, returns at full next node.
+- **Hero death:** off the board for `reviveSeconds`, then back at full health at the map entrance; returns at full next node.
 - **Last Stand:** triggers at 25% health, once per encounter.
 - **Orientation:** 3/4 perspective. See the note below on how to build it.
 
@@ -475,3 +477,78 @@ If Kenney's isometric TD pack is the art you want, its sprites still work fine o
 - **Lanes scale by act.** Act 1 is a single path. Act 2 introduces a split or second entrance. Act 3 runs multiple paths. This is a difficulty curve the player learns rather than a fixed map property, and it makes Beacon placement and tower coverage progressively harder.
 - **Hero uses a rally point, not free movement.** Tap a spot, the hero walks there and engages whatever arrives. Simpler to build than direct control, better on touch, and it gives the player something to actively manage.
 - **Build time scales with upgrade tier**, not with game progress. Tier 1 instant, tier 2 and 3 take time. Consistent from the first minute so it teaches itself, and it creates upgrade-timing tension in every fight rather than arriving later as an apparent nerf.
+
+---
+
+## Open question — custom loadout vs the draft
+
+**Asked by a tester, Phase 1. Not built, and not decided.** He wants to choose
+his towers, abilities and hero rather than be dealt them. This is written down
+so the decision is made deliberately, because it goes at the middle of the
+game rather than at the edge of it.
+
+### Why it conflicts
+
+The draft is not a UI on top of the game; it is the reason a run differs from
+the last one. Three things lean on it:
+
+- **The Banner tree buys variance.** Its slots, its guarantees and its swap
+  nodes are all worth something *because* the hand is not yours to choose. A
+  player who picks their own four towers has nothing left to unlock but
+  numbers.
+- **Runs stop being different.** There is one best opening in a six-tower
+  pool. Free choice converges on it within a session, and then every run opens
+  identically — which is the failure mode the earlier draw-5-upfront model had
+  and the progressive unlock replaced.
+- **Forge nodes lose their point.** A mid-run swap is a real decision only
+  when the hand was dealt.
+
+None of that means the tester is wrong. What he is actually reporting is that
+*being dealt a hand you cannot play* is unfun — which is a fixable problem
+that does not require handing over the whole draft.
+
+### Four ways to give him what he wants, cheapest first
+
+1. **A mulligan.** One free re-deal of the whole hand on the loadout screen,
+   before the map. Costs almost nothing to build, removes the "this hand is
+   dead on arrival" feeling, and keeps every property above. *This is the one
+   to try first.*
+2. **A pity pick and a ban.** Before the deal, nominate one tower you want in
+   the draw and one you never want to see. The hand is still dealt; the tails
+   of the distribution are cut off. Preserves variance, kills the worst runs.
+3. **Custom loadout as a Banner unlock.** The right to choose is bought, one
+   slot at a time: pick your hero, then one opening tower, then an ability.
+   Turns the request into progression rather than into an escape from it, and
+   is the best long-term fit — but it only makes sense once the Banner tree
+   exists, which is Phase 2.
+4. **A separate mode.** SANDBOX beside RUN on the title: pick everything, play
+   the same map, **earn no Banner Points**. Honest, easy to explain, and it
+   costs the roguelite nothing because it is not the roguelite. The risk is
+   that it becomes the mode everyone plays and the drafted run withers.
+
+### What any of them would involve
+
+The plumbing is already there, which is the good news. `RunState` carries
+`heroId`, `abilities`, `openingTowers`, `reserveTowers` and `seed`, and
+everything downstream — GameScene, the HUD, the build menu, the harness —
+reads run state and never the draft. `LoadoutScene` calls `draftAbilities`
+and `draftOpeningTowers` and then `setRunState`. **A custom loadout is a
+different way to fill the same object.**
+
+So the work is not wiring, it is these four decisions:
+
+- **A picker screen.** The bulk of it: every tower and every ability laid out,
+  tap to select, honouring `towersAtStart` and `abilitiesDrawn`. Roughly a
+  day, and it wants the same card layout the loadout screen already has.
+- **The archetype guarantee.** `draftOpeningTowers` guarantees an opening hand
+  covers one damage option and one control or AOE option, so no run opens
+  unwinnable. A free picker can violate that. Enforce it, or let the player
+  build a hand that cannot win and say so on the screen?
+- **Banner Points.** Does a hand you chose pay the same as a hand you were
+  dealt? If yes, the draft is optional. If no, custom is a practice mode. This
+  is the actual decision; everything else follows from it.
+- **Saved loadouts.** If picking is allowed, the last one has to persist, or
+  it is a chore every run. One more field in save data.
+
+Recommendation: ship the mulligan now, revisit 3 when the Banner tree lands,
+and do not build 4 unless the tester still wants it after the mulligan.

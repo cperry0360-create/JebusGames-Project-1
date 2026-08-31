@@ -10,7 +10,7 @@ import { plateButton, type PlateButton } from '../ui/Plate.ts'
 import { AudioToggle } from '../ui/AudioToggle.ts'
 import { iconPlate } from '../ui/Plate.ts'
 import { Dialog } from '../ui/Dialog.ts'
-import { play } from '../systems/Audio.ts'
+import { play, resumeAudio } from '../systems/Audio.ts'
 import { hudLayout, NO_INSETS, type HudLayout, type Rect } from '../systems/HudLayout.ts'
 import { safeAreaInsets } from '../systems/SafeArea.ts'
 
@@ -276,6 +276,10 @@ export class HudScene extends Phaser.Scene {
 
   private resumeGame(): void {
     this.paused = false
+    // A tap is a user gesture, which is the only thing that can start an audio
+    // device the browser suspended while the tab was away. Resuming here means
+    // a player who backgrounds the game and hits RESUME gets its sound back.
+    void resumeAudio(this)
     this.scene.resume('Game')
   }
 
@@ -632,7 +636,9 @@ export class HudScene extends Phaser.Scene {
     const y = region.y
 
     let state = ''
-    if (s.heroDown) state = ' · DOWN'
+    // The countdown belongs on the bar as well as on the ground: the player
+    // is watching the lane, not the patch of grass he comes back to.
+    if (s.heroDown) state = ` · BACK IN ${Math.max(0, Math.ceil(s.heroReviveIn))}s`
     else if (s.lastStand) state = ' · DAD MODE'
     this.heroLabel.setText(`${s.heroName}${state}`)
     this.heroLabel.setColor(s.lastStand ? COLOR.fire : COLOR.ink)

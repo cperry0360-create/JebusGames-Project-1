@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import type { AudioDef } from '../types.ts'
 import audioData from '../data/audio.json'
+import { logEvent } from './Diagnostics.ts'
 import { loadSave, writeSave } from './Save.ts'
 import { stamped } from './Build.ts'
 
@@ -39,6 +40,89 @@ let muted = false
 /** Cue -> timestamps of the copies currently counted as sounding. */
 const voices = new Map<Cue, number[]>()
 
+/**
+ * True once the browser has refused to give us an audio device and we have
+ * stopped asking. The game keeps running; it just runs silently.
+ *
+ * This is the iOS case the tester hit: backgrounding the tab suspends the
+ * AudioContext, and on return `resume()` can reject with "Failed to start the
+ * audio device". A rejected promise nobody handles is an unhandled rejection,
+ * which the crash reporter — correctly — reports as a crash.
+ */
+let unavailable = false
+let noticeHandler: ((reason: string) => void) | null = null
+
+export function audioUnavailable(): boolean {
+  return unavailable
+}
+
+/** Where to say so. Set by the boot path; the game does not depend on it. */
+export function onAudioUnavailable(fn: ((reason: string) => void) | null): void {
+  noticeHandler = fn
+}
+
+export function disableAudio(reason: string): void {
+  if (unavailable) return
+  unavailable = true
+  logEvent('audio', `disabled: ${reason}`)
+  try {
+    noticeHandler?.(reason)
+  } catch {
+    // A notice that cannot be shown is not worth a crash either.
+  }
+}
+
+/**
+ * Makes every AudioContext promise safe, whoever calls it.
+ *
+ * Wrapping our own calls is not enough. Phaser's sound manager calls
+ * `context.resume().then(...)` in its unlock path and again when the page
+ * regains focus, with no rejection handler on either — so on iOS the game can
+ * be taken down by a line of code inside the engine that we do not call and
+ * cannot reach. Patching the prototype once, before the game is constructed,
+ * covers our calls and the engine's with the same guarantee.
+ *
+ * The returned promise still resolves, so a caller's `.then` still runs and
+ * nothing hangs waiting on it. What it can no longer do is reject.
+ */
+export function guardAudioPromises(): void {
+  const Ctx = (globalThis as { AudioContext?: typeof AudioContext }).AudioContext
+    ?? (globalThis as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+  if (!Ctx?.prototype) return
+  const proto = Ctx.prototype as unknown as Record<string, unknown> & { __guarded?: boolean }
+  if (proto.__guarded) return
+  proto.__guarded = true
+
+  for (const name of ['resume', 'suspend', 'close'] as const) {
+    const original = proto[name] as ((this: AudioContext) => Promise<void>) | undefined
+    if (typeof original !== 'function') continue
+    proto[name] = function guarded(this: AudioContext): Promise<void> {
+      try {
+        const result = original.call(this)
+        // Older WebKit returns undefined rather than a promise.
+        if (!result || typeof result.catch !== 'function') return Promise.resolve()
+        return result.catch((err: unknown) => {
+          if (name === 'resume') disableAudio(messageOf(err))
+        })
+      } catch (err) {
+        if (name === 'resume') disableAudio(messageOf(err))
+        return Promise.resolve()
+      }
+    }
+  }
+}
+
+function messageOf(err: unknown): string {
+  if (err instanceof Error) return err.message
+  return typeof err === 'string' ? err : 'the browser refused the audio device'
+}
+
+/** The live context, if there is one. Phaser only has one under Web Audio. */
+function contextOf(scene: Phaser.Scene | Phaser.Game): AudioContext | undefined {
+  const sound = (scene as Phaser.Scene).sound ?? (scene as Phaser.Game).sound
+  return (sound as { context?: AudioContext } | undefined)?.context
+}
+
 export function initAudio(): void {
   const save = loadSave()
   volume = save.volume
@@ -52,15 +136,53 @@ export function initAudio(): void {
  */
 export function unlockAudio(scene: Phaser.Scene): void {
   const resume = (): void => {
-    try {
-      const ctx = (scene.sound as { context?: AudioContext }).context
-      if (ctx && ctx.state === 'suspended') void ctx.resume()
-    } catch {
-      // Not a Web Audio manager, or the browser said no. Either is survivable.
-    }
+    void resumeAudio(scene)
   }
   scene.input.once('pointerdown', resume)
   scene.input.keyboard?.once('keydown', resume)
+}
+
+/**
+ * Starts or restarts the audio device. Never throws and never rejects.
+ *
+ * Resolves true when sound is usable afterwards. A false means the browser
+ * would not give us a device; the caller carries on without one.
+ */
+export async function resumeAudio(scene: Phaser.Scene | Phaser.Game): Promise<boolean> {
+  if (unavailable) return false
+  try {
+    const ctx = contextOf(scene)
+    if (!ctx) return true
+    if (ctx.state === 'suspended') await ctx.resume()
+    // A context still suspended after a resume is one the browser is holding
+    // shut — usually because there has been no gesture yet. Not a failure.
+    return !unavailable && ctx.state === 'running'
+  } catch (err) {
+    disableAudio(messageOf(err))
+    return false
+  }
+}
+
+/**
+ * Stops the audio device on the way out. Never throws.
+ *
+ * Suspending deliberately is what keeps the resume predictable: a context the
+ * browser suspended behind our back on iOS comes back in a state Phaser does
+ * not expect, and that is where the unhandled rejection came from.
+ */
+export function suspendAudio(scene: Phaser.Scene | Phaser.Game): void {
+  try {
+    const sound = (scene as Phaser.Scene).sound ?? (scene as Phaser.Game).sound
+    sound?.pauseAll()
+  } catch {
+    // Nothing playing, or no sound system yet.
+  }
+  try {
+    const ctx = contextOf(scene)
+    if (ctx && ctx.state === 'running') void ctx.suspend()
+  } catch {
+    // Suspending is a courtesy; failing to is not a problem.
+  }
 }
 
 export function queueAudio(scene: Phaser.Scene): void {
@@ -111,7 +233,7 @@ function claimVoice(cue: Cue, cap: number): boolean {
  * in audio.json.
  */
 export function play(scene: Phaser.Scene, cue: Cue, scale = 1): void {
-  if (muted || volume <= 0) return
+  if (muted || volume <= 0 || unavailable) return
   const def = AUDIO.cues[cue]
   if (!def) return
   if (!claimVoice(cue, def.maxVoices)) return

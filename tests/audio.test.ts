@@ -101,3 +101,56 @@ test('the CC0 audio is credited', () => {
   assert.match(roll, /Kenney/, 'the credits roll should name Kenney for the audio too')
   assert.match(roll, /audio/i, 'the roll should say what Kenney supplied, audio included')
 })
+
+// ------------------------------------------------------ leaving and returning
+
+test('no audio call can escape as an unhandled rejection', () => {
+  // The tester's crash: iOS suspends the AudioContext when the tab goes to the
+  // background, and on return `resume()` rejects with "Failed to start the
+  // audio device". Nobody caught it, so the diagnostics — correctly —
+  // reported the game as crashed. Sound failing must never do that.
+  const audio = src('systems/Audio.ts')
+  assert.match(audio, /guardAudioPromises/, 'nothing guards the context promises')
+  // Wrapping only our own calls is not enough: Phaser calls context.resume()
+  // in its unlock and focus paths with no handler on either.
+  assert.match(audio, /proto\[name\] = function guarded/,
+    'the guard does not cover calls the engine makes')
+  assert.match(audio, /disableAudio\(/, 'a refused device does not disable audio')
+  // And `void ctx.resume()` is exactly the shape that started this: void does
+  // not catch a rejection.
+  assert.ok(!/void ctx\.resume\(\)/.test(audio), 'an unguarded resume is back')
+})
+
+test('play is silent rather than loud when the device is gone', () => {
+  const audio = src('systems/Audio.ts')
+  assert.match(audio, /if \(muted \|\| volume <= 0 \|\| unavailable\) return/,
+    'play still tries to sound a cue after the device was refused')
+})
+
+test('backgrounding is a state the game enters, not something that happens to it', () => {
+  const life = src('systems/Lifecycle.ts')
+  for (const evt of ['visibilitychange', 'pagehide', 'pageshow']) {
+    assert.ok(life.includes(evt), `nothing listens for ${evt}`)
+  }
+  // iOS can take the WebGL context too; without preventDefault it never comes
+  // back and every draw afterwards throws on a null context.
+  assert.match(life, /webglcontextlost/, 'a lost graphics context is unhandled')
+  assert.match(life, /e\.preventDefault\(\)/, 'the context loss is not made recoverable')
+  assert.match(life, /webglcontextrestored/, 'nothing resumes after a restore')
+  // A run the player paused must not be resumed by coming back to the tab.
+  assert.match(life, /getScenes\(true\)/,
+    'the lifecycle would resume scenes it did not pause')
+  assert.match(life, /pauseOnBlur = false/,
+    "the engine's own focus handling is still racing this one")
+})
+
+test('a paused run is not reported as a frozen one', () => {
+  // The watchdog fires after three seconds without a heartbeat. Behind the
+  // pause dialog, the portrait overlay and a backgrounded tab the loop stops
+  // beating on purpose, and crying freeze at each would bury the real report.
+  const game = src('scenes/GameScene.ts')
+  assert.match(game, /Events\.PAUSE, \(\) => setRunActive\(false\)/,
+    'pausing the scene leaves the watchdog armed')
+  assert.match(game, /Events\.RESUME, \(\) => setRunActive\(true\)/,
+    'resuming the scene leaves the watchdog disarmed')
+})

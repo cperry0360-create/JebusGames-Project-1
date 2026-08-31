@@ -84,17 +84,71 @@ function glacier(def: AbilityDef, x: number, y: number, ctx: AbilityContext): vo
   for (const e of withinRadius(ctx.enemies(), x, y, def.radius)) ctx.damage(e, def.damage, def.ignoresArmor)
 }
 
+/** Ground markings are ellipses, not circles: the map is painted in 3/4. */
+const GROUND_SQUASH = 0.62
+
+/**
+ * A shadow on the ground where a meteor is about to land.
+ *
+ * Without it a barrage is six explosions arriving out of nowhere and the
+ * player cannot tell whether the ability did what they asked. The shadow is
+ * the whole reason the spread is readable: it says *here*, then it happens.
+ */
+function telegraph(ctx: AbilityContext, x: number, y: number, radius: number, ms: number): void {
+  const g = ctx.scene.add.graphics().setDepth(y - 1)
+  ctx.scene.tweens.addCounter({
+    from: 0,
+    to: 1,
+    duration: ms,
+    onUpdate: (tw) => {
+      const t = tw.getValue() ?? 0
+      g.clear()
+      // Darkens and draws in as it arrives, so the last frame before impact is
+      // the clearest one.
+      const r = radius * (1.35 - t * 0.35)
+      g.fillStyle(0x140d08, 0.1 + t * 0.32)
+      g.fillEllipse(x, y, r * 2, r * 2 * GROUND_SQUASH)
+      g.lineStyle(2, 0xffc07a, 0.25 + t * 0.6)
+      g.strokeEllipse(x, y, r * 2, r * 2 * GROUND_SQUASH)
+    },
+    onComplete: () => g.destroy(),
+  })
+}
+
+/**
+ * Meteor Barrage. Six impacts around the tap, each announced before it lands.
+ *
+ * The spread used to be the ability's whole radius, so a targeted barrage
+ * could put every impact 150px from where the player aimed and kill nothing.
+ * It is its own, much smaller number now, the first impact lands exactly on
+ * the tap, and the ring the player is shown is the spread plus one impact
+ * radius — so what the ring promises is what the barrage can reach.
+ */
 function meteor(def: AbilityDef, x: number, y: number, ctx: AbilityContext): void {
   const gap = (def.duration * 1000) / Math.max(1, def.ticks)
+  const spread = def.impactSpread ?? def.radius * 0.4
+  const blast = def.impactRadius ?? 62
+  const lead = (def.telegraphSeconds ?? 0.5) * 1000
+
   for (let i = 0; i < def.ticks; i++) {
+    // The first one lands on the tap. An ability the player aimed should hit
+    // what they aimed at at least once.
+    const a = Math.random() * Math.PI * 2
+    // Linear in the radius rather than in the area, which clusters the rest
+    // toward the middle instead of scattering them evenly to the edge.
+    const r = i === 0 ? 0 : Math.random() * spread
+    const mx = x + Math.cos(a) * r
+    const my = y + Math.sin(a) * r
+
     ctx.scene.time.delayedCall(i * gap, () => {
-      const a = Math.random() * Math.PI * 2
-      const r = Math.random() * def.radius
-      const mx = x + Math.cos(a) * r
-      const my = y + Math.sin(a) * r
-      boom(ctx, mx, my, 62, 0xffc07a)
-      ctx.scene.cameras.main.shake(120, 0.004)
-      for (const e of withinRadius(ctx.enemies(), mx, my, 62)) ctx.damage(e, def.damage, def.ignoresArmor)
+      telegraph(ctx, mx, my, blast, lead)
+      ctx.scene.time.delayedCall(lead, () => {
+        boom(ctx, mx, my, blast, 0xffc07a)
+        ctx.scene.cameras.main.shake(120, 0.004)
+        for (const e of withinRadius(ctx.enemies(), mx, my, blast)) {
+          ctx.damage(e, def.damage, def.ignoresArmor)
+        }
+      })
     })
   }
 }

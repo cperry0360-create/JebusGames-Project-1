@@ -6,6 +6,7 @@
     "bodySprite": "hero-cory",
     "portraitSprite": "hero-cory",
     "maxHealth": 360,
+    "reviveSeconds": 25,
     "moveSpeed": 104,
     "attackRange": 86,
     "blockRange": 52,
@@ -50,6 +51,9 @@
       "transformPauseMs": 500
     },
     "ultimateSprite": "hero-cory-ultimate",
-    "fighterSprites": ["unit-gnome-trowel", "unit-gnome-rake"]
+    "fighterSprites": [
+      "unit-gnome-trowel",
+      "unit-gnome-rake"
+    ]
   }
 }

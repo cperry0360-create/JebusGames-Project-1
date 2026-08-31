@@ -27,3 +27,22 @@ export function boostedDamage(base: number, totalSupportBonus: number): number {
 export function slowedSpeed(speed: number, factor: number, slowed: boolean): number {
   return slowed && factor > 0 ? speed * factor : speed
 }
+
+/**
+ * How long a target is immune to being stunned again, counted from the moment
+ * the stun lands. Includes the stun itself, so the free window afterwards is
+ * `seconds * (multiple - 1)`.
+ *
+ * A stun with no lockout is not a stun. The Filing Extension's Amendment stops
+ * a target for 0.6s and fires every 0.81s, so refreshing on every shot held
+ * everything it touched still for the whole wave — the player saw a permanent
+ * stop where the panel promised a slow.
+ */
+export function stunLockoutFor(seconds: number, multiple: number): number {
+  return seconds * Math.max(1, multiple)
+}
+
+/** True when a fresh stun may land. */
+export function canStun(stunRemaining: number, lockoutRemaining: number): boolean {
+  return stunRemaining <= 0 && lockoutRemaining <= 0
+}
