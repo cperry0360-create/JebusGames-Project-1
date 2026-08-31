@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, existsSync } from 'node:fs'
-import { specSummary } from '../src/systems/Upgrades.ts'
+import { specPoints, specSummary } from '../src/systems/Upgrades.ts'
 
 const url = (p: string) => new URL(p, import.meta.url)
 const read = (n: string) => JSON.parse(readFileSync(url(`../src/data/${n}.json`), 'utf8'))
@@ -469,6 +469,49 @@ test('a specialization explains itself in mechanics, not in jokes', () => {
       assert.match(line, /%|armour|enemy|enemies|health|slows|stops|pierce/,
         `${id}/${spec.id} summarises as "${line}", which tells the player nothing`)
     }
+  }
+})
+
+test('the tier-3 fork is two cards, not two rows sharing a line', () => {
+  // The bug: both specializations were label/value rows, so a stat string long
+  // enough to reach back across its own label ran straight through the other
+  // option's name. Deferral's stats sat on top of Amendment's.
+  const scene = readFileSync(url('../src/scenes/GameScene.ts'), 'utf8')
+  const fork = scene.slice(scene.indexOf('openSpecChoice(tower: Tower)'),
+    scene.indexOf('specialize(tower: Tower, specId'))
+  assert.ok(fork.includes('choices:'), 'the fork is not built from choice cards')
+  assert.ok(!/rows:/.test(fork), 'the fork still renders its options as shared rows')
+  // Each card has to carry its own price and its own build time: a single
+  // shared cost row is what let the two options be told apart by nothing.
+  assert.ok(/cost:/.test(fork) && /takes:/.test(fork), 'the cards do not price themselves')
+})
+
+test('a specialization lists its effects one per line', () => {
+  // The card sets each point on its own line. One joined string is what had to
+  // be wrapped, and wrapping is what overlapped.
+  for (const [id, t] of Object.entries(towers) as [string, any][]) {
+    for (const spec of t.specializations ?? []) {
+      const points = specPoints(spec)
+      assert.ok(points.length >= 1, `${id}/${spec.id} lists nothing`)
+      for (const p of points) {
+        assert.ok(!p.includes('\u00b7'), `${id}/${spec.id} still joins points into one line`)
+        // A line this long wraps to three rows in a card column and starts
+        // pushing the button off the panel.
+        assert.ok(p.length <= 52, `${id}/${spec.id}: "${p}" is ${p.length} characters`)
+      }
+    }
+  }
+})
+
+test('the game counts enemies in English', () => {
+  const chained = Object.values(towers as Record<string, any>)
+    .flatMap((t) => t.specializations ?? [])
+    .filter((s: any) => s.chainTargets)
+  assert.ok(chained.length > 0, 'no chaining specialization to check')
+  for (const spec of chained) {
+    const line = specSummary(spec)
+    assert.ok(!line.includes('enemyies'), `"${line}"`)
+    assert.match(line, spec.chainTargets > 1 ? /more enemies/ : /more enemy/)
   }
 })
 

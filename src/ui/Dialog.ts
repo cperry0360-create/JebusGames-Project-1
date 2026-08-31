@@ -22,11 +22,38 @@ export interface DialogRow {
   accent?: boolean
 }
 
+/**
+ * One side of a fork.
+ *
+ * A choice between two permanent options is not a list of stats, and rendering
+ * it as one is what broke the tier-3 panel: the two specializations were two
+ * label/value rows, so a long stat string ran leftward across its own label
+ * and straight into the next option's name. Each option gets its own card
+ * instead — name, stats, price, button — so there is no shared line for two
+ * options to collide on.
+ */
+export interface DialogChoice {
+  name: string
+  /** The stat list, one point per line. Never one long string: a string is
+   *  what has to be wrapped, and wrapping is what overlapped. */
+  lines: string[]
+  cost: string
+  /** How long the tower spends building it. */
+  takes: string
+  /** The button. Defaults to the option's own name. */
+  label?: string
+  onPick: () => void
+  enabled?: boolean
+}
+
 export interface DialogOptions {
   title: string
   /** A line under the title, for flavour or a warning. */
   subtitle?: string
   rows?: DialogRow[]
+  /** Two (or more) mutually exclusive options, each in its own card with its
+   *  own button. Replaces confirm/extra: the choice *is* the action. */
+  choices?: DialogChoice[]
   /** One number set large above the rows, for a panel that has a headline
    *  rather than a list — the Banner Points a run paid out. */
   headline?: { label: string; value: string }
@@ -52,6 +79,12 @@ export interface DialogOptions {
 }
 
 const ROW_H = 26
+/** Inside a choice card, between its edge and its contents. */
+const CARD_PAD = 14
+/** Between two choice cards. Wide enough to read as separation rather than as
+ *  a gap in one list. */
+const CARD_GAP = 16
+const CHOICE_BTN_H = 44
 /** Space left around a panel that had to be scaled down to fit. */
 const MARGIN = 24
 /** Space above the title, inside the plate's own chrome. */
@@ -146,6 +179,69 @@ export class Dialog {
       ty += ROW_H
     }
 
+    // The fork, if there is one: one card per option, side by side, each with
+    // its own name, its own stats, its own price and its own button. Measured
+    // first and levelled afterwards — two cards of different heights read as
+    // one option being the bigger offer, which is a claim the panel should not
+    // be making on its own.
+    const picks: Array<{ x: number; y: number; w: number; c: DialogChoice }> = []
+    if (opts.choices?.length) {
+      const n = opts.choices.length
+      const inner = w - 96
+      const colW = (inner - CARD_GAP * (n - 1)) / n
+      const cards: Phaser.GameObjects.Rectangle[] = []
+      let tallest = 0
+
+      opts.choices.forEach((c, i) => {
+        const cx = -inner / 2 + i * (colW + CARD_GAP) + colW / 2
+        // Pushed first so the card draws behind its own contents: the
+        // container renders in the order it was given.
+        const card = scene.add.rectangle(cx, ty, colW, 10, COLOR.panelHi)
+          .setOrigin(0.5, 0)
+          .setStrokeStyle(2, COLOR.panelEdge)
+        body.push(card)
+        cards.push(card)
+
+        let by = ty + CARD_PAD
+        const name = scene.add.text(cx, by, c.name.toUpperCase(), {
+          fontFamily: FONT_UI, fontSize: '19px', fontStyle: 'bold',
+          color: COLOR.amber, letterSpacing: 1,
+          align: 'center', wordWrap: { width: colW - CARD_PAD * 2 },
+        }).setOrigin(0.5, 0)
+        body.push(name)
+        by += name.height + 8
+
+        // One line per point, left-aligned under a centred name, because a
+        // stat list is read down and a heading is read across.
+        const stats = scene.add.text(cx - colW / 2 + CARD_PAD, by,
+          c.lines.map((l) => `\u00b7 ${l}`).join('\n'), {
+            fontFamily: FONT_UI, fontSize: '15px', color: COLOR.ink,
+            wordWrap: { width: colW - CARD_PAD * 2 }, ...BODY_SPACING,
+          }).setOrigin(0, 0)
+        body.push(stats)
+        by += stats.height + 10
+
+        const price = scene.add.text(cx, by, `${c.cost}   ${c.takes}`, {
+          fontFamily: FONT_UI, fontSize: '15px', color: COLOR.dim,
+          align: 'center', wordWrap: { width: colW - CARD_PAD * 2 },
+        }).setOrigin(0.5, 0)
+        body.push(price)
+        by += price.height + CARD_PAD
+
+        tallest = Math.max(tallest, by - ty)
+        picks.push({ x: cx, y: 0, w: colW - CARD_PAD * 2, c })
+      })
+
+      const cardH = tallest + CHOICE_BTN_H + CARD_PAD
+      // Origin re-set after the resize: a shape recomputes its display origin
+      // from its size, so setting it before would leave the card half a card
+      // out of place.
+      cards.forEach((card) => card.setSize(colW, cardH).setOrigin(0.5, 0))
+      // Buttons on one line across both cards, inside the card they belong to.
+      for (const p of picks) p.y = ty + tallest + CHOICE_BTN_H / 2
+      ty += cardH + 14
+    }
+
     // One row of buttons, laid out from however many there are, so a panel with
     // a sell button does not have to know where cancel ended up. Labels carry
     // no numbers: the costs are already on their own rows above, and a label
@@ -167,6 +263,13 @@ export class Dialog {
       ...platePanel(scene, -w / 2, top, w, h),
       ...body,
     ]
+
+    for (const p of picks) {
+      const btn = plateButton(scene, p.x, top + TOP_PAD + p.y, p.w, CHOICE_BTN_H,
+        (p.c.label ?? p.c.name).toUpperCase(), () => { p.c.onPick(); this.close() }, 15)
+      if (p.c.enabled === false) btn.setEnabled(false)
+      parts.push(...btn.parts)
+    }
 
     // Placed under the body rather than up from the bottom edge, so the plate's
     // chrome grows below them instead of over them.

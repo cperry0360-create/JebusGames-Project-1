@@ -102,6 +102,17 @@ export function sellValue(
  * about it, and it cannot drift out of date when the numbers are retuned.
  */
 export function specSummary(spec: TowerSpec): string {
+  return specPoints(spec).join(' \u00b7 ')
+}
+
+/**
+ * The same thing as a list, one point per entry.
+ *
+ * The tier-3 panel sets these as separate lines. Joining them into one string
+ * and letting a text box wrap it is what put "Deferral"'s stats through
+ * "Amendment"'s name.
+ */
+export function specPoints(spec: TowerSpec): string[] {
   const parts: string[] = []
   const pct = (m: number): string => `${m > 1 ? '+' : ''}${Math.round((m - 1) * 100)}%`
 
@@ -109,7 +120,7 @@ export function specSummary(spec: TowerSpec): string {
   // the percentages underneath are the fine print.
   if (spec.ignoresArmor) parts.push('ignores armour entirely')
   if (spec.chainTargets) {
-    parts.push(`hits ${spec.chainTargets} more enemy${spec.chainTargets > 1 ? 'ies' : ''}`)
+    parts.push(`hits ${spec.chainTargets} more ${spec.chainTargets > 1 ? 'enemies' : 'enemy'}`)
   }
   if (spec.executeBelowPercent) {
     parts.push(`kills anything under ${Math.round(spec.executeBelowPercent * 100)}% health`)
@@ -143,5 +154,5 @@ export function specSummary(spec: TowerSpec): string {
     const m = spec[key]
     if (typeof m === 'number' && m !== 1) parts.push(`${pct(m)} ${label}`)
   }
-  return parts.length > 0 ? parts.join(' · ') : 'No change'
+  return parts.length > 0 ? parts : ['No change']
 }

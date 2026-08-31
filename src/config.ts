@@ -7,6 +7,7 @@ import { CreditsScene } from './scenes/CreditsScene.ts'
 import { LoadoutScene } from './scenes/LoadoutScene.ts'
 import { GameScene } from './scenes/GameScene.ts'
 import { HudScene } from './scenes/HudScene.ts'
+import { DiagnosticsScene } from './scenes/DiagnosticsScene.ts'
 
 export const gameConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -26,5 +27,8 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
     height: display.height,
   },
   input: { activePointers: 3 },
-  scene: [BootScene, SplashScene, TitleScene, CreditsScene, LoadoutScene, GameScene, HudScene],
+  scene: [
+    BootScene, SplashScene, TitleScene, CreditsScene, LoadoutScene,
+    GameScene, HudScene, DiagnosticsScene,
+  ],
 }

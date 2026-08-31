@@ -31,11 +31,24 @@ export interface SaveData {
    * counter that starts at zero the moment the tree ships.
    */
   bannerPoints: number
+  /**
+   * The last crash report, as text.
+   *
+   * Kept in the save so it survives the reload that a freeze or an error
+   * forces. Without this the evidence is gone by the time anyone can be told
+   * about it, which is exactly how the boss-fight freeze was reported with
+   * nothing attached.
+   */
+  lastReport: string
 }
 
 export const DEFAULT_SAVE: SaveData = {
-  volume: 0.7, muted: false, runsCleared: 0, bannerPoints: 0,
+  volume: 0.7, muted: false, runsCleared: 0, bannerPoints: 0, lastReport: '',
 }
+
+/** localStorage is small and shared; a report is truncated rather than
+ *  allowed to fill it and start throwing on every write. */
+export const MAX_REPORT_CHARS = 12000
 
 function count(v: unknown): number {
   return typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0
@@ -57,6 +70,9 @@ export function loadSave(): SaveData {
       muted: parsed.muted === true,
       runsCleared: count(parsed.runsCleared),
       bannerPoints: count(parsed.bannerPoints),
+      lastReport: typeof parsed.lastReport === 'string'
+        ? parsed.lastReport.slice(0, MAX_REPORT_CHARS)
+        : '',
     }
   } catch {
     // Unreadable, unparseable or unavailable: start fresh rather than fail.
@@ -96,4 +112,20 @@ export function addBannerPoints(earned: number): number {
 /** Every Banner Point banked so far. */
 export function bannerTotal(): number {
   return loadSave().bannerPoints
+}
+
+/** Keeps a crash report across a reload. Every other field is preserved. */
+export function rememberReport(text: string): void {
+  const save = loadSave()
+  writeSave({ ...save, lastReport: text.slice(0, MAX_REPORT_CHARS) })
+}
+
+/** The last crash report, or an empty string if nothing has gone wrong. */
+export function storedReport(): string {
+  return loadSave().lastReport
+}
+
+export function clearStoredReport(): void {
+  const save = loadSave()
+  writeSave({ ...save, lastReport: '' })
 }

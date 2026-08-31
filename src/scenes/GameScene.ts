@@ -37,12 +37,14 @@ import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { platePanel, plateButton, type PlateButton } from '../ui/Plate.ts'
 import { SignBribe } from '../ui/SignBribe.ts'
 import { CameraRig } from '../systems/CameraRig.ts'
-import { Dialog, type DialogOptions, type DialogRow } from '../ui/Dialog.ts'
-import { maxTier, nextStep, sellValue, specSummary, statAt } from '../systems/Upgrades.ts'
+import { Dialog, type DialogChoice, type DialogOptions, type DialogRow } from '../ui/Dialog.ts'
+import { maxTier, nextStep, sellValue, specPoints, statAt } from '../systems/Upgrades.ts'
 import { canAffordAny, openingPurse } from '../systems/Economy.ts'
 import { addBannerPoints, hasClearedARun, recordRunCleared } from '../systems/Save.ts'
 import { bannerPointsFor, verdictFor, type RunOutcome } from '../systems/Banner.ts'
 import { waveOutcome } from '../systems/Wave.ts'
+import { logEvent, provideState } from '../systems/Diagnostics.ts'
+import { heartbeat, setRunActive } from '../systems/Watchdog.ts'
 import { hudLayout, NO_INSETS, type HudLayout } from '../systems/HudLayout.ts'
 import { safeAreaInsets } from '../systems/SafeArea.ts'
 
@@ -175,10 +177,27 @@ export class GameScene extends Phaser.Scene {
   /** Enemies that reached the exit during the current wave. Reset at its
    *  start; non-zero means the wave was survived rather than cleared. */
   private escapedThisWave = 0
+  /** Last logged hero state and boss phase, so each is written on change
+   *  rather than every frame. */
+  private lastHeroState = ''
+  private lastBossPhase = -1
   /** The half-opacity tower shown on the pad while a build option is chosen.
    *  Never drawn without a pad to stand on. */
   private ghost?: Phaser.GameObjects.Image
+  /**
+   * True while the Server Nuke's wind-up is running. Every ability is refused
+   * during it, so nothing else can be fired into the flash.
+   *
+   * It is also the bug behind "I could not use any ability on the Politician":
+   * Phaser reuses the scene object across restarts, so a run that ended, was
+   * quit, or was restarted during the 2.2s wind-up destroyed the tween without
+   * ever firing its onComplete — and left this true for every later run in the
+   * same page session. Cleared in create() now, and backstopped by castUntil.
+   */
   private casting = false
+  /** When the current wind-up must be over by. A cast that outlives this has
+   *  lost its tween, and the flag is cleared rather than trusted. */
+  private castUntil = 0
 
   constructor() {
     super('Game')
@@ -247,6 +266,8 @@ export class GameScene extends Phaser.Scene {
     this.status.heroDown = false
     this.status.lastStand = false
     this.status.pendingAbility = null
+    this.casting = false
+    this.castUntil = 0
     this.status.abilities = [...run.abilities]
     // The rare drop does not survive a run, and is never drafted into one.
     this.status.rareAbility = null
@@ -304,6 +325,40 @@ this.armReadyCountdown()
     this.refreshMenuOptions()
     this.setupInput()
     this.createPads()
+
+    // What a crash report says about the run. Registered here and cleared on
+    // shutdown, so a report taken from a menu does not describe a dead scene.
+    provideState(() => ({
+      scene: 'Game',
+      phase: this.status.phase,
+      wave: `${this.status.wave + 1}/${this.status.waveCount}`,
+      waveName: this.status.waveName,
+      lives: this.status.lives,
+      peanuts: this.status.peanuts,
+      kills: this.status.kills,
+      enemies: this.enemies.length,
+      towers: this.towers.length,
+      boss: this.status.bossName || 'none',
+      bossHealth: Math.round(this.status.bossHealth),
+      hero: `${this.status.heroDown ? 'down' : 'up'} ${Math.round(this.status.heroHealth)}/${this.status.heroMax}`,
+      abilities: this.status.abilities.join(','),
+      rare: this.status.rareAbility ?? 'none',
+      casting: this.casting,
+      mode: this.status.mode,
+      pending: this.status.pendingAbility ?? 'none',
+      // Read defensively: the snapshot is taken on shutdown, and Phaser's own
+      // plugins tear down before this handler runs. A state provider that
+      // throws there loses the whole state, which is the one thing a report
+      // taken after the run has to carry.
+      zoom: Number((this.cameras?.main?.zoom ?? 0).toFixed(3)),
+      escapedThisWave: this.escapedThisWave,
+    }))
+    setRunActive(true)
+    logEvent('scene', 'Game started')
+    this.events.once('shutdown', () => {
+      setRunActive(false)
+      provideState(null)
+    })
   }
 
   // ---------------------------------------------------------------- setup
@@ -467,6 +522,20 @@ this.armReadyCountdown()
   private earn(amount: number): void {
     this.status.peanuts += amount
     this.status.peanutsEarned += amount
+    logEvent('peanuts', `+${amount} -> ${this.status.peanuts}`)
+  }
+
+  /**
+   * Hero state, logged when it changes rather than every frame.
+   *
+   * 500 events is three or four waves; a per-frame readout would be one
+   * second of play and would push out everything that led up to a crash.
+   */
+  private noteHeroState(): void {
+    const now = `${this.status.heroDown ? 'down' : 'up'}/${this.status.lastStand ? 'laststand' : 'normal'}`
+    if (now === this.lastHeroState) return
+    this.lastHeroState = now
+    logEvent('hero', now)
   }
 
   /** One dialog at a time, and it owns every tap while it is up. */
@@ -817,6 +886,7 @@ this.armReadyCountdown()
     this.menu.close()
     this.rangeRing.clear()
     this.drawSpots()
+    logEvent('tower-built', `${id} spot=${spot.index} cost=${def.cost}`)
     this.status.message = `${def.name} built.`
   }
 
@@ -931,27 +1001,25 @@ this.armReadyCountdown()
     if (!a || !b) return
     const afford = (c: number): boolean => this.status.peanuts >= c
 
+    // Each option is its own card: the two used to be label/value rows, and a
+    // stat line long enough to reach back across its own label ran straight
+    // through the other option's name.
+    const card = (spec: typeof a): DialogChoice => ({
+      name: spec.name,
+      lines: specPoints(spec),
+      cost: `${spec.cost} peanuts`,
+      takes: `${spec.buildSeconds}s to build`,
+      enabled: afford(spec.cost),
+      onPick: () => this.specialize(tower, spec.id),
+    })
+
     this.openDialog({
       title: `${def.name.toUpperCase()} — TIER 3`,
       subtitle: 'One or the other, for the life of this tower. There is no going back.',
-      rows: [
-        { label: a.name, value: specSummary(a) },
-        { label: b.name, value: specSummary(b) },
-        { label: 'Cost', value: `${a.cost} peanuts`, accent: true },
-        { label: 'Takes', value: `${a.buildSeconds}s at reduced rate` },
-      ],
-      confirm: {
-        label: a.name.toUpperCase(),
-        enabled: afford(a.cost),
-        onPick: () => this.specialize(tower, a.id),
-      },
-      extra: {
-        label: b.name.toUpperCase(),
-        enabled: afford(b.cost),
-        onPick: () => this.specialize(tower, b.id),
-      },
+      choices: [card(a), card(b)],
       cancelLabel: 'NOT YET',
       dim: 0.4,
+      width: 660,
     })
   }
 
@@ -968,6 +1036,7 @@ this.armReadyCountdown()
     this.status.peanuts -= spec.cost
     tower.beginUpgrade(specId)
     play(this, 'upgrade')
+    logEvent('tower-spec', `${tower.def.name} -> ${spec.id} cost=${spec.cost}`)
     this.status.message = `${tower.def.name} becoming ${spec.name}.`
   }
 
@@ -980,6 +1049,7 @@ this.armReadyCountdown()
       return
     }
     this.status.peanuts -= step.cost
+    logEvent('tower-upgraded', `${tower.def.name} tier ${tower.tier + 1} cost=${step.cost}`)
     tower.beginUpgrade()
     play(this, 'upgrade')
     this.status.message =
@@ -1002,6 +1072,7 @@ this.armReadyCountdown()
     this.rangeRing.clear()
     this.drawSpots()
     play(this, 'sell')
+    logEvent('tower-sold', `${tower.def.name} +${refund}`)
     this.status.message = `Sold for ${refund} peanuts.`
   }
 
@@ -1150,7 +1221,14 @@ this.armReadyCountdown()
 
   armAbility(id: string | undefined): void {
     if (!id || !ABILITIES[id]) return
-    if (this.casting) return
+    if (this.casting) {
+      // Silent refusal is what made this unreportable: the player taps and
+      // nothing at all happens, on the boss, repeatedly.
+      play(this, 'error')
+      this.status.message = 'The nuke is still going off. Wait for it.'
+      logEvent('ability-refused', `${id} during cast`)
+      return
+    }
     if (id === RULES.serverNuke.abilityId && this.status.rareAbility !== id) return
     if (!this.cooldowns.ready(id)) {
       play(this, 'error')
@@ -1188,6 +1266,7 @@ this.armReadyCountdown()
     // A gnome dropped in a field blocks nothing, so the cast is refused rather
     // than wasted. The targeting overlay has already shown where is legal.
     if (!this.validCastPoint(def, x, y)) {
+      logEvent('ability-refused', `${id} off-path`)
       this.refuse(`${def.name} can only be placed on the path.`)
       return
     }
@@ -1197,6 +1276,7 @@ this.armReadyCountdown()
       this.status.rareAbility = null
     }
     this.cooldowns.start(id)
+    logEvent('ability-cast', `${id} at ${Math.round(x)},${Math.round(y)} enemies=${this.enemies.length}`)
     this.pathBand.clear()
     play(this, `cast-${id.toLowerCase()}`)
     castAbility(id, def, x, y, {
@@ -1213,6 +1293,7 @@ this.armReadyCountdown()
     this.status.mode = 'normal'
     this.status.pendingAbility = null
     this.targetRing.clear()
+    logEvent('ability-done', id)
     this.status.message = `${def.name}!`
   }
 
@@ -1223,6 +1304,9 @@ this.armReadyCountdown()
    */
   private windUp(seconds: number, fire: () => void): void {
     this.casting = true
+    // Generous: the tween's own duration plus room for a slow frame. Anything
+    // past this and the tween is gone, not late.
+    this.castUntil = this.time.now + seconds * 1000 + 2000
     const W = this.scale.width
     const H = this.scale.height
     const cam = this.cameras.main
@@ -1411,6 +1495,7 @@ this.armReadyCountdown()
     this.escapedThisWave = 0
     this.clearSelection()
     this.spawner.begin(WAVES.waves[this.status.wave])
+    logEvent('wave-start', `${this.status.wave + 1} ${WAVES.waves[this.status.wave].name} bonus=${bonus}`)
     this.status.phase = 'wave'
     play(this, 'wave-start')
     this.status.waveName = WAVES.waves[this.status.wave].name
@@ -1437,6 +1522,7 @@ this.armReadyCountdown()
     const escaped = this.escapedThisWave
     const last = this.status.wave + 1 >= WAVES.waves.length
     const { cleared, runEnds } = waveOutcome(escaped, last)
+    logEvent('wave-end', `${this.status.wave + 1} cleared=${cleared} escaped=${escaped}`)
 
     if (cleared) {
       play(this, 'wave-cleared')
@@ -1530,12 +1616,14 @@ this.armReadyCountdown()
    * it — and the loadout screen is where a player is shown what they drew.
    */
   private tryAgain(): void {
+    logEvent('scene', 'Game -> Loadout (try again)')
     setRunState({ heroId: runState().heroId, seed: Date.now() >>> 0 })
     this.scene.stop('Hud')
     this.scene.start('Loadout')
   }
 
   private toTitle(): void {
+    logEvent('scene', 'Game -> Title')
     this.scene.stop('Hud')
     this.scene.start('Title')
   }
@@ -1553,6 +1641,18 @@ this.armReadyCountdown()
   // ---------------------------------------------------------------- loop
 
   update(_time: number, delta: number): void {
+    // Proof of life for the watchdog. Written every frame; read from outside
+    // Phaser, so a loop that has stopped being served can still be noticed.
+    heartbeat()
+
+    // A wind-up whose tween went away with a restart would otherwise refuse
+    // every ability for the rest of the session. Cheap to check, and it logs,
+    // so if it ever fires the report says so.
+    if (this.casting && this.time.now > this.castUntil) {
+      this.casting = false
+      logEvent('cast-stuck', 'wind-up outlived its tween; abilities re-enabled')
+    }
+
     // Anything created since the last split has to be given to a camera.
     if (this.children.list.length !== this.splitAt) this.syncCameras()
 
@@ -1578,6 +1678,7 @@ this.armReadyCountdown()
         const def = ENEMIES[id]
         if (!def) continue
         const enemy = new Enemy(this, def, this.lane)
+        logEvent('spawn', `${id} hp=${def.maxHealth}`)
         this.enemies.push(enemy)
         if (def.tier === 'boss') this.announceBoss(enemy)
       }
@@ -1604,6 +1705,7 @@ this.armReadyCountdown()
     this.status.heroHealth = this.hero.health
     this.status.heroDown = this.hero.down
     this.status.lastStand = this.hero.lastStandActive
+    this.noteHeroState()
     this.status.enemiesLeft = this.enemies.length + this.spawner.remaining
 
     this.checkWaveOver()
@@ -1620,6 +1722,7 @@ this.armReadyCountdown()
       const take = e.tickTax(dt, this.status.peanuts)
       if (take <= 0) continue
       this.status.peanuts = Math.max(0, this.status.peanuts - take)
+      logEvent('taxed', `${e.def.name} -${take} -> ${this.status.peanuts}`)
       floatingDamage(this, e.x, e.centreY, take, true, `-${take} PEANUTS`)
       play(this, 'taxed', 0.7)
       this.cameras.main.shake(140, 0.004)
@@ -1637,6 +1740,13 @@ this.armReadyCountdown()
     this.status.bossName = boss.def.name
     this.status.bossHealth = boss.health
     this.status.bossMax = boss.maxHealth
+    // Phase changes are the interesting part of a boss fight and the reported
+    // freeze happened during one, so they are logged as they cross.
+    const phase = boss.taxPhaseIndex
+    if (phase !== this.lastBossPhase) {
+      this.lastBossPhase = phase
+      logEvent('boss-phase', `${boss.def.name} phase ${phase} hp=${Math.round(boss.health)}`)
+    }
   }
 
   private announceBoss(boss: Enemy): void {
@@ -1794,6 +1904,7 @@ this.armReadyCountdown()
     if (!enemy.alive) return
     if (enemy.hurt(damage, ignoresArmor, true, pierce)) {
       play(this, 'death')
+      logEvent('death', `${enemy.def.name} +${enemy.def.peanutReward}`)
       this.status.kills++
       this.earn(enemy.def.peanutReward)
       this.rollRareDrop(enemy)
@@ -1888,6 +1999,7 @@ this.armReadyCountdown()
     // Counted, not just charged for: an escape is what stops a wave being a
     // clear, and stops the last wave being a win.
     this.escapedThisWave++
+    logEvent('escape', `${enemy.def.name} -${enemy.def.livesCost} lives`)
     this.status.lives -= enemy.def.livesCost
     floatingDamage(this, enemy.x, enemy.centreY, enemy.def.livesCost, true)
     enemy.destroy()

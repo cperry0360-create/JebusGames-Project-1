@@ -224,3 +224,42 @@ test('a tower under construction fires slower and keeps its old stats', () => {
   const finish = /this\.buildLeft = 0\s*\n\s*this\.tier\+\+/
   assert.match(tower, finish, 'the tier should go up when the build completes')
 })
+
+test('a wind-up cannot outlive the run it belongs to', () => {
+  // The reported bug: "I could not use any ability, including the server
+  // nuke, on the Politician." Every ability is refused while a cast runs, and
+  // Phaser reuses the scene object across a restart — so a run abandoned
+  // during the 2.2s wind-up left `casting` true for the rest of the session
+  // and silently refused everything, on every enemy, forever.
+  const game = src('scenes/GameScene.ts')
+  const create = game.slice(game.indexOf('  create(): void {'), game.indexOf('  // ------'))
+  assert.match(create, /this\.casting = false/,
+    'create() does not clear the cast flag, so it survives a restart')
+  // And a backstop, for a tween that goes away some other way.
+  assert.match(game, /this\.casting && this\.time\.now > this\.castUntil/,
+    'nothing recovers a cast whose tween never completed')
+  assert.match(game, /this\.castUntil = this\.time\.now \+ seconds \* 1000/,
+    'the wind-up sets no deadline for the backstop to check')
+})
+
+test('a refused ability says so', () => {
+  // Silence is what made this unreportable: the player taps, nothing happens,
+  // and there is nothing to describe afterwards.
+  const game = src('scenes/GameScene.ts')
+  const arm = game.slice(game.indexOf('armAbility(id: string | undefined)'),
+    game.indexOf('/** True where this ability may be cast'))
+  assert.match(arm, /if \(this\.casting\) \{/, 'the cast check is still a silent early return')
+  assert.match(arm, /this\.status\.message =/, 'a refusal during a cast says nothing')
+})
+
+test('nothing exempts the boss from abilities', () => {
+  // The other half of the same report. If any of these filtered on tier the
+  // player would be right that the boss was immune.
+  const game = src('scenes/GameScene.ts')
+  for (const fn of ['fireAbility', 'damageEnemy']) {
+    const start = game.indexOf(`${fn}(`)
+    assert.ok(start > 0, `${fn} not found`)
+    const body = game.slice(start, start + 2200)
+    assert.ok(!/tier === 'boss'/.test(body), `${fn} treats the boss as a special case`)
+  }
+})

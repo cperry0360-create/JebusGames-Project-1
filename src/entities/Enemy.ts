@@ -94,6 +94,17 @@ export class Enemy extends Phaser.GameObjects.Container {
     return tax.phases.find((p) => f > p.aboveHealth) ?? tax.phases[tax.phases.length - 1]
   }
 
+  /** Which phase that is, as an index. -1 for anything that does not tax.
+   *  The diagnostics log a boss's phase changes, and a number is what
+   *  survives being written into a report. */
+  get taxPhaseIndex(): number {
+    const tax = this.def.tax
+    if (!tax) return -1
+    const f = this.healthFraction
+    const i = tax.phases.findIndex((p) => f > p.aboveHealth)
+    return i >= 0 ? i : tax.phases.length - 1
+  }
+
   /**
    * Ticks the tax clock and reports how much to take, or 0. The amount is a
    * share of what the player is *holding*, which is the whole point: hoarding

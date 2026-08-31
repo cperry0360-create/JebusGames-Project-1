@@ -8,6 +8,7 @@ import { plateButton } from '../ui/Plate.ts'
 import { AudioToggle } from '../ui/AudioToggle.ts'
 import { unlockAudio } from '../systems/Audio.ts'
 import { VERSION_LABEL } from '../systems/Build.ts'
+import { logEvent } from '../systems/Diagnostics.ts'
 import { ART } from '../systems/Art.ts'
 import { fitCameraToDesign } from '../ui/FitCamera.ts'
 
@@ -77,6 +78,29 @@ export class TitleScene extends Phaser.Scene {
     // The pill is created second so it can be sized from the measured text,
     // which puts it on top; the label has to come back over it.
     this.children.bringToTop(stamp)
+
+    // Five taps on the version stamp opens the diagnostics. Hidden because it
+    // is for one person and a player who finds it learns nothing useful; the
+    // stamp is the right place for it because a bug report starts with which
+    // build you are on.
+    let taps = 0
+    let lastTap = 0
+    const hit = this.add.rectangle(stamp.x - stamp.width / 2, stamp.y - stamp.height / 2,
+      stamp.width + 40, stamp.height + 26, 0xffffff, 0.001)
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: false })
+    hit.on('pointerdown', () => {
+      const now = this.time.now
+      // The taps have to be deliberate: a run of them, not five separate
+      // curious pokes minutes apart.
+      taps = now - lastTap > 1200 ? 1 : taps + 1
+      lastTap = now
+      if (taps >= 5) {
+        taps = 0
+        logEvent('scene', 'Title -> Diagnostics')
+        this.scene.start('Diagnostics')
+      }
+    })
 
     unlockAudio(this)
 

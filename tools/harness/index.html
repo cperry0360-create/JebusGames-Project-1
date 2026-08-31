@@ -168,6 +168,41 @@ function dumpOverlaps(label) {
   note(`${label}: HUD overlaps = ${clashes}`)
 }
 
+/**
+ * The open dialog, measured. Two things can go wrong on a panel of cards:
+ * two pieces of text on top of each other, or the panel running off the glass.
+ */
+function dialogCheck(label) {
+  const d = scene('Game').dialog
+  if (!d) { note(label + ': no dialog open'); return }
+  const b = d.layer.getBounds()
+  const W = game.scale.width, H = game.scale.height
+  const clipped = b.x < -1 || b.y < -1 || b.right > W + 1 || b.bottom > H + 1
+  note(`${label}: panel ${Math.round(b.width)}x${Math.round(b.height)} at ` +
+    `${Math.round(b.x)},${Math.round(b.y)} in ${W}x${H} — ${clipped ? 'CLIPPED' : 'fits'}`)
+
+  // Only the text is compared. The card plates and button plates are painted
+  // *under* their own labels by design; text over text is the bug.
+  const texts = []
+  const walkT = (o) => {
+    if (o.visible === false) return
+    if (o.list) { for (const c of o.list) walkT(c); return }
+    if (o.text === undefined || !String(o.text).trim()) return
+    const r = o.getBounds()
+    texts.push({ name: String(o.text).slice(0, 26).replace(/\n/g, ' / '), l: r.x, t: r.y, r: r.right, b: r.bottom })
+  }
+  walkT(d.layer)
+  let clashes = 0
+  for (let i = 0; i < texts.length; i++) {
+    for (let j = i + 1; j < texts.length; j++) {
+      if (!overlap(texts[i], texts[j])) continue
+      clashes++
+      note(`  ${label} TEXT CLASH "${texts[i].name}" x "${texts[j].name}"`)
+    }
+  }
+  note(`${label}: ${texts.length} text runs, ${clashes} overlapping`)
+}
+
 /** Samples the four edges of the canvas: map art everywhere means full-bleed. */
 async function edgeCheck(label) {
   const c = game.canvas
@@ -235,6 +270,75 @@ let g = null
 async function run() {
   const okTitle = await toTitle()
   if (scenario === 'title') { await shot('title'); return }
+  if (scenario === 'diag') {
+    // The diagnostics, which only matter if they work when everything else
+    // does not. Three things to prove: the hidden screen opens, a thrown
+    // error puts a readable panel on the glass, and a stalled loop is noticed.
+    // Play first, so the screen has something real on it: a diagnostics dump
+    // taken from a cold title tells nobody anything.
+    const gd = await startRun()
+    gd.startWave()
+    await until(() => gd.enemies.length > 2, 30000)
+    await sleep(2500)
+    note('played: wave=' + gd.status.wave + ' enemies=' + gd.enemies.length)
+    gd.scene.start('Title')
+    await until(() => running('Title'), 10000)
+    await sleep(600)
+
+    const t = scene('Title')
+    // The five-tap target: an all-but-invisible rectangle over the version
+    // stamp, in the bottom-right corner.
+    const taps = t.children.list.filter((o) => o.type === 'Rectangle' && o.input)
+    note('title tap targets: ' + taps.length)
+    const cam = t.cameras.main
+    const toUI = (o) => {
+      const b = o.getBounds()
+      return [(b.centerX - cam.worldView.x) * cam.zoom + cam.x,
+        (b.centerY - cam.worldView.y) * cam.zoom + cam.y]
+    }
+    for (const o of taps) note('  target ' + JSON.stringify(toUI(o).map(Math.round)) +
+      ' ' + Math.round(o.width) + 'x' + Math.round(o.height))
+    // The stamp's target: wide, and further into the bottom-right corner than
+    // anything else on the screen. The mute button is square and nearer the
+    // left, so size alone is enough to tell them apart.
+    const stampHit = taps.filter((o) => o.width > 60)
+      .sort((a, b) => (toUI(b)[0] + toUI(b)[1]) - (toUI(a)[0] + toUI(a)[1]))[0]
+    const [tx, ty] = toUI(stampHit)
+    note('tapping ' + Math.round(tx) + ',' + Math.round(ty))
+    for (let i = 0; i < 5; i++) { await click(tx, ty); await sleep(60) }
+    await sleep(700)
+    note('after five taps: Diagnostics running = ' + running('Diagnostics'))
+    await shot('diag-01-screen')
+
+    // A real uncaught error, thrown the way a game bug would throw one.
+    const D = await import('./js/systems/ErrorPanel.js')
+    try { null.boom() } catch (e) { D.report('uncaught exception', e.message, e.stack) }
+    await sleep(500)
+    const panel = document.getElementById('crash')
+    note('crash panel: ' + (panel ? 'shown, ' + panel.textContent.length + ' chars' : 'MISSING'))
+    note('panel mentions the log: ' + /EVENTS \(/.test(panel?.textContent || ''))
+    note('panel buttons: ' + [...(panel?.querySelectorAll('button') || [])].map((b) => b.textContent).join('/'))
+    // The panel is DOM, so it is not on the canvas a screenshot captures.
+    // Its text is the evidence.
+    note('panel head: ' + (panel?.textContent || '').replace(/\s+/g, ' ').slice(0, 260))
+    panel?.remove()
+
+    // And the freeze, driven directly: a run in progress and a beat that is
+    // four seconds old.
+    const W = await import('./js/systems/Watchdog.js')
+    let froze = 0
+    W.installWatchdog((ms) => { froze = ms })
+    W.setRunActive(true)
+    W.setBeatForTest(Date.now() - 4000)
+    W.check(Date.now(), false)
+    W.setRunActive(false)
+    note('watchdog fired at ' + froze + 'ms stalled')
+    const Dg = await import('./js/systems/Diagnostics.js')
+    note('events kept: ' + Dg.recentEvents().length +
+      ' last=' + JSON.stringify(Dg.recentEvents().slice(-3).map((e) => e.kind + ' ' + e.detail)))
+    return
+  }
+
   if (scenario === 'draft') {
     if (okTitle) { scene('Title').scene.start('Draft'); await sleep(900); await shot('draft') }
     return
@@ -324,6 +428,45 @@ async function run() {
     return
   }
 
+  if (scenario === 'spec') {
+    // The tier-3 fork, on the smallest screens the game claims to support.
+    g.status.peanuts = 9999
+    const cam0 = g.cameras.main
+    const spot = SPOTS.findIndex((p) => cam0.worldView.contains(p[0], p[1]))
+    const [px, py] = toScreen(SPOTS[spot][0], SPOTS[spot][1])
+    await click(px, py)
+    await sleep(350)
+    const hit = g.menu.hitAreas?.[0]
+    const b = hit.getBounds()
+    await move(b.centerX, b.centerY)
+    mouse('mousedown', b.centerX, b.centerY)
+    await sleep(300)
+    mouse('mouseup', b.centerX, b.centerY)
+    await sleep(500)
+    note('built: towers=' + g.towers.length + ' at spot ' + spot)
+    const t = g.towers[0]
+    // Straight to the choice: the panel is what is under test, not the ten
+    // minutes of play that reach it.
+    t.tier = 2
+    t.buildLeft = 0
+    note('tier=' + t.tier + ' atSpecChoice=' + t.atSpecChoice + ' tower=' + t.def.name)
+    g.openSpecChoice(t)
+    await sleep(700)
+    await shot('spec-01-choice')
+    dialogCheck('spec')
+
+    // The worst case the data holds: Escalation's Compound runs to 47
+    // characters and is the line most likely to wrap into its neighbour.
+    const TOWERS = (await import('./js/data/towers.json', { with: { type: 'json' } })).default
+    g.dialog.close()
+    await sleep(400)
+    g.openSpecChoice({ def: TOWERS.escalation })
+    await sleep(700)
+    await shot('spec-02-longest')
+    dialogCheck('spec-longest')
+    return
+  }
+
   if (scenario === 'ui') {
     await shot('ui-01-fresh')
     await move(...toScreen(SPOTS[4][0], SPOTS[4][1])); await shot('ui-02-hover-spot')
@@ -397,6 +540,45 @@ async function run() {
     return
   }
 
+  if (scenario === 'bossability') {
+    // The other half of the report: are abilities blocked against the boss
+    // specifically? Cast every one of them at him and count the damage.
+    for (const i of [3, 1, 5]) await build(i, 0)
+    g.status.wave = 12
+    g.status.peanuts = 900
+    g.startWave()
+    await until(() => g.enemies.some((e) => e.def.tier === 'boss'), 40000)
+    await sleep(2600)
+    const boss = g.enemies.find((e) => e.def.tier === 'boss')
+    note('boss: ' + g.status.bossName + ' hp=' + Math.round(boss.health))
+
+    for (const id of g.status.abilities) {
+      g.cooldowns.reset(id)
+      const before = boss.health
+      g.armAbility(id)
+      await sleep(150)
+      const armed = g.status.pendingAbility === id
+      // Cast it straight onto him.
+      g.fireAbility(id, boss.x, boss.y)
+      await sleep(1400)
+      note(`${id}: armed=${armed} boss ${Math.round(before)} -> ${Math.round(boss.health)}` +
+        ` (${Math.round(before - boss.health)} damage) msg="${g.status.message}"`)
+    }
+
+    // And the nuke, which the player said did nothing either.
+    g.status.rareAbility = 'serverNuke'
+    g.cooldowns.reset('serverNuke')
+    const beforeNuke = boss.health
+    await key('KeyF')
+    await sleep(400)
+    note('nuke wind-up started: casting=' + g.casting)
+    await sleep(3200)
+    note(`nuke: boss ${Math.round(beforeNuke)} -> ${Math.round(boss.health)}` +
+      ` alive=${boss.alive} casting=${g.casting}`)
+    await shot('bossability-after-nuke')
+    return
+  }
+
   if (scenario === 'boss') {
     // Jump to the boss wave and watch him tax.
     for (const i of [3, 1, 5]) await build(i, 0)
@@ -428,6 +610,41 @@ async function run() {
     await sleep(400)
     note(`kill payout: ${p0} -> ${g.status.peanuts} peanuts; bossName="${g.status.bossName}"`)
     await shot('b-05-killed')
+    return
+  }
+
+  if (scenario === 'stuckcast') {
+    // The reported bug: "I could not use any ability, including the server
+    // nuke, on the Politician." Every ability is refused while a cast is
+    // running, and the flag that says so used to survive a restart — Phaser
+    // reuses the scene object, so a run abandoned during the 2.2s wind-up
+    // left it set for every later run in the same page session.
+    g.status.rareAbility = 'serverNuke'
+    g.cooldowns.reset('serverNuke')
+    await key('KeyF')
+    await sleep(600)
+    note('mid wind-up: casting=' + g.casting)
+
+    // Abandon the run here, exactly as quitting or dying mid-cast would.
+    g.scene.start('Game')
+    await until(() => running('Game') && scene('Game').status.heroName !== '', 10000)
+    await sleep(600)
+    g = scene('Game')
+    note('after restart: casting=' + g.casting)
+
+    // And the thing the player could not do.
+    const id = g.status.abilities[0]
+    g.cooldowns.reset(id)
+    g.armAbility(id)
+    await sleep(200)
+    note('armed "' + id + '": mode=' + g.status.mode + ' pending=' + g.status.pendingAbility)
+    g.clearSelection()
+
+    // The backstop, for a cast whose tween goes away some other way.
+    g.casting = true
+    g.castUntil = 0
+    await sleep(300)
+    note('backstop cleared a stranded cast: casting=' + g.casting)
     return
   }
 

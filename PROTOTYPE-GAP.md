@@ -191,7 +191,7 @@ which is now clamped to keep the pad visible — but keeping it visible is a
 workaround for the panel not being attached to the pad in the first place.
 Not built yet; noted here so it is not rediscovered.
 
-### 1.7 On-screen error panel — MISSING
+### 1.7 On-screen error panel — BUILT
 
 Lines 83–116, before the game script, deliberately: *"so that a failure while
 the game script is being parsed or run still produces something readable
@@ -200,8 +200,18 @@ instead of a black rectangle."*
 On a phone, a JS error in our build is a black screen with no way to report
 what happened. The prototype shows the message and the stack in a red strip.
 
-**Verdict: adopt.** Twenty lines, and it converts "it didn't work" into a bug
-report.
+**Verdict: adopted, and taken further.** `ErrorPanel.ts` catches uncaught
+exceptions and unhandled rejections and shows the message and stack in a red
+DOM panel — DOM, not a scene, because it has to work when Phaser is the thing
+that died. `index.html` carries a pre-boot catcher for the failures that happen
+before the module is even parsed, which are the ones that leave a black screen.
+
+Beyond the prototype: `Diagnostics.ts` keeps a 500-event ring buffer of what the
+game was doing (waves, spawns, deaths, escapes, casts, builds, peanut changes,
+hero and boss state, scene transitions), `Watchdog.ts` reports a loop that stops
+advancing for three seconds during a run, and five taps on the version stamp
+opens a diagnostics screen with a COPY REPORT button. The last report is stored
+in save data, so a crash survives the reload that follows it.
 
 ### 1.8 Things we have that it doesn't
 
@@ -716,7 +726,7 @@ Ordered by player impact per hour of work.
 | 15 | Splash choreography (fall, impact, shockwave, sparks, shine) | 2.4 | a day | **adapt** |
 | 16 | ~~Reserved HUD band~~ — **tried, reverted**: full-bleed map, layout-based rectangles instead | 3.2 | done | **ignore** |
 | 17 | Hero walk cycle + downed ground marker with countdown | 2.5, 2.6 | a day | **adapt** |
-| 18 | On-screen error panel | 1.7 | hours | **adopt** |
+| 18 | ~~On-screen error panel~~ — **built**, and went further: a 500-event ring buffer, a freeze watchdog, a hidden diagnostics screen and a copyable crash report | 1.7 | done | **shipped** |
 | 19 | Type scale ladder in `Theme.ts` | 3.5 | a day | **adapt** |
 | 20 | Interleaved group timing in waves; stop scaling by volume | 5.5 | a day | **adapt** |
 | 21 | **Radial build menu at the pad** — agreed as the next piece of work | 1.6 | a day | **adapt — next** |

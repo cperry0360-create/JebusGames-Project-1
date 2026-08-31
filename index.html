@@ -104,6 +104,42 @@
     <div id="game"></div>
     <div id="boot">LOADING</div>
     <script>
+      // Caught before anything else runs.
+      //
+      // Its own block, ahead of the module, for the reason the prototype gave:
+      // a failure while the game script is being parsed or run still has to
+      // produce something readable instead of a black rectangle. The real
+      // panel is in ErrorPanel.ts and drains this queue once it loads; this
+      // exists for the errors that happen before it can.
+      ;(function () {
+        window.__earlyErrors = []
+        function note(message, stack) {
+          window.__earlyErrors.push({ message: String(message), stack: stack || '' })
+          // If the module never loads, nothing else will ever show this.
+          setTimeout(function () {
+            if (window.__errorPanelReady) return
+            var el = document.getElementById('boot')
+            if (!el) return
+            el.style.color = '#ffd9d4'
+            el.style.font = '12px/1.5 ui-monospace,monospace'
+            el.style.whiteSpace = 'pre-wrap'
+            el.style.padding = '14px'
+            el.style.textAlign = 'left'
+            el.textContent = 'Courjahan Defense could not start\n\n' +
+              window.__earlyErrors.map(function (e) {
+                return e.message + (e.stack ? '\n' + e.stack : '')
+              }).join('\n\n')
+          }, 2500)
+        }
+        window.addEventListener('error', function (e) {
+          note(e.message, e.error && e.error.stack)
+        })
+        window.addEventListener('unhandledrejection', function (e) {
+          var r = e.reason
+          note(r && r.message ? r.message : String(r), r && r.stack)
+        })
+      })()
+
       // Self-healing cache check.
       //
       // Pages gives no control over headers, so a phone can hold this file for

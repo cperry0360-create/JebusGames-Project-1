@@ -41,8 +41,18 @@ screenshots are the evidence.
 | `skilled` | all seven pads, hero posted on the lane, abilities spent, twelve waves |
 | `full` | a deliberately careless player, for the loss path |
 | `lost` | no towers at all |
+| `spec` | the tier-3 fork, measured: panel bounds against the viewport, and every text run against every other |
+| `diag` | five taps on the version stamp, a thrown error, and a stalled loop |
+| `stuckcast` | a run abandoned mid-wind-up, and whether abilities work in the next one |
+| `bossability` | every ability plus the nuke, cast at the Politician, with the damage each one did |
 
 ## Notes
+
+- **A quick tap on a build-menu option does not always build on a small
+  viewport.** `build()` (down, 90ms, up) places a tower at 1400x708 and does
+  not at 844x390; a 300ms press-and-hold works at both, and so does the game
+  itself on a real phone. Scenarios that need a tower on the board should hold
+  the press, as `phone` and `spec` do.
 
 - **Phaser 3 listens for mouse events, not pointer events.** Dispatching
   `PointerEvent` silently does nothing, which cost an hour the first time.
