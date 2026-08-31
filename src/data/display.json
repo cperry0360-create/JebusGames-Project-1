@@ -2,5 +2,10 @@
   "width": 1280,
   "height": 720,
   "hudHeight": 62,
-  "backgroundColor": "#2f7d3f"
+  "backgroundColor": "#2f7d3f",
+  "camera": {
+    "defaultZoom": 1.75,
+    "maxZoom": 2.2,
+    "tapSlopPx": 12
+  }
 }

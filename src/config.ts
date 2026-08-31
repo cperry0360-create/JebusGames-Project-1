@@ -17,8 +17,14 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   pixelArt: false,
   roundPixels: true,
   scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
+    // RESIZE, not FIT: the canvas becomes the viewport instead of a fixed
+    // 1280x720 box letterboxed inside it. The world stays 1280x720 and the
+    // camera moves over it, so no gameplay coordinate changes.
+    mode: Phaser.Scale.RESIZE,
+    autoCenter: Phaser.Scale.NO_CENTER,
+    width: display.width,
+    height: display.height,
   },
+  input: { activePointers: 3 },
   scene: [BootScene, SplashScene, TitleScene, CreditsScene, DraftScene, GameScene, HudScene],
 }

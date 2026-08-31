@@ -9,6 +9,10 @@ export interface DisplayDef {
    *  nothing that must stay readable may sit above this line. */
   hudHeight: number
   backgroundColor: string
+  /** How the camera sits over the map. Zooms are multiples of cover zoom —
+   *  the zoom at which the map fills the viewport with no dead margin — so
+   *  they hold on any phone shape. */
+  camera: { defaultZoom: number; maxZoom: number; tapSlopPx: number }
 }
 
 export interface MapDef {

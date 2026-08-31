@@ -56,6 +56,7 @@ export class Dialog {
   readonly layer: Phaser.GameObjects.Container
   private readonly blocker: Phaser.GameObjects.Rectangle
   private closed = false
+  private closedHandler?: () => void
 
   constructor(scene: Phaser.Scene, x: number, y: number, depth: number, opts: DialogOptions) {
     this.scene = scene
@@ -154,6 +155,12 @@ export class Dialog {
     return !this.closed
   }
 
+  /** The blocker and the panel, for a scene that renders screen space on its
+   *  own camera. Both must be handed over or the dialog pans with the map. */
+  get objects(): Phaser.GameObjects.GameObject[] {
+    return [this.blocker, this.layer]
+  }
+
   /**
    * True when this tap belongs to the dialog, so the world ignores it.
    *
@@ -173,9 +180,15 @@ export class Dialog {
     return objects.some((o) => this.layer.list?.includes(o))
   }
 
+  /** Called once the dialog has gone, so the scene can hand input back. */
+  onClosed(fn: () => void): void {
+    this.closedHandler = fn
+  }
+
   close(): void {
     if (this.closed) return
     this.closed = true
+    this.closedHandler?.()
     this.blocker.destroy()
     this.scene.tweens.add({
       targets: this.layer, alpha: 0, scale: 0.9, duration: 150,

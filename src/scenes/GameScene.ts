@@ -36,6 +36,7 @@ import { ScratchCard } from '../ui/ScratchCard.ts'
 import { COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { platePanel, plateButton, type PlateButton } from '../ui/Plate.ts'
 import { SignBribe } from '../ui/SignBribe.ts'
+import { CameraRig } from '../systems/CameraRig.ts'
 import { Dialog, type DialogOptions, type DialogRow } from '../ui/Dialog.ts'
 import { maxTier, nextStep, sellValue } from '../systems/Upgrades.ts'
 
@@ -100,6 +101,14 @@ export class GameScene extends Phaser.Scene {
   private sign!: SignBribe
   private cancelBtn!: PlateButton
   private dialog?: Dialog
+  /** Public so a harness run can read the camera's state. */
+  rig!: CameraRig
+  /** Everything drawn in screen space rather than on the map. The main
+   *  camera ignores it, so it neither pans nor zooms. */
+  private uiCam!: Phaser.Cameras.Scene2D.Camera
+  private readonly screenSpace: Phaser.GameObjects.GameObject[] = []
+  /** Set at press time when the press belonged to a menu, ticket or dialog. */
+  private pressTakenByUi = false
   private spawner!: WaveSpawner
   private hero!: Hero
   private menu!: BuildMenu
@@ -144,6 +153,12 @@ export class GameScene extends Phaser.Scene {
     const heroDef = HEROES[run.heroId] ?? HEROES.cory
 
     resetVoices()
+
+    // Created before anything registers itself as screen space.
+    this.uiCam = this.cameras.add(0, 0, this.scale.width, this.scale.height)
+    this.uiCam.setName('ui')
+    this.scale.on('resize', () => this.uiCam.setSize(this.scale.width, this.scale.height))
+
     this.lane = new Path(MAP.waypoints)
     this.build = new BuildSystem(MAP.buildSpots, MAP.spotRadius)
     this.spawner = new WaveSpawner()
@@ -189,12 +204,23 @@ export class GameScene extends Phaser.Scene {
     // Arming an ability or a restructure used to be escapable only with ESC or
     // a right-click, neither of which exists on a touch device: once armed, the
     // player was stuck casting. This is the way out.
-    this.cancelBtn = plateButton(this, displayData.width / 2, displayData.height - 96,
+    this.cancelBtn = plateButton(this, this.scale.width / 2, this.scale.height - 96,
       190, 44, 'CANCEL', () => this.clearSelection(), 16, 'secondary')
     for (const part of this.cancelBtn.parts) {
       (part as Phaser.GameObjects.Image).setDepth?.(OVERLAY_DEPTH + 5)
     }
+    this.asScreenSpace(this.cancelBtn.parts)
     this.setCancelVisible(false)
+
+    // The camera goes on last, so bounds are set against a world that is
+    // fully built. The world stays 1280x720; only the view moves.
+    this.rig = new CameraRig(this, {
+      worldWidth: displayData.width,
+      worldHeight: displayData.height,
+      defaultZoom: displayData.camera.defaultZoom,
+      maxZoom: displayData.camera.maxZoom,
+      tapSlopPx: displayData.camera.tapSlopPx,
+    })
 
     this.menu = new BuildMenu(this, [])
     this.refreshMenuOptions()
@@ -270,11 +296,27 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
+  /**
+   * Marks objects as screen space: fixed size, fixed position, drawn only by
+   * the UI camera. Anything the player is meant to press belongs here, or it
+   * would slide and shrink as the map is panned and zoomed under it.
+   */
+  private asScreenSpace(objects: Phaser.GameObjects.GameObject[]): void {
+    this.screenSpace.push(...objects)
+    this.cameras.main.ignore(objects)
+    // Everything else in the scene belongs to the world camera only.
+    this.uiCam.ignore(this.children.list.filter((o) => !this.screenSpace.includes(o)))
+  }
+
   /** One dialog at a time, and it owns every tap while it is up. */
   private openDialog(opts: DialogOptions): void {
     this.dialog?.close()
-    this.dialog = new Dialog(this, displayData.width / 2, displayData.height / 2,
+    this.dialog = new Dialog(this, this.scale.width / 2, this.scale.height / 2,
       TICKET_DEPTH, opts)
+    this.asScreenSpace(this.dialog.objects)
+    // Panning is off while a modal owns the screen, and back on when it goes.
+    this.rig.setEnabled(false)
+    this.dialog.onClosed(() => this.releaseDialog())
   }
 
   private get placing(): boolean {
@@ -377,17 +419,24 @@ export class GameScene extends Phaser.Scene {
   private setupInput(): void {
     this.input.mouse?.disableContextMenu()
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.updateHover(p))
+    // Two halves, deliberately. Whether the press belonged to a piece of UI can
+    // only be answered at press time — a build-menu cell is destroyed by its own
+    // handler before the release arrives, so asking the hit list then finds
+    // nothing and the world acts on a tap that was never meant for it. Whether
+    // the gesture was a pan can only be answered at release. So the press
+    // records the first and the release checks the second.
     this.input.on('pointerdown', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
-      // Asked of the hit list, not of whether the menu is still open: the
-      // tap that picks a tower closes the menu before this handler runs.
-      if (this.menu.ownsAny(over)) return
-      // The ticket takes its own drags; the world must not also act on them.
-      if (this.ticket?.active && this.ticket.owns(over)) return
-      // A dialog is modal: nothing behind it may act on a tap, or a confirm
-      // could be answered and a tower built by the same click. Asked of the
-      // captured hit list rather than of the dialog's state, because the tap
-      // that closes a dialog reaches this handler after it has already gone.
-      if (this.dialog?.owns(over)) return
+      this.pressTakenByUi =
+        this.menu.ownsAny(over)
+        || (this.ticket?.active === true && this.ticket.owns(over))
+        || this.dialog?.owns(over) === true
+      void p
+    })
+    this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
+      if (this.pressTakenByUi) return
+      // A drag that moved the camera is a pan, not a tap. Without this the
+      // release at the end of every pan would build, select or order.
+      if (this.rig.consumedGesture) return
       this.onClick(p)
     })
     this.input.keyboard?.on('keydown-ESC', () => this.clearSelection())
@@ -632,6 +681,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** The cancel button only exists while there is something to cancel. */
+  /** Panning is off while a modal owns the screen, and back on when it goes. */
+  private releaseDialog(): void {
+    this.dialog = undefined
+    this.rig.setEnabled(true)
+  }
+
   private setCancelVisible(on: boolean): void {
     for (const part of this.cancelBtn.parts) {
       (part as Phaser.GameObjects.Image).setVisible?.(on)

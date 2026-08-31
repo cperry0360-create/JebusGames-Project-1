@@ -1,5 +1,4 @@
 import Phaser from 'phaser'
-import displayData from '../data/display.json'
 import { GameScene } from './GameScene.ts'
 import presentationData from '../data/presentation.json'
 import { COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
@@ -7,6 +6,9 @@ import { ART, fitInBox, renderFor } from '../systems/Art.ts'
 import { greyKey } from '../systems/Desaturate.ts'
 import { plateButton, type PlateButton } from '../ui/Plate.ts'
 import { AudioToggle } from '../ui/AudioToggle.ts'
+import { iconPlate } from '../ui/Plate.ts'
+import { Dialog } from '../ui/Dialog.ts'
+import { play } from '../systems/Audio.ts'
 
 interface SlotView {
   id: string
@@ -40,6 +42,8 @@ export class HudScene extends Phaser.Scene {
   private bossBar!: Phaser.GameObjects.Graphics
   private bossLabel!: Phaser.GameObjects.Text
   private startBtn!: PlateButton
+  private panel?: Dialog
+  private paused = false
   private slots: SlotView[] = []
   private slotsBuilt = false
   /** Which abilities the slots were built for, so a rare drop rebuilds them. */
@@ -53,13 +57,19 @@ export class HudScene extends Phaser.Scene {
   }
 
   create(): void {
+    // A rotate or a URL-bar collapse changes the viewport, and every position
+    // below is measured from it. Rebuilding is cheaper to keep correct than
+    // repositioning thirty objects by hand.
+    this.scale.on('resize', this.relayout, this)
+    this.events.once('shutdown', () => this.scale.off('resize', this.relayout, this))
+
     this.world = this.scene.get('Game') as GameScene
     this.slots = []
     this.slotsBuilt = false
     this.slotKeys = ''
     this.lastPeanuts = -1
     this.lastLives = -1
-    const W = displayData.width
+    const W = this.scale.width
 
     // Three painted counters in the top-left corner, and nothing behind them.
     // The map runs to the full canvas now; there is no bar to crop it.
@@ -73,8 +83,10 @@ export class HudScene extends Phaser.Scene {
     // Start button in the opposite corner, standing on its own.
     this.buildStartButton(W - HudScene.START_W - HUD.marginX, HUD.marginY)
 
+    this.buildPauseButton(W - 34, this.scale.height - 34)
+
     // Mute is reachable mid-run, bottom-left, clear of the ability slots.
-    new AudioToggle(this, 36, displayData.height - 36, 34)
+    new AudioToggle(this, 36, this.scale.height - 36, 34)
 
     // The hero stays top-right where he was, moved down clear of the button.
     this.heroLabel = this.add.text(W - HUD.marginX, HUD.marginY + 54, '', {
@@ -91,7 +103,7 @@ export class HudScene extends Phaser.Scene {
       stroke: '#0d1016', strokeThickness: 5,
     }).setOrigin(0.5, 0)
 
-    this.add.text(W - 12, displayData.height - 16, 'art and fonts: Kenney, CC0', {
+    this.add.text(W - 12, this.scale.height - 16, 'art and fonts: Kenney, CC0', {
       fontFamily: FONT_UI, fontSize: '11px', color: COLOR.ink,
     }).setOrigin(1, 0).setAlpha(0.35)
   }
@@ -143,6 +155,80 @@ export class HudScene extends Phaser.Scene {
   private static readonly START_W = 240
   private static readonly START_H = 50
 
+  /**
+   * Pause lives here rather than in GameScene, because it pauses GameScene:
+   * a panel drawn by a paused scene cannot be tweened, pressed or closed.
+   */
+  private buildPauseButton(x: number, y: number): void {
+    const plate = iconPlate(this, x, y, 40, 40)
+    const g = this.add.graphics()
+    g.fillStyle(0xf6ecd9, 1)
+    g.fillRect(x - 7, y - 8, 5, 16)
+    g.fillRect(x + 2, y - 8, 5, 16)
+    const hit = this.add.rectangle(x, y, 44, 44, 0xffffff, 0.001)
+      .setInteractive({ useHandCursor: true })
+    hit.on('pointerover', () => plate.setActive(true))
+    hit.on('pointerout', () => plate.setActive(false))
+    hit.on('pointerdown', () => this.openPause())
+  }
+
+  private openPause(): void {
+    if (this.paused) return
+    this.paused = true
+    play(this, 'open')
+    this.scene.pause('Game')
+    this.showPanel({
+      title: 'PAUSED',
+      subtitle: 'The wave is stopped. Nothing moves until you resume.',
+      confirm: { label: 'RESUME', onPick: () => this.resumeGame() },
+      extra: { label: 'RESTART', onPick: () => this.restartRun() },
+      cancelLabel: 'QUIT',
+      onCancel: () => this.confirmQuit(),
+      dim: 0.55,
+    })
+  }
+
+  /** A dialog owned by the HUD, so it keeps working while Game is paused. */
+  private showPanel(opts: ConstructorParameters<typeof Dialog>[4]): void {
+    this.panel?.close()
+    this.panel = new Dialog(this, this.scale.width / 2, this.scale.height / 2, 90000, opts)
+    this.panel.onClosed(() => { this.panel = undefined })
+  }
+
+  private resumeGame(): void {
+    this.paused = false
+    this.scene.resume('Game')
+  }
+
+  private restartRun(): void {
+    this.scene.resume('Game')
+    this.scene.get('Game').scene.restart()
+    this.scene.restart()
+  }
+
+  /** Quitting throws the run away, so it asks first. */
+  private confirmQuit(): void {
+    this.showPanel({
+      title: 'QUIT TO TITLE?',
+      subtitle: 'This run ends here. Towers, upgrades and peanuts are lost.',
+      confirm: { label: 'QUIT', onPick: () => this.quitToTitle() },
+      cancelLabel: 'KEEP PLAYING',
+      onCancel: () => this.resumeGame(),
+      dim: 0.6,
+    })
+  }
+
+  private quitToTitle(): void {
+    this.scene.resume('Game')
+    this.scene.stop('Game')
+    this.scene.start('Title')
+  }
+
+  /** Tears the HUD down and builds it again at the new viewport size. */
+  private relayout(): void {
+    this.scene.restart()
+  }
+
   private buildStartButton(x: number, y: number): void {
     const w = HudScene.START_W
     const h = HudScene.START_H
@@ -176,8 +262,8 @@ export class HudScene extends Phaser.Scene {
 
     // The bar they used to live in is gone, so they sit along the bottom
     // centre where a hero's actives belong, clear of the counters entirely.
-    const startX = (displayData.width - defs.length * SLOT_PITCH) / 2
-    const bottomY = displayData.height - ICON_H - 14
+    const startX = (this.scale.width - defs.length * SLOT_PITCH) / 2
+    const bottomY = this.scale.height - ICON_H - 14
     defs.forEach((d, i) => {
       const x = startX + i * SLOT_PITCH
       const y = bottomY
@@ -251,7 +337,7 @@ export class HudScene extends Phaser.Scene {
     }
     const w = HUD.bossBarWidth
     const h = HUD.bossBarHeight
-    const x = (displayData.width - w) / 2
+    const x = (this.scale.width - w) / 2
     const y = HUD.marginY + HUD.bossBarTop
     const ratio = Phaser.Math.Clamp(s.bossHealth / Math.max(s.bossMax, 1), 0, 1)
 
@@ -351,7 +437,7 @@ export class HudScene extends Phaser.Scene {
 
   private drawHeroBar(s: GameScene['status']): void {
     const w = 200
-    const x = displayData.width - HUD.marginX - w
+    const x = this.scale.width - HUD.marginX - w
     const y = HUD.marginY + 72
 
     let state = ''
