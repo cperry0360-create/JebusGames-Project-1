@@ -96,5 +96,12 @@
     "heroPitch": 76,
     "heroIcon": 64,
     "groupGap": 26
+  },
+  "buildPad": {
+    "pulseScale": 1.035,
+    "pulseMs": 1400,
+    "restTint": "#d4d8d0",
+    "placingTint": "#f0f4ec",
+    "hoverTint": "#ffffff"
   }
 }

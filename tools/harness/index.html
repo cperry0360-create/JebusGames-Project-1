@@ -308,7 +308,21 @@ async function run() {
   }
   g = await startRun()
 
-  if (scenario === 'game') { await shot('01-fresh'); return }
+  if (scenario === 'game') {
+    await shot('01-fresh')
+    // Zoomed out to cover, so every build pad is in one frame: the sign is
+    // wrong on all of them and that has to be visible at a glance.
+    for (let i = 0; i < 30; i++) {
+      game.canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, clientX: 422, clientY: 195, bubbles: true }))
+    }
+    await sleep(1400)
+    const pads = g.pads.filter((p) => p.visible)
+    note('pads visible: ' + pads.length + ' of ' + g.build.spots.length +
+      ' textures ' + JSON.stringify([...new Set(pads.map((p) => p.texture.key))]) +
+      ' depth ' + pads[0]?.depth)
+    await shot('01b-all-pads')
+    return
+  }
 
   if (scenario === 'ui') {
     await shot('ui-01-fresh')

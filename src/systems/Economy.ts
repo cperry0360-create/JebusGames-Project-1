@@ -1,7 +1,7 @@
 /**
  * The run's opening purse.
  *
- * The first thing the game says is "click a glowing pad to build a tower".
+ * The first thing the game says is "tap a build pad to place a tower".
  * Whatever the draft hands the player, that instruction has to be possible —
  * a fixed 100 peanuts against a draw of Write-Off (150) and Escalation (220)
  * made the opening screen a dead end, with the game telling the player to do

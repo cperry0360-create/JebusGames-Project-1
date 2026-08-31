@@ -57,7 +57,8 @@
     "ui-btn-icon-active": "ui/btn_icon_active.png",
     "ui-panel-dialog": "ui/panel_dialog.png",
     "prop-sign-moes": "props/sign_moes.png",
-    "prop-sign-courjahan": "props/sign_courjahan.png"
+    "prop-sign-courjahan": "props/sign_courjahan.png",
+    "prop-pad": "props/pad_donotbuild.png"
   },
   "render": {
     "turret-escalation": {
@@ -324,6 +325,13 @@
       "anchorY": 0.5,
       "contentWidth": 256,
       "contentHeight": 252
+    },
+    "prop-pad": {
+      "anchorX": 0.5,
+      "anchorY": 1.0,
+      "contentWidth": 320,
+      "contentHeight": 290,
+      "displayHeight": 72
     }
   },
   "map": {
@@ -384,6 +392,7 @@
   ],
   "prop": {
     "signDefault": "prop-sign-moes",
-    "signBribed": "prop-sign-courjahan"
+    "signBribed": "prop-sign-courjahan",
+    "buildPad": "prop-pad"
   }
 }

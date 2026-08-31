@@ -156,7 +156,8 @@ export class GameScene extends Phaser.Scene {
   private shots: Projectile[] = []
   private fighters: Fighter[] = []
 
-  private spotLayer!: Phaser.GameObjects.Graphics
+  /** One marker per build spot, created once and then shown or hidden. */
+  private pads: Phaser.GameObjects.Image[] = []
   private markerLayer!: Phaser.GameObjects.Graphics
   /** The legal drop corridor while a path-only summon is armed. Its own layer
    *  because markerLayer is cleared and redrawn every frame by the rally
@@ -218,7 +219,6 @@ export class GameScene extends Phaser.Scene {
     this.drawPlate()
     this.buildSign()
 
-    this.spotLayer = this.add.graphics().setDepth(GROUND_DEPTH + 5)
     this.markerLayer = this.add.graphics().setDepth(GROUND_DEPTH + 6)
     this.pathBand = this.add.graphics().setDepth(GROUND_DEPTH + 4)
     this.rangeRing = this.add.graphics().setDepth(OVERLAY_DEPTH)
@@ -303,7 +303,7 @@ this.armReadyCountdown()
     this.menu = new BuildMenu(this, [])
     this.refreshMenuOptions()
     this.setupInput()
-    this.drawSpots()
+    this.createPads()
   }
 
   // ---------------------------------------------------------------- setup
@@ -489,31 +489,56 @@ this.armReadyCountdown()
    *
    * A player cannot choose where to build if finding a spot means tapping the
    * map at random, so the pads are part of the map's furniture rather than a
-   * mode. They brighten while placing and brighter still under the cursor.
-   * Pads are drawn as flat ellipses because the map is painted in 3/4: a true
-   * circle reads as a floating disc rather than a patch of ground.
+   * mode. Each is a painted marker anchored on the ground at its spot and
+   * drawn at `GROUND_DEPTH`, which is below every entity: towers, enemies and
+   * the hero all sort by their own y and no map coordinate is negative, so a
+   * pad can never draw over something standing on it.
+   *
+   * Built once and thereafter only shown, hidden and tinted. The alternative
+   * was creating and destroying seven sprites on every hover.
    */
+  private createPads(): void {
+    const key = ART.prop.buildPad
+    const cfg = PRESENTATION.buildPad
+    const n = this.build.spots.length
+    this.pads = this.build.spots.map((spot, i) => {
+      const img = this.add.image(spot.x, spot.y, key).setDepth(GROUND_DEPTH + 5)
+      applyRender(img, key)
+      const base = img.scale
+      // A slow breath, so an empty pad reads as something to press rather than
+      // as scenery. Scale only: the tint carries the state, and two things
+      // writing one property fight.
+      //
+      // Phase-offset per pad. Seven pads pulsing in unison read as a warning
+      // light rather than as an invitation.
+      this.tweens.add({
+        targets: img,
+        scale: { from: base, to: base * cfg.pulseScale },
+        duration: cfg.pulseMs,
+        delay: (i * cfg.pulseMs) / Math.max(1, n),
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      })
+      return img
+    })
+    this.drawSpots()
+  }
+
+  /** Shows the pads still free, and lights the one under the cursor. */
   private drawSpots(): void {
-    this.spotLayer.clear()
-    const r = MAP.spotRadius
+    const cfg = PRESENTATION.buildPad
     const placing = this.placing
-    for (const spot of this.build.freeSpots()) {
+    const tint = (hex: string): number => Phaser.Display.Color.HexStringToColor(hex).color
+    for (const spot of this.build.spots) {
+      const img = this.pads[spot.index]
+      if (!img) continue
+      // A pad with a tower on it is gone; the tower is standing there now.
+      const free = this.build.isFree(spot.index)
+      img.setVisible(free)
+      if (!free) continue
       const hot = this.hoverSpot?.index === spot.index
-      const fill = hot ? 0.34 : placing ? 0.22 : 0.14
-      const edge = hot ? 1 : placing ? 0.8 : 0.5
-      const colour = hot ? 0x8fd07a : 0xf6ecd9
-
-      this.spotLayer.fillStyle(colour, fill)
-      this.spotLayer.fillEllipse(spot.x, spot.y, r * 2, r * 2 * PAD_SQUASH)
-      this.spotLayer.lineStyle(hot ? 3 : 2, colour, edge)
-      this.spotLayer.strokeEllipse(spot.x, spot.y, r * 2, r * 2 * PAD_SQUASH)
-
-      // A small cross marks the pad as a place to put something, so it does
-      // not read as scenery when nothing is being placed.
-      const t = r * 0.3
-      this.spotLayer.lineStyle(2, colour, edge * 0.8)
-      this.spotLayer.lineBetween(spot.x - t, spot.y, spot.x + t, spot.y)
-      this.spotLayer.lineBetween(spot.x, spot.y - t * PAD_SQUASH, spot.x, spot.y + t * PAD_SQUASH)
+      img.setTint(tint(hot ? cfg.hoverTint : placing ? cfg.placingTint : cfg.restTint))
     }
   }
 
@@ -1102,7 +1127,7 @@ this.armReadyCountdown()
           : 'Nothing you can afford yet. START WAVE to earn more peanuts.'
       }
       return this.towers.length === 0
-        ? 'Tap a glowing pad to build a tower, then START WAVE.'
+        ? 'Tap a build pad to place a tower, then START WAVE.'
         : 'Build on another pad, move Cory, or START WAVE when you are ready.'
     }
     return affordable ? 'Tap a pad to build. Tap Cory to move him.' : 'Tap Cory to move him.'
@@ -1458,7 +1483,7 @@ this.armReadyCountdown()
     this.status.phase = phase
     this.clearSelection()
     this.markerLayer.clear()
-    this.spotLayer.clear()
+    for (const p of this.pads) p.setVisible(false)
 
     const won = phase === 'won'
     // Clearing a run is what unlocks the Server Nuke for every run after it.

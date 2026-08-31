@@ -479,6 +479,8 @@ export interface ArtDef {
   prop: {
     signDefault: string
     signBribed: string
+    /** The marker on an empty build pad. */
+    buildPad: string
   }
   fx: {
     spark: string
