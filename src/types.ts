@@ -29,6 +29,8 @@ export interface MapDef {
    */
   waypoints: number[][]
   buildSpots: number[][]
+  /** Where the villager's blank board is, and how wide to draw a sign on it. */
+  sign: { x: number; y: number; boardWidth: number }
 }
 
 export interface ServerNukeDef {
@@ -43,11 +45,21 @@ export interface ServerNukeDef {
   castSeconds: number
 }
 
+/** The sign-bribe easter egg. It buys nothing but the sign. */
+export interface SignBribeDef {
+  cost: number
+  /** Shown when the player cannot afford him. */
+  brokeToast: string
+  /** Shown on payment, and on any later tap. */
+  paidToast: string
+}
+
 export interface RulesDef {
   startingPeanuts: number
   startingLives: number
   peanutsPerWaveCleared: number
   serverNuke: ServerNukeDef
+  signBribe: SignBribeDef
 }
 
 export interface TowerDef {
@@ -314,6 +326,14 @@ export interface SpriteRender {
    *  tall on screen, rather than that tall including its transparent margin. */
   contentWidth?: number
   contentHeight?: number
+  /** Signboards only: where the board sits inside the sprite's canvas, as
+   *  fractions. Both sign sprites are a board with a post hanging below it,
+   *  and the post is the part the villager's hand covers, so the board is what
+   *  gets placed and sized. */
+  boardLeft?: number
+  boardRight?: number
+  boardTop?: number
+  boardBottom?: number
   /** Button plates only: the end-cap sizes in source pixels. A plate is drawn
    *  by slicing at these, so the metal caps keep their proportions at any
    *  width and only the plain middle stretches. */
@@ -348,6 +368,11 @@ export interface ArtDef {
     iconButtonActive: string
     /** The frame behind every dialog: draft cards, build menu, boss card. */
     panel: string
+  }
+  /** Props painted onto the map rather than owned by an entity. */
+  prop: {
+    signDefault: string
+    signBribed: string
   }
   fx: {
     spark: string

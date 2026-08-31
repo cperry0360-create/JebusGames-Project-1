@@ -11,5 +11,10 @@
     ],
     "bossHealthPercent": 0.6,
     "castSeconds": 2.2
+  },
+  "signBribe": {
+    "cost": 150,
+    "brokeToast": "He wants more peanuts.",
+    "paidToast": "The sign has been updated. Democracy."
   }
 }

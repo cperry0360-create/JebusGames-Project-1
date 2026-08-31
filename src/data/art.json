@@ -54,7 +54,9 @@
     "ui-btn-disabled": "ui/btn_disabled.png",
     "ui-btn-icon": "ui/btn_icon.png",
     "ui-btn-icon-active": "ui/btn_icon_active.png",
-    "ui-panel-dialog": "ui/panel_dialog.png"
+    "ui-panel-dialog": "ui/panel_dialog.png",
+    "prop-sign-moes": "props/sign_moes.png",
+    "prop-sign-courjahan": "props/sign_courjahan.png"
   },
   "render": {
     "turret-escalation": {
@@ -293,6 +295,22 @@
         "top": 162,
         "bottom": 159
       }
+    },
+    "prop-sign-moes": {
+      "contentWidth": 300,
+      "contentHeight": 400,
+      "boardLeft": 0.0,
+      "boardRight": 1.0,
+      "boardTop": 0.0725,
+      "boardBottom": 0.63
+    },
+    "prop-sign-courjahan": {
+      "contentWidth": 292,
+      "contentHeight": 400,
+      "boardLeft": 0.0,
+      "boardRight": 1.0,
+      "boardTop": 0.07,
+      "boardBottom": 0.6225
     }
   },
   "map": {
@@ -351,5 +369,9 @@
     "ability-chain",
     "ability-scratchticket",
     "ability-servernuke"
-  ]
+  ],
+  "prop": {
+    "signDefault": "prop-sign-moes",
+    "signBribed": "prop-sign-courjahan"
+  }
 }

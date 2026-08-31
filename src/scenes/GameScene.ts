@@ -35,6 +35,7 @@ import { BuildMenu } from '../ui/BuildMenu.ts'
 import { ScratchCard } from '../ui/ScratchCard.ts'
 import { COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { platePanel } from '../ui/Plate.ts'
+import { SignBribe } from '../ui/SignBribe.ts'
 
 const MAP = mapData as MapDef
 const RULES = rulesData as RulesDef
@@ -94,6 +95,7 @@ export class GameScene extends Phaser.Scene {
 
   private lane!: Path
   private build!: BuildSystem
+  private sign!: SignBribe
   private spawner!: WaveSpawner
   private hero!: Hero
   private menu!: BuildMenu
@@ -142,6 +144,7 @@ export class GameScene extends Phaser.Scene {
     this.spawner = new WaveSpawner()
 
     this.drawPlate()
+    this.buildSign()
 
     this.spotLayer = this.add.graphics().setDepth(GROUND_DEPTH + 5)
     this.markerLayer = this.add.graphics().setDepth(GROUND_DEPTH + 6)
@@ -194,6 +197,32 @@ export class GameScene extends Phaser.Scene {
   private drawPlate(): void {
     const plate = this.add.image(0, 0, ART.map[MAP.plate]).setOrigin(0, 0).setDepth(GROUND_DEPTH)
     plate.setDisplaySize(displayData.width, displayData.height)
+  }
+
+  /**
+   * The villager's sign. It is painted into the plate as a blank board, so the
+   * sprite goes on top of it and sorts by its own foot like everything else.
+   */
+  private buildSign(): void {
+    const cfg = MAP.sign
+    this.sign = new SignBribe(this, cfg.x, cfg.y, cfg.boardWidth, RULES.signBribe)
+    this.sign.setDepth(this.sign.depthY)
+  }
+
+  /**
+   * Paying the villager. He buys nothing — no stats, no tower, no advantage —
+   * so the only thing that changes is the sign and the size of your wallet.
+   */
+  private tapSign(): void {
+    const before = this.sign.paid
+    const { spent, message } = this.sign.tap(this.status.peanuts)
+    if (spent > 0) {
+      this.status.peanuts -= spent
+      play(this, 'sfx-build', 0.9)
+    } else if (!before && !this.sign.paid) {
+      play(this, 'sfx-leak', 0.35)
+    }
+    this.status.message = message
   }
 
   private get placing(): boolean {
@@ -323,6 +352,13 @@ export class GameScene extends Phaser.Scene {
 
     if (this.status.mode === 'restructure') {
       this.doRestructure(p.worldX, p.worldY)
+      return
+    }
+
+    // The sign sits off the lane with no pad under it, so it can take its tap
+    // first without ever stealing one from a build spot.
+    if (this.sign.owns(this.input.hitTestPointer(p))) {
+      this.tapSign()
       return
     }
 

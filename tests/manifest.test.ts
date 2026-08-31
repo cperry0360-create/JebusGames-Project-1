@@ -230,3 +230,16 @@ test('swapping the manifest to another pack needs no code edit', () => {
   }
   assert.equal(Object.keys(swapped).length, Object.keys(art.files).length)
 })
+
+test('every manifest section is re-exported by ART', () => {
+  // ART is hand-written, so a section added to art.json and forgotten here is
+  // undefined at runtime and only shows up when something reads it.
+  const src = readFileSync(url('../src/systems/Art.ts'), 'utf8')
+  const block = src.slice(src.indexOf('export const ART = {'))
+  const exported = new Set([...block.slice(0, block.indexOf('\n}')).matchAll(/^\s*(\w+): art\./gm)]
+    .map((m) => m[1]))
+  for (const section of Object.keys(art)) {
+    if (section === 'note' || section === 'render') continue
+    assert.ok(exported.has(section), `art.json has a "${section}" section that ART never exports`)
+  }
+})

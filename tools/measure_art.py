@@ -385,3 +385,48 @@ for name in ('btn_primary', 'btn_secondary', 'btn_disabled', 'btn_icon',
     }
     print(f'  {key}: {w}x{h}, caps L{left} R{right} T{top} B{bot}')
 json.dump({'files': bfiles, 'render': brender}, open('/tmp/buttonpatch.json', 'w'), indent=2)
+
+
+# ------------------------------------------------------------- signboards
+
+# The two bribe signs are whole boards on a post, drawn to sit over the blank
+# board the painted villager is already holding. What matters is the board
+# itself, not the canvas: the post below it is what the villager's hand covers,
+# so the sign is placed and sized by its board.
+
+def board_band(w, h, px):
+    """(x0, x1, y0, y1) of the widest opaque band — the board above the post."""
+    widths = []
+    for y in range(h):
+        xs = [x for x in range(w) if px[(y * w + x) * 4 + 3] > ALPHA]
+        widths.append((xs[0], xs[-1]) if xs else None)
+    span = [(r[1] - r[0]) if r else 0 for r in widths]
+    broad = max(span) * 0.75
+    rows = [y for y, s in enumerate(span) if s >= broad]
+    y0, y1 = rows[0], rows[-1]
+    x0 = min(widths[y][0] for y in rows)
+    x1 = max(widths[y][1] for y in rows)
+    return x0, x1, y0, y1
+
+
+print('\n\nSignboards')
+sfiles, srender = {}, {}
+for name in ('sign_moes', 'sign_courjahan'):
+    path = f'public/assets/props/{name}.png'
+    w, h, px = png.read(path)
+    x0, x1, y0, y1 = board_band(w, h, px)
+    key = 'prop-' + name.replace('_', '-')
+    sfiles[key] = f'props/{name}.png'
+    srender[key] = {
+        'contentWidth': w,
+        'contentHeight': h,
+        # The board's own rectangle inside the canvas, as fractions, so the
+        # game can put the board on the villager's board at any scale.
+        'boardLeft': round(x0 / w, 4),
+        'boardRight': round((x1 + 1) / w, 4),
+        'boardTop': round(y0 / h, 4),
+        'boardBottom': round((y1 + 1) / h, 4),
+    }
+    print(f'  {key}: {w}x{h}, board x{x0}-{x1} y{y0}-{y1} '
+          f'({x1 - x0 + 1}x{y1 - y0 + 1})')
+json.dump({'files': sfiles, 'render': srender}, open('/tmp/signpatch.json', 'w'), indent=2)

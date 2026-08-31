@@ -24,6 +24,8 @@ export const ART = {
   files: art.files,
   map: art.map,
   ui: art.ui,
+  /** Props painted onto the map rather than owned by an entity. */
+  prop: art.prop,
   fx: art.fx,
   decor: art.decor,
   brand: art.brand,
