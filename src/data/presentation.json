@@ -61,13 +61,16 @@
       0.3
     ],
     "bossBarTop": 10,
-    "bands": {
-      "marginY": 8,
+    "layout": {
+      "marginX": 10,
+      "marginY": 10,
       "plateHeight": 44,
-      "rowGap": 4,
-      "rowHeight": 24,
+      "rowGap": 6,
+      "rowHeight": 22,
       "iconHeight": 64,
-      "minWorldHeight": 170
+      "cornerButton": 40,
+      "startWidth": 240,
+      "startMinWidth": 150
     }
   },
   "typography": {

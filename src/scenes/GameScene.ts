@@ -43,7 +43,11 @@ import { canAffordAny, openingPurse } from '../systems/Economy.ts'
 import { addBannerPoints, hasClearedARun, recordRunCleared } from '../systems/Save.ts'
 import { bannerPointsFor, verdictFor, type RunOutcome } from '../systems/Banner.ts'
 import { waveOutcome } from '../systems/Wave.ts'
-import { bandsFor, type Bands } from '../systems/Bands.ts'
+import { hudLayout, NO_INSETS, type HudLayout } from '../systems/HudLayout.ts'
+import { safeAreaInsets } from '../systems/SafeArea.ts'
+
+/** The HUD's layout constants, shared with HudScene so both agree. */
+const LAYOUT = PRESENTATION.hud.layout
 
 const MAP = mapData as MapDef
 const RULES = rulesData as RulesDef
@@ -132,9 +136,12 @@ export class GameScene extends Phaser.Scene {
   /** Everything drawn in screen space rather than on the map. The main
    *  camera ignores it, so it neither pans nor zooms. */
   private uiCam!: Phaser.Cameras.Scene2D.Camera
-  /** The reserved HUD strips. Public so the HUD lays out against the same
-   *  numbers the world camera is clipped by, rather than a parallel guess. */
-  bands: Bands = { top: 0, bottom: 0, worldTop: 0, worldHeight: 0 }
+  /** Where the HUD's elements sit. Public so anything the scene draws in
+   *  screen space can keep clear of them without guessing. */
+  layout: HudLayout = hudLayout(
+    { width: 1280, height: 720, insets: NO_INSETS, countersWidth: 0, abilitiesWidth: 0 },
+    LAYOUT,
+  )
   private readonly screenSpace: Phaser.GameObjects.GameObject[] = []
   /** Set at press time when the press belonged to a menu, ticket or dialog. */
   private pressTakenByUi = false
@@ -259,10 +266,10 @@ this.armReadyCountdown()
     // Arming an ability or a restructure used to be escapable only with ESC or
     // a right-click, neither of which exists on a touch device: once armed, the
     // player was stuck casting. This is the way out.
-    // Just above the bottom band, not over it: at `height - 96` this sat on
-    // the ability icons on a phone, which is where the thumb already is.
+    // Above the ability row rather than on it: at a fixed `height - 96` this
+    // landed on the icons on a phone, which is where the thumb already is.
     this.cancelBtn = plateButton(this, this.scale.width / 2,
-      this.scale.height - this.bands.bottom - 32,
+      this.layout.abilities.y - 30,
       190, 44, 'CANCEL', () => this.clearSelection(), 16, 'secondary')
     for (const part of this.cancelBtn.parts) {
       (part as Phaser.GameObjects.Image).setDepth?.(OVERLAY_DEPTH + 5)
@@ -364,24 +371,24 @@ this.armReadyCountdown()
   }
 
   /**
-   * The reserved strips, and the world viewport between them.
+   * The map fills the screen, corner to corner.
    *
-   * This is the whole of PROTOTYPE-GAP item 16, and it is one call: the world
-   * camera is given the strip between the bands as its *viewport*, so Phaser
-   * clips everything it draws to that rectangle. A tower, an enemy, a build
-   * pad or a floating damage number cannot reach the HUD, at any depth, at any
-   * zoom, because they are not drawn outside the viewport at all.
-   *
-   * The UI camera keeps the whole screen, which is how the HUD gets to use the
-   * bands that the world cannot.
+   * There is deliberately no `setViewport` here. An earlier version inset the
+   * world camera by a reserved strip at the top and bottom so that no game
+   * object could be drawn into the HUD. It worked, and it was the wrong trade:
+   * on a phone the two strips cost a third of the screen, and Kingdom Rush —
+   * which is the reference — has no bars at all. The HUD floats over the board
+   * instead, and the overlaps are solved in HudLayout by giving every element
+   * a rectangle of its own.
    */
   private applyBands(): void {
     const W = this.scale.width
     const H = this.scale.height
-    this.bands = bandsFor(H, PRESENTATION.hud.bands)
-    this.cameras.main.setViewport(0, this.bands.worldTop, W, this.bands.worldHeight)
-    // Bounds and zoom are computed from the viewport, so the rig has to be
-    // told the view got shorter or it will clamp against the old height.
+    this.cameras.main.setViewport(0, 0, W, H)
+    this.layout = hudLayout(
+      { width: W, height: H, insets: safeAreaInsets(), countersWidth: 0, abilitiesWidth: 0 },
+      LAYOUT,
+    )
     this.rig?.viewportChanged()
   }
 
@@ -722,7 +729,9 @@ this.armReadyCountdown()
           this.clearGhost()
         }
       },
-      { top: this.bands.worldTop, height: this.bands.worldHeight },
+      // Not a reserved strip — the map draws through all of it. Just the part
+      // of the screen where a panel does not cover a counter or the abilities.
+      { top: this.layout.panelArea.y, height: this.layout.panelArea.height },
     )
     this.asScreenSpace(this.menu.objects)
     this.drawSpots()
@@ -1226,7 +1235,7 @@ this.armReadyCountdown()
   private showTicket(payout: number, autoRevealSeconds: number): void {
     this.ticket?.destroy()
     this.ticket = new ScratchCard(this, this.scale.width / 2,
-      this.bands.worldTop + this.bands.worldHeight / 2, TICKET_DEPTH, {
+      this.scale.height / 2, TICKET_DEPTH, {
       payout,
       autoRevealSeconds,
       onCollect: (amount) => {
@@ -1503,10 +1512,7 @@ this.armReadyCountdown()
   }
 
   private announce(text: string, color: string): void {
-    // Over the board, measured from the world strip: a third of the way down
-    // the *screen* is inside the top band on a phone.
-    const t = this.add.text(this.scale.width / 2,
-      this.bands.worldTop + this.bands.worldHeight * 0.28, text, {
+    const t = this.add.text(this.scale.width / 2, this.scale.height * 0.3, text, {
       fontFamily: FONT_UI, fontSize: '40px', fontStyle: 'bold', color,
       stroke: '#0d1016', strokeThickness: 7, letterSpacing: 2,
     }).setOrigin(0.5).setDepth(OVERLAY_DEPTH + 20).setScale(0.5)
@@ -1606,10 +1612,7 @@ this.armReadyCountdown()
 
   private announceBoss(boss: Enemy): void {
     const W = this.scale.width
-    // The middle of the *board*, not of the screen. The card is 156px tall and
-    // a phone's board is about 220, so centring it on the screen pushed it
-    // through both reserved bands.
-    const mid = this.bands.worldTop + this.bands.worldHeight / 2
+    const mid = this.scale.height / 2
     play(this, 'boss', 0.95)
     this.cameras.main.shake(600, 0.007)
 
@@ -1799,9 +1802,7 @@ this.armReadyCountdown()
     play(this, 'cast-servernuke', 0.8)
 
     const W = this.scale.width
-    // Measured from the board, not the screen: on a phone a third of the way
-    // down the screen is inside the reserved HUD band.
-    const y = this.bands.worldTop + this.bands.worldHeight * 0.3
+    const y = this.scale.height * 0.3
     // Not full width, and high rather than centred. This fires *mid-wave* off
     // a kill, so it must not hide the lane at the moment it hands the player a
     // decision — the boss card can afford to, arriving at the start of a wave.

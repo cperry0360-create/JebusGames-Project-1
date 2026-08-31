@@ -140,34 +140,17 @@ function rectsFor(key) {
 const overlap = (a, b) =>
   a.l < b.r - 2 && b.l < a.r - 2 && a.t < b.b - 2 && b.t < a.b - 2
 
-// The bands are enforced by the world camera's viewport, so the checks that
-// matter are: the viewport really is the band-free strip, and no HUD element
-// leaves the band it was laid out in or lands on top of another one.
+// Two things to prove now that there are no bands: the map reaches all four
+// edges, and no two HUD elements sit on each other.
 function dumpOverlaps(label) {
   const g2 = scene('Game')
   const cam = g2.cameras.main
-  const b = g2.bands
   const H = game.scale.height, W = game.scale.width
-  const viewportOk = cam.y === b.worldTop && cam.height === b.worldHeight &&
-    cam.x === 0 && cam.width === W
-  note(`${label}: bands top=${b.top} bottom=${b.bottom} world=${b.worldTop}..${b.worldTop + b.worldHeight}` +
-    ` viewport=${cam.x},${cam.y} ${cam.width}x${cam.height} ${viewportOk ? 'OK' : 'MISMATCH'}`)
+  const full = cam.x === 0 && cam.y === 0 && cam.width === W && cam.height === H
+  note(`${label}: world camera ${cam.x},${cam.y} ${cam.width}x${cam.height} ` +
+    `of ${W}x${H} ${full ? 'FULL-BLEED' : 'INSET'}`)
 
   const hud = rectsFor('Hud').filter((r) => r.r > r.l && r.b > r.t)
-  // Which band each element belongs to, and whether it stayed there.
-  let strays = 0
-  for (const r of hud) {
-    const inTop = r.b <= b.top + 1
-    const inBottom = r.t >= H - b.bottom - 1
-    if (!inTop && !inBottom) {
-      if (strays++ < 10) note(`  ${label} STRAY ${r.name} y=${Math.round(r.t)}..${Math.round(r.b)}`)
-    }
-  }
-  note(`${label}: HUD elements outside a band = ${strays} (of ${hud.length})`)
-
-  // And nothing in the HUD may sit on top of anything else in it. Plates and
-  // the numbers printed into them are meant to overlap, so a text drawn inside
-  // a plate is not a collision; two plates or two texts are.
   let clashes = 0
   for (let i = 0; i < hud.length; i++) {
     for (let j = i + 1; j < hud.length; j++) {
@@ -177,12 +160,41 @@ function dumpOverlaps(label) {
       if (nested(a, c) || nested(c, a)) continue
       // A label drawn on its own button plate is composition, not collision:
       // the plate is three images, so the label is never inside any one of them.
-      const pair = (x, y) => /^ui-btn-/.test(x.name) && /^TEXT:/.test(y.name)
+      const pair = (x, y) => /^ui-btn-|^hud-/.test(x.name) && /^TEXT:/.test(y.name)
       if (pair(a, c) || pair(c, a)) continue
       if (clashes++ < 10) note(`  ${label} CLASH ${a.name} x ${c.name}`)
     }
   }
   note(`${label}: HUD overlaps = ${clashes}`)
+}
+
+/** Samples the four edges of the canvas: map art everywhere means full-bleed. */
+async function edgeCheck(label) {
+  const c = game.canvas
+  const probe = document.createElement('canvas')
+  probe.width = c.width; probe.height = c.height
+  const ctx = probe.getContext('2d')
+  ctx.drawImage(c, 0, 0)
+  const px = (x, y) => {
+    const d = ctx.getImageData(Math.round(x), Math.round(y), 1, 1).data
+    return [d[0], d[1], d[2]]
+  }
+  const W = c.width, H = c.height
+  // Away from the corners, where the HUD legitimately is.
+  const spots = {
+    top: [W * 0.5, 2], bottom: [W * 0.5, H - 3],
+    left: [2, H * 0.5], right: [W - 3, H * 0.5],
+  }
+  const out = {}
+  let bars = 0
+  for (const [k, [x, y]] of Object.entries(spots)) {
+    const c3 = px(x, y)
+    out[k] = c3
+    // The old bands painted 0x10161d at 94%: near-black and desaturated.
+    const dark = c3[0] < 40 && c3[1] < 45 && c3[2] < 50
+    if (dark) bars++
+  }
+  note(`${label}: edges ${JSON.stringify(out)} — ${bars === 0 ? 'MAP TO ALL EDGES' : bars + ' edge(s) still a bar'}`)
 }
 
 async function toTitle() {
@@ -600,6 +612,7 @@ async function run() {
     await shot('phone-2-wave')
     note('wave: enemies=' + g.enemies.length)
     dumpOverlaps('wave')
+    await edgeCheck('wave')
 
     // 3. The boss. Clear the field first — killing the last enemy while the
     // wave is live ends it and advances the index out from under us.

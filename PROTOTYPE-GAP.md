@@ -183,8 +183,13 @@ Ours: a rectangular panel appears elsewhere on the screen with icons in a grid.
 The radial is better on a phone for two reasons: your thumb is already at the
 pad, and the choice is visually attached to the place it will happen.
 
-**Verdict: adapt**, with a caveat — our panel is tested and works, so this is a
-polish item, not a correctness one.
+**Verdict: adapt. This is the agreed next piece of work.**
+
+Kingdom Rush puts a ring of tower buttons around the tapped pad and hangs the
+tower's detail panel next to it. Ours is a floating panel elsewhere on screen,
+which is now clamped to keep the pad visible — but keeping it visible is a
+workaround for the panel not being attached to the pad in the first place.
+Not built yet; noted here so it is not rediscovered.
 
 ### 1.7 On-screen error panel — MISSING
 
@@ -344,7 +349,7 @@ rewriting to a region list would be a large refactor for a working game. But the
 rule — *no control is drawn except from the same description that carries its
 hit area* — is worth enforcing where we add UI from here.
 
-### 3.2 The board is fitted below the HUD, not behind it
+### 3.2 The board is fitted below the HUD, not behind it — **TRIED AND REVERTED**
 
 `BOARD_TOP = 78` (9003) with the comment: *"The status bar is opaque, so the
 board lives underneath it rather than behind it. Every level's geometry is
@@ -352,14 +357,31 @@ squeezed into the strip below the bar once, here... Nothing on a level plate is
 ever hidden by the HUD."* Every path point, build spot, water rect and ridge in
 every level is transformed once at load (9007–9026).
 
-Ours draws a full-bleed map with a floating HUD over it. That is a legitimate
-modern look, but it has cost us: the boss bar running through the wave counter,
-the wave message running through a dialog title, the Kenney credit line landing
-under the ability bar. Each of those was fixed individually. The prototype made
-them impossible.
+**This was built and then taken out again, and the reason matters.** Reserving
+a top and a bottom strip and clipping the world camera to what was left did
+make overlaps impossible — but on a 390px-tall phone the two strips cost a
+third of the screen, and thick opaque bars look worse than the collisions they
+prevent.
 
-**Verdict: adapt.** Not necessarily a full strip — but a reserved HUD band that
-the world camera's bounds respect would close the whole category.
+The prototype's constraint does not transfer: its status bar is an opaque
+painted plate at a fixed 960x540, so the board *had* to live below it. Ours is
+a handful of small pills, and **Kingdom Rush — the actual reference for this
+game's look — has no bars at all.** The map runs edge to edge and the HUD
+floats on it.
+
+So the rule is now the opposite one: **full-bleed map, and overlap solved by
+layout.** `HudLayout.ts` gives every element an explicit rectangle pinned to a
+safe-area corner, the rectangles are disjoint by construction, and a test
+checks they stay disjoint at four viewports with and without a notch. Elements
+sit over map art, because each carries its own plate or stroke and that is how
+the reference does it.
+
+Two things from the band attempt were right and were kept: the boss bar
+constrained to a region of its own rather than spanning the screen, and the
+tier pips moved onto the tower base.
+
+**Verdict: ignore the prototype here.** Its answer was correct for its own
+constraint and wrong for ours.
 
 ### 3.3 The tower panel is anchored, non-modal, and never off screen
 
@@ -692,12 +714,12 @@ Ordered by player impact per hour of work.
 | 13 | Cap effective armour reduction; show mitigated hits | 5.3 | hours | **adapt** |
 | 14 | Splitter enemy + a second defence axis | 1.2 | a day | **adapt** |
 | 15 | Splash choreography (fall, impact, shockwave, sparks, shine) | 2.4 | a day | **adapt** |
-| 16 | Reserved HUD band the world camera respects | 3.2 | a day | **adapt** |
+| 16 | ~~Reserved HUD band~~ — **tried, reverted**: full-bleed map, layout-based rectangles instead | 3.2 | done | **ignore** |
 | 17 | Hero walk cycle + downed ground marker with countdown | 2.5, 2.6 | a day | **adapt** |
 | 18 | On-screen error panel | 1.7 | hours | **adopt** |
 | 19 | Type scale ladder in `Theme.ts` | 3.5 | a day | **adapt** |
 | 20 | Interleaved group timing in waves; stop scaling by volume | 5.5 | a day | **adapt** |
-| 21 | Radial build menu at the pad | 1.6 | a day | **adapt** |
+| 21 | **Radial build menu at the pad** — agreed as the next piece of work | 1.6 | a day | **adapt — next** |
 | 22 | **Barracks / blockers / rally flags** | 1.1 | **a week** | **adapt** |
 | 23 | Opening purse: one tower vs four | 5.4 | data | **your call** |
 | 24 | Region-list UI (one source for draw + hit test) | 3.1 | large | **adapt the principle** |

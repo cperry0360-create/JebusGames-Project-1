@@ -1,0 +1,133 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { collisions, hudLayout, overlaps, NO_INSETS, type Insets } from '../src/systems/HudLayout.ts'
+import presentation from '../src/data/presentation.json' with { type: 'json' }
+
+const url = (p: string) => new URL(p, import.meta.url)
+const src = (p: string) => readFileSync(url(`../src/${p}`), 'utf8')
+
+const CFG = presentation.hud.layout
+
+/** Landscape viewports the game has to survive: iPhone SE, iPhone 14, iPad,
+ *  desktop. The first is the one that breaks layouts. */
+const VIEWPORTS: Array<[string, number, number]> = [
+  ['iPhone SE', 568, 320],
+  ['iPhone 14', 844, 390],
+  ['iPad', 1080, 810],
+  ['desktop', 1440, 900],
+]
+
+/** A notched phone in landscape: the notch on one side, the home indicator
+ *  along the bottom. */
+const NOTCH: Insets = { top: 0, right: 44, bottom: 21, left: 44 }
+
+/** Three counter plates and a full hand of abilities — the widest the HUD
+ *  ever gets. */
+const WIDEST = { countersWidth: 350, abilitiesWidth: 370 }
+
+test('no two HUD elements overlap, at any viewport, notch or not', () => {
+  for (const [name, width, height] of VIEWPORTS) {
+    for (const [what, insets] of [['flat', NO_INSETS], ['notched', NOTCH]] as const) {
+      const layout = hudLayout({ width, height, insets, ...WIDEST }, CFG)
+      assert.deepEqual(collisions(layout), [],
+        `${name} ${what}: ${collisions(layout).join(', ')}`)
+    }
+  }
+})
+
+test('every element stays inside the safe area', () => {
+  for (const [name, width, height] of VIEWPORTS) {
+    const layout = hudLayout({ width, height, insets: NOTCH, ...WIDEST }, CFG)
+    for (const [key, r] of Object.entries(layout)) {
+      if (key === 'panelArea' || typeof r !== 'object') continue
+      assert.ok(r.x >= NOTCH.left, `${name}: ${key} runs under the notch on the left`)
+      assert.ok(r.x + r.width <= width - NOTCH.right,
+        `${name}: ${key} runs under the notch on the right`)
+      assert.ok(r.y >= NOTCH.top, `${name}: ${key} is above the safe area`)
+      assert.ok(r.y + r.height <= height - NOTCH.bottom,
+        `${name}: ${key} runs into the home indicator`)
+    }
+  }
+})
+
+test('the HUD is pinned to the corners it is supposed to be pinned to', () => {
+  const [, width, height] = VIEWPORTS[1]!
+  const l = hudLayout({ width, height, insets: NO_INSETS, ...WIDEST }, CFG)
+  // Kingdom Rush: pills top-left, one button top-right, actives along the
+  // bottom, the two small controls in the bottom corners.
+  assert.ok(l.counters.x < width / 3, 'the counters are not in the top-left')
+  assert.ok(l.counters.y < height / 4, 'the counters are not at the top')
+  assert.ok(l.startButton.x + l.startButton.width > width * 0.7,
+    'the start button is not in the top-right')
+  assert.ok(l.mute.x < width / 4 && l.mute.y > height * 0.7, 'mute is not bottom-left')
+  assert.ok(l.pause.x > width * 0.7 && l.pause.y > height * 0.7, 'pause is not bottom-right')
+  const mid = l.abilities.x + l.abilities.width / 2
+  assert.ok(Math.abs(mid - width / 2) < 40, 'the abilities are not along the bottom centre')
+})
+
+test('the abilities give way to the corner buttons rather than sit on them', () => {
+  // A wide hand on a narrow phone: centring alone puts the outermost icon on
+  // top of mute.
+  const l = hudLayout(
+    { width: 568, height: 320, insets: NOTCH, countersWidth: 350, abilitiesWidth: 420 }, CFG)
+  assert.ok(!overlaps(l.abilities, l.mute), 'the ability row covers the mute button')
+  assert.ok(!overlaps(l.abilities, l.pause), 'the ability row covers the pause button')
+})
+
+test('the map is full-bleed: nothing is reserved from the board', () => {
+  // This is the whole point of the revert. The world camera fills the screen,
+  // and the HUD floats over it.
+  const game = src('scenes/GameScene.ts')
+  const apply = /private applyBands\([\s\S]*?\n  \}/.exec(game)
+  assert.ok(apply, 'the camera setup is gone')
+  assert.match(apply[0], /setViewport\(0, 0, W, H\)/,
+    'the world camera is inset again, so the map no longer reaches the edges')
+  assert.doesNotMatch(game, /this\.bands|bandsFor/,
+    'the reserved-band geometry is back')
+  // And no painted strips behind the HUD.
+  const hud = src('scenes/HudScene.ts')
+  assert.doesNotMatch(hud, /fillRect\(0, y, W, h\)/,
+    'the HUD still paints an opaque band across the screen')
+  assert.doesNotMatch(hud, /bandsFor/, 'the HUD still computes reserved bands')
+})
+
+test('the HUD and the scene that draws over it share one set of rectangles', () => {
+  const hud = src('scenes/HudScene.ts')
+  const game = src('scenes/GameScene.ts')
+  assert.match(hud, /hudLayout\(/, 'the HUD does not use the layout')
+  assert.match(game, /hudLayout\(/, 'the scene does not know where the HUD is')
+  // The cancel button and the build menu keep clear by asking, not by guessing.
+  assert.match(game, /this\.layout\.abilities\.y - 30/,
+    'the cancel button is placed by a magic number again')
+  assert.match(game, /this\.layout\.panelArea/,
+    'the build menu is no longer told where it may open')
+})
+
+test('the safe area is read rather than assumed to be zero', () => {
+  // index.html sets viewport-fit=cover, so without this the counters sit under
+  // the notch on every notched phone in landscape.
+  const html = readFileSync(url('../index.html'), 'utf8')
+  assert.match(html, /id="safe-area"/, 'there is no safe-area probe')
+  assert.match(html, /padding-left: env\(safe-area-inset-left/,
+    'the probe does not carry the inset values')
+  const sa = src('systems/SafeArea.ts')
+  assert.match(sa, /getComputedStyle/, 'the probe is never read')
+  assert.match(sa, /catch/, 'a browser without env\\(\\) would throw instead of reporting zero')
+  assert.match(src('scenes/HudScene.ts'), /safeAreaInsets\(\)/,
+    'the HUD does not use the safe area')
+})
+
+test('what was right about the bands survived the revert', () => {
+  const tier = presentation.towerTier as Record<string, unknown>
+  assert.ok(typeof tier.pipDropBelowBase === 'number',
+    'the tier pips floated back above the towers')
+  assert.equal(tier.pipRiseAboveTop, undefined, 'the old floating pip anchor is back')
+  const hud = src('scenes/HudScene.ts')
+  const boss = /private drawBossBar\([\s\S]*?\n  \}/.exec(hud)
+  assert.ok(boss, 'the boss bar is gone')
+  assert.match(boss[0], /this\.layout\.messageRow/,
+    'the boss bar is unconstrained again, so it runs under the start button')
+  assert.match(boss[0], /this\.message\.setVisible\(!boss\)/,
+    'the boss bar and the wave message can be up at once, in the same place')
+})
