@@ -96,6 +96,65 @@
       "name": "CORY"
     },
     {
+      "kind": "credit",
+      "role": "Line Producer",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "The Line the Producer Produced",
+      "name": "CORY"
+    },
+    {
+      "kind": "division",
+      "text": "DESIGN"
+    },
+    {
+      "kind": "credit",
+      "role": "Lead Designer",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Designer",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Assistant Designer",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Assistant to the Assistant Designer",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Encounter Designer",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Economy Designer",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Chief Balance Officer",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Deputy Balance Officer",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Balance Officer Who Was Overruled",
+      "name": "CORY"
+    },
+    {
       "kind": "division",
       "text": "PEANUT LOGISTICS"
     },
@@ -256,6 +315,27 @@
       "role": "Additional Programming",
       "name": "CLAUDE",
       "accent": "claude"
+    },
+    {
+      "kind": "credit",
+      "role": "Off-By-One Error Introduction",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Off-By-One Error Correction",
+      "name": "CLAUDE",
+      "accent": "claude"
+    },
+    {
+      "kind": "credit",
+      "role": "Merge Conflict Arbitrator",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Merge Conflict Loser",
+      "name": "CORY"
     },
     {
       "kind": "credit",
@@ -432,7 +512,7 @@
     },
     {
       "kind": "division",
-      "text": "SOUND"
+      "text": "AUDIO"
     },
     {
       "kind": "credit",
@@ -452,6 +532,16 @@
     {
       "kind": "credit",
       "role": "Additional Rustling",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Silence Engineer",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Person Who Noticed There Was No Audio",
       "name": "CORY"
     },
     {
@@ -493,6 +583,16 @@
     {
       "kind": "credit",
       "role": "Regression Reintroduction",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Tester Who Found the Bug",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Tester Who Ignored It",
       "name": "CORY"
     },
     {
@@ -552,7 +652,42 @@
     },
     {
       "kind": "division",
-      "text": "MORALE"
+      "text": "OPERATIONS AND MORALE"
+    },
+    {
+      "kind": "credit",
+      "role": "Coffee",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Coffee (Decaf, Rejected)",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Chair",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Rubber Duck Operator",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Rubber Duck",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Cory Wrangler",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Cory Wrangler Wrangler",
+      "name": "CORY"
     },
     {
       "kind": "credit",
@@ -567,6 +702,16 @@
     {
       "kind": "credit",
       "role": "Morale, Restored with Peanuts",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Credits Writer",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Credits Reader",
       "name": "CORY"
     },
     {
