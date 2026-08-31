@@ -101,27 +101,6 @@ export function centerRange(
   return { min: half, max: worldSize - half }
 }
 
-/**
- * Rubber band: how far past a limit a value is actually allowed to go.
- *
- * Hard-stopping at the edge of the map makes a drag feel like it hit a wall.
- * This lets the camera past the limit but with resistance that grows the
- * further it goes, approaching `slack` and never reaching it, so the player
- * feels the edge instead of colliding with it. Releasing snaps the target back
- * to the real limit and the frame interpolation springs it home.
- */
-export function rubberBand(v: number, min: number, max: number, slack: number): number {
-  if (slack <= 0) return Math.min(Math.max(v, min), max)
-  if (v < min) return min - resist(min - v, slack)
-  if (v > max) return max + resist(v - max, slack)
-  return v
-}
-
-function resist(over: number, slack: number): number {
-  // Asymptotic: at `over == slack` it yields half of slack, and it never
-  // reaches slack however hard the player drags.
-  return slack * (over / (over + slack))
-}
 
 /**
  * Where the camera's centre must be on one axis for the world point
@@ -149,4 +128,24 @@ export function worldAt(
   zoom: number,
 ): number {
   return (screenPos - viewSize / 2) / Math.max(zoom, 0.0001) + center
+}
+
+/**
+ * Rounds a scroll value to a whole pixel without leaving the legal range.
+ *
+ * The game runs with `roundPixels`, so whatever scroll we write is rendered at
+ * an integer. Clamping the camera centre as a float is therefore not quite
+ * enough: at the very edge of the map, rounding can push the rendered view a
+ * pixel past the boundary and expose a sliver of the void beyond it. Rounding
+ * *inside* the legal range instead keeps the guarantee exact.
+ *
+ * When the legal range is narrower than a pixel — which happens at cover zoom,
+ * where the view fits the map exactly on one axis — there is no integer inside
+ * it, so the nearest whole pixel to the middle is the best available answer.
+ */
+export function safeScroll(v: number, min: number, max: number): number {
+  const lo = Math.ceil(min - 1e-6)
+  const hi = Math.floor(max + 1e-6)
+  if (lo > hi) return Math.round((min + max) / 2)
+  return Math.min(Math.max(Math.round(v), lo), hi)
 }

@@ -79,12 +79,12 @@ export function isMuted(): boolean {
 
 export function setVolume(v: number): void {
   volume = Math.max(0, Math.min(1, v))
-  writeSave({ volume, muted })
+  writeSave({ ...loadSave(), volume, muted })
 }
 
 export function setMuted(v: boolean): void {
   muted = v
-  writeSave({ volume, muted })
+  writeSave({ ...loadSave(), volume, muted })
 }
 
 export function toggleMuted(): boolean {

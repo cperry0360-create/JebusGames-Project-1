@@ -12,7 +12,6 @@
     "followLambda": 15,
     "zoomLambda": 11,
     "momentumDecay": 0.0022,
-    "momentumMinSpeed": 35,
-    "edgeSlackPx": 70
+    "momentumMinSpeed": 35
   }
 }

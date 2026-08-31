@@ -1,12 +1,13 @@
 {
   "shadow": {
-    "alpha": 0.34,
-    "offsetY": 3,
+    "alpha": 0.52,
+    "offsetY": 0,
     "defaultWidth": 24,
-    "heightRatio": 0.38,
-    "softLayers": 5,
-    "textureWidth": 96,
-    "textureHeight": 40
+    "heightRatio": 0.34,
+    "softLayers": 16,
+    "falloff": 1.7,
+    "textureWidth": 128,
+    "textureHeight": 52
   },
   "facing": {
     "deadZone": 0.15

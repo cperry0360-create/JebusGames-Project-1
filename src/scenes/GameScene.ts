@@ -40,6 +40,7 @@ import { CameraRig } from '../systems/CameraRig.ts'
 import { Dialog, type DialogOptions, type DialogRow } from '../ui/Dialog.ts'
 import { maxTier, nextStep, sellValue, specSummary } from '../systems/Upgrades.ts'
 import { canAffordAny, openingPurse } from '../systems/Economy.ts'
+import { hasClearedARun, recordRunCleared } from '../systems/Save.ts'
 
 const MAP = mapData as MapDef
 const RULES = rulesData as RulesDef
@@ -133,6 +134,10 @@ export class GameScene extends Phaser.Scene {
 
   private spotLayer!: Phaser.GameObjects.Graphics
   private markerLayer!: Phaser.GameObjects.Graphics
+  /** The legal drop corridor while a path-only summon is armed. Its own layer
+   *  because markerLayer is cleared and redrawn every frame by the rally
+   *  marker, which wiped the band the moment it was painted. */
+  private pathBand!: Phaser.GameObjects.Graphics
   private hoverSpot: BuildSpot | null = null
   private heroSelected = false
   private rangeRing!: Phaser.GameObjects.Graphics
@@ -181,6 +186,7 @@ export class GameScene extends Phaser.Scene {
 
     this.spotLayer = this.add.graphics().setDepth(GROUND_DEPTH + 5)
     this.markerLayer = this.add.graphics().setDepth(GROUND_DEPTH + 6)
+    this.pathBand = this.add.graphics().setDepth(GROUND_DEPTH + 4)
     this.rangeRing = this.add.graphics().setDepth(OVERLAY_DEPTH)
     this.targetRing = this.add.graphics().setDepth(OVERLAY_DEPTH + 1)
 
@@ -248,7 +254,6 @@ export class GameScene extends Phaser.Scene {
       zoomLambda: displayData.camera.zoomLambda,
       momentumDecay: displayData.camera.momentumDecay,
       momentumMinSpeed: displayData.camera.momentumMinSpeed,
-      edgeSlackPx: displayData.camera.edgeSlackPx,
     })
 
     this.menu = new BuildMenu(this, [])
@@ -839,6 +844,7 @@ export class GameScene extends Phaser.Scene {
     this.status.pendingAbility = null
     this.rangeRing.clear()
     this.targetRing.clear()
+    this.pathBand.clear()
     this.drawSpots()
     this.status.message = this.idleHint()
   }
@@ -857,13 +863,36 @@ export class GameScene extends Phaser.Scene {
     this.rangeRing.lineStyle(2, colour, 0.8).strokeCircle(x, y, radius)
   }
 
+  /**
+   * Paints the stretch of lane a summon may be dropped on.
+   *
+   * Walked as overlapping discs along the path rather than stroked as a thick
+   * line: the lane bends, and a stroked polyline leaves notches on the outside
+   * of every corner exactly where the player wants to drop a blocker.
+   */
+  private drawPathBand(within: number): void {
+    this.pathBand.clear()
+    const step = within * 0.5
+    // Pale blue, not green: the band is drawn over grass and a dirt lane, and
+    // a green tint on green grass is invisible exactly where it matters.
+    this.pathBand.fillStyle(0x8fd0ff, 0.22)
+    for (let d = 0; d <= this.lane.totalLength; d += step) {
+      const pt = this.lane.pointAt(d)
+      this.pathBand.fillCircle(pt.x, pt.y, within)
+    }
+  }
+
   private updateHover(p: Phaser.Input.Pointer): void {
     if (this.status.mode === 'targeting' && this.status.pendingAbility) {
       const def = ABILITIES[this.status.pendingAbility]
       this.targetRing.clear()
+      const ok = this.validCastPoint(def, p.worldX, p.worldY)
+      // Green where the cast will land, red where it will be refused, so the
+      // restriction is visible before the tap rather than after it.
+      const tint = ok ? 0xff9d5a : 0xff5a3c
       if (def.radius > 0) {
-        this.targetRing.fillStyle(0xff9d5a, 0.16).fillCircle(p.worldX, p.worldY, def.radius)
-        this.targetRing.lineStyle(2, 0xff9d5a, 0.9).strokeCircle(p.worldX, p.worldY, def.radius)
+        this.targetRing.fillStyle(tint, ok ? 0.16 : 0.1).fillCircle(p.worldX, p.worldY, def.radius)
+        this.targetRing.lineStyle(2, tint, 0.9).strokeCircle(p.worldX, p.worldY, def.radius)
       }
       return
     }
@@ -949,18 +978,38 @@ export class GameScene extends Phaser.Scene {
     this.status.mode = 'targeting'
     this.status.pendingAbility = id
     this.setCancelVisible(true)
-    this.status.message = `${ABILITIES[id].name}: click where you want it.`
+    const within = ABILITIES[id].pathOnlyWithin
+    if (within !== undefined) {
+      this.drawPathBand(within)
+      this.status.message = `${ABILITIES[id].name}: tap the highlighted path.`
+    } else {
+      this.status.message = `${ABILITIES[id].name}: tap where you want it.`
+    }
+  }
+
+  /** True where this ability may be cast. Only summons are restricted. */
+  private validCastPoint(def: AbilityDef, x: number, y: number): boolean {
+    const within = def.pathOnlyWithin
+    if (within === undefined) return true
+    return this.lane.distanceTo(x, y) <= within
   }
 
   private fireAbility(id: string, x: number, y: number): void {
     const def = ABILITIES[id]
     if (!def || !this.cooldowns.ready(id)) return
+    // A gnome dropped in a field blocks nothing, so the cast is refused rather
+    // than wasted. The targeting overlay has already shown where is legal.
+    if (!this.validCastPoint(def, x, y)) {
+      this.refuse(`${def.name} can only be placed on the path.`)
+      return
+    }
     if (id === RULES.serverNuke.abilityId) {
       // Spent the moment it is cast, so a long wind-up cannot be used twice.
       this.nukeUsed = true
       this.status.rareAbility = null
     }
     this.cooldowns.start(id)
+    this.pathBand.clear()
     play(this, `cast-${id.toLowerCase()}`)
     castAbility(id, def, x, y, {
       scene: this,
@@ -1187,6 +1236,8 @@ export class GameScene extends Phaser.Scene {
     this.spotLayer.clear()
 
     const won = phase === 'won'
+    // Clearing a run is what unlocks the Server Nuke for every run after it.
+    if (won) recordRunCleared()
     play(this, won ? 'won' : 'lost')
     this.status.message = won ? 'Filed on time.' : 'Overrun.'
 
@@ -1436,6 +1487,10 @@ export class GameScene extends Phaser.Scene {
    */
   private rollRareDrop(enemy: Enemy): void {
     const cfg = RULES.serverNuke
+    // The gate that was missing. The Server Nuke is the reward for finishing
+    // the game once; without this it could turn up on a first-ever run, which
+    // is exactly what it did. Once per run on top of that.
+    if (!hasClearedARun()) return
     if (this.nukeUsed || this.status.rareAbility !== null) return
     if (!cfg.dropFromTiers.includes(enemy.def.tier)) return
     if (Math.random() >= cfg.dropChance) return

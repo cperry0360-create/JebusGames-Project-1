@@ -340,6 +340,9 @@ export interface AbilityDef {
   /** How long the ticket waits before scratching itself, in seconds. */
   autoRevealSeconds: number
   summonCount: number
+  /** Summons only: how far from the lane this may be dropped. Absent means
+   *  anywhere. Gnomes exist to block, so a gnome off the path does nothing. */
+  pathOnlyWithin?: number
 }
 
 export interface DraftDef {

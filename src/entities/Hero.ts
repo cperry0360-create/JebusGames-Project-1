@@ -270,13 +270,27 @@ export class Hero extends Phaser.GameObjects.Container {
     this.drawBar()
   }
 
+  /**
+   * He leaves the map entirely.
+   *
+   * The old version tipped him on his side and faded to 35% alpha, which left
+   * a ghost of the DAD MODE sprite lying on the board for the rest of the
+   * encounter — read as a rendering fault rather than a death, and sat on top
+   * of build pads. The downed state belongs on the HUD, where the hero bar
+   * already greys out and the label reads "— DOWN".
+   */
   private goDown(): void {
     this.down = true
     this.lastStandActive = false
     this.bar.setVisible(false)
     this.shadow.setVisible(false)
     deathPuff(this.scene, this.x, this.y, 0xff8f7a)
-    this.scene.tweens.add({ targets: this, angle: 90, alpha: 0.35, duration: 400, ease: 'Quad.easeIn' })
+    this.scene.tweens.add({
+      targets: this, alpha: 0, duration: 320, ease: 'Quad.easeIn',
+      // Hidden as well as transparent: nothing of him renders, and nothing of
+      // him can be hit-tested, once the puff has cleared.
+      onComplete: () => this.setVisible(false),
+    })
   }
 
   private drawBar(): void {

@@ -243,7 +243,7 @@
     "ignoresArmor": false,
     "slowFactor": 0,
     "slowSeconds": 0,
-    "supportRadius": 104,
+    "supportRadius": 215,
     "supportDamageBonus": 0.3,
     "tiers": [
       {

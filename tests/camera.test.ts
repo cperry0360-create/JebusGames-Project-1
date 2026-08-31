@@ -8,7 +8,7 @@ import {
   coverZoom,
   fitScale,
   pinchScale,
-  rubberBand,
+  safeScroll,
   smoothing,
   worldAt,
 } from '../src/systems/CameraMath.ts'
@@ -191,26 +191,25 @@ test('the camera centre is clamped so the view stays on the map', () => {
   }
 })
 
-test('the map edge resists rather than stopping dead', () => {
-  const slack = display.camera.edgeSlackPx
-  assert.ok(slack > 0, 'no slack at all is a hard wall')
-  assert.equal(rubberBand(500, 100, 900, slack), 500, 'inside the range nothing changes')
-  // Past the limit it gives, but always less than asked and never past slack.
-  for (const over of [1, 20, 100, 5000]) {
-    const got = rubberBand(900 + over, 100, 900, slack)
-    assert.ok(got > 900, `${over}px past the edge gave nothing at all`)
-    assert.ok(got - 900 < over, `${over}px past the edge moved the full ${got - 900}px, so there is no resistance`)
-    assert.ok(got - 900 < slack, `${over}px past the edge exposed ${got - 900}px, past the ${slack}px limit`)
-  }
-  // Resistance grows: pulling twice as hard must not get twice as far.
-  const near = rubberBand(900 + 40, 100, 900, slack) - 900
-  const far = rubberBand(900 + 80, 100, 900, slack) - 900
-  assert.ok(far < near * 2, `${near} then ${far}: the band is linear, not resistant`)
-  // Symmetric at the low end.
-  assert.ok(Math.abs((rubberBand(100 - 40, 100, 900, slack) - 100) + near) < 1e-9,
-    'the band gives more at one edge than the other')
-  // And with no slack it is an ordinary clamp, for the released state.
-  assert.equal(rubberBand(2000, 100, 900, 0), 900)
+test('the map edge is a wall, not a spring', () => {
+  // Overscroll-then-correct was worse than a hard stop: a drag pulled past the
+  // edge, showed the void beyond the map, and snapped back. The clamp now runs
+  // on the target *and* on the interpolated position, so no frame can ever
+  // render past the edge and there is nothing to correct.
+  const rig = code('systems/CameraRig.ts')
+  assert.doesNotMatch(rig, /rubberBand/, 'the camera can still be pulled past the map edge')
+  assert.doesNotMatch(rig, /edgeSlack/, 'there is still an overscroll allowance')
+  assert.equal(display.camera.edgeSlackPx, undefined, 'the overscroll setting is still in the data')
+
+  const math = code('systems/CameraMath.ts')
+  assert.doesNotMatch(math, /rubberBand/, 'the rubber band is still there to be used again')
+
+  // Both writes are clamped: the target, and the eased position written to the
+  // camera. Clamping only the target still lets the ease overshoot on a frame.
+  const update = rig.slice(rig.indexOf('update(dt: number)'), rig.indexOf('private find('))
+  const clamps = update.match(/Math\.min\(Math\.max\(/g) ?? []
+  assert.ok(clamps.length >= 4,
+    `only ${clamps.length} clamped values in the frame step; target and position both need clamping on both axes`)
 })
 
 test('anchoring is the exact inverse of the world lookup', () => {
@@ -281,4 +280,24 @@ test('pan is slower than the finger and the glide actually decays', () => {
   const glide = v0 * (1 / -Math.log(c.momentumDecay))
   assert.ok(glide > 60 && glide < 400,
     `a 900px/s flick glides ${glide.toFixed(0)}px, which is ${glide < 60 ? 'not worth having' : 'a launch'}`)
+})
+
+test('rounding the scroll never pushes the view past the map edge', () => {
+  // roundPixels renders the camera at a whole-pixel scroll, so clamping the
+  // centre as a float is not enough on its own: at the edge, rounding exposed
+  // a one-pixel sliver of the void beyond the map.
+  for (const [min, max] of [[0, 500], [-3.4, 212.7], [214, 214], [213.7, 213.7], [-0.5, 0.5]]) {
+    for (const v of [min - 40, min - 0.4, (min + max) / 2, max + 0.4, max + 40]) {
+      const got = safeScroll(v, min, max)
+      assert.equal(got, Math.round(got), `safeScroll returned ${got}, which is not a whole pixel`)
+      if (Math.ceil(min) <= Math.floor(max)) {
+        assert.ok(got >= min - 1e-6 && got <= max + 1e-6,
+          `safeScroll(${v}, ${min}, ${max}) gave ${got}, outside the legal range`)
+      } else {
+        // Narrower than a pixel: the best available answer is within half of it.
+        assert.ok(Math.abs(got - (min + max) / 2) <= 0.5 + 1e-6,
+          `safeScroll(${v}, ${min}, ${max}) gave ${got}, more than half a pixel out`)
+      }
+    }
+  }
 })

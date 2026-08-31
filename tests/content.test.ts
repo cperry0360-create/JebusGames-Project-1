@@ -366,3 +366,46 @@ test('the retired tower-base placeholder is gone from the manifest', () => {
   assert.equal(art.files['tower-base'], undefined, 'tower-base is still loaded')
   assert.equal(art.ui.towerBase, null, 'the towers carry their own bases now')
 })
+
+/* ------------------------------------------------- every tower does something */
+
+test('every tower either shoots or supports, and none is inert', () => {
+  for (const [id, t] of Object.entries(towers) as [string, any][]) {
+    const shoots = t.damage > 0 && t.range > 0 && t.fireInterval > 0
+    const supports = t.supportRadius > 0 && t.supportDamageBonus > 0
+    assert.ok(shoots || supports,
+      `${id} neither shoots (dmg ${t.damage}, range ${t.range}) nor supports ` +
+      `(radius ${t.supportRadius}, bonus ${t.supportDamageBonus}) — it is 100% inert`)
+    assert.ok(!(shoots && supports), `${id} is both a turret and a support tower; pick one`)
+  }
+})
+
+test('a support tower can actually reach another build pad', () => {
+  // This is the one that was violated. Shelter had a 104px support radius on a
+  // map whose two closest build pads are 141px apart, so it could never buff
+  // anything: 140 peanuts for a tower that did nothing at all, on any pad, in
+  // any run. A support radius is meaningless except against the map it is
+  // played on, so it has to be checked against the map.
+  const spots = read('map').buildSpots as [number, number][]
+  const gaps: number[] = []
+  for (let i = 0; i < spots.length; i++) {
+    for (let j = i + 1; j < spots.length; j++) {
+      gaps.push(Math.hypot(spots[i][0] - spots[j][0], spots[i][1] - spots[j][1]))
+    }
+  }
+  const closest = Math.min(...gaps)
+
+  for (const [id, t] of Object.entries(towers) as [string, any][]) {
+    if (!(t.supportRadius > 0)) continue
+    assert.ok(t.supportRadius >= closest,
+      `${id} has a ${t.supportRadius}px support radius but the closest two build pads are ` +
+      `${closest.toFixed(0)}px apart, so it can never reach a single tower`)
+    // And its weaker specialization must still reach, or picking it is a trap.
+    for (const spec of t.specializations ?? []) {
+      const mult = spec.supportRadius ?? 1
+      assert.ok(t.supportRadius * mult >= closest,
+        `${id}/${spec.id} shrinks the support radius to ${(t.supportRadius * mult).toFixed(0)}px, ` +
+        `below the ${closest.toFixed(0)}px gap between the closest pads`)
+    }
+  }
+})

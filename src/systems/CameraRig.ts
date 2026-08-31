@@ -5,7 +5,7 @@ import {
   clampZoom,
   coverZoom,
   pinchScale,
-  rubberBand,
+  safeScroll,
   smoothing,
   worldAt,
 } from './CameraMath.ts'
@@ -63,8 +63,6 @@ export interface CameraLimits {
   /** Fraction of glide velocity surviving one second, and the cutoff speed. */
   momentumDecay: number
   momentumMinSpeed: number
-  /** World pixels a drag may pull past the map edge, with resistance. */
-  edgeSlackPx: number
 }
 
 type Mode = 'idle' | 'pan' | 'pinch'
@@ -222,12 +220,21 @@ export class CameraRig {
     return clampZoom(z, this.cover, this.limits.maxZoom)
   }
 
-  private writeCenter(x: number, y: number): void {
+  private writeCenter(
+    x: number,
+    y: number,
+    rx?: { min: number; max: number },
+    ry?: { min: number; max: number },
+  ): void {
     const cam = this.scene.cameras.main
     this.curCenterX = x
     this.curCenterY = y
-    cam.scrollX = x - cam.width / 2
-    cam.scrollY = y - cam.height / 2
+    const sx = x - cam.width / 2
+    const sy = y - cam.height / 2
+    // Rounded inside the legal range rather than left to Phaser's own
+    // rounding, which could put the rendered view a pixel past the map edge.
+    cam.scrollX = rx ? safeScroll(sx, rx.min - cam.width / 2, rx.max - cam.width / 2) : sx
+    cam.scrollY = ry ? safeScroll(sy, ry.min - cam.height / 2, ry.max - cam.height / 2) : sy
   }
 
   /**
@@ -293,13 +300,15 @@ export class CameraRig {
       this.targetCenterY = anchorCenter(this.pinchWorldY, this.pinchMidY, cam.height, z)
     }
 
-    // A drag may pull past the edge against resistance; anything else is held
-    // hard inside it, so releasing springs the camera home through the ease.
-    const slack = this.mode === 'idle' ? 0 : this.limits.edgeSlackPx
+    // The map edge is a wall, not a spring. The rubber band let a drag pull
+    // past the edge and show the void beyond the map before snapping back,
+    // which reads as the camera losing its place rather than as resistance.
+    // Clamped every frame, target and actual alike, so the edge is never
+    // crossed in the first place and there is nothing to correct.
     const rx = centerRange(cam.width, this.limits.worldWidth, z)
     const ry = centerRange(cam.height, this.limits.worldHeight, z)
-    const cx = rubberBand(this.targetCenterX, rx.min, rx.max, slack)
-    const cy = rubberBand(this.targetCenterY, ry.min, ry.max, slack)
+    const cx = Math.min(Math.max(this.targetCenterX, rx.min), rx.max)
+    const cy = Math.min(Math.max(this.targetCenterY, ry.min), ry.max)
     // Momentum must not keep pushing into a wall it cannot pass.
     if (cx !== this.targetCenterX) this.velX = 0
     if (cy !== this.targetCenterY) this.velY = 0
@@ -308,8 +317,10 @@ export class CameraRig {
 
     const t = smoothing(this.limits.followLambda, step)
     this.writeCenter(
-      Phaser.Math.Linear(this.curCenterX, this.targetCenterX, t),
-      Phaser.Math.Linear(this.curCenterY, this.targetCenterY, t),
+      Math.min(Math.max(Phaser.Math.Linear(this.curCenterX, this.targetCenterX, t), rx.min), rx.max),
+      Math.min(Math.max(Phaser.Math.Linear(this.curCenterY, this.targetCenterY, t), ry.min), ry.max),
+      rx,
+      ry,
     )
   }
 

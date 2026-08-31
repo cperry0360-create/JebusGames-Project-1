@@ -19,9 +19,15 @@ export function ensureShadowTexture(scene: Phaser.Scene): void {
   const w = s.textureWidth
   const h = s.textureHeight
   const g = scene.make.graphics({ x: 0, y: 0 }, false)
+  // Ellipses of equal alpha stacked outermost-first, so alpha accumulates
+  // toward the middle. Raising the radius to a power above 1 bunches the
+  // layers into the centre: a tight, nearly solid core where the sprite meets
+  // the ground, easing to nothing at the rim. A linear ramp gave a flat grey
+  // disc, which is what made every sprite look like it was hovering over its
+  // own shadow rather than standing on it.
   for (let i = s.softLayers; i >= 1; i--) {
-    const t = i / s.softLayers
-    g.fillStyle(0x000000, (1 / s.softLayers) * 0.9)
+    const t = Math.pow(i / s.softLayers, s.falloff)
+    g.fillStyle(0x000000, 1 / s.softLayers)
     g.fillEllipse(w / 2, h / 2, w * t, h * t)
   }
   g.generateTexture(key, w, h)

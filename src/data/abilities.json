@@ -31,7 +31,8 @@
     "summonCount": 2,
     "payoutMin": 0,
     "payoutMax": 0,
-    "autoRevealSeconds": 0
+    "autoRevealSeconds": 0,
+    "pathOnlyWithin": 56
   },
   "glacier": {
     "name": "Glacier",
