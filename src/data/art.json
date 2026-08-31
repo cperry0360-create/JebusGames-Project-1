@@ -51,7 +51,10 @@
     "enemy-politician": "enemies/enemy_boss_politician.png",
     "ui-btn-primary": "ui/btn_primary.png",
     "ui-btn-secondary": "ui/btn_secondary.png",
-    "ui-btn-disabled": "ui/btn_disabled.png"
+    "ui-btn-disabled": "ui/btn_disabled.png",
+    "ui-btn-icon": "ui/btn_icon.png",
+    "ui-btn-icon-active": "ui/btn_icon_active.png",
+    "ui-panel-dialog": "ui/panel_dialog.png"
   },
   "render": {
     "turret-escalation": {
@@ -260,6 +263,36 @@
         "top": 68,
         "bottom": 71
       }
+    },
+    "ui-btn-icon": {
+      "contentWidth": 252,
+      "contentHeight": 223,
+      "slice": {
+        "left": 69,
+        "right": 71,
+        "top": 97,
+        "bottom": 78
+      }
+    },
+    "ui-btn-icon-active": {
+      "contentWidth": 257,
+      "contentHeight": 224,
+      "slice": {
+        "left": 73,
+        "right": 75,
+        "top": 97,
+        "bottom": 79
+      }
+    },
+    "ui-panel-dialog": {
+      "contentWidth": 721,
+      "contentHeight": 430,
+      "slice": {
+        "left": 144,
+        "right": 143,
+        "top": 162,
+        "bottom": 159
+      }
     }
   },
   "map": {
@@ -277,7 +310,10 @@
       "primary": "ui-btn-primary",
       "secondary": "ui-btn-secondary",
       "disabled": "ui-btn-disabled"
-    }
+    },
+    "iconButton": "ui-btn-icon",
+    "iconButtonActive": "ui-btn-icon-active",
+    "panel": "ui-panel-dialog"
   },
   "fx": {
     "spark": "fx-spark",

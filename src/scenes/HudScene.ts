@@ -5,6 +5,7 @@ import presentationData from '../data/presentation.json'
 import { COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { ART, fitInBox, renderFor } from '../systems/Art.ts'
 import { greyKey } from '../systems/Desaturate.ts'
+import { plateButton, type PlateButton } from '../ui/Plate.ts'
 
 interface SlotView {
   id: string
@@ -37,9 +38,7 @@ export class HudScene extends Phaser.Scene {
   private heroBar!: Phaser.GameObjects.Graphics
   private bossBar!: Phaser.GameObjects.Graphics
   private bossLabel!: Phaser.GameObjects.Text
-  private startBox!: Phaser.GameObjects.Graphics
-  private startLabel!: Phaser.GameObjects.Text
-  private startHit!: Phaser.GameObjects.Rectangle
+  private startBtn!: PlateButton
   private slots: SlotView[] = []
   private slotsBuilt = false
   /** Which abilities the slots were built for, so a rare drop rebuilds them. */
@@ -71,7 +70,7 @@ export class HudScene extends Phaser.Scene {
     })
 
     // Start button in the opposite corner, standing on its own.
-    this.buildStartButton(W - 196 - HUD.marginX, HUD.marginY)
+    this.buildStartButton(W - HudScene.START_W - HUD.marginX, HUD.marginY)
 
     // The hero stays top-right where he was, moved down clear of the button.
     this.heroLabel = this.add.text(W - HUD.marginX, HUD.marginY + 54, '', {
@@ -135,20 +134,16 @@ export class HudScene extends Phaser.Scene {
     return { bottom }
   }
 
+  /** Width is declared here so the caller can place the button by its own
+   *  size rather than by a number that has to be kept in step with it. */
+  private static readonly START_W = 240
+  private static readonly START_H = 50
+
   private buildStartButton(x: number, y: number): void {
-    const w = 196
-    const h = 46
-    this.startBox = this.add.graphics()
-    // Stroked: with the bar gone this button sits straight on the map, and
-    // the wave readout it turns into was washing out against the treeline.
-    this.startLabel = this.add.text(x + w / 2, y + h / 2, '', {
-      fontFamily: FONT_DISPLAY, fontSize: '17px', color: COLOR.ink,
-      stroke: '#0d1016', strokeThickness: 4,
-    }).setOrigin(0.5)
-    this.startHit = this.add.rectangle(x + w / 2, y + h / 2, w, h, 0xffffff, 0.001)
-      .setInteractive({ useHandCursor: true })
-    this.startHit.on('pointerdown', () => this.world.startWave())
-    this.startHit.setData('box', { x, y, w, h })
+    const w = HudScene.START_W
+    const h = HudScene.START_H
+    this.startBtn = plateButton(this, x + w / 2, y + h / 2, w, h, '',
+      () => this.world.startWave(), 16)
   }
 
   /** Two drafted abilities, Cory's own two actives, and the rare drop if it
@@ -289,17 +284,13 @@ export class HudScene extends Phaser.Scene {
   }
 
   private drawStartButton(s: GameScene['status']): void {
-    const box = this.startHit.getData('box') as { x: number; y: number; w: number; h: number }
-    const ready = s.phase === 'ready'
-    this.startBox.clear()
-    this.startBox.fillStyle(ready ? 0x2f6b38 : 0x232c38, 0.98).fillRoundedRect(box.x, box.y, box.w, box.h, 9)
-    this.startBox.lineStyle(2, ready ? COLOR.accent : COLOR.panelEdge, 1)
-      .strokeRoundedRect(box.x, box.y, box.w, box.h, 9)
-    this.startLabel.setColor(ready ? COLOR.ink : '#6f7a86')
+    // Only pressable between waves. Mid-wave it becomes a readout, which is
+    // exactly what the disabled plate is for.
+    this.startBtn.setEnabled(s.phase === 'ready')
 
-    if (s.phase === 'ready') this.startLabel.setText(`START WAVE ${Math.min(s.wave + 1, s.waveCount)}`)
-    else if (s.phase === 'wave') this.startLabel.setText(`${s.waveName} · ${s.enemiesLeft} left`)
-    else this.startLabel.setText(s.phase === 'won' ? 'CLEARED' : 'OVERRUN')
+    if (s.phase === 'ready') this.startBtn.setLabel(`START WAVE ${Math.min(s.wave + 1, s.waveCount)}`)
+    else if (s.phase === 'wave') this.startBtn.setLabel(`${s.waveName} · ${s.enemiesLeft} left`)
+    else this.startBtn.setLabel(s.phase === 'won' ? 'CLEARED' : 'OVERRUN')
   }
 
   /**

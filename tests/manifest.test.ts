@@ -86,12 +86,35 @@ test('art.json and the ArtDef type describe the same manifest', () => {
   // in CI as a cast error. This catches the drift where it happens.
   const types = readFileSync(url('../src/types.ts'), 'utf8')
   const artDef = types.slice(types.indexOf('export interface ArtDef'))
+
+  /** The body of `name: { ... }`, matched by counting braces. A section can
+   *  hold a nested object (ui.buttons does), and stopping at the first closing
+   *  brace would silently read half the section and compare that. */
+  const body = (name: string): string => {
+    const open = artDef.indexOf(`\n  ${name}: {`)
+    if (open < 0) return ''
+    let depth = 0
+    const from = artDef.indexOf('{', open)
+    for (let i = from; i < artDef.length; i++) {
+      if (artDef[i] === '{') depth++
+      else if (artDef[i] === '}' && --depth === 0) return artDef.slice(from + 1, i)
+    }
+    return ''
+  }
+
   for (const section of ['fx', 'ui']) {
-    const block = artDef.match(new RegExp(`\\n  ${section}: \\{([^}]*)\\}`))
+    const block = body(section)
     assert.ok(block, `ArtDef declares no ${section} section`)
-    const declared = [...block[1].matchAll(/^\s*(\w+):/gm)].map((m) => m[1]).sort()
+    // Top-level keys only: a nested object's own fields are not roles.
+    const declared: string[] = []
+    let depth = 0
+    for (const line of block.split('\n')) {
+      const m = /^\s*(\w+):/.exec(line)
+      if (m && depth === 0) declared.push(m[1])
+      depth += (line.match(/\{/g) ?? []).length - (line.match(/\}/g) ?? []).length
+    }
     const actual = Object.keys(art[section]).sort()
-    assert.deepEqual(actual, declared,
+    assert.deepEqual(actual, declared.sort(),
       `art.json's ${section} section and ArtDef.${section} disagree`)
   }
 })

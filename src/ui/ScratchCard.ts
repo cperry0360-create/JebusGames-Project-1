@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
-import { COLOR, FONT_DISPLAY, FONT_UI, paintPanel } from './Theme.ts'
+import { COLOR, FONT_DISPLAY, FONT_UI } from './Theme.ts'
+import { platePanel } from './Plate.ts'
 
 /**
  * The Scratch Ticket overlay.
@@ -48,8 +49,11 @@ export class ScratchCard {
     this.layer = scene.add.container(x, y).setDepth(depth).setScale(0.6)
     scene.tweens.add({ targets: this.layer, scale: 1, duration: 220, ease: 'Back.easeOut' })
 
-    const panel = scene.add.graphics()
-    paintPanel(panel, -w / 2 - 10, -h / 2 - 34, w + 20, h + 62, { fill: COLOR.panelHi })
+    // The plate's chrome sits outside the card, not over it: sized from the
+    // foil plus the title above and the hint below, or the frame eats both.
+    const pw = w + 150
+    const ph = h + 240
+    const panel = platePanel(scene, -pw / 2, -ph / 2, pw, ph)
     const title = scene.add.text(0, -h / 2 - 24, 'SCRATCH TICKET', {
       fontFamily: FONT_DISPLAY, fontSize: '17px', color: COLOR.ink,
     }).setOrigin(0.5, 0)
@@ -82,7 +86,7 @@ export class ScratchCard {
     })
     this.zone.on('pointerdown', (p: Phaser.Input.Pointer) => this.scratchAt(p))
 
-    this.layer.add([panel, title, face, prize, unit, this.foil, this.hint, this.zone])
+    this.layer.add([...panel, title, face, prize, unit, this.foil, this.hint, this.zone])
 
     this.timer = scene.time.delayedCall(opts.autoRevealSeconds * 1000, () => this.reveal(true))
   }

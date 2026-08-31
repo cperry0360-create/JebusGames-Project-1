@@ -1,6 +1,8 @@
 import Phaser from 'phaser'
 import type { TowerDef } from '../types.ts'
 import { towerIcon } from './TowerIcon.ts'
+import { iconPlate, platePanel } from './Plate.ts'
+import { COLOR, FONT_DISPLAY, FONT_UI } from './Theme.ts'
 
 export interface BuildOption {
   id: string
@@ -8,10 +10,14 @@ export interface BuildOption {
 }
 
 const PANEL_DEPTH = 200000
-const CELL_W = 92
-const CELL_H = 84
-const COLS = 3
-const PAD = 10
+const CELL_W = 96
+const CELL_H = 116
+/** The plate is square and sits at the top of its cell; the name and cost go
+ *  underneath it, outside the frame, where they are readable on any icon. */
+const PLATE = 74
+const MAX_COLS = 3
+const PAD = 12
+const TITLE_H = 24
 
 /**
  * Opens on an empty tile and shows what can be built there and for how much.
@@ -52,9 +58,12 @@ export class BuildMenu {
   ): void {
     this.close(onPreview)
 
-    const rows = Math.ceil(this.options.length / COLS)
-    const w = COLS * CELL_W + PAD * 2
-    const h = rows * CELL_H + PAD * 2 + 22
+    // Size to the options actually offered: a fixed three columns left a wide
+    // empty panel whenever fewer towers were unlocked.
+    const cols = Math.max(1, Math.min(MAX_COLS, this.options.length))
+    const rows = Math.ceil(this.options.length / cols)
+    const w = cols * CELL_W + PAD * 2
+    const h = rows * CELL_H + PAD * 2 + TITLE_H
 
     const cam = this.scene.cameras.main
     const x = Phaser.Math.Clamp(worldX - w / 2, 6, cam.width - w - 6)
@@ -62,38 +71,32 @@ export class BuildMenu {
 
     const c = this.scene.add.container(x, y).setDepth(PANEL_DEPTH)
 
-    const bg = this.scene.add.rectangle(0, 0, w, h, 0x14181f, 0.94).setOrigin(0, 0)
-    bg.setStrokeStyle(2, 0x4a5666)
-    const title = this.scene.add.text(PAD, 8, 'BUILD', {
-      fontFamily: 'monospace', fontSize: '13px', color: '#c2ab84',
-    })
-    c.add([bg, title])
+    c.add(platePanel(this.scene, 0, 0, w, h))
+    c.add(this.scene.add.text(w / 2, PAD - 2, 'BUILD', {
+      fontFamily: FONT_DISPLAY, fontSize: '13px', color: COLOR.amber,
+    }).setOrigin(0.5, 0))
 
     this.options.forEach((opt, i) => {
-      const cx = PAD + (i % COLS) * CELL_W
-      const cy = PAD + 22 + Math.floor(i / COLS) * CELL_H
+      const cx = PAD + (i % cols) * CELL_W
+      const cy = PAD + TITLE_H + Math.floor(i / cols) * CELL_H
       const affordable = peanuts >= opt.def.cost
 
-      const cell = this.scene.add
-        .rectangle(cx, cy, CELL_W - 6, CELL_H - 6, 0x232a34, 0.95)
-        .setOrigin(0, 0)
-        .setStrokeStyle(1, 0x3b4552)
-
-      const iconX = cx + (CELL_W - 6) / 2
+      const iconX = cx + CELL_W / 2
+      const cell = iconPlate(this.scene, iconX, cy + PLATE / 2, PLATE, PLATE)
       // Unaffordable reads as greyed out, not as faded: a half-alpha tower on
       // a dark cell just looks like it is behind something.
-      const icon = towerIcon(this.scene, iconX, cy + 48, opt.def.sprite, 44, !affordable)
+      const icon = towerIcon(this.scene, iconX, cy + PLATE / 2 + 8, opt.def.sprite, 46, !affordable)
 
       const cost = this.scene.add
-        .text(iconX, cy + 56, `${opt.def.cost}p`, {
-          fontFamily: 'monospace', fontSize: '13px',
+        .text(iconX, cy + PLATE + 20, `${opt.def.cost}p`, {
+          fontFamily: FONT_DISPLAY, fontSize: '14px',
           color: affordable ? '#f2d06b' : '#7d7568',
         })
         .setOrigin(0.5, 0)
 
       const name = this.scene.add
-        .text(iconX, cy + 2, opt.def.name.split(' ')[0], {
-          fontFamily: 'monospace', fontSize: '10px',
+        .text(iconX, cy + PLATE + 4, opt.def.name.split(' ')[0], {
+          fontFamily: FONT_UI, fontSize: '11px',
           color: affordable ? '#f6ecd9' : '#7d7568',
         })
         .setOrigin(0.5, 0)
@@ -101,16 +104,18 @@ export class BuildMenu {
       // One transparent rectangle per cell carries the input, so hit testing
       // never has to care about the icons stacked underneath.
       const hit = this.scene.add
-        .rectangle(cx, cy, CELL_W - 6, CELL_H - 6, 0xffffff, 0.001)
+        .rectangle(cx + 2, cy, CELL_W - 4, CELL_H - 6, 0xffffff, 0.001)
         .setOrigin(0, 0)
         .setInteractive({ useHandCursor: affordable })
 
+      // The active plate is the hover state, so the cell lights up rather
+      // than changing colour under the icon.
       hit.on('pointerover', () => {
-        cell.setFillStyle(affordable ? 0x2f4536 : 0x3a2a2a, 0.95)
+        cell.setActive(true)
         onPreview(opt.id)
       })
       hit.on('pointerout', () => {
-        cell.setFillStyle(0x232a34, 0.95)
+        cell.setActive(false)
         onPreview(null)
       })
       // An unaffordable pick still reports: swallowing the click here is what
@@ -119,7 +124,7 @@ export class BuildMenu {
       hit.on('pointerdown', () => onPick(opt.id))
 
       this.hitAreas.push(hit)
-      c.add([cell, name, ...icon, cost, hit])
+      c.add([...cell.parts, name, ...icon, cost, hit])
     })
 
     this.container = c

@@ -34,6 +34,7 @@ import { Projectile } from '../entities/Projectile.ts'
 import { BuildMenu } from '../ui/BuildMenu.ts'
 import { ScratchCard } from '../ui/ScratchCard.ts'
 import { COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
+import { platePanel } from '../ui/Plate.ts'
 
 const MAP = mapData as MapDef
 const RULES = rulesData as RulesDef
@@ -875,10 +876,11 @@ export class GameScene extends Phaser.Scene {
     play(this, 'sfx-boss', 0.95)
     this.cameras.main.shake(600, 0.007)
 
-    const card = this.add.graphics().setDepth(TICKET_DEPTH)
-    card.fillStyle(0x0d1016, 0.88).fillRect(0, H / 2 - 74, W, 148)
-    card.lineStyle(3, 0xff5a3c, 1).lineBetween(0, H / 2 - 74, W, H / 2 - 74)
-    card.lineStyle(3, 0xff5a3c, 1).lineBetween(0, H / 2 + 74, W, H / 2 + 74)
+    // The dialog plate, run the full width of the screen. Its corners scale
+    // down to fit a band this shallow, so the chrome reads without the frame
+    // swallowing the boss's name.
+    const card = platePanel(this, 0, H / 2 - 78, W, 156)
+    card.forEach((p) => p.setDepth(TICKET_DEPTH))
 
     const name = this.add.text(W / 2, H / 2 - 34, boss.def.name.toUpperCase(), {
       fontFamily: FONT_DISPLAY, fontSize: '56px', color: COLOR.fire,
@@ -889,9 +891,12 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5, 0).setDepth(TICKET_DEPTH + 1)
 
     this.tweens.add({ targets: name, scale: { from: 0.7, to: 1 }, duration: 380, ease: 'Back.easeOut' })
-    for (const o of [card, name, sub]) {
-      this.tweens.add({ targets: o, alpha: 0, delay: 2200, duration: 700, onComplete: () => o.destroy() })
-    }
+    // The plate is many images, so the fade targets them all as one list.
+    const pieces: Phaser.GameObjects.GameObject[] = [...card, name, sub]
+    this.tweens.add({
+      targets: pieces, alpha: 0, delay: 2200, duration: 700,
+      onComplete: () => pieces.forEach((o) => o.destroy()),
+    })
     this.status.message = `${boss.def.name} is here. He does not attack — he taxes. Spend your peanuts.`
   }
 
@@ -999,10 +1004,8 @@ export class GameScene extends Phaser.Scene {
 
     const W = displayData.width
     const y = displayData.height / 2 - 90
-    const banner = this.add.graphics().setDepth(TICKET_DEPTH)
-    banner.fillStyle(0x0d1016, 0.9).fillRect(0, y - 34, W, 88)
-    banner.lineStyle(3, 0x8fd0ff, 1).lineBetween(0, y - 34, W, y - 34)
-    banner.lineStyle(3, 0x8fd0ff, 1).lineBetween(0, y + 54, W, y + 54)
+    const banner = platePanel(this, 0, y - 38, W, 96)
+    banner.forEach((p) => p.setDepth(TICKET_DEPTH))
 
     const title = this.add.text(W / 2, y - 22, name.toUpperCase(), {
       fontFamily: FONT_DISPLAY, fontSize: '46px', color: '#8fd0ff',
@@ -1012,9 +1015,11 @@ export class GameScene extends Phaser.Scene {
       fontFamily: FONT_UI, fontSize: '15px', color: COLOR.ink,
     }).setOrigin(0.5, 0).setDepth(TICKET_DEPTH + 1)
 
-    for (const o of [banner, title, sub]) {
-      this.tweens.add({ targets: o, alpha: 0, delay: 2100, duration: 600, onComplete: () => o.destroy() })
-    }
+    const pieces: Phaser.GameObjects.GameObject[] = [...banner, title, sub]
+    this.tweens.add({
+      targets: pieces, alpha: 0, delay: 2100, duration: 600,
+      onComplete: () => pieces.forEach((o) => o.destroy()),
+    })
     this.tweens.add({ targets: title, scale: { from: 0.6, to: 1 }, duration: 320, ease: 'Back.easeOut' })
     this.status.message = `${name} recovered. One use, then it is gone.`
   }

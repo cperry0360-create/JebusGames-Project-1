@@ -157,21 +157,49 @@ test('the dedication sits between the closing note and the back button', () => {
     'the dedication would land on the back button')
 })
 
-test('the arcade button plates are on disk and sliced sanely', () => {
-  // A plate is drawn by slicing at its end caps. If a cap were measured wider
-  // than half the plate the two would overlap and the frame would fold in on
-  // itself, which is the one way this can look broken rather than merely wrong.
-  for (const weight of ['primary', 'secondary', 'disabled'] as const) {
-    const key = art.ui.buttons[weight]
-    assert.ok(key, `no plate for the ${weight} weight`)
-    const path = art.files[key]
-    assert.ok(path, `ui.buttons.${weight} points at unknown key "${key}"`)
-    assert.ok(existsSync(url(`../public/${art.assetRoot}${path}`)), `${key} -> ${path} is missing`)
+/** Every plate role, and the manifest key each points at. */
+const PLATE_ROLES: [string, string][] = [
+  ['buttons.primary', art.ui.buttons?.primary],
+  ['buttons.secondary', art.ui.buttons?.secondary],
+  ['buttons.disabled', art.ui.buttons?.disabled],
+  ['iconButton', art.ui.iconButton],
+  ['iconButtonActive', art.ui.iconButtonActive],
+  ['panel', art.ui.panel],
+]
 
-    const cfg = art.render[key]
-    assert.ok(cfg?.slice, `${key} has no measured slice`)
-    assert.ok(cfg.slice.left > 0 && cfg.slice.right > 0, `${key} has no end caps to preserve`)
-    assert.ok(cfg.slice.left + cfg.slice.right < cfg.contentWidth,
-      `${key} caps span ${cfg.slice.left + cfg.slice.right}px of a ${cfg.contentWidth}px plate`)
+test('all six UI plates are in the manifest and on disk', () => {
+  for (const [role, key] of PLATE_ROLES) {
+    assert.ok(key, `no plate for ui.${role}`)
+    const path = art.files[key]
+    assert.ok(path, `ui.${role} points at unknown key "${key}"`)
+    assert.ok(path.startsWith('ui/'), `${key} should live under ui/`)
+    assert.ok(existsSync(url(`../public/${art.assetRoot}${path}`)), `${key} -> ${path} is missing`)
   }
+  assert.equal(new Set(PLATE_ROLES.map(([, k]) => k)).size, 6,
+    'the six roles should map to six distinct plates')
+})
+
+test('every plate is sliced sanely', () => {
+  // A plate is drawn by slicing at its corners. If opposite insets were
+  // measured wider than the plate they would overlap and the frame would fold
+  // in on itself, which is the one way this looks broken rather than wrong.
+  for (const [role, key] of PLATE_ROLES) {
+    const cfg = art.render[key]
+    assert.ok(cfg?.slice, `${key} (ui.${role}) has no measured slice`)
+    const s = cfg.slice
+    assert.ok(s.left > 0 && s.right > 0 && s.top > 0 && s.bottom > 0,
+      `${key} has a zero inset, so it has no chrome to preserve`)
+    assert.ok(s.left + s.right < cfg.contentWidth,
+      `${key} side insets span ${s.left + s.right}px of a ${cfg.contentWidth}px plate`)
+    assert.ok(s.top + s.bottom < cfg.contentHeight,
+      `${key} top and bottom insets span ${s.top + s.bottom}px of a ${cfg.contentHeight}px plate`)
+  }
+})
+
+test('no button or panel is drawn by hand any more', () => {
+  // The plates replaced every drawn plate in the game. A Graphics-painted
+  // panel creeping back in is how the look drifts apart again.
+  const theme = readFileSync(url('../src/ui/Theme.ts'), 'utf8')
+  assert.doesNotMatch(theme, /export function (button|panel|paintPanel)\b/,
+    'Theme still exports a hand-drawn button or panel')
 })

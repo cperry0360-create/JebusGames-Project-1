@@ -6,7 +6,8 @@ import abilitiesData from '../data/abilities.json'
 import draftData from '../data/draft.json'
 import { draftAbilities, draftOpeningTowers, makeRng, reserveTowers } from '../systems/Draft.ts'
 import { runState, setRunState } from '../systems/RunState.ts'
-import { COLOR, FONT_DISPLAY, FONT_UI, button, panel } from '../ui/Theme.ts'
+import { COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
+import { plateButton, platePanel } from '../ui/Plate.ts'
 import { towerIcon } from '../ui/TowerIcon.ts'
 import { fitInBox } from '../systems/Art.ts'
 
@@ -89,7 +90,7 @@ export class DraftScene extends Phaser.Scene {
       }).setOrigin(0.5).setAlpha(0.75))
     }
 
-    const b = button(this, W / 2, 618, 280, 56,
+    const b = plateButton(this, W / 2, 618, 300, 60,
       isAbilities ? 'NEXT: TOWERS' : 'BEGIN THE RUN',
       () => {
         if (this.step === 'abilities') {
@@ -106,7 +107,7 @@ export class DraftScene extends Phaser.Scene {
   private abilityCard(x: number, y: number, w: number, id: string): void {
     const def = ABILITIES[id]
     const h = 280
-    this.layer.add(panel(this, x, y, w, h, { fill: COLOR.panelHi }))
+    this.layer.add(platePanel(this, x, y, w, h))
     // The cards carry their own frames, so nothing is drawn behind them.
     const icon = this.add.image(x + w / 2, y + 74, def.icon)
     fitInBox(icon, def.icon, ABILITY_ICON_H)
@@ -135,7 +136,7 @@ export class DraftScene extends Phaser.Scene {
   private towerCard(x: number, y: number, w: number, id: string): void {
     const def = TOWERS[id]
     const h = 280
-    this.layer.add(panel(this, x, y, w, h, { fill: COLOR.panelHi }))
+    this.layer.add(platePanel(this, x, y, w, h))
     this.layer.add(towerIcon(this, x + w / 2, y + 112, def.sprite, 104))
     this.layer.add(this.add.text(x + w / 2, y + 132, def.name.toUpperCase(), {
       fontFamily: FONT_DISPLAY, fontSize: '22px', color: COLOR.ink,

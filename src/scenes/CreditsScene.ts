@@ -4,7 +4,8 @@ import displayData from '../data/display.json'
 import brandingData from '../data/branding.json'
 import creditsData from '../data/credits.json'
 import { ART, contentWidthAt, fitContentHeight } from '../systems/Art.ts'
-import { COLOR, FONT_DISPLAY, FONT_UI, plateButton } from '../ui/Theme.ts'
+import { COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
+import { plateButton } from '../ui/Plate.ts'
 
 const BRANDING = brandingData as BrandingDef
 const CREDITS = creditsData as CreditsDef

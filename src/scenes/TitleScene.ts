@@ -4,7 +4,8 @@ import displayData from '../data/display.json'
 import heroesData from '../data/heroes.json'
 import brandingData from '../data/branding.json'
 import { setRunState } from '../systems/RunState.ts'
-import { COLOR, FONT_DISPLAY, FONT_UI, button, panel } from '../ui/Theme.ts'
+import { COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
+import { plateButton, platePanel } from '../ui/Plate.ts'
 import { ART, fitContentHeight, fitInBox } from '../systems/Art.ts'
 
 const HEROES = heroesData as Record<string, HeroDef>
@@ -13,7 +14,7 @@ const BRANDING = brandingData as BrandingDef
 /** Title, hero selection, and the only place a run can begin. */
 export class TitleScene extends Phaser.Scene {
   private selectedHero = 'cory'
-  private cards: Array<{ id: string; frame: Phaser.GameObjects.Graphics; x: number; y: number; w: number; h: number }> = []
+  private cards: Array<{ id: string; frame: Phaser.GameObjects.Image[] }> = []
   private blurb!: Phaser.GameObjects.Text
   private kit!: Phaser.GameObjects.Text
 
@@ -74,8 +75,8 @@ export class TitleScene extends Phaser.Scene {
       align: 'center', wordWrap: { width: 740 },
     }).setOrigin(0.5, 0)
 
-    button(this, W / 2, 622, 260, 58, 'START RUN', () => this.start(), 24)
-    button(this, W / 2, 680, 190, 38, 'CREDITS', () => this.scene.start('Credits'), 15)
+    plateButton(this, W / 2, 622, 300, 62, 'START RUN', () => this.start(), 24)
+    plateButton(this, W / 2, 682, 210, 44, 'CREDITS', () => this.scene.start('Credits'), 15, 'secondary')
 
     this.select(this.selectedHero)
   }
@@ -132,7 +133,7 @@ export class TitleScene extends Phaser.Scene {
 
   private heroCard(id: string, x: number, y: number, w: number, h: number): void {
     const def = HEROES[id]
-    const frame = panel(this, x, y, w, h, { fill: COLOR.panelHi })
+    const frame = platePanel(this, x, y, w, h)
 
     // The hero's own art, fitted to the card rather than scaled by a factor.
     const portrait = this.add.image(x + w / 2, y + 74, def.portraitSprite)
@@ -149,17 +150,16 @@ export class TitleScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
     hit.on('pointerdown', () => this.select(id))
 
-    this.cards.push({ id, frame, x, y, w, h })
+    this.cards.push({ id, frame })
   }
 
   private select(id: string): void {
     this.selectedHero = id
+    // The plate is painted, so the picked card is the bright one and the rest
+    // sit back: a tint can only darken, so selection is the absence of one.
     for (const c of this.cards) {
-      const on = c.id === id
-      c.frame.clear()
-      c.frame.fillStyle(on ? 0x24402a : COLOR.panelHi, 0.96).fillRoundedRect(c.x, c.y, c.w, c.h, 10)
-      c.frame.lineStyle(on ? 3 : 2, on ? COLOR.accent : COLOR.panelEdge, 1)
-        .strokeRoundedRect(c.x, c.y, c.w, c.h, 10)
+      const tint = c.id === id ? 0xffffff : 0x8b939c
+      c.frame.forEach((p) => p.setTint(tint))
     }
     const def = HEROES[id]
     this.blurb.setText(`${def.flavor}\n${def.blurb}`)

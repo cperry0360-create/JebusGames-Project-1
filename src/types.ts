@@ -343,6 +343,11 @@ export interface ArtDef {
     counters: Record<string, string>
     /** The arcade button plates, by the weight of the action they carry. */
     buttons: { primary: string; secondary: string; disabled: string }
+    /** The small square plate for an icon button, and its selected state. */
+    iconButton: string
+    iconButtonActive: string
+    /** The frame behind every dialog: draft cards, build menu, boss card. */
+    panel: string
   }
   fx: {
     spark: string
