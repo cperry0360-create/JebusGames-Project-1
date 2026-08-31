@@ -153,6 +153,17 @@ test('selling mid-upgrade refunds the tier already paid for', () => {
   assert.equal(quotes.length, 2, 'the quoted refund and the paid refund should be the one rule')
 })
 
+test('finishing a tier recomputes support', () => {
+  // Support is only recalculated when the tower set changes. A Tax Shelter
+  // that upgrades grows its radius without the set changing, so its new reach
+  // would not have reached anything.
+  const tower = src('entities/Tower.ts')
+  assert.match(tower, /this\.emit\('tierup'/, 'a completed tier should announce itself')
+  const game = src('scenes/GameScene.ts')
+  assert.match(game, /on\('tierup', \(\) => this\.refreshSupport\(\)\)/,
+    'the scene should recompute support when a tier finishes')
+})
+
 test('a tower under construction fires slower and keeps its old stats', () => {
   const tower = src('entities/Tower.ts')
   assert.match(tower, /this\.upgrading \? base \/ UPGRADES\.buildFireRate : base/,

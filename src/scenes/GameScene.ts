@@ -514,7 +514,9 @@ export class GameScene extends Phaser.Scene {
 
     this.status.peanuts -= def.cost
     this.build.occupy(spot.index)
-    this.towers.push(new Tower(this, spot.x, spot.y, id, def, spot.index))
+    const tower = new Tower(this, spot.x, spot.y, id, def, spot.index)
+    tower.on('tierup', () => this.refreshSupport())
+    this.towers.push(tower)
     this.refreshSupport()
     play(this, 'build')
     this.menu.close()

@@ -190,6 +190,10 @@ export class Tower extends Phaser.GameObjects.Container {
     this.scaffold?.destroy()
     this.scaffold = undefined
     this.popIn()
+    // A Tax Shelter that just grew its radius has to be recomputed against
+    // every tower it now covers, and support is only recalculated when the
+    // tower set changes. Finishing a tier is that kind of change.
+    this.emit('tierup', this)
   }
 
   /** A bar over the tower while it is being raised, so the player can see what
