@@ -8,7 +8,7 @@ import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { plateButton, platePanel } from '../ui/Plate.ts'
 import { AudioToggle } from '../ui/AudioToggle.ts'
 import { unlockAudio } from '../systems/Audio.ts'
-import { BUILD_ID } from '../systems/Build.ts'
+import { VERSION_LABEL } from '../systems/Build.ts'
 import { ART, fitContentHeight, fitInBox } from '../systems/Art.ts'
 import { fitCameraToDesign } from '../ui/FitCamera.ts'
 
@@ -86,12 +86,27 @@ export class TitleScene extends Phaser.Scene {
     plateButton(this, W / 2, 606, 300, 62, 'START RUN', () => this.start(), 26)
     plateButton(this, W / 2, 670, 250, 52, 'CREDITS', () => this.scene.start('Credits'), 22, 'secondary')
 
-    // Which build this is, small and out of the way, so a deploy can be
-    // confirmed at a glance without opening devtools on a phone.
-    this.add.text(W - 10, H - 8, BUILD_ID, {
-      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.dim,
+    // Which build this is. Small and out of the way, but readable without
+    // squinting: this is the line that answers "did my deploy actually reach
+    // the phone?", and a stamp you cannot read answers nothing. It sits on its
+    // own dark pill because the corner behind it is painted scenery, and text
+    // over arbitrary art is only legible by luck.
+    const stamp = this.add.text(W - 18, H - 14, VERSION_LABEL, {
+      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.ink,
       stroke: '#0d1016', strokeThickness: 3,
-    }).setOrigin(1, 1).setAlpha(0.65)
+    }).setOrigin(1, 1)
+    const pad = 12
+    this.add.rectangle(
+      stamp.x - stamp.width / 2,
+      stamp.y - stamp.height / 2,
+      stamp.width + pad * 2,
+      stamp.height + pad * 0.7,
+      0x0d1016,
+      0.62,
+    ).setOrigin(0.5)
+    // The pill is created second so it can be sized from the measured text,
+    // which puts it on top; the label has to come back over it.
+    this.children.bringToTop(stamp)
 
     unlockAudio(this)
 

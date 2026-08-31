@@ -66,7 +66,31 @@ test('the stale-page reload cannot loop', () => {
     'the guard must be written before the reload, or a cached reload loops')
 })
 
-test('the title screen says which build it is', () => {
+test('the title screen says which build it is, legibly', () => {
   const title = read('../src/scenes/TitleScene.ts')
-  assert.match(title, /BUILD_ID/, 'no build stamp on the title screen')
+  assert.match(title, /VERSION_LABEL/, 'no build stamp on the title screen')
+
+  // It has to be readable, or it cannot answer the only question it exists to
+  // answer: is the phone running today's build? It was set at 11px over
+  // painted scenery, which on a fitted menu is about six real pixels.
+  const stamp = title.slice(title.indexOf('VERSION_LABEL, {'))
+  const size = /fontSize: '(\d+)px'/.exec(stamp)
+  assert.ok(size, 'the stamp has no size to check')
+  const type = JSON.parse(read('../src/data/presentation.json')).typography
+  assert.ok(Number(size[1]) >= type.minMenuSize,
+    `the stamp is ${size[1]}px on a fitted menu screen; the floor is ${type.minMenuSize}px`)
+  assert.match(stamp, /color: COLOR\.ink/, 'the dim colour is not readable over the painted corner')
+  assert.match(title, /bringToTop\(stamp\)/, 'the backing pill would cover the label')
+})
+
+test('the stamp carries a version as well as a commit', () => {
+  const build = read('../src/systems/Build.ts')
+  assert.match(build, /export const VERSION\b/, 'no released version, only a commit hash')
+  assert.match(build, /VERSION_LABEL/, 'nothing assembles the two into one line')
+  // Sourced from package.json, so there is one place to bump it.
+  const vite = read('../vite.config.ts')
+  assert.match(vite, /__APP_VERSION__/, 'the version never reaches the bundle')
+  assert.match(vite, /package\.json/, 'the version is typed in by hand somewhere')
+  const pkg = JSON.parse(read('../package.json'))
+  assert.match(pkg.version, /^\d+\.\d+\.\d+$/, `package.json version "${pkg.version}" is not a version`)
 })

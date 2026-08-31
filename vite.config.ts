@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { defineConfig, type Plugin } from 'vite'
 
 /**
@@ -15,7 +16,17 @@ function buildId(): string {
   }
 }
 
+/** The released version, from package.json, so there is one place to bump. */
+function appVersion(): string {
+  try {
+    return JSON.parse(readFileSync('./package.json', 'utf8')).version ?? '0.0.0'
+  } catch {
+    return '0.0.0'
+  }
+}
+
 const BUILD_ID = buildId()
+const APP_VERSION = appVersion()
 
 /**
  * GitHub Pages serves whatever it likes for Cache-Control and gives us no way
@@ -51,6 +62,7 @@ export default defineConfig({
   base: './',
   define: {
     __BUILD_ID__: JSON.stringify(BUILD_ID),
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
   },
   plugins: [versionStamp()],
   build: {

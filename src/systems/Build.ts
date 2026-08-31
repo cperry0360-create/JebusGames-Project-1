@@ -12,9 +12,23 @@
  */
 
 declare const __BUILD_ID__: string | undefined
+declare const __APP_VERSION__: string | undefined
 
 export const BUILD_ID: string =
   typeof __BUILD_ID__ === 'string' && __BUILD_ID__.length > 0 ? __BUILD_ID__ : 'dev'
+
+/** The released version, from package.json. */
+export const VERSION: string =
+  typeof __APP_VERSION__ === 'string' && __APP_VERSION__.length > 0 ? __APP_VERSION__ : '0.0.0'
+
+/**
+ * What the title screen shows: the version, then the commit it was built
+ * from. The commit is the half that matters when checking whether a deploy
+ * actually landed — the version only moves when someone bumps it, but the
+ * hash changes every push, so "is the phone running today's build?" is a
+ * question this line can answer on its own.
+ */
+export const VERSION_LABEL = `v${VERSION} · ${BUILD_ID}`
 
 /** Appends the build stamp to a runtime asset URL. */
 export function stamped(url: string): string {
