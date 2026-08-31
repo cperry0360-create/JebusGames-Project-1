@@ -6,7 +6,7 @@ import abilitiesData from '../data/abilities.json'
 import draftData from '../data/draft.json'
 import { draftAbilities, draftOpeningTowers, makeRng, reserveTowers } from '../systems/Draft.ts'
 import { runState, setRunState } from '../systems/RunState.ts'
-import { COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
+import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { plateButton, platePanel } from '../ui/Plate.ts'
 import { towerIcon } from '../ui/TowerIcon.ts'
 import { fitInBox } from '../systems/Art.ts'
@@ -17,7 +17,11 @@ const ABILITIES = abilitiesData as Record<string, AbilityDef>
 const DRAFT = draftData as DraftDef
 
 /** The size the ability cards were drawn for. */
-const ABILITY_ICON_H = 64
+// How far above a card's bottom edge its stats line sits. The plate art
+// carries a thick chrome band at these sizes; inside this margin the text
+// lands on the frame rather than on the panel.
+const CARD_FOOT = 42
+const ABILITY_ICON_H = 84
 
 /**
  * Two steps in one screen: the abilities you drew, then the towers you opened
@@ -74,28 +78,29 @@ export class DraftScene extends Phaser.Scene {
     this.layer.add(this.add.text(W / 2, 78, title, {
       fontFamily: FONT_DISPLAY, fontSize: '44px', color: COLOR.ink, stroke: '#0d1016', strokeThickness: 6,
     }).setOrigin(0.5))
-    this.layer.add(this.add.text(W / 2, 130, sub, {
-      fontFamily: FONT_UI, fontSize: '15px', color: COLOR.dim,
+    this.layer.add(this.add.text(W / 2, 128, sub, {
+      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.dim, ...BODY_SPACING,
+      align: 'center', wordWrap: { width: 1120 },
     }).setOrigin(0.5))
 
     const ids = isAbilities ? run.abilities : run.openingTowers
-    const cardW = 300
-    const gap = 40
+    const cardW = 380
+    const gap = 30
     const totalW = ids.length * cardW + (ids.length - 1) * gap
     ids.forEach((id, i) => {
       const x = W / 2 - totalW / 2 + i * (cardW + gap)
-      if (isAbilities) this.abilityCard(x, 180, cardW, id)
-      else this.towerCard(x, 180, cardW, id)
+      if (isAbilities) this.abilityCard(x, 172, cardW, id)
+      else this.towerCard(x, 172, cardW, id)
     })
 
     if (!isAbilities && run.reserveTowers.length > 0) {
-      this.layer.add(this.add.text(W / 2, 500, 'Still in the pool: ' +
+      this.layer.add(this.add.text(W / 2, 580, 'Still in the pool: ' +
         run.reserveTowers.map((id) => TOWERS[id].name).join(', '), {
-        fontFamily: FONT_UI, fontSize: '13px', color: COLOR.dim,
-      }).setOrigin(0.5).setAlpha(0.75))
+        fontFamily: FONT_UI, fontSize: '22px', color: COLOR.dim,
+      }).setOrigin(0.5).setAlpha(0.8))
     }
 
-    const b = plateButton(this, W / 2, 618, 300, 60,
+    const b = plateButton(this, W / 2, 638, 300, 60,
       isAbilities ? 'NEXT: TOWERS' : 'BEGIN THE RUN',
       () => {
         if (this.step === 'abilities') {
@@ -105,27 +110,27 @@ export class DraftScene extends Phaser.Scene {
           this.scene.start('Game')
           this.scene.launch('Hud')
         }
-      }, 22)
+      }, 26)
     this.layer.add(b.parts)
   }
 
   private abilityCard(x: number, y: number, w: number, id: string): void {
     const def = ABILITIES[id]
-    const h = 280
+    const h = 340
     this.layer.add(platePanel(this, x, y, w, h))
     // The cards carry their own frames, so nothing is drawn behind them.
-    const icon = this.add.image(x + w / 2, y + 74, def.icon)
+    const icon = this.add.image(x + w / 2, y + 88, def.icon)
     fitInBox(icon, def.icon, ABILITY_ICON_H)
     this.layer.add(icon)
-    this.layer.add(this.add.text(x + w / 2, y + 128, def.name.toUpperCase(), {
-      fontFamily: FONT_DISPLAY, fontSize: '24px', color: COLOR.ink,
+    this.layer.add(this.add.text(x + w / 2, y + 158, def.name.toUpperCase(), {
+      fontFamily: FONT_DISPLAY, fontSize: '30px', color: COLOR.ink,
     }).setOrigin(0.5))
-    this.layer.add(this.add.text(x + w / 2, y + 162, def.flavor, {
-      fontFamily: FONT_UI, fontSize: '13px', color: COLOR.dim,
-      align: 'center', wordWrap: { width: w - 40 },
+    this.layer.add(this.add.text(x + w / 2, y + 194, def.flavor, {
+      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.dim, ...BODY_SPACING,
+      align: 'center', wordWrap: { width: w - 48 },
     }).setOrigin(0.5, 0))
-    this.layer.add(this.add.text(x + w / 2, y + 236, this.abilityStats(def), {
-      fontFamily: FONT_UI, fontSize: '13px', color: COLOR.amber, align: 'center',
+    this.layer.add(this.add.text(x + w / 2, y + h - CARD_FOOT, this.abilityStats(def), {
+      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.amber, align: 'center',
     }).setOrigin(0.5))
   }
 
@@ -140,24 +145,24 @@ export class DraftScene extends Phaser.Scene {
 
   private towerCard(x: number, y: number, w: number, id: string): void {
     const def = TOWERS[id]
-    const h = 280
+    const h = 386
     this.layer.add(platePanel(this, x, y, w, h))
-    this.layer.add(towerIcon(this, x + w / 2, y + 112, def.sprite, 104))
-    this.layer.add(this.add.text(x + w / 2, y + 132, def.name.toUpperCase(), {
-      fontFamily: FONT_DISPLAY, fontSize: '22px', color: COLOR.ink,
+    this.layer.add(towerIcon(this, x + w / 2, y + 96, def.sprite, 104))
+    this.layer.add(this.add.text(x + w / 2, y + 160, def.name.toUpperCase(), {
+      fontFamily: FONT_DISPLAY, fontSize: '30px', color: COLOR.ink,
     }).setOrigin(0.5))
-    this.layer.add(this.add.text(x + w / 2, y + 158, def.archetype, {
-      fontFamily: FONT_UI, fontSize: '12px', color: COLOR.good,
+    this.layer.add(this.add.text(x + w / 2, y + 194, def.archetype, {
+      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.good,
     }).setOrigin(0.5))
-    this.layer.add(this.add.text(x + w / 2, y + 184, def.flavor, {
-      fontFamily: FONT_UI, fontSize: '12px', color: COLOR.dim,
-      align: 'center', wordWrap: { width: w - 40 },
+    this.layer.add(this.add.text(x + w / 2, y + 226, def.flavor, {
+      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.dim, ...BODY_SPACING,
+      align: 'center', wordWrap: { width: w - 48 },
     }).setOrigin(0.5, 0))
     const stats = def.supportRadius > 0
       ? `${def.cost}p   ·   +${Math.round(def.supportDamageBonus * 100)}% nearby`
       : `${def.cost}p   ·   ${def.damage} dmg   ·   ${def.range} range`
-    this.layer.add(this.add.text(x + w / 2, y + 250, stats, {
-      fontFamily: FONT_UI, fontSize: '13px', color: COLOR.amber,
+    this.layer.add(this.add.text(x + w / 2, y + h - CARD_FOOT, stats, {
+      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.amber,
     }).setOrigin(0.5))
   }
 }

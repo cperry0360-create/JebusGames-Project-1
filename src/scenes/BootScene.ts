@@ -45,7 +45,7 @@ export class BootScene extends Phaser.Scene {
       // Better a loud message than a screen of invisible sprites.
       console.error('[art] missing textures:', missing.join(', '))
       this.add.text(40, 40, `Missing art:\n${missing.join('\n')}`, {
-        fontFamily: 'monospace', fontSize: '14px', color: '#ff6b5a',
+        fontFamily: 'monospace', fontSize: '16px', color: '#ff6b5a',
       })
       return
     }

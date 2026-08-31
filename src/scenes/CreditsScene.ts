@@ -4,7 +4,7 @@ import displayData from '../data/display.json'
 import brandingData from '../data/branding.json'
 import creditsData from '../data/credits.json'
 import { ART, contentWidthAt, fitContentHeight } from '../systems/Art.ts'
-import { COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
+import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { plateButton } from '../ui/Plate.ts'
 import { fitCameraToDesign } from '../ui/FitCamera.ts'
 
@@ -35,7 +35,7 @@ export class CreditsScene extends Phaser.Scene {
     }).setOrigin(0.5)
 
     this.add.text(W / 2, c.subheadingY, CREDITS.subheading, {
-      fontFamily: FONT_UI, fontSize: '16px', color: COLOR.amber,
+      fontFamily: FONT_UI, fontSize: '24px', color: COLOR.amber,
     }).setOrigin(0.5)
 
     // Both marks side by side, spaced from their real on-screen widths.
@@ -56,16 +56,16 @@ export class CreditsScene extends Phaser.Scene {
     let y = c.textTop
     for (const section of CREDITS.sections) {
       this.add.text(W / 2, y, section.title, {
-        fontFamily: FONT_DISPLAY, fontSize: '15px', color: COLOR.amber,
+        fontFamily: FONT_UI, fontSize: '22px', color: COLOR.amber, letterSpacing: 2,
       }).setOrigin(0.5)
       y += c.sectionGap
 
       for (const entry of section.entries) {
         this.add.text(W / 2 - c.columnGap, y, entry.role, {
-          fontFamily: FONT_UI, fontSize: '13px', color: COLOR.dim,
+          fontFamily: FONT_UI, fontSize: '22px', color: COLOR.dim,
         }).setOrigin(1, 0.5)
         this.add.text(W / 2 + c.columnGap, y, entry.name, {
-          fontFamily: FONT_UI, fontSize: '14px', color: COLOR.ink,
+          fontFamily: FONT_UI, fontSize: '22px', color: COLOR.ink,
         }).setOrigin(0, 0.5)
         y += c.lineHeight
       }
@@ -74,19 +74,19 @@ export class CreditsScene extends Phaser.Scene {
 
     // The closing note, which is the punchline rather than a credit.
     CREDITS.notes.forEach((note, i) => {
-      this.add.text(W / 2, y + i * 18, note, {
-        fontFamily: FONT_UI, fontSize: '12px', color: COLOR.good,
+      this.add.text(W / 2, y + i * 28, note, {
+        fontFamily: FONT_UI, fontSize: '22px', color: COLOR.good, ...BODY_SPACING,
       }).setOrigin(0.5).setAlpha(0.85)
     })
 
     // The dedication. It is the sign-off, so it sits on its own above the
     // button rather than joining the list of credits.
     this.add.text(W / 2, c.footerY, CREDITS.footer, {
-      fontFamily: FONT_UI, fontSize: '13px', color: COLOR.ink,
-    }).setOrigin(0.5).setAlpha(0.7)
+      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.ink, ...BODY_SPACING,
+    }).setOrigin(0.5).setAlpha(0.85)
 
     // Going back is the lesser action, so it wears the secondary plate.
-    plateButton(this, W / 2, H - 46, 210, 52, 'BACK', () => this.scene.start('Title'), 18, 'secondary')
+    plateButton(this, W / 2, H - 48, 250, 56, 'BACK', () => this.scene.start('Title'), 24, 'secondary')
     this.input.keyboard?.on('keydown-ESC', () => this.scene.start('Title'))
   }
 

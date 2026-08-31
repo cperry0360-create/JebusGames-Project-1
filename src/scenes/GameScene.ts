@@ -33,7 +33,7 @@ import { Fighter } from '../entities/Fighter.ts'
 import { Projectile } from '../entities/Projectile.ts'
 import { BuildMenu } from '../ui/BuildMenu.ts'
 import { ScratchCard } from '../ui/ScratchCard.ts'
-import { COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
+import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { platePanel, plateButton, type PlateButton } from '../ui/Plate.ts'
 import { SignBribe } from '../ui/SignBribe.ts'
 import { CameraRig } from '../systems/CameraRig.ts'
@@ -339,6 +339,11 @@ export class GameScene extends Phaser.Scene {
     if (ui.length > 0) this.cameras.main.ignore(ui)
     if (world.length > 0) this.uiCam.ignore(world)
     this.splitAt = this.children.list.length
+  }
+
+  /** True while a modal owned by the world is up. The HUD dims behind it. */
+  get modalOpen(): boolean {
+    return this.dialog?.active === true
   }
 
   /** One dialog at a time, and it owns every tap while it is up. */
@@ -938,12 +943,12 @@ export class GameScene extends Phaser.Scene {
    */
   private windUp(seconds: number, fire: () => void): void {
     this.casting = true
-    const W = displayData.width
-    const H = displayData.height
+    const W = this.scale.width
+    const H = this.scale.height
     const cam = this.cameras.main
 
     const wash = this.add.graphics().setDepth(TICKET_DEPTH)
-    const label = this.add.text(W / 2, 150, 'SERVER NUKE', {
+    const label = this.add.text(W / 2, H * 0.22, 'SERVER NUKE', {
       fontFamily: FONT_DISPLAY, fontSize: '38px', color: '#8fd0ff',
       stroke: '#0d1016', strokeThickness: 8,
     }).setOrigin(0.5).setDepth(TICKET_DEPTH + 1).setAlpha(0)
@@ -972,12 +977,13 @@ export class GameScene extends Phaser.Scene {
         this.casting = false
       },
     })
+    this.asScreenSpace([wash, label])
   }
 
   /** The ticket sits over the board and never pauses it. */
   private showTicket(payout: number, autoRevealSeconds: number): void {
     this.ticket?.destroy()
-    this.ticket = new ScratchCard(this, displayData.width / 2, displayData.height / 2, TICKET_DEPTH, {
+    this.ticket = new ScratchCard(this, this.scale.width / 2, this.scale.height / 2, TICKET_DEPTH, {
       payout,
       autoRevealSeconds,
       onCollect: (amount) => {
@@ -986,6 +992,7 @@ export class GameScene extends Phaser.Scene {
         play(this, 'peanuts')
       },
     })
+    this.asScreenSpace(this.ticket.objects)
   }
 
   private summonFighters(x: number, y: number, count: number, seconds: number): void {
@@ -1140,19 +1147,27 @@ export class GameScene extends Phaser.Scene {
     play(this, won ? 'won' : 'lost')
     this.status.message = won ? 'Filed on time.' : 'Overrun.'
 
-    this.add.text(displayData.width / 2, displayData.height / 2, won ? 'ALL WAVES CLEARED' : 'OVERRUN', {
-      fontFamily: FONT_DISPLAY, fontSize: '64px',
+    // Screen space, against the live viewport. This was laid out against the
+    // 1280x720 design box and never registered, which put it at the centre of
+    // the *map* rather than the centre of the view: panned to a corner, the
+    // player got no banner and no button — the same dead end the button exists
+    // to prevent.
+    const cx = this.scale.width / 2
+    const cy = this.scale.height / 2
+
+    const banner = this.add.text(cx, cy - 30, won ? 'ALL WAVES CLEARED' : 'OVERRUN', {
+      fontFamily: FONT_DISPLAY, fontSize: '48px',
       color: won ? COLOR.ink : COLOR.fire, stroke: '#0d1016', strokeThickness: 8,
     }).setOrigin(0.5).setDepth(OVERLAY_DEPTH + 10)
 
     // A button, not a keypress. The run-end screen used to say "press R" and
     // nothing else, which on a touch device is a dead end with no way out of
     // the game at all.
-    const back = plateButton(this, displayData.width / 2, displayData.height / 2 + 76,
-      300, 62, 'BACK TO TITLE', () => this.toTitle(), 22)
+    const back = plateButton(this, cx, cy + 48, 300, 62, 'BACK TO TITLE', () => this.toTitle(), 22)
     for (const part of back.parts) {
       (part as Phaser.GameObjects.Image).setDepth?.(OVERLAY_DEPTH + 11)
     }
+    this.asScreenSpace([banner, ...back.parts])
   }
 
   private toTitle(): void {
@@ -1161,9 +1176,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private announce(text: string, color: string): void {
-    const t = this.add.text(displayData.width / 2, 200, text, {
+    const t = this.add.text(this.scale.width / 2, this.scale.height * 0.3, text, {
       fontFamily: FONT_DISPLAY, fontSize: '40px', color, stroke: '#0d1016', strokeThickness: 7,
     }).setOrigin(0.5).setDepth(OVERLAY_DEPTH + 20).setScale(0.5)
+    this.asScreenSpace([t])
     this.tweens.add({ targets: t, scale: 1, duration: 240, ease: 'Back.easeOut' })
     this.tweens.add({ targets: t, alpha: 0, delay: 1500, duration: 500, onComplete: () => t.destroy() })
   }
@@ -1253,8 +1269,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private announceBoss(boss: Enemy): void {
-    const W = displayData.width
-    const H = displayData.height
+    const W = this.scale.width
+    const H = this.scale.height
     play(this, 'boss', 0.95)
     this.cameras.main.shake(600, 0.007)
 
@@ -1268,13 +1284,15 @@ export class GameScene extends Phaser.Scene {
       fontFamily: FONT_DISPLAY, fontSize: '56px', color: COLOR.fire,
       stroke: '#0d1016', strokeThickness: 9,
     }).setOrigin(0.5, 0).setDepth(TICKET_DEPTH + 1)
-    const sub = this.add.text(W / 2, H / 2 + 30, boss.def.flavor, {
-      fontFamily: FONT_UI, fontSize: '15px', color: COLOR.ink,
+    const sub = this.add.text(W / 2, H / 2 + 34, boss.def.flavor, {
+      fontFamily: FONT_UI, fontSize: '17px', color: COLOR.ink, ...BODY_SPACING,
+      align: 'center', wordWrap: { width: W - 80 },
     }).setOrigin(0.5, 0).setDepth(TICKET_DEPTH + 1)
 
     this.tweens.add({ targets: name, scale: { from: 0.7, to: 1 }, duration: 380, ease: 'Back.easeOut' })
     // The plate is many images, so the fade targets them all as one list.
     const pieces: Phaser.GameObjects.GameObject[] = [...card, name, sub]
+    this.asScreenSpace(pieces)
     this.tweens.add({
       targets: pieces, alpha: 0, delay: 2200, duration: 700,
       onComplete: () => pieces.forEach((o) => o.destroy()),
@@ -1390,8 +1408,8 @@ export class GameScene extends Phaser.Scene {
     cam.shake(360, 0.009)
     play(this, 'cast-servernuke', 0.8)
 
-    const W = displayData.width
-    const y = displayData.height / 2 - 90
+    const W = this.scale.width
+    const y = this.scale.height * 0.3
     // Not full width, and high rather than centred. This fires *mid-wave* off
     // a kill, so it must not hide the lane at the moment it hands the player a
     // decision — the boss card can afford to, arriving at the start of a wave.
@@ -1403,11 +1421,12 @@ export class GameScene extends Phaser.Scene {
       fontFamily: FONT_DISPLAY, fontSize: '30px', color: '#8fd0ff',
       stroke: '#0d1016', strokeThickness: 6,
     }).setOrigin(0.5, 0).setDepth(TICKET_DEPTH + 1)
-    const sub = this.add.text(W / 2, y + 20, 'RARE DROP — ONE USE', {
-      fontFamily: FONT_UI, fontSize: '13px', color: COLOR.ink,
+    const sub = this.add.text(W / 2, y + 22, 'RARE DROP — ONE USE', {
+      fontFamily: FONT_UI, fontSize: '16px', color: COLOR.ink, letterSpacing: 1,
     }).setOrigin(0.5, 0).setDepth(TICKET_DEPTH + 1)
 
     const pieces: Phaser.GameObjects.GameObject[] = [...banner, title, sub]
+    this.asScreenSpace(pieces)
     this.tweens.add({
       targets: pieces, alpha: 0, delay: 2100, duration: 600,
       onComplete: () => pieces.forEach((o) => o.destroy()),

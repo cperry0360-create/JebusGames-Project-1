@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import { GameScene } from './GameScene.ts'
 import presentationData from '../data/presentation.json'
-import { COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
+import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { ART, fitInBox, renderFor } from '../systems/Art.ts'
 import { greyKey } from '../systems/Desaturate.ts'
 import { plateButton, type PlateButton } from '../ui/Plate.ts'
@@ -39,6 +39,9 @@ export class HudScene extends Phaser.Scene {
   private message!: Phaser.GameObjects.Text
   private heroLabel!: Phaser.GameObjects.Text
   private heroBar!: Phaser.GameObjects.Graphics
+  /** Where the counter plates end. The boss block and the wave message both
+   *  hang off this rather than off the top of the screen. */
+  private countersBottom = 0
   private bossBar!: Phaser.GameObjects.Graphics
   private bossLabel!: Phaser.GameObjects.Text
   private startBtn!: PlateButton
@@ -74,10 +77,11 @@ export class HudScene extends Phaser.Scene {
     // Three painted counters in the top-left corner, and nothing behind them.
     // The map runs to the full canvas now; there is no bar to crop it.
     const row = this.buildCounters()
+    this.countersBottom = row.bottom
 
     this.message = this.add.text(HUD.marginX, row.bottom + 8, '', {
-      fontFamily: FONT_UI, fontSize: '14px', color: COLOR.ink,
-      stroke: '#0d1016', strokeThickness: 4,
+      fontFamily: FONT_UI, fontSize: '17px', color: COLOR.ink,
+      stroke: '#0d1016', strokeThickness: 4, ...BODY_SPACING,
     })
 
     // Start button in the opposite corner, standing on its own.
@@ -90,7 +94,7 @@ export class HudScene extends Phaser.Scene {
 
     // The hero stays top-right where he was, moved down clear of the button.
     this.heroLabel = this.add.text(W - HUD.marginX, HUD.marginY + 54, '', {
-      fontFamily: FONT_UI, fontSize: '13px', color: COLOR.ink,
+      fontFamily: FONT_UI, fontSize: '16px', color: COLOR.ink,
       stroke: '#0d1016', strokeThickness: 4,
     }).setOrigin(1, 0)
     this.heroBar = this.add.graphics()
@@ -98,14 +102,18 @@ export class HudScene extends Phaser.Scene {
     // The boss bar sits across the top between the two corners: the counters
     // own the left and the start button the right, so it takes the middle.
     this.bossBar = this.add.graphics()
-    this.bossLabel = this.add.text(W / 2, HUD.marginY + 2, '', {
-      fontFamily: FONT_DISPLAY, fontSize: '16px', color: COLOR.fire,
-      stroke: '#0d1016', strokeThickness: 5,
+    this.bossLabel = this.add.text(W / 2, 0, '', {
+      fontFamily: FONT_UI, fontSize: '18px', color: COLOR.fire,
+      fontStyle: 'bold', stroke: '#0d1016', strokeThickness: 5, letterSpacing: 1,
     }).setOrigin(0.5, 0)
 
-    this.add.text(W - 12, this.scale.height - 16, 'art, fonts and audio: Kenney, CC0', {
-      fontFamily: FONT_UI, fontSize: '11px', color: COLOR.ink,
-    }).setOrigin(1, 0).setAlpha(0.35)
+    // Above the ability bar rather than beside the pause button: at a legible
+    // size this line is wide enough to run underneath the button, and on a
+    // narrower phone it would reach the ability slots too. Nothing else is
+    // drawn at this height, at any width.
+    this.add.text(W - 12, this.scale.height - 84, 'art, fonts and audio: Kenney, CC0', {
+      fontFamily: FONT_UI, fontSize: '15px', color: COLOR.ink,
+    }).setOrigin(1, 1).setAlpha(0.4)
   }
 
   /**
@@ -272,14 +280,15 @@ export class HudScene extends Phaser.Scene {
       fitInBox(icon, d.icon, ICON_H)
       const sweep = this.add.graphics()
       const timer = this.add.text(x + SLOT_PITCH / 2, y + ICON_H / 2, '', {
+        /* numerals */
         fontFamily: FONT_DISPLAY, fontSize: '19px', color: COLOR.ink,
         stroke: '#0d1016', strokeThickness: 5,
       }).setOrigin(0.5)
       // Over the card's lower edge rather than under it: the bar is only just
       // taller than a 64px icon, and below it the letters met the bar's edge.
-      const key = this.add.text(x + SLOT_PITCH / 2, y + ICON_H - 13, d.key, {
-        fontFamily: FONT_UI, fontSize: '12px', color: COLOR.ink,
-        stroke: '#0d1016', strokeThickness: 4,
+      const key = this.add.text(x + SLOT_PITCH / 2, y + ICON_H - 15, d.key, {
+        fontFamily: FONT_UI, fontSize: '15px', color: COLOR.ink,
+        fontStyle: 'bold', stroke: '#0d1016', strokeThickness: 4,
       }).setOrigin(0.5, 0)
 
       const hit = this.add.rectangle(x + SLOT_PITCH / 2, y + ICON_H / 2, SLOT_PITCH, ICON_H, 0xffffff, 0.001)
@@ -294,8 +303,23 @@ export class HudScene extends Phaser.Scene {
     })
   }
 
+  /** The wave message steps down out of the boss block's way while one is up. */
+  private placeMessage(hasBoss: boolean): void {
+    const drop = hasBoss ? HUD.bossBarTop + HUD.bossBarHeight + 30 : 8
+    this.message.setY(this.countersBottom + drop)
+  }
+
   update(): void {
+    // The HUD is a separate scene and renders after the world, so a dialog the
+    // world owns cannot cover it — the wave message ran straight through the
+    // panel's title and the ability bar sat on its bottom edge. Dimming this
+    // scene's camera pushes the whole HUD behind the modal in one move, and
+    // restores it exactly, without touching any object's own alpha. The HUD's
+    // own pause dialog is unaffected: the world has no modal open then.
+    this.cameras.main.setAlpha(this.world.modalOpen ? 0.3 : 1)
+
     const s = this.world.status
+    this.placeMessage(Boolean(s.bossName))
     // Scene creation order is not guaranteed, so wait for the game scene to
     // have populated its status before drawing anything that depends on it.
     if (s.heroName === '') return
@@ -335,13 +359,17 @@ export class HudScene extends Phaser.Scene {
       this.bossLabel.setText('')
       return
     }
-    const w = HUD.bossBarWidth
+    // Under the counters, not across them, and never wider than the screen.
+    // Centred at the very top against a fixed 560px it ran through the wave
+    // counter on one side and the start button on the other.
+    const w = Math.min(HUD.bossBarWidth, this.scale.width - HUD.marginX * 4)
     const h = HUD.bossBarHeight
     const x = (this.scale.width - w) / 2
-    const y = HUD.marginY + HUD.bossBarTop
+    const y = this.countersBottom + HUD.bossBarTop
     const ratio = Phaser.Math.Clamp(s.bossHealth / Math.max(s.bossMax, 1), 0, 1)
 
     this.bossLabel.setText(s.bossName.toUpperCase())
+    this.bossLabel.setY(y + h + 5)
     this.bossBar.fillStyle(0x0d1016, 0.82).fillRoundedRect(x - 3, y - 3, w + 6, h + 6, 5)
     this.bossBar.fillStyle(0x3a1f1c, 1).fillRect(x, y, w, h)
     this.bossBar.fillStyle(0xff5a3c, 1).fillRect(x, y, w * ratio, h)
@@ -365,7 +393,8 @@ export class HudScene extends Phaser.Scene {
 
   private floatUp(label: string, colour: string): void {
     const t = this.add.text(this.peanutsText.x + 6, 34, label, {
-      fontFamily: FONT_DISPLAY, fontSize: '15px', color: colour,
+      /* numerals */
+      fontFamily: FONT_DISPLAY, fontSize: '18px', color: colour,
     })
     this.tweens.add({
       targets: t, y: 14, alpha: 0, duration: 700, ease: 'Quad.easeOut',

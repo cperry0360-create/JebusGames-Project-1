@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { platePanel, plateButton } from './Plate.ts'
-import { COLOR, FONT_DISPLAY, FONT_UI } from './Theme.ts'
+import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from './Theme.ts'
 import { play } from '../systems/Audio.ts'
 
 /**
@@ -41,9 +41,9 @@ export interface DialogOptions {
   dim?: number
 }
 
-const ROW_H = 22
+const ROW_H = 26
 /** Space above the title, inside the plate's own chrome. */
-const TOP_PAD = 46
+const TOP_PAD = 54
 /** Space below the body for the button row plus the plate's bottom chrome,
  *  which on this plate reaches ~73px in and would otherwise sit over them. */
 const BUTTON_BAND = 128
@@ -61,7 +61,7 @@ export class Dialog {
 
   constructor(scene: Phaser.Scene, x: number, y: number, depth: number, opts: DialogOptions) {
     this.scene = scene
-    const w = opts.width ?? 540
+    const w = opts.width ?? 580
 
     // Swallows every tap that is not on the dialog itself, and dismisses on
     // one. A panel that only its own button can close is a trap over a live
@@ -83,16 +83,17 @@ export class Dialog {
     const body: Phaser.GameObjects.GameObject[] = []
     let ty = 0
 
+    // At the display face's floor. Below this its K, X and R stop resolving.
     const title = scene.add.text(0, ty, opts.title, {
-      fontFamily: FONT_DISPLAY, fontSize: '22px', color: COLOR.ink,
+      fontFamily: FONT_DISPLAY, fontSize: '26px', color: COLOR.ink,
     }).setOrigin(0.5, 0)
     body.push(title)
     ty += title.height + 8
 
     if (opts.subtitle) {
       const sub = scene.add.text(0, ty, opts.subtitle, {
-        fontFamily: FONT_UI, fontSize: '13px', color: COLOR.dim,
-        align: 'center', wordWrap: { width: w - 130 },
+        fontFamily: FONT_UI, fontSize: '16px', color: COLOR.dim, ...BODY_SPACING,
+        align: 'center', wordWrap: { width: w - 110 },
       }).setOrigin(0.5, 0)
       body.push(sub)
       ty += sub.height + 12
@@ -102,10 +103,10 @@ export class Dialog {
     const inset = w / 2 - 84
     for (const row of opts.rows ?? []) {
       body.push(scene.add.text(-inset, ty, row.label, {
-        fontFamily: FONT_UI, fontSize: '13px', color: COLOR.dim,
+        fontFamily: FONT_UI, fontSize: '16px', color: COLOR.dim,
       }).setOrigin(0, 0))
       body.push(scene.add.text(inset, ty, row.value, {
-        fontFamily: FONT_UI, fontSize: '14px',
+        fontFamily: FONT_UI, fontSize: '16px', fontStyle: 'bold',
         color: row.accent ? COLOR.amber : COLOR.ink,
       }).setOrigin(1, 0))
       ty += ROW_H
@@ -141,10 +142,11 @@ export class Dialog {
     const total = row.length * bw + (row.length - 1) * gap
     row.forEach((b, i) => {
       const bx = -total / 2 + bw / 2 + i * (bw + gap)
-      // 13px: the plate's end caps eat ~62px of a 150px button, and a longer
-      // label at 15px runs under them.
-      const btn = plateButton(scene, bx, btnY, bw, 46, b.label,
-        () => { b.onPick(); this.close() }, 13, b.weight)
+      // The plate's end caps eat about 62px of the button's width, so the
+      // label has less room than the plate suggests. plateButton holds the
+      // legibility floor; the panel got wider to pay for it.
+      const btn = plateButton(scene, bx, btnY, bw, 48, b.label,
+        () => { b.onPick(); this.close() }, 15, b.weight)
       if (b.enabled === false) btn.setEnabled(false)
       parts.push(...btn.parts)
     })

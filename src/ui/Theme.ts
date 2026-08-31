@@ -1,10 +1,56 @@
 import Phaser from 'phaser'
+import presentation from '../data/presentation.json'
 
 // One place for the game's look, so panels and labels stay consistent.
-// The fonts are Kenney's CC0 font package, loaded via @font-face in index.html.
 
+/**
+ * Two faces, and the size decides which one you get.
+ *
+ * KenneyFuture is a display face and only a display face: the title, screen
+ * headings, big numbers. Below about 26px its letterforms stop resolving — K
+ * reads as H, X as H, R as A — and the game starts misreading its own words.
+ * "KEEP PLAYING" rendered as "HEEP PLAYING", and the credits managed to turn
+ * "CORY WORKS IN TAX" into "CORY WORHS IN TAH", which is a joke the game did
+ * not write.
+ *
+ * Everything else is the platform's own UI sans, which on a phone means San
+ * Francisco and on a desktop means Segoe or Roboto — faces drawn for exactly
+ * this job, hinted for small sizes, and already on the device so there is
+ * nothing to download and nothing to wait for. Style loses to legibility here.
+ */
 export const FONT_DISPLAY = 'KenneyFuture, Georgia, serif'
-export const FONT_UI = 'KenneyFutureNarrow, KenneyFuture, monospace'
+export const FONT_UI =
+  '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+
+export const TYPE = presentation.typography
+
+/**
+ * Clamps a size to the floor for screen-space UI: the HUD, dialogs and the
+ * build menu, which render 1:1 against the real viewport.
+ */
+export function uiSize(px: number): number {
+  return Math.max(px, TYPE.minUiSize)
+}
+
+/**
+ * Clamps a size for the menu screens, which are composed against the 1280x720
+ * design box and then fitted to the viewport. On a phone in landscape that fit
+ * is about 0.55, so a menu label needs to be nearly twice the size of the same
+ * label in the HUD to end up the same size on the glass.
+ */
+export function menuSize(px: number): number {
+  return Math.max(px, TYPE.minMenuSize)
+}
+
+/**
+ * Spacing for text meant to be read in sentences rather than glanced at.
+ * A little air between lines and between letters is most of what separates
+ * comfortable body copy from a wall.
+ */
+export const BODY_SPACING = {
+  lineSpacing: TYPE.lineSpacing,
+  letterSpacing: TYPE.letterSpacing,
+} as const
 
 export const COLOR = {
   ink: '#f6ecd9',
@@ -23,7 +69,9 @@ export const COLOR = {
 export function heading(scene: Phaser.Scene, x: number, y: number, text: string, size = 30) {
   return scene.add
     .text(x, y, text, {
-      fontFamily: FONT_DISPLAY,
+      // A heading below the display floor gets the sans instead. The face is
+      // chosen by size, never by which helper happened to be called.
+      fontFamily: size >= TYPE.displayMinSize ? FONT_DISPLAY : FONT_UI,
       fontSize: `${size}px`,
       color: COLOR.ink,
       stroke: '#0d1016',
@@ -32,6 +80,8 @@ export function heading(scene: Phaser.Scene, x: number, y: number, text: string,
     .setOrigin(0.5)
 }
 
-export function label(scene: Phaser.Scene, x: number, y: number, text: string, size = 14, color = COLOR.dim) {
-  return scene.add.text(x, y, text, { fontFamily: FONT_UI, fontSize: `${size}px`, color }).setOrigin(0.5)
+export function label(scene: Phaser.Scene, x: number, y: number, text: string, size = 15, color = COLOR.dim) {
+  return scene.add
+    .text(x, y, text, { fontFamily: FONT_UI, fontSize: `${uiSize(size)}px`, color })
+    .setOrigin(0.5)
 }

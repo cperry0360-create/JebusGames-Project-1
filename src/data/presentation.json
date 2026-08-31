@@ -59,6 +59,14 @@
       0.6,
       0.3
     ],
-    "bossBarTop": 28
+    "bossBarTop": 10
+  },
+  "typography": {
+    "minUiSize": 15,
+    "minMenuSize": 22,
+    "menuBodySize": 24,
+    "displayMinSize": 26,
+    "lineSpacing": 6,
+    "letterSpacing": 0.5
   }
 }

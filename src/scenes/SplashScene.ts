@@ -32,8 +32,8 @@ export class SplashScene extends Phaser.Scene {
     const card = this.add.image(W / 2, H / 2, ART.brand.studioCard).setAlpha(0)
     fitContentHeight(card, ART.brand.studioCard, cfg.cardHeight)
 
-    const hint = this.add.text(W / 2, H - 42, 'tap to skip', {
-      fontFamily: FONT_UI, fontSize: '12px', color: COLOR.ink,
+    const hint = this.add.text(W / 2, H - 44, 'tap to skip', {
+      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.ink, letterSpacing: 1,
     }).setOrigin(0.5).setAlpha(0)
 
     this.tweens.add({ targets: card, alpha: 1, duration: cfg.fadeInMs, ease: 'Quad.easeOut' })

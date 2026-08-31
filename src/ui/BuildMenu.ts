@@ -11,14 +11,14 @@ export interface BuildOption {
 }
 
 const PANEL_DEPTH = 200000
-const CELL_W = 96
-const CELL_H = 116
+const CELL_W = 108
+const CELL_H = 128
 /** The plate is square and sits at the top of its cell; the name and cost go
  *  underneath it, outside the frame, where they are readable on any icon. */
 const PLATE = 74
 const MAX_COLS = 3
 const PAD = 12
-const TITLE_H = 24
+const TITLE_H = 28
 
 /**
  * Opens on an empty tile and shows what can be built there and for how much.
@@ -93,7 +93,8 @@ export class BuildMenu {
 
     c.add(platePanel(this.scene, 0, 0, w, h))
     c.add(this.scene.add.text(w / 2, PAD - 2, 'BUILD', {
-      fontFamily: FONT_DISPLAY, fontSize: '13px', color: COLOR.amber,
+      fontFamily: FONT_UI, fontSize: '16px', color: COLOR.amber,
+      fontStyle: 'bold', letterSpacing: 2,
     }).setOrigin(0.5, 0))
 
     this.options.forEach((opt, i) => {
@@ -108,15 +109,16 @@ export class BuildMenu {
       const icon = towerIcon(this.scene, iconX, cy + PLATE / 2 + 8, opt.def.sprite, 46, !affordable)
 
       const cost = this.scene.add
-        .text(iconX, cy + PLATE + 20, `${opt.def.cost}p`, {
-          fontFamily: FONT_DISPLAY, fontSize: '14px',
+        .text(iconX, cy + PLATE + 28, `${opt.def.cost}p`, {
+          /* numerals */
+          fontFamily: FONT_DISPLAY, fontSize: '17px',
           color: affordable ? '#f2d06b' : '#7d7568',
         })
         .setOrigin(0.5, 0)
 
       const name = this.scene.add
-        .text(iconX, cy + PLATE + 4, opt.def.name.split(' ')[0], {
-          fontFamily: FONT_UI, fontSize: '11px',
+        .text(iconX, cy + PLATE + 6, opt.def.name.split(' ')[0], {
+          fontFamily: FONT_UI, fontSize: '15px',
           color: affordable ? '#f6ecd9' : '#7d7568',
         })
         .setOrigin(0.5, 0)

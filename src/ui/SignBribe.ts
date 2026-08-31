@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import type { SignBribeDef, SpriteRender } from '../types.ts'
 import { ART, renderFor } from '../systems/Art.ts'
-import { COLOR, FONT_DISPLAY } from './Theme.ts'
+import { COLOR, FONT_UI } from './Theme.ts'
 
 /**
  * The sign bribe.
@@ -135,7 +135,7 @@ export class SignBribe {
     }
 
     const cheer = this.scene.add.text(x, y - 26, 'COURJAHAN!', {
-      fontFamily: FONT_DISPLAY, fontSize: '15px', color: COLOR.amber,
+      fontFamily: FONT_UI, fontSize: '20px', color: COLOR.amber, fontStyle: 'bold',
       stroke: '#0d1016', strokeThickness: 4,
     }).setOrigin(0.5).setDepth(this.sprite.depth + 2)
     this.scene.tweens.add({

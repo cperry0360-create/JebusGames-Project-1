@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { ART, renderFor } from '../systems/Art.ts'
-import { COLOR, FONT_DISPLAY } from './Theme.ts'
+import { COLOR, FONT_UI, uiSize } from './Theme.ts'
 import { play } from '../systems/Audio.ts'
 
 /**
@@ -195,9 +195,13 @@ export function plateButton(
 
   // The plates are bright and saturated, so the label needs a dark outline to
   // sit on top of one rather than fight it.
+  // Button labels are always the sans face, at every size. They are the words
+  // a player has to read fastest and act on, and the display face turned "KEEP
+  // PLAYING" into "HEEP PLAYING". Never a heading, never an exception.
   const t = scene.add
     .text(x, y, text, {
-      fontFamily: FONT_DISPLAY, fontSize: `${size}px`, color: COLOR.ink,
+      fontFamily: FONT_UI, fontSize: `${uiSize(size)}px`, color: COLOR.ink,
+      fontStyle: 'bold', letterSpacing: 1,
       stroke: '#171c24', strokeThickness: 4,
     })
     .setOrigin(0.5)

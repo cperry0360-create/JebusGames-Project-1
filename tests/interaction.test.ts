@@ -38,13 +38,40 @@ test('no interaction anywhere in the game is keyboard-only', () => {
 })
 
 test('the run-end button is on the screen it appears on', () => {
-  const display = read('display')
   const game = src('scenes/GameScene.ts')
-  const m = /plateButton\(this, displayData\.width \/ 2, displayData\.height \/ 2 \+ (\d+),\s*(\d+), (\d+)/s.exec(game)
+  // It used to be placed against the 1280x720 design box in *world* space,
+  // which put it at the centre of the map rather than the centre of the view.
+  // Panned to a corner at gameplay zoom, the player reached the end of a run
+  // with no banner and no button — exactly the dead end the button exists to
+  // prevent. It has to be positioned against the live viewport and drawn by
+  // the camera that does not move.
+  const m = /plateButton\(this, cx, cy \+ (\d+), (\d+), (\d+),\s*'BACK TO TITLE'/s.exec(game)
   assert.ok(m, 'could not find the run-end button')
   const [, dy, w, h] = m.map(Number)
-  assert.ok(display.height / 2 + dy + h / 2 < display.height, 'the button runs off the bottom')
   assert.ok(w > 120 && h > 40, 'a run-end button should be a big, obvious target')
+  // The shortest viewport the game is expected to run on, in landscape.
+  const shortest = 375
+  assert.ok(shortest / 2 + dy + h / 2 < shortest,
+    `at ${shortest}px tall the button reaches ${shortest / 2 + dy + h / 2}px and runs off the bottom`)
+  assert.match(game, /const cx = this\.scale\.width \/ 2/, 'the run-end screen is not sized to the viewport')
+  assert.match(game, /this\.asScreenSpace\(\[banner, \.\.\.back\.parts\]\)/,
+    'the run-end screen is drawn by the world camera, so panning moves it off view')
+})
+
+test('every full-screen overlay is drawn by the camera that does not move', () => {
+  // Same fault as the run-end screen, in every other overlay: laid out against
+  // the design box, drawn in world space, and therefore centred on the map
+  // instead of on whatever the player is looking at. The scratch ticket is the
+  // worst of them — it is a drag target, so off-view it is a soft lock.
+  const game = src('scenes/GameScene.ts')
+  for (const fn of ['windUp', 'showTicket', 'announceBoss', 'announce']) {
+    const from = game.indexOf(`private ${fn}(`)
+    assert.ok(from > 0, `${fn} has moved; this test is checking nothing`)
+    const body = game.slice(from, game.indexOf('\n  private ', from + 10))
+    assert.doesNotMatch(body, /displayData\.(width|height)/,
+      `${fn} positions against the design box rather than the viewport`)
+    assert.match(body, /asScreenSpace\(/, `${fn} never hands its overlay to the UI camera`)
+  }
 })
 
 test('nothing spends peanuts without asking first', () => {

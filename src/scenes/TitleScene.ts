@@ -4,7 +4,7 @@ import displayData from '../data/display.json'
 import heroesData from '../data/heroes.json'
 import brandingData from '../data/branding.json'
 import { setRunState } from '../systems/RunState.ts'
-import { COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
+import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { plateButton, platePanel } from '../ui/Plate.ts'
 import { AudioToggle } from '../ui/AudioToggle.ts'
 import { unlockAudio } from '../systems/Audio.ts'
@@ -53,43 +53,43 @@ export class TitleScene extends Phaser.Scene {
       stroke: '#0d1016', strokeThickness: 6,
     }).setOrigin(0.5)
 
-    this.add.text(W / 2, 196, 'A serious tower defense in a very silly world.', {
-      fontFamily: FONT_UI, fontSize: '15px', color: COLOR.ink,
-      stroke: '#0d1016', strokeThickness: 4,
+    this.add.text(W / 2, 200, 'A serious tower defense in a very silly world.', {
+      fontFamily: FONT_UI, fontSize: '24px', color: COLOR.ink,
+      stroke: '#0d1016', strokeThickness: 4, ...BODY_SPACING,
     }).setOrigin(0.5)
 
-    this.add.text(W / 2, 252, 'CHOOSE YOUR HERO', {
-      fontFamily: FONT_UI, fontSize: '15px', color: COLOR.ink,
-      stroke: '#0d1016', strokeThickness: 4,
+    this.add.text(W / 2, 242, 'CHOOSE YOUR HERO', {
+      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.amber,
+      stroke: '#0d1016', strokeThickness: 4, letterSpacing: 2,
     }).setOrigin(0.5)
 
     const ids = Object.keys(HEROES)
     const cardW = 210
     const gap = 24
     const totalW = ids.length * cardW + (ids.length - 1) * gap
-    ids.forEach((id, i) => this.heroCard(id, W / 2 - totalW / 2 + i * (cardW + gap), 282, cardW, 190))
+    ids.forEach((id, i) => this.heroCard(id, W / 2 - totalW / 2 + i * (cardW + gap), 264, cardW, 190))
 
     // The description and the kit are separate blocks: as one wrapped string
     // the kit line ran under the START RUN button.
-    this.blurb = this.add.text(W / 2, 486, '', {
-      fontFamily: FONT_UI, fontSize: '13px', color: COLOR.ink,
-      stroke: '#0d1016', strokeThickness: 4,
-      align: 'center', wordWrap: { width: 620 },
+    this.blurb = this.add.text(W / 2, 468, '', {
+      fontFamily: FONT_UI, fontSize: '24px', color: COLOR.ink,
+      stroke: '#0d1016', strokeThickness: 4, ...BODY_SPACING,
+      align: 'center', wordWrap: { width: 1140 },
     }).setOrigin(0.5, 0)
 
-    this.kit = this.add.text(W / 2, 552, '', {
-      fontFamily: FONT_UI, fontSize: '12px', color: COLOR.good,
-      stroke: '#0d1016', strokeThickness: 4,
-      align: 'center', wordWrap: { width: 740 },
+    this.kit = this.add.text(W / 2, 538, '', {
+      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.good,
+      stroke: '#0d1016', strokeThickness: 4, ...BODY_SPACING,
+      align: 'center', wordWrap: { width: 1140 },
     }).setOrigin(0.5, 0)
 
-    plateButton(this, W / 2, 622, 300, 62, 'START RUN', () => this.start(), 24)
-    plateButton(this, W / 2, 682, 210, 44, 'CREDITS', () => this.scene.start('Credits'), 15, 'secondary')
+    plateButton(this, W / 2, 606, 300, 62, 'START RUN', () => this.start(), 26)
+    plateButton(this, W / 2, 670, 250, 52, 'CREDITS', () => this.scene.start('Credits'), 22, 'secondary')
 
     // Which build this is, small and out of the way, so a deploy can be
     // confirmed at a glance without opening devtools on a phone.
     this.add.text(W - 10, H - 8, BUILD_ID, {
-      fontFamily: FONT_UI, fontSize: '11px', color: COLOR.dim,
+      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.dim,
       stroke: '#0d1016', strokeThickness: 3,
     }).setOrigin(1, 1).setAlpha(0.65)
 
@@ -159,11 +159,11 @@ export class TitleScene extends Phaser.Scene {
     const portrait = this.add.image(x + w / 2, y + 74, def.portraitSprite)
     fitInBox(portrait, def.portraitSprite, 108)
 
-    this.add.text(x + w / 2, y + 122, def.name.toUpperCase(), {
-      fontFamily: FONT_DISPLAY, fontSize: '26px', color: COLOR.ink,
+    this.add.text(x + w / 2, y + 124, def.name.toUpperCase(), {
+      fontFamily: FONT_DISPLAY, fontSize: '30px', color: COLOR.ink,
     }).setOrigin(0.5)
-    this.add.text(x + w / 2, y + 152, def.title, {
-      fontFamily: FONT_UI, fontSize: '13px', color: COLOR.amber,
+    this.add.text(x + w / 2, y + 158, def.title, {
+      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.amber,
     }).setOrigin(0.5)
 
     const hit = this.add.rectangle(x + w / 2, y + h / 2, w, h, 0xffffff, 0.001)

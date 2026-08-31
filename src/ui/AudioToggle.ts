@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import { getVolume, isMuted, play, setVolume, toggleMuted } from '../systems/Audio.ts'
 import { iconPlate } from './Plate.ts'
-import { COLOR, FONT_DISPLAY } from './Theme.ts'
+import { COLOR, FONT_UI } from './Theme.ts'
 
 /**
  * The settings, such as they are: mute, and a volume that steps rather than
@@ -38,8 +38,8 @@ export class AudioToggle {
 
     const step = (dx: number, label: string, delta: number): Phaser.GameObjects.Text => {
       const t = scene.add.text(x + dx, y, label, {
-        fontFamily: FONT_DISPLAY, fontSize: '17px', color: COLOR.ink,
-        stroke: '#0d1016', strokeThickness: 4,
+        fontFamily: FONT_UI, fontSize: '22px', color: COLOR.ink,
+        fontStyle: 'bold', stroke: '#0d1016', strokeThickness: 4,
       }).setOrigin(0.5).setInteractive({ useHandCursor: true })
       t.on('pointerdown', () => {
         setVolume(Math.round((getVolume() + delta) * 10) / 10)
@@ -52,7 +52,7 @@ export class AudioToggle {
     const up = step(size * 1.32, '+', 0.1)
 
     this.readout = scene.add.text(x + size * 1.05, y + size * 0.52, '', {
-      fontFamily: FONT_DISPLAY, fontSize: '11px', color: COLOR.dim,
+      fontFamily: FONT_UI, fontSize: '15px', color: COLOR.dim,
       stroke: '#0d1016', strokeThickness: 3,
     }).setOrigin(0.5, 0)
 

@@ -56,7 +56,7 @@ export class ScratchCard {
     const ph = h + 240
     const panel = platePanel(scene, -pw / 2, -ph / 2, pw, ph)
     const title = scene.add.text(0, -h / 2 - 24, 'SCRATCH TICKET', {
-      fontFamily: FONT_DISPLAY, fontSize: '17px', color: COLOR.ink,
+      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.ink, fontStyle: 'bold',
     }).setOrigin(0.5, 0)
 
     // What is under the foil, drawn first so erasing the foil uncovers it.
@@ -65,8 +65,9 @@ export class ScratchCard {
     const prize = scene.add.text(0, -6, `${opts.payout}`, {
       fontFamily: FONT_DISPLAY, fontSize: '58px', color: COLOR.amber,
     }).setOrigin(0.5)
-    const unit = scene.add.text(0, 44, 'PEANUTS', {
-      fontFamily: FONT_DISPLAY, fontSize: '20px', color: COLOR.ink,
+    const unit = scene.add.text(0, 46, 'PEANUTS', {
+      fontFamily: FONT_UI, fontSize: '20px', color: COLOR.ink,
+      fontStyle: 'bold', letterSpacing: 3,
     }).setOrigin(0.5)
 
     // The foil itself: a render texture so it can be erased where dragged.
@@ -74,7 +75,7 @@ export class ScratchCard {
     this.paintFoil(w, h)
 
     this.hint = scene.add.text(0, h / 2 + 12, 'drag to scratch', {
-      fontFamily: FONT_UI, fontSize: '12px', color: COLOR.dim,
+      fontFamily: FONT_UI, fontSize: '16px', color: COLOR.dim,
     }).setOrigin(0.5, 0)
 
     // The eraser nib, stamped into the foil wherever the pointer drags.
@@ -93,6 +94,12 @@ export class ScratchCard {
   }
 
   /** True while the card owns the pointer, so the world ignores those clicks. */
+  /** Everything the card draws, for a scene that splits its two cameras.
+   *  It is all inside one container, so the container is the whole card. */
+  get objects(): Phaser.GameObjects.GameObject[] {
+    return [this.layer]
+  }
+
   owns(objects: Phaser.GameObjects.GameObject[]): boolean {
     return objects.includes(this.zone)
   }
