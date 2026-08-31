@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { gameConfig } from './config.ts'
+import { installOrientationGate } from './systems/Orientation.ts'
 
 /**
  * Phaser measures and rasterises text the moment a scene creates it, so the
@@ -20,7 +21,11 @@ async function waitForFonts(): Promise<void> {
 async function start(): Promise<void> {
   await waitForFonts()
   document.getElementById('boot')?.remove()
-  new Phaser.Game(gameConfig)
+  const game = new Phaser.Game(gameConfig)
+  // The game is landscape. Portrait gets an overlay and a paused game rather
+  // than a rotated canvas: rotating would put pointer coordinates in a
+  // different frame from the one the browser reports them in.
+  installOrientationGate(game)
 }
 
 void start()
