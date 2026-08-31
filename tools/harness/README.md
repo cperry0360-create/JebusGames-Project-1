@@ -50,8 +50,19 @@ screenshots are the evidence.
   The harness runs in real time and the page uploads its own frames instead.
 - **`tsc` here cannot resolve `phaser`**, so every file importing it reports a
   cascade of errors and a real one hides among them. Filtering by error code
-  helps (`TS2352`, `TS2739` on the project's own types are usually real), but
-  CI is the only complete typecheck. Data that drifts from its declared type —
+  helps, but CI is the only complete typecheck. The two classes that have
+  actually reached CI are both worth grepping for after touching `types.ts`:
+
+  ```bash
+  # Data drifted from its declared type, or a default no longer satisfies it.
+  npx tsc --noEmit 2>&1 | grep -E 'TS2352|TS2739|TS2740|TS2741' \
+    | grep -v "Blocker\|Sortable\|Targetable"
+  # A name used but never imported.
+  npx tsc --noEmit 2>&1 | grep -E 'TS2304|TS2552'
+  ```
+
+  The `grep -v` drops the Phaser cascades: `Hero`, `Fighter` and the rest are
+  missing `x`/`y` only because `Container` has no types here. Data that drifts from its declared type —
   a role removed from `art.json` but left in `ArtDef` — is covered by a test
   instead, because that is the drift that actually reached CI.
 - The Phaser build must match `package.json`. A mismatched major version boots

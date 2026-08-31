@@ -106,9 +106,11 @@ export class HudScene extends Phaser.Scene {
       const plate = this.add.image(x, HUD.marginY, key).setOrigin(0, 0)
       plate.setScale(scale)
 
+      // Defaults only matter for a plate whose field was never measured; the
+      // three real ones all carry theirs.
       const text = this.add.text(
-        x + cfg.fieldLeft * plateW + HUD.numberMargin,
-        HUD.marginY + cfg.fieldCentreY * HUD.plateHeight,
+        x + (cfg.fieldLeft ?? 0.3) * plateW + HUD.numberMargin,
+        HUD.marginY + (cfg.fieldCentreY ?? 0.5) * HUD.plateHeight,
         '',
         { fontFamily: FONT_DISPLAY, fontSize: `${HUD.numberSize}px`, color: colour },
       ).setOrigin(0, 0.5)

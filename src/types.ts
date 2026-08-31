@@ -255,10 +255,11 @@ export interface SpriteRender {
   anchorX: number
   anchorY: number
   /** Counter plates only: where the empty number field sits, as fractions of
-   *  the plate, so the HUD can place its text at any size. */
-  fieldLeft: number
-  fieldRight: number
-  fieldCentreY: number
+   *  the plate, so the HUD can place its text at any size. Optional, because
+   *  every other sprite in the game has no number field at all. */
+  fieldLeft?: number
+  fieldRight?: number
+  fieldCentreY?: number
   /** On-screen height in pixels; the aspect ratio is preserved. */
   displayHeight?: number
   /** Width of the ground shadow under this sprite. */
