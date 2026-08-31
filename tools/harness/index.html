@@ -261,6 +261,22 @@ function toScreen(wx, wy) {
   // origin is not the top-left of the screen any more.
   return [(wx - cam.worldView.x) * cam.zoom + cam.x, (wy - cam.worldView.y) * cam.zoom + cam.y]
 }
+/** Pans the board to a world point and waits for the camera to settle. */
+async function lookAt(wx, wy) {
+  const g = scene('Game')
+  if (g.rig) {
+    g.rig.targetCenterX = wx
+    g.rig.targetCenterY = wy
+  } else {
+    g.cameras.main.centerOn(wx, wy)
+  }
+  for (let i = 0; i < 30; i++) {
+    await sleep(60)
+    const v = g.cameras.main.worldView
+    if (Math.abs(v.centerX - wx) < 6 && Math.abs(v.centerY - wy) < 6) break
+  }
+}
+
 /**
  * Places a tower the way a player does: tap the pad, then press and hold an
  * option and release.
@@ -279,8 +295,10 @@ async function build(spotIndex, towerIndex = 0) {
   // with zero towers built and no error anywhere.
   const [wx, wy] = SPOTS[spotIndex]
   if (!g.cameras.main.worldView.contains(wx, wy)) {
-    g.cameras.main.centerOn(wx, wy)
-    await sleep(400)
+    // Drive the rig's target, not the camera. The rig eases the real camera
+    // toward its own target every frame, so a direct centerOn is undone within
+    // a frame or two and the tap lands off the pad again.
+    await lookAt(wx, wy)
   }
   const [x, y] = toScreen(wx, wy)
   await click(x, y)
@@ -501,8 +519,7 @@ async function run() {
     await shot('ui-01-fresh')
     // Look at the pad this scenario works on, or every tap below lands off
     // the canvas at a phone's zoom.
-    g.cameras.main.centerOn(SPOTS[4][0], SPOTS[4][1])
-    await sleep(500)
+    await lookAt(SPOTS[4][0], SPOTS[4][1])
     await move(...toScreen(SPOTS[4][0], SPOTS[4][1])); await shot('ui-02-hover-spot')
     await click(...toScreen(SPOTS[4][0], SPOTS[4][1])); await shot('ui-03-menu')
     let hit = g.menu.hitAreas?.[0]
@@ -816,6 +833,43 @@ async function run() {
       ', lands again after the lockout=' + afterLockout)
 
     await shot('stun-01-under-fire')
+    return
+  }
+
+  if (scenario === 'buildall') {
+    // Does the director actually place towers on every pad, at a phone's
+    // zoom, where most of them start off screen?
+    g.status.peanuts = 99999
+    for (let i = 0; i < g.build.spots.length; i++) {
+      const [wx, wy] = SPOTS[i]
+      await lookAt(wx, wy)
+      const v = g.cameras.main.worldView
+      const [sx, sy] = toScreen(wx, wy)
+      const inView = v.contains(wx, wy)
+      await click(sx, sy)
+      await sleep(250)
+      const opened = !!g.menu?.isOpen
+      let bought = false
+      if (opened) {
+        const hit = g.menu.hitAreas?.[0]
+        const bb = hit && hit.getBounds()
+        const before = g.towers.length
+        if (bb) {
+          await move(bb.centerX, bb.centerY)
+          mouse('mousedown', bb.centerX, bb.centerY); await sleep(300)
+          mouse('mouseup', bb.centerX, bb.centerY); await sleep(300)
+        }
+        bought = g.towers.length > before
+        note('pad ' + i + ' world ' + Math.round(wx) + ',' + Math.round(wy) +
+          ' inView=' + inView + ' screen ' + Math.round(sx) + ',' + Math.round(sy) +
+          ' menu=' + opened + ' option@' + (bb ? Math.round(bb.centerX) + ',' + Math.round(bb.centerY) : 'none') +
+          ' bought=' + bought + ' msg="' + g.status.message + '"')
+      } else {
+        note('pad ' + i + ' inView=' + inView + ' screen ' + Math.round(sx) + ',' +
+          Math.round(sy) + ' MENU DID NOT OPEN msg="' + g.status.message + '"')
+      }
+    }
+    note('total ' + g.towers.length + ' of ' + g.build.spots.length + ' pads built')
     return
   }
 

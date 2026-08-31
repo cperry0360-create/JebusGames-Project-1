@@ -78,6 +78,13 @@ export class BuildMenu {
     band?: { top: number; height: number },
   ): void {
     this.close(onPreview)
+    // Replaces the previous list rather than adding to it. It used to only
+    // ever be pushed to, so the array grew by one entry per cell on every
+    // open, held every destroyed rectangle alive for the life of the run, and
+    // left `hitAreas[0]` pointing at a cell from the first menu the player
+    // opened. `ownsAny` survived that by comparing object identity, but
+    // nothing else could have.
+    this.hitAreas = []
 
     // Size to the options actually offered, and prefer a wide, short panel:
     // on a phone the board is about 220px tall, and a two-row grid does not
@@ -207,7 +214,9 @@ export class BuildMenu {
     if (this.container) play(this.scene, 'close')
     this.container?.destroy(true)
     this.container = undefined
-    // hitAreas is not cleared here: see ownsAny. open() replaces it.
+    // Deliberately not cleared here. `ownsAny` is asked at pointerdown, and a
+    // cell's own handler can close the menu before that press is done with;
+    // the list is replaced on the next open instead.
     onPreview?.(null)
   }
 }

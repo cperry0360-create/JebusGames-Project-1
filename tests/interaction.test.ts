@@ -401,3 +401,18 @@ test('the tower panel does not cover the ring it is asking about', () => {
   const modal = game.slice(game.indexOf('get modalOpen()'), game.indexOf('get modalOpen()') + 160)
   assert.ok(!/panel/.test(modal), 'the anchored panel counts as a modal')
 })
+
+test('reopening the build menu replaces its hit areas rather than piling them up', () => {
+  // open() only ever pushed. The array grew by one entry per cell every time
+  // a pad was tapped, held every destroyed rectangle alive for the life of
+  // the run, and left hitAreas[0] pointing at a cell from the first menu ever
+  // opened — which is a live object leak and a lie about what the array is.
+  const menu = src('ui/BuildMenu.ts')
+  const open = menu.slice(menu.indexOf('  open('), menu.indexOf('  close('))
+  assert.match(open, /this\.hitAreas = \[\]/,
+    'the hit areas are never reset, so they accumulate across every open')
+  // And it must happen after close(), not before: close is what destroys the
+  // rectangles the old list refers to.
+  assert.ok(open.indexOf('this.close(') < open.indexOf('this.hitAreas = []'),
+    'the list is cleared before the menu it belongs to is closed')
+})
