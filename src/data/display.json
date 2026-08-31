@@ -6,6 +6,13 @@
   "camera": {
     "defaultZoom": 1.75,
     "maxZoom": 2.2,
-    "tapSlopPx": 12
+    "tapSlopPx": 12,
+    "panSpeed": 0.82,
+    "pinchDamping": 0.6,
+    "followLambda": 15,
+    "zoomLambda": 11,
+    "momentumDecay": 0.0022,
+    "momentumMinSpeed": 35,
+    "edgeSlackPx": 70
   }
 }

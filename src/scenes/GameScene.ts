@@ -225,6 +225,13 @@ export class GameScene extends Phaser.Scene {
       defaultZoom: displayData.camera.defaultZoom,
       maxZoom: displayData.camera.maxZoom,
       tapSlopPx: displayData.camera.tapSlopPx,
+      panSpeed: displayData.camera.panSpeed,
+      pinchDamping: displayData.camera.pinchDamping,
+      followLambda: displayData.camera.followLambda,
+      zoomLambda: displayData.camera.zoomLambda,
+      momentumDecay: displayData.camera.momentumDecay,
+      momentumMinSpeed: displayData.camera.momentumMinSpeed,
+      edgeSlackPx: displayData.camera.edgeSlackPx,
     })
 
     this.menu = new BuildMenu(this, [])
@@ -1169,6 +1176,12 @@ export class GameScene extends Phaser.Scene {
 
     // A backgrounded tab hands back a huge delta; cap it so nothing teleports.
     const dt = Math.min(delta / 1000, 0.05)
+
+    // The camera eases toward its target every frame, including on the run-end
+    // screen: it is what stops a released pan from halting dead, and a glide
+    // that is still running when the last enemy dies has to finish.
+    this.rig.update(dt)
+
     if (this.status.phase === 'won' || this.status.phase === 'lost') return
 
     this.cooldowns.tick(dt)

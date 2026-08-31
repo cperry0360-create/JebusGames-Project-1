@@ -1,11 +1,25 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { clampZoom, coverZoom, fitScale } from '../src/systems/CameraMath.ts'
+import {
+  anchorCenter,
+  centerRange,
+  clampZoom,
+  coverZoom,
+  fitScale,
+  pinchScale,
+  rubberBand,
+  smoothing,
+  worldAt,
+} from '../src/systems/CameraMath.ts'
 
 const url = (p: string) => new URL(p, import.meta.url)
 const display = JSON.parse(readFileSync(url('../src/data/display.json'), 'utf8'))
 const src = (p: string) => readFileSync(url(`../src/${p}`), 'utf8')
+/** Source with comments stripped, for rules about what the code does rather
+ *  than what it says about itself. */
+const code = (p: string) =>
+  src(p).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
 
 const W = display.width, H = display.height
 
@@ -114,4 +128,157 @@ test('only the game scene can pan or zoom, and it gives the gestures back', () =
   assert.match(game, /syncCameras\(\)/, 'no camera split')
   assert.match(game, /this\.children\.list\.length !== this\.splitAt/,
     'the split is never refreshed, so new objects render on both cameras')
+})
+
+/* --------------------------------------------------- gesture arithmetic */
+
+test('smoothing converges at the same rate whatever the frame rate', () => {
+  // The bug this guards: `v += (target - v) * 0.2` per frame is twice as fast
+  // at 120Hz as at 60Hz, so the camera feels different on different phones.
+  const settle = (fps: number): number => {
+    let v = 0
+    const dt = 1 / fps
+    for (let t = 0; t < 0.5; t += dt) v += (1 - v) * smoothing(15, dt)
+    return v
+  }
+  const a = settle(60), b = settle(120), c = settle(30)
+  assert.ok(Math.abs(a - b) < 0.01, `60Hz reached ${a}, 120Hz reached ${b}`)
+  assert.ok(Math.abs(a - c) < 0.02, `60Hz reached ${a}, 30Hz reached ${c}`)
+  // And it must actually get there, or the camera lags behind the finger.
+  assert.ok(a > 0.99, `after half a second the ease has only covered ${a}`)
+})
+
+test('smoothing never overshoots, even on a stalled frame', () => {
+  for (const dt of [0, 0.008, 0.016, 0.05, 1, 10]) {
+    const t = smoothing(display.camera.followLambda, dt)
+    assert.ok(t >= 0 && t <= 1, `dt=${dt} gives an interpolation factor of ${t}`)
+  }
+})
+
+test('pinch damping is symmetric, so open and closed feel the same', () => {
+  const d = display.camera.pinchDamping
+  assert.ok(d > 0 && d < 1, `a damping of ${d} does not damp anything`)
+  // Spreading the fingers to 2x and squeezing them to 1/2x are the same
+  // gesture in opposite directions; they must move the zoom equally.
+  const open = Math.log(pinchScale(2, d))
+  const shut = Math.log(pinchScale(0.5, d))
+  assert.ok(Math.abs(open + shut) < 1e-9, `open ${open} vs closed ${shut}`)
+  // And it must be damping, not a no-op or an amplifier.
+  assert.ok(pinchScale(2, d) < 2, 'zoom should move less than the fingers do')
+  assert.ok(pinchScale(2, d) > 1, 'but it still has to move')
+  assert.equal(pinchScale(1, d), 1, 'fingers that have not moved must not zoom')
+  assert.equal(pinchScale(0, d), 1, 'a degenerate separation must not blow up')
+})
+
+test('the camera centre is clamped so the view stays on the map', () => {
+  for (const [vw, vh] of [[852, 393], [667, 375], [1280, 720]]) {
+    const cover = coverZoom(vw, vh, W, H)
+    for (const mult of [1, 1.4, 1.75, 2.2]) {
+      const z = cover * mult
+      const rx = centerRange(vw, W, z), ry = centerRange(vh, H, z)
+      // At either extreme the visible rectangle must touch the edge exactly.
+      assert.ok(rx.min - vw / (2 * z) >= -0.001, `${vw}x${vh} @${mult}x: left edge escapes`)
+      assert.ok(rx.max + vw / (2 * z) <= W + 0.001, `${vw}x${vh} @${mult}x: right edge escapes`)
+      assert.ok(ry.min - vh / (2 * z) >= -0.001, `${vw}x${vh} @${mult}x: top edge escapes`)
+      assert.ok(ry.max + vh / (2 * z) <= H + 0.001, `${vw}x${vh} @${mult}x: bottom edge escapes`)
+      assert.ok(rx.min <= rx.max && ry.min <= ry.max, `${vw}x${vh} @${mult}x: empty range`)
+    }
+    // At cover exactly, one axis is pinned to a single position.
+    const at = centerRange(vw, W, cover)
+    const other = centerRange(vh, H, cover)
+    assert.ok(Math.abs(at.max - at.min) < 0.5 || Math.abs(other.max - other.min) < 0.5,
+      `${vw}x${vh}: at cover zoom neither axis is pinned, so the view can leave the map`)
+  }
+})
+
+test('the map edge resists rather than stopping dead', () => {
+  const slack = display.camera.edgeSlackPx
+  assert.ok(slack > 0, 'no slack at all is a hard wall')
+  assert.equal(rubberBand(500, 100, 900, slack), 500, 'inside the range nothing changes')
+  // Past the limit it gives, but always less than asked and never past slack.
+  for (const over of [1, 20, 100, 5000]) {
+    const got = rubberBand(900 + over, 100, 900, slack)
+    assert.ok(got > 900, `${over}px past the edge gave nothing at all`)
+    assert.ok(got - 900 < over, `${over}px past the edge moved the full ${got - 900}px, so there is no resistance`)
+    assert.ok(got - 900 < slack, `${over}px past the edge exposed ${got - 900}px, past the ${slack}px limit`)
+  }
+  // Resistance grows: pulling twice as hard must not get twice as far.
+  const near = rubberBand(900 + 40, 100, 900, slack) - 900
+  const far = rubberBand(900 + 80, 100, 900, slack) - 900
+  assert.ok(far < near * 2, `${near} then ${far}: the band is linear, not resistant`)
+  // Symmetric at the low end.
+  assert.ok(Math.abs((rubberBand(100 - 40, 100, 900, slack) - 100) + near) < 1e-9,
+    'the band gives more at one edge than the other')
+  // And with no slack it is an ordinary clamp, for the released state.
+  assert.equal(rubberBand(2000, 100, 900, 0), 900)
+})
+
+test('anchoring is the exact inverse of the world lookup', () => {
+  // This pair is what keeps the map still under a pinch. If they ever disagree
+  // the map slides out from under the fingers.
+  for (const [view, zoom, screen, center] of [
+    [852, 0.9, 210, 500], [852, 1.4, 640, 300], [393, 2.0, 12, 400], [1280, 1.0, 1279, 640],
+  ]) {
+    const w = worldAt(screen, center, view, zoom)
+    assert.ok(Math.abs(anchorCenter(w, screen, view, zoom) - center) < 1e-9,
+      `view=${view} zoom=${zoom}: anchoring a point back gave the wrong centre`)
+  }
+  // Zooming about a point must leave that point where it was.
+  const view = 852, from = 1.0, to = 1.6, screen = 300, center = 500
+  const w = worldAt(screen, center, view, from)
+  const moved = anchorCenter(w, screen, view, to)
+  assert.ok(Math.abs(worldAt(screen, moved, view, to) - w) < 1e-9,
+    'the point under the fingers moved when the zoom changed')
+})
+
+test('the rig tracks its own pointers rather than asking Phaser for a second one', () => {
+  // Comments stripped: this file *documents* the old bug, and the point is
+  // that the code no longer does it.
+  const rig = code('systems/CameraRig.ts')
+  // The old bug: at pointerdown the second finger *is* input.pointer2, so the
+  // distance between "the two fingers" was zero and the pinch never armed.
+  assert.doesNotMatch(rig, /input\.pointer2/,
+    'pointer2 at pointerdown is the finger going down, so the pinch measures itself')
+  assert.match(rig, /pointers\.length === 2/, 'the mode is not derived from how many fingers are down')
+  assert.match(rig, /beginPinch\(\)/, 'no distinct pinch state')
+})
+
+test('nothing writes to the camera from an input handler', () => {
+  // Every jump the old rig had came from a handler setting cam.scrollX from a
+  // delta against a stale origin. Handlers move targets; one place eases.
+  const rig = code('systems/CameraRig.ts')
+  // Just the input handlers. `onResize` is excluded on purpose: a rotate is
+  // already a discontinuity, and easing into the new cover zoom would show
+  // dead space past the map for the length of the ease.
+  const from = rig.indexOf('private onDown =')
+  const to = rig.indexOf('private onResize =')
+  assert.ok(from > 0 && to > from, 'the handler block moved; this test is now checking nothing')
+  const body = rig.slice(from, to)
+  assert.doesNotMatch(body, /cam\.scrollX\s*=/, 'a handler moves the camera directly')
+  assert.doesNotMatch(body, /cam\.setZoom\(/, 'a handler zooms the camera directly')
+  assert.match(rig, /update\(dt: number\)/, 'the rig has no per-frame ease')
+  const game = src('scenes/GameScene.ts')
+  assert.match(game, /this\.rig\.update\(dt\)/, 'the scene never ticks the rig, so nothing ever eases')
+})
+
+test('the rig owns its clamp instead of handing it to Phaser', () => {
+  // Phaser's own bounds clamp runs in preRender and would flatten the rubber
+  // band back into a hard stop.
+  const rig = code('systems/CameraRig.ts')
+  assert.doesNotMatch(rig, /setBounds\(/, 'Phaser bounds fight the rig for the edge behaviour')
+  assert.match(rig, /centerRange\(/, 'nothing clamps the camera centre')
+})
+
+test('pan is slower than the finger and the glide actually decays', () => {
+  const c = display.camera
+  assert.ok(c.panSpeed > 0.5 && c.panSpeed < 1,
+    `a pan speed of ${c.panSpeed} is either twitchy (>=1) or sluggish (<0.5)`)
+  assert.ok(c.momentumDecay > 0 && c.momentumDecay < 0.2,
+    `${c.momentumDecay} of the velocity surviving a second is not a glide, it is drift`)
+  assert.ok(c.momentumMinSpeed > 0, 'without a cutoff the glide never quite stops')
+  // A glide should travel a useful distance but not across the whole map.
+  const v0 = 900
+  const glide = v0 * (1 / -Math.log(c.momentumDecay))
+  assert.ok(glide > 60 && glide < 400,
+    `a 900px/s flick glides ${glide.toFixed(0)}px, which is ${glide < 60 ? 'not worth having' : 'a launch'}`)
 })
