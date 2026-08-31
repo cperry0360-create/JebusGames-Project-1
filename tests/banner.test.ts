@@ -110,19 +110,6 @@ test('the results screen reports the run and cannot be dismissed into a dead boa
     'Dialog ignores dismissable, so the results panel closes on an outside tap')
 })
 
-test('the results title is legible in the display face', () => {
-  // KenneyFuture renders K, X and R as H, H and A below about 26px, and the
-  // dialog title is set at 26px. "THE LINE BROKE" came out as THE LINE BROHE.
-  const scene = src('scenes/GameScene.ts')
-  const end = /private endRun\([\s\S]*?\n  \}/.exec(scene)![0]
-  const title = /title: won \? '([^']+)' : '([^']+)'/.exec(end)
-  assert.ok(title, 'the results panel has no title')
-  for (const word of [title[1]!, title[2]!]) {
-    assert.doesNotMatch(word, /[KXR]/,
-      `"${word}" contains a letter the display face does not resolve at 26px`)
-  }
-})
-
 test('peanuts earned counts income, not refunds', () => {
   // Selling a tower hands back money the player already had. Counting it as
   // earned would let a player inflate the run total by churning towers.

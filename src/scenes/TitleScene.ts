@@ -44,7 +44,7 @@ export class TitleScene extends Phaser.Scene {
     }).setOrigin(0.5)
 
     this.add.text(W / 2, 158, 'D E F E N S E', {
-      fontFamily: FONT_DISPLAY, fontSize: '30px', color: COLOR.amber,
+      fontFamily: FONT_UI, fontSize: '30px', fontStyle: 'bold', color: COLOR.amber,
       stroke: '#0d1016', strokeThickness: 6,
     }).setOrigin(0.5)
 

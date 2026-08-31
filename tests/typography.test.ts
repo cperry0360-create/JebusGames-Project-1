@@ -6,11 +6,17 @@ import { join } from 'node:path'
 /**
  * The type rules, enforced.
  *
- * KenneyFutureNarrow was the UI face and it could not hold its letterforms at
- * UI sizes: K read as H, X as H, R as A. The game misread its own words —
- * "KEEP PLAYING" became "HEEP PLAYING", and the credits turned "CORY WORKS IN
- * TAX" into "CORY WORHS IN TAH". These tests exist so that cannot come back by
- * someone typing a familiar-looking number into a style object.
+ * KenneyFuture cannot hold its letterforms at UI sizes: K reads as H, X as H,
+ * R as A. The game misread its own words — "KEEP PLAYING" became "HEEP
+ * PLAYING", "SPECIAL THANKS" became "SPECIAL THANHS", the credits turned "CORY
+ * WORKS IN TAX" into "CORY WORHS IN TAH", and the results panel announced THE
+ * LINE BROHE. Each one was found in a real frame, and each was worked around
+ * one at a time until the copy was being chosen to suit the font.
+ *
+ * So the rule is now total and mechanical: the display face above the floor,
+ * the sans everywhere else, with no exemption for numerals and none for a
+ * string that happens to contain no K. These tests exist so it cannot come
+ * back by someone typing a familiar-looking number into a style object.
  */
 
 const url = (p: string) => new URL(p, import.meta.url)
@@ -29,34 +35,60 @@ function sources(dir: string, out: { path: string; body: string }[] = []) {
 const ALL = sources('')
 
 /** Every `fontFamily: X, ... fontSize: 'Npx'` pair in one file, in order. */
-function styles(body: string): { family: string; size: number; at: number; numerals: boolean }[] {
-  const found: { family: string; size: number; at: number; numerals: boolean }[] = []
-  const re = /(\/\* numerals \*\/\s*)?fontFamily:\s*(FONT_DISPLAY|FONT_UI|'[^']*')[\s\S]{0,120}?fontSize:\s*'(\d+)px'/g
+function styles(body: string): { family: string; size: number; at: number }[] {
+  const found: { family: string; size: number; at: number }[] = []
+  const re = /fontFamily:\s*(FONT_DISPLAY|FONT_UI|'[^']*')[\s\S]{0,140}?fontSize:\s*'(\d+)px'/g
   for (let m = re.exec(body); m; m = re.exec(body)) {
     found.push({
-      family: m[2] as string,
-      size: Number(m[3]),
+      family: m[1] as string,
+      size: Number(m[2]),
       at: body.slice(0, m.index).split('\n').length,
-      numerals: Boolean(m[1]),
     })
   }
   return found
 }
 
 test('the display face is never used below the size its letters survive', () => {
-  // Digits are exempt and stay in the display face: the glyphs that fail are
-  // letters, and the HUD counters are the "big numbers" the face is for. The
-  // exemption has to be claimed in the source with a `/* numerals */` marker,
-  // so it is a decision someone made rather than one they drifted into.
+  // No exemptions. The numerals exemption is gone: it was the crack the face
+  // kept coming back through, and a rule with a carve-out is a rule someone
+  // has to remember rather than one the code enforces.
   for (const { path, body } of ALL) {
     for (const s of styles(body)) {
       if (s.family !== 'FONT_DISPLAY') continue
-      if (s.numerals) continue
       assert.ok(s.size >= type.displayMinSize,
         `${path}:${s.at} sets the display face at ${s.size}px, below the ${type.displayMinSize}px floor. ` +
-        'That is where K becomes H and X becomes H.')
+        'That is where K becomes H, X becomes H and R becomes A.')
     }
   }
+})
+
+test('the floor is clear of the failure, not on its edge', () => {
+  // 40px is where an R is already ambiguous, so the floor sits above it.
+  assert.ok(type.displayMinSize >= 44,
+    `a ${type.displayMinSize}px floor is inside the range where the face fails`)
+})
+
+test('the face is chosen by size in one place, not at each call site', () => {
+  const theme = readFileSync(url('../src/ui/Theme.ts'), 'utf8')
+  assert.match(theme, /export function faceFor\(px: number\): string \{[\s\S]{0,120}displayMinSize \? FONT_DISPLAY : FONT_UI/,
+    'there is no single place that decides which face a size gets')
+  assert.match(theme, /fontFamily: faceFor\(size\)/,
+    'the heading helper picks a face without asking faceFor')
+})
+
+test('what is left in the display face is genuinely large', () => {
+  // The title, the boss, the payoff — and nothing that a player has to read
+  // quickly or that carries a word the face cannot spell.
+  const big: string[] = []
+  for (const { path, body } of ALL) {
+    if (path === 'ui/Theme.ts') continue
+    for (const s of styles(body)) {
+      if (s.family === 'FONT_DISPLAY') big.push(`${path}:${s.at}@${s.size}`)
+    }
+  }
+  assert.ok(big.length > 0, 'the display face is gone entirely; the title should still use it')
+  assert.ok(big.length <= 12,
+    `${big.length} display-face sites is more than a title and a few headings: ${big.join(', ')}`)
 })
 
 test('no UI text is set below the legible minimum', () => {

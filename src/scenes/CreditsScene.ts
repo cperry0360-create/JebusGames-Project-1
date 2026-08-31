@@ -57,11 +57,11 @@ interface Block {
  * Tapping anywhere skips out. Nobody should be held here.
  *
  * The roll is set in the sans throughout and the display face appears exactly
- * once, on the names and the title they spell. That is partly restraint — the
- * one place the game's own typeface shows up is the one moment that matters —
- * and partly necessity: KenneyFuture's K still reads as an H at 40px, which
- * turned "SPECIAL THANKS" into "SPECIAL THANHS" and "JUST KIDDING" into
- * something worse. At the 54px and 92px of the payoff its letterforms hold.
+ * once, on the names and the title they spell — the 54px row and the 92px
+ * word, both well above the floor in Theme.ts. That is the game's rule now
+ * rather than a local workaround, and it happens to be the right restraint
+ * anyway: the one place the game's own typeface shows up is the one moment
+ * that matters.
  */
 export class CreditsScene extends Phaser.Scene {
   roll!: Phaser.GameObjects.Container

@@ -3,7 +3,7 @@ import { GameScene } from './GameScene.ts'
 import type { RulesDef } from '../types.ts'
 import presentationData from '../data/presentation.json'
 import rulesData from '../data/rules.json'
-import { COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
+import { COLOR, FONT_UI } from '../ui/Theme.ts'
 import { ART, fitInBox, renderFor } from '../systems/Art.ts'
 import { greyKey } from '../systems/Desaturate.ts'
 import { plateButton, type PlateButton } from '../ui/Plate.ts'
@@ -189,7 +189,10 @@ export class HudScene extends Phaser.Scene {
         x + (cfg.fieldLeft ?? 0.3) * plateW + HUD.numberMargin,
         top + (cfg.fieldCentreY ?? 0.5) * HUD.plateHeight,
         '',
-        { fontFamily: FONT_DISPLAY, fontSize: `${HUD.numberSize}px`, color: colour },
+        {
+          fontFamily: FONT_UI, fontSize: `${HUD.numberSize}px`,
+          fontStyle: 'bold', color: colour,
+        },
       ).setOrigin(0, 0.5)
 
       // The field the number is printed into, so a five-glyph wave counter
@@ -347,8 +350,7 @@ export class HudScene extends Phaser.Scene {
       fitInBox(icon, d.icon, box)
       const sweep = this.add.graphics()
       const timer = this.add.text(cx, cy, '', {
-        /* numerals */
-        fontFamily: FONT_DISPLAY, fontSize: '19px', color: COLOR.ink,
+        fontFamily: FONT_UI, fontSize: '19px', fontStyle: 'bold', color: COLOR.ink,
         stroke: '#0d1016', strokeThickness: 5,
       }).setOrigin(0.5)
       const hit = this.add.rectangle(cx, cy, pitch, ICON_H, 0xffffff, 0.001)
@@ -494,8 +496,7 @@ export class HudScene extends Phaser.Scene {
 
   private floatUp(label: string, colour: string): void {
     const t = this.add.text(this.peanutsText.x + 6, 34, label, {
-      /* numerals */
-      fontFamily: FONT_DISPLAY, fontSize: '18px', color: colour,
+      fontFamily: FONT_UI, fontSize: '18px', fontStyle: 'bold', color: colour,
     })
     this.tweens.add({
       targets: t, y: 14, alpha: 0, duration: 700, ease: 'Quad.easeOut',

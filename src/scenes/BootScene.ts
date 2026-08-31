@@ -5,7 +5,7 @@ import { initAudio, queueAudio } from '../systems/Audio.ts'
 import { ensureShadowTexture } from '../systems/Presentation.ts'
 import { ensureGrey } from '../systems/Desaturate.ts'
 import { ART } from '../systems/Art.ts'
-import { COLOR, FONT_DISPLAY } from '../ui/Theme.ts'
+import { COLOR, FONT_UI } from '../ui/Theme.ts'
 
 /** Loads the Kenney art and the synthesised cues, then hands over to the title. */
 export class BootScene extends Phaser.Scene {
@@ -18,7 +18,8 @@ export class BootScene extends Phaser.Scene {
     const cy = displayData.height / 2
 
     const label = this.add.text(cx, cy - 34, 'COURJAHAN DEFENSE', {
-      fontFamily: FONT_DISPLAY, fontSize: '40px', color: COLOR.ink,
+      fontFamily: FONT_UI, fontSize: '40px', fontStyle: 'bold', color: COLOR.ink,
+      letterSpacing: 3,
     }).setOrigin(0.5)
 
     const bar = this.add.rectangle(cx - 158, cy + 30, 0, 10, 0x6cc24a).setOrigin(0, 0.5)

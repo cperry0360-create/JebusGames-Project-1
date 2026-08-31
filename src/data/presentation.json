@@ -74,7 +74,7 @@
     "minUiSize": 15,
     "minMenuSize": 22,
     "menuBodySize": 24,
-    "displayMinSize": 26,
+    "displayMinSize": 44,
     "lineSpacing": 6,
     "letterSpacing": 0.5
   },

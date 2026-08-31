@@ -231,6 +231,32 @@ async function run() {
     if (okTitle) { scene('Title').scene.start('Credits'); await sleep(900); await shot('credits') }
     return
   }
+  // Every screen that carries a heading, a title or a verdict, so the face
+  // rule can be read off real frames rather than off the source.
+  if (scenario === 'type') {
+    await shot('type-1-title')
+    scene('Title').scene.start('Loadout')
+    await until(() => running('Loadout'), 8000); await sleep(700)
+    await shot('type-2-loadout')
+    scene('Loadout').scene.start('Credits')
+    await until(() => running('Credits') && scene('Credits').roll, 8000)
+    await sleep(500)
+    const cs = scene('Credits')
+    cs.tween?.stop()
+    const total = -cs.tween.data[0].end
+    const at = (t) => {
+      for (const o of cs.roll.list) if (o.text !== undefined && String(o.text) === t) return o.y
+      return -1
+    }
+    cs.roll.y = -(at('LEGAL AND COMPLIANCE') - 140)
+    await sleep(300)
+    await shot('type-3-credits-tax')
+    cs.roll.y = -(at('COURJAHAN') - 380)
+    await sleep(300)
+    await shot('type-4-credits-payoff')
+    return
+  }
+
   if (scenario === 'creditsroll') {
     // The roll is minutes long, so it is stepped by hand: the tween is stopped
     // and the container is parked at fractions of its own height. That also
@@ -624,6 +650,23 @@ async function run() {
     const drift = Math.round(Math.hypot(wAfter.x - wBefore.x, wAfter.y - wBefore.y))
     note('zoom anchor drift ' + drift + 'px (zoom ' + cam.zoom.toFixed(3) + ')')
     await shot('gestures')
+    return
+  }
+
+  if (scenario === 'typegame') {
+    // The pause dialog and the results panel, both of which are titles.
+    scene('Hud').openPause()
+    await sleep(700)
+    await shot('type-5-pause')
+    scene('Hud').panel?.close()
+    scene('Hud').resumeGame()
+    await until(() => !scene('Hud').panel, 5000)
+    await sleep(500)
+    g.status.wave = 6
+    g.status.lives = 0
+    g.endRun('lost')
+    await sleep(800)
+    await shot('type-6-results')
     return
   }
 

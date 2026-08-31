@@ -136,7 +136,8 @@ export class LoadoutScene extends Phaser.Scene {
     const portrait = this.add.image(-w / 2 + 76, h / 2, hero.portraitSprite)
     fitInBox(portrait, hero.portraitSprite, 96)
     const name = this.add.text(-w / 2 + 150, 20, hero.name.toUpperCase(), {
-      fontFamily: FONT_DISPLAY, fontSize: '34px', color: COLOR.ink,
+      fontFamily: FONT_UI, fontSize: '34px', fontStyle: 'bold', color: COLOR.ink,
+      letterSpacing: 2,
     }).setOrigin(0, 0)
     const line = this.add.text(-w / 2 + 150, 60, hero.blurb, {
       fontFamily: FONT_UI, fontSize: '22px', color: COLOR.dim, ...BODY_SPACING,

@@ -97,9 +97,12 @@ export class Dialog {
     const body: Phaser.GameObjects.GameObject[] = []
     let ty = 0
 
-    // At the display face's floor. Below this its K, X and R stop resolving.
+    // Sized up and set in the sans. At 26px the display face turned THE LINE
+    // BROKE into THE LINE BROHE; a title the player has to decode is worse
+    // than one that is merely a different typeface.
     const title = scene.add.text(0, ty, opts.title, {
-      fontFamily: FONT_DISPLAY, fontSize: '26px', color: COLOR.ink,
+      fontFamily: FONT_UI, fontSize: '30px', fontStyle: 'bold',
+      color: COLOR.ink, letterSpacing: 1,
     }).setOrigin(0.5, 0)
     body.push(title)
     ty += title.height + 8

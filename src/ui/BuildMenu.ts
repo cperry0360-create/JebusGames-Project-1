@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import type { TowerDef } from '../types.ts'
 import { towerIcon } from './TowerIcon.ts'
 import { iconPlate, platePanel } from './Plate.ts'
-import { COLOR, FONT_DISPLAY, FONT_UI } from './Theme.ts'
+import { COLOR, FONT_UI } from './Theme.ts'
 import { play } from '../systems/Audio.ts'
 
 export interface BuildOption {
@@ -143,8 +143,7 @@ export class BuildMenu {
 
       const cost = this.scene.add
         .text(iconX, cy + PLATE + 28, `${opt.def.cost}p`, {
-          /* numerals */
-          fontFamily: FONT_DISPLAY, fontSize: '17px',
+          fontFamily: FONT_UI, fontSize: '18px', fontStyle: 'bold',
           color: affordable ? '#f2d06b' : '#7d7568',
         })
         .setOrigin(0.5, 0)

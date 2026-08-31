@@ -1191,8 +1191,8 @@ this.armReadyCountdown()
 
     const wash = this.add.graphics().setDepth(TICKET_DEPTH)
     const label = this.add.text(W / 2, H * 0.22, 'SERVER NUKE', {
-      fontFamily: FONT_DISPLAY, fontSize: '38px', color: '#8fd0ff',
-      stroke: '#0d1016', strokeThickness: 8,
+      fontFamily: FONT_UI, fontSize: '40px', fontStyle: 'bold', color: '#8fd0ff',
+      stroke: '#0d1016', strokeThickness: 8, letterSpacing: 2,
     }).setOrigin(0.5).setDepth(TICKET_DEPTH + 1).setAlpha(0)
 
     this.tweens.add({ targets: label, alpha: 1, duration: 400 })
@@ -1466,11 +1466,7 @@ this.armReadyCountdown()
     this.status.message = won ? 'Filed on time.' : 'Overrun.'
 
     this.openDialog({
-      // "BROKE" would be the prototype's word, and the display face renders
-      // its K as an H at this size — the panel announced THE LINE BROHE. The
-      // font is a decision that has not been made yet (AUDIT #5), so the copy
-      // routes around it instead: HELD and FELL are a better pair anyway.
-      title: won ? 'THE LINE HELD' : 'THE LINE FELL',
+      title: won ? 'THE LINE HELD' : 'THE LINE BROKE',
       subtitle: verdictFor(outcome, RULES.banner),
       headline: { value: `+${earned}`, label: 'BANNER POINTS EARNED' },
       rows: [
@@ -1511,7 +1507,8 @@ this.armReadyCountdown()
     // the *screen* is inside the top band on a phone.
     const t = this.add.text(this.scale.width / 2,
       this.bands.worldTop + this.bands.worldHeight * 0.28, text, {
-      fontFamily: FONT_DISPLAY, fontSize: '40px', color, stroke: '#0d1016', strokeThickness: 7,
+      fontFamily: FONT_UI, fontSize: '40px', fontStyle: 'bold', color,
+      stroke: '#0d1016', strokeThickness: 7, letterSpacing: 2,
     }).setOrigin(0.5).setDepth(OVERLAY_DEPTH + 20).setScale(0.5)
     this.asScreenSpace([t])
     this.tweens.add({ targets: t, scale: 1, duration: 240, ease: 'Back.easeOut' })
@@ -1813,8 +1810,8 @@ this.armReadyCountdown()
     banner.forEach((p) => p.setDepth(TICKET_DEPTH))
 
     const title = this.add.text(W / 2, y - 16, name.toUpperCase(), {
-      fontFamily: FONT_DISPLAY, fontSize: '30px', color: '#8fd0ff',
-      stroke: '#0d1016', strokeThickness: 6,
+      fontFamily: FONT_UI, fontSize: '32px', fontStyle: 'bold', color: '#8fd0ff',
+      stroke: '#0d1016', strokeThickness: 6, letterSpacing: 1,
     }).setOrigin(0.5, 0).setDepth(TICKET_DEPTH + 1)
     const sub = this.add.text(W / 2, y + 22, 'RARE DROP — ONE USE', {
       fontFamily: FONT_UI, fontSize: '16px', color: COLOR.ink, letterSpacing: 1,

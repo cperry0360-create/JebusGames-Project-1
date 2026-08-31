@@ -6,23 +6,43 @@ import presentation from '../data/presentation.json'
 /**
  * Two faces, and the size decides which one you get.
  *
- * KenneyFuture is a display face and only a display face: the title, screen
- * headings, big numbers. Below about 26px its letterforms stop resolving — K
- * reads as H, X as H, R as A — and the game starts misreading its own words.
- * "KEEP PLAYING" rendered as "HEEP PLAYING", and the credits managed to turn
- * "CORY WORKS IN TAX" into "CORY WORHS IN TAH", which is a joke the game did
- * not write.
+ * KenneyFuture is a display face and only a display face: the game's title,
+ * the boss's name, the one big number on a results panel. Below about 40px its
+ * letterforms stop resolving — **K reads as H, X as H, R as A** — and the game
+ * starts misreading its own words. "KEEP PLAYING" rendered as "HEEP PLAYING",
+ * the credits turned "CORY WORKS IN TAX" into "CORY WORHS IN TAH", "SPECIAL
+ * THANKS" came out "SPECIAL THANHS", and the results panel announced THE LINE
+ * BROHE. Every one of those was a real frame, not a theory.
+ *
+ * The floor is 44px rather than 40 because 40 is the edge of the failure and
+ * not past it: at 40 an R is already ambiguous. Anything that wants the
+ * display face and is smaller than this does not get it — it gets the sans,
+ * sized up and set bold, which is a better-looking answer than a heading the
+ * player has to decode.
  *
  * Everything else is the platform's own UI sans, which on a phone means San
  * Francisco and on a desktop means Segoe or Roboto — faces drawn for exactly
  * this job, hinted for small sizes, and already on the device so there is
- * nothing to download and nothing to wait for. Style loses to legibility here.
+ * nothing to download and nothing to wait for. Style loses to legibility here,
+ * every time, without exceptions for numerals or for a word that happens to
+ * contain no K.
  */
 export const FONT_DISPLAY = 'KenneyFuture, Georgia, serif'
 export const FONT_UI =
   '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
 
 export const TYPE = presentation.typography
+
+/**
+ * The face for a given size. The only place that decision is made.
+ *
+ * Call sites ask for a size and get whichever face is legible at it, so a
+ * heading cannot be set in the display face by accident just because a
+ * previous version of it was bigger.
+ */
+export function faceFor(px: number): string {
+  return px >= TYPE.displayMinSize ? FONT_DISPLAY : FONT_UI
+}
 
 /**
  * Clamps a size to the floor for screen-space UI: the HUD, dialogs and the
@@ -71,7 +91,7 @@ export function heading(scene: Phaser.Scene, x: number, y: number, text: string,
     .text(x, y, text, {
       // A heading below the display floor gets the sans instead. The face is
       // chosen by size, never by which helper happened to be called.
-      fontFamily: size >= TYPE.displayMinSize ? FONT_DISPLAY : FONT_UI,
+      fontFamily: faceFor(size),
       fontSize: `${size}px`,
       color: COLOR.ink,
       stroke: '#0d1016',

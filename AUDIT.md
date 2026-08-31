@@ -122,21 +122,35 @@ Fine for the boss, who arrives at the start of his own wave. Not fine for the
 Server Nuke, which fires **mid-wave** off a kill — the player loses sight of the
 fight at the exact moment they are handed a decision.
 
-### 5. `K` and `X` are unreadable in the UI font
+### 5. `K` and `X` are unreadable in the UI font — **FIXED**
 
-`KenneyFutureNarrow` draws `K` and `X` with squared-off diagonals that read as
-`H` at UI sizes, and an `R` that reads as `A`. Verified at 5× zoom on a real
-frame — the credits dedication renders as:
+`KenneyFuture` draws `K` and `X` with squared-off diagonals that read as `H`,
+and an `R` that reads as `A`. Verified at 5× zoom on real frames:
 
 > HEROES ARE NAMED AFTER THE FAMILY. CORY **WORHS** IN **TAH**.
+> SPECIAL **THANHS** · **HEEP** PLAYING · THE LINE **BROHE**
 
-`CLAUDE.md` says "Cory works in tax, not audit. This matters." **The word "tax"
-cannot currently be read on screen.** The title blurb has it too: "MILD-MANNERED
-**TAH** ADVISOR… NOT AN **AUDITOA**."
+`CLAUDE.md` says "Cory works in tax, not audit. This matters." The word "tax"
+could not be read on screen at all.
 
-The display face at large sizes is fine — the 46px `CREDITS` heading is clean.
-It is the narrow UI face at 12–15px that fails. Changing it is a call about the
-game's typographic identity, which is why it is here rather than fixed.
+**Resolved.** The rule is now mechanical and lives in one place: `faceFor(size)`
+in `Theme.ts` returns the display face at or above `typography.displayMinSize`
+and the sans below it, and every call site asks for a size rather than naming a
+face. The floor is **44px**, not 40: measured at 4× on a real frame, an `R` at
+40px is still ambiguous and at 44px it has its leg back.
+
+The display face is left at seven sites, all of them genuinely large — the
+title (82), the credits payoff (92) and the names row (54), the boss's name
+(56), the two big result numbers (58), and the loadout heading (44). Screen
+headings, dialog titles, button labels, HUD counters, cooldown timers and
+result verdicts are all the sans, sized up and set bold.
+
+There is **no numerals exemption** any more. It was the crack the face kept
+coming back through, and a rule with a carve-out is one somebody has to
+remember. Enforced by `typography.test.ts`, which walks every source file.
+
+The copy that had been bent around the font is restored: the results panel says
+**THE LINE BROKE** again.
 
 ---
 
@@ -253,4 +267,5 @@ Recorded so it does not get refactored away:
 2. **Tower upgrades (#1)** — the run's real problem, and #3 largely solves
    itself once a selected tower has something to offer.
 3. Banner width mid-wave (#4), credit line (#8), dead data (#10) — small.
-4. **The font (#5)** and **boss scale (#7)** — both need your call, not mine.
+4. **Boss scale (#7)** — needs your call, not mine. (**The font (#5)** was
+   also yours to call and has since been called: see #5.)
