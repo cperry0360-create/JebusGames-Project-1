@@ -44,7 +44,10 @@
     "ability-meteor": "abilities/ability_meteor.png",
     "ability-chain": "abilities/ability_chain.png",
     "ability-scratchticket": "abilities/ability_scratchticket.png",
-    "ability-servernuke": "abilities/ability_servernuke.png"
+    "ability-servernuke": "abilities/ability_servernuke.png",
+    "hud-peanuts": "ui/hud_peanuts.png",
+    "hud-lives": "ui/hud_lives.png",
+    "hud-wave": "ui/hud_wave.png"
   },
   "render": {
     "turret-escalation": {
@@ -194,6 +197,27 @@
       "anchorY": 0.5,
       "contentWidth": 166,
       "contentHeight": 256
+    },
+    "hud-peanuts": {
+      "contentWidth": 232,
+      "contentHeight": 96,
+      "fieldLeft": 0.2845,
+      "fieldRight": 0.9397,
+      "fieldCentreY": 0.4948
+    },
+    "hud-lives": {
+      "contentWidth": 229,
+      "contentHeight": 96,
+      "fieldLeft": 0.3231,
+      "fieldRight": 0.9345,
+      "fieldCentreY": 0.4948
+    },
+    "hud-wave": {
+      "contentWidth": 232,
+      "contentHeight": 96,
+      "fieldLeft": 0.319,
+      "fieldRight": 0.9353,
+      "fieldCentreY": 0.4948
     }
   },
   "map": {
@@ -201,7 +225,12 @@
   },
   "ui": {
     "towerBase": null,
-    "titleBackdrop": "ui-title-bg"
+    "titleBackdrop": "ui-title-bg",
+    "counters": {
+      "peanuts": "hud-peanuts",
+      "lives": "hud-lives",
+      "wave": "hud-wave"
+    }
   },
   "fx": {
     "spark": "fx-spark",

@@ -264,3 +264,57 @@ for name in ('hero_cory.png', 'hero_cory_ultimate.png'):
     print(f'{"":24s} -> {key}: stands x{lo}-{hi}, shadow x{slo}-{shi}, scale {scale:.4f}, '
           f'on screen {round(w * scale, 1)}x{round(h * scale, 1)}, {hrender[key]}')
 json.dump({'files': hfiles, 'render': hrender}, open('/tmp/heropatch.json', 'w'), indent=2)
+
+
+# -------------------------------------------------------------- HUD plates
+
+# Each counter plate carries its own icon on the left and an empty dark field
+# on the right for the number. Where that field starts differs per plate, so it
+# is measured rather than guessed, and recorded as a fraction of the plate so
+# the HUD can place its text at any size.
+
+def dark_field(w, h, px):
+    """The empty area to the right of the plate's icon."""
+    y0, y1 = int(h * 0.28), int(h * 0.72)
+
+    def is_dark(x):
+        for y in range(y0, y1):
+            i = (y * w + x) * 4
+            if px[i + 3] > ALPHA and (px[i] > 60 or px[i + 1] > 60 or px[i + 2] > 60):
+                return False
+        return True
+
+    best, run = (0, 0), None
+    for x in range(w + 1):
+        d = x < w and is_dark(x)
+        if d and run is None:
+            run = x
+        elif not d and run is not None:
+            if x - run > best[1] - best[0]:
+                best = (run, x)
+            run = None
+    left, right = best
+    mid = (left + right) // 2
+    ys = [y for y in range(h)
+          if px[(y * w + mid) * 4 + 3] > ALPHA and max(px[(y * w + mid) * 4:(y * w + mid) * 4 + 3]) < 60]
+    return left, right, ys[0], ys[-1]
+
+
+print('\n\nHUD plates')
+pfiles, prender = {}, {}
+for name in ('peanuts', 'lives', 'wave'):
+    path = f'public/assets/ui/hud_{name}.png'
+    w, h, px = png.read(path)
+    left, right, top, bot = dark_field(w, h, px)
+    key = f'hud-{name}'
+    pfiles[key] = f'ui/hud_{name}.png'
+    prender[key] = {
+        'contentWidth': w,
+        'contentHeight': h,
+        # Fractions of the plate, so the HUD places its number at any size.
+        'fieldLeft': round(left / w, 4),
+        'fieldRight': round(right / w, 4),
+        'fieldCentreY': round(((top + bot) / 2) / h, 4),
+    }
+    print(f'  {key}: {w}x{h}, field x{left}-{right - 1} y{top}-{bot} -> {prender[key]}')
+json.dump({'files': pfiles, 'render': prender}, open('/tmp/hudpatch.json', 'w'), indent=2)

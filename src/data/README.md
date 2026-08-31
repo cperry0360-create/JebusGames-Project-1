@@ -61,9 +61,17 @@ shape of each one — add a field there when you add one here.
   how many different towers the build menu ever offers. How many towers can
   stand on the map is `map.json.buildSpots.length` — seven. The field used to
   be called `towerCap`, which read like a placement limit and was taken for one.
-- **`display.hudHeight` is shared, not just the HUD's own business.** The world
-  draws underneath the bar, so `tools/trace_map.py` uses it to keep build pads
-  low enough that a tower on one is not decapitated, and a test enforces it.
+- **`display.hudHeight` is shared, not just the HUD's own business.** There is
+  no HUD bar any more — three counter plates sit in the top-left corner and the
+  map runs to the full canvas — but the world still draws underneath them, so
+  `tools/trace_map.py` uses this to keep build pads low enough that a tower on
+  one is not decapitated, and a test enforces it.
+- **`art.render.hud-*` carries each counter plate's empty field**, as
+  `fieldLeft`/`fieldRight`/`fieldCentreY` fractions measured off the artwork.
+  The HUD places its number from those rather than from a constant, so a
+  redrawn plate with its icon somewhere else needs no code change.
+- **`presentation.hud` is the counter layout**: plate height, the gap between
+  them, the corner margins and the number's size and inset.
 - **`presentation.muzzle` puts a shot at the top of a tower.** The towers are
   painted buildings: they do not rotate to aim (doing that laid them on their
   sides), so the muzzle flash and the recoil are the only aim cues there are.

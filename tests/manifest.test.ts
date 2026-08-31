@@ -49,9 +49,17 @@ test('every role in the manifest resolves to a file that exists', () => {
   const keys = new Set(Object.keys(art.files))
   const roleRefs: Array<[string, string]> = []
   for (const [role, key] of Object.entries(art.map) as [string, string][]) roleRefs.push([`map.${role}`, key])
-  for (const [role, key] of Object.entries(art.ui) as [string, string | null][]) {
+  for (const [role, key] of Object.entries(art.ui) as [string, unknown][]) {
     // A null role is a deliberate opt-out, e.g. towers that carry their own base.
-    if (key !== null) roleRefs.push([`ui.${role}`, key])
+    if (key === null) continue
+    if (typeof key === 'object') {
+      // A nested group, like the three counter plates.
+      for (const [sub, k] of Object.entries(key as Record<string, string>)) {
+        roleRefs.push([`ui.${role}.${sub}`, k])
+      }
+    } else {
+      roleRefs.push([`ui.${role}`, key as string])
+    }
   }
   for (const [role, key] of Object.entries(art.fx) as [string, string][]) roleRefs.push([`fx.${role}`, key])
   art.decor.forEach((key: string, i: number) => roleRefs.push([`decor[${i}]`, key]))

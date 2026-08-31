@@ -1,8 +1,9 @@
 import Phaser from 'phaser'
 import displayData from '../data/display.json'
 import { GameScene } from './GameScene.ts'
-import { COLOR, FONT_DISPLAY, FONT_UI, panel } from '../ui/Theme.ts'
-import { fitInBox } from '../systems/Art.ts'
+import presentationData from '../data/presentation.json'
+import { COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
+import { ART, fitInBox, renderFor } from '../systems/Art.ts'
 import { greyKey } from '../systems/Desaturate.ts'
 
 interface SlotView {
@@ -18,10 +19,7 @@ interface SlotView {
   y: number
 }
 
-const SHADOW_H = 6
-/** The bar itself; display.hudHeight is the bar plus its shadow, which is the
- *  line the rest of the game has to keep clear. */
-const BAR_H = displayData.hudHeight - SHADOW_H
+const HUD = presentationData.hud
 /** Icons are drawn 64px tall, as the art was made for. They carry their own
  *  frames, so nothing is drawn behind them. */
 const ICON_H = 64
@@ -61,30 +59,22 @@ export class HudScene extends Phaser.Scene {
     this.lastLives = -1
     const W = displayData.width
 
-    panel(this, -4, -6, W + 8, BAR_H + 6, { radius: 0, alpha: 0.97, shadow: false })
-    // The bar is flush to the top edge, so its shadow is drawn below it only.
-    this.add.rectangle(0, BAR_H, W, SHADOW_H, 0x000000, 0.3).setOrigin(0, 0)
+    // Three painted counters in the top-left corner, and nothing behind them.
+    // The map runs to the full canvas now; there is no bar to crop it.
+    const row = this.buildCounters()
 
-    this.peanutsText = this.add.text(18, 12, '', {
-      fontFamily: FONT_DISPLAY, fontSize: '22px', color: COLOR.amber,
-    })
-    this.livesText = this.add.text(158, 12, '', {
-      fontFamily: FONT_DISPLAY, fontSize: '22px', color: COLOR.danger,
-    })
-    this.waveText = this.add.text(288, 12, '', {
-      fontFamily: FONT_DISPLAY, fontSize: '22px', color: COLOR.ink,
-    })
-    // Under the bar rather than inside it: at 13px the guidance line ran
-    // straight into the ability slots and lost its second half.
-    this.message = this.add.text(18, BAR_H + 12, '', {
+    this.message = this.add.text(HUD.marginX, row.bottom + 8, '', {
       fontFamily: FONT_UI, fontSize: '14px', color: COLOR.ink,
       stroke: '#0d1016', strokeThickness: 4,
     })
 
-    this.buildStartButton(W - 208, 10)
+    // Start button in the opposite corner, standing on its own.
+    this.buildStartButton(W - 196 - HUD.marginX, HUD.marginY)
 
-    this.heroLabel = this.add.text(W - 232, 12, '', {
+    // The hero stays top-right where he was, moved down clear of the button.
+    this.heroLabel = this.add.text(W - HUD.marginX, HUD.marginY + 54, '', {
       fontFamily: FONT_UI, fontSize: '13px', color: COLOR.ink,
+      stroke: '#0d1016', strokeThickness: 4,
     }).setOrigin(1, 0)
     this.heroBar = this.add.graphics()
 
@@ -93,12 +83,55 @@ export class HudScene extends Phaser.Scene {
     }).setOrigin(1, 0).setAlpha(0.35)
   }
 
+  /**
+   * The counter plates. Each already carries its icon and an empty dark field;
+   * the number goes in that field, whose position is measured in the manifest
+   * rather than guessed, so a replaced plate needs no code change.
+   */
+  private buildCounters(): { bottom: number } {
+    const keys = ART.ui.counters
+    const order: Array<[string, () => Phaser.GameObjects.Text, string]> = [
+      ['peanuts', () => this.peanutsText, COLOR.amber],
+      ['lives', () => this.livesText, COLOR.danger],
+      ['wave', () => this.waveText, COLOR.ink],
+    ]
+    let x = HUD.marginX
+    let bottom = HUD.marginY
+    for (const [name, , colour] of order) {
+      const key = keys[name]
+      const cfg = renderFor(key)
+      const scale = HUD.plateHeight / (cfg.contentHeight ?? 96)
+      const plateW = (cfg.contentWidth ?? 232) * scale
+
+      const plate = this.add.image(x, HUD.marginY, key).setOrigin(0, 0)
+      plate.setScale(scale)
+
+      const text = this.add.text(
+        x + cfg.fieldLeft * plateW + HUD.numberMargin,
+        HUD.marginY + cfg.fieldCentreY * HUD.plateHeight,
+        '',
+        { fontFamily: FONT_DISPLAY, fontSize: `${HUD.numberSize}px`, color: colour },
+      ).setOrigin(0, 0.5)
+
+      if (name === 'peanuts') this.peanutsText = text
+      else if (name === 'lives') this.livesText = text
+      else this.waveText = text
+
+      x += plateW + HUD.plateGap
+      bottom = Math.max(bottom, HUD.marginY + HUD.plateHeight)
+    }
+    return { bottom }
+  }
+
   private buildStartButton(x: number, y: number): void {
     const w = 196
     const h = 46
     this.startBox = this.add.graphics()
+    // Stroked: with the bar gone this button sits straight on the map, and
+    // the wave readout it turns into was washing out against the treeline.
     this.startLabel = this.add.text(x + w / 2, y + h / 2, '', {
       fontFamily: FONT_DISPLAY, fontSize: '17px', color: COLOR.ink,
+      stroke: '#0d1016', strokeThickness: 4,
     }).setOrigin(0.5)
     this.startHit = this.add.rectangle(x + w / 2, y + h / 2, w, h, 0xffffff, 0.001)
       .setInteractive({ useHandCursor: true })
@@ -130,10 +163,13 @@ export class HudScene extends Phaser.Scene {
     }
     this.slotKeys = defs.map((d) => d.id).join(',')
 
-    const startX = 420
+    // The bar they used to live in is gone, so they sit along the bottom
+    // centre where a hero's actives belong, clear of the counters entirely.
+    const startX = (displayData.width - defs.length * SLOT_PITCH) / 2
+    const bottomY = displayData.height - ICON_H - 14
     defs.forEach((d, i) => {
       const x = startX + i * SLOT_PITCH
-      const y = 4
+      const y = bottomY
       const frame = this.add.graphics()
       const icon = this.add.image(x + SLOT_PITCH / 2, y + ICON_H / 2, d.icon)
       fitInBox(icon, d.icon, ICON_H)
@@ -172,20 +208,20 @@ export class HudScene extends Phaser.Scene {
       this.slotsBuilt = true
     }
 
-    this.peanutsText.setText(`${s.peanuts}p`)
-    this.livesText.setText(`${s.lives} HP`)
+    this.peanutsText.setText(`${s.peanuts}`)
+    this.livesText.setText(`${s.lives}`)
     // Money and lives are the two numbers a player watches, so a change has to
     // announce itself rather than quietly appear.
     if (this.lastPeanuts >= 0 && s.peanuts !== this.lastPeanuts) {
       this.bump(this.peanutsText, s.peanuts > this.lastPeanuts ? '#ffffff' : COLOR.danger, COLOR.amber)
-      if (s.peanuts > this.lastPeanuts) this.floatUp(`+${s.peanuts - this.lastPeanuts}p`, COLOR.amber)
+      if (s.peanuts > this.lastPeanuts) this.floatUp(`+${s.peanuts - this.lastPeanuts}`, COLOR.amber)
     }
     if (this.lastLives >= 0 && s.lives < this.lastLives) {
       this.bump(this.livesText, '#ffffff', COLOR.danger)
     }
     this.lastPeanuts = s.peanuts
     this.lastLives = s.lives
-    this.waveText.setText(`WAVE ${Math.min(s.wave + 1, s.waveCount)}/${s.waveCount}`)
+    this.waveText.setText(`${Math.min(s.wave + 1, s.waveCount)}/${s.waveCount}`)
     this.message.setText(s.message)
 
     this.drawStartButton(s)
@@ -282,8 +318,8 @@ export class HudScene extends Phaser.Scene {
 
   private drawHeroBar(s: GameScene['status']): void {
     const w = 200
-    const x = displayData.width - 232 - w
-    const y = 34
+    const x = displayData.width - HUD.marginX - w
+    const y = HUD.marginY + 72
 
     let state = ''
     if (s.heroDown) state = ' — DOWN'

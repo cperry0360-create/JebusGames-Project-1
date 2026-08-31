@@ -29,6 +29,11 @@ npm run preview  # serve the built dist/ locally
 The currency is **peanuts**. Towers cost peanuts, kills pay peanuts, and the
 HUD counts them.
 
+The HUD follows the Kingdom Rush pattern: three painted counter plates tucked
+into the top-left corner, the start-wave button alone in the top-right, Cory's
+health under it, and his abilities along the bottom. There is no bar across the
+top, so the painted map runs to the full canvas.
+
 A run goes: **studio splash → title and hero pick → ability draft → tower draft →
 the map.** The splash runs about two seconds and any click or key skips it.
 

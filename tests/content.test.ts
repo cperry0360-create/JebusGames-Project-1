@@ -6,6 +6,7 @@ const url = (p: string) => new URL(p, import.meta.url)
 const read = (n: string) => JSON.parse(readFileSync(url(`../src/data/${n}.json`), 'utf8'))
 const art = read('art'), abilities = read('abilities'), heroes = read('heroes'), rules = read('rules')
 const towers = read('towers'), enemies = read('enemies'), map = read('map'), pres = read('presentation')
+const display = read('display')
 
 const ART_KEYS = new Set(Object.keys(art.files))
 
@@ -192,6 +193,37 @@ test('every ability icon is its own painted card', () => {
   for (const a of Object.values(abilities) as any[]) {
     assert.ok(art.greyable.includes(a.icon), `${a.icon} has no greyscale copy for the unavailable state`)
   }
+})
+
+test('the three counter plates carry a measured number field', () => {
+  // The HUD draws each number inside its plate's empty area, so where that
+  // area is has to come from the manifest rather than from a constant.
+  const counters = art.ui.counters
+  assert.deepEqual(Object.keys(counters).sort(), ['lives', 'peanuts', 'wave'])
+  for (const [name, key] of Object.entries(counters) as [string, string][]) {
+    const cfg = art.render[key]
+    assert.ok(cfg, `the ${name} plate has no render entry`)
+    assert.ok(cfg.fieldLeft > 0.1 && cfg.fieldLeft < 0.6,
+      `the ${name} plate's number field starts at ${cfg.fieldLeft}; that is not beside its icon`)
+    assert.ok(cfg.fieldRight > cfg.fieldLeft, `the ${name} plate's field is inverted`)
+    assert.ok(Math.abs(cfg.fieldCentreY - 0.5) < 0.1,
+      `the ${name} plate's field is not vertically centred`)
+    assert.match(art.files[key], /^ui\/hud_/, `the ${name} plate is not the painted art`)
+  }
+})
+
+test('the HUD leaves the map uncropped and its corners uncontested', () => {
+  const hud = pres.hud
+  const plates = Object.values(art.ui.counters as Record<string, string>)
+    .map((k) => (art.render[k].contentWidth / art.render[k].contentHeight) * hud.plateHeight)
+  const rowWidth = plates.reduce((a, b) => a + b, 0) + hud.plateGap * (plates.length - 1)
+  // The counters own the left of the strip and the start button the right;
+  // they must not be able to meet in the middle.
+  const buttonLeft = display.width - 196 - hud.marginX
+  assert.ok(hud.marginX + rowWidth < buttonLeft,
+    `the counter row reaches ${(hud.marginX + rowWidth).toFixed(0)}px and the button starts at ${buttonLeft}px`)
+  assert.ok(hud.marginY + hud.plateHeight <= display.hudHeight,
+    'the counters stick out below the strip the world keeps clear of')
 })
 
 test('nothing in the shipped data calls the currency gold', () => {

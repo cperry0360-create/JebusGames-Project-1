@@ -4,8 +4,9 @@
 export interface DisplayDef {
   width: number
   height: number
-  /** Height of the HUD bar, including its shadow. The world draws under it,
-   *  so nothing that must stay readable may sit above this line. */
+  /** Height of the strip the counters occupy in the top corner. There is no
+   *  HUD bar any more, but the world still draws underneath the counters, so
+   *  nothing that must stay readable may sit above this line. */
   hudHeight: number
   backgroundColor: string
 }
@@ -253,6 +254,11 @@ export interface WavesDef {
 export interface SpriteRender {
   anchorX: number
   anchorY: number
+  /** Counter plates only: where the empty number field sits, as fractions of
+   *  the plate, so the HUD can place its text at any size. */
+  fieldLeft: number
+  fieldRight: number
+  fieldCentreY: number
   /** On-screen height in pixels; the aspect ratio is preserved. */
   displayHeight?: number
   /** Width of the ground shadow under this sprite. */
@@ -283,6 +289,8 @@ export interface ArtDef {
     towerBase: string | null
     /** The painted title illustration. null falls back to a flat panel. */
     titleBackdrop: string | null
+    /** The three counter plates, each carrying its own icon and empty field. */
+    counters: Record<string, string>
   }
   fx: {
     spark: string
