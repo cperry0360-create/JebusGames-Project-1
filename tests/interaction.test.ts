@@ -28,8 +28,11 @@ test('no interaction anywhere in the game is keyboard-only', () => {
   const credits = src('scenes/CreditsScene.ts')
   const splash = src('scenes/SplashScene.ts')
 
-  assert.match(game, /plateButton\([^)]*'BACK TO TITLE'/s,
-    'the run-end screen has no button, so a touch player cannot leave it')
+  // The run-end screen is a panel now, so its way out is a dialog button.
+  assert.match(game, /'TRY AGAIN'/,
+    'the run-end screen offers no way to start another run')
+  assert.match(game, /cancelLabel: 'QUIT TO TITLE'/,
+    'the run-end screen has no way out, so a touch player cannot leave it')
   assert.match(game, /'CANCEL'/,
     'an armed ability can only be cancelled with a key')
   assert.match(hud, /plateButton\(/, 'the HUD start-wave button is not a button')
@@ -40,25 +43,34 @@ test('no interaction anywhere in the game is keyboard-only', () => {
   assert.match(splash, /pointerdown/, 'the splash can only be skipped with a key')
 })
 
-test('the run-end button is on the screen it appears on', () => {
+test('the run-end screen is on the screen it appears on, and cannot be left behind', () => {
   const game = src('scenes/GameScene.ts')
+  const dialog = src('ui/Dialog.ts')
   // It used to be placed against the 1280x720 design box in *world* space,
   // which put it at the centre of the map rather than the centre of the view.
   // Panned to a corner at gameplay zoom, the player reached the end of a run
-  // with no banner and no button — exactly the dead end the button exists to
+  // with no banner and no button — exactly the dead end the panel exists to
   // prevent. It has to be positioned against the live viewport and drawn by
   // the camera that does not move.
-  const m = /plateButton\(this, cx, cy \+ (\d+), (\d+), (\d+),\s*'BACK TO TITLE'/s.exec(game)
-  assert.ok(m, 'could not find the run-end button')
-  const [, dy, w, h] = m.map(Number)
-  assert.ok(w > 120 && h > 40, 'a run-end button should be a big, obvious target')
-  // The shortest viewport the game is expected to run on, in landscape.
-  const shortest = 375
-  assert.ok(shortest / 2 + dy + h / 2 < shortest,
-    `at ${shortest}px tall the button reaches ${shortest / 2 + dy + h / 2}px and runs off the bottom`)
-  assert.match(game, /const cx = this\.scale\.width \/ 2/, 'the run-end screen is not sized to the viewport')
-  assert.match(game, /this\.asScreenSpace\(\[banner, \.\.\.back\.parts\]\)/,
-    'the run-end screen is drawn by the world camera, so panning moves it off view')
+  const open = /private openDialog\([\s\S]*?\n  \}/.exec(game)
+  assert.ok(open, 'openDialog is gone')
+  assert.match(open[0], /this\.scale\.width \/ 2, this\.scale\.height \/ 2/,
+    'the dialog is not centred on the live viewport')
+  assert.match(open[0], /this\.asScreenSpace\(this\.dialog\.objects\)/,
+    'the dialog is drawn by the world camera, so panning moves it off view')
+
+  // And the run-end panel goes through it rather than drawing its own.
+  const end = /private endRun\([\s\S]*?\n  \}/.exec(game)
+  assert.ok(end, 'endRun is gone')
+  assert.match(end[0], /this\.openDialog\(\{/, 'the run-end screen is hand-drawn again')
+
+  // A phone in landscape can be 320px tall and a results panel is taller than
+  // that. A panel that runs off the screen takes its buttons with it.
+  assert.match(dialog, /Math\.min\(1, \(scene\.scale\.height - MARGIN\) \/ h/,
+    'a dialog taller than the viewport is not scaled to fit')
+  const btn = /plateButton\(scene, bx, btnY, bw, (\d+),/.exec(dialog)
+  assert.ok(btn && Number(btn[1]) >= 44,
+    'dialog buttons are below the 44px touch target floor')
 })
 
 test('every full-screen overlay is drawn by the camera that does not move', () => {

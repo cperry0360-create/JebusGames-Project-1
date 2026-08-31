@@ -27,6 +27,9 @@ export interface DialogOptions {
   /** A line under the title, for flavour or a warning. */
   subtitle?: string
   rows?: DialogRow[]
+  /** One number set large above the rows, for a panel that has a headline
+   *  rather than a list — the Banner Points a run paid out. */
+  headline?: { label: string; value: string }
   /** The action button. Omitted for an informational panel. */
   confirm?: { label: string; onPick: () => void; enabled?: boolean }
   /** A second action beside confirm, for a panel that offers two things —
@@ -39,9 +42,18 @@ export interface DialogOptions {
   /** How much the world behind is dimmed. A confirm can afford to darken the
    *  screen; a panel opened mid-wave should not hide the wave. */
   dim?: number
+  /**
+   * Whether a tap outside the panel closes it. True everywhere except the
+   * results screen: the run is over there, so dismissing would leave the
+   * player on a dead board with no way off it. The blocker still swallows the
+   * tap either way.
+   */
+  dismissable?: boolean
 }
 
 const ROW_H = 26
+/** Space left around a panel that had to be scaled down to fit. */
+const MARGIN = 24
 /** Space above the title, inside the plate's own chrome. */
 const TOP_PAD = 54
 /** Space below the body for the button row plus the plate's bottom chrome,
@@ -58,6 +70,9 @@ export class Dialog {
   private readonly blocker: Phaser.GameObjects.Rectangle
   private closed = false
   private closedHandler?: () => void
+  /** How much the panel had to shrink to fit the viewport. 1 on any screen
+   *  tall enough to hold it. */
+  private fit = 1
 
   constructor(scene: Phaser.Scene, x: number, y: number, depth: number, opts: DialogOptions) {
     this.scene = scene
@@ -71,10 +86,9 @@ export class Dialog {
       .rectangle(0, 0, scene.scale.width * 2, scene.scale.height * 2, 0x000000, opts.dim ?? 0.45)
       .setOrigin(0.5)
       .setInteractive()
-    this.blocker.on('pointerdown', () => this.close())
+    if (opts.dismissable !== false) this.blocker.on('pointerdown', () => this.close())
 
-    this.layer = scene.add.container(x, y).setDepth(depth).setScale(0.86)
-    scene.tweens.add({ targets: this.layer, scale: 1, duration: 170, ease: 'Back.easeOut' })
+    this.layer = scene.add.container(x, y).setDepth(depth)
     play(scene, 'open')
 
     // The body is built first and measured, then the plate is sized around it.
@@ -97,6 +111,23 @@ export class Dialog {
       }).setOrigin(0.5, 0)
       body.push(sub)
       ty += sub.height + 12
+    }
+
+    // The headline, if there is one: the number first and large, its label
+    // under it. A results screen has one number that matters and a list of
+    // numbers that explain it, and they should not look alike.
+    if (opts.headline) {
+      const big = scene.add.text(0, ty, opts.headline.value, {
+        fontFamily: FONT_DISPLAY, fontSize: '58px', color: COLOR.amber,
+      }).setOrigin(0.5, 0)
+      body.push(big)
+      ty += big.height + 2
+      const cap = scene.add.text(0, ty, opts.headline.label, {
+        fontFamily: FONT_UI, fontSize: '15px', color: COLOR.dim,
+        fontStyle: 'bold', letterSpacing: 3,
+      }).setOrigin(0.5, 0)
+      body.push(cap)
+      ty += cap.height + 20
     }
 
     // Label left, value right, against the panel's inner face.
@@ -153,6 +184,16 @@ export class Dialog {
 
     this.layer.add(parts)
     this.blocker.setDepth(depth - 1)
+
+    // A phone in landscape can be 320px tall. A panel with a headline and five
+    // rows is taller than that, and a panel that runs off the screen takes its
+    // buttons with it — which on the results screen would be a dead end. So
+    // the whole panel is scaled to fit rather than trusted to be short enough.
+    this.fit = Math.min(1, (scene.scale.height - MARGIN) / h, (scene.scale.width - MARGIN) / w)
+    this.layer.setScale(this.fit * 0.86)
+    scene.tweens.add({
+      targets: this.layer, scale: this.fit, duration: 170, ease: 'Back.easeOut',
+    })
   }
 
   get active(): boolean {
@@ -196,7 +237,7 @@ export class Dialog {
     this.closedHandler?.()
     this.blocker.destroy()
     this.scene.tweens.add({
-      targets: this.layer, alpha: 0, scale: 0.9, duration: 150,
+      targets: this.layer, alpha: 0, scale: this.fit * 0.9, duration: 150,
       onComplete: () => this.layer.destroy(true),
     })
   }

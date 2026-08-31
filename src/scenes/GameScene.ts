@@ -21,7 +21,7 @@ import { GROUND_DEPTH } from '../systems/DepthSort.ts'
 import { ART } from '../systems/Art.ts'
 import { Cooldowns } from '../systems/Cooldowns.ts'
 import { unlockedTowerCount } from '../systems/Draft.ts'
-import { runState } from '../systems/RunState.ts'
+import { runState, setRunState } from '../systems/RunState.ts'
 import { castAbility } from '../systems/AbilityRunner.ts'
 import { PRESENTATION, floatingDamage } from '../systems/Presentation.ts'
 import { play, playRotating, resetVoices } from '../systems/Audio.ts'
@@ -40,7 +40,8 @@ import { CameraRig } from '../systems/CameraRig.ts'
 import { Dialog, type DialogOptions, type DialogRow } from '../ui/Dialog.ts'
 import { maxTier, nextStep, sellValue, specSummary, statAt } from '../systems/Upgrades.ts'
 import { canAffordAny, openingPurse } from '../systems/Economy.ts'
-import { hasClearedARun, recordRunCleared } from '../systems/Save.ts'
+import { addBannerPoints, hasClearedARun, recordRunCleared } from '../systems/Save.ts'
+import { bannerPointsFor, verdictFor, type RunOutcome } from '../systems/Banner.ts'
 
 const MAP = mapData as MapDef
 const RULES = rulesData as RulesDef
@@ -80,6 +81,10 @@ export interface GameStatus {
   pendingAbility: string | null
   /** Seconds until the next wave starts by itself. 0 when nothing is counting. */
   readyCountdown: number
+  /** Run totals, for the results screen. Kills counts enemies killed by any
+   *  means; earned counts peanuts taken in, not peanuts recovered by selling. */
+  kills: number
+  peanutsEarned: number
   message: string
   /**
    * A refusal the player needs to see *now*, raised where their finger is
@@ -108,6 +113,7 @@ export class GameScene extends Phaser.Scene {
     heroName: '', heroHealth: 0, heroMax: 0, heroDown: false, lastStand: false,
     unlockedTowers: [], abilities: [], rareAbility: null, pendingAbility: null,
     readyCountdown: 0, message: '',
+    kills: 0, peanutsEarned: 0,
     alert: '',
     bossName: '', bossHealth: 0, bossMax: 0,
   }
@@ -207,6 +213,8 @@ export class GameScene extends Phaser.Scene {
     )
     this.status.lives = RULES.startingLives
     this.status.wave = 0
+    this.status.kills = 0
+    this.status.peanutsEarned = 0
     this.status.phase = 'ready'
     this.status.mode = 'normal'
     this.status.waveName = WAVES.waves[0].name
@@ -384,6 +392,18 @@ this.armReadyCountdown()
   /** True while a modal owned by the world is up. The HUD dims behind it. */
   get modalOpen(): boolean {
     return this.dialog?.active === true
+  }
+
+  /**
+   * Peanuts taken in, as opposed to peanuts recovered.
+   *
+   * Every income route goes through here so the run total on the results
+   * screen cannot drift from the purse. Selling a tower deliberately does not:
+   * refunding your own money is not earning.
+   */
+  private earn(amount: number): void {
+    this.status.peanuts += amount
+    this.status.peanutsEarned += amount
   }
 
   /** One dialog at a time, and it owns every tap while it is up. */
@@ -1051,7 +1071,7 @@ this.armReadyCountdown()
       scene: this,
       enemies: () => this.enemies,
       damage: (e, amount, pierce) => this.damageEnemy(e, amount, pierce),
-      addPeanuts: (amount) => { this.status.peanuts += amount },
+      addPeanuts: (amount) => this.earn(amount),
       summon: (sx, sy, count, seconds) => this.summonFighters(sx, sy, count, seconds),
       scratchTicket: (payout, seconds) => this.showTicket(payout, seconds),
       windUp: (seconds, fire) => this.windUp(seconds, fire),
@@ -1115,7 +1135,7 @@ this.armReadyCountdown()
       payout,
       autoRevealSeconds,
       onCollect: (amount) => {
-        this.status.peanuts += amount
+        this.earn(amount)
         this.status.message = `Scratch Ticket: ${amount} peanuts.`
         play(this, 'peanuts')
       },
@@ -1260,7 +1280,7 @@ this.armReadyCountdown()
     play(this, 'wave-start')
     this.status.waveName = WAVES.waves[this.status.wave].name
     if (bonus > 0) {
-      this.status.peanuts += bonus
+      this.earn(bonus)
       play(this, 'peanuts')
       this.status.message = `Wave ${this.status.wave + 1}: ${this.status.waveName}  ·  +${bonus} for starting early`
     } else {
@@ -1273,7 +1293,7 @@ this.armReadyCountdown()
     if (!this.spawner.done || this.enemies.length > 0) return
 
     play(this, 'wave-cleared')
-    this.status.peanuts += RULES.peanutsPerWaveCleared
+    this.earn(RULES.peanutsPerWaveCleared)
     this.status.wave++
     this.grantTowerUnlocks()
 
@@ -1313,29 +1333,54 @@ this.armReadyCountdown()
     // Clearing a run is what unlocks the Server Nuke for every run after it.
     if (won) recordRunCleared()
     play(this, won ? 'won' : 'lost')
+
+    // What the run was worth. Depth is the main term, so a defeat still banks
+    // something: DESIGN.md replaced the three-star rating with the Banner
+    // precisely so that a run ending at wave nine is still progress.
+    const outcome: RunOutcome = {
+      wavesCleared: this.status.wave,
+      cleared: won,
+      livesRemaining: this.status.lives,
+      maxLives: RULES.startingLives,
+    }
+    const earned = bannerPointsFor(outcome, RULES.banner)
+    const total = addBannerPoints(earned)
     this.status.message = won ? 'Filed on time.' : 'Overrun.'
 
-    // Screen space, against the live viewport. This was laid out against the
-    // 1280x720 design box and never registered, which put it at the centre of
-    // the *map* rather than the centre of the view: panned to a corner, the
-    // player got no banner and no button — the same dead end the button exists
-    // to prevent.
-    const cx = this.scale.width / 2
-    const cy = this.scale.height / 2
+    this.openDialog({
+      // "BROKE" would be the prototype's word, and the display face renders
+      // its K as an H at this size — the panel announced THE LINE BROHE. The
+      // font is a decision that has not been made yet (AUDIT #5), so the copy
+      // routes around it instead: HELD and FELL are a better pair anyway.
+      title: won ? 'THE LINE HELD' : 'THE LINE FELL',
+      subtitle: verdictFor(outcome, RULES.banner),
+      headline: { value: `+${earned}`, label: 'BANNER POINTS EARNED' },
+      rows: [
+        { label: 'Waves survived', value: `${this.status.wave} of ${this.status.waveCount}` },
+        { label: 'Lives remaining', value: `${this.status.lives} of ${RULES.startingLives}` },
+        { label: 'Kills', value: `${this.status.kills}` },
+        { label: 'Peanuts earned', value: `${this.status.peanutsEarned}` },
+        { label: 'Banner Points, all runs', value: `${total}`, accent: true },
+      ],
+      // The run is over: a tap on the board behind must not put the player
+      // back on a dead board with no way off it.
+      dismissable: false,
+      dim: 0.68,
+      confirm: { label: 'TRY AGAIN', onPick: () => this.tryAgain() },
+      cancelLabel: 'QUIT TO TITLE',
+      onCancel: () => this.toTitle(),
+    })
+  }
 
-    const banner = this.add.text(cx, cy - 30, won ? 'ALL WAVES CLEARED' : 'OVERRUN', {
-      fontFamily: FONT_DISPLAY, fontSize: '48px',
-      color: won ? COLOR.ink : COLOR.fire, stroke: '#0d1016', strokeThickness: 8,
-    }).setOrigin(0.5).setDepth(OVERLAY_DEPTH + 10)
-
-    // A button, not a keypress. The run-end screen used to say "press R" and
-    // nothing else, which on a touch device is a dead end with no way out of
-    // the game at all.
-    const back = plateButton(this, cx, cy + 48, 300, 62, 'BACK TO TITLE', () => this.toTitle(), 22)
-    for (const part of back.parts) {
-      (part as Phaser.GameObjects.Image).setDepth?.(OVERLAY_DEPTH + 11)
-    }
-    this.asScreenSpace([banner, ...back.parts])
+  /**
+   * A fresh run, at the loadout screen rather than straight back onto the same
+   * board. The hand is part of the run in a roguelite, so retrying re-draws
+   * it — and the loadout screen is where a player is shown what they drew.
+   */
+  private tryAgain(): void {
+    setRunState({ heroId: runState().heroId, seed: Date.now() >>> 0 })
+    this.scene.stop('Hud')
+    this.scene.start('Loadout')
   }
 
   private toTitle(): void {
@@ -1596,7 +1641,8 @@ this.armReadyCountdown()
     if (!enemy.alive) return
     if (enemy.hurt(damage, ignoresArmor, true, pierce)) {
       play(this, 'death')
-      this.status.peanuts += enemy.def.peanutReward
+      this.status.kills++
+      this.earn(enemy.def.peanutReward)
       this.rollRareDrop(enemy)
     } else {
       // Rotated, because a wave lands far more hits than one sample can carry

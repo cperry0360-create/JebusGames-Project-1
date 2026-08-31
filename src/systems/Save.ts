@@ -22,9 +22,20 @@ export interface SaveData {
    * as a count rather than a flag so a later unlock can ask for more than one.
    */
   runsCleared: number
+  /**
+   * Banner Points banked across every run ever played, won or lost.
+   *
+   * Nothing spends them yet — the Banner tree is Phase 2. They accrue now so
+   * that the total on the results screen is a real number with a history
+   * behind it on the day there is something to spend it on, rather than a
+   * counter that starts at zero the moment the tree ships.
+   */
+  bannerPoints: number
 }
 
-export const DEFAULT_SAVE: SaveData = { volume: 0.7, muted: false, runsCleared: 0 }
+export const DEFAULT_SAVE: SaveData = {
+  volume: 0.7, muted: false, runsCleared: 0, bannerPoints: 0,
+}
 
 function count(v: unknown): number {
   return typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0
@@ -45,6 +56,7 @@ export function loadSave(): SaveData {
       volume: clamp01(parsed.volume, DEFAULT_SAVE.volume),
       muted: parsed.muted === true,
       runsCleared: count(parsed.runsCleared),
+      bannerPoints: count(parsed.bannerPoints),
     }
   } catch {
     // Unreadable, unparseable or unavailable: start fresh rather than fail.
@@ -69,4 +81,19 @@ export function hasClearedARun(): boolean {
 export function recordRunCleared(): void {
   const save = loadSave()
   writeSave({ ...save, runsCleared: save.runsCleared + 1 })
+}
+
+/** Banks a run's Banner Points and returns the new lifetime total, which is
+ *  the number the results screen shows. Negative and fractional awards are
+ *  refused rather than banked. */
+export function addBannerPoints(earned: number): number {
+  const save = loadSave()
+  const total = save.bannerPoints + count(earned)
+  writeSave({ ...save, bannerPoints: total })
+  return total
+}
+
+/** Every Banner Point banked so far. */
+export function bannerTotal(): number {
+  return loadSave().bannerPoints
 }

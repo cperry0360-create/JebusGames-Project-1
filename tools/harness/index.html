@@ -114,9 +114,16 @@ async function startRun() {
   await sleep(500)
   return scene('Game')
 }
+// The world camera zooms and pans, so a build spot's world coordinates are not
+// the pixel a tap has to land on. Everything the director clicks on the board
+// goes through here.
+function toScreen(wx, wy) {
+  const cam = scene('Game').cameras.main
+  return [(wx - cam.worldView.x) * cam.zoom, (wy - cam.worldView.y) * cam.zoom]
+}
 async function build(spotIndex, towerIndex = 0) {
   const g = scene('Game')
-  const [x, y] = SPOTS[spotIndex]
+  const [x, y] = toScreen(SPOTS[spotIndex][0], SPOTS[spotIndex][1])
   await click(x, y)
   if (!g.menu?.isOpen) { note(`build@${spotIndex}: menu did not open`); return false }
   const hit = g.menu.hitAreas?.[towerIndex]
@@ -376,8 +383,42 @@ async function run() {
   if (scenario === 'lost') {
     await key('Space')
     await until(() => g.status.phase === 'lost', 240000)
-    await sleep(600); await shot('lost')
+    await sleep(900); await shot('lost')
     note('lost: msg=' + g.status.message)
+    note('run: waves=' + g.status.wave + ' kills=' + g.status.kills +
+      ' earned=' + g.status.peanutsEarned + ' lives=' + g.status.lives)
+    return
+  }
+
+  // The results panel on a win, without playing thirteen waves for it: the
+  // run is driven to the end state directly and the panel it opens is real.
+  if (scenario === 'results') {
+    // A few kills and some income first, so the rows are not all zero.
+    const cam = g.cameras.main
+    // Only pads inside the camera's view can be tapped at gameplay zoom.
+    const inView = SPOTS.map((p, i) => [i, p])
+      .filter(([, p]) => cam.worldView.contains(p[0], p[1])).map(([i]) => i)
+    note('pads in view: ' + JSON.stringify(inView) + ' at zoom ' + cam.zoom.toFixed(2))
+    await shot('results-00-hud-normal')
+    await build(inView[0], 0)
+    note('towers ' + g.towers.length + ' peanuts ' + g.status.peanuts)
+    await key('Space')
+    await until(() => g.status.kills > 6, 120000)
+    note('after play: kills=' + g.status.kills + ' wave=' + g.status.wave +
+      ' lives=' + g.status.lives + ' earned=' + g.status.peanutsEarned)
+    for (const [name, phase] of [['results-lost', 'lost'], ['results-won', 'won']]) {
+      g.status.phase = 'ready'
+      g.dialog?.close()
+      if (phase === 'won') { g.status.wave = g.status.waveCount; g.status.lives = 17 }
+      else { g.status.wave = 6; g.status.lives = 0 }
+      g.endRun(phase)
+      await sleep(700)
+      await shot(name)
+      note(name + ': kills=' + g.status.kills + ' earned=' + g.status.peanutsEarned +
+        ' modalOpen=' + g.modalOpen +
+        ' hudAlpha=' + scene('Hud').cameras.main.alpha +
+        ' hudRunning=' + running('Hud'))
+    }
     return
   }
 

@@ -116,7 +116,7 @@ players and satisfies neither: it's too fast to plan in and too slow to grind
 through. A toggle is roughly twenty lines and is the single cheapest
 improvement in this entire document. **Verdict: adopt.**
 
-### 1.4 Results screen — HALF-BUILT
+### 1.4 Results screen — HALF-BUILT — **BUILT, with Banner Points instead of stars**
 
 `drawResult` (10762), `starsFor` (9808).
 
@@ -125,13 +125,29 @@ stars filled by how many lives survived, lives remaining, kills, and a one-line
 verdict — *NOT ONE OF THEM GOT THROUGH* / *A FEW SLIPPED PAST* / *BARELY* — and
 two buttons (NEXT LEVEL / WORLD MAP, or TRY AGAIN / WORLD MAP).
 
-Ours (`endRun`, GameScene:1305) draws one word and one button. No score, no
-stats, no retry. You cannot lose *well* in our build, and you cannot try again
-without walking back through the title and the loadout.
+The old run-end screen drew one word and one button. No score, no stats, no
+retry: you could not lose *well*, and you could not try again without walking
+back through the title and the loadout.
 
-**Verdict: adopt.** Stars, the stat line, and a TRY AGAIN button are worth
-having before anything else on this list, because they are what makes a run feel
-like it counted.
+**Do not take the stars.** `DESIGN.md` replaces the three-star rating with the
+Banner, deliberately: stars grade a *level*, and this game has runs. Adopting
+them would be a regression dressed as a feature.
+
+**Built instead** — the panel now shows:
+
+- THE LINE HELD / THE LINE BROKE, and the verdict line under it
+- **BANNER POINTS EARNED** as the headline number
+- Waves survived, lives remaining, kills, peanuts earned
+- Banner Points across all runs, banked in the save
+- TRY AGAIN and QUIT TO TITLE
+
+Points are awarded on **depth reached**, so a failed run still pays: four per
+wave cleared, thirty for finishing, one per life left. The lives term needs no
+special case — a run is lost at zero lives, so it is already zero on a defeat.
+The Banner tree itself is Phase 2 and is not built; the points accrue now so
+that the total means something on the day there is a tree to spend it on.
+
+**Verdict: done, minus the stars.**
 
 ### 1.5 Progression: map, levels, save, continue — MISSING BY DESIGN
 
@@ -668,7 +684,7 @@ Ordered by player impact per hour of work.
 | 5 | Safe-area insets — HUD is under the notch today | 3.6 | hours | **adopt (bug)** |
 | 6 | Flat spec cost + compressed tower costs (fixes the rich/hard swing) | 5.2 | hours, data only | **adopt** |
 | 7 | Scaling wave-clear reward; cut the boss windfall | 5.1 | hours, data only | **adopt** |
-| 8 | Results screen: stars, stats, TRY AGAIN | 1.4 | a day | **adopt** |
+| 8 | ~~Results screen~~ — **built**: Banner Points, stats, TRY AGAIN | 1.4 | done | **shipped** |
 | 9 | Wave pips with boss marks | 3.4 | a day | **adopt** |
 | 10 | Status effects visible on the enemy | 2.2 | a day | **adopt** |
 | 11 | Non-modal tower panel anchored to the tower, range ring visible | 3.3 | a day | **adopt** |

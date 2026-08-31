@@ -77,6 +77,29 @@ export interface RulesDef {
   serverNuke: ServerNukeDef
   signBribe: SignBribeDef
   towerUpgrades: TowerUpgradeDef
+  banner: BannerDef
+}
+
+/**
+ * What a run pays into the Banner.
+ *
+ * The tree these points buy is Phase 2; the payout is not, because a run that
+ * ends with nothing banked is a run the player has no reason to repeat.
+ */
+export interface BannerDef {
+  /** Depth is the main term: it pays whether or not the run was won. */
+  perWaveCleared: number
+  clearBonus: number
+  perLifeRemaining: number
+  /** Above this fraction of starting lives, a win reads as clean rather than
+   *  narrow. */
+  cleanLivesFraction: number
+  verdicts: {
+    flawless: string
+    clean: string
+    narrow: string
+    lost: string
+  }
 }
 
 export interface TowerDef {
