@@ -102,6 +102,10 @@
       // panel is in ErrorPanel.ts and drains this queue once it loads; this
       // exists for the errors that happen before it can.
       ;(function () {
+        // Stamped by Vite, and recorded here rather than in the module: a
+        // crash before boot never reaches main.ts, and a report that cannot
+        // name its build is a report nobody can act on.
+        window.__buildId = '__BUILD_ID__'
         window.__earlyErrors = []
         function note(message, stack) {
           window.__earlyErrors.push({ message: String(message), stack: stack || '' })
@@ -128,7 +132,7 @@
           var r = e.reason
           note(r && r.message ? r.message : String(r), r && r.stack)
         })
-      })()
+      })();
 
       // Self-healing cache check.
       //
@@ -154,7 +158,7 @@
             })
             .catch(function () {})
         } catch (e) {}
-      })()
+      })();
     </script>
     <script type="module" src="/src/main.ts"></script>
   </body>

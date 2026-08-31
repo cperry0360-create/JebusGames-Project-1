@@ -27,6 +27,9 @@ export interface CrashReport {
   /** What triggered the report: an exception, a rejected promise, a freeze, or
    *  the player asking for it. */
   cause: string
+  /** True when this happened before the game booted. The event log is empty
+   *  for those, and it is empty *correctly* — there was nothing to log yet. */
+  preBoot: boolean
   message: string
   stack: string
   when: string
@@ -46,7 +49,21 @@ let stateProvider: (() => Record<string, unknown>) | null = null
  *  written from the title screen is usually *about* the run that just ended,
  *  and "(empty)" answers nothing. */
 let lastKnown: Record<string, unknown> = {}
-let buildLabel = 'unknown'
+/**
+ * Which build this is.
+ *
+ * Defaults to whatever index.html stamped on the window before any script of
+ * ours ran, so a crash that happens before boot can still name its build.
+ * main.ts replaces it with the fuller label once the module is alive.
+ */
+let buildLabel = earlyBuildLabel()
+
+function earlyBuildLabel(): string {
+  const id = (globalThis as { __buildId?: string }).__buildId
+  // The literal is what a dev server serves, where Vite never substitutes it.
+  if (!id || id.includes('__BUILD')) return 'unknown'
+  return `${id} (pre-boot)`
+}
 
 /** The ring is a fixed array written in a circle: no allocation per event and
  *  no unbounded growth during a long run. */
@@ -105,6 +122,10 @@ function gather(): Record<string, unknown> {
 export function buildReport(cause: string, message: string, stack = ''): CrashReport {
   return {
     cause,
+    // An empty event log means one of two very different things, and a reader
+    // has to be able to tell them apart: nothing had happened yet, or the log
+    // is broken. Recording which lets the report say so.
+    preBoot: cause.includes('before boot'),
     message,
     stack,
     when: new Date().toISOString(),
@@ -140,6 +161,12 @@ export function formatReport(r: CrashReport): string {
   lines.push(`build  ${r.build}`)
   lines.push(`cause  ${r.cause}`)
   lines.push(`error  ${r.message || '(none)'}`)
+  if (r.preBoot) {
+    lines.push('')
+    lines.push('This happened BEFORE the game booted, so the state and event')
+    lines.push('sections below are empty by definition — nothing had run yet.')
+    lines.push('That is expected here and is not a second fault.')
+  }
   if (r.stack) {
     lines.push('')
     lines.push('STACK')
@@ -150,6 +177,9 @@ export function formatReport(r: CrashReport): string {
   for (const [k, v] of Object.entries(r.state)) lines.push(`  ${k} = ${safeString(v)}`)
   lines.push('')
   lines.push(`EVENTS (${r.events.length}, oldest first, ms since load)`)
+  if (r.events.length === 0 && !r.preBoot) {
+    lines.push('  (none — the log was empty, which is worth a second look)')
+  }
   for (const e of r.events) {
     lines.push(`  ${String(e.t).padStart(7)}  ${e.kind}${e.detail ? `  ${e.detail}` : ''}`)
   }

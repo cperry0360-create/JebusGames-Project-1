@@ -836,6 +836,42 @@ async function run() {
     return
   }
 
+  if (scenario === 'boot') {
+    // The panel must be silent on a clean load, and must still fire on a real
+    // fault. It had been appearing on every single load, which turns the one
+    // signal a tester has into noise they learn to ignore.
+    note('crash panel on a clean load: ' +
+      (document.getElementById('crash') ? 'SHOWN — still broken' : 'none'))
+    note('early errors queued by index.html: ' +
+      JSON.stringify(window.__earlyErrors || 'the queue is missing'))
+    note('page errors seen by the director: ' +
+      JSON.stringify(log.filter((l) => l.startsWith('PAGE ERROR') || l.startsWith('REJECT'))))
+
+    const D = await import('./js/systems/Diagnostics.js')
+    const E = await import('./js/systems/ErrorPanel.js')
+
+    // A genuine fault still has to produce a panel.
+    try { null.boom() } catch (err) { E.report('uncaught exception', err.message, err.stack) }
+    await sleep(300)
+    note('panel after a real error: ' +
+      (document.getElementById('crash') ? 'shown' : 'MISSING — the panel is broken'))
+    document.getElementById('crash')?.remove()
+
+    // And a pre-boot crash has to say that its empty log is expected, and
+    // still name the build.
+    const pre = D.buildReport('uncaught exception (before boot)', 'TypeError: x is not a function')
+    const text = D.formatReport(pre)
+    note('pre-boot report: preBoot=' + pre.preBoot + ' build="' + pre.build + '"')
+    note('  says the empty log is expected: ' + /BEFORE the game booted/.test(text))
+    note('  events section: "' + (text.split('EVENTS')[1] || '').trim().slice(0, 60) + '"')
+
+    // A normal report must NOT carry that note.
+    const normal = D.buildReport('requested by player', '')
+    note('ordinary report: preBoot=' + normal.preBoot +
+      ' carries the pre-boot note: ' + /BEFORE the game booted/.test(D.formatReport(normal)))
+    return
+  }
+
   if (scenario === 'muzzle') {
     // The new muzzle flash, and the open question about the embers.
     const ART = (await import('./js/data/art.json', { with: { type: 'json' } })).default
