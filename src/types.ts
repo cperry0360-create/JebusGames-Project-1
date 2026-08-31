@@ -292,23 +292,6 @@ export interface BrandingDef {
     /** Ignore skip input for a moment, so a stray click cannot eat the splash. */
     skipGuardMs: number
   }
-  titleMark: { height: number; x: number; y: number }
-  credits: {
-    headingY: number
-    subheadingY: number
-    logoHeight: number
-    logoGap: number
-    logoY: number
-    textTop: number
-    lineHeight: number
-    /** Space above and below a section's title. */
-    sectionGap: number
-    /** Half the gap between the role column and the name column. */
-    columnGap: number
-    /** The dedication line, sat between the closing note and the back button. */
-    footerY: number
-  }
-
 }
 
 /** One sound the game can play. */

@@ -49,39 +49,15 @@ test('the studio card fits the canvas with margin', () => {
   assert.ok(h <= display.height - 80, `studio card is ${h}px tall on a ${display.height}px canvas`)
 })
 
-test('the title mark is small and sits inside the canvas', () => {
-  const m = branding.titleMark
-  const cfg = art.render[art.brand.jebusGames]
-  const w = (cfg.contentWidth / cfg.contentHeight) * m.height
-  assert.ok(m.height <= 160, `a corner mark ${m.height}px tall is not small`)
-  assert.ok(m.x - w / 2 >= 0 && m.x + w / 2 <= display.width, 'title mark runs off the canvas horizontally')
-  assert.ok(m.y - m.height / 2 >= 0 && m.y + m.height / 2 <= display.height, 'title mark runs off vertically')
+test('the title screen does not repeat the studio mark', () => {
+  // The splash card is the JebusGames logo, full screen, immediately before
+  // this scene. A second copy in the corner reads as a watermark.
+  const title = src('scenes/TitleScene.ts')
+  assert.doesNotMatch(title, /brand\.jebusGames/,
+    'the title screen still draws the studio logo the splash just showed')
+  assert.doesNotMatch(JSON.stringify(branding), /titleMark/,
+    'the title mark config outlived the mark it positioned')
 })
-
-test('both credits logos fit side by side with the configured gap', () => {
-  const c = branding.credits
-  const widthOf = (role: 'jebusGames' | 'cpPlays') => {
-    const cfg = art.render[art.brand[role]]
-    return (cfg.contentWidth / cfg.contentHeight) * c.logoHeight
-  }
-  const total = widthOf('jebusGames') + c.logoGap + widthOf('cpPlays')
-  assert.ok(total <= display.width - 80, `credits logos span ${total.toFixed(0)}px on a ${display.width}px canvas`)
-  assert.ok(c.logoGap > 40, 'the two marks need breathing room between them')
-})
-
-/** Where the credits block ends, laid out exactly as CreditsScene lays it. */
-function creditsBottom(): number {
-  const c = branding.credits
-  let y = c.textTop
-  for (const section of credits.sections) {
-    y += c.sectionGap
-    y += section.entries.length * c.lineHeight
-    y += c.sectionGap
-  }
-  return y + credits.notes.length * 18
-}
-
-const allEntries = () => credits.sections.flatMap((s: any) => s.entries)
 
 /** Every plate role, and the manifest key each points at. */
 const PLATE_ROLES: [string, string][] = [
@@ -194,6 +170,80 @@ test('the real credits are in among the joke ones', () => {
   assert.match(rollText, /rides were reportedly excellent/, 'the rides line is gone')
   assert.match(rollText, /Kenney/, 'Kenney is not credited')
   assert.match(rollText, /CC0/, 'the CC0 licence is not named')
+})
+
+test('the roll is broken into departments, not one flat list', () => {
+  const divisions = blocks.filter((b) => b.kind === 'division')
+  assert.ok(divisions.length >= 8,
+    `${divisions.length} department headers is a list with a title on it, not a roll`)
+  assert.equal(blocks.findIndex((b) => b.kind === 'credit') >
+    blocks.findIndex((b) => b.kind === 'division'), true,
+    'the roll starts crediting people before it says which department they are in')
+  // Every credit sits under a header, and no header is left with nothing
+  // under it.
+  let seen: string | null = null
+  const under = new Map<string, number>()
+  for (const b of blocks) {
+    if (b.kind === 'division') { seen = b.text as string; under.set(seen, 0) }
+    if (b.kind === 'credit' && seen !== null) under.set(seen, (under.get(seen) ?? 0) + 1)
+  }
+  for (const [name, n] of under) {
+    assert.ok(n >= 3, `department "${name}" has ${n} credits under it`)
+  }
+  // A department header must not be mistakable for the section headings that
+  // announce SPECIAL THANKS and DEDICATION.
+  const scene = src('scenes/CreditsScene.ts')
+  assert.match(scene, /case 'division':/, 'the scene does not render department headers')
+  assert.match(scene, /private division\(/, 'department headers reuse the section heading style')
+})
+
+test('Cory arrives long before Claude does', () => {
+  // The joke is the sheer volume of Cory credits, and the real credits are
+  // the relief. Relief that arrives first is just a cast list.
+  const all = creditsOf()
+  const real = new Set(['CLAUDE', 'CHATGPT', 'GEMINI'])
+  const firstReal = all.findIndex((c) => real.has(c.name as string))
+  assert.ok(firstReal > 0, 'the first credit in the roll is not one of Cory\'s')
+  const fraction = firstReal / all.length
+  assert.ok(fraction >= 0.28,
+    `the real credits arrive ${(fraction * 100).toFixed(0)}% in; the joke has not had time to build`)
+  assert.ok(fraction <= 0.45,
+    `the real credits arrive ${(fraction * 100).toFixed(0)}% in; that is past the point of relief`)
+  // And the run before them is unbroken Cory.
+  const opening = all.slice(0, firstReal)
+  assert.ok(opening.every((c) => c.name === 'CORY'),
+    'somebody else is credited in the opening run, which breaks the count')
+  assert.ok(opening.length >= 25, `${opening.length} credits is not a run, it is a warm-up`)
+})
+
+test('the roll has room to be read', () => {
+  const scene = src('scenes/CreditsScene.ts')
+  const line = /const LINE_H = (\d+)/.exec(scene)
+  assert.ok(line, 'the roll has no line height')
+  assert.ok(Number(line[1]) >= 44, `${line[1]}px between credits is cramped`)
+  for (const name of ['DIV_ABOVE', 'DIV_BELOW']) {
+    const m = new RegExp(`const ${name} = (\\d+)`).exec(scene)
+    assert.ok(m && Number(m[1]) >= 30, `${name} leaves a department header no breathing room`)
+  }
+  // Dot leaders, measured rather than guessed, are what align the columns.
+  assert.match(scene, /'\.'\.repeat/, 'the dot leaders are gone')
+  // Speed follows length: a longer roll at the same duration just scrolls
+  // faster, which is the opposite of readable.
+  assert.ok(credits.scrollSeconds >= 70,
+    `${credits.scrollSeconds}s for a roll this long is a blur`)
+})
+
+test('a studio mark is placed on the line it is laid out on', () => {
+  // fitContentHeight anchors on the artwork's centre and overwrites any origin
+  // set before it. Laying a logo out as if it were top-anchored is what put
+  // CP Plays through the middle of "IN COLLABORATION WITH".
+  const scene = src('scenes/CreditsScene.ts')
+  const body = /private logo\([\s\S]*?\n  \}/.exec(scene)
+  assert.ok(body, 'the roll no longer draws logos')
+  assert.doesNotMatch(body[0], /setOrigin/,
+    'the logo sets an origin that fitContentHeight then overwrites')
+  assert.match(body[0], /y \+ height \/ 2/,
+    'the logo is not centred in the space the layout reserved for it')
 })
 
 test('the shout lands between the last credit and SPECIAL THANKS', () => {

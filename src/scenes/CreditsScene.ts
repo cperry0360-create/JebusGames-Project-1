@@ -10,9 +10,18 @@ const W = displayData.width
 const H = displayData.height
 
 /** Where the roll's columns sit: role on the left, name on the right. */
-const ROLE_X = 300
-const NAME_X = W - 300
-const LINE_H = 38
+const ROLE_X = 250
+const NAME_X = W - 250
+const LINE_H = 46
+
+/** Air around a division header. A header that sits as close to the credits
+ *  above it as to its own is not a header, it is another line. */
+const DIV_ABOVE = 64
+const DIV_BELOW = 34
+const DIV_RULE_W = 300
+
+/** Air above and below an aside, so it does not read as another credit. */
+const NOTE_AIR = 14
 
 /** Claude is the one name in the roll that is not Cory. That is the joke, so
  *  it gets a colour nothing else in the roll uses. */
@@ -37,6 +46,13 @@ interface Block {
  * where that is funny, which is where it becomes funny again. It ends on the
  * three boys' names assembling into the title, which is the only part of this
  * screen that is not a joke and needs the run-up to land.
+ *
+ * Two things about the order, both load-bearing. It is broken into department
+ * headers rather than run as one column, which is what makes a roll read as a
+ * production rather than as a list. And every department for the first third
+ * is Cory, so that the real credits — Claude, ChatGPT, Gemini — arrive as
+ * relief. Putting them first, which is where a cast list would normally start,
+ * throws the joke away before it has been made.
  *
  * Tapping anywhere skips out. Nobody should be held here.
  *
@@ -108,12 +124,19 @@ export class CreditsScene extends Phaser.Scene {
         case 'heading':
           y += this.centred(raw.text ?? '', y, 38, COLOR.amber, FONT_UI, 4, true)
           break
+        case 'division':
+          y += this.division(raw.text ?? '', y)
+          break
         case 'big':
           y += this.centred(raw.text ?? '', y, 92, COLOR.amber, FONT_DISPLAY, 4)
           break
-        case 'note':
-          y += this.centred(raw.text ?? '', y, 24, COLOR.dim, FONT_UI, 0)
+        case 'note': {
+          // A note is an aside on the credit above it, so it is set apart from
+          // both neighbours; its own lines stay tight, as one paragraph.
+          const body = (raw.lines ?? [raw.text ?? '']).join('\n')
+          y += NOTE_AIR + this.centred(body, y + NOTE_AIR, 24, COLOR.dim, FONT_UI, 0) + NOTE_AIR
           break
+        }
         case 'shout':
           for (const line of raw.lines ?? []) {
             y += this.centred(line, y, 44, COLOR.ink, FONT_UI, 2, true)
@@ -153,15 +176,17 @@ export class CreditsScene extends Phaser.Scene {
   private credit(b: Block, y: number): number {
     const claude = b.accent === 'claude'
     const role = this.add.text(ROLE_X, y, b.role ?? '', {
-      fontFamily: FONT_UI, fontSize: '24px', color: COLOR.dim,
+      fontFamily: FONT_UI, fontSize: '26px', color: COLOR.dim,
     }).setOrigin(0, 0)
     const name = this.add.text(NAME_X, y, b.name ?? '', {
-      fontFamily: FONT_UI, fontSize: '24px', fontStyle: 'bold',
+      fontFamily: FONT_UI, fontSize: '26px', fontStyle: 'bold',
       color: claude ? CLAUDE_COLOUR : COLOR.ink,
     }).setOrigin(1, 0)
 
-    const dots = this.add.text(0, y, '', {
-      fontFamily: FONT_UI, fontSize: '24px', color: COLOR.dim,
+    // Leaders are drawn on the type's own baseline block, nudged down so they
+    // sit on the line rather than through the middle of the words.
+    const dots = this.add.text(0, y + 3, '', {
+      fontFamily: FONT_UI, fontSize: '26px', color: COLOR.dim,
     }).setOrigin(0, 0).setAlpha(0.4)
     const from = ROLE_X + role.width + 12
     const to = NAME_X - name.width - 12
@@ -209,12 +234,43 @@ export class CreditsScene extends Phaser.Scene {
     return size + 26
   }
 
+  /**
+   * A studio mark on its own line.
+   *
+   * `fitContentHeight` anchors a logo on the *centre* of its artwork, because
+   * that is what every other caller wants. It also overwrites any origin set
+   * before it, which is what put the CP Plays mark half a logo higher than the
+   * layout thought and straight through "IN COLLABORATION WITH". So the centre
+   * is placed deliberately, half a logo below the top of the block it occupies.
+   */
   private logo(which: 'jebusGames' | 'cpPlays', height: number, y: number): number {
     const key = ART.brand[which]
-    const img = this.add.image(W / 2, y, key).setOrigin(0.5, 0)
+    const img = this.add.image(W / 2, y + height / 2, key)
     fitContentHeight(img, key, height)
     this.roll.add(img)
-    return height + 20
+    return height
+  }
+
+  /**
+   * A department header: PEANUT LOGISTICS, GNOME AFFAIRS, and so on.
+   *
+   * Deliberately not the same as the section headings that announce SPECIAL
+   * THANKS — smaller, wider-tracked, and underscored with a short rule — so
+   * that scrolling past one reads as "new department" rather than "the credits
+   * have started again". The air above and below is what makes the roll parse
+   * as a set of lists instead of one long undifferentiated column.
+   */
+  private division(text: string, y: number): number {
+    const top = y + DIV_ABOVE
+    const t = this.add.text(W / 2, top, text, {
+      fontFamily: FONT_UI, fontSize: '30px', color: COLOR.amber,
+      fontStyle: 'bold', letterSpacing: 6, align: 'center',
+    }).setOrigin(0.5, 0)
+    const ruleY = top + t.height + 14
+    const rule = this.add.rectangle(W / 2, ruleY, DIV_RULE_W, 2, 0xf2d06b, 0.35)
+      .setOrigin(0.5, 0)
+    this.roll.add([t, rule])
+    return DIV_ABOVE + t.height + 14 + rule.height + DIV_BELOW
   }
 
   private decorateBackdrop(): void {

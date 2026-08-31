@@ -33,6 +33,7 @@ screenshots are the evidence.
 | name | what it exercises |
 |---|---|
 | `title`, `draft`, `credits` | the screens before the map |
+| `creditsroll` | the roll parked at fractions of its own height, with where each department and each real credit landed |
 | `game` | a fresh board |
 | `ui` | pads, build menu, tower selection, hero select-then-order, tap precedence, restructure, ability targeting |
 | `combat` | four towers through a whole wave |

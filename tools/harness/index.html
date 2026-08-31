@@ -138,6 +138,43 @@ async function run() {
     if (okTitle) { scene('Title').scene.start('Credits'); await sleep(900); await shot('credits') }
     return
   }
+  if (scenario === 'creditsroll') {
+    // The roll is minutes long, so it is stepped by hand: the tween is stopped
+    // and the container is parked at fractions of its own height. That also
+    // makes the ordering measurable rather than eyeballed.
+    if (!okTitle) return
+    scene('Title').scene.start('Credits')
+    await until(() => running('Credits') && scene('Credits').roll, 8000)
+    await sleep(600)
+    const cs = scene('Credits')
+    cs.tween?.stop()
+    const total = -cs.tween.data[0].end
+    note('roll height ' + Math.round(total) + 'px over ' + cs.tweens.scene.sys.game.config.width)
+    // Where each department header and each real credit landed.
+    const items = []
+    for (const o of cs.roll.list) {
+      if (o.text !== undefined) items.push({ y: Math.round(o.y), text: String(o.text) })
+    }
+    const at = (t) => { const m = items.find((i) => i.text === t); return m ? m.y : -1 }
+    const heads = items.filter((i) => /^[A-Z][A-Z ]{4,}$/.test(i.text) && i.text === i.text.toUpperCase())
+    note('DIVISIONS ' + JSON.stringify(heads.slice(0, 20).map((h) => h.text + '@' + (h.y / total * 100).toFixed(0) + '%')))
+    for (const t of ['CLAUDE', 'CHATGPT', 'GEMINI']) {
+      note(t + ' at ' + (at(t) / total * 100).toFixed(1) + '% (' + at(t) + 'px)')
+    }
+    const CD = (await import('./js/data/credits.json', { with: { type: 'json' } })).default
+    note('scroll ' + Math.round(total / CD.scrollSeconds) + ' px/s over ' + CD.scrollSeconds + 's')
+    // The opening cards, then four samples through the roll.
+    for (const [name, y] of [['00-cards', 0], ['01-opening', 0.06], ['02-cory', 0.22],
+                             ['03-programming', (at('PROGRAMMING') - 300) / total],
+                             ['04-art', (at('ART DEPARTMENT') - 300) / total],
+                             ['05-qa', (at('QUALITY ASSURANCE') - 300) / total],
+                             ['06-names', (at('COURJAHAN') - 420) / total]]) {
+      cs.roll.y = name === '00-cards' ? 0 : -(y * total)
+      await sleep(220)
+      await shot('roll-' + name)
+    }
+    return
+  }
   g = await startRun()
 
   if (scenario === 'game') { await shot('01-fresh'); return }

@@ -1,5 +1,5 @@
 {
-  "scrollSeconds": 60,
+  "scrollSeconds": 90,
   "names": [
     {
       "lit": "COUR",
@@ -18,16 +18,16 @@
   "blocks": [
     {
       "kind": "gap",
-      "height": 120
+      "height": 110
     },
     {
       "kind": "logo",
       "art": "jebusGames",
-      "height": 190
+      "height": 180
     },
     {
       "kind": "gap",
-      "height": 46
+      "height": 76
     },
     {
       "kind": "label",
@@ -35,40 +35,20 @@
     },
     {
       "kind": "gap",
-      "height": 46
+      "height": 76
     },
     {
       "kind": "logo",
       "art": "cpPlays",
-      "height": 190
+      "height": 180
     },
     {
       "kind": "gap",
-      "height": 150
+      "height": 170
     },
     {
-      "kind": "heading",
-      "text": "CAST AND CREW"
-    },
-    {
-      "kind": "gap",
-      "height": 28
-    },
-    {
-      "kind": "credit",
-      "role": "Lead Programmer",
-      "name": "CLAUDE",
-      "accent": "claude"
-    },
-    {
-      "kind": "credit",
-      "role": "Art",
-      "name": "CHATGPT"
-    },
-    {
-      "kind": "credit",
-      "role": "Early Concept Art",
-      "name": "GEMINI"
+      "kind": "division",
+      "text": "PRODUCTION"
     },
     {
       "kind": "credit",
@@ -87,23 +67,37 @@
     },
     {
       "kind": "credit",
-      "role": "Semicolon Placement",
+      "role": "Deadline Enforcement",
       "name": "CORY"
     },
     {
       "kind": "credit",
-      "role": "Semicolon Removal",
+      "role": "Deadline Extension",
       "name": "CORY"
     },
     {
       "kind": "credit",
-      "role": "Semicolon Reinstatement",
+      "role": "Deadline Extension, Denied",
       "name": "CORY"
     },
     {
       "kind": "credit",
-      "role": "Tabs Versus Spaces Arbitration",
+      "role": "Person Who Said “Just Ship It”",
       "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Person Who Said “Not Like That”",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Person Who Said It Again, Louder",
+      "name": "CORY"
+    },
+    {
+      "kind": "division",
+      "text": "PEANUT LOGISTICS"
     },
     {
       "kind": "credit",
@@ -132,6 +126,50 @@
     },
     {
       "kind": "credit",
+      "role": "Peanut Compliance (Appeals Denied)",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Catering",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Catering: Peanuts",
+      "name": "CORY"
+    },
+    {
+      "kind": "division",
+      "text": "TOWER PLACEMENT ERGONOMICS"
+    },
+    {
+      "kind": "credit",
+      "role": "Pad Glow Consultant",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Range Circle Review",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Range Circle Review, Second Pass",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Grid Alignment",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Grid Realignment",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
       "role": "Tower Placement Ergonomics",
       "name": "CORY"
     },
@@ -139,6 +177,10 @@
       "kind": "credit",
       "role": "Tower Placement Ergonomics (Reshoots)",
       "name": "CORY"
+    },
+    {
+      "kind": "division",
+      "text": "GNOME AFFAIRS"
     },
     {
       "kind": "credit",
@@ -157,115 +199,151 @@
     },
     {
       "kind": "credit",
-      "role": "Deadline Enforcement",
+      "role": "Gnome Path Adherence Officer",
       "name": "CORY"
     },
     {
       "kind": "credit",
-      "role": "Deadline Extension",
+      "role": "Gnome Retrieval",
       "name": "CORY"
     },
     {
       "kind": "credit",
-      "role": "Deadline Extension, Denied",
+      "role": "Gnome Retrieval, Unsuccessful",
+      "name": "CORY"
+    },
+    {
+      "kind": "division",
+      "text": "PUNCTUATION"
+    },
+    {
+      "kind": "credit",
+      "role": "Semicolon Placement",
       "name": "CORY"
     },
     {
       "kind": "credit",
-      "role": "Lead Game Tester, CP Plays",
-      "name": "COURTLAND"
+      "role": "Semicolon Removal",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Semicolon Reinstatement",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Tabs Versus Spaces Arbitration",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Final Sign-Off on the Semicolons",
+      "name": "CORY"
+    },
+    {
+      "kind": "division",
+      "text": "PROGRAMMING"
+    },
+    {
+      "kind": "credit",
+      "role": "Lead Programmer",
+      "name": "CLAUDE",
+      "accent": "claude"
+    },
+    {
+      "kind": "credit",
+      "role": "Additional Programming",
+      "name": "CLAUDE",
+      "accent": "claude"
+    },
+    {
+      "kind": "credit",
+      "role": "Requirements, Verbal",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Requirements, Revised",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Requirements, Revised Again",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Bug Reports, Filed Loudly",
+      "name": "CORY"
+    },
+    {
+      "kind": "division",
+      "text": "ART DEPARTMENT"
+    },
+    {
+      "kind": "credit",
+      "role": "Art",
+      "name": "CHATGPT"
+    },
+    {
+      "kind": "credit",
+      "role": "Early Concept Art",
+      "name": "GEMINI"
+    },
+    {
+      "kind": "credit",
+      "role": "Assets",
+      "name": "KENNEY — CC0"
+    },
+    {
+      "kind": "note",
+      "lines": [
+        "Projectiles, scenery, fonts and audio. Thank you, Kenney."
+      ]
+    },
+    {
+      "kind": "credit",
+      "role": "Art Direction",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Art Redirection",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Grass",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "More Grass",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "The Path",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Cloud Movement",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Additional Clouds",
+      "name": "CORY"
+    },
+    {
+      "kind": "division",
+      "text": "SET DRESSING AND CONTINUITY"
     },
     {
       "kind": "credit",
       "role": "Filing Cabinet Continuity",
-      "name": "CORY"
-    },
-    {
-      "kind": "credit",
-      "role": "Armour Shredding Supervisor",
-      "name": "CORY"
-    },
-    {
-      "kind": "credit",
-      "role": "Armour Shredding Supervisor's Supervisor",
-      "name": "CORY"
-    },
-    {
-      "kind": "credit",
-      "role": "Best Boy",
-      "name": "CORY"
-    },
-    {
-      "kind": "credit",
-      "role": "Second Best Boy",
-      "name": "CORY"
-    },
-    {
-      "kind": "credit",
-      "role": "Third Best Boy, Held in Reserve",
-      "name": "CORY"
-    },
-    {
-      "kind": "credit",
-      "role": "Key Grip",
-      "name": "CORY"
-    },
-    {
-      "kind": "credit",
-      "role": "Spare Grip",
-      "name": "CORY"
-    },
-    {
-      "kind": "credit",
-      "role": "Foley: Peanuts",
-      "name": "CORY"
-    },
-    {
-      "kind": "credit",
-      "role": "Foley: Distant Paperwork",
-      "name": "CORY"
-    },
-    {
-      "kind": "credit",
-      "role": "Foley: Nearby Paperwork",
-      "name": "CORY"
-    },
-    {
-      "kind": "credit",
-      "role": "Additional Rustling",
-      "name": "CORY"
-    },
-    {
-      "kind": "credit",
-      "role": "Field Research, Hersheypark Division",
-      "name": "ELI AND HAN"
-    },
-    {
-      "kind": "note",
-      "text": "Field research was conducted on location, all day, at Hersheypark."
-    },
-    {
-      "kind": "note",
-      "text": "No findings were submitted. The rides were reportedly excellent."
-    },
-    {
-      "kind": "credit",
-      "role": "DAD MODE Technical Advisor",
-      "name": "CORY"
-    },
-    {
-      "kind": "credit",
-      "role": "DAD MODE Stunt Double",
-      "name": "CORY"
-    },
-    {
-      "kind": "credit",
-      "role": "SUV Wrangler",
-      "name": "CORY"
-    },
-    {
-      "kind": "credit",
-      "role": "Minivan Consultant (Uncredited)",
       "name": "CORY"
     },
     {
@@ -295,66 +373,131 @@
     },
     {
       "kind": "credit",
-      "role": "Cloud Movement",
+      "role": "SUV Wrangler",
       "name": "CORY"
     },
     {
       "kind": "credit",
-      "role": "Additional Clouds",
+      "role": "Minivan Consultant (Uncredited)",
+      "name": "CORY"
+    },
+    {
+      "kind": "division",
+      "text": "STUNTS AND DAD MODE"
+    },
+    {
+      "kind": "credit",
+      "role": "DAD MODE Technical Advisor",
       "name": "CORY"
     },
     {
       "kind": "credit",
-      "role": "Grass",
+      "role": "DAD MODE Stunt Double",
       "name": "CORY"
     },
     {
       "kind": "credit",
-      "role": "More Grass",
+      "role": "Armour Shredding Supervisor",
       "name": "CORY"
     },
     {
       "kind": "credit",
-      "role": "The Path",
+      "role": "Armour Shredding Supervisor’s Supervisor",
       "name": "CORY"
     },
     {
       "kind": "credit",
-      "role": "Assets",
-      "name": "KENNEY \u2014 CC0"
+      "role": "Best Boy",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Second Best Boy",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Third Best Boy, Held in Reserve",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Key Grip",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Spare Grip",
+      "name": "CORY"
+    },
+    {
+      "kind": "division",
+      "text": "SOUND"
+    },
+    {
+      "kind": "credit",
+      "role": "Foley: Peanuts",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Foley: Distant Paperwork",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Foley: Nearby Paperwork",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Additional Rustling",
+      "name": "CORY"
+    },
+    {
+      "kind": "division",
+      "text": "QUALITY ASSURANCE"
+    },
+    {
+      "kind": "credit",
+      "role": "Lead Game Tester, CP Plays",
+      "name": "COURTLAND"
+    },
+    {
+      "kind": "credit",
+      "role": "Field Research, Hersheypark Division",
+      "name": "ELI AND HAN"
     },
     {
       "kind": "note",
-      "text": "Projectiles, scenery, fonts and audio. Thank you, Kenney."
+      "lines": [
+        "Field research was conducted on location, all day, at Hersheypark.",
+        "No findings were submitted. The rides were reportedly excellent."
+      ]
     },
     {
       "kind": "credit",
-      "role": "The Politician: Speech Coach",
+      "role": "Wave 7",
       "name": "CORY"
     },
     {
       "kind": "credit",
-      "role": "Percentage Taken",
+      "role": "Wave 8 (Reshoots)",
       "name": "CORY"
     },
     {
       "kind": "credit",
-      "role": "Percentage Returned",
-      "name": "NOBODY"
-    },
-    {
-      "kind": "credit",
-      "role": "Audit Defence",
+      "role": "Regression Testing",
       "name": "CORY"
     },
     {
       "kind": "credit",
-      "role": "Reminder That Cory Works in Tax, Not Audit",
+      "role": "Regression Reintroduction",
       "name": "CORY"
     },
     {
-      "kind": "note",
-      "text": "Heroes are named after the family. Cory works in tax."
+      "kind": "division",
+      "text": "LEGAL AND COMPLIANCE"
     },
     {
       "kind": "credit",
@@ -378,13 +521,38 @@
     },
     {
       "kind": "credit",
-      "role": "Catering",
+      "role": "Audit Defence",
       "name": "CORY"
     },
     {
       "kind": "credit",
-      "role": "Catering: Peanuts",
+      "role": "Reminder That Cory Works in Tax, Not Audit",
       "name": "CORY"
+    },
+    {
+      "kind": "note",
+      "lines": [
+        "Heroes are named after the family. Cory works in tax."
+      ]
+    },
+    {
+      "kind": "credit",
+      "role": "The Politician: Speech Coach",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Percentage Taken",
+      "name": "CORY"
+    },
+    {
+      "kind": "credit",
+      "role": "Percentage Returned",
+      "name": "NOBODY"
+    },
+    {
+      "kind": "division",
+      "text": "MORALE"
     },
     {
       "kind": "credit",
@@ -398,27 +566,7 @@
     },
     {
       "kind": "credit",
-      "role": "Person Who Said \"Just Ship It\"",
-      "name": "CORY"
-    },
-    {
-      "kind": "credit",
-      "role": "Person Who Said \"Not Like That\"",
-      "name": "CORY"
-    },
-    {
-      "kind": "credit",
-      "role": "Person Who Said It Again, Louder",
-      "name": "CORY"
-    },
-    {
-      "kind": "credit",
-      "role": "Wave 7",
-      "name": "CORY"
-    },
-    {
-      "kind": "credit",
-      "role": "Wave 8 (Reshoots)",
+      "role": "Morale, Restored with Peanuts",
       "name": "CORY"
     },
     {
@@ -448,7 +596,7 @@
     },
     {
       "kind": "gap",
-      "height": 28
+      "height": 34
     },
     {
       "kind": "credit",
@@ -472,7 +620,7 @@
     },
     {
       "kind": "credit",
-      "role": "Anyone who ever said \"you should make a game\"",
+      "role": "Anyone who ever said “you should make a game”",
       "name": "THIS IS YOUR FAULT"
     },
     {

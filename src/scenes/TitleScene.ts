@@ -8,7 +8,7 @@ import { plateButton } from '../ui/Plate.ts'
 import { AudioToggle } from '../ui/AudioToggle.ts'
 import { unlockAudio } from '../systems/Audio.ts'
 import { VERSION_LABEL } from '../systems/Build.ts'
-import { ART, fitContentHeight } from '../systems/Art.ts'
+import { ART } from '../systems/Art.ts'
 import { fitCameraToDesign } from '../ui/FitCamera.ts'
 
 const BRANDING = brandingData as BrandingDef
@@ -33,9 +33,10 @@ export class TitleScene extends Phaser.Scene {
 
     this.drawBackdrop(W, H)
 
-    const mark = BRANDING.titleMark
-    const logo = this.add.image(mark.x, mark.y, ART.brand.jebusGames)
-    fitContentHeight(logo, ART.brand.jebusGames, mark.height)
+    // No studio mark here. The splash card immediately before this screen is
+    // the JebusGames logo, full size and on its own; repeating it in the
+    // corner four hundred milliseconds later reads as a watermark, not as a
+    // studio. The title is the title screen's job.
 
     this.add.text(W / 2, 96, 'COURJAHAN', {
       fontFamily: FONT_DISPLAY, fontSize: '82px', color: COLOR.ink,

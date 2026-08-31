@@ -7,23 +7,6 @@
     "fadeOutMs": 450,
     "skipGuardMs": 220
   },
-  "titleMark": {
-    "height": 100,
-    "x": 104,
-    "y": 108
-  },
-  "credits": {
-    "headingY": 40,
-    "subheadingY": 78,
-    "logoHeight": 56,
-    "logoGap": 130,
-    "logoY": 124,
-    "textTop": 168,
-    "lineHeight": 26,
-    "sectionGap": 21,
-    "columnGap": 16,
-    "footerY": 618
-  },
   "titleBackdropDim": 0.35,
   "titleColumnWidth": 760
 }
