@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { clampZoom, coverZoom } from '../src/systems/CameraMath.ts'
+import { clampZoom, coverZoom, fitScale } from '../src/systems/CameraMath.ts'
 
 const url = (p: string) => new URL(p, import.meta.url)
 const display = JSON.parse(readFileSync(url('../src/data/display.json'), 'utf8'))
@@ -70,4 +70,48 @@ test('screen-space UI is drawn by a camera that does not move', () => {
   assert.match(game, /this\.cameras\.add\(/, 'no second camera, so the UI zooms with the map')
   assert.match(game, /cameras\.main\.ignore\(/, 'the world camera should skip screen-space objects')
   assert.match(game, /asScreenSpace\(/, 'nothing is registered as screen space')
+})
+
+/* ------------------------------------------------- the two-camera split */
+
+test('a fitted menu never crops its design box, at any device size', () => {
+  // The menus are composed against 1280x720. The canvas is the viewport now,
+  // so on a phone in landscape a hero card at y=282 was off the bottom of the
+  // screen entirely — which read as the title being "massively zoomed in".
+  for (const [vw, vh] of [[852, 393], [667, 375], [1280, 720], [390, 844], [1024, 768], [2560, 1080]]) {
+    const z = fitScale(vw, vh, W, H)
+    assert.ok(W * z <= vw + 0.001, `${vw}x${vh}: design is ${W * z} wide in a ${vw} viewport`)
+    assert.ok(H * z <= vh + 0.001, `${vw}x${vh}: design is ${H * z} tall in a ${vh} viewport`)
+    // And it must be the largest such scale, or the menu is needlessly small.
+    const bigger = z * 1.01
+    assert.ok(W * bigger > vw + 0.001 || H * bigger > vh + 0.001,
+      `${vw}x${vh}: fit scale ${z} is smaller than it needs to be`)
+  }
+})
+
+test('fit and cover are opposites, and cover is never the smaller', () => {
+  for (const [vw, vh] of [[852, 393], [390, 844], [1280, 720]]) {
+    assert.ok(coverZoom(vw, vh, W, H) >= fitScale(vw, vh, W, H),
+      'cover fills the viewport, fit fits inside it')
+  }
+})
+
+test('every menu scene uses the fixed camera and none takes a gesture', () => {
+  for (const scene of ['TitleScene', 'DraftScene', 'CreditsScene', 'SplashScene']) {
+    const body = src(`scenes/${scene}.ts`)
+    assert.match(body, /fitCameraToDesign\(this\)/, `${scene} does not fit its camera to the viewport`)
+    assert.doesNotMatch(body, /CameraRig/, `${scene} must not bind pan or zoom gestures`)
+  }
+})
+
+test('only the game scene can pan or zoom, and it gives the gestures back', () => {
+  const game = src('scenes/GameScene.ts')
+  assert.match(game, /new CameraRig\(/, 'the world camera has no rig')
+  assert.match(game, /shutdown[\s\S]{0,80}rig\?\.destroy\(\)/,
+    'the rig must die with the run, or gestures leak onto menus')
+  // The split has to be recomputed: enemies and shots are created constantly,
+  // and an object born after a one-off split is drawn by both cameras.
+  assert.match(game, /syncCameras\(\)/, 'no camera split')
+  assert.match(game, /this\.children\.list\.length !== this\.splitAt/,
+    'the split is never refreshed, so new objects render on both cameras')
 })

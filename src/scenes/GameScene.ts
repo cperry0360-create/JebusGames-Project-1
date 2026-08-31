@@ -109,6 +109,8 @@ export class GameScene extends Phaser.Scene {
   private readonly screenSpace: Phaser.GameObjects.GameObject[] = []
   /** Set at press time when the press belonged to a menu, ticket or dialog. */
   private pressTakenByUi = false
+  /** Child count at the last camera split, so new objects get assigned. */
+  private splitAt = -1
   private spawner!: WaveSpawner
   private hero!: Hero
   private menu!: BuildMenu
@@ -214,6 +216,9 @@ export class GameScene extends Phaser.Scene {
 
     // The camera goes on last, so bounds are set against a world that is
     // fully built. The world stays 1280x720; only the view moves.
+    // Gestures belong to the run and die with it, so nothing can pan or zoom
+    // on a menu after the scene stops.
+    this.events.once('shutdown', () => this.rig?.destroy())
     this.rig = new CameraRig(this, {
       worldWidth: displayData.width,
       worldHeight: displayData.height,
@@ -303,9 +308,30 @@ export class GameScene extends Phaser.Scene {
    */
   private asScreenSpace(objects: Phaser.GameObjects.GameObject[]): void {
     this.screenSpace.push(...objects)
-    this.cameras.main.ignore(objects)
-    // Everything else in the scene belongs to the world camera only.
-    this.uiCam.ignore(this.children.list.filter((o) => !this.screenSpace.includes(o)))
+    this.syncCameras()
+  }
+
+  /**
+   * Splits the scene between the two cameras.
+   *
+   * The world camera draws the map, towers, enemies, hero and shots, and is
+   * the only camera the player can move. The UI camera draws the screen-space
+   * objects and never transforms.
+   *
+   * Recomputed rather than applied once, because enemies, projectiles and
+   * effects are created constantly: an object born after the last split would
+   * be drawn by *both* cameras, appearing twice — once in the world and once
+   * pinned to the screen at the wrong size.
+   */
+  private syncCameras(): void {
+    const world: Phaser.GameObjects.GameObject[] = []
+    const ui: Phaser.GameObjects.GameObject[] = []
+    for (const o of this.children.list) {
+      (this.screenSpace.includes(o) ? ui : world).push(o)
+    }
+    if (ui.length > 0) this.cameras.main.ignore(ui)
+    if (world.length > 0) this.uiCam.ignore(world)
+    this.splitAt = this.children.list.length
   }
 
   /** One dialog at a time, and it owns every tap while it is up. */
@@ -554,14 +580,19 @@ export class GameScene extends Phaser.Scene {
 
   private openBuildMenu(spot: BuildSpot): void {
     this.selected = null
+    // The pad is a world position; the menu is screen-space chrome.
+    const cam = this.cameras.main
+    const sx = (spot.x - cam.worldView.x) * cam.zoom
+    const sy = (spot.y - cam.worldView.y) * cam.zoom
     this.menu.open(
-      spot.x, spot.y, this.status.peanuts,
+      sx, sy, this.status.peanuts,
       (id) => this.place(id, spot),
       (id) => {
         if (id) this.showTowerRange(spot.x, spot.y, TOWERS[id])
         else this.rangeRing.clear()
       },
     )
+    this.asScreenSpace(this.menu.objects)
     this.drawSpots()
     this.status.message = 'Pick a tower, or click away to cancel.'
   }
@@ -1076,6 +1107,9 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------- loop
 
   update(_time: number, delta: number): void {
+    // Anything created since the last split has to be given to a camera.
+    if (this.children.list.length !== this.splitAt) this.syncCameras()
+
     // A backgrounded tab hands back a huge delta; cap it so nothing teleports.
     const dt = Math.min(delta / 1000, 0.05)
     if (this.status.phase === 'won' || this.status.phase === 'lost') return

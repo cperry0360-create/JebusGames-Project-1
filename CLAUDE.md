@@ -26,10 +26,26 @@ It is an old single-file HTML prototype. Read it to understand how the explosion
 **3. Rendering is a flat square grid with 3/4 perspective art.**
 Not isometric. Grid math stays orthogonal. Depth is handled by sorting sprites on Y position so lower sprites draw in front. If a task seems to require isometric coordinate conversion, stop and flag it.
 
-**4. Do not build ahead of the current phase.**
+**4. This game uses two cameras. Never apply a camera transform globally.**
+
+- A **world camera** renders the map and every game object on it — towers,
+  enemies, the hero, projectiles. It is the only thing that zooms or pans, and
+  only during an active run.
+- A **fixed UI camera** renders all HUD, menus, panels and dialogs at 1:1 and
+  never transforms.
+
+Menu screens are composed against the 1280x720 design box and fitted to the
+viewport by `fitCameraToDesign`, so nothing is ever cropped on any device. That
+fit is a fixed transform: no gesture is ever bound to it. Gestures belong to
+`CameraRig`, which lives on GameScene alone and is destroyed when the run ends.
+
+Anything drawn in screen space inside GameScene must be registered with
+`asScreenSpace`, or it will pan and zoom with the map.
+
+**5. Do not build ahead of the current phase.**
 `DESIGN.md` defines four phases. Build only what the current task asks for. If a feature would be useful later, note it and move on. Scope creep kills this project faster than any bug.
 
-**5. Ask before large refactors.**
+**6. Ask before large refactors.**
 Propose the approach first and wait for confirmation before rewriting anything that already works.
 
 ## Conventions

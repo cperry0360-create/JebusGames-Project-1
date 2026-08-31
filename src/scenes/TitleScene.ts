@@ -9,6 +9,7 @@ import { plateButton, platePanel } from '../ui/Plate.ts'
 import { AudioToggle } from '../ui/AudioToggle.ts'
 import { unlockAudio } from '../systems/Audio.ts'
 import { ART, fitContentHeight, fitInBox } from '../systems/Art.ts'
+import { fitCameraToDesign } from '../ui/FitCamera.ts'
 
 const HEROES = heroesData as Record<string, HeroDef>
 const BRANDING = brandingData as BrandingDef
@@ -25,6 +26,10 @@ export class TitleScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Fixed UI camera: the design box is fitted into the viewport so nothing
+    // is cut off, and no gesture is bound to it. Menus never pan or zoom.
+    fitCameraToDesign(this)
+
     // Defensive: the HUD must never survive into the title screen.
     this.scene.stop('Hud')
     this.cards = []

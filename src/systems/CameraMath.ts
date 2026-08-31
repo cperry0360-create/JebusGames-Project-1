@@ -25,3 +25,21 @@ export function coverZoom(
 export function clampZoom(requested: number, cover: number, maxMultiple: number): number {
   return Math.min(Math.max(requested, cover), cover * maxMultiple)
 }
+
+/**
+ * Fit scale: the largest scale at which a fixed design box fits *inside* the
+ * viewport without cropping. The opposite of cover, and never larger than it.
+ *
+ * This is what the menus use. They are composed against a 1280x720 box, and
+ * the canvas is the device viewport, so without this a hero card at y=282 sits
+ * off the bottom of a 393px-tall phone.
+ */
+export function fitScale(
+  viewW: number,
+  viewH: number,
+  designW: number,
+  designH: number,
+): number {
+  if (designW <= 0 || designH <= 0) return 1
+  return Math.min(viewW / designW, viewH / designH)
+}

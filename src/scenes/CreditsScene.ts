@@ -6,6 +6,7 @@ import creditsData from '../data/credits.json'
 import { ART, contentWidthAt, fitContentHeight } from '../systems/Art.ts'
 import { COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { plateButton } from '../ui/Plate.ts'
+import { fitCameraToDesign } from '../ui/FitCamera.ts'
 
 const BRANDING = brandingData as BrandingDef
 const CREDITS = creditsData as CreditsDef
@@ -17,6 +18,10 @@ export class CreditsScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Fixed UI camera: the design box is fitted into the viewport so nothing
+    // is cut off, and no gesture is bound to it. Menus never pan or zoom.
+    fitCameraToDesign(this)
+
     const W = displayData.width
     const H = displayData.height
     const c = BRANDING.credits

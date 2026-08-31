@@ -10,6 +10,7 @@ import { COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { plateButton, platePanel } from '../ui/Plate.ts'
 import { towerIcon } from '../ui/TowerIcon.ts'
 import { fitInBox } from '../systems/Art.ts'
+import { fitCameraToDesign } from '../ui/FitCamera.ts'
 
 const TOWERS = towersData as Record<string, TowerDef>
 const ABILITIES = abilitiesData as Record<string, AbilityDef>
@@ -31,6 +32,10 @@ export class DraftScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Fixed UI camera: the design box is fitted into the viewport so nothing
+    // is cut off, and no gesture is bound to it. Menus never pan or zoom.
+    fitCameraToDesign(this)
+
     const run = runState()
     const rng = makeRng(run.seed)
 

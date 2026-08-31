@@ -4,6 +4,7 @@ import displayData from '../data/display.json'
 import brandingData from '../data/branding.json'
 import { ART, fitContentHeight } from '../systems/Art.ts'
 import { COLOR, FONT_UI } from '../ui/Theme.ts'
+import { fitCameraToDesign } from '../ui/FitCamera.ts'
 
 const BRANDING = brandingData as BrandingDef
 
@@ -16,6 +17,10 @@ export class SplashScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Fixed UI camera: the design box is fitted into the viewport so nothing
+    // is cut off, and no gesture is bound to it. Menus never pan or zoom.
+    fitCameraToDesign(this)
+
     this.done = false
     const cfg = BRANDING.splash
     const W = displayData.width

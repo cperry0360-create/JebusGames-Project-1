@@ -45,6 +45,12 @@ export class BuildMenu {
     return this.container !== undefined
   }
 
+  /** Every object the menu owns, for the scene's camera split. The menu is a
+   *  panel, so it belongs to the fixed UI camera. */
+  get objects(): Phaser.GameObjects.GameObject[] {
+    return this.container ? [this.container] : []
+  }
+
   /**
    * True when this tap belongs to the menu, so the world ignores it.
    *
@@ -59,8 +65,8 @@ export class BuildMenu {
   }
 
   open(
-    worldX: number,
-    worldY: number,
+    screenX: number,
+    screenY: number,
     peanuts: number,
     onPick: (id: string) => void,
     onPreview: (id: string | null) => void,
@@ -74,9 +80,13 @@ export class BuildMenu {
     const w = cols * CELL_W + PAD * 2
     const h = rows * CELL_H + PAD * 2 + TITLE_H
 
-    const cam = this.scene.cameras.main
-    const x = Phaser.Math.Clamp(worldX - w / 2, 6, cam.width - w - 6)
-    const y = Phaser.Math.Clamp(worldY - h - 40, 70, cam.height - h - 6)
+    // Screen space, not world space. The menu is a panel: it belongs to the
+    // fixed UI camera, at 1:1, clamped to the viewport. Positioning it at world
+    // coordinates and then clamping those against the camera's *pixel* size
+    // mixed two coordinate systems, and under zoom it landed off screen.
+    const view = this.scene.scale
+    const x = Phaser.Math.Clamp(screenX - w / 2, 6, view.width - w - 6)
+    const y = Phaser.Math.Clamp(screenY - h - 40, 6, view.height - h - 6)
 
     play(this.scene, 'open')
     const c = this.scene.add.container(x, y).setDepth(PANEL_DEPTH)
