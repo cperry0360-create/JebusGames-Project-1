@@ -20,10 +20,18 @@ export function coverZoom(
   return Math.max(viewW / worldW, viewH / worldH)
 }
 
-/** Clamps a requested zoom into the allowed range: never below cover, never
- *  above `maxMultiple` times it. */
-export function clampZoom(requested: number, cover: number, maxMultiple: number): number {
-  return Math.min(Math.max(requested, cover), cover * maxMultiple)
+/**
+ * Clamps a requested zoom into the allowed range.
+ *
+ * The floor is cover — below it the map stops filling the screen and the
+ * player is looking at background. The ceiling used to be a multiple of cover
+ * too, which meant the whole zoom range moved with the viewport: the same
+ * build showed towers at 100px on a phone and 165px on a desktop, and nothing
+ * decided what size a tower should actually be. The ceiling is now an absolute
+ * zoom, raised to the floor if a viewport is wide enough to need more.
+ */
+export function clampZoom(requested: number, cover: number, maxZoom: number): number {
+  return Math.min(Math.max(requested, cover), Math.max(cover, maxZoom))
 }
 
 /**

@@ -285,6 +285,10 @@ this.armReadyCountdown()
     this.rig = new CameraRig(this, {
       worldWidth: displayData.width,
       worldHeight: displayData.height,
+      // Open on the hero, not on the middle of the map: at the closer default
+      // zoom the centre of the board is a patch of grass.
+      startX: MAP.heroStart[0],
+      startY: MAP.heroStart[1],
       defaultZoom: displayData.camera.defaultZoom,
       maxZoom: displayData.camera.maxZoom,
       tapSlopPx: displayData.camera.tapSlopPx,

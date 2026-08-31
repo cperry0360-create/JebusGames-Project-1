@@ -4,8 +4,8 @@
   "hudHeight": 62,
   "backgroundColor": "#2f7d3f",
   "camera": {
-    "defaultZoom": 1.75,
-    "maxZoom": 2.2,
+    "defaultZoom": 1.72,
+    "maxZoom": 2.75,
     "tapSlopPx": 12,
     "panSpeed": 0.82,
     "pinchDamping": 0.6,

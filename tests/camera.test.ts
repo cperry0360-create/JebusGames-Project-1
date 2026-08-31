@@ -41,8 +41,12 @@ test('zoom is clamped between cover and the configured maximum', () => {
   const cover = coverZoom(852, 393, W, H)
   const max = display.camera.maxZoom
   assert.equal(clampZoom(0.0001, cover, max), cover, 'zooming out must stop at cover')
-  assert.equal(clampZoom(9999, cover, max), cover * max, 'zooming in must stop at the maximum')
-  assert.equal(clampZoom(cover * 1.5, cover, max), cover * 1.5, 'a legal zoom passes through')
+  assert.equal(clampZoom(9999, cover, max), max, 'zooming in must stop at the maximum')
+  assert.equal(clampZoom((cover + max) / 2, cover, max), (cover + max) / 2,
+    'a legal zoom passes through')
+  // A viewport wide enough that cover alone exceeds the ceiling still has to
+  // fill the screen: the floor wins.
+  assert.equal(clampZoom(1, 4, 2.75), 4, 'a wide viewport was zoomed out past cover')
 })
 
 test('the default view shows about half the map, not all of it', () => {
@@ -303,4 +307,70 @@ test('rounding the scroll never pushes the view past the map edge', () => {
       }
     }
   }
+})
+
+/* --------------------------------------------- how big things actually are */
+
+/**
+ * The zoom is chosen for a size on the glass, not for a feel.
+ *
+ * The art is drawn at 470-512px and was rendering at 60-87, a five- to
+ * eight-fold reduction that turned the detail to mush. Kingdom Rush, which is
+ * the reference, sits much closer to its board. These check that the number in
+ * display.json still produces the sizes it was picked for, so neither a zoom
+ * tweak nor a re-measure of the art can quietly undo it.
+ */
+const RENDER = JSON.parse(
+  readFileSync(new URL('../src/data/art.json', import.meta.url), 'utf8'),
+).render as Record<string, { displayHeight?: number }>
+
+const onScreen = (key: string, zoom: number): number =>
+  (RENDER[key]?.displayHeight ?? 0) * zoom
+
+test('a tower fills the share of the screen the art was drawn for', () => {
+  const z = display.camera.defaultZoom
+  for (const key of Object.keys(RENDER).filter((k) => k.startsWith('turret-'))) {
+    const h = onScreen(key, z)
+    assert.ok(h >= 140 && h <= 160,
+      `${key} renders ${h.toFixed(0)}px tall at the default zoom; the target is 140-160`)
+  }
+})
+
+test('the hero is the size he was drawn to be', () => {
+  const h = onScreen('hero-cory', display.camera.defaultZoom)
+  assert.ok(h >= 95 && h <= 112, `the hero renders ${h.toFixed(0)}px tall; the target is about 100`)
+})
+
+test('the zoom range brackets the default rather than the viewport', () => {
+  const z = display.camera.defaultZoom
+  const max = display.camera.maxZoom
+  assert.ok(max / z >= 1.45 && max / z <= 1.75,
+    `the ceiling is ${(max / z).toFixed(2)}x the default; about 1.6x was the intent`)
+  // And zooming all the way out still fills the screen, at every viewport.
+  const sizes: Array<[number, number]> = [[568, 320], [844, 390], [1080, 810], [1440, 900]]
+  for (const [vw, vh] of sizes) {
+    const cover = coverZoom(vw, vh, W, H)
+    assert.equal(clampZoom(0, cover, max), cover,
+      `${vw}x${vh}: zooming out does not stop where the map stops filling the screen`)
+    assert.ok(clampZoom(z, cover, max) >= cover,
+      `${vw}x${vh}: the default zoom shows background past the edge of the map`)
+  }
+})
+
+test('the interface does not zoom with the board', () => {
+  // The HUD is its own scene and GameScene's chrome is on a second camera;
+  // neither is ever handed to the rig, so pinching in cannot make the buttons
+  // grow. The rig may only touch cameras.main.
+  const rig = readFileSync(new URL('../src/systems/CameraRig.ts', import.meta.url), 'utf8')
+  assert.doesNotMatch(rig, /uiCam|cameras\.getCamera/,
+    'the camera rig can reach a camera that is not the world camera')
+  const game = readFileSync(new URL('../src/scenes/GameScene.ts', import.meta.url), 'utf8')
+  assert.doesNotMatch(game, /uiCam\.setZoom|uiCam\.zoom =/,
+    'the UI camera is being zoomed')
+  // Anything the player presses inside GameScene is registered as screen space,
+  // which is what puts it on the fixed camera.
+  assert.match(game, /asScreenSpace\(this\.cancelBtn\.parts\)/,
+    'the cancel button is a world object and would grow with the zoom')
+  assert.match(game, /asScreenSpace\(this\.menu\.objects\)/,
+    'the build menu is a world object and would grow with the zoom')
 })

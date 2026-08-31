@@ -49,7 +49,14 @@ export interface CameraLimits {
   worldWidth: number
   worldHeight: number
   /** Multiples of cover zoom. */
+  /** Where the view is centred when the run opens. Defaults to the middle of
+   *  the map, which is only the right answer when the whole map is visible. */
+  startX?: number
+  startY?: number
+  /** Absolute zoom the run starts at, chosen so a tower renders at the size
+   *  the art was drawn for. Raised to cover on a viewport that needs more. */
   defaultZoom: number
+  /** Absolute ceiling, about 1.6x the default. */
   maxZoom: number
   /** Movement in screen pixels that turns a tap into a pan. */
   tapSlopPx: number
@@ -139,9 +146,16 @@ export class CameraRig {
     // and would flatten the rubber band at the map edge back to a hard stop.
     // The clamp is owned here instead, against the camera *centre*, which is
     // the quantity that actually has to stay inside the world.
-    this.targetZoom = this.clampZ(this.cover * limits.defaultZoom)
-    this.targetCenterX = limits.worldWidth / 2
-    this.targetCenterY = limits.worldHeight / 2
+    // An absolute zoom, not a multiple of cover: the point of the number is
+    // the size a tower is on the glass, and that cannot depend on how wide the
+    // window happens to be.
+    this.targetZoom = this.clampZ(limits.defaultZoom)
+    // Where the run opens. The middle of the map was fine while the whole
+    // board fit on screen; at the closer default it shows whatever happens to
+    // be at the centre, which on this map is grass with the hero's head cut
+    // off by the top edge. Callers point it at the hero instead.
+    this.targetCenterX = limits.startX ?? limits.worldWidth / 2
+    this.targetCenterY = limits.startY ?? limits.worldHeight / 2
     cam.setZoom(this.targetZoom)
     this.writeCenter(this.targetCenterX, this.targetCenterY)
 

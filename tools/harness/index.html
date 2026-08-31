@@ -341,7 +341,7 @@ async function run() {
 
     // A tap on a pad must beat a rally order aimed at the same pixel.
     await click(...toScreen(g.hero.x, g.hero.y))
-    await click(SPOTS[2][0], SPOTS[2][1])
+    await click(...toScreen(SPOTS[2][0], SPOTS[2][1]))
     note('pad vs ground precedence: menuOpen=' + g.menu.isOpen + ' heroRally=' + JSON.stringify(g.hero.rally))
     await shot('ui-11-pad-beats-ground')
     await click(20, 700)
@@ -496,7 +496,7 @@ async function run() {
   if (scenario === 'poor') {
     // Insufficient gold: does the game say why nothing happened?
     g.status.gold = 5
-    await click(SPOTS[1][0], SPOTS[1][1])
+    await click(...toScreen(SPOTS[1][0], SPOTS[1][1]))
     const hit = g.menu.hitAreas?.[0]
     if (hit) { const b = hit.getBounds(); await click(b.centerX, b.centerY) }
     note('poor: towers=' + g.towers.length + ' msg="' + g.status.message + '" menuOpen=' + g.menu.isOpen)
@@ -610,9 +610,42 @@ async function run() {
     await until(() => g.enemies.length > 2, 40000)
     await sleep(400)
     await shot('phone-2-wave')
+    // What the art is actually rendering at, on the glass.
+    const camZ = g.cameras.main.zoom
+    const sizes = []
+    for (const t of g.towers) sizes.push('tower ' + Math.round(t.turret.displayHeight * camZ))
+    sizes.push('hero ' + Math.round(g.hero.list[1].displayHeight * camZ))
+    for (const e of g.enemies.slice(0, 1)) sizes.push('enemy ' + Math.round(e.art.displayHeight * camZ))
+    note('zoom ' + camZ.toFixed(3) + ' on screen: ' + sizes.join(', '))
+    note('view shows ' + Math.round(g.cameras.main.worldView.width) + 'x' +
+      Math.round(g.cameras.main.worldView.height) + ' of 1280x720')
     note('wave: enemies=' + g.enemies.length)
     dumpOverlaps('wave')
     await edgeCheck('wave')
+
+    // The interface must not zoom with the board. Same HUD rectangles at the
+    // default zoom and at the ceiling; only the world changes size.
+    const before = JSON.stringify(rectsFor('Hud').map((r) =>
+      [r.name, Math.round(r.l), Math.round(r.t), Math.round(r.r), Math.round(r.b)]))
+    const zBefore = g.cameras.main.zoom
+    const towerBefore = g.towers[0] ? Math.round(g.towers[0].turret.displayHeight * zBefore) : 0
+    for (let i = 0; i < 30; i++) {
+      game.canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, clientX: 422, clientY: 195, bubbles: true }))
+    }
+    await sleep(1400)
+    const zAfter = g.cameras.main.zoom
+    const after = JSON.stringify(rectsFor('Hud').map((r) =>
+      [r.name, Math.round(r.l), Math.round(r.t), Math.round(r.r), Math.round(r.b)]))
+    const towerAfter = g.towers[0] ? Math.round(g.towers[0].turret.displayHeight * zAfter) : 0
+    note('zoom ' + zBefore.toFixed(2) + ' -> ' + zAfter.toFixed(2) +
+      ': tower ' + towerBefore + ' -> ' + towerAfter + 'px, HUD ' +
+      (before === after ? 'UNCHANGED' : 'MOVED/RESIZED'))
+    await shot('phone-2b-zoomed')
+    // Back to the default for the boss shot.
+    for (let i = 0; i < 30; i++) {
+      game.canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, clientX: 422, clientY: 195, bubbles: true }))
+    }
+    await sleep(1200)
 
     // 3. The boss. Clear the field first — killing the last enemy while the
     // wave is live ends it and advances the index out from under us.
@@ -662,6 +695,49 @@ async function run() {
     const wAfter = cam.getWorldPoint(at.x, at.y)
     const drift = Math.round(Math.hypot(wAfter.x - wBefore.x, wAfter.y - wBefore.y))
     note('zoom anchor drift ' + drift + 'px (zoom ' + cam.zoom.toFixed(3) + ')')
+
+    // The floor and the ceiling, now that both are absolute rather than
+    // multiples of the viewport.
+    const D = (await import('./js/data/display.json', { with: { type: 'json' } })).default
+    const cover = Math.max(844 / D.width, 390 / D.height)
+    for (let i = 0; i < 24; i++) {
+      game.canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, clientX: 422, clientY: 195, bubbles: true }))
+    }
+    await sleep(1200)
+    note('zoom out floor ' + cam.zoom.toFixed(3) + ' (cover ' + cover.toFixed(3) + ')')
+    for (let i = 0; i < 40; i++) {
+      game.canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, clientX: 422, clientY: 195, bubbles: true }))
+    }
+    await sleep(1400)
+    note('zoom in ceiling ' + cam.zoom.toFixed(3) + ' (max ' + D.camera.maxZoom + ')')
+
+    // Edge clamp: shove the camera at a corner and check it stops inside the
+    // map rather than overscrolling and springing back.
+    for (let n = 0; n < 3; n++) {
+      mouse('mousedown', 700, 330)
+      for (let i = 1; i <= 10; i++) { mouse('mousemove', 700 - i * 40, 330 - i * 22); await sleep(16) }
+      mouse('mouseup', 300, 110)
+      await sleep(500)
+    }
+    await sleep(1400)
+    const v = cam.worldView
+    note('corner clamp: view ' + [Math.round(v.x), Math.round(v.y), Math.round(v.right), Math.round(v.bottom)].join(',') +
+      ' world 0,0,' + D.width + ',' + D.height +
+      ' inside=' + (v.right <= D.width + 1 && v.bottom <= D.height + 1))
+
+    // Momentum: a flick keeps gliding and then stops on its own.
+    game.canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, clientX: 422, clientY: 195, bubbles: true }))
+    await sleep(600)
+    mouse('mousedown', 300, 200)
+    for (let i = 1; i <= 6; i++) { mouse('mousemove', 300 + i * 30, 200); await sleep(12) }
+    mouse('mouseup', 480, 200)
+    const glideFrom = Math.round(cam.scrollX)
+    await sleep(140)
+    const mid = Math.round(cam.scrollX)
+    await sleep(1600)
+    const rest = Math.round(cam.scrollX)
+    note('momentum: ' + glideFrom + ' -> ' + mid + ' -> ' + rest +
+      ' (glided=' + (Math.abs(rest - mid) > 2) + ' settled=' + (Math.abs(rest - mid) < 400) + ')')
     await shot('gestures')
     return
   }
