@@ -314,6 +314,10 @@ export interface SpriteRender {
    *  tall on screen, rather than that tall including its transparent margin. */
   contentWidth?: number
   contentHeight?: number
+  /** Button plates only: the end-cap sizes in source pixels. A plate is drawn
+   *  by slicing at these, so the metal caps keep their proportions at any
+   *  width and only the plain middle stretches. */
+  slice?: { left: number; right: number; top: number; bottom: number }
 }
 
 /**
@@ -337,6 +341,8 @@ export interface ArtDef {
     titleBackdrop: string | null
     /** The three counter plates, each carrying its own icon and empty field. */
     counters: Record<string, string>
+    /** The arcade button plates, by the weight of the action they carry. */
+    buttons: { primary: string; secondary: string; disabled: string }
   }
   fx: {
     spark: string

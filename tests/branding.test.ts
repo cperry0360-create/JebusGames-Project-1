@@ -156,3 +156,22 @@ test('the dedication sits between the closing note and the back button', () => {
   assert.ok(c.footerY < display.height - 80,
     'the dedication would land on the back button')
 })
+
+test('the arcade button plates are on disk and sliced sanely', () => {
+  // A plate is drawn by slicing at its end caps. If a cap were measured wider
+  // than half the plate the two would overlap and the frame would fold in on
+  // itself, which is the one way this can look broken rather than merely wrong.
+  for (const weight of ['primary', 'secondary', 'disabled'] as const) {
+    const key = art.ui.buttons[weight]
+    assert.ok(key, `no plate for the ${weight} weight`)
+    const path = art.files[key]
+    assert.ok(path, `ui.buttons.${weight} points at unknown key "${key}"`)
+    assert.ok(existsSync(url(`../public/${art.assetRoot}${path}`)), `${key} -> ${path} is missing`)
+
+    const cfg = art.render[key]
+    assert.ok(cfg?.slice, `${key} has no measured slice`)
+    assert.ok(cfg.slice.left > 0 && cfg.slice.right > 0, `${key} has no end caps to preserve`)
+    assert.ok(cfg.slice.left + cfg.slice.right < cfg.contentWidth,
+      `${key} caps span ${cfg.slice.left + cfg.slice.right}px of a ${cfg.contentWidth}px plate`)
+  }
+})

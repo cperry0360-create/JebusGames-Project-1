@@ -323,3 +323,65 @@ for name in ('peanuts', 'lives', 'wave'):
     }
     print(f'  {key}: {w}x{h}, field x{left}-{right - 1} y{top}-{bot} -> {prender[key]}')
 json.dump({'files': pfiles, 'render': prender}, open('/tmp/hudpatch.json', 'w'), indent=2)
+
+
+# ------------------------------------------------------------ button plates
+
+# The arcade plates are metal frames with detailed end caps and a plain
+# stretchable middle. Drawing one at an arbitrary size means slicing it, so the
+# caps keep their proportions and only the middle grows. Where the caps end is
+# measured by walking out from the centre column (or row) until the pixels stop
+# matching it — the plain middle is uniform by construction, so the first
+# column that differs is where the cap detail begins.
+
+SLICE_TOL = 6.0
+
+
+def _col(w, px, x, y0, y1):
+    return [px[(y * w + x) * 4 + c] for y in range(y0, y1 + 1) for c in range(4)]
+
+
+def _row(w, px, y, x0, x1):
+    return list(px[(y * w + x0) * 4:(y * w + x1 + 1) * 4])
+
+
+def _differs(a, b):
+    return sum(abs(p - q) for p, q in zip(a, b)) / len(a) >= SLICE_TOL
+
+
+def slice_insets(w, h, px):
+    """(left, right, top, bottom) cap sizes in source pixels."""
+    xc, yc = w // 2, h // 2
+    cref = _col(w, px, xc, 0, h - 1)
+    left = xc
+    while left > 0 and not _differs(_col(w, px, left - 1, 0, h - 1), cref):
+        left -= 1
+    right = xc
+    while right < w - 1 and not _differs(_col(w, px, right + 1, 0, h - 1), cref):
+        right += 1
+    rref = _row(w, px, yc, 0, w - 1)
+    top = yc
+    while top > 0 and not _differs(_row(w, px, top - 1, 0, w - 1), rref):
+        top -= 1
+    bot = yc
+    while bot < h - 1 and not _differs(_row(w, px, bot + 1, 0, w - 1), rref):
+        bot += 1
+    return left, (w - 1) - right, top, (h - 1) - bot
+
+
+print('\n\nButton plates')
+bfiles, brender = {}, {}
+for name in ('btn_primary', 'btn_secondary', 'btn_disabled', 'btn_icon',
+             'btn_icon_active', 'panel_dialog'):
+    path = f'public/assets/ui/{name}.png'
+    w, h, px = png.read(path)
+    left, right, top, bot = slice_insets(w, h, px)
+    key = 'ui-' + name.replace('_', '-')
+    bfiles[key] = f'ui/{name}.png'
+    brender[key] = {
+        'contentWidth': w,
+        'contentHeight': h,
+        'slice': {'left': left, 'right': right, 'top': top, 'bottom': bot},
+    }
+    print(f'  {key}: {w}x{h}, caps L{left} R{right} T{top} B{bot}')
+json.dump({'files': bfiles, 'render': brender}, open('/tmp/buttonpatch.json', 'w'), indent=2)

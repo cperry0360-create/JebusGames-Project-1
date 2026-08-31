@@ -48,7 +48,10 @@
     "hud-peanuts": "ui/hud_peanuts.png",
     "hud-lives": "ui/hud_lives.png",
     "hud-wave": "ui/hud_wave.png",
-    "enemy-politician": "enemies/enemy_boss_politician.png"
+    "enemy-politician": "enemies/enemy_boss_politician.png",
+    "ui-btn-primary": "ui/btn_primary.png",
+    "ui-btn-secondary": "ui/btn_secondary.png",
+    "ui-btn-disabled": "ui/btn_disabled.png"
   },
   "render": {
     "turret-escalation": {
@@ -227,6 +230,36 @@
       "shadowWidth": 62.1,
       "contentWidth": 639,
       "contentHeight": 640
+    },
+    "ui-btn-primary": {
+      "contentWidth": 1407,
+      "contentHeight": 221,
+      "slice": {
+        "left": 148,
+        "right": 147,
+        "top": 73,
+        "bottom": 71
+      }
+    },
+    "ui-btn-secondary": {
+      "contentWidth": 652,
+      "contentHeight": 204,
+      "slice": {
+        "left": 139,
+        "right": 141,
+        "top": 75,
+        "bottom": 71
+      }
+    },
+    "ui-btn-disabled": {
+      "contentWidth": 1407,
+      "contentHeight": 217,
+      "slice": {
+        "left": 149,
+        "right": 148,
+        "top": 68,
+        "bottom": 71
+      }
     }
   },
   "map": {
@@ -239,6 +272,11 @@
       "peanuts": "hud-peanuts",
       "lives": "hud-lives",
       "wave": "hud-wave"
+    },
+    "buttons": {
+      "primary": "ui-btn-primary",
+      "secondary": "ui-btn-secondary",
+      "disabled": "ui-btn-disabled"
     }
   },
   "fx": {

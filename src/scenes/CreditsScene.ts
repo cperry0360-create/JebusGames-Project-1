@@ -4,7 +4,7 @@ import displayData from '../data/display.json'
 import brandingData from '../data/branding.json'
 import creditsData from '../data/credits.json'
 import { ART, contentWidthAt, fitContentHeight } from '../systems/Art.ts'
-import { COLOR, FONT_DISPLAY, FONT_UI, button } from '../ui/Theme.ts'
+import { COLOR, FONT_DISPLAY, FONT_UI, plateButton } from '../ui/Theme.ts'
 
 const BRANDING = brandingData as BrandingDef
 const CREDITS = creditsData as CreditsDef
@@ -79,7 +79,8 @@ export class CreditsScene extends Phaser.Scene {
       fontFamily: FONT_UI, fontSize: '13px', color: COLOR.ink,
     }).setOrigin(0.5).setAlpha(0.7)
 
-    button(this, W / 2, H - 46, 200, 46, 'BACK', () => this.scene.start('Title'), 18)
+    // Going back is the lesser action, so it wears the secondary plate.
+    plateButton(this, W / 2, H - 46, 210, 52, 'BACK', () => this.scene.start('Title'), 18, 'secondary')
     this.input.keyboard?.on('keydown-ESC', () => this.scene.start('Title'))
   }
 

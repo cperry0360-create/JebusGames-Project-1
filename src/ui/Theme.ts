@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { ART, renderFor } from '../systems/Art.ts'
 
 // One place for the game's look, so panels and labels stay consistent.
 // The fonts are Kenney's CC0 font package, loaded via @font-face in index.html.
@@ -130,6 +131,108 @@ export function button(
       enabled = on
       t.setColor(on ? COLOR.ink : '#6f7a86')
       redraw(on ? 0x2f6b38 : 0x2a3340, on ? COLOR.accent : COLOR.panelEdge)
+    },
+  }
+}
+
+/**
+ * A button wearing one of the painted arcade plates.
+ *
+ * The plates are wide metal frames with detailed end caps and a plain middle,
+ * so a button is three pieces: both caps drawn at a uniform scale set by the
+ * requested height, and the middle stretched horizontally to fill whatever is
+ * left. Only the middle distorts, which is the point — the caps are where all
+ * the detail is.
+ *
+ * Phaser's own NineSlice would do this in one object, but it is WebGL-only and
+ * draws nothing at all under the Canvas renderer, which is what a browser
+ * falls back to when WebGL is unavailable. A button that vanishes on a
+ * fallback renderer is worse than one built from three images, so this builds
+ * the three images.
+ */
+
+/** Cuts a plate into left cap, stretchable middle and right cap. The frames
+ *  live on the texture itself, so a second button reuses them. */
+function plateFrames(
+  scene: Phaser.Scene,
+  key: string,
+): { left: string; mid: string; right: string; width: number; height: number } {
+  const tex = scene.textures.get(key)
+  const src = tex.source[0]
+  const s = renderFor(key).slice ?? { left: 0, right: 0, top: 0, bottom: 0 }
+  const names = { left: `${key}__cap-l`, mid: `${key}__mid`, right: `${key}__cap-r` }
+  if (!tex.has(names.left)) {
+    tex.add(names.left, 0, 0, 0, s.left, src.height)
+    tex.add(names.mid, 0, s.left, 0, src.width - s.left - s.right, src.height)
+    tex.add(names.right, 0, src.width - s.right, 0, s.right, src.height)
+  }
+  return { ...names, width: src.width, height: src.height }
+}
+
+export function plateButton(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  text: string,
+  onClick: () => void,
+  size = 18,
+  weight: 'primary' | 'secondary' = 'primary',
+): {
+  hit: Phaser.GameObjects.Rectangle
+  setEnabled: (on: boolean) => void
+  text: Phaser.GameObjects.Text
+  parts: Phaser.GameObjects.GameObject[]
+} {
+  const build = (key: string): Phaser.GameObjects.Image[] => {
+    const f = plateFrames(scene, key)
+    const s = renderFor(key).slice ?? { left: 0, right: 0, top: 0, bottom: 0 }
+    const scale = h / f.height
+    const capW = (s.left + s.right) * scale
+    // Middle first, so a rounding gap at a seam hides under a cap.
+    const mid = scene.add.image(x - w / 2 + s.left * scale, y, key, f.mid).setOrigin(0, 0.5)
+    mid.setScale(Math.max(w - capW, 1) / (f.width - s.left - s.right), scale)
+    const l = scene.add.image(x - w / 2, y, key, f.left).setOrigin(0, 0.5).setScale(scale)
+    const r = scene.add.image(x + w / 2, y, key, f.right).setOrigin(1, 0.5).setScale(scale)
+    return [mid, l, r]
+  }
+
+  const on = build(ART.ui.buttons[weight])
+  const off = build(ART.ui.buttons.disabled)
+  off.forEach((p) => p.setVisible(false))
+
+  // The plates are bright and saturated, so the label needs a dark outline to
+  // sit on top of one rather than fight it.
+  const t = scene.add
+    .text(x, y, text, {
+      fontFamily: FONT_DISPLAY, fontSize: `${size}px`, color: COLOR.ink,
+      stroke: '#171c24', strokeThickness: 4,
+    })
+    .setOrigin(0.5)
+  const hit = scene.add.rectangle(x, y, w, h, 0xffffff, 0.001).setInteractive({ useHandCursor: true })
+
+  // The plate is painted, so hover cannot brighten it with a tint — Phaser's
+  // tint multiplies. It rests very slightly dimmed instead and clears to full
+  // on hover, which reads as the button lighting up.
+  const REST = 0xd2d8de
+  const light = (v: number): void => on.forEach((p) => p.setTint(v))
+  light(REST)
+
+  let enabled = true
+  hit.on('pointerover', () => { if (enabled) light(0xffffff) })
+  hit.on('pointerout', () => { if (enabled) light(REST) })
+  hit.on('pointerdown', () => { if (enabled) onClick() })
+
+  return {
+    hit,
+    text: t,
+    parts: [...on, ...off, t, hit],
+    setEnabled: (v: boolean) => {
+      enabled = v
+      on.forEach((p) => p.setVisible(v))
+      off.forEach((p) => p.setVisible(!v))
+      t.setColor(v ? COLOR.ink : '#6f7a86')
     },
   }
 }
