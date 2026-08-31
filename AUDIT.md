@@ -87,6 +87,18 @@ their own bases, but the file and this reference outlived it.
 Two of Cory's four buttons look broken. This is the most visible defect in the
 build and probably the cheapest to fix — it needs two icons.
 
+> **Resolved.** The two icons arrived as `ability_haymaker.png` and
+> `ability_restructure.png`, and both slots now point at their own art. They are
+> circular medallions where the six drafted actives are rectangular arcade
+> plates: round means a hero ability, rectangular means one this run dealt you.
+> The HUD bar keeps each group whole and puts a gap between them, and the armed
+> outline follows each shape rather than boxing a circle in a rectangle.
+>
+> `tower-base`, its `art.ui.towerBase` field, the branches that read it and
+> `kenney/towerDefense_tile181.png` are all gone. Kenney's projectiles, effects
+> and decor remain — they are used and credited — but that tile was the last
+> placeholder standing in for art that now exists.
+
 ### 3. Selecting a tower does nothing
 
 Clicking a built tower prints its name and flavour to the message line and draws

@@ -4,7 +4,7 @@ import { ySort } from '../systems/DepthSort.ts'
 import { pickFirst } from '../systems/Targeting.ts'
 import { boostedDamage } from '../systems/Combat.ts'
 import { makeShadow, muzzleFlash, PRESENTATION } from '../systems/Presentation.ts'
-import { ART, applyRender } from '../systems/Art.ts'
+import { applyRender } from '../systems/Art.ts'
 import { atSpecChoice, BASE_TIER, isMaxed, maxTier, nextStep, specById, statAt } from '../systems/Upgrades.ts'
 import rulesData from '../data/rules.json'
 import type { RulesDef } from '../types.ts'
@@ -50,15 +50,11 @@ export class Tower extends Phaser.GameObjects.Container {
     this.def = def
     this.spot = spot
 
-    // The base plate is optional: art that carries its own base sets
-    // ui.towerBase to null in the manifest and this drops out.
+    // Every tower's art carries its own base. The manifest used to point at a
+    // Kenney placeholder tile to stand in for one; the painted towers made it
+    // redundant and it is gone.
     this.shadow = makeShadow(scene, def.sprite)
     const parts: Phaser.GameObjects.GameObject[] = [this.shadow]
-    if (ART.ui.towerBase !== null) {
-      const base = scene.add.sprite(0, 0, ART.ui.towerBase)
-      applyRender(base, ART.ui.towerBase)
-      parts.push(base)
-    }
     this.turret = scene.add.sprite(0, 0, def.sprite)
     // Anchor and on-screen height come from the manifest, so a 512px tower and
     // a 64px turret both sit on the tile at the size the manifest asks for.

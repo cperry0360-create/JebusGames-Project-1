@@ -44,6 +44,8 @@
     "ability-chain": "abilities/ability_chain.png",
     "ability-scratchticket": "abilities/ability_scratchticket.png",
     "ability-servernuke": "abilities/ability_servernuke.png",
+    "ability-haymaker": "abilities/ability_haymaker.png",
+    "ability-restructure": "abilities/ability_restructure.png",
     "hud-peanuts": "ui/hud_peanuts.png",
     "hud-lives": "ui/hud_lives.png",
     "hud-wave": "ui/hud_wave.png",
@@ -310,13 +312,24 @@
       "boardRight": 1.0,
       "boardTop": 0.07,
       "boardBottom": 0.6225
+    },
+    "ability-haymaker": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 256,
+      "contentHeight": 233
+    },
+    "ability-restructure": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 256,
+      "contentHeight": 252
     }
   },
   "map": {
     "level1": "map-level1"
   },
   "ui": {
-    "towerBase": null,
     "titleBackdrop": "ui-title-bg",
     "counters": {
       "peanuts": "hud-peanuts",

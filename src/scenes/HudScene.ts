@@ -15,6 +15,8 @@ import { play } from '../systems/Audio.ts'
 interface SlotView {
   id: string
   kind: 'ability' | 'haymaker' | 'restructure'
+  /** True for Cory's own two, which are round medallions rather than plates. */
+  hero: boolean
   frame: Phaser.GameObjects.Graphics
   sweep: Phaser.GameObjects.Graphics
   icon: Phaser.GameObjects.Image
@@ -22,6 +24,8 @@ interface SlotView {
   hit: Phaser.GameObjects.Rectangle
   x: number
   y: number
+  /** This slot's own width; the two shapes do not share a grid. */
+  pitch: number
 }
 
 const HUD = presentationData.hud
@@ -29,7 +33,6 @@ const RULES = rulesData as unknown as RulesDef
 /** Icons are drawn 64px tall, as the art was made for. They carry their own
  *  frames, so nothing is drawn behind them. */
 const ICON_H = 64
-const SLOT_PITCH = 56
 
 /** UI lives in its own scene so the world can Y-sort freely without the HUD
  *  ever landing in the middle of the sort order. */
@@ -49,7 +52,7 @@ export class HudScene extends Phaser.Scene {
   private startBtn!: PlateButton
   private panel?: Dialog
   private paused = false
-  private slots: SlotView[] = []
+  slots: SlotView[] = []
   private slotsBuilt = false
   /** Which abilities the slots were built for, so a rare drop rebuilds them. */
   private slotKeys = ''
@@ -259,36 +262,52 @@ export class HudScene extends Phaser.Scene {
     const hero = this.world.heroDef()
     // No key letters. This is a touch game; Q W E R meant nothing on a phone
     // and the labels were four more things crowding a 64px icon.
-    const defs: Array<{ id: string; kind: SlotView['kind']; icon: string }> = []
+    // Two groups, and the order says which is which. Everything the run dealt
+    // — the drafted actives and the rare drop — comes first as rectangular
+    // arcade plates; Cory's own two come last as round medallions. The shape
+    // is the signal, so the layout keeps each group whole rather than
+    // interleaving them or forcing both into one grid.
+    const defs: Array<{ id: string; kind: SlotView['kind']; icon: string; hero: boolean }> = []
     s.abilities.forEach((id) => {
       const def = this.world.abilityDef(id)
-      if (def) defs.push({ id, kind: 'ability', icon: def.icon })
+      if (def) defs.push({ id, kind: 'ability', icon: def.icon, hero: false })
     })
-    defs.push({ id: 'haymaker', kind: 'haymaker', icon: hero.haymaker.icon })
-    defs.push({ id: 'restructure', kind: 'restructure', icon: hero.restructure.icon })
     if (s.rareAbility) {
       const def = this.world.abilityDef(s.rareAbility)
-      if (def) defs.push({ id: s.rareAbility, kind: 'ability', icon: def.icon })
+      if (def) defs.push({ id: s.rareAbility, kind: 'ability', icon: def.icon, hero: false })
     }
+    defs.push({ id: 'haymaker', kind: 'haymaker', icon: hero.haymaker.icon, hero: true })
+    defs.push({ id: 'restructure', kind: 'restructure', icon: hero.restructure.icon, hero: true })
     this.slotKeys = defs.map((d) => d.id).join(',')
 
-    // The bar they used to live in is gone, so they sit along the bottom
-    // centre where a hero's actives belong, clear of the counters entirely.
-    const startX = (this.scale.width - defs.length * SLOT_PITCH) / 2
+    const bar = presentationData.abilityBar
+    const pitchOf = (d: { hero: boolean }): number => (d.hero ? bar.heroPitch : bar.draftedPitch)
+    const iconOf = (d: { hero: boolean }): number => (d.hero ? bar.heroIcon : bar.draftedIcon)
+    // One gap, where the run's hand ends and the hero's own begins.
+    const gaps = defs.some((d) => d.hero) && defs.some((d) => !d.hero) ? bar.groupGap : 0
+    const totalW = defs.reduce((a, d) => a + pitchOf(d), 0) + gaps
+
+    // Along the bottom centre, where a hero's actives belong, clear of the
+    // counters entirely.
+    let x = (this.scale.width - totalW) / 2
     const bottomY = this.scale.height - ICON_H - 14
     defs.forEach((d, i) => {
-      const x = startX + i * SLOT_PITCH
+      if (i > 0 && d.hero && !defs[i - 1]!.hero) x += bar.groupGap
+      const pitch = pitchOf(d)
+      const box = iconOf(d)
       const y = bottomY
+      const cx = x + pitch / 2
+      const cy = y + ICON_H / 2
       const frame = this.add.graphics()
-      const icon = this.add.image(x + SLOT_PITCH / 2, y + ICON_H / 2, d.icon)
-      fitInBox(icon, d.icon, ICON_H)
+      const icon = this.add.image(cx, cy, d.icon)
+      fitInBox(icon, d.icon, box)
       const sweep = this.add.graphics()
-      const timer = this.add.text(x + SLOT_PITCH / 2, y + ICON_H / 2, '', {
+      const timer = this.add.text(cx, cy, '', {
         /* numerals */
         fontFamily: FONT_DISPLAY, fontSize: '19px', color: COLOR.ink,
         stroke: '#0d1016', strokeThickness: 5,
       }).setOrigin(0.5)
-      const hit = this.add.rectangle(x + SLOT_PITCH / 2, y + ICON_H / 2, SLOT_PITCH, ICON_H, 0xffffff, 0.001)
+      const hit = this.add.rectangle(cx, cy, pitch, ICON_H, 0xffffff, 0.001)
         .setInteractive({ useHandCursor: true })
       hit.on('pointerdown', () => {
         if (d.kind === 'ability') this.world.armAbility(d.id)
@@ -296,7 +315,8 @@ export class HudScene extends Phaser.Scene {
         else this.world.armRestructure()
       })
 
-      this.slots.push({ id: d.id, kind: d.kind, frame, sweep, icon, timer, hit, x, y })
+      this.slots.push({ id: d.id, kind: d.kind, hero: d.hero, frame, sweep, icon, timer, hit, x, y, pitch })
+      x += pitch
     })
   }
 
@@ -480,11 +500,19 @@ export class HudScene extends Phaser.Scene {
       }
       slot.icon.setTint(ready && usable ? 0xffffff : 0x8a8a8a)
 
-      // Armed reads as a glow around the card rather than a plate behind it.
+      // Armed reads as a glow around the card rather than a plate behind it,
+      // and it follows the card's own shape: a ring for the round hero
+      // medallions, a rounded rect for the rectangular drafted plates. A box
+      // drawn around a circle is exactly the kind of thing that makes two
+      // deliberately different shapes look like one of them is a mistake.
       slot.frame.clear()
       if (armed) {
         slot.frame.lineStyle(3, COLOR.accent, 0.95)
-        slot.frame.strokeRoundedRect(slot.x + 4, slot.y - 2, SLOT_PITCH - 8, ICON_H + 4, 8)
+        if (slot.hero) {
+          slot.frame.strokeCircle(slot.x + slot.pitch / 2, slot.y + ICON_H / 2, ICON_H / 2 + 3)
+        } else {
+          slot.frame.strokeRoundedRect(slot.x + 4, slot.y - 2, slot.pitch - 8, ICON_H + 4, 8)
+        }
       }
 
       slot.timer.setText(ready ? '' : String(Math.ceil(left)))
@@ -494,7 +522,7 @@ export class HudScene extends Phaser.Scene {
         const p = this.world.cooldowns.progress(slot.id)
         slot.sweep.fillStyle(0x000000, 0.5)
         slot.sweep.slice(
-          slot.x + SLOT_PITCH / 2, slot.y + ICON_H / 2, ICON_H * 0.42,
+          slot.x + slot.pitch / 2, slot.y + ICON_H / 2, ICON_H * 0.42,
           Phaser.Math.DegToRad(-90 + 360 * p), Phaser.Math.DegToRad(270), false,
         )
         slot.sweep.fillPath()

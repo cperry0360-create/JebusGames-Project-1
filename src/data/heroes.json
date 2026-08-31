@@ -21,7 +21,7 @@
     },
     "haymaker": {
       "name": "Haymaker",
-      "icon": "ability-meteor",
+      "icon": "ability-haymaker",
       "cooldown": 12,
       "range": 120,
       "damage": 130,
@@ -30,7 +30,7 @@
     },
     "restructure": {
       "name": "Restructure",
-      "icon": "ability-gnomes",
+      "icon": "ability-restructure",
       "cooldown": 22
     },
     "lastStand": {

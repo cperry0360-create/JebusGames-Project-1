@@ -365,7 +365,20 @@ test('the retired tower-base placeholder is gone from the manifest', () => {
   // bases. It outlived its role and was still being loaded at boot.
   const art = JSON.parse(readFileSync(new URL('../src/data/art.json', import.meta.url), 'utf8'))
   assert.equal(art.files['tower-base'], undefined, 'tower-base is still loaded')
-  assert.equal(art.ui.towerBase, null, 'the towers carry their own bases now')
+  assert.ok(!('towerBase' in art.ui),
+    'ui.towerBase is still in the manifest; a permanently null field is a branch nobody can take')
+
+  // The branches that read it have to go too, or the next person wires a new
+  // placeholder into a hole that was supposed to be closed.
+  for (const f of ['entities/Tower.ts', 'ui/TowerIcon.ts', 'types.ts']) {
+    assert.doesNotMatch(readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8'),
+      /towerBase/, `${f} still reads ui.towerBase`)
+  }
+
+  // And the file itself. Kenney's projectiles, effects and decor stay — they
+  // are used and credited — but this one tile is not art, it is a leftover.
+  assert.equal(existsSync(new URL('../public/assets/kenney/towerDefense_tile181.png', import.meta.url)),
+    false, 'the placeholder tile is still on disk')
 })
 
 /* ------------------------------------------------- every tower does something */
@@ -474,4 +487,62 @@ test('tier is visible on the board without opening a panel', () => {
   const build = tower.slice(tower.indexOf('private tickBuild'))
   assert.match(build.slice(0, build.indexOf('\n  ', 40) + 400), /drawTier\(\)/,
     'finishing a tier never redraws the indicator')
+})
+
+/* --------------------------------------- hero abilities have their own art */
+
+test('the hero abilities point at their own icons, not at borrowed ones', () => {
+  // AUDIT #2: Haymaker pointed at a tower sprite and Restructure at a Kenney
+  // placeholder tile. Both then spent a while pointing at other abilities'
+  // icons as stand-ins, which is better but still borrowed.
+  const art = JSON.parse(readFileSync(new URL('../src/data/art.json', import.meta.url), 'utf8'))
+  const c = heroes.cory
+  for (const [slot, key] of [['haymaker', c.haymaker.icon], ['restructure', c.restructure.icon]] as const) {
+    assert.equal(key, `ability-${slot}`, `${slot} does not use its own icon`)
+    assert.ok(art.files[key], `${key} is not in the manifest`)
+    assert.match(art.files[key], new RegExp(`ability_${slot}\\.png$`), `${key} points at the wrong file`)
+    assert.ok(art.render[key], `${key} has no render entry, so it cannot be fitted`)
+    assert.equal(existsSync(new URL(`../public/${art.files[key]}`.replace('/assets/', '/assets/'), import.meta.url))
+      || existsSync(new URL(`../public/assets/${art.files[key]}`, import.meta.url)), true,
+      `${art.files[key]} is not on disk`)
+  }
+  // And nothing borrows a drafted ability's icon any more.
+  for (const key of [c.haymaker.icon, c.restructure.icon]) {
+    assert.doesNotMatch(key, /meteor|gnomes|molotov|glacier|chain|scratch/, `${key} is still a borrowed icon`)
+  }
+})
+
+test('the hero medallions are round and the drafted plates are not', () => {
+  // The shapes carry the meaning: round is a hero ability, rectangular is one
+  // this run dealt. The manifest has to reflect that, or the bar cannot.
+  const art = JSON.parse(readFileSync(new URL('../src/data/art.json', import.meta.url), 'utf8'))
+  const ratio = (k: string): number => art.render[k].contentWidth / art.render[k].contentHeight
+  for (const k of ['ability-haymaker', 'ability-restructure']) {
+    assert.ok(Math.abs(ratio(k) - 1) < 0.15, `${k} is ${ratio(k).toFixed(2)}:1, not a square medallion`)
+  }
+  for (const k of ['ability-molotov', 'ability-glacier', 'ability-meteor']) {
+    assert.ok(ratio(k) < 0.85, `${k} is ${ratio(k).toFixed(2)}:1, not a tall plate`)
+  }
+})
+
+test('the ability bar groups the hero medallions and spaces them apart', () => {
+  const bar = read('presentation').abilityBar
+  assert.ok(bar, 'the ability bar has no layout config')
+  // A medallion fitted to the same box is far wider than a plate, so they
+  // cannot share one grid without the round ones colliding.
+  assert.ok(bar.heroPitch > bar.draftedPitch,
+    `hero pitch ${bar.heroPitch} is not wider than the drafted pitch ${bar.draftedPitch}`)
+  assert.ok(bar.groupGap > 0, 'nothing separates the two groups')
+
+  const hud = readFileSync(new URL('../src/scenes/HudScene.ts', import.meta.url), 'utf8')
+  // The hero pair goes last and together, after everything the run dealt.
+  const build = hud.slice(hud.indexOf('private buildSlots'))
+  const body = build.slice(0, build.indexOf('\n  private ', 10))
+  assert.ok(body.indexOf('rareAbility') < body.indexOf("id: 'haymaker'"),
+    'the rare drop is pushed after the hero abilities, splitting the medallion pair')
+  assert.ok(body.indexOf("id: 'haymaker'") < body.indexOf("id: 'restructure'"),
+    'the two hero abilities are not adjacent')
+  // And the armed outline follows the shape rather than boxing a circle.
+  assert.match(hud, /slot\.hero[\s\S]{0,120}strokeCircle/,
+    'a round medallion is outlined with a rectangle when armed')
 })

@@ -457,7 +457,6 @@ export interface ArtDef {
   map: Record<string, string>
   ui: {
     /** null once towers ship as one sprite carrying their own base. */
-    towerBase: string | null
     /** The painted title illustration. null falls back to a flat panel. */
     titleBackdrop: string | null
     /** The three counter plates, each carrying its own icon and empty field. */

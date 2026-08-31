@@ -78,5 +78,12 @@
     "pipEmptyColour": "#39424e",
     "scalePerTier": 0.07,
     "tintPerTier": 0.12
+  },
+  "abilityBar": {
+    "draftedPitch": 56,
+    "draftedIcon": 64,
+    "heroPitch": 72,
+    "heroIcon": 64,
+    "groupGap": 26
   }
 }

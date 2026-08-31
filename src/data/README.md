@@ -224,7 +224,7 @@ still comes from the wheels, so he sits on the road rather than floating.
 asked about the reversed heading rather than being given a second rule.
 
 - **`art.json` is the only place a sprite is named.** Code asks for a *role*
-  (`ART.fx.blast`, `ART.map.level1`, `ART.ui.towerBase`) and
+  (`ART.fx.blast`, `ART.map.level1`, `ART.ui.panel`) and
   `src/systems/Art.ts` resolves it. No `.ts` file may
   contain a sprite key or a filename; `tests/manifest.test.ts` fails if one
   does, naming the file. Swapping art packs is an edit to this file alone.
