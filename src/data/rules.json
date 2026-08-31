@@ -1,5 +1,15 @@
 {
   "startingPeanuts": 260,
   "startingLives": 20,
-  "peanutsPerWaveCleared": 35
+  "peanutsPerWaveCleared": 35,
+  "serverNuke": {
+    "abilityId": "serverNuke",
+    "dropChance": 0.02,
+    "dropFromTiers": [
+      "elite",
+      "boss"
+    ],
+    "bossHealthPercent": 0.6,
+    "castSeconds": 2.2
+  }
 }

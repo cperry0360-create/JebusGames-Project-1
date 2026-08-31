@@ -20,6 +20,11 @@ export class Cooldowns {
     return (this.remaining.get(id) ?? 0) <= 0
   }
 
+  /** Makes an ability castable now. Used when a rare one is first acquired. */
+  reset(id: string): void {
+    this.remaining.set(id, 0)
+  }
+
   start(id: string): void {
     this.remaining.set(id, this.length.get(id) ?? 0)
   }

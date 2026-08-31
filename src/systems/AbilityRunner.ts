@@ -2,7 +2,7 @@
 // this file only decides what shape each effect takes on screen.
 
 import Phaser from 'phaser'
-import type { AbilityDef } from '../types.ts'
+import type { AbilityDef, ServerNukeDef } from '../types.ts'
 import { withinRadius } from './Targeting.ts'
 import { Enemy } from '../entities/Enemy.ts'
 import { ART } from './Art.ts'
@@ -15,19 +15,23 @@ export interface AbilityContext {
   /** Hands a rolled payout to the UI, which shows the ticket and pays out
    *  when it is scratched or when it reveals itself. */
   scratchTicket: (payout: number, autoRevealSeconds: number) => void
+  /** Runs the long wind-up, then the payload. The scene owns the theatre. */
+  windUp: (seconds: number, fire: () => void) => void
   summon: (x: number, y: number, count: number, seconds: number) => void
   overlayDepth: number
+  nuke: ServerNukeDef
 }
 
 export function castAbility(id: string, def: AbilityDef, x: number, y: number, ctx: AbilityContext): void {
   switch (id) {
-    case 'explosion':      return explosion(def, x, y, ctx)
-    case 'twoFighters':    return ctx.summon(x, y, def.summonCount, def.duration)
-    case 'freezeField':    return freezeField(def, x, y, ctx)
-    case 'meteorBarrage':  return meteorBarrage(def, x, y, ctx)
-    case 'chainLightning': return chainLightning(def, x, y, ctx)
+    case 'molotov':      return molotov(def, x, y, ctx)
+    case 'gnomes':    return ctx.summon(x, y, def.summonCount, def.duration)
+    case 'glacier':    return glacier(def, x, y, ctx)
+    case 'meteor':  return meteor(def, x, y, ctx)
+    case 'chain': return chain(def, x, y, ctx)
     case 'scratchTicket':  return scratchTicket(def, ctx)
-    default:               return explosion(def, x, y, ctx)
+    case 'serverNuke':     return serverNuke(ctx)
+    default:               return molotov(def, x, y, ctx)
   }
 }
 
@@ -47,13 +51,13 @@ function boom(ctx: AbilityContext, x: number, y: number, radius: number, tint = 
   }
 }
 
-function explosion(def: AbilityDef, x: number, y: number, ctx: AbilityContext): void {
+function molotov(def: AbilityDef, x: number, y: number, ctx: AbilityContext): void {
   boom(ctx, x, y, def.radius)
   ctx.scene.cameras.main.shake(200, 0.006)
   for (const e of withinRadius(ctx.enemies(), x, y, def.radius)) ctx.damage(e, def.damage, def.ignoresArmor)
 }
 
-function freezeField(def: AbilityDef, x: number, y: number, ctx: AbilityContext): void {
+function glacier(def: AbilityDef, x: number, y: number, ctx: AbilityContext): void {
   const ring = ctx.scene.add.graphics().setDepth(ctx.overlayDepth)
   ring.fillStyle(0x8fd0ff, 0.18).fillCircle(x, y, def.radius)
   ring.lineStyle(3, 0x8fd0ff, 0.8).strokeCircle(x, y, def.radius)
@@ -80,7 +84,7 @@ function freezeField(def: AbilityDef, x: number, y: number, ctx: AbilityContext)
   for (const e of withinRadius(ctx.enemies(), x, y, def.radius)) ctx.damage(e, def.damage, def.ignoresArmor)
 }
 
-function meteorBarrage(def: AbilityDef, x: number, y: number, ctx: AbilityContext): void {
+function meteor(def: AbilityDef, x: number, y: number, ctx: AbilityContext): void {
   const gap = (def.duration * 1000) / Math.max(1, def.ticks)
   for (let i = 0; i < def.ticks; i++) {
     ctx.scene.time.delayedCall(i * gap, () => {
@@ -95,7 +99,7 @@ function meteorBarrage(def: AbilityDef, x: number, y: number, ctx: AbilityContex
   }
 }
 
-function chainLightning(def: AbilityDef, x: number, y: number, ctx: AbilityContext): void {
+function chain(def: AbilityDef, x: number, y: number, ctx: AbilityContext): void {
   const hit = new Set<Enemy>()
   let fromX = x
   let fromY = y
@@ -121,6 +125,28 @@ function chainLightning(def: AbilityDef, x: number, y: number, ctx: AbilityConte
   }
 
   ctx.scene.tweens.add({ targets: bolts, alpha: 0, duration: 260, onComplete: () => bolts.destroy() })
+}
+
+/**
+ * Server Nuke. Everything on the map dies at once — type, health and armour
+ * are all irrelevant, which is the whole point of it being the rare drop.
+ *
+ * A boss is the exception: deleting one would take the encounter's ending away
+ * from the player, so it takes a large fixed share of its maximum health and
+ * survives to be finished properly.
+ */
+function serverNuke(ctx: AbilityContext): void {
+  ctx.windUp(ctx.nuke.castSeconds, () => {
+    for (const e of ctx.enemies()) {
+      if (!e.alive) continue
+      if (e.def.tier === 'boss') {
+        ctx.damage(e, e.maxHealth * ctx.nuke.bossHealthPercent, true)
+      } else {
+        // Enough to remove anything, whatever its armour, in one go.
+        ctx.damage(e, e.maxHealth + e.def.armor + 1, true)
+      }
+    }
+  })
 }
 
 /**

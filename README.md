@@ -39,6 +39,7 @@ the map.** The splash runs about two seconds and any click or key skips it.
 | Click a built tower | Select it and show its range |
 | Click Cory, then a spot | Send him there; he walks, holds, and fights what comes |
 | Drag across a Scratch Ticket | Reveal the payout. It scratches itself if you don't |
+| `F` | Server Nuke, if it has dropped. Once per run |
 | `Q` / `W` or the HUD slots | Cast a drafted ability (click to place it) |
 | `E` | Haymaker — huge single-target hit with knockback |
 | `R` | Restructure — move a built tower for free |

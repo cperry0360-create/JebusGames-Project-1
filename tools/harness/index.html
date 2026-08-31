@@ -29,7 +29,7 @@ await document.fonts.ready.catch(() => {})
 
 // A fixed run, so every scenario starts from the same hand.
 setRunState({
-  heroId: 'cory', abilities: ['explosion', 'freezeField'],
+  heroId: 'cory', abilities: ['molotov', 'glacier'],
   openingTowers: ['withholding', 'writeoff'],
   reserveTowers: ['escalation', 'rounding', 'extension', 'shelter'], seed: 7,
 })
@@ -64,6 +64,7 @@ const KEYS = {
   Space: { key: ' ', code: 'Space', keyCode: 32 }, KeyR: { key: 'r', code: 'KeyR', keyCode: 82 },
   KeyE: { key: 'e', code: 'KeyE', keyCode: 69 }, KeyQ: { key: 'q', code: 'KeyQ', keyCode: 81 },
   KeyW: { key: 'w', code: 'KeyW', keyCode: 87 }, Escape: { key: 'Escape', code: 'Escape', keyCode: 27 },
+  KeyF: { key: 'f', code: 'KeyF', keyCode: 70 },
 }
 async function key(name) {
   const k = KEYS[name]
@@ -214,10 +215,42 @@ async function run() {
     return
   }
 
+  if (scenario === 'nuke') {
+    // Force the drop, then watch the wind-up and the payload.
+    for (const i of [3, 1]) await build(i, 0)
+    await key('Space')
+    await sleep(4000)
+    note('before drop: enemies=' + g.enemies.length)
+    g.status.rareAbility = 'serverNuke'
+    g.cooldowns.reset('serverNuke')
+    g.announceRareDrop('Server Nuke')
+    await sleep(300); await shot('n-01-drop-banner')
+    await sleep(1800); await shot('n-02-hud-slot')
+    const before = g.enemies.filter((e) => e.alive).length
+    await key('KeyF')
+    // The HUD binds F to the rare slot; if the key is not wired, click it.
+    if (!g.casting) {
+      const hud = game.scene.getScene('Hud')
+      const slot = hud.slots[hud.slots.length - 1]
+      if (slot) await click(slot.hit.x, slot.hit.y)
+    }
+    await sleep(700); await shot('n-03-windup')
+    await sleep(1300); await shot('n-04-windup-late')
+    await sleep(1400); await shot('n-05-after')
+    const after = g.enemies.filter((e) => e.alive).length
+    note(`nuke: ${before} alive -> ${after} alive; casting=${g.casting} rare=${g.status.rareAbility}`)
+    // And it must be gone for good.
+    g.cooldowns.reset('serverNuke')
+    await key('KeyF')
+    await sleep(600)
+    note('second use blocked: ' + (!g.casting))
+    return
+  }
+
   if (scenario === 'ticket') {
     g.status.peanuts = 100
     // Force the ticket into the drafted hand so Q casts it.
-    g.status.abilities = ['scratchTicket', 'freezeField']
+    g.status.abilities = ['scratchTicket', 'glacier']
     g.cooldowns.register('scratchTicket', 1)
     await key('KeyQ')
     await sleep(400); await shot('t-01-card')

@@ -40,6 +40,16 @@ shape of each one — add a field there when you add one here.
 - **The currency is peanuts.** Not gold. `rules.startingPeanuts`,
   `enemies.*.peanutReward`, `towers.*.cost`. A test fails if the word "gold"
   reappears anywhere in the shipped data.
+- **`abilities.*.draftable` is what keeps Server Nuke out of the draft.** The
+  flag sits on the ability rather than in a list of special ids somewhere else,
+  so the draft pool is `filter(draftable)` and nothing has to remember.
+- **`rules.serverNuke` holds the rare drop's whole rule set**: the per-kill
+  chance, which enemy tiers can drop it, the share of max health a boss loses
+  instead of dying, and the cast wind-up.
+- **`enemies.*.tier` is `basic`, `elite` or `boss`.** It keys rules that care
+  about importance rather than behaviour, which `role` already covers. Only
+  elites and bosses can drop the nuke. There is no boss in Phase 1, so that
+  branch is written and unreachable for now.
 - **`abilities.scratchTicket` has a payout *range*, not a payout.**
   `payoutMin`/`payoutMax` are rolled when the card appears, and
   `autoRevealSeconds` is how long it waits before scratching itself. The

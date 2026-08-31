@@ -4,7 +4,7 @@ import { readFileSync, existsSync } from 'node:fs'
 
 const url = (p: string) => new URL(p, import.meta.url)
 const read = (n: string) => JSON.parse(readFileSync(url(`../src/data/${n}.json`), 'utf8'))
-const art = read('art'), abilities = read('abilities'), heroes = read('heroes')
+const art = read('art'), abilities = read('abilities'), heroes = read('heroes'), rules = read('rules')
 const towers = read('towers'), enemies = read('enemies'), map = read('map'), pres = read('presentation')
 
 const ART_KEYS = new Set(Object.keys(art.files))
@@ -157,6 +157,43 @@ test('every icon the UI shows can be sized from the manifest', () => {
   }
 })
 
+test('Server Nuke is a rare drop with real teeth and a real wind-up', () => {
+  const cfg = rules.serverNuke
+  assert.equal(abilities[cfg.abilityId].draftable, false, 'the rare drop must not be draftable')
+  assert.ok(cfg.dropChance > 0 && cfg.dropChance <= 0.05,
+    `a ${(cfg.dropChance * 100).toFixed(1)}% drop is not ultra-rare`)
+  assert.ok(cfg.dropFromTiers.length > 0, 'nothing can drop it')
+  assert.ok(!cfg.dropFromTiers.includes('basic'),
+    'a trash mob dropping it stops it being a reward for a hard fight')
+  assert.ok(cfg.bossHealthPercent > 0.3 && cfg.bossHealthPercent < 1,
+    'a boss must survive it, but only just')
+  assert.ok(cfg.castSeconds >= 1.5 && cfg.castSeconds <= 4,
+    `a ${cfg.castSeconds}s wind-up is not something you watch`)
+})
+
+test('every enemy declares a tier, and at least one can drop the nuke', () => {
+  const tiers = Object.values(enemies).map((e: any) => e.tier)
+  for (const [id, e] of Object.entries(enemies) as [string, any][]) {
+    assert.ok(e.tier, `${id} has no tier`)
+    assert.ok(['basic', 'elite', 'boss'].includes(e.tier), `${id} has an unknown tier "${e.tier}"`)
+  }
+  assert.ok(tiers.some((t) => rules.serverNuke.dropFromTiers.includes(t)),
+    'no enemy in the game can drop the rare ability, so it can never appear')
+})
+
+test('every ability icon is its own painted card', () => {
+  for (const [id, a] of Object.entries(abilities) as [string, any][]) {
+    assert.match(art.files[a.icon], /^abilities\//, `${id} is not using the painted ability art`)
+    const cfg = art.render[a.icon]
+    assert.ok(cfg?.contentWidth && cfg?.contentHeight, `${id}'s icon records no content box`)
+  }
+  // The cards carry their own frames, so every one has to be greyable for the
+  // unavailable state — a plate cannot be dimmed behind them.
+  for (const a of Object.values(abilities) as any[]) {
+    assert.ok(art.greyable.includes(a.icon), `${a.icon} has no greyscale copy for the unavailable state`)
+  }
+})
+
 test('nothing in the shipped data calls the currency gold', () => {
   // The currency is peanuts. A stray "gold" in a flavour line or a field name
   // is the kind of thing that survives a rename and then ships.
@@ -176,30 +213,33 @@ test('the fonts and sound cues are bundled', () => {
   assert.ok(existsSync(url('../public/assets/kenney/License.txt')), 'the art pack license must ship with the art')
 })
 
-test('all six actives exist and each does something distinct', () => {
-  const ids = Object.keys(abilities)
-  assert.deepEqual(new Set(ids), new Set([
-    'explosion', 'twoFighters', 'freezeField', 'meteorBarrage', 'chainLightning', 'scratchTicket',
+test('six draftable actives plus the rare drop, each doing something distinct', () => {
+  const draftable = Object.entries(abilities).filter(([, a]: [string, any]) => a.draftable).map(([id]) => id)
+  assert.deepEqual(new Set(draftable), new Set([
+    'molotov', 'gnomes', 'glacier', 'meteor', 'chain', 'scratchTicket',
   ]))
+  const rare = Object.entries(abilities).filter(([, a]: [string, any]) => !a.draftable).map(([id]) => id)
+  assert.deepEqual(rare, ['serverNuke'], 'Server Nuke is the only ability outside the draft pool')
   const a = abilities
-  assert.ok(a.explosion.damage > 0 && a.explosion.radius > 0, 'Explosion needs damage in an area')
-  assert.ok(a.twoFighters.summonCount === 2, 'Two Fighters summons two')
-  assert.ok(a.twoFighters.duration > 0, 'summons need a lifetime')
-  assert.ok(a.freezeField.slowFactor > 0 && a.freezeField.duration > 0, 'Freeze Field must slow, and linger')
-  assert.ok(a.meteorBarrage.ticks > 1 && a.meteorBarrage.duration > 0, 'a barrage is repeated impacts over time')
-  assert.ok(a.chainLightning.ticks > 1, 'chain lightning needs jumps')
-  assert.ok(a.chainLightning.ignoresArmor, 'lightning should not care about armour')
+  assert.ok(a.molotov.damage > 0 && a.molotov.radius > 0, 'Molotov needs damage in an area')
+  assert.ok(a.gnomes.summonCount === 2, 'Gnomes summons two')
+  assert.ok(a.gnomes.duration > 0, 'summons need a lifetime')
+  assert.ok(a.glacier.slowFactor > 0 && a.glacier.duration > 0, 'Glacier must slow, and linger')
+  assert.ok(a.meteor.ticks > 1 && a.meteor.duration > 0, 'a barrage is repeated impacts over time')
+  assert.ok(a.chain.ticks > 1, 'chain lightning needs jumps')
+  assert.ok(a.chain.ignoresArmor, 'lightning should not care about armour')
   assert.ok(a.scratchTicket.payoutMax > a.scratchTicket.payoutMin,
     'a Scratch Ticket with a fixed payout is not a scratch ticket')
   assert.equal(a.scratchTicket.targeting, 'instant', 'the ticket is not aimed anywhere')
   for (const [id, def] of Object.entries(a) as [string, any][]) {
+    if (!def.draftable) continue
     assert.ok(def.cooldown > 0, `${id} has no cooldown`)
     assert.ok(['ground', 'instant'].includes(def.targeting), `${id} has bad targeting "${def.targeting}"`)
   }
 })
 
 test('ability cooldowns are spread, so they are not interchangeable', () => {
-  const cds = Object.values(abilities).map((a: any) => a.cooldown)
+  const cds = Object.values(abilities).filter((a: any) => a.draftable).map((a: any) => a.cooldown)
   assert.ok(Math.max(...cds) >= Math.min(...cds) * 2, 'every ability has roughly the same cooldown')
 })
 

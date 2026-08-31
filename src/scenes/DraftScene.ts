@@ -14,6 +14,9 @@ const TOWERS = towersData as Record<string, TowerDef>
 const ABILITIES = abilitiesData as Record<string, AbilityDef>
 const DRAFT = draftData as DraftDef
 
+/** The size the ability cards were drawn for. */
+const ABILITY_ICON_H = 64
+
 /**
  * Two steps in one screen: the abilities you drew, then the towers you opened
  * with. Both are shown before the map so the run has a shape before it starts.
@@ -30,7 +33,9 @@ export class DraftScene extends Phaser.Scene {
     const run = runState()
     const rng = makeRng(run.seed)
 
-    const abilities = draftAbilities(Object.keys(ABILITIES), DRAFT.abilitiesDrawn, rng)
+    // Server Nuke is a mid-run drop, never a starting hand.
+    const pool = Object.keys(ABILITIES).filter((id) => ABILITIES[id].draftable)
+    const abilities = draftAbilities(pool, DRAFT.abilitiesDrawn, rng)
     const opening = draftOpeningTowers(
       Object.entries(TOWERS).map(([id, t]) => ({ id, weight: DRAFT.towerWeights[id], archetype: t.archetype })),
       DRAFT,
@@ -57,7 +62,7 @@ export class DraftScene extends Phaser.Scene {
     const isAbilities = this.step === 'abilities'
     const title = isAbilities ? 'YOUR ABILITIES' : 'YOUR OPENING TOWERS'
     const sub = isAbilities
-      ? `Two of ${Object.keys(ABILITIES).length} actives, drawn for this run. They do not change.`
+      ? `Two of ${Object.values(ABILITIES).filter((a) => a.draftable).length} actives, drawn for this run. They do not change.`
       : `Two of ${Object.keys(TOWERS).length} towers. A third arrives after wave ${DRAFT.unlockAfterWave[0]}, a fourth after wave ${DRAFT.unlockAfterWave[1]}.`
 
     this.layer.add(this.add.text(W / 2, 78, title, {
@@ -102,10 +107,9 @@ export class DraftScene extends Phaser.Scene {
     const def = ABILITIES[id]
     const h = 280
     this.layer.add(panel(this, x, y, w, h, { fill: COLOR.panelHi }))
-    // Fitted, not scaled: an ability whose icon is painted art rather than a
-    // 64px pack tile would otherwise draw at its source size.
+    // The cards carry their own frames, so nothing is drawn behind them.
     const icon = this.add.image(x + w / 2, y + 74, def.icon)
-    fitInBox(icon, def.icon, 104)
+    fitInBox(icon, def.icon, ABILITY_ICON_H)
     this.layer.add(icon)
     this.layer.add(this.add.text(x + w / 2, y + 128, def.name.toUpperCase(), {
       fontFamily: FONT_DISPLAY, fontSize: '24px', color: COLOR.ink,
@@ -123,7 +127,7 @@ export class DraftScene extends Phaser.Scene {
     const bits: string[] = [`${def.cooldown}s cooldown`]
     if (def.payoutMax > 0) bits.push(`${def.payoutMin}-${def.payoutMax} peanuts`)
     if (def.damage > 0) bits.push(`${def.damage} damage`)
-    if (def.summonCount > 0) bits.push(`${def.summonCount} fighters`)
+    if (def.summonCount > 0) bits.push(`${def.summonCount} gnomes`)
     if (def.slowFactor > 0) bits.push(`slow to ${Math.round(def.slowFactor * 100)}%`)
     return bits.join('   ·   ')
   }

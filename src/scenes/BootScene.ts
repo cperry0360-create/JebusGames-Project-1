@@ -3,6 +3,8 @@ import displayData from '../data/display.json'
 import { queueArt, SPRITE_KEYS } from '../systems/ArtLoader.ts'
 import { queueSfx } from '../systems/Sfx.ts'
 import { ensureShadowTexture } from '../systems/Presentation.ts'
+import { ensureGrey } from '../systems/Desaturate.ts'
+import { ART } from '../systems/Art.ts'
 import { COLOR, FONT_DISPLAY } from '../ui/Theme.ts'
 
 /** Loads the Kenney art and the synthesised cues, then hands over to the title. */
@@ -48,6 +50,9 @@ export class BootScene extends Phaser.Scene {
     }
     // Every ground shadow reuses one generated texture; build it once here.
     ensureShadowTexture(this)
+    // Greyed copies of anything the UI shows as unavailable, built once rather
+    // than per frame.
+    for (const key of ART.greyable) ensureGrey(this, key)
     this.scene.start('Splash')
   }
 }

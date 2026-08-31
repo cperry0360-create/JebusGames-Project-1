@@ -3,6 +3,7 @@ import displayData from '../data/display.json'
 import { GameScene } from './GameScene.ts'
 import { COLOR, FONT_DISPLAY, FONT_UI, panel } from '../ui/Theme.ts'
 import { fitInBox } from '../systems/Art.ts'
+import { greyKey } from '../systems/Desaturate.ts'
 
 interface SlotView {
   id: string
@@ -12,6 +13,7 @@ interface SlotView {
   icon: Phaser.GameObjects.Image
   timer: Phaser.GameObjects.Text
   key: Phaser.GameObjects.Text
+  hit: Phaser.GameObjects.Rectangle
   x: number
   y: number
 }
@@ -20,7 +22,10 @@ const SHADOW_H = 6
 /** The bar itself; display.hudHeight is the bar plus its shadow, which is the
  *  line the rest of the game has to keep clear. */
 const BAR_H = displayData.hudHeight - SHADOW_H
-const SLOT = 56
+/** Icons are drawn 64px tall, as the art was made for. They carry their own
+ *  frames, so nothing is drawn behind them. */
+const ICON_H = 64
+const SLOT_PITCH = 56
 
 /** UI lives in its own scene so the world can Y-sort freely without the HUD
  *  ever landing in the middle of the sort order. */
@@ -37,6 +42,8 @@ export class HudScene extends Phaser.Scene {
   private startHit!: Phaser.GameObjects.Rectangle
   private slots: SlotView[] = []
   private slotsBuilt = false
+  /** Which abilities the slots were built for, so a rare drop rebuilds them. */
+  private slotKeys = ''
   /** Last drawn values, so a change can be shown rather than just displayed. */
   private lastPeanuts = -1
   private lastLives = -1
@@ -49,6 +56,7 @@ export class HudScene extends Phaser.Scene {
     this.world = this.scene.get('Game') as GameScene
     this.slots = []
     this.slotsBuilt = false
+    this.slotKeys = ''
     this.lastPeanuts = -1
     this.lastLives = -1
     const W = displayData.width
@@ -98,8 +106,15 @@ export class HudScene extends Phaser.Scene {
     this.startHit.setData('box', { x, y, w, h })
   }
 
-  /** Two drafted abilities plus Cory's own two actives, all on cooldown dials. */
+  /** Two drafted abilities, Cory's own two actives, and the rare drop if it
+   *  has turned up. The slots are rebuilt when that set changes. */
   private buildSlots(): void {
+    for (const s of this.slots) {
+      s.frame.destroy(); s.sweep.destroy(); s.icon.destroy()
+      s.timer.destroy(); s.key.destroy(); s.hit.destroy()
+    }
+    this.slots = []
+
     const s = this.world.status
     const hero = this.world.heroDef()
     const defs: Array<{ id: string; kind: SlotView['kind']; icon: string; key: string }> = []
@@ -109,25 +124,32 @@ export class HudScene extends Phaser.Scene {
     })
     defs.push({ id: 'haymaker', kind: 'haymaker', icon: hero.haymaker.icon, key: 'E' })
     defs.push({ id: 'restructure', kind: 'restructure', icon: hero.restructure.icon, key: 'R' })
+    if (s.rareAbility) {
+      const def = this.world.abilityDef(s.rareAbility)
+      if (def) defs.push({ id: s.rareAbility, kind: 'ability', icon: def.icon, key: 'F' })
+    }
+    this.slotKeys = defs.map((d) => d.id).join(',')
 
     const startX = 420
     defs.forEach((d, i) => {
-      const x = startX + i * (SLOT + 10)
-      const y = 8
+      const x = startX + i * SLOT_PITCH
+      const y = 4
       const frame = this.add.graphics()
-      // Sized through the manifest: these icons come from Kenney tiles and
-      // painted towers alike, and a bare scale factor sizes only one of them.
-      const icon = this.add.image(x + SLOT / 2, y + SLOT / 2 - 4, d.icon)
-      fitInBox(icon, d.icon, SLOT - 18)
+      const icon = this.add.image(x + SLOT_PITCH / 2, y + ICON_H / 2, d.icon)
+      fitInBox(icon, d.icon, ICON_H)
       const sweep = this.add.graphics()
-      const timer = this.add.text(x + SLOT / 2, y + SLOT / 2, '', {
-        fontFamily: FONT_DISPLAY, fontSize: '17px', color: COLOR.ink,
+      const timer = this.add.text(x + SLOT_PITCH / 2, y + ICON_H / 2, '', {
+        fontFamily: FONT_DISPLAY, fontSize: '19px', color: COLOR.ink,
+        stroke: '#0d1016', strokeThickness: 5,
       }).setOrigin(0.5)
-      const key = this.add.text(x + SLOT - 6, y + SLOT - 15, d.key, {
-        fontFamily: FONT_UI, fontSize: '11px', color: COLOR.dim,
-      }).setOrigin(1, 0)
+      // Over the card's lower edge rather than under it: the bar is only just
+      // taller than a 64px icon, and below it the letters met the bar's edge.
+      const key = this.add.text(x + SLOT_PITCH / 2, y + ICON_H - 13, d.key, {
+        fontFamily: FONT_UI, fontSize: '12px', color: COLOR.ink,
+        stroke: '#0d1016', strokeThickness: 4,
+      }).setOrigin(0.5, 0)
 
-      const hit = this.add.rectangle(x + SLOT / 2, y + SLOT / 2, SLOT, SLOT, 0xffffff, 0.001)
+      const hit = this.add.rectangle(x + SLOT_PITCH / 2, y + ICON_H / 2, SLOT_PITCH, ICON_H, 0xffffff, 0.001)
         .setInteractive({ useHandCursor: true })
       hit.on('pointerdown', () => {
         if (d.kind === 'ability') this.world.armAbility(d.id)
@@ -135,7 +157,7 @@ export class HudScene extends Phaser.Scene {
         else this.world.armRestructure()
       })
 
-      this.slots.push({ id: d.id, kind: d.kind, frame, sweep, icon, timer, key, x, y })
+      this.slots.push({ id: d.id, kind: d.kind, frame, sweep, icon, timer, key, hit, x, y })
     })
   }
 
@@ -144,7 +166,8 @@ export class HudScene extends Phaser.Scene {
     // Scene creation order is not guaranteed, so wait for the game scene to
     // have populated its status before drawing anything that depends on it.
     if (s.heroName === '') return
-    if (!this.slotsBuilt) {
+    const wanted = [...s.abilities, 'haymaker', 'restructure', s.rareAbility ?? ''].join(',')
+    if (!this.slotsBuilt || wanted !== this.slotKeys + (s.rareAbility ? '' : ',')) {
       this.buildSlots()
       this.slotsBuilt = true
     }
@@ -205,36 +228,56 @@ export class HudScene extends Phaser.Scene {
     else this.startLabel.setText(s.phase === 'won' ? 'CLEARED' : 'OVERRUN')
   }
 
+  /**
+   * The cards carry their own frames, so nothing is drawn behind them. A
+   * cooldown darkens the icon and sweeps a dial over it; an ability that is
+   * not castable at all is swapped for its greyscale copy, which reads as
+   * switched off rather than as merely dim.
+   */
   private drawSlots(s: GameScene['status']): void {
     for (const slot of this.slots) {
       const ready = this.world.cooldowns.ready(slot.id)
+      const usable = this.slotUsable(slot, s)
       const armed = s.pendingAbility === slot.id
         || (slot.kind === 'restructure' && s.mode === 'restructure')
       const left = this.world.cooldowns.secondsLeft(slot.id)
 
-      slot.frame.clear()
-      slot.frame
-        .fillStyle(armed ? 0x3f6a2f : ready ? 0x232c38 : 0x1b2028, 0.98)
-        .fillRoundedRect(slot.x, slot.y, SLOT, SLOT, 8)
-      slot.frame
-        .lineStyle(armed ? 3 : 2, armed ? COLOR.accent : ready ? COLOR.panelEdge : 0x2a323d, 1)
-        .strokeRoundedRect(slot.x, slot.y, SLOT, SLOT, 8)
+      const base = this.world.abilityIcon(slot.id) ?? slot.icon.texture.key
+      const wantKey = usable ? base : greyKey(base)
+      if (this.textures.exists(wantKey) && slot.icon.texture.key !== wantKey) {
+        slot.icon.setTexture(wantKey)
+        fitInBox(slot.icon, base, ICON_H)
+      }
+      slot.icon.setTint(ready && usable ? 0xffffff : 0x8a8a8a)
 
-      slot.icon.setAlpha(ready ? 1 : 0.3)
+      // Armed reads as a glow around the card rather than a plate behind it.
+      slot.frame.clear()
+      if (armed) {
+        slot.frame.lineStyle(3, COLOR.accent, 0.95)
+        slot.frame.strokeRoundedRect(slot.x + 4, slot.y - 2, SLOT_PITCH - 8, ICON_H + 4, 8)
+      }
+
       slot.timer.setText(ready ? '' : String(Math.ceil(left)))
 
-      // Radial sweep so a cooldown reads at a glance.
       slot.sweep.clear()
       if (!ready) {
         const p = this.world.cooldowns.progress(slot.id)
-        slot.sweep.fillStyle(0x000000, 0.45)
+        slot.sweep.fillStyle(0x000000, 0.5)
         slot.sweep.slice(
-          slot.x + SLOT / 2, slot.y + SLOT / 2, SLOT * 0.62,
+          slot.x + SLOT_PITCH / 2, slot.y + ICON_H / 2, ICON_H * 0.42,
           Phaser.Math.DegToRad(-90 + 360 * p), Phaser.Math.DegToRad(270), false,
         )
         slot.sweep.fillPath()
       }
     }
+  }
+
+  /** Castable at all, ignoring cooldown: the hero has to be up for his own
+   *  actives, and a rare drop is only usable while it is held. */
+  private slotUsable(slot: SlotView, s: GameScene['status']): boolean {
+    if (slot.kind !== 'ability') return !s.heroDown
+    if (slot.id === s.rareAbility) return true
+    return s.abilities.includes(slot.id)
   }
 
   private drawHeroBar(s: GameScene['status']): void {

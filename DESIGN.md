@@ -161,18 +161,42 @@ Heroes unlock through the Banner tree.
 
 Cooldown-based, player-triggered, placed anywhere on the map.
 
-1. **Explosion** — big AOE burst *(built)*
-2. **Two Fighters** — summon melee blockers *(built)*
-3. **Freeze Field** — area slow plus damage vulnerability
+1. **Molotov** — big AOE burst *(built)*
+2. **Gnomes** — summon melee blockers *(built)*
+3. **Glacier** — area slow plus damage vulnerability *(built)*
 4. **Poison Cloud** — damage over time, lingers
-5. **Scratch Ticket** — instant peanuts, but the payout is a random range and you must scratch the card to collect it. It auto-reveals after a few seconds so it never stalls a wave.
-6. **Meteor Barrage** — repeated AOE over several seconds
+5. **Scratch Ticket** — instant peanuts, but the payout is a random range and you must scratch the card to collect it. It auto-reveals after a few seconds so it never stalls a wave. *(built)*
+6. **Meteor** — repeated AOE over several seconds *(built)*
 7. **Overclock** — target tower doubles fire rate briefly
 8. **Barricade** — temporary wall, blocks or reroutes
-9. **Chain Lightning** — bounces between enemies
+9. **Chain** — bounces between enemies *(built)*
 10. **Vortex** — pulls enemies backward along the path
 11. **Decoy** — enemies attack a fake target and stop advancing
 12. **Rooted** — vines erupt and hold enemies in place; they take bonus damage while held
+
+### The rare drop: Server Nuke
+
+Outside the draft pool entirely. It cannot be drawn at run start and cannot be
+chosen — it turns up, or it does not.
+
+- **It drops off elites and bosses only**, at a low per-kill chance, and only
+  once in a run. Trash mobs never drop it, so it always arrives as payment for
+  a fight that was actually hard.
+- **The drop is loud**: full-screen flash, its own sound, and a banner across
+  the map. A player must never miss that they have it.
+- **The cast is long on purpose.** A couple of seconds of gathering light and
+  rising shake before anything happens, because the whole point is watching it
+  land rather than seeing the board empty between two frames.
+- **It kills everything on the map** regardless of type, health or armour.
+- **A boss is the exception**: it takes a large fixed share of its maximum
+  health instead of dying outright. Deleting a boss would take the encounter's
+  ending away from the player, which is the one thing this must not do.
+- **One use, then it is gone for the run.** It is spent the moment it is cast,
+  so the wind-up cannot be used twice.
+
+Drop chance, the tiers that can drop it, the boss health percentage and the
+cast time are all in `rules.json`. Which enemies count as elite or boss is a
+`tier` on each enemy, not a list of ids.
 
 ### Passive abilities (10 in pool, draw 1)
 

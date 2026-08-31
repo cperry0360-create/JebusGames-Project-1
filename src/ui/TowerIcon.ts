@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { ART, applyRender, renderFor } from '../systems/Art.ts'
+import { greyKey } from '../systems/Desaturate.ts'
 
 /**
  * One tower portrait, used by the build menu and the draft screen so both
@@ -12,6 +13,8 @@ export function towerIcon(
   baselineY: number,
   spriteKey: string,
   boxHeight: number,
+  /** Draws the greyscale copy, for a tower that cannot be afforded. */
+  grey = false,
 ): Phaser.GameObjects.Image[] {
   const out: Phaser.GameObjects.Image[] = []
 
@@ -25,7 +28,8 @@ export function towerIcon(
   // Same anchor the world uses, so art with padded canvases lines up in the
   // menu exactly as it does on a tile. Only the scale differs.
   const cfg = renderFor(spriteKey)
-  const art = scene.add.image(x, baselineY, spriteKey).setOrigin(cfg.anchorX, cfg.anchorY)
+  const drawKey = grey && scene.textures.exists(greyKey(spriteKey)) ? greyKey(spriteKey) : spriteKey
+  const art = scene.add.image(x, baselineY, drawKey).setOrigin(cfg.anchorX, cfg.anchorY)
   // Fitted by the artwork's own bounds, so a wide tower cannot spill out of
   // its cell and a padded canvas is not drawn smaller than the rest.
   const box = boxHeight * 0.86

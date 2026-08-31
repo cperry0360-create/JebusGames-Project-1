@@ -28,6 +28,8 @@ export const ART = {
   decor: art.decor,
   brand: art.brand,
   generated: art.generated,
+  /** Art the UI draws greyed out when it is unavailable. */
+  greyable: art.greyable,
 }
 
 export const SPRITE_KEYS = Object.keys(art.files)

@@ -30,10 +30,23 @@ export interface MapDef {
   buildSpots: number[][]
 }
 
+export interface ServerNukeDef {
+  abilityId: string
+  /** Chance per qualifying kill, 0-1. */
+  dropChance: number
+  /** Enemy tiers that can drop it at all. */
+  dropFromTiers: string[]
+  /** A boss loses this share of its max health instead of dying. */
+  bossHealthPercent: number
+  /** Wind-up before it fires, in seconds. */
+  castSeconds: number
+}
+
 export interface RulesDef {
   startingPeanuts: number
   startingLives: number
   peanutsPerWaveCleared: number
+  serverNuke: ServerNukeDef
 }
 
 export interface TowerDef {
@@ -64,6 +77,9 @@ export interface EnemyDef {
   name: string
   flavor: string
   role: string
+  /** What kind of thing this is, for rules that key off importance rather
+   *  than behaviour. Only elites and bosses can drop a Server Nuke. */
+  tier: string
   sprite: string
   maxHealth: number
   /** Flat damage subtracted per hit, unless the attacker ignores armour. */
@@ -184,6 +200,8 @@ export interface CreditsDef {
 export interface AbilityDef {
   name: string
   flavor: string
+  /** False for the rare drop, which is never in the run-start pool. */
+  draftable: boolean
   icon: string
   /** 'ground' asks the player for a spot; 'instant' fires immediately. */
   targeting: string
@@ -273,6 +291,8 @@ export interface ArtDef {
     muzzle: string
   }
   decor: string[]
+  /** Keys that get a greyscale copy built at boot, for unavailable states. */
+  greyable: string[]
   brand: {
     studioCard: string
     jebusGames: string

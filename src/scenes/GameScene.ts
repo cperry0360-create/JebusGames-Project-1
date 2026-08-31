@@ -33,7 +33,7 @@ import { Fighter } from '../entities/Fighter.ts'
 import { Projectile } from '../entities/Projectile.ts'
 import { BuildMenu } from '../ui/BuildMenu.ts'
 import { ScratchCard } from '../ui/ScratchCard.ts'
-import { COLOR, FONT_DISPLAY } from '../ui/Theme.ts'
+import { COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 
 const MAP = mapData as MapDef
 const RULES = rulesData as RulesDef
@@ -64,6 +64,8 @@ export interface GameStatus {
   lastStand: boolean
   unlockedTowers: string[]
   abilities: string[]
+  /** The rare drop, once it has dropped. Null before, and again after use. */
+  rareAbility: string | null
   pendingAbility: string | null
   message: string
 }
@@ -79,7 +81,7 @@ export class GameScene extends Phaser.Scene {
     peanuts: 0, lives: 0, wave: 0, waveCount: WAVES.waves.length, waveName: '',
     phase: 'ready', mode: 'normal', enemiesLeft: 0,
     heroName: '', heroHealth: 0, heroMax: 0, heroDown: false, lastStand: false,
-    unlockedTowers: [], abilities: [], pendingAbility: null, message: '',
+    unlockedTowers: [], abilities: [], rareAbility: null, pendingAbility: null, message: '',
   }
 
   readonly cooldowns = new Cooldowns()
@@ -104,6 +106,9 @@ export class GameScene extends Phaser.Scene {
   private selected: Tower | null = null
   private restructuring: Tower | null = null
   private ticket: ScratchCard | null = null
+  /** One Server Nuke per run, dropped or not. */
+  private nukeUsed = false
+  private casting = false
 
   constructor() {
     super('Game')
@@ -153,10 +158,14 @@ export class GameScene extends Phaser.Scene {
     this.status.lastStand = false
     this.status.pendingAbility = null
     this.status.abilities = [...run.abilities]
+    // The rare drop does not survive a run, and is never drafted into one.
+    this.status.rareAbility = null
+    this.nukeUsed = false
     this.status.unlockedTowers = run.openingTowers.slice(0, DRAFT.towersAtStart)
     this.status.message = 'Click a glowing pad to build a tower, then START WAVE.'
 
     for (const id of this.status.abilities) this.cooldowns.register(id, ABILITIES[id].cooldown)
+    this.cooldowns.register(RULES.serverNuke.abilityId, ABILITIES[RULES.serverNuke.abilityId].cooldown)
     this.cooldowns.register('haymaker', heroDef.haymaker.cooldown)
     this.cooldowns.register('restructure', heroDef.restructure.cooldown)
 
@@ -282,6 +291,8 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-SPACE', () => this.startWave())
     this.input.keyboard?.on('keydown-Q', () => this.armAbility(this.status.abilities[0]))
     this.input.keyboard?.on('keydown-W', () => this.armAbility(this.status.abilities[1]))
+    // The rare drop gets its own key, since it arrives after the hand is dealt.
+    this.input.keyboard?.on('keydown-F', () => this.armAbility(this.status.rareAbility ?? undefined))
     this.input.keyboard?.on('keydown-E', () => this.castHaymaker())
     this.input.keyboard?.on('keydown-R', () => {
       if (this.status.phase === 'won' || this.status.phase === 'lost') this.toTitle()
@@ -503,6 +514,8 @@ export class GameScene extends Phaser.Scene {
 
   armAbility(id: string | undefined): void {
     if (!id || !ABILITIES[id]) return
+    if (this.casting) return
+    if (id === RULES.serverNuke.abilityId && this.status.rareAbility !== id) return
     if (!this.cooldowns.ready(id)) {
       this.status.message = `${ABILITIES[id].name} is still on cooldown.`
       return
@@ -520,6 +533,11 @@ export class GameScene extends Phaser.Scene {
   private fireAbility(id: string, x: number, y: number): void {
     const def = ABILITIES[id]
     if (!def || !this.cooldowns.ready(id)) return
+    if (id === RULES.serverNuke.abilityId) {
+      // Spent the moment it is cast, so a long wind-up cannot be used twice.
+      this.nukeUsed = true
+      this.status.rareAbility = null
+    }
     this.cooldowns.start(id)
     play(this, 'sfx-cast', 0.45)
     castAbility(id, def, x, y, {
@@ -529,12 +547,58 @@ export class GameScene extends Phaser.Scene {
       addPeanuts: (amount) => { this.status.peanuts += amount },
       summon: (sx, sy, count, seconds) => this.summonFighters(sx, sy, count, seconds),
       scratchTicket: (payout, seconds) => this.showTicket(payout, seconds),
+      windUp: (seconds, fire) => this.windUp(seconds, fire),
+      nuke: RULES.serverNuke,
       overlayDepth: OVERLAY_DEPTH,
     })
     this.status.mode = 'normal'
     this.status.pendingAbility = null
     this.targetRing.clear()
     this.status.message = `${def.name}!`
+  }
+
+  /**
+   * The long cast. A couple of seconds of gathering light and rising noise
+   * before anything happens, because the player should watch this one land
+   * rather than see the board empty between frames.
+   */
+  private windUp(seconds: number, fire: () => void): void {
+    this.casting = true
+    const W = displayData.width
+    const H = displayData.height
+    const cam = this.cameras.main
+
+    const wash = this.add.graphics().setDepth(TICKET_DEPTH)
+    const label = this.add.text(W / 2, 150, 'SERVER NUKE', {
+      fontFamily: FONT_DISPLAY, fontSize: '38px', color: '#8fd0ff',
+      stroke: '#0d1016', strokeThickness: 8,
+    }).setOrigin(0.5).setDepth(TICKET_DEPTH + 1).setAlpha(0)
+
+    this.tweens.add({ targets: label, alpha: 1, duration: 400 })
+    this.tweens.addCounter({
+      from: 0, to: 1, duration: seconds * 1000,
+      onUpdate: (tw) => {
+        const t = tw.getValue() ?? 0
+        wash.clear()
+        wash.fillStyle(0x8fd0ff, 0.06 + t * 0.5).fillRect(0, 0, W, H)
+        // A ring closing on the map, so the wind-up has somewhere to arrive.
+        wash.lineStyle(4 + t * 10, 0xffffff, t)
+        wash.strokeCircle(W / 2, H / 2, (1 - t) * W * 0.8 + 40)
+        cam.shake(60, 0.002 + t * 0.006)
+      },
+      onComplete: () => {
+        cam.flash(700, 255, 255, 255)
+        cam.shake(520, 0.016)
+        play(this, 'sfx-dadmode', 1)
+        fire()
+        wash.clear()
+        this.tweens.add({
+          targets: label, alpha: 0, delay: 400, duration: 400,
+          onComplete: () => { label.destroy(); wash.destroy() },
+        })
+        this.casting = false
+      },
+    })
   }
 
   /** The ticket sits over the board and never pauses it. */
@@ -834,7 +898,54 @@ export class GameScene extends Phaser.Scene {
 
   private damageEnemy(enemy: Enemy, damage: number, ignoresArmor: boolean): void {
     if (!enemy.alive) return
-    if (enemy.hurt(damage, ignoresArmor)) this.status.peanuts += enemy.def.peanutReward
+    if (enemy.hurt(damage, ignoresArmor)) {
+      this.status.peanuts += enemy.def.peanutReward
+      this.rollRareDrop(enemy)
+    }
+  }
+
+  /**
+   * Server Nuke drops off elites and bosses only, and only once a run. The
+   * roll happens on the kill so the drop is felt as a reward for the fight
+   * that just happened rather than as a wave-clear payout.
+   */
+  private rollRareDrop(enemy: Enemy): void {
+    const cfg = RULES.serverNuke
+    if (this.nukeUsed || this.status.rareAbility !== null) return
+    if (!cfg.dropFromTiers.includes(enemy.def.tier)) return
+    if (Math.random() >= cfg.dropChance) return
+
+    this.status.rareAbility = cfg.abilityId
+    this.cooldowns.reset(cfg.abilityId)
+    this.announceRareDrop(ABILITIES[cfg.abilityId].name)
+  }
+
+  private announceRareDrop(name: string): void {
+    const cam = this.cameras.main
+    cam.flash(520, 180, 255, 220)
+    cam.shake(360, 0.009)
+    play(this, 'sfx-dadmode', 0.9)
+
+    const W = displayData.width
+    const y = displayData.height / 2 - 90
+    const banner = this.add.graphics().setDepth(TICKET_DEPTH)
+    banner.fillStyle(0x0d1016, 0.9).fillRect(0, y - 34, W, 88)
+    banner.lineStyle(3, 0x8fd0ff, 1).lineBetween(0, y - 34, W, y - 34)
+    banner.lineStyle(3, 0x8fd0ff, 1).lineBetween(0, y + 54, W, y + 54)
+
+    const title = this.add.text(W / 2, y - 22, name.toUpperCase(), {
+      fontFamily: FONT_DISPLAY, fontSize: '46px', color: '#8fd0ff',
+      stroke: '#0d1016', strokeThickness: 8,
+    }).setOrigin(0.5, 0).setDepth(TICKET_DEPTH + 1)
+    const sub = this.add.text(W / 2, y + 28, 'RARE DROP — ONE USE', {
+      fontFamily: FONT_UI, fontSize: '15px', color: COLOR.ink,
+    }).setOrigin(0.5, 0).setDepth(TICKET_DEPTH + 1)
+
+    for (const o of [banner, title, sub]) {
+      this.tweens.add({ targets: o, alpha: 0, delay: 2100, duration: 600, onComplete: () => o.destroy() })
+    }
+    this.tweens.add({ targets: title, scale: { from: 0.6, to: 1 }, duration: 320, ease: 'Back.easeOut' })
+    this.status.message = `${name} recovered. One use, then it is gone.`
   }
 
   /** Routes an enemy's melee to whatever is actually holding it. */
@@ -894,6 +1005,14 @@ export class GameScene extends Phaser.Scene {
   /** Exposed for the HUD. */
   abilityDef(id: string): AbilityDef | undefined {
     return ABILITIES[id]
+  }
+
+  /** The un-greyed icon key for a slot, ability or hero active alike. */
+  abilityIcon(id: string): string | undefined {
+    if (ABILITIES[id]) return ABILITIES[id].icon
+    if (id === 'haymaker') return this.hero.def.haymaker.icon
+    if (id === 'restructure') return this.hero.def.restructure.icon
+    return undefined
   }
 
   heroDef(): HeroDef {

@@ -80,8 +80,9 @@ export class BuildMenu {
         .setStrokeStyle(1, 0x3b4552)
 
       const iconX = cx + (CELL_W - 6) / 2
-      const icon = towerIcon(this.scene, iconX, cy + 48, opt.def.sprite, 44)
-      if (!affordable) for (const part of icon) part.setAlpha(0.35)
+      // Unaffordable reads as greyed out, not as faded: a half-alpha tower on
+      // a dark cell just looks like it is behind something.
+      const icon = towerIcon(this.scene, iconX, cy + 48, opt.def.sprite, 44, !affordable)
 
       const cost = this.scene.add
         .text(iconX, cy + 56, `${opt.def.cost}p`, {

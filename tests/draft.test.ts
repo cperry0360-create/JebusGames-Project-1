@@ -87,9 +87,15 @@ test('every unlock lands before the run ends', () => {
   }
 })
 
+/** Exactly what DraftScene offers: everything flagged draftable. */
+const draftPool = (): string[] =>
+  Object.entries(abilities).filter(([, a]: [string, any]) => a.draftable).map(([id]) => id)
+
 test('the ability draft draws the right number without repeats', () => {
-  const ids = Object.keys(abilities)
-  assert.equal(ids.length, 6, 'the pool should hold six actives')
+  // The pool is the draftable abilities, not every ability that exists: the
+  // rare drop lives in the same file and must never be dealt at run start.
+  const ids = draftPool()
+  assert.equal(ids.length, 6, 'the pool should hold six draftable actives')
   for (let seed = 1; seed <= 1000; seed++) {
     const drawn = draftAbilities(ids, draft.abilitiesDrawn, makeRng(seed))
     assert.equal(drawn.length, draft.abilitiesDrawn)
@@ -98,8 +104,19 @@ test('the ability draft draws the right number without repeats', () => {
   }
 })
 
+test('the rare drop can never be dealt at run start', () => {
+  const rare = Object.entries(abilities).filter(([, a]: [string, any]) => !a.draftable).map(([id]) => id)
+  assert.ok(rare.length > 0, 'no rare ability exists to check')
+  const pool = draftPool()
+  for (let seed = 1; seed <= 2000; seed++) {
+    for (const id of draftAbilities(pool, draft.abilitiesDrawn, makeRng(seed))) {
+      assert.ok(!rare.includes(id), `seed ${seed} dealt the rare ability ${id}`)
+    }
+  }
+})
+
 test('every ability in the pool can actually be drawn', () => {
-  const ids = Object.keys(abilities)
+  const ids = draftPool()
   const seen = new Set<string>()
   for (let seed = 1; seed <= 600; seed++) for (const id of draftAbilities(ids, 2, makeRng(seed))) seen.add(id)
   assert.equal(seen.size, ids.length, `only ${seen.size} of ${ids.length} abilities ever appear`)
@@ -107,19 +124,19 @@ test('every ability in the pool can actually be drawn', () => {
 
 test('cooldowns count down, gate casting, and report progress', () => {
   const cd = new Cooldowns()
-  cd.register('explosion', 10)
-  assert.equal(cd.ready('explosion'), true)
-  assert.equal(cd.progress('explosion'), 1)
-  cd.start('explosion')
-  assert.equal(cd.ready('explosion'), false)
-  assert.equal(cd.progress('explosion'), 0)
+  cd.register('molotov', 10)
+  assert.equal(cd.ready('molotov'), true)
+  assert.equal(cd.progress('molotov'), 1)
+  cd.start('molotov')
+  assert.equal(cd.ready('molotov'), false)
+  assert.equal(cd.progress('molotov'), 0)
   cd.tick(5)
-  assert.equal(cd.secondsLeft('explosion'), 5)
-  assert.equal(cd.progress('explosion'), 0.5)
+  assert.equal(cd.secondsLeft('molotov'), 5)
+  assert.equal(cd.progress('molotov'), 0.5)
   cd.tick(5)
-  assert.equal(cd.ready('explosion'), true)
+  assert.equal(cd.ready('molotov'), true)
   cd.tick(100)
-  assert.equal(cd.secondsLeft('explosion'), 0, 'cooldown should not go negative')
+  assert.equal(cd.secondsLeft('molotov'), 0, 'cooldown should not go negative')
 })
 
 test('unknown ability ids are never castable by accident', () => {

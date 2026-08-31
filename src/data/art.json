@@ -37,7 +37,14 @@
     "hero-cory": "hero/hero_cory.png",
     "hero-cory-ultimate": "hero/hero_cory_ultimate.png",
     "ui-title-bg": "ui/title_bg.png",
-    "fighter-body": "kenney/towerDefense_tile291.png"
+    "fighter-body": "kenney/towerDefense_tile291.png",
+    "ability-molotov": "abilities/ability_molotov.png",
+    "ability-gnomes": "abilities/ability_gnomes.png",
+    "ability-glacier": "abilities/ability_glacier.png",
+    "ability-meteor": "abilities/ability_meteor.png",
+    "ability-chain": "abilities/ability_chain.png",
+    "ability-scratchticket": "abilities/ability_scratchticket.png",
+    "ability-servernuke": "abilities/ability_servernuke.png"
   },
   "render": {
     "turret-escalation": {
@@ -145,6 +152,48 @@
       "shadowWidth": 127.3,
       "contentWidth": 900,
       "contentHeight": 588
+    },
+    "ability-molotov": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 166,
+      "contentHeight": 256
+    },
+    "ability-gnomes": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 163,
+      "contentHeight": 256
+    },
+    "ability-glacier": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 164,
+      "contentHeight": 256
+    },
+    "ability-meteor": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 162,
+      "contentHeight": 256
+    },
+    "ability-chain": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 163,
+      "contentHeight": 256
+    },
+    "ability-scratchticket": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 164,
+      "contentHeight": 256
+    },
+    "ability-servernuke": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 166,
+      "contentHeight": 256
     }
   },
   "map": {
@@ -175,5 +224,20 @@
   },
   "generated": {
     "groundShadow": "gen-ground-shadow"
-  }
+  },
+  "greyable": [
+    "turret-ledger",
+    "turret-writeoff",
+    "turret-rounding",
+    "turret-escalation",
+    "turret-extension",
+    "turret-shelter",
+    "ability-molotov",
+    "ability-gnomes",
+    "ability-glacier",
+    "ability-meteor",
+    "ability-chain",
+    "ability-scratchticket",
+    "ability-servernuke"
+  ]
 }
