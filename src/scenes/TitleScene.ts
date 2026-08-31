@@ -8,6 +8,7 @@ import { COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { plateButton, platePanel } from '../ui/Plate.ts'
 import { AudioToggle } from '../ui/AudioToggle.ts'
 import { unlockAudio } from '../systems/Audio.ts'
+import { BUILD_ID } from '../systems/Build.ts'
 import { ART, fitContentHeight, fitInBox } from '../systems/Art.ts'
 import { fitCameraToDesign } from '../ui/FitCamera.ts'
 
@@ -84,6 +85,13 @@ export class TitleScene extends Phaser.Scene {
 
     plateButton(this, W / 2, 622, 300, 62, 'START RUN', () => this.start(), 24)
     plateButton(this, W / 2, 682, 210, 44, 'CREDITS', () => this.scene.start('Credits'), 15, 'secondary')
+
+    // Which build this is, small and out of the way, so a deploy can be
+    // confirmed at a glance without opening devtools on a phone.
+    this.add.text(W - 10, H - 8, BUILD_ID, {
+      fontFamily: FONT_UI, fontSize: '11px', color: COLOR.dim,
+      stroke: '#0d1016', strokeThickness: 3,
+    }).setOrigin(1, 1).setAlpha(0.65)
 
     unlockAudio(this)
 

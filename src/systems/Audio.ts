@@ -2,6 +2,7 @@ import Phaser from 'phaser'
 import type { AudioDef } from '../types.ts'
 import audioData from '../data/audio.json'
 import { loadSave, writeSave } from './Save.ts'
+import { stamped } from './Build.ts'
 
 /**
  * Every sound in the game goes through here.
@@ -64,7 +65,7 @@ export function unlockAudio(scene: Phaser.Scene): void {
 
 export function queueAudio(scene: Phaser.Scene): void {
   for (const [cue, def] of Object.entries(AUDIO.cues)) {
-    scene.load.audio(cue, `${AUDIO.root}${def.file}.${def.format}`)
+    scene.load.audio(cue, stamped(`${AUDIO.root}${def.file}.${def.format}`))
   }
 }
 

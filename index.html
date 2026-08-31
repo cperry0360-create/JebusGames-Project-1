@@ -6,6 +6,15 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
+    <!--
+      GitHub Pages will not let us set Cache-Control, so these are best effort:
+      some browsers honour them for the document, many ignore them. The real
+      mechanism is the version check at the bottom of this file.
+    -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <meta name="build" content="__BUILD_ID__" />
     <title>Courjahan Defense</title>
     <style>
       /* Kenney font package, CC0. Bundled so the game needs no network. */
@@ -74,6 +83,33 @@
   <body>
     <div id="game"></div>
     <div id="boot">LOADING</div>
+    <script>
+      // Self-healing cache check.
+      //
+      // Pages gives no control over headers, so a phone can hold this file for
+      // days. That is worse than stale: the hashed bundle this HTML points at
+      // is deleted by the next deploy, so an old index.html boots to nothing.
+      //
+      // version.json is fetched with no-store, which is a request-level flag
+      // the browser does honour. If it names a different build than the one
+      // stamped into this file, we are stale and reload once. The sessionStorage
+      // guard stops that looping when even the reload comes from cache.
+      (function () {
+        var BUILT = '__BUILD_ID__'
+        if (BUILT === '__BUILD' + '_ID__') return // dev server, nothing to check
+        try {
+          fetch('./version.json', { cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.json() : null })
+            .then(function (v) {
+              if (!v || v.build === BUILT) return
+              if (sessionStorage.getItem('courjahan.reloaded') === v.build) return
+              sessionStorage.setItem('courjahan.reloaded', v.build)
+              location.reload()
+            })
+            .catch(function () {})
+        } catch (e) {}
+      })()
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
