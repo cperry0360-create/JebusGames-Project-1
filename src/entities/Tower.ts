@@ -90,6 +90,12 @@ export class Tower extends Phaser.GameObjects.Container {
     return this.upgrading ? base / UPGRADES.buildFireRate : base
   }
 
+  /** How much of a target's armour this tower gets through. Climbs with tier,
+   *  so upgrading a single-target tower is the reachable answer to armour. */
+  get armorPierce(): number {
+    return statAt(this.def, this.tier, 'armorPierce')
+  }
+
   get splashRadius(): number {
     return statAt(this.def, this.tier, 'splashRadius')
   }

@@ -5,7 +5,7 @@
     "archetype": "single-target",
     "sprite": "turret-ledger",
     "shot": "shot-small",
-    "cost": 70,
+    "cost": 80,
     "range": 150,
     "damage": 11,
     "fireInterval": 0.65,
@@ -18,20 +18,23 @@
     "supportDamageBonus": 0,
     "tiers": [
       {
-        "cost": 63,
+        "cost": 96,
         "buildSeconds": 4.0,
         "damage": 1.8,
         "range": 1.08,
-        "fireInterval": 0.9
+        "fireInterval": 0.9,
+        "armorPierce": 1.6
       },
       {
-        "cost": 112,
+        "cost": 176,
         "buildSeconds": 7.0,
         "damage": 1.85,
         "range": 1.08,
-        "fireInterval": 0.88
+        "fireInterval": 0.88,
+        "armorPierce": 1.6
       }
-    ]
+    ],
+    "armorPierce": 5
   },
   "writeoff": {
     "name": "Write-Off",
@@ -39,7 +42,7 @@
     "archetype": "single-target",
     "sprite": "turret-writeoff",
     "shot": "shot-heavy",
-    "cost": 130,
+    "cost": 150,
     "range": 180,
     "damage": 44,
     "fireInterval": 1.7,
@@ -52,20 +55,21 @@
     "supportDamageBonus": 0,
     "tiers": [
       {
-        "cost": 117,
+        "cost": 180,
         "buildSeconds": 4.0,
         "damage": 1.8,
         "range": 1.08,
         "fireInterval": 0.9
       },
       {
-        "cost": 208,
+        "cost": 330,
         "buildSeconds": 7.0,
         "damage": 1.85,
         "range": 1.08,
         "fireInterval": 0.88
       }
-    ]
+    ],
+    "armorPierce": 0
   },
   "rounding": {
     "name": "Rounding Error",
@@ -73,7 +77,7 @@
     "archetype": "aoe",
     "sprite": "turret-rounding",
     "shot": "shot-rocket",
-    "cost": 110,
+    "cost": 125,
     "range": 132,
     "damage": 9,
     "fireInterval": 1.1,
@@ -86,7 +90,7 @@
     "supportDamageBonus": 0,
     "tiers": [
       {
-        "cost": 99,
+        "cost": 150,
         "buildSeconds": 4.0,
         "damage": 1.8,
         "range": 1.08,
@@ -94,14 +98,15 @@
         "splashRadius": 1.12
       },
       {
-        "cost": 176,
+        "cost": 275,
         "buildSeconds": 7.0,
         "damage": 1.85,
         "range": 1.08,
         "fireInterval": 0.88,
         "splashRadius": 1.12
       }
-    ]
+    ],
+    "armorPierce": 0
   },
   "escalation": {
     "name": "Escalation Clause",
@@ -109,7 +114,7 @@
     "archetype": "aoe",
     "sprite": "turret-escalation",
     "shot": "shot-rocket-big",
-    "cost": 195,
+    "cost": 220,
     "range": 215,
     "damage": 27,
     "fireInterval": 2.4,
@@ -122,7 +127,7 @@
     "supportDamageBonus": 0,
     "tiers": [
       {
-        "cost": 176,
+        "cost": 264,
         "buildSeconds": 4.0,
         "damage": 1.8,
         "range": 1.08,
@@ -130,14 +135,15 @@
         "splashRadius": 1.12
       },
       {
-        "cost": 312,
+        "cost": 484,
         "buildSeconds": 7.0,
         "damage": 1.85,
         "range": 1.08,
         "fireInterval": 0.88,
         "splashRadius": 1.12
       }
-    ]
+    ],
+    "armorPierce": 0
   },
   "extension": {
     "name": "Filing Extension",
@@ -145,9 +151,9 @@
     "archetype": "control",
     "sprite": "turret-extension",
     "shot": "shot-ring",
-    "cost": 90,
+    "cost": 100,
     "range": 142,
-    "damage": 4,
+    "damage": 8,
     "fireInterval": 0.9,
     "projectileSpeed": 620,
     "splashRadius": 0,
@@ -158,22 +164,25 @@
     "supportDamageBonus": 0,
     "tiers": [
       {
-        "cost": 81,
+        "cost": 120,
         "buildSeconds": 4.0,
         "damage": 1.8,
         "range": 1.08,
         "fireInterval": 0.9,
-        "slowSeconds": 1.2
+        "slowSeconds": 1.2,
+        "armorPierce": 1.6
       },
       {
-        "cost": 144,
+        "cost": 220,
         "buildSeconds": 7.0,
         "damage": 1.85,
         "range": 1.08,
         "fireInterval": 0.88,
-        "slowSeconds": 1.2
+        "slowSeconds": 1.2,
+        "armorPierce": 1.6
       }
-    ]
+    ],
+    "armorPierce": 3
   },
   "shelter": {
     "name": "Tax Shelter",
@@ -181,7 +190,7 @@
     "archetype": "support",
     "sprite": "turret-shelter",
     "shot": "shot-pale",
-    "cost": 125,
+    "cost": 140,
     "range": 0,
     "damage": 0,
     "fireInterval": 0,
@@ -194,17 +203,18 @@
     "supportDamageBonus": 0.3,
     "tiers": [
       {
-        "cost": 112,
+        "cost": 168,
         "buildSeconds": 4.0,
         "supportDamageBonus": 1.55,
         "supportRadius": 1.1
       },
       {
-        "cost": 200,
+        "cost": 308,
         "buildSeconds": 7.0,
         "supportDamageBonus": 1.55,
         "supportRadius": 1.1
       }
-    ]
+    ],
+    "armorPierce": 0
   }
 }

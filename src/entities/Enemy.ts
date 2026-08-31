@@ -189,9 +189,9 @@ export class Enemy extends Phaser.GameObjects.Container {
   }
 
   /** Returns true if this hit killed it. */
-  hurt(damage: number, ignoresArmor: boolean, showNumber = true): boolean {
+  hurt(damage: number, ignoresArmor: boolean, showNumber = true, pierce = 0): boolean {
     if (this.status === 'dead') return false
-    const dealt = damageAfterArmor(damage, this.effectiveArmor, ignoresArmor)
+    const dealt = damageAfterArmor(damage, this.effectiveArmor, ignoresArmor, pierce)
     this.health -= dealt
     if (showNumber) floatingDamage(this.scene, this.x, this.centreY, dealt, dealt >= 60)
     this.drawBar()

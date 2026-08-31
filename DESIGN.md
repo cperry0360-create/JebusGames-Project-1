@@ -71,6 +71,50 @@ Each tower has 2 peanut-purchased upgrade tiers plus a branching tier-3 choice b
 
 ---
 
+## Armour and its counterplay
+
+Armour is subtracted flat from every hit, which by construction punishes fast,
+weak towers hardest and barely touches slow, heavy ones. That made the design's
+own rule — *single-target DPS is the armoured counter* — false in the data:
+Withholding is single-target and was keeping 36% of its damage against a brute,
+the same as the AOE towers.
+
+**Towers pierce armour; the amount is the counterplay knob.**
+
+| archetype | pierce at tier 1 | why |
+|---|---|---|
+| single-target | high | the named answer to armour |
+| control | low | visibly working, never the answer |
+| AOE | none | armoured units must stay threatening to an AOE-only board |
+
+Pierce climbs with tier, so **upgrading a single-target tower is the reachable
+answer to an armoured wave** — the player who did not draw the specialist still
+has a route, and it costs peanuts. A hit always lands at least 1, so nothing is
+ever fully immune.
+
+Two other answers exist and both are deliberate: **Write-Off** ignores armour
+outright (the specialist draw), and **Cory's Depreciation** strips up to 7
+armour from anything within 96px of him, which is a positioning decision rather
+than a purchase.
+
+---
+
+## Economy — the player should never be comfortable
+
+Peanuts are scarce relative to what the player wants, always. Three rules keep
+them that way:
+
+1. **The opening buys exactly one tower.** Not a loadout. Opening rich enough
+   to fill the board meant every decision in the run was made during wave 1.
+2. **Upgrades are the main sink.** Tier 2 costs 1.2x the tower, tier 3 costs
+   2.2x, so a fully upgraded tower is roughly 4.4x its build price and a serious
+   commitment to one pad.
+3. **No dead surplus.** Total run income is close to the cost of a maxed board,
+   so the board is only finished as the run ends. A player accumulating peanuts
+   with nothing to buy is a tuning failure, not a player achievement.
+
+---
+
 ## Holdings — off-path buildings
 
 Separate plots, scattered away from the path, visually distinct from tower slots. **They cannot target enemies.** They do not consume tower slots.

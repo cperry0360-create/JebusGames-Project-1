@@ -364,6 +364,12 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** The tower table, exposed so a harness run can price a decision the way
+   *  the build menu does. */
+  get towerDefs(): Record<string, TowerDef> {
+    return TOWERS
+  }
+
   private refreshMenuOptions(): void {
     this.menu.setOptions(this.status.unlockedTowers.map((id) => ({ id, def: TOWERS[id] })))
   }
@@ -1153,11 +1159,11 @@ export class GameScene extends Phaser.Scene {
         if (tower.splashRadius > 0) {
           this.blast(hit.x, hit.y, tower.splashRadius)
           for (const e of withinRadius(this.enemies, hit.x, hit.y, tower.splashRadius)) {
-            this.damageEnemy(e, tower.damage, tower.def.ignoresArmor)
+            this.damageEnemy(e, tower.damage, tower.def.ignoresArmor, tower.armorPierce)
             e.applySlow(tower.def.slowFactor, tower.slowSeconds)
           }
         } else {
-          this.damageEnemy(hit.target, tower.damage, tower.def.ignoresArmor)
+          this.damageEnemy(hit.target, tower.damage, tower.def.ignoresArmor, tower.armorPierce)
           hit.target.applySlow(tower.def.slowFactor, tower.slowSeconds)
         }
       }),
@@ -1181,9 +1187,9 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
-  private damageEnemy(enemy: Enemy, damage: number, ignoresArmor: boolean): void {
+  private damageEnemy(enemy: Enemy, damage: number, ignoresArmor: boolean, pierce = 0): void {
     if (!enemy.alive) return
-    if (enemy.hurt(damage, ignoresArmor)) {
+    if (enemy.hurt(damage, ignoresArmor, true, pierce)) {
       play(this, 'death')
       this.status.peanuts += enemy.def.peanutReward
       this.rollRareDrop(enemy)

@@ -305,11 +305,17 @@ test('killing the boss pays enough to be worth racing for', () => {
 
 // ------------------------------------------------------------------ economy
 
-test('the opening buys a real choice but not the whole board', () => {
+test('the opening buys exactly one tower', () => {
+  // Deliberately one, not a loadout. Opening rich enough to fill the board
+  // meant the player made every decision they would ever make in wave 1 and
+  // then watched the rest of the run.
   const costs = towerList.map(([, t]) => t.cost)
   const cheapest = Math.min(...costs)
-  assert.ok(rules.startingPeanuts >= cheapest * 2, 'cannot open with two towers')
-  assert.ok(rules.startingPeanuts < cheapest * 5, 'the opening is too rich to be a decision')
+  const secondCheapest = [...costs].sort((a, b) => a - b)[1]
+  assert.ok(rules.startingPeanuts >= cheapest,
+    `${rules.startingPeanuts} peanuts cannot buy the ${cheapest} peanut opener`)
+  assert.ok(rules.startingPeanuts < cheapest + secondCheapest,
+    'the opening should not stretch to a second tower')
 })
 
 test('the board grows at a sane rate across the run', () => {

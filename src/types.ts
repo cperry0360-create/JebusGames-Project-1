@@ -81,6 +81,10 @@ export interface TowerDef {
   /** 0 means single target. */
   splashRadius: number
   ignoresArmor: boolean
+  /** Flat armour this tower gets through. Single-target towers pierce; AOE
+   *  towers do not, which is what keeps armoured units threatening to a
+   *  player who brought only AOE. */
+  armorPierce: number
   /** 0 means no slow. 0.45 means targets move at 45% speed. */
   slowFactor: number
   slowSeconds: number
@@ -107,6 +111,7 @@ export interface TowerTier {
   fireInterval?: number
   splashRadius?: number
   slowSeconds?: number
+  armorPierce?: number
   supportRadius?: number
   supportDamageBonus?: number
 }

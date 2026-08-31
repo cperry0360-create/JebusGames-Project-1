@@ -1,5 +1,5 @@
 {
-  "startingPeanuts": 260,
+  "startingPeanuts": 100,
   "startingLives": 20,
   "peanutsPerWaveCleared": 35,
   "serverNuke": {
