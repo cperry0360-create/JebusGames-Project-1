@@ -144,6 +144,15 @@ test('selling always loses money', () => {
   }
 })
 
+test('selling mid-upgrade refunds the tier already paid for', () => {
+  const game = src('scenes/GameScene.ts')
+  assert.match(game, /tower\.tier \+ \(tower\.upgrading \? 1 : 0\)/,
+    'a tier still going up has been paid for and should count towards the refund')
+  // And the panel must quote the same number the sell will actually pay.
+  const quotes = [...game.matchAll(/sellValue\(/g)]
+  assert.equal(quotes.length, 2, 'the quoted refund and the paid refund should be the one rule')
+})
+
 test('a tower under construction fires slower and keeps its old stats', () => {
   const tower = src('entities/Tower.ts')
   assert.match(tower, /this\.upgrading \? base \/ UPGRADES\.buildFireRate : base/,

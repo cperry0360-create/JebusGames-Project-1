@@ -540,7 +540,8 @@ export class GameScene extends Phaser.Scene {
   private openTowerPanel(tower: Tower): void {
     const def = tower.def
     const step = nextStep(def, tower.tier)
-    const refund = sellValue(def, tower.tier, RULES.towerUpgrades.sellRefund)
+    const refund = sellValue(def, tower.tier + (tower.upgrading ? 1 : 0),
+      RULES.towerUpgrades.sellRefund)
     const support = tower.isSupport
 
     const n = (v: number, digits = 0): string => v.toFixed(digits)
@@ -604,7 +605,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private sellTower(tower: Tower): void {
-    const refund = sellValue(tower.def, tower.tier, RULES.towerUpgrades.sellRefund)
+    // A tier that is still going up has already been paid for, so it counts
+    // towards the refund. Otherwise selling mid-build quietly eats the cost of
+    // the upgrade the player just bought.
+    const paidTier = tower.tier + (tower.upgrading ? 1 : 0)
+    const refund = sellValue(tower.def, paidTier, RULES.towerUpgrades.sellRefund)
     this.status.peanuts += refund
     this.build.release(tower.spot)
     this.towers = this.towers.filter((t) => t !== tower)
