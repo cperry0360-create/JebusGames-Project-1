@@ -58,11 +58,13 @@ screenshots are the evidence.
 
 ## Notes
 
-- **A quick tap on a build-menu option does not always build on a small
-  viewport.** `build()` (down, 90ms, up) places a tower at 1400x708 and does
-  not at 844x390; a 300ms press-and-hold works at both, and so does the game
-  itself on a real phone. Scenarios that need a tower on the board should hold
-  the press, as `phone` and `spec` do.
+- **`build()` presses and holds, and returns whether a tower actually
+  appeared.** The build menu previews on press and buys on release, and a
+  90ms down-up does not survive the preview work in between on a small
+  viewport: it places a tower at 1400x708 and not at 844x390. A whole 13-wave
+  `skilled` run was once scored with zero towers on the board because the
+  helper reported success on a press that bought nothing. It checks the tower
+  count now rather than trusting the click.
 
 - **Phaser 3 listens for mouse events, not pointer events.** Dispatching
   `PointerEvent` silently does nothing, which cost an hour the first time.

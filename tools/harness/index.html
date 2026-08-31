@@ -261,16 +261,39 @@ function toScreen(wx, wy) {
   // origin is not the top-left of the screen any more.
   return [(wx - cam.worldView.x) * cam.zoom + cam.x, (wy - cam.worldView.y) * cam.zoom + cam.y]
 }
+/**
+ * Places a tower the way a player does: tap the pad, then press and hold an
+ * option and release.
+ *
+ * The hold is not decoration. The build menu previews on press and buys on
+ * release, and a 90ms down-up does not survive the preview work in between on
+ * a small viewport — a whole 13-wave run was scored with zero towers on the
+ * board because this used `click`. Presses that mean to buy something hold.
+ */
 async function build(spotIndex, towerIndex = 0) {
   const g = scene('Game')
-  const [x, y] = toScreen(SPOTS[spotIndex][0], SPOTS[spotIndex][1])
+  const before = g.towers.length
+  // Look at the pad first. At the default zoom the camera shows about 491x227
+  // of a 1280x720 world, so most pads are off screen and a tap aimed at one
+  // lands outside the canvas entirely — which is how a 13-wave run got scored
+  // with zero towers built and no error anywhere.
+  const [wx, wy] = SPOTS[spotIndex]
+  if (!g.cameras.main.worldView.contains(wx, wy)) {
+    g.cameras.main.centerOn(wx, wy)
+    await sleep(400)
+  }
+  const [x, y] = toScreen(wx, wy)
   await click(x, y)
   if (!g.menu?.isOpen) { note(`build@${spotIndex}: menu did not open`); return false }
   const hit = g.menu.hitAreas?.[towerIndex]
   if (!hit) { note(`build@${spotIndex}: no option ${towerIndex}`); return false }
   const b = hit.getBounds()
-  await click(b.centerX, b.centerY)
-  return true
+  await move(b.centerX, b.centerY)
+  mouse('mousedown', b.centerX, b.centerY)
+  await sleep(300)
+  mouse('mouseup', b.centerX, b.centerY)
+  await sleep(260)
+  return g.towers.length > before
 }
 
 let g = null
@@ -476,11 +499,23 @@ async function run() {
 
   if (scenario === 'ui') {
     await shot('ui-01-fresh')
+    // Look at the pad this scenario works on, or every tap below lands off
+    // the canvas at a phone's zoom.
+    g.cameras.main.centerOn(SPOTS[4][0], SPOTS[4][1])
+    await sleep(500)
     await move(...toScreen(SPOTS[4][0], SPOTS[4][1])); await shot('ui-02-hover-spot')
     await click(...toScreen(SPOTS[4][0], SPOTS[4][1])); await shot('ui-03-menu')
     let hit = g.menu.hitAreas?.[0]
     if (hit) { const b = hit.getBounds(); await move(b.centerX, b.centerY); await shot('ui-04-menu-hover-range') }
-    if (hit) { const b = hit.getBounds(); await click(b.centerX, b.centerY) }
+    // Press and hold, like every other purchase: the menu previews on press
+    // and buys on release.
+    if (hit) {
+      const b = hit.getBounds()
+      mouse('mousedown', b.centerX, b.centerY)
+      await sleep(300)
+      mouse('mouseup', b.centerX, b.centerY)
+      await sleep(260)
+    }
     await shot('ui-05-built')
     note('after build: towers=' + g.towers.length + ' peanuts=' + g.status.peanuts)
     await click(...toScreen(SPOTS[4][0], SPOTS[4][1])); await shot('ui-06-select-tower')
