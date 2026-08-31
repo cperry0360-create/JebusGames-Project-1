@@ -412,6 +412,15 @@ export class GameScene extends Phaser.Scene {
     return TOWERS
   }
 
+  /** Wave and enemy tables, for a harness run reporting on the curve. */
+  get waveDefs(): WavesDef['waves'] {
+    return WAVES.waves
+  }
+
+  get enemyDefs(): Record<string, EnemyDef> {
+    return ENEMIES
+  }
+
   private refreshMenuOptions(): void {
     this.menu.setOptions(this.status.unlockedTowers.map((id) => ({ id, def: TOWERS[id] })))
   }
