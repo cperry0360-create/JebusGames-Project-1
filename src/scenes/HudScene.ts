@@ -6,6 +6,7 @@ import { COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { ART, fitInBox, renderFor } from '../systems/Art.ts'
 import { greyKey } from '../systems/Desaturate.ts'
 import { plateButton, type PlateButton } from '../ui/Plate.ts'
+import { AudioToggle } from '../ui/AudioToggle.ts'
 
 interface SlotView {
   id: string
@@ -71,6 +72,9 @@ export class HudScene extends Phaser.Scene {
 
     // Start button in the opposite corner, standing on its own.
     this.buildStartButton(W - HudScene.START_W - HUD.marginX, HUD.marginY)
+
+    // Mute is reachable mid-run, bottom-left, clear of the ability slots.
+    new AudioToggle(this, 36, displayData.height - 36, 34)
 
     // The hero stays top-right where he was, moved down clear of the button.
     this.heroLabel = this.add.text(W - HUD.marginX, HUD.marginY + 54, '', {

@@ -1,0 +1,236 @@
+{
+  "note": "Every sound the game plays. gain is the cue mixed against the others; maxVoices caps how many copies can sound at once, so a busy wave does not turn to noise.",
+  "credit": "Kenney CC0 audio packs (Impact Sounds, Interface Sounds, UI Audio, RPG Audio). The multi-second stings are synthesised for this project by tools/mksfx.py.",
+  "root": "assets/audio/",
+  "defaultVolume": 0.7,
+  "cues": {
+    "tower-withholding": {
+      "file": "sfx-tower-withholding",
+      "gain": 0.3,
+      "maxVoices": 2,
+      "format": "ogg"
+    },
+    "tower-writeoff": {
+      "file": "sfx-tower-writeoff",
+      "gain": 0.34,
+      "maxVoices": 2,
+      "format": "ogg"
+    },
+    "tower-rounding": {
+      "file": "sfx-tower-rounding",
+      "gain": 0.26,
+      "maxVoices": 2,
+      "format": "ogg"
+    },
+    "tower-escalation": {
+      "file": "sfx-tower-escalation",
+      "gain": 0.34,
+      "maxVoices": 2,
+      "format": "ogg"
+    },
+    "tower-extension": {
+      "file": "sfx-tower-extension",
+      "gain": 0.28,
+      "maxVoices": 2,
+      "format": "ogg"
+    },
+    "hit-a": {
+      "file": "sfx-hit-a",
+      "gain": 0.22,
+      "maxVoices": 3,
+      "format": "ogg"
+    },
+    "hit-b": {
+      "file": "sfx-hit-b",
+      "gain": 0.22,
+      "maxVoices": 3,
+      "format": "ogg"
+    },
+    "hit-c": {
+      "file": "sfx-hit-c",
+      "gain": 0.22,
+      "maxVoices": 3,
+      "format": "ogg"
+    },
+    "death": {
+      "file": "sfx-death",
+      "gain": 0.38,
+      "maxVoices": 3,
+      "format": "ogg"
+    },
+    "hero-hit": {
+      "file": "sfx-hero-hit",
+      "gain": 0.42,
+      "maxVoices": 2,
+      "format": "ogg"
+    },
+    "build": {
+      "file": "sfx-build",
+      "gain": 0.75,
+      "maxVoices": 2,
+      "format": "ogg"
+    },
+    "upgrade": {
+      "file": "sfx-upgrade",
+      "gain": 0.75,
+      "maxVoices": 2,
+      "format": "ogg"
+    },
+    "sell": {
+      "file": "sfx-sell",
+      "gain": 0.65,
+      "maxVoices": 2,
+      "format": "ogg"
+    },
+    "peanuts": {
+      "file": "sfx-peanuts",
+      "gain": 0.55,
+      "maxVoices": 2,
+      "format": "ogg"
+    },
+    "taxed": {
+      "file": "sfx-taxed",
+      "gain": 0.85,
+      "maxVoices": 2,
+      "format": "ogg"
+    },
+    "click": {
+      "file": "sfx-click",
+      "gain": 0.55,
+      "maxVoices": 3,
+      "format": "ogg"
+    },
+    "hover": {
+      "file": "sfx-hover",
+      "gain": 0.28,
+      "maxVoices": 2,
+      "format": "ogg"
+    },
+    "error": {
+      "file": "sfx-error",
+      "gain": 0.6,
+      "maxVoices": 1,
+      "format": "ogg"
+    },
+    "broke": {
+      "file": "sfx-broke",
+      "gain": 0.6,
+      "maxVoices": 1,
+      "format": "ogg"
+    },
+    "open": {
+      "file": "sfx-open",
+      "gain": 0.45,
+      "maxVoices": 2,
+      "format": "ogg"
+    },
+    "close": {
+      "file": "sfx-close",
+      "gain": 0.45,
+      "maxVoices": 2,
+      "format": "ogg"
+    },
+    "wave-start": {
+      "file": "sfx-wave-start",
+      "gain": 0.7,
+      "maxVoices": 1,
+      "format": "ogg"
+    },
+    "wave-cleared": {
+      "file": "sfx-wave-cleared",
+      "gain": 0.75,
+      "maxVoices": 1,
+      "format": "ogg"
+    },
+    "life-lost": {
+      "file": "sfx-life-lost",
+      "gain": 0.8,
+      "maxVoices": 2,
+      "format": "ogg"
+    },
+    "cast-molotov": {
+      "file": "sfx-cast-molotov",
+      "gain": 0.7,
+      "maxVoices": 2,
+      "format": "ogg"
+    },
+    "cast-gnomes": {
+      "file": "sfx-cast-gnomes",
+      "gain": 0.7,
+      "maxVoices": 2,
+      "format": "ogg"
+    },
+    "cast-glacier": {
+      "file": "sfx-cast-glacier",
+      "gain": 0.7,
+      "maxVoices": 2,
+      "format": "ogg"
+    },
+    "cast-meteor": {
+      "file": "sfx-cast-meteor",
+      "gain": 0.75,
+      "maxVoices": 2,
+      "format": "ogg"
+    },
+    "cast-chain": {
+      "file": "sfx-cast-chain",
+      "gain": 0.7,
+      "maxVoices": 2,
+      "format": "ogg"
+    },
+    "cast-scratchticket": {
+      "file": "sfx-cast-scratchticket",
+      "gain": 0.7,
+      "maxVoices": 2,
+      "format": "ogg"
+    },
+    "haymaker": {
+      "file": "sfx-haymaker",
+      "gain": 0.75,
+      "maxVoices": 2,
+      "format": "ogg"
+    },
+    "scratching": {
+      "file": "sfx-scratching",
+      "gain": 0.35,
+      "maxVoices": 2,
+      "format": "ogg"
+    },
+    "cast-servernuke": {
+      "file": "sfx-nuke",
+      "gain": 1.0,
+      "maxVoices": 1,
+      "format": "wav"
+    },
+    "last-stand": {
+      "file": "sfx-dadmode",
+      "gain": 1.0,
+      "maxVoices": 1,
+      "format": "wav"
+    },
+    "boss": {
+      "file": "sfx-boss",
+      "gain": 0.95,
+      "maxVoices": 1,
+      "format": "wav"
+    },
+    "last-life": {
+      "file": "sfx-last-life",
+      "gain": 1.0,
+      "maxVoices": 1,
+      "format": "wav"
+    },
+    "won": {
+      "file": "sfx-won",
+      "gain": 0.9,
+      "maxVoices": 1,
+      "format": "wav"
+    },
+    "lost": {
+      "file": "sfx-lost",
+      "gain": 0.9,
+      "maxVoices": 1,
+      "format": "wav"
+    }
+  }
+}

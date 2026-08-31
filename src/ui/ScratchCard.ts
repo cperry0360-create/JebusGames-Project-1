@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { COLOR, FONT_DISPLAY, FONT_UI } from './Theme.ts'
 import { platePanel } from './Plate.ts'
+import { play } from '../systems/Audio.ts'
 
 /**
  * The Scratch Ticket overlay.
@@ -130,6 +131,8 @@ export class ScratchCard {
     if (fx < 0 || fy < 0 || fx > this.foil.width || fy > this.foil.height) return
 
     this.foil.erase(this.nib, fx - NIB, fy - NIB)
+    // Voice-capped in audio.json, so a fast drag rasps rather than roars.
+    play(this.scene, 'scratching')
     this.hint.setText('keep going')
 
     // Every cell the nib actually covers, not just the one under the pointer.

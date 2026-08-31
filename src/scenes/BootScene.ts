@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import displayData from '../data/display.json'
 import { queueArt, SPRITE_KEYS } from '../systems/ArtLoader.ts'
-import { queueSfx } from '../systems/Sfx.ts'
+import { initAudio, queueAudio } from '../systems/Audio.ts'
 import { ensureShadowTexture } from '../systems/Presentation.ts'
 import { ensureGrey } from '../systems/Desaturate.ts'
 import { ART } from '../systems/Art.ts'
@@ -35,7 +35,8 @@ export class BootScene extends Phaser.Scene {
     })
 
     queueArt(this)
-    queueSfx(this)
+    initAudio()
+    queueAudio(this)
   }
 
   create(): void {

@@ -24,7 +24,7 @@ import { unlockedTowerCount } from '../systems/Draft.ts'
 import { runState } from '../systems/RunState.ts'
 import { castAbility } from '../systems/AbilityRunner.ts'
 import { PRESENTATION, floatingDamage } from '../systems/Presentation.ts'
-import { play } from '../systems/Sfx.ts'
+import { play, playRotating, resetVoices } from '../systems/Audio.ts'
 import { Enemy } from '../entities/Enemy.ts'
 import type { Blocker } from '../entities/Enemy.ts'
 import { Tower } from '../entities/Tower.ts'
@@ -139,6 +139,7 @@ export class GameScene extends Phaser.Scene {
     const run = runState()
     const heroDef = HEROES[run.heroId] ?? HEROES.cory
 
+    resetVoices()
     this.lane = new Path(MAP.waypoints)
     this.build = new BuildSystem(MAP.buildSpots, MAP.spotRadius)
     this.spawner = new WaveSpawner()
@@ -218,9 +219,9 @@ export class GameScene extends Phaser.Scene {
     const { spent, message } = this.sign.tap(this.status.peanuts)
     if (spent > 0) {
       this.status.peanuts -= spent
-      play(this, 'sfx-build', 0.9)
+      play(this, 'peanuts', 0.9)
     } else if (!before && !this.sign.paid) {
-      play(this, 'sfx-leak', 0.35)
+      play(this, 'broke')
     }
     this.status.message = message
   }
@@ -449,7 +450,7 @@ export class GameScene extends Phaser.Scene {
     if (this.status.peanuts < def.cost) {
       // Silence here reads as a broken button, so say what is missing.
       this.status.message = `${def.name} costs ${def.cost} peanuts — ${def.cost - this.status.peanuts} short.`
-      play(this, 'sfx-leak', 0.25)
+      play(this, 'broke')
       return
     }
 
@@ -457,7 +458,7 @@ export class GameScene extends Phaser.Scene {
     this.build.occupy(spot.index)
     this.towers.push(new Tower(this, spot.x, spot.y, id, def, spot.index))
     this.refreshSupport()
-    play(this, 'sfx-build', 0.5)
+    play(this, 'build')
     this.menu.close()
     this.rangeRing.clear()
     this.drawSpots()
@@ -584,7 +585,7 @@ export class GameScene extends Phaser.Scene {
       this.status.rareAbility = null
     }
     this.cooldowns.start(id)
-    play(this, 'sfx-cast', 0.45)
+    play(this, `cast-${id.toLowerCase()}`)
     castAbility(id, def, x, y, {
       scene: this,
       enemies: () => this.enemies,
@@ -634,7 +635,6 @@ export class GameScene extends Phaser.Scene {
       onComplete: () => {
         cam.flash(700, 255, 255, 255)
         cam.shake(520, 0.016)
-        play(this, 'sfx-dadmode', 1)
         fire()
         wash.clear()
         this.tweens.add({
@@ -655,7 +655,7 @@ export class GameScene extends Phaser.Scene {
       onCollect: (amount) => {
         this.status.peanuts += amount
         this.status.message = `Scratch Ticket: ${amount} peanuts.`
-        play(this, 'sfx-cast', 0.5)
+        play(this, 'peanuts')
       },
     })
   }
@@ -694,7 +694,7 @@ export class GameScene extends Phaser.Scene {
       return
     }
     this.cooldowns.start('haymaker')
-    play(this, 'sfx-cast', 0.6)
+    play(this, 'haymaker')
     this.damageEnemy(target, hm.damage, hm.ignoresArmor)
     target.knockBack(hm.knockbackPixels)
     const s = PRESENTATION.shake
@@ -747,7 +747,7 @@ export class GameScene extends Phaser.Scene {
     moving.relocate(spot.x, spot.y, spot.index)
     this.refreshSupport()
     this.cooldowns.start('restructure')
-    play(this, 'sfx-build', 0.5)
+    play(this, 'upgrade')
     this.status.message = `${moving.def.name} restructured. No charge.`
     this.restructuring = null
     this.status.mode = 'normal'
@@ -762,6 +762,7 @@ export class GameScene extends Phaser.Scene {
     this.clearSelection()
     this.spawner.begin(WAVES.waves[this.status.wave])
     this.status.phase = 'wave'
+    play(this, 'wave-start')
     this.status.waveName = WAVES.waves[this.status.wave].name
     this.status.message = `Wave ${this.status.wave + 1}: ${this.status.waveName}`
   }
@@ -770,6 +771,7 @@ export class GameScene extends Phaser.Scene {
     if (this.status.phase !== 'wave') return
     if (!this.spawner.done || this.enemies.length > 0) return
 
+    play(this, 'wave-cleared')
     this.status.peanuts += RULES.peanutsPerWaveCleared
     this.status.wave++
     this.grantTowerUnlocks()
@@ -806,6 +808,7 @@ export class GameScene extends Phaser.Scene {
     this.spotLayer.clear()
 
     const won = phase === 'won'
+    play(this, won ? 'won' : 'lost')
     this.status.message = won ? 'Filed on time. Press R for the title screen.' : 'Overrun. Press R for the title screen.'
 
     this.add.text(displayData.width / 2, displayData.height / 2, won ? 'ALL WAVES CLEARED' : 'OVERRUN', {
@@ -888,7 +891,7 @@ export class GameScene extends Phaser.Scene {
       if (take <= 0) continue
       this.status.peanuts = Math.max(0, this.status.peanuts - take)
       floatingDamage(this, e.x, e.centreY, take, true, `-${take} PEANUTS`)
-      play(this, 'sfx-tax', 0.7)
+      play(this, 'taxed', 0.7)
       this.cameras.main.shake(140, 0.004)
       this.status.message = `${e.def.name} taxed you ${take} peanuts. Spend it or lose it.`
     }
@@ -909,7 +912,7 @@ export class GameScene extends Phaser.Scene {
   private announceBoss(boss: Enemy): void {
     const W = displayData.width
     const H = displayData.height
-    play(this, 'sfx-boss', 0.95)
+    play(this, 'boss', 0.95)
     this.cameras.main.shake(600, 0.007)
 
     // The dialog plate, run the full width of the screen. Its corners scale
@@ -973,6 +976,7 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------- combat
 
   private fire(tower: Tower, target: Enemy): void {
+    play(this, `tower-${tower.id}`)
     const m = tower.muzzle(tower.aimAt(target.x, target.centreY))
     this.shots.push(
       new Projectile(this, m.x, m.y, tower.def.shot, target, tower.def.projectileSpeed, (hit) => {
@@ -1011,8 +1015,13 @@ export class GameScene extends Phaser.Scene {
   private damageEnemy(enemy: Enemy, damage: number, ignoresArmor: boolean): void {
     if (!enemy.alive) return
     if (enemy.hurt(damage, ignoresArmor)) {
+      play(this, 'death')
       this.status.peanuts += enemy.def.peanutReward
       this.rollRareDrop(enemy)
+    } else {
+      // Rotated, because a wave lands far more hits than one sample can carry
+      // before it starts to sound like a stuck key.
+      playRotating(this, 'hit', ['hit-a', 'hit-b', 'hit-c'])
     }
   }
 
@@ -1036,7 +1045,7 @@ export class GameScene extends Phaser.Scene {
     const cam = this.cameras.main
     cam.flash(520, 180, 255, 220)
     cam.shake(360, 0.009)
-    play(this, 'sfx-dadmode', 0.9)
+    play(this, 'cast-servernuke', 0.8)
 
     const W = displayData.width
     const y = displayData.height / 2 - 90
@@ -1068,6 +1077,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private damageHero(damage: number): void {
+    play(this, 'hero-hit')
     const result = this.hero.hurt(damage)
     if (result === 'lastStand') this.announceLastStand()
     if (result === 'down') {
@@ -1081,7 +1091,7 @@ export class GameScene extends Phaser.Scene {
     const s = PRESENTATION.shake
     this.cameras.main.flash(340, 255, 90, 60)
     this.cameras.main.shake(s.lastStandMs, s.lastStandIntensity)
-    play(this, 'sfx-dadmode', 0.85)
+    play(this, 'last-stand', 0.85)
     this.announce(ls.name, COLOR.fire)
     this.status.message = `${ls.name}! Damage doubled, defence gone.`
   }
@@ -1092,7 +1102,9 @@ export class GameScene extends Phaser.Scene {
     enemy.destroy()
     const s = PRESENTATION.shake
     this.cameras.main.shake(s.leakMs, s.leakIntensity)
-    play(this, 'sfx-leak', 0.5)
+    // The last one gets its own sound, so the player hears the difference
+    // without having to read the counter.
+    play(this, this.status.lives <= 0 ? 'last-life' : 'life-lost')
     if (this.status.lives <= 0) {
       this.status.lives = 0
       this.endRun('lost')

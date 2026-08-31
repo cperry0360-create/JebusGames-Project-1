@@ -233,6 +233,28 @@ export interface BrandingDef {
 
 }
 
+/** One sound the game can play. */
+export interface AudioCue {
+  /** Filename under the audio root, without its extension. */
+  file: string
+  /** Where this cue sits in the mix, against the others. Fixed; the player's
+   *  master volume multiplies it. */
+  gain: number
+  /** How many copies may sound at once. A big wave fires far more shots than
+   *  this, and stacked copies of one sample are mud, not volume. */
+  maxVoices: number
+  format: string
+}
+
+export interface AudioDef {
+  note: string
+  credit: string
+  /** Path prefix under the site root. */
+  root: string
+  defaultVolume: number
+  cues: Record<string, AudioCue>
+}
+
 export interface CreditEntry {
   role: string
   name: string

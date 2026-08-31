@@ -3,6 +3,7 @@ import type { TowerDef } from '../types.ts'
 import { towerIcon } from './TowerIcon.ts'
 import { iconPlate, platePanel } from './Plate.ts'
 import { COLOR, FONT_DISPLAY, FONT_UI } from './Theme.ts'
+import { play } from '../systems/Audio.ts'
 
 export interface BuildOption {
   id: string
@@ -69,6 +70,7 @@ export class BuildMenu {
     const x = Phaser.Math.Clamp(worldX - w / 2, 6, cam.width - w - 6)
     const y = Phaser.Math.Clamp(worldY - h - 40, 70, cam.height - h - 6)
 
+    play(this.scene, 'open')
     const c = this.scene.add.container(x, y).setDepth(PANEL_DEPTH)
 
     c.add(platePanel(this.scene, 0, 0, w, h))
@@ -112,6 +114,7 @@ export class BuildMenu {
       // than changing colour under the icon.
       hit.on('pointerover', () => {
         cell.setActive(true)
+        play(this.scene, 'hover')
         onPreview(opt.id)
       })
       hit.on('pointerout', () => {

@@ -6,6 +6,8 @@ import brandingData from '../data/branding.json'
 import { setRunState } from '../systems/RunState.ts'
 import { COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { plateButton, platePanel } from '../ui/Plate.ts'
+import { AudioToggle } from '../ui/AudioToggle.ts'
+import { unlockAudio } from '../systems/Audio.ts'
 import { ART, fitContentHeight, fitInBox } from '../systems/Art.ts'
 
 const HEROES = heroesData as Record<string, HeroDef>
@@ -77,6 +79,11 @@ export class TitleScene extends Phaser.Scene {
 
     plateButton(this, W / 2, 622, 300, 62, 'START RUN', () => this.start(), 24)
     plateButton(this, W / 2, 682, 210, 44, 'CREDITS', () => this.scene.start('Credits'), 15, 'secondary')
+
+    unlockAudio(this)
+
+    // Settings: mute and volume, bottom-left and out of the way.
+    new AudioToggle(this, 44, H - 44)
 
     this.select(this.selectedHero)
   }

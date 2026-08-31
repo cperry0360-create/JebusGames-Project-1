@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { ART, renderFor } from '../systems/Art.ts'
 import { COLOR, FONT_DISPLAY } from './Theme.ts'
+import { play } from '../systems/Audio.ts'
 
 /**
  * The painted arcade chrome: six plates that stand in for every button and
@@ -205,10 +206,20 @@ export function plateButton(
   const light = (v: number): void => on.forEach((p) => p.setTint(v))
   light(REST)
 
+  // Sound lives here rather than at every call site, so a new button is
+  // audible by construction and none can be forgotten.
   let enabled = true
-  hit.on('pointerover', () => { if (enabled) light(0xffffff) })
+  hit.on('pointerover', () => {
+    if (!enabled) return
+    light(0xffffff)
+    play(scene, 'hover')
+  })
   hit.on('pointerout', () => { if (enabled) light(REST) })
-  hit.on('pointerdown', () => { if (enabled) onClick() })
+  hit.on('pointerdown', () => {
+    if (!enabled) return
+    play(scene, 'click')
+    onClick()
+  })
 
   return {
     hit,
