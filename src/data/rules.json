@@ -14,7 +14,14 @@
   },
   "signBribe": {
     "cost": 150,
+    "confirmTitle": "BRIBE THE VILLAGER",
+    "confirmBody": "He is advertising for the competition. This buys you nothing but the sign.",
+    "confirmLabel": "PAY UP",
     "brokeToast": "He wants more peanuts.",
     "paidToast": "The sign has been updated. Democracy."
+  },
+  "towerUpgrades": {
+    "sellRefund": 0.6,
+    "buildFireRate": 0.35
   }
 }

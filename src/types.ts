@@ -48,6 +48,10 @@ export interface ServerNukeDef {
 /** The sign-bribe easter egg. It buys nothing but the sign. */
 export interface SignBribeDef {
   cost: number
+  /** The confirm dialog. Nothing spends peanuts without asking first. */
+  confirmTitle: string
+  confirmBody: string
+  confirmLabel: string
   /** Shown when the player cannot afford him. */
   brokeToast: string
   /** Shown on payment, and on any later tap. */
@@ -60,6 +64,7 @@ export interface RulesDef {
   peanutsPerWaveCleared: number
   serverNuke: ServerNukeDef
   signBribe: SignBribeDef
+  towerUpgrades: TowerUpgradeDef
 }
 
 export interface TowerDef {
@@ -82,8 +87,36 @@ export interface TowerDef {
   /** Non-zero marks a support tower: it never fires, it buffs towers in radius. */
   supportRadius: number
   supportDamageBonus: number
-  /** Tier 1 is instant. Tiers 2 and 3 will use this once upgrades exist. */
-  buildTime: number
+  /** The upgrade path. One entry per tier above the first, so a two-entry
+   *  list means the tower tops out at tier 3. */
+  tiers: TowerTier[]
+}
+
+/**
+ * One step up the upgrade path. Every stat here is a *multiplier* on the
+ * tower's base value, so retuning a base number carries through the whole path
+ * rather than diverging from it at tier 2. A stat the step does not mention is
+ * left alone.
+ */
+export interface TowerTier {
+  cost: number
+  /** How long the tier takes to raise. Tier 1 is instant; these are not. */
+  buildSeconds: number
+  damage?: number
+  range?: number
+  fireInterval?: number
+  splashRadius?: number
+  slowSeconds?: number
+  supportRadius?: number
+  supportDamageBonus?: number
+}
+
+export interface TowerUpgradeDef {
+  /** Share of everything sunk in that selling returns. Below 1, or selling is
+   *  free money. */
+  sellRefund: number
+  /** Fire rate while a tier is going up, as a share of normal. */
+  buildFireRate: number
 }
 
 export interface TaxPhase {

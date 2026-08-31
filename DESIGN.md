@@ -63,7 +63,11 @@ Economy is deliberately absent from this pool. It lives off-path in Holdings. Se
 
 Each tower has 2 peanut-purchased upgrade tiers plus a branching tier-3 choice between two mutually exclusive specializations.
 
+**Built:** the two linear tiers, with stats, costs and build times in `towers.json` as per-tier multipliers on the base stats. Tapping a placed tower opens its panel — current stats, next tier cost, upgrade and sell. Selling returns `rules.towerUpgrades.sellRefund` of everything sunk in. The **branching tier-3 specializations are not built**; tier 3 is currently a single linear step.
+
 **Build time scales with tier.** Tier 1 places instantly. Tier 2 and tier 3 upgrades take time to complete, during which the tower fires at reduced rate. This creates a real mid-wave decision: upgrade now and go soft for eight seconds, or hold and upgrade during the gap.
+
+**Built.** Tier 1 has no entry at all, which is what makes it instant. Tiers 2 and 3 carry `buildSeconds`, and the tower's tier only goes up when the work *finishes*, so it keeps its old stats and its reduced rate for the whole build rather than getting the new ones for free. Rate while building is `rules.towerUpgrades.buildFireRate`.
 
 ---
 
@@ -368,6 +372,19 @@ Art pass, animation, audio, juice. Screen shake, hit pause, damage numbers, part
 Four extended heroes. Classes, each with its own tower pool. Second environment theme. Balance and playtest.
 
 Classes are Phase 4. Not before.
+
+---
+
+## Input
+
+**Nothing in the game may be keyboard-only.** Keys are shortcuts and never the
+only route: every action they reach also has a visible, tappable target. The
+game is played on phones, and a screen whose only way forward is a keypress is
+a screen a player cannot leave.
+
+**Anything that spends peanuts asks first.** A confirm dialog on the dialog
+plate, stating the cost, with a way out. A misjudged tap must never be able to
+empty the player's pockets.
 
 ---
 

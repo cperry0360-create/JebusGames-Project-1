@@ -34,8 +34,10 @@ import { Projectile } from '../entities/Projectile.ts'
 import { BuildMenu } from '../ui/BuildMenu.ts'
 import { ScratchCard } from '../ui/ScratchCard.ts'
 import { COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
-import { platePanel } from '../ui/Plate.ts'
+import { platePanel, plateButton, type PlateButton } from '../ui/Plate.ts'
 import { SignBribe } from '../ui/SignBribe.ts'
+import { Dialog, type DialogOptions, type DialogRow } from '../ui/Dialog.ts'
+import { maxTier, nextStep, sellValue } from '../systems/Upgrades.ts'
 
 const MAP = mapData as MapDef
 const RULES = rulesData as RulesDef
@@ -96,6 +98,8 @@ export class GameScene extends Phaser.Scene {
   private lane!: Path
   private build!: BuildSystem
   private sign!: SignBribe
+  private cancelBtn!: PlateButton
+  private dialog?: Dialog
   private spawner!: WaveSpawner
   private hero!: Hero
   private menu!: BuildMenu
@@ -182,6 +186,16 @@ export class GameScene extends Phaser.Scene {
     this.cooldowns.register('haymaker', heroDef.haymaker.cooldown)
     this.cooldowns.register('restructure', heroDef.restructure.cooldown)
 
+    // Arming an ability or a restructure used to be escapable only with ESC or
+    // a right-click, neither of which exists on a touch device: once armed, the
+    // player was stuck casting. This is the way out.
+    this.cancelBtn = plateButton(this, displayData.width / 2, displayData.height - 96,
+      190, 44, 'CANCEL', () => this.clearSelection(), 16, 'secondary')
+    for (const part of this.cancelBtn.parts) {
+      (part as Phaser.GameObjects.Image).setDepth?.(OVERLAY_DEPTH + 5)
+    }
+    this.setCancelVisible(false)
+
     this.menu = new BuildMenu(this, [])
     this.refreshMenuOptions()
     this.setupInput()
@@ -215,15 +229,52 @@ export class GameScene extends Phaser.Scene {
    * so the only thing that changes is the sign and the size of your wallet.
    */
   private tapSign(): void {
-    const before = this.sign.paid
-    const { spent, message } = this.sign.tap(this.status.peanuts)
-    if (spent > 0) {
-      this.status.peanuts -= spent
-      play(this, 'peanuts', 0.9)
-    } else if (!before && !this.sign.paid) {
-      play(this, 'broke')
+    const cfg = RULES.signBribe
+    switch (this.sign.tap(this.status.peanuts)) {
+      case 'done':
+        this.status.message = cfg.paidToast
+        return
+      case 'broke':
+        play(this, 'broke')
+        this.status.message = cfg.brokeToast
+        return
+      default:
+        break
     }
-    this.status.message = message
+
+    // Ask before spending. This used to take the peanuts on the tap itself.
+    this.openDialog({
+      title: cfg.confirmTitle,
+      subtitle: cfg.confirmBody,
+      rows: [
+        { label: 'Cost', value: `${cfg.cost} peanuts`, accent: true },
+        { label: 'You have', value: `${this.status.peanuts} peanuts` },
+        { label: 'You get', value: 'A better sign' },
+      ],
+      confirm: {
+        label: cfg.confirmLabel,
+        onPick: () => {
+          // Re-check: the tax or a tower could have taken the peanuts while the
+          // dialog was open, since the wave keeps running underneath it.
+          if (this.status.peanuts < cfg.cost) {
+            play(this, 'broke')
+            this.status.message = cfg.brokeToast
+            return
+          }
+          this.status.peanuts -= cfg.cost
+          this.sign.pay()
+          play(this, 'peanuts', 0.9)
+          this.status.message = cfg.paidToast
+        },
+      },
+    })
+  }
+
+  /** One dialog at a time, and it owns every tap while it is up. */
+  private openDialog(opts: DialogOptions): void {
+    this.dialog?.close()
+    this.dialog = new Dialog(this, displayData.width / 2, displayData.height / 2,
+      TICKET_DEPTH, opts)
   }
 
   private get placing(): boolean {
@@ -321,9 +372,16 @@ export class GameScene extends Phaser.Scene {
     this.input.mouse?.disableContextMenu()
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.updateHover(p))
     this.input.on('pointerdown', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
-      if (this.menu.isOpen && this.menu.ownsAny(over)) return
+      // Asked of the hit list, not of whether the menu is still open: the
+      // tap that picks a tower closes the menu before this handler runs.
+      if (this.menu.ownsAny(over)) return
       // The ticket takes its own drags; the world must not also act on them.
       if (this.ticket?.active && this.ticket.owns(over)) return
+      // A dialog is modal: nothing behind it may act on a tap, or a confirm
+      // could be answered and a tower built by the same click. Asked of the
+      // captured hit list rather than of the dialog's state, because the tap
+      // that closes a dialog reaches this handler after it has already gone.
+      if (this.dialog?.owns(over)) return
       this.onClick(p)
     })
     this.input.keyboard?.on('keydown-ESC', () => this.clearSelection())
@@ -469,12 +527,107 @@ export class GameScene extends Phaser.Scene {
     this.menu.close()
     this.drawSpots()
     this.selected = tower
-    this.showTowerRange(tower.x, tower.y, tower.def)
+    this.showTowerRange(tower.x, tower.y, tower)
     const bonus = tower.supportBonus > 0 ? `  (+${Math.round(tower.supportBonus * 100)}% sheltered)` : ''
     this.status.message = `${tower.def.name} — ${tower.def.flavor}${bonus}`
+    this.openTowerPanel(tower)
+  }
+
+  /**
+   * What a built tower is for. Tapping one used to print a sentence and do
+   * nothing, which left the player with peanuts and no way to spend them.
+   */
+  private openTowerPanel(tower: Tower): void {
+    const def = tower.def
+    const step = nextStep(def, tower.tier)
+    const refund = sellValue(def, tower.tier, RULES.towerUpgrades.sellRefund)
+    const support = tower.isSupport
+
+    const n = (v: number, digits = 0): string => v.toFixed(digits)
+    const rows: DialogRow[] = [{ label: 'Tier', value: `${tower.tier} of ${maxTier(def)}` }]
+    if (support) {
+      rows.push({ label: 'Nearby damage', value: `+${Math.round(tower.supportDamageBonus * 100)}%` })
+      rows.push({ label: 'Radius', value: n(tower.supportRadius) })
+    } else {
+      rows.push({ label: 'Damage', value: n(tower.damage, 1) })
+      rows.push({ label: 'Range', value: n(tower.range) })
+      rows.push({ label: 'Rate', value: `${n(1 / tower.fireInterval, 2)}/s` })
+      if (tower.splashRadius > 0) rows.push({ label: 'Splash', value: n(tower.splashRadius) })
+    }
+
+    if (tower.upgrading) {
+      rows.push({ label: 'Upgrading', value: `${Math.round(tower.buildProgress * 100)}%`, accent: true })
+    } else if (step) {
+      rows.push({ label: `Tier ${tower.tier + 1}`, value: `${step.cost} peanuts`, accent: true })
+      rows.push({ label: 'Takes', value: `${step.buildSeconds}s at reduced rate` })
+    }
+    rows.push({ label: 'Sell for', value: `${refund} peanuts` })
+
+    // The upgrade button is the confirm slot; selling is its own button, so
+    // neither can be hit by aiming for the other.
+    const affordable = step !== null && this.status.peanuts >= step.cost
+    this.openDialog({
+      title: def.name.toUpperCase(),
+      subtitle: def.flavor,
+      rows,
+      confirm: step && !tower.upgrading
+        ? {
+          label: 'UPGRADE',
+          enabled: affordable,
+          onPick: () => this.upgradeTower(tower),
+        }
+        : undefined,
+      cancelLabel: 'CLOSE',
+      // Barely dimmed: this one can be opened mid-wave, and the player still
+      // needs to see what is walking down the lane behind it.
+      dim: 0.22,
+      extra: {
+        label: 'SELL',
+        onPick: () => this.sellTower(tower),
+      },
+    })
+  }
+
+  private upgradeTower(tower: Tower): void {
+    const step = nextStep(tower.def, tower.tier)
+    if (!step || tower.upgrading) return
+    if (this.status.peanuts < step.cost) {
+      play(this, 'broke')
+      this.status.message = `Tier ${tower.tier + 1} costs ${step.cost} peanuts — ${step.cost - this.status.peanuts} short.`
+      return
+    }
+    this.status.peanuts -= step.cost
+    tower.beginUpgrade()
+    play(this, 'upgrade')
+    this.status.message =
+      `${tower.def.name} going to tier ${tower.tier + 1}. It fires slowly for ${step.buildSeconds}s.`
+  }
+
+  private sellTower(tower: Tower): void {
+    const refund = sellValue(tower.def, tower.tier, RULES.towerUpgrades.sellRefund)
+    this.status.peanuts += refund
+    this.build.release(tower.spot)
+    this.towers = this.towers.filter((t) => t !== tower)
+    tower.destroy()
+    if (this.selected === tower) this.selected = null
+    this.refreshSupport()
+    this.refreshMenuOptions()
+    this.rangeRing.clear()
+    this.drawSpots()
+    play(this, 'sell')
+    this.status.message = `Sold for ${refund} peanuts.`
+  }
+
+  /** The cancel button only exists while there is something to cancel. */
+  private setCancelVisible(on: boolean): void {
+    for (const part of this.cancelBtn.parts) {
+      (part as Phaser.GameObjects.Image).setVisible?.(on)
+    }
+    this.cancelBtn.hit.input!.enabled = on
   }
 
   private clearSelection(): void {
+    this.setCancelVisible(false)
     this.menu.close()
     this.selected = null
     this.restructuring = null
@@ -487,7 +640,9 @@ export class GameScene extends Phaser.Scene {
     this.status.message = this.idleHint()
   }
 
-  private showTowerRange(x: number, y: number, def: TowerDef): void {
+  /** Takes a Tower or a bare TowerDef: a built tower reports the range its
+   *  tier actually gives it, a menu preview reports tier 1. */
+  private showTowerRange(x: number, y: number, def: { supportRadius: number; range: number }): void {
     const support = def.supportRadius > 0
     this.showRange(x, y, support ? def.supportRadius : def.range, support ? 0x8fd07a : 0xf6ecd9)
   }
@@ -514,7 +669,7 @@ export class GameScene extends Phaser.Scene {
     const tower = this.towerAt(p.worldX, p.worldY)
     if (tower) {
       if (this.hoverSpot) { this.hoverSpot = null; this.drawSpots() }
-      if (!this.selected) this.showTowerRange(tower.x, tower.y, tower.def)
+      if (!this.selected) this.showTowerRange(tower.x, tower.y, tower)
       return
     }
     if (!this.selected) this.rangeRing.clear()
@@ -533,7 +688,7 @@ export class GameScene extends Phaser.Scene {
       return `${this.hero.def.name} is out for this encounter. The towers are on their own.`
     }
     if (this.build.freeSpots().length === 0) {
-      return 'Every pad is built. Press R to restructure, or START WAVE.'
+      return 'Every pad is built. Tap a tower to upgrade it, or START WAVE.'
     }
     if (this.status.phase === 'ready') {
       return this.towers.length === 0
@@ -573,6 +728,7 @@ export class GameScene extends Phaser.Scene {
     this.menu.close()
     this.status.mode = 'targeting'
     this.status.pendingAbility = id
+    this.setCancelVisible(true)
     this.status.message = `${ABILITIES[id].name}: click where you want it.`
   }
 
@@ -718,6 +874,7 @@ export class GameScene extends Phaser.Scene {
     this.menu.close()
     this.status.mode = 'restructure'
     this.restructuring = null
+    this.setCancelVisible(true)
     this.drawSpots()
     this.status.message = `${this.hero.def.restructure.name}: click a tower, then a free spot.`
   }
@@ -730,7 +887,7 @@ export class GameScene extends Phaser.Scene {
         return
       }
       this.restructuring = tower
-      this.showTowerRange(tower.x, tower.y, tower.def)
+      this.showTowerRange(tower.x, tower.y, tower)
       this.status.message = `Moving ${tower.def.name}. Click a free spot.`
       return
     }
@@ -809,16 +966,21 @@ export class GameScene extends Phaser.Scene {
 
     const won = phase === 'won'
     play(this, won ? 'won' : 'lost')
-    this.status.message = won ? 'Filed on time. Press R for the title screen.' : 'Overrun. Press R for the title screen.'
+    this.status.message = won ? 'Filed on time.' : 'Overrun.'
 
     this.add.text(displayData.width / 2, displayData.height / 2, won ? 'ALL WAVES CLEARED' : 'OVERRUN', {
       fontFamily: FONT_DISPLAY, fontSize: '64px',
       color: won ? COLOR.ink : COLOR.fire, stroke: '#0d1016', strokeThickness: 8,
     }).setOrigin(0.5).setDepth(OVERLAY_DEPTH + 10)
 
-    this.add.text(displayData.width / 2, displayData.height / 2 + 58, 'Press R for the title screen', {
-      fontFamily: FONT_DISPLAY, fontSize: '20px', color: COLOR.ink,
-    }).setOrigin(0.5).setDepth(OVERLAY_DEPTH + 10)
+    // A button, not a keypress. The run-end screen used to say "press R" and
+    // nothing else, which on a touch device is a dead end with no way out of
+    // the game at all.
+    const back = plateButton(this, displayData.width / 2, displayData.height / 2 + 76,
+      300, 62, 'BACK TO TITLE', () => this.toTitle(), 22)
+    for (const part of back.parts) {
+      (part as Phaser.GameObjects.Image).setDepth?.(OVERLAY_DEPTH + 11)
+    }
   }
 
   private toTitle(): void {
@@ -865,7 +1027,7 @@ export class GameScene extends Phaser.Scene {
     )
     this.hero.tick(dt, this.enemies, (e, dmg) => this.damageEnemy(e, dmg, this.hero.def.ignoresArmor))
 
-    if (this.selected) this.showTowerRange(this.selected.x, this.selected.y, this.selected.def)
+    if (this.selected) this.showTowerRange(this.selected.x, this.selected.y, this.selected)
     else if (this.heroSelected) {
       this.showRange(this.hero.x, this.hero.y, this.hero.attackRange, 0x4fa3e3)
     }
@@ -981,15 +1143,15 @@ export class GameScene extends Phaser.Scene {
     this.shots.push(
       new Projectile(this, m.x, m.y, tower.def.shot, target, tower.def.projectileSpeed, (hit) => {
         this.impactSpark(hit.x, hit.target.centreY)
-        if (tower.def.splashRadius > 0) {
-          this.blast(hit.x, hit.y, tower.def.splashRadius)
-          for (const e of withinRadius(this.enemies, hit.x, hit.y, tower.def.splashRadius)) {
+        if (tower.splashRadius > 0) {
+          this.blast(hit.x, hit.y, tower.splashRadius)
+          for (const e of withinRadius(this.enemies, hit.x, hit.y, tower.splashRadius)) {
             this.damageEnemy(e, tower.damage, tower.def.ignoresArmor)
-            e.applySlow(tower.def.slowFactor, tower.def.slowSeconds)
+            e.applySlow(tower.def.slowFactor, tower.slowSeconds)
           }
         } else {
           this.damageEnemy(hit.target, tower.damage, tower.def.ignoresArmor)
-          hit.target.applySlow(tower.def.slowFactor, tower.def.slowSeconds)
+          hit.target.applySlow(tower.def.slowFactor, tower.slowSeconds)
         }
       }),
     )
@@ -1118,8 +1280,8 @@ export class GameScene extends Phaser.Scene {
       let bonus = 0
       for (const s of this.towers) {
         if (!s.isSupport || s === t) continue
-        if (Phaser.Math.Distance.Between(s.x, s.y, t.x, t.y) <= s.def.supportRadius) {
-          bonus += s.def.supportDamageBonus
+        if (Phaser.Math.Distance.Between(s.x, s.y, t.x, t.y) <= s.supportRadius) {
+          bonus += s.supportDamageBonus
         }
       }
       t.supportBonus = bonus

@@ -2,6 +2,12 @@
 
 **Date:** 2026-08-31 · **Build:** `main` @ `af0a159` · **Phase:** 1
 
+> **Update — findings #1 and #3 are fixed.** Tower upgrades, selling and a
+> tower panel now exist, which closes the economy hole this report opened with,
+> and gives a selected tower something to do. Two blocking input bugs found
+> after this audit are fixed too: the run-end screen was keyboard-only, and the
+> sign bribe spent peanuts with no confirmation. The rest of the list stands.
+
 Played through in the headless-Chromium harness (`tools/harness/`), which runs
 the shipping source and drives it with real mouse and keyboard events. Fifteen
 scenarios, ~60 screenshots: every screen, a full wave, a twelve-wave run, the

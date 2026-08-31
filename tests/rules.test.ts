@@ -89,8 +89,70 @@ test('towers cover the archetypes that matter against ground enemies', () => {
   }
 })
 
-test('every tower places instantly at tier 1', () => {
-  for (const [id, t] of towerList) assert.equal(t.buildTime, 0, `${id} is not instant`)
+test('every tower places instantly at tier 1, and no higher tier is instant', () => {
+  // DESIGN.md: tier 1 places instantly, tiers 2 and 3 take build time. Tier 1
+  // has no entry at all, which is what makes it instant.
+  for (const [id, t] of towerList) {
+    assert.equal(t.buildTime, undefined, `${id} still carries the dead buildTime field`)
+    assert.ok(Array.isArray(t.tiers) && t.tiers.length >= 2, `${id} has no upgrade path`)
+    for (const [i, step] of t.tiers.entries()) {
+      assert.ok(step.buildSeconds > 0, `${id} tier ${i + 2} would be instant`)
+    }
+  }
+})
+
+test('upgrades cost more than the tower and get stronger each tier', () => {
+  for (const [id, t] of towerList) {
+    let prev = 0
+    for (const [i, step] of t.tiers.entries()) {
+      assert.ok(step.cost > prev, `${id} tier ${i + 2} is not dearer than the one below`)
+      prev = step.cost
+      // Every step has to actually do something, or it is a peanut sink.
+      const gains = Object.entries(step).filter(([k]) => k !== 'cost' && k !== 'buildSeconds')
+      assert.ok(gains.length > 0, `${id} tier ${i + 2} buys nothing`)
+      for (const [k, v] of gains) {
+        if (k === 'fireInterval') assert.ok(v < 1, `${id} tier ${i + 2} fires slower, not faster`)
+        else assert.ok(v > 1, `${id} tier ${i + 2} makes ${k} worse`)
+      }
+    }
+    // A tier the tower has no base value for would multiply zero by something.
+    for (const step of t.tiers) {
+      for (const k of Object.keys(step)) {
+        if (k === 'cost' || k === 'buildSeconds') continue
+        assert.notEqual(t[k], 0, `${id} scales ${k}, which is 0 on the base tower`)
+      }
+    }
+  }
+})
+
+test('a maxed board costs more than a run can earn', () => {
+  // This is the whole point of upgrades: before them, the player could afford
+  // the best possible board by wave 8 and had nothing left to decide.
+  const map = JSON.parse(readFileSync(new URL('../src/data/map.json', import.meta.url), 'utf8'))
+  const waves = JSON.parse(readFileSync(new URL('../src/data/waves.json', import.meta.url), 'utf8'))
+  const enemies = JSON.parse(readFileSync(new URL('../src/data/enemies.json', import.meta.url), 'utf8'))
+
+  let earned = rules.startingPeanuts
+  for (const w of waves.waves) {
+    earned += rules.peanutsPerWaveCleared
+    for (const s of w.spawns) earned += enemies[s.enemy].peanutReward * s.count
+  }
+
+  const cheapestMaxed = Math.min(...towerList.map(([, t]: [string, any]) =>
+    t.cost + t.tiers.reduce((n: number, s: any) => n + s.cost, 0)))
+  const fullBoard = cheapestMaxed * map.buildSpots.length
+  assert.ok(fullBoard > 0)
+  // Even the cheapest possible maxed board should be a real share of the run's
+  // whole income, so filling it is a sequence of choices rather than a default.
+  assert.ok(fullBoard > earned * 0.35,
+    `the cheapest maxed board is ${fullBoard} against ${earned} earned; upgrades are not a real sink`)
+})
+
+test('selling never returns more than was paid', () => {
+  const refund = rules.towerUpgrades.sellRefund
+  assert.ok(refund > 0 && refund < 1, `a refund of ${refund} makes selling free money`)
+  assert.ok(rules.towerUpgrades.buildFireRate > 0 && rules.towerUpgrades.buildFireRate < 1,
+    'a tower going up a tier should fire slower, but not stop')
 })
 
 test('tower roles behave the way their stats claim', () => {

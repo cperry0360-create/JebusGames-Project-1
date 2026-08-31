@@ -45,7 +45,15 @@ export class BuildMenu {
     return this.container !== undefined
   }
 
-  /** True when the pointer is over any part of the menu. */
+  /**
+   * True when this tap belongs to the menu, so the world ignores it.
+   *
+   * The list is kept after the menu closes, deliberately. Phaser hit-tests
+   * before it dispatches, so picking a tower reaches the cell first — which
+   * closes the menu — and then reaches the scene's own handler with the menu
+   * already gone. That let the same click build a tower and then re-open a
+   * menu, or open the new tower's panel, on the pad underneath.
+   */
   ownsAny(objects: Phaser.GameObjects.GameObject[]): boolean {
     return objects.some((o) => this.hitAreas.includes(o as Phaser.GameObjects.Rectangle))
   }
@@ -136,7 +144,7 @@ export class BuildMenu {
   close(onPreview?: (id: string | null) => void): void {
     this.container?.destroy(true)
     this.container = undefined
-    this.hitAreas = []
+    // hitAreas is not cleared here: see ownsAny. open() replaces it.
     onPreview?.(null)
   }
 }

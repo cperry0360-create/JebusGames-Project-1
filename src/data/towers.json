@@ -16,7 +16,22 @@
     "slowSeconds": 0,
     "supportRadius": 0,
     "supportDamageBonus": 0,
-    "buildTime": 0
+    "tiers": [
+      {
+        "cost": 63,
+        "buildSeconds": 4.0,
+        "damage": 1.8,
+        "range": 1.08,
+        "fireInterval": 0.9
+      },
+      {
+        "cost": 112,
+        "buildSeconds": 7.0,
+        "damage": 1.85,
+        "range": 1.08,
+        "fireInterval": 0.88
+      }
+    ]
   },
   "writeoff": {
     "name": "Write-Off",
@@ -35,7 +50,22 @@
     "slowSeconds": 0,
     "supportRadius": 0,
     "supportDamageBonus": 0,
-    "buildTime": 0
+    "tiers": [
+      {
+        "cost": 117,
+        "buildSeconds": 4.0,
+        "damage": 1.8,
+        "range": 1.08,
+        "fireInterval": 0.9
+      },
+      {
+        "cost": 208,
+        "buildSeconds": 7.0,
+        "damage": 1.85,
+        "range": 1.08,
+        "fireInterval": 0.88
+      }
+    ]
   },
   "rounding": {
     "name": "Rounding Error",
@@ -54,7 +84,24 @@
     "slowSeconds": 0,
     "supportRadius": 0,
     "supportDamageBonus": 0,
-    "buildTime": 0
+    "tiers": [
+      {
+        "cost": 99,
+        "buildSeconds": 4.0,
+        "damage": 1.8,
+        "range": 1.08,
+        "fireInterval": 0.9,
+        "splashRadius": 1.12
+      },
+      {
+        "cost": 176,
+        "buildSeconds": 7.0,
+        "damage": 1.85,
+        "range": 1.08,
+        "fireInterval": 0.88,
+        "splashRadius": 1.12
+      }
+    ]
   },
   "escalation": {
     "name": "Escalation Clause",
@@ -73,7 +120,24 @@
     "slowSeconds": 0,
     "supportRadius": 0,
     "supportDamageBonus": 0,
-    "buildTime": 0
+    "tiers": [
+      {
+        "cost": 176,
+        "buildSeconds": 4.0,
+        "damage": 1.8,
+        "range": 1.08,
+        "fireInterval": 0.9,
+        "splashRadius": 1.12
+      },
+      {
+        "cost": 312,
+        "buildSeconds": 7.0,
+        "damage": 1.85,
+        "range": 1.08,
+        "fireInterval": 0.88,
+        "splashRadius": 1.12
+      }
+    ]
   },
   "extension": {
     "name": "Filing Extension",
@@ -92,7 +156,24 @@
     "slowSeconds": 1.6,
     "supportRadius": 0,
     "supportDamageBonus": 0,
-    "buildTime": 0
+    "tiers": [
+      {
+        "cost": 81,
+        "buildSeconds": 4.0,
+        "damage": 1.8,
+        "range": 1.08,
+        "fireInterval": 0.9,
+        "slowSeconds": 1.2
+      },
+      {
+        "cost": 144,
+        "buildSeconds": 7.0,
+        "damage": 1.85,
+        "range": 1.08,
+        "fireInterval": 0.88,
+        "slowSeconds": 1.2
+      }
+    ]
   },
   "shelter": {
     "name": "Tax Shelter",
@@ -111,6 +192,19 @@
     "slowSeconds": 0,
     "supportRadius": 104,
     "supportDamageBonus": 0.3,
-    "buildTime": 0
+    "tiers": [
+      {
+        "cost": 112,
+        "buildSeconds": 4.0,
+        "supportDamageBonus": 1.55,
+        "supportRadius": 1.1
+      },
+      {
+        "cost": 200,
+        "buildSeconds": 7.0,
+        "supportDamageBonus": 1.55,
+        "supportRadius": 1.1
+      }
+    ]
   }
 }

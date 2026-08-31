@@ -64,19 +64,25 @@ export class SignBribe {
   }
 
   /**
-   * Returns the line to show. Pays out only once: after that the sign is
-   * already his, and tapping it again is free and says nothing new.
+   * What a tap on the sign should do. This never spends anything on its own —
+   * paying peanuts on a single tap with no prompt is exactly what a misjudged
+   * tap must not be able to do, so the scene puts up a confirm dialog and calls
+   * `pay()` only if the player says yes.
    */
-  tap(peanuts: number): { spent: number; message: string } {
-    if (this.bribed) return { spent: 0, message: this.def.paidToast }
-    if (peanuts < this.def.cost) return { spent: 0, message: this.def.brokeToast }
+  tap(peanuts: number): 'ask' | 'broke' | 'done' {
+    if (this.bribed) return 'done'
+    if (peanuts < this.def.cost) return 'broke'
+    return 'ask'
+  }
 
+  /** Takes the bribe. Only ever called after the player has confirmed. */
+  pay(): void {
+    if (this.bribed) return
     this.bribed = true
     const key = ART.prop.signBribed
     this.sprite.setTexture(key)
     this.place(key, this.hit.width)
     this.celebrate()
-    return { spent: this.def.cost, message: this.def.paidToast }
   }
 
   private cfg(key: string): SpriteRender {
