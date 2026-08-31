@@ -722,3 +722,41 @@ test('nothing ships a font or a pack file the game never asks for', () => {
     }
   }
 })
+
+test('the rockets are painted art, sized from the manifest', () => {
+  // They were the only sprites in the game with no render entry, drawn 1:1 in
+  // world space. Survivable while every projectile was a 64px pack tile;
+  // not once one of them is a 200px painted rocket.
+  const rockets = ['projectile-rocket', 'projectile-rocket-big']
+  for (const key of rockets) {
+    assert.match(art.files[key], /^projectiles\//, `${key} is not the painted art`)
+    const cfg = art.render[key]
+    assert.ok(cfg, `${key} has no render entry, so it would draw at source size`)
+    assert.ok(cfg.displayHeight > 0, `${key} has no on-screen height`)
+    // Centred, because Projectile rotates about its own origin to point at
+    // whatever it is flying toward.
+    assert.equal(cfg.anchorX, 0.5, `${key} would spin about a corner`)
+    assert.equal(cfg.anchorY, 0.5, `${key} would spin about a corner`)
+  }
+
+  // The heavy one has to stay visibly heavier. Height alone is not the test:
+  // it is the wider silhouette that reads as weight in flight.
+  const [small, big] = rockets.map((k) => art.render[k])
+  const widthAt = (c: any): number => c.displayHeight * (c.contentWidth / c.contentHeight)
+  assert.ok(big.displayHeight > small.displayHeight, 'the big rocket is not taller')
+  assert.ok(widthAt(big) > widthAt(small) * 1.3,
+    `the big rocket is only ${(widthAt(big) / widthAt(small)).toFixed(2)}x the width of the small one`)
+
+  // And the towers that fire them are the two splash towers, not a swap.
+  assert.equal(towers.rounding.shot, 'projectile-rocket')
+  assert.equal(towers.escalation.shot, 'projectile-rocket-big')
+})
+
+test('the projectile pack tiles are gone', () => {
+  for (const [key, path] of Object.entries(art.files) as [string, string][]) {
+    assert.ok(!/towerDefense_tile25[12]/.test(path), `${key} still points at a pack rocket`)
+  }
+  for (const f of ['towerDefense_tile251.png', 'towerDefense_tile252.png']) {
+    assert.ok(!existsSync(url(`../public/assets/kenney/${f}`)), `${f} still ships`)
+  }
+})

@@ -45,6 +45,15 @@ screenshots are the evidence.
 | `diag` | five taps on the version stamp, a thrown error, and a stalled loop |
 | `stuckcast` | a run abandoned mid-wind-up, and whether abilities work in the next one |
 | `bossability` | every ability plus the nuke, cast at the Politician, with the damage each one did |
+| `fx` | the explosion, hit spark and death puff sheets, each held on its peak frame, and a leak check |
+| `rockets` | the painted rockets in flight and side by side, with their sizes and origins |
+| `towerpanel` | the tower panel anchored beside its tower, both range rings, panning, and a tap off it |
+| `retreat` | ordering the hero out of a fight, the cost, and re-engaging without another tap |
+| `herohp` | what actually lands on Cory in a wave, against what the data says should |
+| `stun` | the tier-3 stop, measured as how far the target still moves |
+| `meteor` | where a barrage lands relative to the tap, and the telegraph |
+| `background` | leaving the tab and coming back, with the audio device refused on the way in |
+| `revive` | the hero going down, the countdown marker, and coming back on |
 | `gnomes` | the summon refused off the lane and allowed on it, both gnome sprites, their size beside a soldier, and how long they actually survive |
 
 ## Notes

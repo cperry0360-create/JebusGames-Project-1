@@ -1,6 +1,6 @@
 {
   "assetRoot": "assets/",
-  "credit": "Projectiles, the muzzle flash and the title scenery from Kenney Tower Defense (Top-Down), CC0. See public/assets/kenney/License.txt. The level map, the towers, the enemies, the hero, the gnomes and the effect animations are original art.",
+  "credit": "Four projectile tiles, the muzzle flash and the title scenery from Kenney Tower Defense (Top-Down), CC0. See public/assets/kenney/License.txt. The level map, the towers, the enemies, the hero, the gnomes, the rockets and the effect animations are original art.",
   "note": "Every sprite the game draws is named here. `files` maps a key to a path under assetRoot, so a new art pack is a path change. `render` gives a key its anchor and on-screen height, so art of any source size drops in without touching code.",
   "files": {
     "turret-ledger": "towers/tower_withholding.png",
@@ -17,8 +17,8 @@
     "shot-small": "kenney/towerDefense_tile272.png",
     "shot-ring": "kenney/towerDefense_tile273.png",
     "shot-heavy": "kenney/towerDefense_tile274.png",
-    "shot-rocket": "kenney/towerDefense_tile251.png",
-    "shot-rocket-big": "kenney/towerDefense_tile252.png",
+    "projectile-rocket": "projectiles/shot_rocket.png",
+    "projectile-rocket-big": "projectiles/shot_rocket_big.png",
     "fx-explosion": "fx/fx_explosion.png",
     "fx-hit-spark": "fx/fx_hit_spark.png",
     "fx-death-puff": "fx/fx_death_puff.png",
@@ -368,6 +368,20 @@
         "frameHeight": 192,
         "frames": 4
       }
+    },
+    "projectile-rocket": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "displayHeight": 35.0,
+      "contentWidth": 71,
+      "contentHeight": 129
+    },
+    "projectile-rocket-big": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "displayHeight": 40.0,
+      "contentWidth": 145,
+      "contentHeight": 200
     }
   },
   "map": {

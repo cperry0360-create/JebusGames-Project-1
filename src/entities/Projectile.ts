@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { ySort, ABOVE } from '../systems/DepthSort.ts'
+import { applyRender } from '../systems/Art.ts'
 import { Enemy } from './Enemy.ts'
 
 export interface HitPayload {
@@ -26,6 +27,11 @@ export class Projectile extends Phaser.GameObjects.Sprite {
     onHit: (hit: HitPayload) => void,
   ) {
     super(scene, x, y, spriteKey)
+    // Anchor and on-screen size from the manifest, like every other sprite in
+    // the game. The projectiles were the only art drawn 1:1 in world space —
+    // which was survivable while they were all 64px pack tiles and is not once
+    // one of them is a 200px painted rocket.
+    applyRender(this, spriteKey)
     this.target = target
     this.speed = speed
     this.onHit = onHit

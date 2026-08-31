@@ -4,10 +4,12 @@ Everything still coming from Kenney's free CC0 packs rather than from painted
 art, where it appears, how big it renders and how often anyone sees it.
 
 **Status: acted on.** The dead keys, the unused pack files, the two unused
-fonts and the reference sheets under `public/` are gone, and the explosion,
-hit spark and death puff have been replaced with painted animations. What is
-left of Kenney in the game is five projectile tiles, one muzzle-flash tile,
-six title-screen shapes at 12% opacity, one font and the audio.
+fonts and the reference sheets under `public/` are gone; the explosion, hit
+spark and death puff have been replaced with painted animations; and both
+rockets are painted. What is left of Kenney in the game is **three 28px
+projectile dots, one muzzle-flash tile, six title-screen shapes at 12%
+opacity, one font and the audio** — ten sprites, of which four are visible
+during play.
 
 The recommendations below are kept as written so the reasoning survives; the
 sections they refer to are marked where they no longer describe the build.
@@ -38,7 +40,7 @@ For reference at the same zoom: **a tower renders 150px tall, a Late Filer
 
 | Category | Kenney assets, then | Now | Verdict |
 |---|---|---|---|
-| Projectiles | 5 (a sixth was dead) | **5** | replace when there is art |
+| Projectiles | 5 (a sixth was dead) | **3** | ~~replace~~ the two rockets are painted; three 28px dots left |
 | Particles and effects | 3 tiles doing 8 jobs | **1 tile, 1 job** (the muzzle flash) | ~~replace second~~ **done** |
 | Terrain and scenery | 6 | **6** | not worth replacing |
 | UI elements | none left | none | — |
@@ -300,7 +302,15 @@ puff**, because they are doing different jobs and the pack tile is a compromise
 between them. The Haymaker punch and the chain arc can keep reusing the hit
 spark.
 
-### 3. The two rockets — `shot-rocket`, `shot-rocket-big` — **next**
+### 3. ~~The two rockets~~ — **done**
+
+Replaced by `projectile-rocket` and `projectile-rocket-big`, painted and
+trimmed. They were the only sprites in the game drawn 1:1 in world space with
+no render entry, which is called out below; `Projectile` applies the manifest
+now like everything else, so they are sized by data rather than by their
+source resolution.
+
+#### Why they were third
 
 At **60px and 69px tall** these are the projectiles anyone can actually see;
 the round shots are 28px and read as dots at any zoom. They also belong to the
@@ -318,7 +328,7 @@ this list — but small (24–36px) and gone in 110ms. Cheap to improve and it s
 right on the painted towers, where a pack tile is most obviously not the same
 hand. Worth one sprite, not two.
 
-### 5. The four round shots — `shot-small`, `shot-ring`, `shot-heavy`
+### 5. The three round shots — `shot-small`, `shot-ring`, `shot-heavy` — **next**
 
 28×28 on screen, in flight for a fraction of a second, and mostly seen against
 grass. `shot-small` is the most-drawn projectile in the game by count, which is

@@ -784,6 +784,74 @@ async function run() {
     return
   }
 
+  if (scenario === 'rockets') {
+    // The painted rockets, in flight, from the towers that fire them.
+    const ART = (await import('./js/data/art.json', { with: { type: 'json' } })).default
+    for (const k of ['projectile-rocket', 'projectile-rocket-big']) {
+      const r = ART.render[k]
+      note(k + ' -> ' + ART.files[k] + ' displayHeight=' + r.displayHeight +
+        ' world px (' + Math.round(r.displayHeight * 1.72) + ' on screen at the default zoom)' +
+        ' width=' + (r.displayHeight * r.contentWidth / r.contentHeight).toFixed(1))
+    }
+
+    g.status.peanuts = 99999
+    const cam0 = g.cameras.main
+    const spot = SPOTS.findIndex((p) => cam0.worldView.contains(p[0], p[1]))
+    const [px, py] = toScreen(SPOTS[spot][0], SPOTS[spot][1])
+    await click(px, py); await sleep(350)
+    const b = g.menu.hitAreas[0].getBounds()
+    await move(b.centerX, b.centerY)
+    mouse('mousedown', b.centerX, b.centerY); await sleep(300)
+    mouse('mouseup', b.centerX, b.centerY); await sleep(600)
+    const t = g.towers[0]
+
+    g.startWave()
+    await until(() => g.enemies.length > 1, 30000)
+    await sleep(400)
+    const e = g.enemies.reduce((a, b2) => (a.distance > b2.distance ? a : b2))
+    e.health = 999999
+    g.cameras.main.centerOn(e.x, e.y)
+
+    // Fire each one at a live target and catch it mid-flight.
+    for (const [id, name] of [['rounding', 'small'], ['escalation', 'big']]) {
+      t.def = g.towerDefs[id]
+      t.cooldown = 0
+      g.fire(t, e)
+      await sleep(60)
+      const shots = g.shots.filter((s2) => s2.active)
+      const s2 = shots[shots.length - 1]
+      if (!s2) { note(name + ': no projectile in flight'); continue }
+      note(name + ' rocket: texture=' + s2.texture.key +
+        ' ' + Math.round(s2.displayWidth) + 'x' + Math.round(s2.displayHeight) + ' world px' +
+        ' origin ' + s2.originX + ',' + s2.originY +
+        ' rotation ' + s2.rotation.toFixed(2) + ' rad')
+      await shot('rockets-0' + (name === 'small' ? 1 : 2) + '-' + name)
+      await sleep(500)
+    }
+
+    // Held still side by side so the pair can be compared.
+    const P = await import('./js/systems/Art.js')
+    // On open grass, away from the crowd, and turned the way a shot in flight
+    // to the right would be turned.
+    const open = { x: 980, y: 250 }
+    g.cameras.main.centerOn(open.x, open.y)
+    const pair = []
+    for (const [i, k] of ['projectile-rocket', 'projectile-rocket-big'].entries()) {
+      const sp = g.add.image(open.x - 45 + i * 90, open.y, k).setDepth(99999)
+      P.applyRender(sp, k)
+      sp.setRotation(Math.PI / 2)
+      pair.push(sp)
+    }
+    g.syncCameras()
+    await sleep(500)
+    note('side by side: ' + pair.map((s2) => Math.round(s2.displayWidth) + 'x' +
+      Math.round(s2.displayHeight)).join(' vs '))
+    await shot('rockets-03-side-by-side')
+    pair.forEach((s2) => s2.destroy())
+    note('page errors: ' + log.filter((l) => l.startsWith('PAGE ERROR')).length)
+    return
+  }
+
   if (scenario === 'towerpanel') {
     // PROTOTYPE-GAP 11: the panel was covering the range ring it was asking
     // about. Non-modal, anchored, rings visible.
