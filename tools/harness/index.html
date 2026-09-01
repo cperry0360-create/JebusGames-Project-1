@@ -2743,6 +2743,110 @@ async function run() {
     return
   }
 
+  if (scenario === 'gateway') {
+    // REQUIREMENT 11, watched frame by frame rather than judged from a still.
+    // Nothing may appear or disappear in open ground: an enemy that is visible
+    // at all must be at or past the arch mouth, and an enemy that leaves must
+    // leave at the gate rather than anywhere else.
+    const MAPD = (await import('./js/data/map.json', { with: { type: 'json' } })).default
+    const mouthX = MAPD.entrance.emergeFromX
+    const clearX = MAPD.entrance.clearOfArchX
+    const gateX = MAPD.exit.gateX
+    note('viewport ' + VP.w + 'x' + VP.h)
+    note('arch mouth x=' + mouthX + '  clear of arch x=' + clearX + '  gate face x=' + gateX)
+
+    // Deliberately no towers. With a board that can kill, wave one dies on the
+    // way and the gate is never reached — the first run of this scenario
+    // reported "left at the gate: 0" and proved nothing about the exit.
+    g.startWave()
+
+    // Look at the arch while the first enemies come out of it, then at the
+    // gate. The rig owns the centre, so it is written through the rig's own
+    // target rather than onto the camera, which would be eased away.
+    const look = async (x, y, name, ms) => {
+      g.rig.targetCenterX = x
+      g.rig.targetCenterY = y
+      await sleep(ms)
+      await shot(name + '-' + VP.w + 'x' + VP.h)
+    }
+    await look(90, 400, 'gateway-arch', 2600)
+
+    const seen = new Map()
+    let visibleBeforeArch = 0, worstEarly = null
+    let fadedInOpen = 0, worstFade = null
+    let samples = 0
+    const watch = () => {
+      samples++
+      for (const e of g.enemies) {
+        if (!e.alive) continue
+        const a = e.art ? e.art.alpha : 1
+        seen.set(e, { x: e.x, y: e.y, alpha: a })
+        // (a) nothing visible before the arch mouth
+        if (a > 0.02 && e.x < mouthX - 1) {
+          visibleBeforeArch++
+          if (!worstEarly || e.x < worstEarly.x) worstEarly = { x: e.x, alpha: a }
+        }
+        // (b) nothing part-transparent once past the arch: no fade in open
+        //     ground, and no fade-out at the exit either.
+        if (a < 0.98 && e.x > clearX + 1) {
+          fadedInOpen++
+          if (!worstFade || a < worstFade.alpha) worstFade = { x: e.x, alpha: a }
+        }
+      }
+    }
+    const t0 = performance.now()
+    let lookedAtGate = false, shotGate = false
+    let lastCount = 0
+    const departures = []
+    while (performance.now() - t0 < 26000) {
+      const before = new Map(seen)
+      const alive = new Set(g.enemies.filter((e) => e.alive))
+      for (const [e, last] of before) {
+        if (!alive.has(e) && !departures.some((d) => d.e === e)) {
+          departures.push({ e, x: last.x, y: last.y, alpha: last.alpha })
+        }
+      }
+      watch()
+      lastCount = g.enemies.length
+      if (!lookedAtGate && performance.now() - t0 > 14000) {
+        lookedAtGate = true
+        g.rig.targetCenterX = 1150
+        g.rig.targetCenterY = 390
+      }
+      if (lookedAtGate && !shotGate && performance.now() - t0 > 20000) {
+        shotGate = true
+        await shot('gateway-gate-' + VP.w + 'x' + VP.h)
+      }
+      await new Promise((r) => requestAnimationFrame(r))
+    }
+
+    note('sampled ' + samples + ' frames, ' + departures.length + ' enemies left the board')
+    note('  visible before the arch mouth: ' + visibleBeforeArch + ' frames' +
+      (worstEarly ? ' (worst x=' + worstEarly.x.toFixed(0) + ' alpha ' + worstEarly.alpha.toFixed(2) + ')' : ''))
+    note('  part-transparent past the arch: ' + fadedInOpen + ' frames' +
+      (worstFade ? ' (worst x=' + worstFade.x.toFixed(0) + ' alpha ' + worstFade.alpha.toFixed(2) + ')' : ''))
+
+    // Every enemy that left did so either by dying to a tower or at the gate.
+    const atGate = departures.filter((d) => d.x >= gateX - 12)
+    const killed = departures.filter((d) => d.x < gateX - 12)
+    note('  left at the gate: ' + atGate.length + '   killed on the way: ' + killed.length)
+    const fadedOut = departures.filter((d) => d.x >= gateX - 12 && d.alpha < 0.98)
+    note('  arrived at the gate part-transparent: ' + fadedOut.length + ' (must be 0)')
+    for (const d of atGate.slice(0, 4)) {
+      note('    gate arrival at x=' + d.x.toFixed(0) + ' alpha ' + d.alpha.toFixed(2))
+    }
+
+    const occ = g.archOccluders || []
+    note('  arch occluders drawn: ' + occ.length +
+      (occ.length ? ' at depth ' + occ.map((o) => o.depth.toFixed(0)).join(', ') : ''))
+    await shot('gateway-' + VP.w + 'x' + VP.h)
+    const ok = visibleBeforeArch === 0 && fadedInOpen === 0 && fadedOut.length === 0 && occ.length === 2
+    note('RESULT ' + (ok
+      ? 'nothing appears or disappears in open ground'
+      : '*** SOMETHING APPEARS OR DISAPPEARS IN OPEN GROUND ***'))
+    return
+  }
+
   if (scenario === 'startrun') {
     // Actually press BEGIN THE RUN, on the longest loadout there is, at the
     // smallest viewport. Not "the button is on screen" — the button works and

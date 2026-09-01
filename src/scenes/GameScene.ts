@@ -20,6 +20,7 @@ import type { BuildSpot } from '../systems/BuildSystem.ts'
 import { WaveSpawner } from '../systems/WaveSpawner.ts'
 import { withinRadius, pickNearest } from '../systems/Targeting.ts'
 import { GROUND_DEPTH } from '../systems/DepthSort.ts'
+import { distanceAtX, gateShake, type EmergeConfig } from '../systems/Gateway.ts'
 import { makeRng } from '../systems/Draft.ts'
 import { scatter, type ScatterKind, type Rect } from '../systems/Scatter.ts'
 import { installAmbient, type AmbientDef, type AmbientStyle } from '../systems/Ambient.ts'
@@ -30,7 +31,7 @@ import { Cooldowns } from '../systems/Cooldowns.ts'
 import { unlockedTowerCount } from '../systems/Draft.ts'
 import { runState, setRunState } from '../systems/RunState.ts'
 import { castAbility } from '../systems/AbilityRunner.ts'
-import { PRESENTATION, floatingDamage, hitPause } from '../systems/Presentation.ts'
+import { deathPuff, PRESENTATION, floatingDamage, hitPause } from '../systems/Presentation.ts'
 import { play, playRotating, resetVoices } from '../systems/Audio.ts'
 import { Enemy } from '../entities/Enemy.ts'
 import type { Blocker } from '../entities/Enemy.ts'
@@ -188,6 +189,15 @@ export class GameScene extends Phaser.Scene {
 
   /** One marker per build spot, created once and then shown or hidden. */
   private pads: Phaser.GameObjects.Image[] = []
+  /** Where the arch lets go and where the gate stops them, in lane distance. */
+  private gateway!: { mouthDistance: number; stopDistance: number; emerge: EmergeConfig }
+  /** Cropped out of the map plate at scene start; see createArchOccluders. */
+  /** Public for the harness, which counts them and reads their depth. */
+  archOccluders: Phaser.GameObjects.Image[] = []
+  /** Gate-impact shake bookkeeping, so a wave arriving together does not hold
+   *  the camera in continuous motion. */
+  private lastGateShake = -99999
+  private gateBurst = 0
   /** Which spot keeps the full DO NOT BUILD HERE sign. The rest get the quiet
    *  marker; see createPads. Public so a harness run can check there is
    *  exactly one and that it is the one nearest the entrance. */
@@ -304,6 +314,14 @@ export class GameScene extends Phaser.Scene {
     })
 
     this.lane = new Path(MAP.waypoints)
+    // The arch mouth and the gate face are measured off the painted plate as
+    // map positions; the enemy walks in lane distance. Converted once here
+    // rather than per enemy per frame.
+    this.gateway = {
+      mouthDistance: distanceAtX(MAP.waypoints, MAP.entrance.emergeFromX),
+      stopDistance: distanceAtX(MAP.waypoints, MAP.exit.gateX),
+      emerge: { fadeMs: MAP.entrance.fadeMs, startScale: MAP.entrance.startScale },
+    }
     this.build = new BuildSystem(MAP.buildSpots, MAP.spotRadius)
     this.spawner = new WaveSpawner()
 
@@ -476,6 +494,7 @@ this.armReadyCountdown()
   private drawPlate(): void {
     const plate = this.add.image(0, 0, ART.map[MAP.plate]).setOrigin(0, 0).setDepth(GROUND_DEPTH)
     this.createScatter()
+    this.createArchOccluders()
     this.createAmbient()
     plate.setDisplaySize(displayData.width, displayData.height)
   }
@@ -710,6 +729,54 @@ this.armReadyCountdown()
    * Depth sits above the map plate and below the build pads, and every entity
    * sorts by its own y from 0 upward, so a prop can never draw over a unit.
    */
+  /**
+   * The archway, put back in front of the enemies walking under it.
+   *
+   * The arch is painted into the map plate, which is one image at the bottom
+   * of the depth order, so nothing can be drawn behind part of it. The fix
+   * needs no new art: the two stone piers are cropped OUT of the plate at
+   * scene start and re-added as their own images, sorted by their base like
+   * any other scenery. An enemy under the arch is then behind real stone
+   * rather than approximately behind it.
+   *
+   * The passage between the piers is deliberately not covered. Cropping the
+   * whole arch rectangle would also copy the road, and an enemy standing in
+   * the opening would be hidden behind a picture of the ground it is on.
+   *
+   * Cropped at the plate's own resolution and scaled down on the way out, so
+   * the piers carry exactly the detail the plate does and no less.
+   */
+  private createArchOccluders(): void {
+    const plate = this.textures.get(ART.map.level1)
+    const img = plate?.getSourceImage() as CanvasImageSource | undefined
+    if (!img) return
+    const srcW = plate.source[0]?.width ?? 0
+    if (srcW <= 0) return
+    // The plate is authored larger than the world box it covers.
+    const perWorld = srcW / displayData.width
+
+    MAP.entrance.occluders.forEach((r, i) => {
+      const key = `gen-arch-${i}`
+      if (!this.textures.exists(key)) {
+        const sw = Math.round(r.w * perWorld)
+        const sh = Math.round(r.h * perWorld)
+        const canvas = this.textures.createCanvas(key, sw, sh)
+        if (!canvas) return
+        canvas.context.drawImage(
+          img, Math.round(r.x * perWorld), Math.round(r.y * perWorld), sw, sh, 0, 0, sw, sh,
+        )
+        canvas.refresh()
+      }
+      const piece = this.add.image(r.x + r.w / 2, r.y + r.h / 2, key)
+      piece.setDisplaySize(r.w, r.h)
+      // Sorted by its base, exactly like a tower or a rock: an enemy higher up
+      // the screen is behind it, one lower down is in front. That is the same
+      // one rule the rest of the board uses, not a special case for the arch.
+      piece.setDepth(r.y + r.h)
+      this.archOccluders.push(piece)
+    })
+  }
+
   private createScatter(): void {
     const cfg = PRESENTATION.scatter
     const kinds = (cfg.kinds as ScatterKind[]).filter((k) => this.textures.exists(k.key))
@@ -2148,7 +2215,7 @@ this.armReadyCountdown()
       for (const id of this.spawner.update(dt)) {
         const def = ENEMIES[id]
         if (!def) continue
-        const enemy = new Enemy(this, def, this.lane)
+        const enemy = new Enemy(this, def, this.lane, this.gateway)
         logEvent('spawn', `${id} hp=${def.maxHealth}`)
         this.enemies.push(enemy)
         if (def.tier === 'boss') this.announceBoss(enemy)
@@ -2620,16 +2687,44 @@ this.armReadyCountdown()
       `${ls.name}! Damage doubled, defence gone. He cannot be touched for a moment.`
   }
 
+  /**
+   * An enemy reaching the gate.
+   *
+   * It does not escape and it does not dissolve: the gate is closed and
+   * painted shut, so it arrives at full opacity and full size and hits it. The
+   * puff goes up on the same frame and the sprite comes down inside it, so
+   * there is never a frame of a half-faded enemy standing at a solid gate.
+   */
   private leak(enemy: Enemy): void {
     // Counted, not just charged for: an escape is what stops a wave being a
     // clear, and stops the last wave being a win.
     this.escapedThisWave++
     logEvent('escape', `${enemy.def.name} -${enemy.def.livesCost} lives`)
     this.status.lives -= enemy.def.livesCost
+
+    // Two puffs at the foot of the gate, offset from each other so it reads
+    // as a cloud thrown up by an impact rather than as one tidy ring. The
+    // enemy is destroyed on the same frame, so the puff is already covering
+    // the spot before there is any chance of seeing it thin away.
+    const gx = enemy.x
+    const gy = enemy.y + MAP.exit.puffOffsetY
+    deathPuff(this, gx, gy)
+    deathPuff(this, gx - 9, gy + 4)
     floatingDamage(this, enemy.x, enemy.centreY, enemy.def.livesCost, true)
     enemy.destroy()
-    const s = PRESENTATION.shake
-    this.cameras.main.shake(s.leakMs, s.leakIntensity)
+
+    // A heavy hit and the life-lost sting together, so the two land as one
+    // event rather than as a thump followed by a counter changing.
+    play(this, 'hit-c', 1)
+
+    const g = PRESENTATION.gateImpact
+    this.gateBurst++
+    const shake = gateShake(this.time.now, this.lastGateShake, this.gateBurst, g)
+    if (shake.play) {
+      this.lastGateShake = this.time.now
+      this.gateBurst = 0
+      this.cameras.main.shake(g.durationMs, shake.intensity)
+    }
     // The last one gets its own sound, so the player hears the difference
     // without having to read the counter.
     play(this, this.status.lives <= 0 ? 'last-life' : 'life-lost')

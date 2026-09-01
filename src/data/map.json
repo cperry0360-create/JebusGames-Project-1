@@ -239,5 +239,31 @@
         "y": 23.0
       }
     ]
+  },
+  "entrance": {
+    "_note": "Measured off the painted plate: stone spans world x 0-32 (near pier), the passage is open from 33 to 83, and the far pier runs 84-128. An enemy is clear of the arch past x=128.",
+    "emergeFromX": 0.0,
+    "clearOfArchX": 128.0,
+    "fadeMs": 400,
+    "startScale": 0.9,
+    "occluders": [
+      {
+        "x": 0.0,
+        "y": 286.0,
+        "w": 34.0,
+        "h": 140.0
+      },
+      {
+        "x": 83.0,
+        "y": 286.0,
+        "w": 47.0,
+        "h": 140.0
+      }
+    ]
+  },
+  "exit": {
+    "_note": "The gate is closed and painted into the plate, so enemies stop AT it. Face measured at world x 1191.",
+    "gateX": 1191.0,
+    "puffOffsetY": -6.0
   }
 }

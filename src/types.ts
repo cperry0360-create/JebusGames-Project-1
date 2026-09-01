@@ -35,6 +35,20 @@ export interface MapDef {
   buildSpots: number[][]
   /** Where the villager's blank board is, and how wide to draw a sign on it. */
   sign: { x: number; y: number; boardWidth: number }
+  /** The stone archway enemies walk out of, measured off the painted plate. */
+  entrance: {
+    /** Map x at the arch's mouth: where the fade starts. */
+    emergeFromX: number
+    /** Map x past which nothing of the arch is in front any more. */
+    clearOfArchX: number
+    fadeMs: number
+    startScale: number
+    /** The stone piers, cropped out of the plate and drawn in front. The
+     *  passage between them is deliberately not listed. */
+    occluders: Array<{ x: number; y: number; w: number; h: number }>
+  }
+  /** The closed gate enemies hit. They stop AT it; they do not pass through. */
+  exit: { gateX: number; puffOffsetY: number }
   /** Parts of the painted plate that already have furniture on them, so the
    *  scatter layer does not drop a rock on the tavern roof. */
   scatterExclude?: Array<{ x: number; y: number; w: number; h: number }>

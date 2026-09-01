@@ -4,6 +4,7 @@ import { Path } from '../systems/Path.ts'
 import { ySort } from '../systems/DepthSort.ts'
 import { canStun, damageAfterArmor, diminishedSeconds, slowedSpeed, slowStacksAfter, stunLockoutFor, type DiminishDef } from '../systems/Combat.ts'
 import { makeShadow, PRESENTATION, floatingDamage, deathPuff } from '../systems/Presentation.ts'
+import { emergeState, type EmergeConfig } from '../systems/Gateway.ts'
 import { applyGroundRender } from '../systems/Art.ts'
 import { facesLeft } from '../systems/Facing.ts'
 
@@ -63,8 +64,31 @@ export class Enemy extends Phaser.GameObjects.Container {
   private readonly artOffset: number
   private readonly baseScaleX: number
   private facingLeft = false
+  /**
+   * Milliseconds since this enemy reached the arch mouth; negative until it
+   * does. It is NOT time since spawn: an enemy spawns off the plate behind the
+   * arch and walks to the mouth first, and how long that takes depends on how
+   * fast it is. Tying the fade to the mouth means all four enemies emerge the
+   * same way at their own speeds.
+   */
+  private sinceMouth: number
+  /** True once fully emerged, after which the emergence stops recomputing. */
+  private emerged = false
+  /** Lane distance at which the arch mouth is reached, and at which the gate
+   *  stops it. Both measured off the plate; see map.json. */
+  private readonly mouthDistance: number
+  private readonly stopDistance: number
+  private readonly emergeCfg: EmergeConfig
+  /** The scale the art was built at, so the emergence scale-up multiplies it
+   *  rather than replacing it. */
+  private readonly baseScaleY: number
 
-  constructor(scene: Phaser.Scene, def: EnemyDef, lane: Path) {
+  constructor(
+    scene: Phaser.Scene,
+    def: EnemyDef,
+    lane: Path,
+    gate: { mouthDistance: number; stopDistance: number; emerge: EmergeConfig },
+  ) {
     super(scene, 0, 0)
     this.def = def
     this.lane = lane
@@ -81,10 +105,46 @@ export class Enemy extends Phaser.GameObjects.Container {
     // Shadow first, then the art, then the bar, so each draws over the last.
     this.add([this.shadow, this.art, this.bar])
 
+    this.mouthDistance = gate.mouthDistance
+    this.stopDistance = gate.stopDistance
+    this.emergeCfg = gate.emerge
+    this.baseScaleY = this.art.scaleY
+    // Behind the arch and invisible, not at its mouth at full opacity.
+    this.sinceMouth = -1
     const p = lane.pointAt(0)
     this.setPosition(p.x, p.y)
     scene.add.existing(this)
+    this.applyEmergence(0)
     this.drawBar()
+  }
+
+  /**
+   * Fades and grows the enemy as it comes out of the arch.
+   *
+   * The health bar is driven from the same alpha rather than being left at
+   * full: a floating bar over an invisible enemy is exactly the giveaway this
+   * whole change exists to remove. The shadow rides the alpha too, so nothing
+   * casts a contact shadow while it is still under the stonework.
+   */
+  private applyEmergence(dt: number): void {
+    // Stops writing once it is fully out, so the attack tween — which also
+    // animates scaleX — is never fought over. Nothing is fighting anything
+    // this early in the lane, but the two would collide silently if they ever
+    // did, and that is the shape of bug this file has had before.
+    if (this.emerged) return
+    if (this.sinceMouth < 0) {
+      if (this.distance >= this.mouthDistance) this.sinceMouth = 0
+    } else {
+      this.sinceMouth += dt * 1000
+    }
+    const e = emergeState(this.sinceMouth, this.emergeCfg)
+    this.emerged = e.alpha >= 1
+    this.art.setAlpha(e.alpha)
+    this.bar.setAlpha(e.alpha)
+    // Mirroring is setFlipX, not a negative scale, so both axes stay positive
+    // here and the two mechanisms cannot cancel each other out.
+    this.art.setScale(this.baseScaleX * e.scale, this.baseScaleY * e.scale)
+    this.shadow.setAlpha(e.alpha * PRESENTATION.shadow.alpha)
   }
 
   get alive(): boolean {
@@ -228,6 +288,7 @@ export class Enemy extends Phaser.GameObjects.Container {
     // rather than inside each branch so a stunned enemy cannot leak an attack
     // through the fighting path.
     if (this.stunRemaining > 0) {
+      this.applyEmergence(dt)
       this.bob(dt)
       this.tintForStatus()
       ySort(this)
@@ -262,9 +323,13 @@ export class Enemy extends Phaser.GameObjects.Container {
       const p = this.lane.pointAt(this.distance)
       this.setPosition(p.x, p.y)
       this.face(this.lane.angleAt(this.distance))
-      if (this.distance >= this.lane.totalLength) return true
+      // The gate, not the end of the lane. It is closed and painted shut, so
+      // this is where the enemy stops — at full opacity and full size, because
+      // what happens next is an impact rather than a disappearance.
+      if (this.distance >= this.stopDistance) return true
     }
 
+    this.applyEmergence(dt)
     this.bob(dt)
     this.tintForStatus()
     ySort(this)

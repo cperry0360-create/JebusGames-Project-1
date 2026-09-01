@@ -418,5 +418,13 @@
       "alpha": 0.34,
       "tint": 14213847
     }
+  },
+  "gateImpact": {
+    "_note": "An enemy reaching the closed gate. minGapMs stops a stream of arrivals becoming one continuous rumble; maxIntensity stops a wave that lands together hitting with the force of the whole wave.",
+    "minGapMs": 220,
+    "baseIntensity": 0.009,
+    "perExtra": 0.003,
+    "maxIntensity": 0.02,
+    "durationMs": 210
   }
 }
