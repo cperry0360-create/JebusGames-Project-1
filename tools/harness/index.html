@@ -2227,6 +2227,75 @@ async function run() {
     return
   }
 
+  if (scenario === 'restructure') {
+    // Restructure is DAD MODE only, and its slot must not move when it goes.
+    const hud = game.scene.getScene('Hud')
+    g.status.peanuts = 99999
+    await build(3, 0)
+    g.startWave()
+    await sleep(1200)
+
+    const positions = () => hud.slots.map((sl) =>
+      sl.region.id + '@' + Math.round(sl.region.cx) + ',' + Math.round(sl.region.cy))
+    const shownOf = () => hud.slots.map((sl) =>
+      sl.region.id + '=' + (sl.icon.visible ? 'shown' : 'SOCKET'))
+
+    note('viewport ' + VP.w + 'x' + VP.h)
+    note('out of DAD MODE:')
+    note('  ' + positions().join('  '))
+    note('  ' + shownOf().join('  '))
+    const before = positions().join('|')
+
+    // Does it refuse?
+    let armed = g.status.mode
+    g.armRestructure()
+    await sleep(200)
+    note('  armRestructure outside DAD MODE: mode=' + g.status.mode +
+      ' (was ' + armed + ') alert="' + g.status.alert + '"' +
+      (g.status.mode === 'restructure' ? '  *** ALLOWED ***' : '  refused'))
+
+    // And does a tap on its reserved slot do anything?
+    const slot = hud.slots.find((sl) => sl.region.id === 'restructure')
+    let reached = 0
+    const orig = g.armRestructure.bind(g)
+    g.armRestructure = () => { reached++; return orig() }
+    const bb = slot.hit.getBounds()
+    await click(bb.centerX, bb.centerY)
+    await sleep(150)
+    note('  tapping the empty socket reached the game ' + reached + ' times')
+    g.armRestructure = orig
+    await shot('restructure-01-hidden-' + VP.w + 'x' + VP.h)
+
+    // Into DAD MODE.
+    g.hero.health = g.hero.def.maxHealth * 0.3
+    g.hero.hurt(g.hero.def.maxHealth * 4)
+    await sleep(1400)
+    note('in DAD MODE (lastStand=' + g.status.lastStand + '):')
+    note('  ' + positions().join('  '))
+    note('  ' + shownOf().join('  '))
+    const after = positions().join('|')
+    note('  slot positions identical: ' + (before === after ? 'YES' : 'NO *** THEY MOVED ***'))
+    await shot('restructure-02-shown-' + VP.w + 'x' + VP.h)
+
+    g.cooldowns.reset('restructure')
+    g.armRestructure()
+    await sleep(200)
+    note('  armRestructure in DAD MODE: mode=' + g.status.mode)
+
+    // Half-finished move, then DAD MODE ends.
+    g.doRestructure(g.towers[0].x, g.towers[0].y)
+    await sleep(150)
+    note('  picked a tower up: restructuring=' + !!g.restructuring + ' mode=' + g.status.mode)
+    g.hero.lastStandActive = false
+    await sleep(400)
+    note('  after DAD MODE ends: mode=' + g.status.mode +
+      ' restructuring=' + !!g.restructuring +
+      ' CANCEL visible=' + g.cancelVisible + ' msg="' + g.status.message + '"')
+    note('  ' + shownOf().join('  '))
+    await shot('restructure-03-ended-' + VP.w + 'x' + VP.h)
+    return
+  }
+
   if (scenario === 'heroblock') {
     // How many enemies does one man actually hold, and what does that cost him?
     // Measured before anything is changed, because the data says 3 and the

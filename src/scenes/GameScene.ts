@@ -193,7 +193,9 @@ export class GameScene extends Phaser.Scene {
   private rangeRing!: Phaser.GameObjects.Graphics
   private targetRing!: Phaser.GameObjects.Graphics
   private selected: Tower | null = null
-  private restructuring: Tower | null = null
+  /** The tower being moved, exposed so a harness run can see a half-finished
+   *  relocation get cancelled. */
+  restructuring: Tower | null = null
   /** Public so a harness run can assert the modal contract from outside. */
   ticket: ScratchCard | null = null
   /** The Server Nuke's two moments. Both are modals; see ui/NukeOverlays.ts. */
@@ -1717,6 +1719,18 @@ this.armReadyCountdown()
   }
 
   armRestructure(): void {
+    // DAD MODE only. It was gated on nothing but its cooldown, so a hero at
+    // full health on wave 1 could pick a tower up and put it somewhere else —
+    // which is what made it read as a permanent board-editing mode rather
+    // than as something the hero earns by nearly dying.
+    if (!this.hero.lastStandActive) {
+      this.refuse(`${this.hero.def.restructure.name} needs ${this.hero.def.lastStand.name}.`)
+      return
+    }
+    if (this.hero.down) {
+      this.refuse(`${this.hero.def.name} is down.`)
+      return
+    }
     if (!this.cooldowns.ready('restructure')) {
       this.refuse(`${this.hero.def.restructure.name} is still recharging.`)
       return
@@ -1732,6 +1746,17 @@ this.armReadyCountdown()
     this.setCancelVisible(true)
     this.drawSpots()
     this.status.message = `${this.hero.def.restructure.name}: click a tower, then a free spot.`
+  }
+
+  /** Drops a relocation in progress and leaves the board as it was. */
+  private cancelRestructure(): void {
+    if (this.status.mode !== 'restructure') return
+    this.restructuring = null
+    this.status.mode = 'normal'
+    this.setCancelVisible(false)
+    this.rangeRing.clear()
+    this.drawSpots()
+    this.status.message = `${this.hero.def.lastStand.name} is over. Restructure with it.`
   }
 
   private doRestructure(x: number, y: number): void {
@@ -2042,6 +2067,10 @@ this.armReadyCountdown()
     this.status.heroHealth = this.hero.health
     this.status.heroDown = this.hero.down
     this.status.heroReviveIn = this.hero.reviveIn
+    // Leaving DAD MODE takes the ability with it, and any half-finished move
+    // with that. A player left holding a tower in a mode that no longer exists
+    // has no way to put it down.
+    if (this.status.lastStand && !this.hero.lastStandActive) this.cancelRestructure()
     this.status.lastStand = this.hero.lastStandActive
     this.noteHeroState()
     this.status.enemiesLeft = this.enemies.length + this.spawner.remaining

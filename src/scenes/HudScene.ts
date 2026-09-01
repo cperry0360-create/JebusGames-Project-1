@@ -74,6 +74,9 @@ export class HudScene extends Phaser.Scene {
   private paused = false
   slots: SlotView[] = []
   private slotsBuilt = false
+  /** Last frame's DAD MODE state, so the arrival of a new option can be
+   *  announced once rather than every frame. */
+  private lastStandWas = false
   /** Which abilities the slots were built for, so a rare drop rebuilds them. */
   private slotKeys = ''
   /** Last drawn values, so a change can be shown rather than just displayed. */
@@ -466,6 +469,11 @@ export class HudScene extends Phaser.Scene {
       this.slotsBuilt = true
     }
 
+    // A new option arriving mid-fight has to be noticed, or the player never
+    // learns it is there.
+    if (s.lastStand && !this.lastStandWas) this.flashSlot('restructure')
+    this.lastStandWas = s.lastStand
+
     this.setCounter(this.peanutsText, `${s.peanuts}`, this.peanutsField)
     this.setCounter(this.livesText, `${s.lives}`, this.livesField)
     // Money and lives are the two numbers a player watches, so a change has to
@@ -612,6 +620,34 @@ export class HudScene extends Phaser.Scene {
   private drawSlots(s: GameScene['status']): void {
     for (const slot of this.slots) {
       const r = slot.region
+
+      // An empty reserved slot. Drawn as a recessed socket rather than left
+      // blank — a hole in the middle of the bar reads as a rendering fault —
+      // and deliberately not as a greyed-out copy of the icon, which would say
+      // "this is here but unavailable" when the truth is that it does not
+      // exist yet.
+      const shown = this.slotShown(r, s)
+      slot.icon.setVisible(shown)
+      slot.timer.setVisible(shown)
+      slot.hit.input!.enabled = shown
+      if (!shown) {
+        slot.sweep.clear()
+        slot.frame.clear()
+        // The socket takes the shape of the slot it is standing in for: a
+        // circle among the round hero medallions, a rounded rect among the
+        // rectangular drafted plates. A rectangle sitting between two
+        // medallions reads as a different kind of thing having gone wrong.
+        slot.frame.fillStyle(0x0d1016, 0.42)
+        slot.frame.lineStyle(2, 0xf6ecd9, 0.16)
+        if (r.hero) {
+          slot.frame.fillCircle(r.cx, r.cy, r.boxH / 2 - 3)
+          slot.frame.strokeCircle(r.cx, r.cy, r.boxH / 2 - 3)
+        } else {
+          slot.frame.fillRoundedRect(r.x + 6, r.y + 2, r.pitch - 12, r.boxH - 4, 10)
+          slot.frame.strokeRoundedRect(r.x + 6, r.y + 2, r.pitch - 12, r.boxH - 4, 10)
+        }
+        continue
+      }
       const ready = this.world.cooldowns.ready(r.id)
       const usable = this.slotUsable(r, s)
       const armed = s.pendingAbility === r.id
@@ -656,12 +692,50 @@ export class HudScene extends Phaser.Scene {
     }
   }
 
+  /** A brief highlight on one slot, for an ability that has just appeared. */
+  private flashSlot(id: string): void {
+    const slot = this.slots.find((sl) => sl.region.id === id)
+    if (!slot) return
+    play(this, 'upgrade')
+    const r = slot.region
+    const ring = this.add.graphics().setDepth(9000)
+    slot.icon.setScale(slot.icon.scale * 1.4)
+    this.tweens.add({
+      targets: slot.icon, scaleX: slot.icon.scaleX / 1.4, scaleY: slot.icon.scaleY / 1.4,
+      duration: 260, ease: 'Back.easeOut',
+    })
+    this.tweens.addCounter({
+      from: 0, to: 1, duration: 900,
+      onUpdate: (tw) => {
+        const t = tw.getValue() ?? 0
+        ring.clear()
+        ring.lineStyle(3, 0xf2d06b, 1 - t)
+        ring.strokeCircle(r.cx, r.cy, r.boxH / 2 + 2 + t * 18)
+      },
+      onComplete: () => ring.destroy(),
+    })
+  }
+
   /** Castable at all, ignoring cooldown: the hero has to be up for his own
    *  actives, and a rare drop is only usable while it is held. */
   private slotUsable(slot: SlotRegion, s: GameScene['status']): boolean {
+    if (slot.kind === 'restructure') return s.lastStand && !s.heroDown
     if (slot.kind !== 'ability') return !s.heroDown
     if (slot.id === s.rareAbility) return true
     return s.abilities.includes(slot.id)
+  }
+
+  /**
+   * Whether a slot's icon is on the glass at all.
+   *
+   * Restructure only exists during DAD MODE. Its slot is NOT removed when it
+   * is gone — the bar is laid out from a fixed list of ids, so every other
+   * icon keeps its exact position whether or not this one is showing. A bar
+   * that reflows mid-fight causes misfires, and misfiring the Server Nuke
+   * costs a run.
+   */
+  private slotShown(slot: SlotRegion, s: GameScene['status']): boolean {
+    return slot.kind !== 'restructure' || s.lastStand
   }
 
   /**

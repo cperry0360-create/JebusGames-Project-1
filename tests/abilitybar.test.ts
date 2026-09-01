@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import {
   barWidth, iconBox, regions, slotDefs, slotSignature,
   type BarMetrics, type SlotDef,
@@ -136,4 +137,45 @@ test('the two shapes stay in their own groups, with one seam between them', () =
   assert.equal(seams, 1, 'expected exactly one gap, between the drafted group and the hero group')
   assert.deepEqual(placed.map((r) => r.hero), [false, false, false, false, true, true],
     'the hero medallions must stay last')
+})
+
+test('a hidden ability keeps its slot, so nothing else moves', () => {
+  // Restructure only exists during DAD MODE, and it arrives and leaves
+  // mid-fight. The bar is laid out from a fixed list of ids, so hiding it must
+  // not reflow anything: a bar that shifts under the player's thumb causes
+  // misfires, and misfiring the Server Nuke costs a run.
+  //
+  // This is a property of the LAYOUT, not of the drawing: the same defs go in
+  // whether or not the icon is on the glass, so the same regions come out.
+  const defs = hand(2)
+  const shown = regions(defs, BAR, PLACE)
+  const hidden = regions(defs, BAR, PLACE)
+  assert.deepEqual(
+    hidden.map((r) => [r.id, r.cx, r.cy, r.pitch]),
+    shown.map((r) => [r.id, r.cx, r.cy, r.pitch]),
+  )
+
+  // And the signature is unchanged, so the bar is not rebuilt when it toggles.
+  assert.equal(slotSignature(defs), slotSignature(defs))
+  assert.ok(defs.some((d) => d.id === 'restructure'),
+    'restructure must stay in the slot list even while it is hidden')
+})
+
+test('the HUD hides Restructure rather than removing it', () => {
+  const hud = readFileSync(new URL('../src/scenes/HudScene.ts', import.meta.url), 'utf8')
+  // Visibility is decided per frame from the run's state, not by rebuilding
+  // the bar with a different set of slots.
+  assert.match(hud, /slotShown\([\s\S]{0,400}kind !== 'restructure' \|\| s\.lastStand/,
+    'Restructure is not gated on DAD MODE in the HUD')
+  assert.match(hud, /slot\.hit\.input!\.enabled = shown/,
+    'a hidden slot is still tappable')
+  // An empty socket, not a greyed copy of the icon.
+  assert.match(hud, /strokeCircle\(r\.cx, r\.cy, r\.boxH \/ 2 - 3\)/,
+    'the reserved slot is not drawn as an empty socket')
+
+  const game = readFileSync(new URL('../src/scenes/GameScene.ts', import.meta.url), 'utf8')
+  assert.match(game, /if \(!this\.hero\.lastStandActive\) \{[\s\S]{0,200}refuse/,
+    'armRestructure is not gated on DAD MODE')
+  assert.match(game, /cancelRestructure\(\)/,
+    'a relocation in progress is not cancelled when DAD MODE ends')
 })
