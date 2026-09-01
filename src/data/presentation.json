@@ -122,5 +122,36 @@
     "liftMs": 170,
     "travelMs": 300,
     "dropMs": 200
+  },
+  "serverNuke": {
+    "earned": {
+      "headline": "NUKE THE SERVER!",
+      "subhead": "YOU EARNED IT, NERD!",
+      "skipHint": "tap to skip",
+      "medallionHeight": 260,
+      "blastSize": 620,
+      "bounceMs": 420,
+      "slamMs": 220,
+      "holdMs": 700,
+      "flyMs": 520,
+      "shakeMs": 300,
+      "shakeIntensity": 0.018,
+      "flashMs": 220,
+      "dim": 0.78
+    },
+    "launch": {
+      "heading": "LAUNCH NUKE",
+      "closeLabel": "X",
+      "confirmHint": "press the button",
+      "buttonHeight": 300,
+      "pulseMs": 1400,
+      "pulseScale": 1.045,
+      "pressHoldMs": 420,
+      "shakeMs": 260,
+      "shakeIntensity": 0.016,
+      "dim": 0.72,
+      "closeSize": 56,
+      "closeMargin": 18
+    }
   }
 }

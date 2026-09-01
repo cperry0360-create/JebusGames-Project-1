@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import type { ScratchOutcome } from '../systems/Scratch.ts'
+import { NukeEarnedOverlay, NukeLaunchOverlay } from '../ui/NukeOverlays.ts'
 import type {
   AbilityDef, DraftDef, EnemyDef, HeroDef, MapDef, RulesDef, TowerDef, WavesDef,
 } from '../types.ts'
@@ -50,6 +51,7 @@ import { logEvent, provideState } from '../systems/Diagnostics.ts'
 import { heartbeat, setRunActive } from '../systems/Watchdog.ts'
 import { hudLayout, hudTakesPress, NO_INSETS, type HudLayout } from '../systems/HudLayout.ts'
 import { cameraAcceptsGestures, LAYER } from '../systems/Layers.ts'
+import { barWidth, regions, slotDefs, type BarMetrics } from '../systems/AbilityBar.ts'
 import { safeAreaInsets } from '../systems/SafeArea.ts'
 
 /** The HUD's layout constants, shared with HudScene so both agree. */
@@ -194,6 +196,9 @@ export class GameScene extends Phaser.Scene {
   private restructuring: Tower | null = null
   /** Public so a harness run can assert the modal contract from outside. */
   ticket: ScratchCard | null = null
+  /** The Server Nuke's two moments. Both are modals; see ui/NukeOverlays.ts. */
+  nukeEarned: NukeEarnedOverlay | null = null
+  nukeLaunch: NukeLaunchOverlay | null = null
   /** One Server Nuke per run, dropped or not. */
   private nukeUsed = false
   /** Enemies that reached the exit during the current wave. Reset at its
@@ -560,6 +565,8 @@ this.armReadyCountdown()
   get modalOpen(): boolean {
     return this.dialog?.active === true
       || this.ticket?.active === true
+      || this.nukeEarned?.active === true
+      || this.nukeLaunch?.active === true
   }
 
   /**
@@ -832,6 +839,8 @@ this.armReadyCountdown()
         // tapping a second one cast the first at the bar's own position, which
         // is how a Server Nuke could be spent without the player ever touching
         // the lane.
+        || this.nukeEarned?.owns(over) === true
+        || this.nukeLaunch?.owns(over) === true
         || hudTakesPress(this.layout, p.x, p.y)
     })
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
@@ -1492,7 +1501,14 @@ this.armReadyCountdown()
       logEvent('ability-refused', `${id} during cast`)
       return
     }
-    if (id === RULES.serverNuke.abilityId && this.status.rareAbility !== id) return
+    if (id === RULES.serverNuke.abilityId) {
+      if (this.status.rareAbility !== id) return
+      // Never fired straight off the icon. It is once per run and a misfire
+      // is unrecoverable, so the tap opens a confirmation and the launch is a
+      // second, deliberate press on a button that does nothing else.
+      this.openNukeLaunch()
+      return
+    }
     if (!this.cooldowns.ready(id)) {
       play(this, 'error')
       this.status.message = `${ABILITIES[id].name} is still on cooldown.`
@@ -2303,37 +2319,111 @@ this.armReadyCountdown()
     this.announceRareDrop(ABILITIES[cfg.abilityId].name)
   }
 
-  private announceRareDrop(name: string): void {
-    const cam = this.cameras.main
-    cam.flash(520, 180, 255, 220)
-    cam.shake(360, 0.009)
-    play(this, 'cast-servernuke', 0.8)
+  /**
+   * The launch confirmation.
+   *
+   * Bypasses armAbility entirely on the way back in: the ability is cast from
+   * `fireAbility` once the dome has actually been pressed, so nothing that
+   * merely opens this panel can spend the drop.
+   */
+  private openNukeLaunch(): void {
+    if (this.nukeLaunch?.active) return
+    this.nukeLaunch = new NukeLaunchOverlay(
+      this,
+      () => {
+        this.nukeLaunch = null
+        // Instant targeting: the nuke takes the whole board, so there is
+        // nowhere to aim it.
+        this.fireAbility(RULES.serverNuke.abilityId, this.hero.x, this.hero.y)
+      },
+      () => {
+        this.nukeLaunch = null
+        this.status.message = 'Launch aborted. The nuke is still yours.'
+      },
+    )
+    this.asScreenSpace(this.nukeLaunch.objects)
+  }
 
-    const W = this.scale.width
-    const y = this.scale.height * 0.3
-    // Not full width, and high rather than centred. This fires *mid-wave* off
-    // a kill, so it must not hide the lane at the moment it hands the player a
-    // decision — the boss card can afford to, arriving at the start of a wave.
-    const bw = 520
-    const banner = platePanel(this, W / 2 - bw / 2, y - 34, bw, 88)
-    banner.forEach((p) => p.setDepth(TICKET_DEPTH))
+  /**
+   * The announcement, when the drop is EARNED — not when it is used.
+   *
+   * Once per run by construction: the drop itself is gated on `nukeUsed` and
+   * on `rareAbility` already being held, so this cannot fire twice.
+   *
+   * It is deliberately not shown while another ability is winding up or while
+   * a dialog is open. Freezing the board on top of a cast the player is
+   * watching, or on top of a decision they are making, turns the loudest
+   * moment in the game into an interruption.
+   */
+  announceRareDrop(name: string): void {
+    if (this.casting || this.modalOpen) {
+      // The drop still happened; it just arrives quietly rather than on top of
+      // something else. Better a muted moment than a stolen one.
+      this.announce(name.toUpperCase(), '#8fd0ff')
+      this.status.message = `${name} acquired. One use.`
+      play(this, 'cast-servernuke', 0.8)
+      return
+    }
 
-    const title = this.add.text(W / 2, y - 16, name.toUpperCase(), {
-      fontFamily: FONT_UI, fontSize: '32px', fontStyle: 'bold', color: '#8fd0ff',
-      stroke: '#0d1016', strokeThickness: 6, letterSpacing: 1,
-    }).setOrigin(0.5, 0).setDepth(TICKET_DEPTH + 1)
-    const sub = this.add.text(W / 2, y + 22, 'RARE DROP — ONE USE', {
-      fontFamily: FONT_UI, fontSize: '16px', color: COLOR.ink, letterSpacing: 1,
-    }).setOrigin(0.5, 0).setDepth(TICKET_DEPTH + 1)
+    const slot = this.abilitySlotFor(RULES.serverNuke.abilityId)
+    this.nukeEarned = new NukeEarnedOverlay(
+      this,
+      ABILITIES[RULES.serverNuke.abilityId].icon,
+      slot,
+      () => {
+        this.nukeEarned = null
+        this.status.message = `${name} acquired. One use. Tap it when you mean it.`
+      },
+    )
+    this.nukeEarned.onEffect = (obj) => this.asScreenSpace([obj])
+    this.asScreenSpace(this.nukeEarned.objects)
+  }
 
-    const pieces: Phaser.GameObjects.GameObject[] = [...banner, title, sub]
-    this.asScreenSpace(pieces)
-    this.tweens.add({
-      targets: pieces, alpha: 0, delay: 2100, duration: 600,
-      onComplete: () => pieces.forEach((o) => o.destroy()),
+  /**
+   * Where in the ability bar an icon will end up, so the announcement can fly
+   * into it.
+   *
+   * Worked out from the same region list the HUD builds its slots from, rather
+   * than guessed at — the bar re-centres itself when the hand grows, so a
+   * hardcoded corner would point at the wrong place precisely on the one
+   * occasion this is used.
+   */
+  private abilitySlotFor(id: string): { x: number; y: number; height: number } {
+    const bar = PRESENTATION.abilityBar as BarMetrics
+    const hero = this.heroDef()
+    const defs = slotDefs(
+      this.status.abilities,
+      this.status.rareAbility,
+      (aid) => ABILITIES[aid],
+      [
+        { id: 'haymaker', kind: 'haymaker', icon: hero.haymaker.icon, hero: true },
+        { id: 'restructure', kind: 'restructure', icon: hero.restructure.icon, hero: true },
+      ],
+    )
+    // The bar is laid out for the hand INCLUDING the new drop, which is what
+    // the HUD will do on its next frame.
+    const width = barWidth(defs, bar)
+    const layout = hudLayout(
+      {
+        width: this.scale.width,
+        height: this.scale.height,
+        insets: safeAreaInsets(),
+        countersWidth: 0,
+        abilitiesWidth: width,
+      },
+      LAYOUT,
+    )
+    const placed = regions(defs, bar, {
+      x: layout.abilities.x,
+      y: layout.abilities.y,
+      scale: layout.abilityScale,
+      iconH: 64,
     })
-    this.tweens.add({ targets: title, scale: { from: 0.6, to: 1 }, duration: 320, ease: 'Back.easeOut' })
-    this.status.message = `${name} recovered. One use, then it is gone.`
+    const mine = placed.find((r) => r.id === id) ?? placed[placed.length - 1]
+    if (!mine) {
+      return { x: this.scale.width / 2, y: this.scale.height - 50, height: 64 }
+    }
+    return { x: mine.cx, y: mine.cy, height: mine.boxH }
   }
 
   /** Routes an enemy's melee to whatever is actually holding it. */

@@ -1996,6 +1996,108 @@ async function run() {
     return
   }
 
+  if (scenario === 'nukeseq') {
+    // Both Server Nuke moments, at whatever viewport the run was given.
+    const hud = game.scene.getScene('Hud')
+    const vp = VP.w + 'x' + VP.h
+    note('viewport ' + vp)
+    g.status.peanuts = 99999
+    await build(3, 0)
+    g.startWave()
+    await sleep(900)
+
+    // --- 1. Earned -------------------------------------------------------
+    g.status.rareAbility = 'serverNuke'
+    g.cooldowns.reset('serverNuke')
+    g.announceRareDrop('Server Nuke')
+    await sleep(260)
+    const ov = g.nukeEarned
+    note('earned: overlay=' + !!ov + ' modalOpen=' + g.modalOpen +
+      ' HUD visible=' + hud.cameras.main.visible)
+    await shot('nukeseq-01-earned-' + vp)
+    await sleep(420)
+    await shot('nukeseq-02-slam-' + vp)
+
+    // Everything on screen must be inside the viewport.
+    const clipped = []
+    const check = (label, obj) => {
+      if (!obj) return
+      const b = obj.getBounds()
+      if (b.x < -1 || b.y < -1 || b.right > VP.w + 1 || b.bottom > VP.h + 1) {
+        clipped.push(label + ' ' + Math.round(b.x) + ',' + Math.round(b.y) +
+          ' ' + Math.round(b.width) + 'x' + Math.round(b.height))
+      }
+    }
+    if (ov) {
+      check('headline', ov.headline); check('subhead', ov.subhead)
+      check('medallion', ov.medallion)
+      note('  medallion ' + Math.round(ov.medallion.displayWidth) + 'x' +
+        Math.round(ov.medallion.displayHeight) +
+        ' headline ' + Math.round(ov.headline.width) + 'x' + Math.round(ov.headline.height))
+    }
+    note('  clipped: ' + (clipped.length ? clipped.join(' | ') : 'nothing'))
+
+    await until(() => !g.nukeEarned, 6000)
+    note('earned overlay closed; rareAbility=' + g.status.rareAbility +
+      ' modalOpen=' + g.modalOpen + ' HUD visible=' + hud.cameras.main.visible)
+
+    // --- 2. Launch confirmation -----------------------------------------
+    await sleep(400)
+    g.armAbility('serverNuke')
+    await sleep(500)
+    const lp = g.nukeLaunch
+    note('launch: panel=' + !!lp + ' modalOpen=' + g.modalOpen +
+      ' HUD visible=' + hud.cameras.main.visible + ' casting=' + g.casting)
+    await shot('nukeseq-03-launch-' + vp)
+    const clip2 = []
+    if (lp) {
+      const bb = lp.button.getBounds()
+      note('  button ' + Math.round(bb.width) + 'x' + Math.round(bb.height) +
+        ' at ' + Math.round(bb.centerX) + ',' + Math.round(bb.centerY))
+      const cb = lp.closeHit.getBounds()
+      note('  X hit ' + Math.round(cb.width) + 'x' + Math.round(cb.height) +
+        ' at ' + Math.round(cb.centerX) + ',' + Math.round(cb.centerY) +
+        '; distance from the dome centre ' +
+        Math.round(Math.hypot(cb.centerX - bb.centerX, cb.centerY - bb.centerY)) + 'px')
+      for (const [n, o] of [['button', lp.button], ['X', lp.closeHit]]) {
+        const b = o.getBounds()
+        if (b.x < -1 || b.y < -1 || b.right > VP.w + 1 || b.bottom > VP.h + 1) {
+          clip2.push(n)
+        }
+      }
+    }
+    note('  clipped: ' + (clip2.length ? clip2.join(', ') : 'nothing'))
+
+    // A tap on empty space must do nothing at all.
+    const before = { open: !!g.nukeLaunch, rare: g.status.rareAbility, casting: g.casting }
+    await click(VP.w * 0.82, VP.h * 0.5)
+    await sleep(250)
+    note('  tap on empty space: panel still open=' + !!g.nukeLaunch +
+      ' rare=' + g.status.rareAbility + ' casting=' + g.casting +
+      (!!g.nukeLaunch === before.open && g.casting === before.casting ? '  (nothing happened)' : '  *** SOMETHING HAPPENED ***'))
+
+    // The X cancels and the ability survives.
+    const cb2 = g.nukeLaunch.closeHit.getBounds()
+    await click(cb2.centerX, cb2.centerY)
+    await sleep(300)
+    note('  tap the X: panel=' + !!g.nukeLaunch + ' rare=' + g.status.rareAbility +
+      ' casting=' + g.casting + ' modalOpen=' + g.modalOpen)
+
+    // And the dome fires it.
+    g.armAbility('serverNuke')
+    await sleep(450)
+    const hb = g.nukeLaunch.hit.getBounds()
+    await click(hb.centerX, hb.centerY)
+    await sleep(200)
+    await shot('nukeseq-04-pressed-' + vp)
+    await sleep(700)
+    note('  press the dome: panel=' + !!g.nukeLaunch + ' casting=' + g.casting +
+      ' rare=' + g.status.rareAbility)
+    await sleep(2500)
+    note('  after the cast: rare=' + g.status.rareAbility + ' casting=' + g.casting)
+    return
+  }
+
   if (scenario === 'heroblock') {
     // How many enemies does one man actually hold, and what does that cost him?
     // Measured before anything is changed, because the data says 3 and the

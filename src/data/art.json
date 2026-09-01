@@ -59,7 +59,9 @@
     "prop-sign-courjahan": "props/sign_courjahan.png",
     "prop-pad": "props/pad_donotbuild.png",
     "turret-ledger-t2": "towers/tower_withholding_t2.png",
-    "turret-ledger-t3": "towers/tower_withholding_t3.png"
+    "turret-ledger-t3": "towers/tower_withholding_t3.png",
+    "ui-nuke-up": "ui/btn_nuke_up.png",
+    "ui-nuke-down": "ui/btn_nuke_down.png"
   },
   "render": {
     "turret-escalation": {
@@ -407,6 +409,14 @@
       "shadowWidth": 69.1,
       "contentWidth": 239,
       "contentHeight": 472
+    },
+    "ui-nuke-up": {
+      "contentWidth": 600,
+      "contentHeight": 495
+    },
+    "ui-nuke-down": {
+      "contentWidth": 600,
+      "contentHeight": 495
     }
   },
   "map": {
@@ -426,7 +436,11 @@
     },
     "iconButton": "ui-btn-icon",
     "iconButtonActive": "ui-btn-icon-active",
-    "panel": "ui-panel-dialog"
+    "panel": "ui-panel-dialog",
+    "nukeButton": {
+      "up": "ui-nuke-up",
+      "down": "ui-nuke-down"
+    }
   },
   "fx": {
     "spark": "fx-hit-spark",

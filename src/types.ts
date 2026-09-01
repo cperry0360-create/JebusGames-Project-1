@@ -538,6 +538,9 @@ export interface ArtDef {
     iconButtonActive: string
     /** The frame behind every dialog: draft cards, build menu, boss card. */
     panel: string
+    /** The launch button's two states. Same box, chrome ring in the same
+     *  place, so swapping reads as the dome depressing. */
+    nukeButton: { up: string; down: string }
   }
   /** Props painted onto the map rather than owned by an entity. */
   prop: {
