@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { scatter, distanceToPath, scatterRng, type ScatterKind } from '../src/systems/Scatter.ts'
 
 const url = (p: string) => new URL(p, import.meta.url)
@@ -10,6 +10,7 @@ const read = (n: string) => JSON.parse(readFileSync(url(`../src/data/${n}.json`)
 const MAP = read('map')
 const DISPLAY = read('display')
 const P = read('presentation')
+const art = read('art')
 const cfg = P.scatter
 
 const input = {
@@ -253,29 +254,58 @@ test('exactly one build spot keeps the sign, and it is the one nearest the entra
   assert.equal(signIndexPicks.length, 1, 'the sign index is assigned from more than one place')
   assert.ok(!/isSign = true/.test(fn), 'something can force a spot to carry the sign')
 
-  // And the fallback cannot be "the sign" any more. A generated marker means
-  // the one-sign rule holds whether or not the art has been uploaded.
-  assert.match(fn, /ART\.generated\.buildPad/,
-    'a missing upload still falls back to the sign, which is what put seven on the map')
-  assert.match(fn, /uploaded && this\.textures\.exists\(uploaded\)/,
-    'the uploaded art no longer takes precedence over the generated marker')
+  // THE ASSET THAT BLANKED THE GAME. It is painted art now, and REQUIRED —
+  // an optional hook whose file never arrived is what put seven signs on the
+  // board, and a procedurally drawn disc is what propped it up in the interim.
+  const quietKey = art.prop.buildPadQuiet
+  assert.ok(quietKey, 'there is no quiet marker key at all')
+  assert.ok(art.files[quietKey], `${quietKey} is not in the manifest`)
+  assert.ok(!(art.optional ?? []).includes(quietKey),
+    'the pad art is on the optional list, where a missing file says nothing')
+  assert.ok(existsSync(url(`../public/${art.assetRoot}${art.files[quietKey]}`)),
+    `${quietKey} -> ${art.files[quietKey]} is not in the repo`)
+  // Required means boot SAYS so and keeps going. The existence check stays
+  // whatever the manifest claims, and what "keeps going" means is the sign.
+  assert.match(fn, /this\.textures\.exists\(quietKey\)/,
+    'the pad is drawn without checking its art loaded, which is a blank render')
+  assert.match(fn, /const isSign = i === signIndex \|\| !hasQuiet/,
+    'a missing pad texture no longer falls back to anything')
+  // And the disc is gone, along with everything that drew it.
   const boot = src('scenes/BootScene.ts')
-  assert.match(boot, /ensureBuildPadTexture\(this\)/, 'the marker is never generated')
+  assert.ok(!/ensureBuildPadTexture/.test(boot + src('systems/Presentation.ts')),
+    'the procedural marker is still being generated')
+  assert.ok(!/generated\.buildPad/.test(src('scenes/GameScene.ts')),
+    'the pad still falls back to a texture nothing draws any more')
+  assert.equal((art.generated as Record<string, string>).buildPad, undefined,
+    'the manifest still names a generated pad texture')
+
   // The pad has to read as a buildable slot at a glance, which it did not
   // when it was a third of the sign: at 26px it was a brown smudge, and next
   // to a rock it WAS a rock. It is bigger than every scatter prop and still
   // clearly smaller than the one sign, which stays the loudest thing there.
+  //
+  // Its size is specified in SCREEN pixels, so the world figure the rest of
+  // this compares against is derived the same way the scene derives it.
   const P2 = read('presentation') as any
-  const padH = P2.buildPad.quietHeight
+  const padW = P2.buildPad.quietScreenWidth / DISPLAY.camera.defaultZoom
+  const r = (art.render as Record<string, any>)[quietKey]
+  assert.ok(r?.contentWidth && r?.contentHeight,
+    `${quietKey} has no measured content extents, so fitContentWidth divides by the frame`)
+  const padH = padW * (r.contentHeight / r.contentWidth)
   const ratio = padH / P2.buildPad.signHeight
   assert.ok(ratio > 0.45 && ratio < 0.8,
     `the pad is ${(ratio * 100).toFixed(0)}% of the sign; it should read as a slot, not as a second sign`)
   // Bigger than the biggest thing it could be mistaken for. Scatter radii are
   // half-extents, so the widest prop spans twice its radius, at native scale.
   const widestProp = Math.max(...(cfg.kinds as ScatterKind[]).map((k) => k.radius)) * 2
-  const padW = padH * (P2.buildPad.marker.textureWidth / P2.buildPad.marker.textureHeight)
   assert.ok(padW > widestProp * 1.5,
     `the pad is ${padW.toFixed(0)}px across and the widest prop is ${widestProp}px; it will read as scenery`)
+  // CLAUDE.md rule 7, on the one piece of art that was cut for it: the source
+  // must hold up at the top of the zoom band on a 3x screen.
+  const wanted = padH * DISPLAY.camera.maxZoom * 3
+  assert.ok(r.contentHeight >= wanted * 0.9,
+    `the pad is ${r.contentHeight}px of source for a ${padH.toFixed(0)}px render; `
+    + `rule 7 wants ${wanted.toFixed(0)}`)
   // The art shrinks; the tap target does not. Taps are geometric, against
   // map.spotRadius, and never against the sprite.
   assert.ok(!/pads\[[^\]]*\]\.setInteractive/.test(g), 'a pad carries its own hit area')

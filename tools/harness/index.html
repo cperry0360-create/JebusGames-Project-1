@@ -2648,6 +2648,111 @@ async function run() {
     return
   }
 
+  if (scenario === 'padart') {
+    // The painted flagstone, at both viewport sizes and both ends of the zoom
+    // band: does it read as a build site, or does it vanish into the grass?
+    //
+    // The second half of that is a MEASUREMENT, not a look. "Disappears into
+    // the grass" means the pixels where the pad is are the same colour as the
+    // pixels around it, and a screenshot can be squinted at either way.
+    const D = (await import('./js/data/display.json', { with: { type: 'json' } })).default
+    const A = await import('./js/systems/Art.js')
+    const P = (await import('./js/data/presentation.json', { with: { type: 'json' } })).default
+    const AJ = (await import('./js/data/art.json', { with: { type: 'json' } })).default
+    const cam = g.cameras.main
+    const key = A.ART.prop.buildPadQuiet
+    const dpr = window.devicePixelRatio || 1
+    note('viewport ' + VP.w + 'x' + VP.h + '  devicePixelRatio ' + dpr)
+    note('quiet marker key: ' + key + '  loaded=' + game.textures.exists(key) +
+      '  file ' + AJ.files[key])
+    note('asked for ' + P.buildPad.quietScreenWidth + ' screen px across at the default zoom of '
+      + D.camera.defaultZoom)
+
+    const quiet = g.pads.filter((pd) => pd.texture.key === key)
+    const signs = g.pads.filter((pd) => pd.texture.key !== key)
+    note('pads: ' + g.pads.length + ' — ' + quiet.length + ' flagstone, ' + signs.length +
+      ' sign' + (signs.length === 1 ? '  correct' : '  *** SHOULD BE EXACTLY 1 ***'))
+    if (quiet.length === 0) {
+      // THE MISSING-FILE CASE, which is the one this asset has failed before.
+      // Not an error to bail on: the point is that the game is still running,
+      // still playable, and saying loudly what is wrong. Rename the file out
+      // of tools/harness/stage/assets/props to reproduce it.
+      note('*** NO FLAGSTONE PADS: the art did not load ***')
+      note('   the game booted anyway: bootFailed=' + bootBroken +
+        ', ' + g.pads.length + ' spots all fell back to the sign')
+      const banner = document.getElementById('missing-art')
+      note('   and it says so: banner ' + (banner ? '"' + banner.textContent + '"' : 'MISSING'))
+      await shot('padart-nofile-' + VP.w + 'x' + VP.h)
+      return
+    }
+    const q = quiet[0]
+    note('world size ' + q.displayWidth.toFixed(1) + ' x ' + q.displayHeight.toFixed(1) + ' px' +
+      '  (source ' + q.texture.source[0].width + 'x' + q.texture.source[0].height + ')')
+
+    // Reading the canvas directly. Under the harness's software path this is
+    // the CANVAS renderer, so getImageData is real pixels.
+    const ctx = game.canvas.getContext('2d')
+    const patch = (cx, cy, r) => {
+      const x = Math.max(0, Math.round(cx - r)), y = Math.max(0, Math.round(cy - r))
+      const w = Math.min(game.canvas.width - x, Math.round(r * 2))
+      const h = Math.min(game.canvas.height - y, Math.round(r * 2))
+      if (w <= 0 || h <= 0) return null
+      const d = ctx.getImageData(x, y, w, h).data
+      let R = 0, G = 0, B = 0, n = 0
+      for (let i = 0; i < d.length; i += 4) { R += d[i]; G += d[i+1]; B += d[i+2]; n++ }
+      return { r: R / n, g: G / n, b: B / n }
+    }
+    const contrast = (a, b) => Math.sqrt((a.r-b.r)**2 + (a.g-b.g)**2 + (a.b-b.b)**2)
+
+    for (const zName of ['min', 'default', 'max']) {
+      const z = (zName === 'min' ? D.camera.minZoom
+        : zName === 'max' ? D.camera.maxZoom : D.camera.defaultZoom) * dpr
+      g.rig.setTargetZoom(z)
+      await until(() => Math.abs(cam.zoom - z) < 0.01, 5000)
+      // A flagstone in the middle of the view, so it is not clipped by an edge.
+      await lookAt(q.x, q.y)
+      await sleep(260)
+      // Screen size, in CSS pixels — the unit the size was asked for in.
+      const screenW = q.displayWidth * cam.zoom / dpr
+      const screenH = q.displayHeight * cam.zoom / dpr
+      // Canvas coordinates for the sampling, which are device pixels.
+      const px = (q.x - cam.worldView.x) * cam.zoom + cam.x
+      const py = (q.y - cam.worldView.y) * cam.zoom + cam.y
+      const half = q.displayWidth * cam.zoom / 2
+      const inside = patch(px, py, Math.max(2, half * 0.28))
+      const outside = patch(px + half * 1.9, py, Math.max(2, half * 0.22))
+      const dc = inside && outside ? contrast(inside, outside) : -1
+      note('at ' + zName + ' zoom ' + (cam.zoom / dpr).toFixed(2) + ': ' +
+        screenW.toFixed(0) + ' x ' + screenH.toFixed(0) + ' screen px' +
+        (zName === 'default'
+          ? '  (asked for ' + P.buildPad.quietScreenWidth + ' across — ' +
+            // Deliberately loose. Every pad carries a per-instance scale
+            // jitter and a slow breathing pulse, so a live measurement is up
+            // to a tenth either side of nominal and a tight bound here would
+            // fail on the animation working correctly.
+            (Math.abs(screenW - P.buildPad.quietScreenWidth) <= P.buildPad.quietScreenWidth * 0.12
+              ? 'matches, within the jitter and the pulse' : '*** OFF ***') + ')'
+          : ''))
+      note('   pad rgb ' + (inside ? [inside.r, inside.g, inside.b].map((v) => Math.round(v)).join(',') : '?') +
+        '  grass beside it ' + (outside ? [outside.r, outside.g, outside.b].map((v) => Math.round(v)).join(',') : '?') +
+        '  separation ' + dc.toFixed(1) +
+        (dc >= 24 ? '  reads clearly' : dc >= 12 ? '  faint' : '  *** DISAPPEARS INTO THE GRASS ***'))
+      await shot('padart-' + zName + '-' + VP.w + 'x' + VP.h)
+    }
+
+    // And the sign is still the loudest thing on the board.
+    if (signs.length === 1) {
+      note('the one sign is ' + signs[0].displayWidth.toFixed(0) + 'x' +
+        signs[0].displayHeight.toFixed(0) + ' world px against the flagstone\'s ' +
+        q.displayWidth.toFixed(0) + 'x' + q.displayHeight.toFixed(0) +
+        (signs[0].displayHeight > q.displayHeight ? '  — still taller' : '  *** OUTGROWN ***'))
+      await lookAt(signs[0].x, signs[0].y)
+      await sleep(200)
+      await shot('padart-sign-' + VP.w + 'x' + VP.h)
+    }
+    return
+  }
+
   if (scenario === 'signs') {
     // Exactly one full-size DO NOT BUILD HERE sign on the whole map.
     const A = await import('./js/systems/Art.js')

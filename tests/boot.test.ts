@@ -59,7 +59,6 @@ test('an optional key is a short deliberate list, and every one has a fallback',
   // checked fallback. Eight walk frames sharing one fallback are one decision,
   // not eight; a stray key belonging to no family is the thing to catch.
   const FAMILIES: Array<{ match: RegExp; fallback: string }> = [
-    { match: /^prop-build-pad$/, fallback: 'the generated build pad' },
     { match: /^icon-/, fallback: 'the generated icon stand-in' },
     { match: /^hero-cory-(walk|attack)-\d$/, fallback: 'the static idle sprite' },
   ]
@@ -72,18 +71,22 @@ test('an optional key is a short deliberate list, and every one has a fallback',
     assert.ok(art.files[key], `${key} is marked optional but is not in the manifest`)
   }
   // Every family's fallback is real code, not a comment.
-  assert.match(src('scenes/BootScene.ts'), /ensureBuildPadTexture\(this\)/, 'no build-pad fallback')
   assert.match(src('scenes/BootScene.ts'), /ensureIconFallbackTexture\(this\)/, 'no icon fallback')
   assert.match(src('entities/Hero.ts'), /return this\.def\.bodySprite/,
     'a missing hero frame does not fall back to the static idle')
 
+  // The build pad is REQUIRED art now, not an optional hook — it was the one
+  // that took the game down to a green screen, and a hook whose file never
+  // arrived is what put seven signs on the board afterwards. Required means
+  // boot names it in a banner and carries on, so the existence check and the
+  // fallback matter more than they did, not less.
   const game = src('scenes/GameScene.ts')
-  if (optional.includes('prop-build-pad')) {
-    assert.match(game, /this\.textures\.exists\(quietKey\)/,
-      'the build pad has no existence check, so a missing file would draw nothing')
-    assert.match(game, /const isSign = i === signIndex \|\| !hasQuiet/,
-      'the build pad does not fall back to the sign when its art is absent')
-  }
+  assert.ok(!optional.includes('prop-pad-flagstone') && !optional.includes('prop-build-pad'),
+    'the build pad is back on the optional list, where a missing file says nothing')
+  assert.match(game, /this\.textures\.exists\(quietKey\)/,
+    'the build pad has no existence check, so a missing file would draw nothing')
+  assert.match(game, /const isSign = i === signIndex \|\| !hasQuiet/,
+    'the build pad does not fall back to the sign when its art is absent')
 })
 
 test('the scatter skips props whose art did not load', () => {

@@ -25,7 +25,7 @@ import { makeRng } from '../systems/Draft.ts'
 import { scatter, type ScatterKind, type Rect } from '../systems/Scatter.ts'
 import { installAmbient, type AmbientDef, type AmbientStyle } from '../systems/Ambient.ts'
 import { dashArcs, HeroMarkers, type MarkersDef } from '../systems/HeroMarkers.ts'
-import { ART, applyRender, fitContentHeight } from '../systems/Art.ts'
+import { ART, applyRender, fitContentHeight, fitContentWidth } from '../systems/Art.ts'
 import { EFFECT_MS, playEffect, sizeForRadius } from '../systems/Effects.ts'
 import { Cooldowns } from '../systems/Cooldowns.ts'
 import { unlockedTowerCount } from '../systems/Draft.ts'
@@ -825,17 +825,22 @@ this.armReadyCountdown()
 
   private createPads(): void {
     const signKey = ART.prop.buildPad
-    // The quiet marker is an optional manifest hook: the key and the path were
-    // agreed before the art was drawn, so until the file lands every pad falls
-    // back to the sign and the board still reads.
-    // The uploaded art if it has landed, otherwise the one generated at boot.
-    // A hook alone was not enough: the art never arrived, every pad fell back
-    // to the sign, and the board carried SEVEN full-size signs.
-    const uploaded = ART.prop.buildPadQuiet
-    const quietKey = uploaded && this.textures.exists(uploaded)
-      ? uploaded
-      : ART.generated.buildPad
-    const hasQuiet = this.textures.exists(quietKey)
+    // THE ASSET THAT BLANKED THE GAME, and what is different now.
+    //
+    // The quiet marker used to be an optional manifest hook — a key and a path
+    // agreed before the art was drawn. The art never arrived, so every pad
+    // took the fallback and the board carried SEVEN full-size signs shouting
+    // the same joke. It was propped up with a procedurally drawn disc, which
+    // is gone: the painted flagstone is here and it is REQUIRED art now, so an
+    // absent file is an error with a banner on it rather than a hook quietly
+    // doing nothing.
+    //
+    // The existence check stays regardless. Required means boot SAYS so and
+    // keeps going, and what "keeps going" means here is every spot falling
+    // back to the sign — a loud, wrong-looking board that still plays, rather
+    // than seven invisible pads nobody can find.
+    const quietKey = ART.prop.buildPadQuiet
+    const hasQuiet = !!quietKey && this.textures.exists(quietKey)
     const cfg = PRESENTATION.buildPad
     const n = this.build.spots.length
 
@@ -855,6 +860,11 @@ this.armReadyCountdown()
     // not a thing that shuffles between sessions.
     const jitter = makeRng(0x5EED ^ this.build.spots.length)
 
+    // Screen pixels to world pixels. Derived rather than stored, so moving the
+    // zoom band cannot silently resize the pad — which is the failure mode the
+    // last two art passes both had.
+    const quietWorldWidth = cfg.quietScreenWidth / displayData.camera.defaultZoom
+
     this.pads = this.build.spots.map((spot, i) => {
       const isSign = i === signIndex || !hasQuiet
       const key = isSign ? signKey : quietKey!
@@ -863,10 +873,14 @@ this.armReadyCountdown()
       if (isSign) {
         fitContentHeight(img, key, cfg.signHeight)
       } else {
-        // About a third of the sign's footprint, and varied so seven of them
-        // do not read as one object stamped seven times: a few degrees of
-        // rotation and about a tenth of scale, both per instance.
-        fitContentHeight(img, key, cfg.quietHeight)
+        // Sized by WIDTH, in screen pixels at the default zoom, because that
+        // is the unit the size was specified in and the only one that means
+        // anything for a thing you look at. A slab's height is whatever the
+        // perspective makes it.
+        //
+        // Varied so seven of them do not read as one object stamped seven
+        // times: about a tenth of scale per instance.
+        fitContentWidth(img, key, quietWorldWidth)
         img.setScale(img.scale * (1 + (jitter() * 2 - 1) * cfg.quietJitterScale))
         img.setRotation(((jitter() * 2 - 1) * cfg.quietJitterDegrees) * Math.PI / 180)
         img.setAlpha(cfg.quietAlpha)

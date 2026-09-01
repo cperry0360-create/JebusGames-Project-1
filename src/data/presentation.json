@@ -123,25 +123,9 @@
     "placingTint": "#f0f4ec",
     "hoverTint": "#ffffff",
     "signHeight": 74,
-    "quietHeight": 44,
     "quietJitterScale": 0.05,
     "quietJitterDegrees": 0,
     "quietAlpha": 0.95,
-    "marker": {
-      "textureWidth": 176,
-      "textureHeight": 112,
-      "softLayers": 8,
-      "rimColor": 3812376,
-      "soilColor": 9270096,
-      "soilDark": 7034426,
-      "kerbColor": 13218953,
-      "kerbDark": 5522220,
-      "kerbWidth": 5,
-      "pegColor": 14206876,
-      "pegSize": 11,
-      "crossWidth": 3,
-      "crossAlpha": 0.3
-    },
     "glowAffordableAlpha": 0.34,
     "glowIdleAlpha": 0.12,
     "glowPulseMs": 1900,
@@ -151,7 +135,9 @@
       "textureHeight": 128,
       "softLayers": 10,
       "color": 16770728
-    }
+    },
+    "quietScreenWidth": 90,
+    "_quietScreenWidth": "The flagstone in SCREEN pixels across, at the default camera zoom — the unit it was asked for in, and the only one that means anything for a thing you look at. The world width falls out of it (90 / defaultZoom), so changing the zoom band does not silently resize the pad. It also lands where the art was cut for: at 90 screen px the slab is about 40 world px tall, and CLAUDE.md rule 7 wants 40 x 2.37 x 3 = 284 source pixels against the 272 delivered."
   },
   "restructure": {
     "liftPixels": 46,

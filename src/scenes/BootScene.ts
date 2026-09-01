@@ -5,7 +5,7 @@ import { OPTIONAL_SPRITE_KEYS, REQUIRED_SPRITE_KEYS } from '../systems/Art.ts'
 import { initAudio, missingCues, queueAudio } from '../systems/Audio.ts'
 import { registerEffectAnims } from '../systems/Effects.ts'
 import {
-  ensureBuildGlowTexture, ensureBuildPadTexture, ensureIconFallbackTexture, ensureShadowTexture,
+  ensureBuildGlowTexture, ensureIconFallbackTexture, ensureShadowTexture,
 } from '../systems/Presentation.ts'
 import { ensureGrey } from '../systems/Desaturate.ts'
 import { ART } from '../systems/Art.ts'
@@ -81,7 +81,6 @@ export class BootScene extends Phaser.Scene {
     }
     // Every ground shadow reuses one generated texture; build it once here.
     ensureShadowTexture(this)
-    ensureBuildPadTexture(this)
     ensureBuildGlowTexture(this)
     ensureIconFallbackTexture(this)
     // Phaser's animation manager is global, so the effect animations are

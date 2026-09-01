@@ -83,6 +83,10 @@ export const SPRITE_KEYS = Object.keys(art.files)
  * place that actually gates the game — BootScene, which refused to start
  * Splash if any key was missing — was not. The result was a green screen and
  * the word "Missing art".
+ *
+ * That key is not on this list any more. The painted flagstone arrived, so it
+ * is ordinary required art: absent means an error and a banner, which is the
+ * treatment art that is supposed to exist should get.
  */
 export const OPTIONAL_SPRITE_KEYS: string[] = (art as { optional?: string[] }).optional ?? []
 
@@ -118,6 +122,27 @@ export function fitContentHeight(
   const cfg = renderFor(key)
   sprite.setOrigin(cfg.anchorX, cfg.anchorY)
   sprite.setScale(targetHeight / (cfg.contentHeight ?? sprite.height))
+}
+
+/**
+ * Sizes art by its painted WIDTH rather than its height.
+ *
+ * The build pad is the case for it: what the eye judges a slot by is how wide
+ * it is against the tower that will stand on it, and its height is whatever
+ * the perspective makes it. Sizing that by height would mean re-deriving the
+ * width every time the art's angle changed.
+ *
+ * Divides by `contentWidth`, so transparent margin in the frame does not
+ * shrink the figure — the same reason `fitContentHeight` exists.
+ */
+export function fitContentWidth(
+  sprite: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image,
+  key: string,
+  targetWidth: number,
+): void {
+  const cfg = renderFor(key)
+  sprite.setOrigin(cfg.anchorX, cfg.anchorY)
+  sprite.setScale(targetWidth / (cfg.contentWidth ?? sprite.width))
 }
 
 /**

@@ -592,8 +592,10 @@ export interface ArtDef {
   prop: {
     signDefault: string
     signBribed: string
-    /** The marker on an empty build pad. */
+    /** The DO NOT BUILD HERE sign. Exactly one spot on the map carries it. */
     buildPad: string
+    /** The painted flagstone every other free spot carries. */
+    buildPadQuiet?: string
   }
   fx: {
     /** Landed hit: a projectile, a chain link, the Haymaker, the sign bribe. */
@@ -631,7 +633,6 @@ export interface ArtDef {
   /** Textures the game draws for itself, named here so code never does. */
   generated: {
     groundShadow: string
-    buildPad: string
     buildGlow: string
     iconMissing: string
   }

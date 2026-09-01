@@ -58,6 +58,7 @@
     "prop-sign-moes": "props/sign_moes.png",
     "prop-sign-courjahan": "props/sign_courjahan.png",
     "prop-pad": "props/pad_donotbuild.png",
+    "prop-pad-flagstone": "props/pad_flagstone.png",
     "turret-ledger-t2": "towers/tower_withholding_t2.png",
     "turret-ledger-t3": "towers/tower_withholding_t3.png",
     "ui-nuke-up": "ui/btn_nuke_up.png",
@@ -79,7 +80,6 @@
     "scatter-pebbles": "props/pebbles.png",
     "scatter-stump": "props/stump.png",
     "scatter-mushrooms": "props/mushrooms.png",
-    "prop-build-pad": "props/build_pad.png",
     "icon-upgrade": "ui/icon_upgrade.png",
     "icon-sell": "ui/icon_sell.png",
     "icon-target": "ui/icon_target.png",
@@ -565,6 +565,12 @@
       "anchorX": 0.3974,
       "anchorY": 0.9778,
       "displayHeight": 79.1
+    },
+    "prop-pad-flagstone": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 356,
+      "contentHeight": 272
     }
   },
   "map": {
@@ -628,7 +634,6 @@
   },
   "generated": {
     "groundShadow": "gen-ground-shadow",
-    "buildPad": "generated-build-pad",
     "buildGlow": "generated-build-glow",
     "iconMissing": "generated-icon-missing"
   },
@@ -651,7 +656,7 @@
     "signDefault": "prop-sign-moes",
     "signBribed": "prop-sign-courjahan",
     "buildPad": "prop-pad",
-    "buildPadQuiet": "prop-build-pad"
+    "buildPadQuiet": "prop-pad-flagstone"
   },
   "towerTiers": {
     "turret-ledger": [
@@ -677,7 +682,6 @@
     "mushrooms": "scatter-mushrooms"
   },
   "optional": [
-    "prop-build-pad",
     "icon-upgrade",
     "icon-sell",
     "icon-target",
