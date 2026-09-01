@@ -369,8 +369,10 @@ test('an upgraded tower is visibly bigger, and not so big it leaves the board', 
 })
 
 test('the hero is the size he was drawn to be', () => {
+  // Raised 25% deliberately: at ~100 he was 0.70 of a tower and read as a
+  // figurine standing next to the buildings he defends.
   const h = onScreen('hero-cory', display.camera.defaultZoom)
-  assert.ok(h >= 95 && h <= 112, `the hero renders ${h.toFixed(0)}px tall; the target is about 100`)
+  assert.ok(h >= 118 && h <= 138, `the hero renders ${h.toFixed(0)}px tall; the target is about 130`)
 })
 
 test('the zoom range brackets the default rather than the viewport', () => {

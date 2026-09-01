@@ -3,6 +3,7 @@ import type { HeroDef } from '../types.ts'
 import { ySort } from '../systems/DepthSort.ts'
 import { pickNearest, withinRadius } from '../systems/Targeting.ts'
 import { applyHit, attackInterval, incomingDamage, outgoingDamage } from '../systems/LastStand.ts'
+import { HeroMotion, type MotionDef } from '../systems/HeroMotion.ts'
 import { makeShadow, deathPuff } from '../systems/Presentation.ts'
 import { applyGroundRender } from '../systems/Art.ts'
 import { facesLeft } from '../systems/Facing.ts'
@@ -81,6 +82,14 @@ export class Hero extends Phaser.GameObjects.Container {
   /** Where he came onto the map, and where he comes back on. */
   private readonly homeX: number
   private readonly homeY: number
+  /** Idle bob, walk bounce and attack lunge. He is never perfectly still. */
+  private readonly motion = new HeroMotion(PRESENTATION.heroMotion as MotionDef)
+  /** The sprite's resting scale, from the manifest. The pose multiplies it, so
+   *  this has to be captured once rather than read back off a posed sprite. */
+  private baseScale = 1
+  /** The shadow's resting size, for the same reason. */
+  private shadowW = 0
+  private shadowH = 0
 
   constructor(scene: Phaser.Scene, x: number, y: number, def: HeroDef) {
     super(scene, x, y)
@@ -94,6 +103,7 @@ export class Hero extends Phaser.GameObjects.Container {
     this.shadow = makeShadow(scene, def.bodySprite)
     this.body_ = scene.add.sprite(0, 0, def.bodySprite)
     this.artOffset = applyGroundRender(this.body_, def.bodySprite)
+    this.captureRest()
     this.bar = scene.add.graphics()
     this.add([this.shadow, this.body_, this.bar])
     scene.add.existing(this)
@@ -135,6 +145,17 @@ export class Hero extends Phaser.GameObjects.Container {
    *  hitbox and the ram both measure from the art rather than a constant. */
   get halfFootprint(): number {
     return this.body_.displayWidth / 2
+  }
+
+  /**
+   * His width at rest, in world pixels.
+   *
+   * Not `displayWidth`: the idle bob squashes and stretches him every frame,
+   * so a ring sized off the live width would breathe along with him. The
+   * selection ring is meant to sit still while he moves inside it.
+   */
+  get spriteWidth(): number {
+    return this.body_.width * this.baseScale
   }
 
   /** Where he has been told to hold. The scene draws a marker here. */
@@ -217,12 +238,16 @@ export class Hero extends Phaser.GameObjects.Container {
     const dx = this.rallyX - this.x
     const dy = this.rallyY - this.y
     const dist = Math.hypot(dx, dy)
+    let walking = false
+    let headingX = 0
     if (dist > 0.5) {
       const step = this.moveSpeed * dt
       if (dist > step) {
         this.x += (dx / dist) * step
         this.y += (dy / dist) * step
         this.faceTowards(this.rallyX, this.rallyY)
+        walking = true
+        headingX = dx
       } else {
         this.setPosition(this.rallyX, this.rallyY)
         // Arrived: he needs a moment before he can swing again.
@@ -240,12 +265,16 @@ export class Hero extends Phaser.GameObjects.Container {
           ? withinRadius(enemies, this.x, this.y, this.attackRange)
           : [target]
         for (const v of victims) onHit(v, this.damage)
-        const base = this.body_.scaleX
-        this.scene.tweens.add({
-          targets: this.body_, scaleX: base * 1.08, duration: 80, yoyo: true,
-        })
+        // A lunge at what he actually swung at, rather than a scaleX pulse in
+        // place. The pulse was the same whichever way he was facing and read
+        // as a flinch.
+        this.motion.swingAt(target.x - this.x, target.y - this.y)
       }
     }
+
+    // The pose goes on last, after the frame's position and facing are final:
+    // it is a decoration of where he ended up, not an input to it.
+    this.applyPose(dt, walking, headingX)
 
     if (this.inVehicle) this.ram(enemies, onHit)
 
@@ -313,6 +342,40 @@ export class Hero extends Phaser.GameObjects.Container {
    * the shared rule is asked about the reversed heading and the answer means
    * "facing right" here.
    */
+  /**
+   * Records the resting scale of the sprite and the shadow.
+   *
+   * The pose is a set of MULTIPLIERS, so it needs something to multiply. Read
+   * back off the sprite each frame it would compound: a 3% squash applied to
+   * an already-squashed sprite walks the scale down until he is a puddle.
+   * Called again after the DAD MODE swap, which replaces both objects.
+   */
+  private captureRest(): void {
+    this.baseScale = this.body_.scaleX
+    this.shadowW = this.shadow.displayWidth
+    this.shadowH = this.shadow.displayHeight
+  }
+
+  /**
+   * Puts this frame's pose on the sprite and its shadow.
+   *
+   * The lunge offset goes on with the facing applied, so a swing to his left
+   * moves him left however the art happens to be flipped; the body's x already
+   * carries the art offset, so the two are added rather than assigned.
+   */
+  private applyPose(dt: number, walking: boolean, headingX: number): void {
+    const pose = this.motion.advance(dt, walking, headingX)
+    const rest = this.facingRight ? -this.artOffset : this.artOffset
+    this.body_.x = rest + pose.offsetX
+    this.body_.y = pose.offsetY
+    this.body_.setScale(this.baseScale * pose.scaleX, this.baseScale * pose.scaleY)
+    this.body_.setRotation(pose.rotation)
+    // The shadow does the opposite of the lift: he leaves the ground, so his
+    // contact patch shrinks. It does not lunge with him — a shadow that slides
+    // out from under a character reads as the character floating.
+    this.shadow.setDisplaySize(this.shadowW * pose.shadowScale, this.shadowH * pose.shadowScale)
+  }
+
   private faceTowards(x: number, y: number): void {
     const angle = Math.atan2(y - this.y, x - this.x)
     const right = facesLeft(angle + Math.PI, this.facingRight, PRESENTATION.facing.deadZone)
@@ -352,6 +415,8 @@ export class Hero extends Phaser.GameObjects.Container {
       this.shadow.destroy()
       this.shadow = makeShadow(this.scene, this.def.ultimateSprite)
       this.addAt(this.shadow, 0)
+      // Both objects the pose multiplies have just been replaced.
+      this.captureRest()
       this.body_.setAlpha(0)
       this.scene.tweens.add({ targets: this.body_, alpha: 1, duration: 180 })
       this.scene.cameras.main.shake(160, 0.008)
@@ -416,6 +481,7 @@ export class Hero extends Phaser.GameObjects.Container {
       this.shadow.destroy()
       this.shadow = makeShadow(this.scene, this.def.bodySprite)
       this.addAt(this.shadow, 0)
+      this.captureRest()
     }
     this.body_.setFlipX(this.facingRight)
     this.body_.x = this.facingRight ? -this.artOffset : this.artOffset

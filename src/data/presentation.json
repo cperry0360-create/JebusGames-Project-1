@@ -192,5 +192,44 @@
     "revealFraction": 0.38,
     "loseLabelSize": 34,
     "payoutSize": 78
+  },
+  "heroMotion": {
+    "idle": {
+      "periodMs": 1500,
+      "riseY": 2.6,
+      "squash": 0.035
+    },
+    "walk": {
+      "periodMs": 440,
+      "riseY": 4.2,
+      "squash": 0.055,
+      "leanDegrees": 5
+    },
+    "attack": {
+      "lungeMs": 180,
+      "reachPx": 10,
+      "stretch": 0.14,
+      "outFraction": 0.35
+    },
+    "shadowBob": 0.1
+  },
+  "heroMarkers": {
+    "footRing": {
+      "widthFraction": 0.6,
+      "strokeWidth": 2,
+      "alpha": 0.55,
+      "fadeOutMs": 300
+    },
+    "moveRing": {
+      "widthFraction": 0.6,
+      "strokeWidth": 2,
+      "alpha": 0.55,
+      "dashes": 10,
+      "dashFraction": 0.55,
+      "rotationMs": 3000,
+      "appearMs": 200,
+      "appearFromScale": 0.7,
+      "fadeOutMs": 300
+    }
   }
 }

@@ -20,6 +20,7 @@ import type { BuildSpot } from '../systems/BuildSystem.ts'
 import { WaveSpawner } from '../systems/WaveSpawner.ts'
 import { withinRadius, pickNearest } from '../systems/Targeting.ts'
 import { GROUND_DEPTH } from '../systems/DepthSort.ts'
+import { dashArcs, HeroMarkers, type MarkersDef } from '../systems/HeroMarkers.ts'
 import { ART, applyRender } from '../systems/Art.ts'
 import { EFFECT_MS, playEffect, sizeForRadius } from '../systems/Effects.ts'
 import { Cooldowns } from '../systems/Cooldowns.ts'
@@ -122,6 +123,10 @@ const TICKET_DEPTH = LAYER.modal
 /** Ground markings are ellipses, not circles: the map is painted in 3/4. */
 const PAD_SQUASH = 0.62
 
+/** One blue for both hero markers: they are two halves of one idea, and two
+ *  blues would read as two systems. */
+const MARKER_BLUE = 0x4fa3e3
+
 export class GameScene extends Phaser.Scene {
   readonly status: GameStatus = {
     peanuts: 0, lives: 0, wave: 0, waveCount: WAVES.waves.length, waveName: '',
@@ -191,6 +196,9 @@ export class GameScene extends Phaser.Scene {
   private pathBand!: Phaser.GameObjects.Graphics
   private hoverSpot: BuildSpot | null = null
   private heroSelected = false
+  /** The selection ring and the move order. Three states, and it owns the
+   *  timing of all of them; see HeroMarkers. */
+  private readonly markers = new HeroMarkers(PRESENTATION.heroMarkers as MarkersDef)
   private rangeRing!: Phaser.GameObjects.Graphics
   private targetRing!: Phaser.GameObjects.Graphics
   private selected: Tower | null = null
@@ -728,100 +736,53 @@ this.armReadyCountdown()
       return
     }
 
-    const r = this.hero.rally
-    const walking = !this.hero.atRally
-    const a = walking ? 1 : 0.55
-    const w = 40
-    this.markerLayer.fillStyle(0x4fa3e3, walking ? 0.28 : 0.14)
-    this.markerLayer.fillEllipse(r.x, r.y, w, w * PAD_SQUASH)
-    this.markerLayer.lineStyle(3, 0x4fa3e3, a)
-    this.markerLayer.strokeEllipse(r.x, r.y, w, w * PAD_SQUASH)
-    // A flag, so the marker reads as an order and not as another build pad.
-    this.markerLayer.lineStyle(3, 0x4fa3e3, a)
-    this.markerLayer.lineBetween(r.x, r.y - 4, r.x, r.y - 40)
-    this.markerLayer.fillStyle(0x4fa3e3, a)
-    this.markerLayer.fillTriangle(r.x + 1, r.y - 40, r.x + 22, r.y - 34, r.x + 1, r.y - 28)
-
-    // Depreciation, which had no visual at all.
+    // STATE 2 and 3, and nothing else.
     //
-    // The passive shreds armour off anything standing near him, and a player
-    // who has run the hero for three waves still cannot say what he does. A
-    // translucent disc at the shred radius says where it reaches; the enemies
-    // inside it are marked separately, in `tickPassive`, so the ring and the
-    // marks cannot disagree about who is being shredded.
-    if (!this.hero.down) {
-      const pas = this.hero.def.passive
-      const rr = pas.armorShredRadius
+    // What used to be drawn here, every frame, whether or not the player had
+    // asked for anything: a rally flag, a filled ellipse under it, the yellow
+    // Depreciation disc with rotating rim ticks, the block-range ellipse, and
+    // a green bracket with corner ticks around him. Five indicators on one
+    // patch of grass. They are gone; see HeroMarkers for what replaced them.
+    const M = PRESENTATION.heroMarkers
+    const ringW = this.hero.spriteWidth * M.footRing.widthFraction
+
+    const foot = this.markers.footRing()
+    if (foot && !this.hero.down) {
       const y = this.hero.y + this.hero.footOffsetY
-      const beat = 0.5 + 0.5 * Math.sin(this.time.now / 620)
-      // Read against grass, not against a mockup. The first pass at 5% fill
-      // and a 2px line vanished completely on a green board at the default
-      // zoom, which is the same failure as having no ring at all.
-      this.markerLayer.fillStyle(0xc9a227, 0.10 + beat * 0.05)
-      this.markerLayer.fillEllipse(this.hero.x, y, rr * 2, rr * 2 * PAD_SQUASH)
-      this.markerLayer.lineStyle(3, 0xe0b93a, 0.55 + beat * 0.25)
-      this.markerLayer.strokeEllipse(this.hero.x, y, rr * 2, rr * 2 * PAD_SQUASH)
-      // Ticks on the rim, so it reads as a working radius rather than as a
-      // decorative pool of light.
-      for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * Math.PI * 2 + this.time.now / 2600
-        const ox = Math.cos(a) * rr
-        const oy = Math.sin(a) * rr * PAD_SQUASH
-        this.markerLayer.lineBetween(
-          this.hero.x + ox * 0.9, y + oy * 0.9, this.hero.x + ox, y + oy,
-        )
+      this.markerLayer.lineStyle(M.footRing.strokeWidth, MARKER_BLUE, foot.alpha)
+      this.markerLayer.strokeEllipse(this.hero.x, y, ringW, ringW * PAD_SQUASH)
+    }
+
+    const move = this.markers.moveRing()
+    if (move) {
+      const rx = (ringW / 2) * move.scale
+      const ry = rx * PAD_SQUASH
+      this.markerLayer.lineStyle(M.moveRing.strokeWidth, MARKER_BLUE, move.alpha)
+      // Dashes as short polylines along the ellipse: Graphics has no dashed
+      // stroke, and an arc() on a squashed circle is not the same shape.
+      for (const [a0, a1] of dashArcs(M.moveRing.dashes, M.moveRing.dashFraction, move.phase)) {
+        this.markerLayer.beginPath()
+        const steps = 5
+        for (let i = 0; i <= steps; i++) {
+          const a = a0 + (a1 - a0) * (i / steps)
+          const px = move.x + Math.cos(a) * rx
+          const py = move.y + Math.sin(a) * ry
+          if (i === 0) this.markerLayer.moveTo(px, py)
+          else this.markerLayer.lineTo(px, py)
+        }
+        this.markerLayer.strokePath()
       }
     }
 
-    // His reach as a blocker, and whether he has a hand free.
-    //
-    // Inside this ring he grabs; beyond it, and once all three hands are full,
-    // enemies walk by untouched. Drawn faint while he has room and amber the
-    // moment he does not, because "he is full, they are getting past" is a
-    // thing the player has to be able to read at a glance rather than infer
-    // from a pile of sprites.
-    if (!this.hero.down) {
-      const br = this.hero.blockRange
-      const y = this.hero.y + this.hero.footOffsetY
-      const full = this.hero.blocking >= this.hero.def.blockCapacity
-      const beat = 0.5 + 0.5 * Math.sin(this.time.now / 150)
-      this.markerLayer.lineStyle(full ? 3 : 2, full ? 0xf2a03c : 0xf6ecd9,
-        full ? 0.55 + beat * 0.35 : 0.22)
-      this.markerLayer.strokeEllipse(this.hero.x, y, br * 2, br * 2 * PAD_SQUASH)
-    }
-
-    // Pulling out of a fight costs him: while the window is open he takes
-    // extra damage, and the player has to be able to see that it is open.
+    // Kept, and deliberately: this is not a selection or move marker, it is
+    // damage feedback. While the window is open he takes extra damage for
+    // having been pulled out of a fight, and it lasts about a second.
     if (this.hero.retreatVulnerableFor > 0) {
       const w = this.hero.halfFootprint * 2 + 22
       const y = this.hero.y + this.hero.footOffsetY
       const beat = 0.5 + 0.5 * Math.sin(this.time.now / 110)
       this.markerLayer.lineStyle(3, 0xff8f7a, 0.45 + beat * 0.4)
       this.markerLayer.strokeEllipse(this.hero.x, y, w, w * PAD_SQUASH)
-    }
-
-    if (this.heroSelected) {
-      // Deliberately not the rally marker's shape or colour: that is a blue
-      // flag planted on the ground, this is a green bracket around him. Sized
-      // from his own art so it fits the SUV as well as the man.
-      const w = this.hero.halfFootprint * 2 + 16
-      const h = w * PAD_SQUASH
-      const y = this.hero.y + this.hero.footOffsetY
-      this.markerLayer.fillStyle(0x8fd07a, 0.16)
-      this.markerLayer.fillEllipse(this.hero.x, y, w, h)
-      this.markerLayer.lineStyle(3, 0x8fd07a, 0.95)
-      this.markerLayer.strokeEllipse(this.hero.x, y, w, h)
-      // Corner ticks, which a plain ring does not have.
-      const hx = w / 2
-      const hy = h / 2
-      for (const sx of [-1, 1]) {
-        for (const sy of [-1, 1]) {
-          this.markerLayer.lineBetween(this.hero.x + sx * hx, y + sy * hy * 0.55,
-            this.hero.x + sx * hx, y + sy * hy)
-          this.markerLayer.lineBetween(this.hero.x + sx * hx * 0.6, y + sy * hy,
-            this.hero.x + sx * hx, y + sy * hy)
-        }
-      }
     }
   }
 
@@ -960,7 +921,10 @@ this.armReadyCountdown()
     this.menu.close()
     this.selected = null
     this.heroSelected = true
-    this.showRange(this.hero.x, this.hero.y, this.hero.attackRange, 0x4fa3e3)
+    // Just the foot ring. The attack-range circle that used to come up with
+    // him is one of the rings the brief calls for gone: state 2 is a ring at
+    // his feet and nothing else.
+    this.markers.select()
     this.status.message = `${this.hero.def.name} selected — click where he should hold.`
   }
 
@@ -968,8 +932,13 @@ this.armReadyCountdown()
     // Asked before the order, because the order is what ends the fight.
     const wasFighting = this.hero.engaged
     this.hero.setRally(x, y)
-    this.pingRally(x, y)
-    this.heroSelected = false
+    // The marker carries its own arrival animation — up from 70% and fading
+    // in over 200ms — so the old expanding ping would be a second, differently
+    // timed confirmation of the same tap.
+    this.markers.orderTo(x, y)
+    // He STAYS selected while he walks. Deselection happens on arrival, so
+    // his foot ring and the destination ring go together and the board is
+    // clean the moment he gets there.
     this.rangeRing.clear()
     // Say which of the two things just happened. Breaking off a fight is a
     // decision with a cost and should not read the same as walking up an
@@ -1395,6 +1364,8 @@ this.armReadyCountdown()
     this.projectedRing.clear()
     this.restructuring = null
     this.heroSelected = false
+    // Both markers fade the same way rather than being cut.
+    this.markers.cancel()
     this.status.mode = 'normal'
     this.status.pendingAbility = null
     this.rangeRing.clear()
@@ -1500,19 +1471,6 @@ this.armReadyCountdown()
         : 'Build on another pad, move Cory, or START WAVE when you are ready.'
     }
     return affordable ? 'Tap a pad to build. Tap Cory to move him.' : 'Tap Cory to move him.'
-  }
-
-  private pingRally(x: number, y: number): void {
-    const ring = this.add.graphics().setDepth(OVERLAY_DEPTH)
-    this.tweens.addCounter({
-      from: 0, to: 1, duration: 420,
-      onUpdate: (tw) => {
-        const t = tw.getValue() ?? 0
-        ring.clear()
-        ring.lineStyle(3, 0x4fa3e3, 1 - t).strokeCircle(x, y, 10 + t * 24)
-      },
-      onComplete: () => ring.destroy(),
-    })
   }
 
   // ---------------------------------------------------------------- abilities
@@ -2083,9 +2041,23 @@ this.armReadyCountdown()
       // while its own panel is open, and the ring has to say so.
       this.drawSelectedRange(this.selected)
       this.positionPanel(this.selected)
-    } else if (this.heroSelected) {
-      this.showRange(this.hero.x, this.hero.y, this.hero.attackRange, 0x4fa3e3)
     }
+
+    // The move order ends when he gets there, not when it is given. The ring
+    // stays on the destination for the whole walk — it is the order, and an
+    // order the player can no longer see is one they cannot cancel — and both
+    // markers go together on arrival so the board is clean the moment he
+    // stops.
+    if (this.markers.hasOrder && this.hero.atRally) {
+      this.markers.endOrder()
+      this.markers.deselect()
+      this.heroSelected = false
+    }
+    // Real time, like the camera: these are interface animations, not
+    // simulation. Run on the game clock the "one turn every 3 seconds" the
+    // brief asks for came out at 2.1s, because the game runs at 1.4x — and it
+    // would have sped up again with any future change to gameSpeed.
+    this.markers.advance(real)
     this.drawHeroMarkers()
 
     this.status.heroHealth = this.hero.health

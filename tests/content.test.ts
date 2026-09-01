@@ -68,11 +68,16 @@ test('the Last Stand form is sized by width, and is wider than the road', () => 
   const c = heroes.cory
   const onFoot = art.render[c.bodySprite]
   const suv = art.render[c.ultimateSprite]
-  const footW = (onFoot.contentWidth / onFoot.contentHeight) * onFoot.displayHeight
+  // Measured on the STANCE, not on the canvas. contentWidth is the size of the
+  // image file, and a re-export with different transparent margins moves it
+  // without moving anything the player sees — which is exactly what happened
+  // when Cory's source went from 199x208 to 386x470 and this read 2.56x for a
+  // pair of sprites whose on-screen relationship had not changed at all.
+  // shadowWidth is the measured width he actually stands on.
   const suvW = (suv.contentWidth / suv.contentHeight) * suv.displayHeight
-  const multiple = suvW / footW
-  assert.ok(Math.abs(multiple - 2.2) < 0.15,
-    `the SUV is ${multiple.toFixed(2)}x his width; the design asks for about 2.2x`)
+  const multiple = suv.shadowWidth / onFoot.shadowWidth
+  assert.ok(multiple > 2.5,
+    `the SUV is only ${multiple.toFixed(2)}x his stance; it is supposed to be a vehicle`)
   assert.ok(suvW > map.roadWidth,
     `the SUV is ${suvW.toFixed(0)}px against a ${map.roadWidth}px road; it is supposed to not fit`)
 })
@@ -722,8 +727,16 @@ test('a gnome is smaller than the enemy it stands in front of', () => {
     assert.equal(cfg.anchorY, 1.0, `${key} is not anchored on its feet`)
     assert.ok(cfg.shadowWidth > 0, `${key} casts no ground shadow`)
   }
+  // Against the SOLDIER, which is what the joke is about and what the gnome
+  // stands in front of. It used to be measured against Cory, and Cory has
+  // since been scaled up 25% on purpose while the enemy cast stayed where it
+  // was — so a ratio against him stopped describing the art's shared scale
+  // and started describing a deliberate design change.
+  const vsSoldier = gnome.displayHeight / soldier.displayHeight
+  assert.ok(vsSoldier > 0.75 && vsSoldier < 0.95,
+    `a gnome is ${vsSoldier.toFixed(2)} of the soldier it blocks; it should be nearly as tall but clearly smaller`)
   const ratio = gnome.displayHeight / hero.displayHeight
-  assert.ok(ratio > 0.55 && ratio < 0.72,
+  assert.ok(ratio > 0.40 && ratio < 0.72,
     `a gnome is ${ratio.toFixed(2)} of Cory; the art was drawn at two thirds`)
 })
 

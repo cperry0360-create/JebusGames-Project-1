@@ -2324,6 +2324,103 @@ async function run() {
     return
   }
 
+  if (scenario === 'markers') {
+    // Three states and nothing else.
+    g.status.peanuts = 99999
+    await build(3, 0)
+    await sleep(500)
+
+    // What the marker layer actually drew, by counting its command list. A
+    // screenshot cannot tell an absent ring from a faint one.
+    const drew = () => {
+      const c = g.markerLayer.commandBuffer || []
+      let strokes = 0, fills = 0
+      for (let i = 0; i < c.length; i++) {
+        if (c[i] === 5 /* Phaser STROKE_PATH */ || c[i] === 25) strokes++
+        if (c[i] === 4 /* FILL_PATH */ || c[i] === 24) fills++
+      }
+      return 'commands=' + c.length
+    }
+    // The rig starts looking at the entrance; the markers are on the hero.
+    const look = () => { g.cameras.main.centerOn(g.hero.x, g.hero.y) }
+    const marks = () => ({
+      foot: g.markers.footRing(),
+      move: g.markers.moveRing(),
+      selected: g.heroSelected,
+      atRally: g.hero.atRally,
+    })
+
+    note('STATE 1 idle, not selected:')
+    note('  ' + JSON.stringify(marks()) + '  markerLayer ' + drew())
+    look(); await sleep(60); await shot('markers-01-idle-' + VP.w + 'x' + VP.h)
+
+    // STATE 2: select him.
+    g.selectHero()
+    await sleep(200)
+    let m = marks()
+    note('STATE 2 selected:')
+    note('  foot ring alpha ' + (m.foot ? m.foot.alpha : 'NONE *** should be a ring ***') +
+      '  move ring: ' + (m.move ? 'PRESENT *** should be none ***' : 'none'))
+    const ringW = g.hero.spriteWidth * 0.60
+    note('  ring width ' + ringW.toFixed(1) + ' of sprite width ' + g.hero.spriteWidth.toFixed(1) +
+      ' = ' + (ringW / g.hero.spriteWidth * 100).toFixed(0) + '%')
+    look(); await sleep(60); await shot('markers-02-selected-' + VP.w + 'x' + VP.h)
+
+    // STATE 3: order him somewhere far.
+    const far = { x: g.hero.x + 260, y: g.hero.y + 40 }
+    g.orderHero(far.x, far.y)
+    await sleep(60)
+    m = marks()
+    note('STATE 3 move order, just given:')
+    note('  move ring at ' + Math.round(m.move.x) + ',' + Math.round(m.move.y) +
+      ' scale ' + m.move.scale.toFixed(2) + ' alpha ' + m.move.alpha.toFixed(3) +
+      ' (scales in from 0.70 over 200ms)')
+    await sleep(300)
+    m = marks()
+    note('  after 360ms: scale ' + m.move.scale.toFixed(2) + ' alpha ' + m.move.alpha.toFixed(3) +
+      ' selected=' + m.selected + ' (he stays selected while walking)')
+    const p1 = g.markers.moveRing().phase
+    await sleep(750)
+    const p2 = g.markers.moveRing().phase
+    const turnsPerSec = ((p2 - p1) / (Math.PI * 2)) / 0.75
+    note('  dash rotation ' + (1 / turnsPerSec).toFixed(2) + 's per turn (asked for 3s)')
+    look(); await sleep(60); await shot('markers-03-walking-' + VP.w + 'x' + VP.h)
+
+    // Re-order mid-walk: the old ring must be gone, not fading beside it.
+    g.orderHero(g.hero.x - 120, g.hero.y - 30)
+    await sleep(50)
+    note('  re-ordered mid-walk: rings on the board = ' + (g.markers.moveRing() ? 1 : 0) +
+      ' at ' + Math.round(g.markers.moveRing().x) + ',' + Math.round(g.markers.moveRing().y))
+
+    // Arrival.
+    await until(() => g.hero.atRally, 12000)
+    await sleep(80)
+    m = marks()
+    note('on arrival: selected=' + m.selected +
+      ' foot=' + (m.foot ? 'fading a' + m.foot.alpha.toFixed(2) : 'gone') +
+      ' move=' + (m.move ? 'fading a' + m.move.alpha.toFixed(2) : 'gone'))
+    await sleep(450)
+    m = marks()
+    note('  350ms later: foot=' + (m.foot ? '*** STILL THERE ***' : 'gone') +
+      ' move=' + (m.move ? '*** STILL THERE ***' : 'gone') +
+      '  markerLayer ' + drew())
+    look(); await sleep(60); await shot('markers-04-arrived-' + VP.w + 'x' + VP.h)
+
+    // Cancel: both go the same way.
+    g.selectHero()
+    g.orderHero(g.hero.x + 200, g.hero.y)
+    await sleep(120)
+    g.clearSelection()
+    await sleep(80)
+    m = marks()
+    note('cancelled: foot=' + (m.foot ? 'fading a' + m.foot.alpha.toFixed(2) : 'gone') +
+      ' move=' + (m.move ? 'fading a' + m.move.alpha.toFixed(2) : 'gone') + ' (both should fade)')
+    await sleep(420)
+    m = marks()
+    note('  after the fade: ' + (m.foot || m.move ? '*** SOMETHING REMAINS ***' : 'nothing drawn'))
+    return
+  }
+
   if (scenario === 'restructure') {
     // Restructure is DAD MODE only, and its slot must not move when it goes.
     const hud = game.scene.getScene('Hud')

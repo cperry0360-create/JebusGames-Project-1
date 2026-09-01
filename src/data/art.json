@@ -158,18 +158,18 @@
       "contentHeight": 150
     },
     "hero-cory": {
-      "anchorX": 0.6005,
+      "anchorX": 0.5725,
       "anchorY": 1.0,
-      "displayHeight": 60.6,
-      "shadowWidth": 35.4,
-      "contentWidth": 199,
-      "contentHeight": 208
+      "displayHeight": 75.8,
+      "shadowWidth": 48.1,
+      "contentWidth": 386,
+      "contentHeight": 470
     },
     "hero-cory-ultimate": {
       "anchorX": 0.5384,
       "anchorY": 1.0,
-      "displayHeight": 83.2,
-      "shadowWidth": 127.3,
+      "displayHeight": 104.0,
+      "shadowWidth": 159.1,
       "contentWidth": 704,
       "contentHeight": 460
     },
