@@ -176,8 +176,6 @@
     "headingGap": 4,
     "safeMargin": 40,
     "cardPad": 9,
-    "cardIconColumn": 80,
-    "cardIconBox": 58,
     "rerollFadeMs": 170,
     "rerollStaggerMs": 55,
     "copy": {
@@ -185,7 +183,24 @@
       "rerollLabel": "REROLL"
     },
     "buttonHeight": 48,
-    "cardPadBottom": 15
+    "cardPadBottom": 15,
+    "buttonMargin": 16,
+    "buttonGap": 26,
+    "rowShares": {
+      "hero": 0.27,
+      "towers": 0.39,
+      "specials": 0.34
+    },
+    "frameInsetShare": 0.58,
+    "bodySizes": [
+      22,
+      20,
+      18
+    ],
+    "heroNameSize": 26,
+    "cardIconColumnShare": 0.23,
+    "cardIconColumnMin": 62,
+    "cardIconColumnMax": 92
   },
   "scratchCard": {
     "cardHeight": 260,

@@ -169,7 +169,13 @@ export class TitleScene extends Phaser.Scene {
 
   private start(): void {
     // A fresh seed per run, so the draft differs each time.
-    setRunState({ heroId: this.selectedHero, seed: Date.now() >>> 0 })
+    // The hand is cleared as well as the seed: the loadout screen deals only
+    // when there is no hand, so leaving the last run's cards here would show
+    // them again.
+    setRunState({
+      heroId: this.selectedHero, seed: Date.now() >>> 0,
+      openingTowers: [], abilities: [], reserveTowers: [],
+    })
     this.scene.start('Loadout')
   }
 }

@@ -112,8 +112,14 @@ export function towerStats(def: TowerDef): string {
  */
 export function towerLine(def: TowerDef): string {
   const traits: string[] = []
-  if (def.supportRadius > 0) return 'Buffs every tower standing inside it. Cannot attack.'
-  if (def.splashRadius > 0) traits.push(`hits everything in ${say('area', def.splashRadius)}`)
+  // Shortened to fit. "Buffs every tower standing inside it. Cannot attack."
+  // was 51 characters and did not fit a tower card at any readable size on a
+  // 568x320 phone — it overflowed by 25px even at 18px type.
+  if (def.supportRadius > 0) return 'Buffs nearby towers. Cannot attack.'
+  // "hits everything in a wide area" -> "hits a wide area": the three words
+  // it loses say nothing the word "area" does not, and they were the
+  // difference between fitting a card and overflowing it by 19px.
+  if (def.splashRadius > 0) traits.push(`hits ${say('area', def.splashRadius)}`)
   if (def.slowFactor > 0) traits.push(`slows what it hits to ${Math.round(def.slowFactor * 100)}%`)
   if (def.ignoresArmor) traits.push('ignores armour entirely')
   else if (def.armorPierce > 0) traits.push(`cuts ${bound(def.armorPierce, 'armour')}`)

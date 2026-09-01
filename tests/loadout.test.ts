@@ -107,9 +107,8 @@ test('both card rows are built by the same component', () => {
   // And the shared face keeps the icon and the words in separate columns.
   const face = s.slice(s.indexOf('private cardFace'), s.indexOf('private towerSection'))
   assert.match(face, /const tx = -cw \/ 2 \+ pad \+ col/, 'the text column is not offset past the icon')
-  // Padded against the painted frame, not the box: the frame reaches further
-  // in than the box edge and a hand-picked pad put the cost on the chrome.
-  assert.match(face, /panelInset\(this, cw/, 'the card pads against its box rather than its frame')
+  assert.match(face, /this\.frameInsetFor\(cw, ch\)/,
+    'the card pads against its box rather than its frame')
   assert.match(face, /wordWrap: \{ width: tw \}/, 'body text is not wrapped to the text column')
 })
 
@@ -172,26 +171,65 @@ test('the loadout says the hand was dealt, not chosen', () => {
  * Pixel verification is the harness's `everyloadout` scenario, which renders
  * all fourteen entries at both viewports.
  */
-test('every card pads against its painted frame, not its box', () => {
+test('the screen is laid out from the viewport, not from the content', () => {
+  // The outage. The layout ran top to bottom and put the buttons wherever the
+  // content finished; on a 568x320 phone the content finished at y=931 in a
+  // 720-unit box, so BEGIN THE RUN was 227px below the screen and no run could
+  // be started at all. The buttons are placed from H now, before a single card
+  // is measured, and the cards are fitted into what is left.
   const s = src('scenes/LoadoutScene.ts')
+  const render = s.slice(s.indexOf('private render(): void {'), s.indexOf('private headingHeight'))
+
+  assert.match(render, /const by = H - LO\.buttonMargin - LO\.buttonHeight \/ 2/,
+    'the button row is not anchored to the bottom of the viewport')
+  // Placed before the cards exist, so nothing measured later can move them.
+  assert.ok(render.indexOf('this.buildButtons(by)') < render.indexOf('this.heroSection('),
+    'the buttons are placed after the cards, so a tall card can still push them off')
+  assert.match(render, /const budget = \(by - LO\.buttonHeight \/ 2 - LO\.buttonGap\) - top/,
+    'the card area is not the space left over after the buttons')
+  // And every row is GIVEN its height rather than growing to fit.
+  for (const section of ['heroSection', 'towerSection', 'abilitySection']) {
+    assert.match(s, new RegExp(`private ${section}\\([^)]*height: number`),
+      `${section} decides its own height, which is how the row grew off the screen`)
+  }
+  const row = s.slice(s.indexOf('private cardRow('))
+  assert.match(row.slice(0, 900), /return y \+ height/,
+    'the card row still reports a height it measured rather than the one it was given')
 
   const face = s.slice(s.indexOf('private cardFace'), s.indexOf('private towerSection'))
-  assert.match(face, /panelInset\(this, cw/, 'the card face pads against its box')
-  for (const [side, name] of [['left', 'pad'], ['right', 'padR'], ['top', 'padT']] as const) {
-    assert.match(face, new RegExp(`const ${name} = Math\\.max\\([^)]*Math\\.ceil\\(frame\\.${side}\\)`),
-      `the card face does not pad its ${side} edge by the frame`)
-  }
-  assert.match(face, /Math\.ceil\(frame\.bottom\)/, 'the card face does not pad its bottom by the frame')
-  // The top rail is deeper than the side rails, so the top must not reuse the
-  // side inset. That mistake put all fourteen names 1px onto the chrome.
-  assert.ok(!/const padT = Math\.max\([^)]*frame\.left/.test(face),
-    'the top pad is taken from the side inset')
+  assert.match(face, /this\.frameInsetFor\(cw, ch\)/,
+    'the card pads against its box rather than its frame')
+  // One size for the whole card, chosen so name, stats and body all fit.
+  assert.match(face, /for \(const size of LO\.bodySizes\)/,
+    'the card cannot shrink its type, so long copy has nowhere to go but out')
+  assert.match(face, /if \(total <= room\) break/, 'the type ladder does not check it fits')
+})
 
-  // The hero card is the one that was 19px out at the top AND the bottom,
-  // because it never went through the shared face and kept a flat pad of 12.
-  const hero = s.slice(s.indexOf('private heroSection'), s.indexOf('private cardFace'))
-  assert.match(hero, /panelInset\(this, w/, 'the hero card still pads against its box')
-  assert.ok(!/const pad = 12\b/.test(hero), 'the hero card still uses the flat pad that overflowed')
+test('the loadout fits the design box with room for the buttons', () => {
+  // Arithmetic, since CI has no renderer: the fixed furniture must leave a
+  // sane budget for three rows of cards inside 720 units.
+  const P = read('presentation') as any
+  const LO = P.loadout
+  const H = (read('display') as any).height
+  const buttonTop = H - LO.buttonMargin - LO.buttonHeight
+  assert.ok(buttonTop < H, 'the button row starts below the bottom of the screen')
+  assert.ok(LO.buttonMargin >= 8, 'the buttons sit flush against the bottom edge')
+  // The plate's chrome hangs below its box, so the gap has to clear it.
+  assert.ok(LO.buttonGap >= 20, `a ${LO.buttonGap}px gap lets the buttons touch the last card`)
+
+  const shares = LO.rowShares
+  const total = shares.hero + shares.towers + shares.specials
+  assert.ok(Math.abs(total - 1) < 1e-9, `the row shares sum to ${total}, not 1`)
+  for (const [name, v] of Object.entries(shares) as [string, number][]) {
+    assert.ok(v > 0.15 && v < 0.5, `the ${name} row takes ${v} of the card area`)
+  }
+  // A type ladder that bottoms out too low is unreadable on a phone; one that
+  // bottoms out too high cannot fit the longest copy.
+  assert.deepEqual([...LO.bodySizes].sort((a: number, b: number) => b - a), LO.bodySizes,
+    'the type ladder is not ordered largest first')
+  assert.equal(LO.bodySizes[0], 22, 'the ladder does not start at the design size')
+  assert.ok(LO.bodySizes[LO.bodySizes.length - 1] >= 18,
+    'the ladder bottoms out below 18px, which is not readable on a phone')
 })
 
 test('every hero, tower and special is covered, and none is too long to fit', () => {
@@ -203,7 +241,12 @@ test('every hero, tower and special is covered, and none is too long to fit', ()
   const towers = read('towers')
   const abilities = read('abilities')
   const heroes = read('heroes')
-  const WORST = 57   // characters; the Scratch Ticket line, measured at 5 lines
+  // Characters. The Scratch Ticket line is the longest that has been MEASURED
+  // to fit — 3 lines at 18px in the narrowest card at 568x320. Two strings
+  // failed this budget and were shortened rather than left to clip: the Tax
+  // Shelter's "Buffs every tower standing inside it. Cannot attack." (51) and
+  // "hits everything in a wide area" (31 as part of a longer line).
+  const WORST = 57
 
   let combinations = 0
   const tooLong: string[] = []

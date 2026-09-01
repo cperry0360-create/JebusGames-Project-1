@@ -9,7 +9,6 @@ import { draftAbilities, draftOpeningTowers, makeRng, reserveTowers } from '../s
 import { runState, setRunState } from '../systems/RunState.ts'
 import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { panelInset, plateButton, platePanel } from '../ui/Plate.ts'
-import { towerIcon } from '../ui/TowerIcon.ts'
 import { fitInBox } from '../systems/Art.ts'
 import { fitCameraToDesign } from '../ui/FitCamera.ts'
 import { abilityLine, towerLine, towerStats } from '../systems/AbilityText.ts'
@@ -70,7 +69,13 @@ export class LoadoutScene extends Phaser.Scene {
     fitCameraToDesign(this)
 
     this.rerollsLeft = DRAFT.rerollsPerRun
-    this.deal(runState().seed)
+    // Deal only when there is no hand yet. Re-dealing on every create meant
+    // the screen could not be shown twice without changing what it showed —
+    // and it silently overwrote any hand set from outside, which is how the
+    // exhaustive layout check ended up measuring dealt hands rather than the
+    // fourteen it thought it was forcing. Title clears the hand when a run
+    // starts, so a fresh run still gets a fresh draw.
+    if (runState().openingTowers.length === 0) this.deal(runState().seed)
 
     this.contentWidth = this.drawBackdrop()
     this.render()
@@ -221,13 +226,20 @@ export class LoadoutScene extends Phaser.Scene {
     )
   }
 
-  /** The painted frame's inner inset for a card of this width. Exposed so a
-   *  harness run measures against the frame the player sees rather than the
-   *  box behind it. */
-  frameInsetFor(w: number): { left: number; right: number; top: number; bottom: number } {
-    return panelInset(this, w, 120)
-  }
 
+  /**
+   * The screen, laid out from the VIEWPORT down.
+   *
+   * This used to run top to bottom and put the buttons wherever the content
+   * finished. On a 568x320 phone the content finished at y=931 in a 720-unit
+   * box, so BEGIN THE RUN was 227px below the bottom of the screen and the
+   * player could not start a run at all.
+   *
+   * So the order is inverted. The title, the headings and the button row take
+   * their fixed space first; the cards get exactly what is left and are fitted
+   * INTO it. The cards can never push a button off the screen because the
+   * buttons were placed before the cards were measured.
+   */
   private render(): void {
     this.layer?.destroy(true)
     this.layer = this.add.container(0, 0)
@@ -248,28 +260,46 @@ export class LoadoutScene extends Phaser.Scene {
     }).setOrigin(0.5, 0)
     this.layer.add([title, drawn])
 
-    // Laid out top to bottom with one gap between sections rather than three
-    // hand-picked y values, so the rhythm cannot drift when a card changes
-    // height. Each section returns the y it finished at.
-    // The plate's chrome reaches about 10px above the box it is given, so a
-    // heading set tight against a card is drawn underneath its frame. The gap
-    // clears the chrome rather than the box.
-    let y = 72 + 20
-    y = this.heroSection(hero, y) + LO.sectionGap
-    y = this.towerSection(run.openingTowers, y) + LO.sectionGap
-    y = this.abilitySection(run.abilities, y) + LO.sectionGap
+    // THE BUTTONS GO FIRST, at a fixed distance from the bottom of the design
+    // box. Nothing computed after this can move them.
+    const by = H - LO.buttonMargin - LO.buttonHeight / 2
+    this.buildButtons(by)
 
-    // Two buttons on one row: the reroll is a choice about this screen, so it
-    // belongs beside the button that leaves it rather than tucked in a corner.
-    // Follows the content. It used to be clamped to the bottom of the screen,
-    // which does not make room — it just draws the buttons on top of the last
-    // row of cards, and on a 568x320 phone that is exactly what it did. If the
-    // stack ever grows past the box the layout test catches it, which is a
-    // failure worth seeing rather than one hidden under a button.
-    // +36, not +22: `y` is the bottom of the card's BOX, and the plate's
-    // nine-slice chrome hangs about 14px below that. Measuring to the box put
-    // the button row three pixels inside the last card.
-    const by = y + 36
+    // What is left, after the heading each section carries.
+    const top = drawn.y + drawn.height + 10
+    const headingH = this.headingHeight()
+    const budget = (by - LO.buttonHeight / 2 - LO.buttonGap) - top
+      - headingH * 3 - LO.sectionGap * 2
+
+    const share = LO.rowShares
+    const heights = {
+      hero: Math.floor(budget * share.hero),
+      towers: Math.floor(budget * share.towers),
+      specials: Math.floor(budget * share.specials),
+    }
+
+    let y = top
+    y = this.heroSection(hero, y, heights.hero) + LO.sectionGap
+    y = this.towerSection(run.openingTowers, y, heights.towers) + LO.sectionGap
+    this.abilitySection(run.abilities, y, heights.specials)
+
+    // Every card is face-up for now. The reveal lands here.
+    for (const c of this.cards) c.reveal()
+  }
+
+  /** How tall a section heading and its gap are. Measured once so the budget
+   *  above is arithmetic rather than a guess. */
+  private headingHeight(): number {
+    const probe = this.add.text(0, 0, 'TOWERS', {
+      fontFamily: FONT_UI, fontSize: '22px', letterSpacing: 3,
+    })
+    const h = probe.height + LO.headingGap
+    probe.destroy()
+    return h
+  }
+
+  /** The two buttons, at a y the cards cannot argue with. */
+  private buildButtons(by: number): void {
     const begin = plateButton(this, W / 2 + 90, by, 300, LO.buttonHeight, 'BEGIN THE RUN', () => {
       this.scene.start('Game')
       this.scene.launch('Hud')
@@ -278,14 +308,9 @@ export class LoadoutScene extends Phaser.Scene {
     const reroll = plateButton(this, W / 2 - 190, by, 240, LO.buttonHeight,
       `${LO.copy.rerollLabel} (${left} left)`, () => this.reroll(), 22)
     // Spent, it stays on the screen greyed rather than disappearing: a button
-    // that vanishes takes the knowledge that the option existed with it. And
-    // greyed now means genuinely inert — a disabled plate is off the input
-    // list, so it cannot be pressed and cannot swallow a press either.
+    // that vanishes takes the knowledge that the option existed with it.
     if (left <= 0) reroll.setEnabled(false)
     this.layer.add([...reroll.parts, ...begin.parts])
-
-    // Every card is face-up for now. The reveal lands here.
-    for (const c of this.cards) c.reveal()
   }
 
   /** A section heading. Returns the y its content should start at. */
@@ -333,51 +358,56 @@ export class LoadoutScene extends Phaser.Scene {
     return c
   }
 
-  private heroSection(hero: HeroDef, top: number): number {
+  private heroSection(hero: HeroDef, top: number, height: number): number {
     const y = this.heading('HERO', top)
     const w = this.contentWidth
     const x = W / 2 - w / 2
+    const h = height
 
-    // The portrait is sized first, because it is what sets the card's height.
-    // It used to be 96px in a 136px card, floated left of a text block that
-    // started 150px in — a small picture with a gap either side of it.
-    const portraitBox = 104
-    // Against the painted frame, like every other card. Padded by a flat 12
-    // it put CORY 19px above the frame's top rail and his kit 19px below the
-    // bottom one — the worst overflow on the screen, and one that no random
-    // draw could ever miss, yet three passes did.
-    const frame = panelInset(this, w, 140)
-    const pad = Math.max(12, Math.ceil(Math.max(frame.left, frame.top, frame.bottom)) + 2)
+    const frame = this.frameInsetFor(w, h)
+    const pad = Math.max(LO.cardPad, Math.ceil(Math.max(frame.left, frame.top, frame.bottom)))
+    const portraitBox = Math.min(104, h - pad * 2)
     const textX = -w / 2 + pad + portraitBox + 18
+    const textW = w - pad - portraitBox - 18 - pad
+    const room = h - pad * 2
 
-    const name = this.add.text(textX, 0, hero.name.toUpperCase(), {
-      fontFamily: FONT_UI, fontSize: '30px', fontStyle: 'bold', color: COLOR.ink,
-      letterSpacing: 2,
-    }).setOrigin(0, 0)
-    const line = this.add.text(textX, 0, hero.blurb, {
-      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.dim, ...BODY_SPACING,
-      wordWrap: { width: w - pad - portraitBox - 18 - pad },
-    }).setOrigin(0, 0)
-    const kit = this.add.text(textX, 0, `${hero.haymaker.name}  ·  ${hero.restructure.name}`, {
-      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.good, letterSpacing: 1,
-    }).setOrigin(0, 0)
+    // One size for the whole card, like the tower and special cards. The name
+    // used to be a fixed 26px and could not give ground, so a shorter hero row
+    // pushed CORY out through the top of his own frame.
+    let built: { name: Phaser.GameObjects.Text; line: Phaser.GameObjects.Text;
+      kit: Phaser.GameObjects.Text; total: number } | null = null
+    for (const size of LO.bodySizes) {
+      built?.name.destroy(); built?.line.destroy(); built?.kit.destroy()
+      const name = this.add.text(textX, 0, hero.name.toUpperCase(), {
+        fontFamily: FONT_UI, fontSize: `${size + 4}px`, fontStyle: 'bold',
+        color: COLOR.ink, letterSpacing: 2,
+      }).setOrigin(0, 0)
+      const line = this.add.text(textX, 0, hero.blurb, {
+        fontFamily: FONT_UI, fontSize: `${size}px`, color: COLOR.dim, ...BODY_SPACING,
+        wordWrap: { width: textW },
+      }).setOrigin(0, 0)
+      const kit = this.add.text(textX, 0, `${hero.haymaker.name}  ·  ${hero.restructure.name}`, {
+        fontFamily: FONT_UI, fontSize: `${size}px`, color: COLOR.good, letterSpacing: 1,
+      }).setOrigin(0, 0)
+      const total = name.height + 4 + line.height + 6 + kit.height
+      built = { name, line, kit, total }
+      if (total <= room) break
+    }
+    const b = built as NonNullable<typeof built>
 
-    // Height from the content, then the text block centred against the
-    // portrait rather than pinned to the top of the card.
-    const stack = name.height + 4 + line.height + 6 + kit.height
-    const h = Math.max(portraitBox + pad * 2, stack + pad * 2)
     const c = this.card(x, y, w, h)
-
-    let ty = (h - stack) / 2
-    name.setY(ty); ty += name.height + 4
-    line.setY(ty); ty += line.height + 6
-    kit.setY(ty)
+    let ty = pad + Math.max(0, (room - b.total) / 2)
+    b.name.setY(ty); ty += b.name.height + 4
+    b.line.setY(ty); ty += b.line.height + 6
+    b.kit.setY(ty)
 
     const portrait = this.add.image(-w / 2 + pad + portraitBox / 2, h / 2, hero.portraitSprite)
     fitInBox(portrait, hero.portraitSprite, portraitBox)
-    c.face.add([portrait, name, line, kit])
+    c.face.add([portrait, b.name, b.line, b.kit])
     return y + h
   }
+
+
 
   /**
    * One card face, for every card in both rows.
@@ -397,138 +427,170 @@ export class LoadoutScene extends Phaser.Scene {
    */
   private cardFace(
     cw: number,
+    ch: number,
     icon: (cx: number, cy: number, box: number) => Phaser.GameObjects.GameObject[],
     name: string,
     cost: string | null,
     stats: string | null,
     body: string,
-  ): { parts: Phaser.GameObjects.GameObject[]; bottom: number } {
-    // Padded against the painted frame, not against the box. The frame's
-    // corners reach in further than the box edge, so a hand-picked 9px put the
-    // cost on top of the chrome — which is exactly what was reported, and what
-    // measuring against the backing rectangle could never see.
-    const frame = panelInset(this, cw, 120)
-    const pad = Math.max(LO.cardPad, Math.ceil(frame.left) + 2)
-    const padR = Math.max(LO.cardPad, Math.ceil(frame.right) + 2)
-    // The frame is not square. Its top rail is deeper than its side rails, so
-    // padding the top by the LEFT inset put every card's name one pixel onto
-    // the chrome — on all fourteen entries, at both viewports.
-    const padT = Math.max(LO.cardPad, Math.ceil(frame.top) + 2)
-    const col = LO.cardIconColumn
+  ): { parts: Phaser.GameObjects.GameObject[] } {
+    // Padded against the painted frame, not the box — but only against the
+    // part of it that is a rail. The nine-slice's corner bracket reaches 144px
+    // into the source art, and padding by all of it threw away a tenth of a
+    // small card on each side, which is what made the cards tall enough to
+    // push the buttons off the screen.
+    const frame = this.frameInsetFor(cw, ch)
+    const pad = Math.max(LO.cardPad, Math.ceil(frame.left))
+    const padR = Math.max(LO.cardPad, Math.ceil(frame.right))
+    const padT = Math.max(LO.cardPad, Math.ceil(frame.top))
+    const padB = Math.max(LO.cardPad, Math.ceil(frame.bottom))
+    // The icon column scales with the card rather than being a fixed 62px on
+    // every screen. On a wide viewport that left the art small in a column
+    // with room to spare; on a narrow one a fixed wide column would eat the
+    // text. Bounded at both ends so it can do neither.
+    const col = Math.round(Math.max(LO.cardIconColumnMin,
+      Math.min(LO.cardIconColumnMax, cw * LO.cardIconColumnShare)))
     const tx = -cw / 2 + pad + col
     const tw = cw - pad - col - padR
+    const room = ch - padT - padB
 
-    // The price goes UNDER the icon, not beside the name. Sharing the name's
-    // line cost it 37px of a 200px column on a small phone, which was enough
-    // to wrap "WITHHOLDING TOWER" onto a second line and make the whole row
-    // 26px taller than it needed to be. The icon column has the height going
-    // spare, and a picture with a price under it is a price tag.
-    const box = LO.cardIconBox
+    // ONE size for the whole card, chosen so the name, the stats and the body
+    // all fit together. Fitting only the body was not enough: on a narrow
+    // phone the stats line wraps to three lines on its own and there is
+    // nothing left for the description, so the body overflowed by 43px at a
+    // size the ladder thought was fine.
+    let built: { name: Phaser.GameObjects.Text; stats: Phaser.GameObjects.Text | null;
+      body: Phaser.GameObjects.Text; total: number } | null = null
+    for (const size of LO.bodySizes) {
+      built?.name.destroy(); built?.stats?.destroy(); built?.body.destroy()
+      const n = this.add.text(tx, 0, name.toUpperCase(), {
+        fontFamily: FONT_UI, fontSize: `${size}px`, color: COLOR.ink, fontStyle: 'bold',
+        wordWrap: { width: tw },
+      }).setOrigin(0, 0)
+      const st = stats === null ? null : this.add.text(tx, 0, stats, {
+        fontFamily: FONT_UI, fontSize: `${size}px`, color: COLOR.ink,
+        wordWrap: { width: tw },
+      }).setOrigin(0, 0)
+      const bd = this.add.text(tx, 0, body, {
+        fontFamily: FONT_UI, fontSize: `${size}px`, color: COLOR.dim, ...BODY_SPACING,
+        wordWrap: { width: tw },
+      }).setOrigin(0, 0)
+      const total = n.height + 4 + (st ? st.height + 3 : 0) + bd.height
+      built = { name: n, stats: st, body: bd, total }
+      if (total <= room) break
+    }
+    const b = built as NonNullable<typeof built>
+
+    // Laid out from the top of the padded area, centred if there is slack.
+    let ty = padT + Math.max(0, (room - b.total) / 2)
+    b.name.setY(ty); ty += b.name.height + 4
+    if (b.stats) { b.stats.setY(ty); ty += b.stats.height + 3 }
+    b.body.setY(ty)
+
+    const box = col - 8
+    // Centred in its column, vertically as well as horizontally. The icons
+    // used to sit at a fixed y near the top, which put them against the frame
+    // and made them read as different sizes from card to card.
+    const iconCx = -cw / 2 + pad + col / 2
+    const iconCy = ch / 2 - (cost === null ? 0 : 10)
     const costText = cost === null ? null : this.add.text(
-      -cw / 2 + pad + col / 2, padT + box + 4, cost, {
+      iconCx, iconCy + box / 2 + 4, cost, {
         fontFamily: FONT_UI, fontSize: '22px', color: COLOR.amber, fontStyle: 'bold',
       },
     ).setOrigin(0.5, 0)
-    const nameText = this.add.text(tx, padT, name.toUpperCase(), {
-      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.ink, fontStyle: 'bold',
-      wordWrap: { width: tw },
-    }).setOrigin(0, 0)
 
-    let ty = padT + nameText.height + 6
-    const statsText = stats === null ? null : this.add.text(tx, ty, stats, {
-      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.ink,
-      wordWrap: { width: tw },
-    }).setOrigin(0, 0)
-    if (statsText) ty += statsText.height + 4
-
-    const bodyText = this.add.text(tx, ty, body, {
-      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.dim, ...BODY_SPACING,
-      wordWrap: { width: tw },
-    }).setOrigin(0, 0)
-
-    const parts = [
-      ...icon(-cw / 2 + pad + col / 2, padT + box / 2, box),
-      nameText, bodyText,
-    ]
-    if (costText) parts.push(costText)
-    if (statsText) parts.push(statsText)
-
-    // The taller of the two columns decides the card, so a short description
-    // never crops the icon and a tall one never runs off the plate.
-    // The bottom inset is larger than the top one: the plate's chrome reaches
-    // further in at the foot than at the head, and a last line set to the same
-    // padding as the first sits on the frame.
-    const iconColumnBottom = padT + box + (costText ? 4 + costText.height : 0)
     return {
-      parts,
-      bottom: Math.max(ty + bodyText.height, iconColumnBottom)
-        + Math.max(LO.cardPadBottom, Math.ceil(frame.bottom) + 2),
+      parts: [
+        ...icon(iconCx, iconCy, box),
+        b.name, b.body,
+        ...(costText ? [costText] : []),
+        ...(b.stats ? [b.stats] : []),
+      ],
     }
   }
 
   /**
-   * The two opening towers, described to the same depth as the specials.
+   * An icon centred in a box it can never spill out of.
    *
-   * They used to show a name and a price while the ability cards showed full
-   * mechanics, so the player was asked to compare two things that had been
-   * explained to completely different depths.
+   * `fitInBox` scales by the manifest's CONTENT extents, which is right for
+   * matching art of different source sizes — but a padded canvas then renders
+   * wider than the box it was given, and the Write-Off tower's did exactly
+   * that: its art reached out of the icon column and under the card's own
+   * text. This clamps on what is actually drawn.
    */
-  private towerSection(ids: string[], top: number): number {
+  private boxedIcon(key: string, cx: number, cy: number, box: number): Phaser.GameObjects.Image {
+    const img = this.add.image(cx, cy, key)
+    fitInBox(img, key, box)
+    const over = Math.max(img.displayWidth, img.displayHeight)
+    if (over > box) img.setScale(img.scaleX * (box / over), img.scaleY * (box / over))
+    return img
+  }
+
+  /** The painted frame's inner rail for a card of this size. Exposed so a
+   *  harness run measures against the frame the player sees. */
+  frameInsetFor(w: number, h = 140): { left: number; right: number; top: number; bottom: number } {
+    const f = panelInset(this, w, h)
+    const k = LO.frameInsetShare
+    return { left: f.left * k, right: f.right * k, top: f.top * k, bottom: f.bottom * k }
+  }
+
+  /**
+   * The two opening towers, described to the same depth as the specials.
+   */
+  private towerSection(ids: string[], top: number, height: number): number {
     const y = this.heading('TOWERS', top)
-    return this.cardRow(ids, y, (id, cw) => {
+    return this.cardRow(ids, y, height, (id, cw, ch) => {
       const def = TOWERS[id]!
       return this.cardFace(
-        cw,
-        (cx, cy, box) => towerIcon(this, cx, cy, def.sprite, box),
+        cw, ch,
+        // fitInBox, not towerIcon: towerIcon is BOTTOM-anchored and takes a
+        // baseline, so passing it the box centre hung every tower icon above
+        // the middle and against the frame. fitInBox centres the art and
+        // scales its longest side to exactly the box, so a wide tower and a
+        // tall one occupy the same square — which is what made them look
+        // like different sizes from card to card.
+        (cx, cy, box) => [this.boxedIcon(def.sprite, cx, cy, box)],
         def.name, `${def.cost}`, towerStats(def), towerLine(def),
       )
     })
   }
 
-  private abilitySection(ids: string[], top: number): number {
+  private abilitySection(ids: string[], top: number, height: number): number {
     const y = this.heading('SPECIALS', top)
-    return this.cardRow(ids, y, (id, cw) => {
+    return this.cardRow(ids, y, height, (id, cw, ch) => {
       const def = ABILITIES[id]!
       return this.cardFace(
-        cw,
-        (cx, cy, box) => {
-          const img = this.add.image(cx, cy, def.icon)
-          fitInBox(img, def.icon, box)
-          return [img]
-        },
+        cw, ch,
+        (cx, cy, box) => [this.boxedIcon(def.icon, cx, cy, box)],
         def.name, null, null, abilityLine(def),
       )
     })
   }
 
   /**
-   * A row of equal cards.
+   * A row of equal cards, at the height the screen can spare.
    *
-   * Every face is built first, its natural height measured, and the tallest
-   * decides the row. The two special cards were 162px against the towers'
-   * 104px and the grid read as broken; a row whose height is picked per card
-   * always will.
+   * The height is GIVEN. It used to be measured from the tallest card, which
+   * is how the row grew until the buttons left the screen; now the row is told
+   * what it has and each face fits itself into it.
    */
   private cardRow(
     ids: string[],
     y: number,
-    build: (id: string, cw: number) => { parts: Phaser.GameObjects.GameObject[]; bottom: number },
+    height: number,
+    build: (id: string, cw: number, ch: number) => { parts: Phaser.GameObjects.GameObject[] },
   ): number {
     const gap = 22
     const n = Math.max(1, ids.length)
     const cw = Math.floor((this.contentWidth - gap * (n - 1)) / n)
     const total = n * cw + (n - 1) * gap
 
-    // Built before any card exists, so the row's height is known before the
-    // plates are drawn.
-    const built = ids.map((id) => build(id, cw))
-    const h = Math.max(...built.map((b) => b.bottom), 96)
-
-    ids.forEach((_id, i) => {
+    ids.forEach((id, i) => {
       const x = W / 2 - total / 2 + i * (cw + gap)
-      const c = this.card(x, y, cw, h)
-      c.face.add(built[i]!.parts)
+      const c = this.card(x, y, cw, height)
+      c.face.add(build(id, cw, height).parts)
     })
-    return y + h
+    return y + height
   }
 }
+

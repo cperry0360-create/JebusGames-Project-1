@@ -2394,6 +2394,52 @@ async function run() {
     return
   }
 
+  if (scenario === 'startrun') {
+    // Actually press BEGIN THE RUN, on the longest loadout there is, at the
+    // smallest viewport. Not "the button is on screen" — the button works and
+    // a run starts.
+    for (const k of ['Title', 'Splash', 'Credits', 'Boot', 'Game', 'Hud']) game.scene.stop(k)
+    const RS = await import('./js/systems/RunState.js')
+    // The worst case by measurement: Filing Extension has the longest tower
+    // body, the Scratch Ticket the longest special body.
+    RS.setRunState({ heroId: 'cory', openingTowers: ['extension', 'shelter'],
+      abilities: ['scratchTicket', 'glacier'] })
+    game.scene.start('Loadout')
+    await until(() => running('Loadout'), 10000)
+    await sleep(500)
+    const sc = scene('Loadout')
+
+    const all = []
+    const walkAll = (list) => { for (const o of list) { all.push(o); if (o.list) walkAll(o.list) } }
+    walkAll(sc.children.list)
+    const label = all.find((o) => o.type === 'Text' && /BEGIN/.test(String(o.text ?? '')))
+    const bb = label.getBounds()
+    note('viewport ' + VP.w + 'x' + VP.h)
+    note('loadout: extension + shelter / scratchTicket + glacier (the longest copy in the game)')
+    note('BEGIN THE RUN at y ' + Math.round(bb.y) + '..' + Math.round(bb.bottom) + ' of 720  ' +
+      (bb.bottom < 720 ? 'ON SCREEN' : '*** OFF SCREEN ***'))
+    await shot('startrun-01-loadout-' + VP.w + 'x' + VP.h)
+
+    // Press it for real, through the input system, at its screen position.
+    const cam = sc.cameras.main
+    const sx = cam.x + (bb.centerX - cam.worldView.x) * cam.zoom
+    const sy = cam.y + (bb.centerY - cam.worldView.y) * cam.zoom
+    note('pressing at screen ' + Math.round(sx) + ',' + Math.round(sy) +
+      ' (viewport is ' + VP.w + 'x' + VP.h + ')')
+    await click(sx, sy)
+    const started = await until(() => running('Game'), 12000)
+    note('the run started: ' + (started ? 'YES' : 'NO *** THE BUTTON DID NOT WORK ***'))
+    await sleep(900)
+    const g2 = scene('Game')
+    note('  towers available: ' + (g2 ? Object.keys(g2.towerDefs).length : '?') +
+      '  hero: ' + (g2 && g2.status ? g2.status.heroName : '?') +
+      '  drew ' + (g2 ? g2.children.list.length : 0) + ' objects')
+    await shot('startrun-02-playing-' + VP.w + 'x' + VP.h)
+    note('RESULT ' + (started && bb.bottom < 720 ? 'a run can be started at the worst case'
+      : '*** COULD NOT START A RUN ***'))
+    return
+  }
+
   if (scenario === 'everyloadout') {
     // EVERY hero, EVERY tower and EVERY special, each one forced into both
     // slots of its row so it is measured in the narrowest card it can get.
@@ -2405,17 +2451,37 @@ async function run() {
     const specials = Object.keys(abil)
 
     let combos = 0
+    let worstButtonBottom = 0
     const bad = []
     const table = []
 
     const render = async (hero, tp, sp) => {
-      RS.setRunState({ heroId: hero, openingTowers: tp, abilities: sp })
+      RS.setRunState({ heroId: hero, openingTowers: tp, abilities: sp, reserveTowers: [] })
       game.scene.stop('Loadout')
       game.scene.start('Loadout')
       await until(() => running('Loadout'), 6000)
       await sleep(50)
       combos++
       const sc = scene('Loadout')
+      // THE ASSERTION THAT WOULD HAVE CAUGHT THE OUTAGE. A card that grows
+      // pushes the buttons down, and a button off the bottom of the screen is
+      // a player who cannot start a run. Checked for every combination, not
+      // for whichever one the seed happened to deal.
+      // Walked recursively: the buttons live on the scene's layer container,
+      // so a scan of children.list alone finds nothing and reports a clean
+      // bill of health — which is exactly the shape of check that missed this.
+      const all = []
+      const walkAll = (list) => { for (const o of list) { all.push(o); if (o.list) walkAll(o.list) } }
+      walkAll(sc.children.list)
+      for (const o of all) {
+        if (o.type !== 'Text' || !/BEGIN|REROLL/.test(String(o.text ?? ''))) continue
+        const bb = o.getBounds()
+        worstButtonBottom = Math.max(worstButtonBottom, bb.bottom + 16)
+        if (bb.bottom + 16 > 720 || bb.y < 0) {
+          bad.push([hero, tp[0], sp[0]].join('/') + '  ' + JSON.stringify(String(o.text)) +
+            '  BUTTON OFF SCREEN at y ' + Math.round(bb.y) + '..' + Math.round(bb.bottom))
+        }
+      }
       for (const c of sc.cards) {
         // Measured against the PAINTED FRAME's inner edge, not the backing
         // rectangle: the backing sits 5px inside the box, the nine-slice's
@@ -2424,7 +2490,7 @@ async function run() {
         const plate = c.parts.find((o) => o.type === 'Rectangle' && o.getBounds)
         if (!plate) continue
         const pb = plate.getBounds()
-        const inset = sc.frameInsetFor(pb.width + 10)
+        const inset = sc.frameInsetFor(pb.width + 10, pb.height + 10)
         const safe = {
           x: pb.x - 5 + inset.left, right: pb.right + 5 - inset.right,
           y: pb.y - 5 + inset.top, bottom: pb.bottom + 5 - inset.bottom,
@@ -2448,7 +2514,9 @@ async function run() {
           }
           if (over.length) bad.push([hero, tp[0], sp[0]].join('/') + '  ' + label + '  ' + over.join(', '))
           const lines = o.getWrappedText ? o.getWrappedText().length : 1
-          table.push({ what: [hero, tp[0], sp[0]].join('/'), text: String(o.text), lines, h: Math.round(bb.height), w: Math.round(bb.width) })
+          const size = parseInt(o.style.fontSize, 10) || 0
+          table.push({ what: [hero, tp[0], sp[0]].join('/'), text: String(o.text), lines,
+            h: Math.round(bb.height), w: Math.round(bb.width), size })
         }
       }
     }
@@ -2461,18 +2529,33 @@ async function run() {
       const sc = scene('Loadout')
       const plate = sc.cards[1].parts.find((o) => o.type === 'Rectangle' && o.getBounds)
       const pb = plate.getBounds()
-      const inset = sc.frameInsetFor(pb.width + 10)
+      const inset = sc.frameInsetFor(pb.width + 10, pb.height + 10)
       note('card box w ' + Math.round(pb.width + 10) +
         '  painted frame reaches in L' + inset.left.toFixed(1) + ' R' + inset.right.toFixed(1) +
         ' T' + inset.top.toFixed(1) + ' B' + inset.bottom.toFixed(1) +
         '  (the old pad was 9)')
     }
     note('viewport ' + VP.w + 'x' + VP.h)
+    note('worst button row bottom over every combination: ' + Math.round(worstButtonBottom) +
+      ' of 720' + (worstButtonBottom > 720 ? '  *** OFF THE SCREEN ***' : '  on screen'))
     note('combinations rendered: ' + combos +
       '  (' + heroes.length + ' heroes + ' + towers.length + ' towers + ' + specials.length + ' specials)')
     const worst = table.slice().sort((x, y) => y.lines - x.lines || y.w - x.w).slice(0, 6)
     note('longest rendered bodies:')
     for (const w of worst) note('   ' + w.lines + ' lines, ' + w.h + 'px tall, ' + w.w + 'px wide  ' + w.what + '  ' + JSON.stringify(w.text.slice(0, 46)))
+    // Which copy had to shrink below the 22px floor to fit, and how far.
+    const shrunk = {}
+    for (const t of table) {
+      if (t.size && t.size < 22) {
+        const key = t.text.slice(0, 44)
+        shrunk[key] = Math.min(shrunk[key] ?? 99, t.size)
+      }
+    }
+    const keys = Object.keys(shrunk)
+    note('copy that had to drop below 22px: ' + (keys.length ? keys.length + ' strings' : 'none'))
+    for (const k of keys.sort((a, b) => shrunk[a] - shrunk[b]).slice(0, 8)) {
+      note('   ' + shrunk[k] + 'px  ' + JSON.stringify(k))
+    }
     note('OVERFLOWS: ' + (bad.length ? bad.length : 'none'))
     for (const b of bad.slice(0, 16)) note('   ' + b)
     return
@@ -2588,6 +2671,13 @@ async function run() {
       const plate = c.parts.find((o) => o.type === 'Rectangle' && o.getBounds)
       const pb = plate ? plate.getBounds() : null
       const kids = (c.face.list || []).filter((o) => o.type === 'Text')
+      const ic = (c.face.list || []).filter((o) => o.type === 'Image')
+      note('  icons: ' + ic.map((o) => {
+        const b = o.getBounds()
+        return (o.texture?.key ?? '?') + ' ' + Math.round(b.width) + 'x' + Math.round(b.height) +
+          ' centre ' + Math.round(b.centerX - (pb ? pb.centerX : 0)) + ',' +
+          Math.round(b.centerY - (pb ? pb.centerY : 0)) + ' rel card'
+      }).join('  |  '))
       note('  card w' + (pb ? Math.round(pb.width) : '?') + ' h' + (pb ? Math.round(pb.height) : '?') +
         ': ' + kids.map((t) => JSON.stringify(String(t.text).slice(0, 16)) + ' w' +
           Math.round(t.width) + ' x' + Math.round(t.getBounds().width)).join(' '))
