@@ -32,7 +32,9 @@ ALPHA = 16
 MEDIAN_BASE_ON_SCREEN = 73.0
 
 KEY = {
-    'tower_withholding.png': 'turret-ledger',
+    # Tier 1 is the Withholding Tower's base sprite; t2 and t3 are measured
+    # separately and are not part of the six-tower scale.
+    'tower_withholding_t1.png': 'turret-ledger',
     'tower_writeoff.png':    'turret-writeoff',
     'tower_rounding.png':    'turret-rounding',
     'tower_escalation.png':  'turret-escalation',
@@ -59,7 +61,15 @@ def base_width(path):
 
 
 # First pass: the median base across the set sets the scale for all six.
-bases = sorted(base_width(f) for f in glob.glob('public/assets/towers/tower_*.png'))
+# Exactly the six towers in KEY, and no more.
+#
+# The scale is set from the median base across the set, so what is IN the set
+# matters. Tier art is three sizes of one tower: letting t2 and t3 in would
+# drag the whole board's scale toward whichever tower happened to get tier art
+# first, and dropping the tower entirely because its file was renamed would do
+# the same in the other direction. Tier 1 stands for its tower.
+tower_art = [f'public/assets/towers/{n}' for n in sorted(KEY)]
+bases = sorted(base_width(f) for f in tower_art)
 median = bases[len(bases) // 2]
 SCALE = MEDIAN_BASE_ON_SCREEN / median
 print(f'bases at source scale: {bases}')
@@ -67,7 +77,7 @@ print(f'median {median}px -> uniform scale {SCALE:.4f} '
       f'(on-screen bases {[round(b * SCALE, 1) for b in bases]})\n')
 
 rows_out, files, render = [], {}, {}
-for f in sorted(glob.glob('public/assets/towers/tower_*.png')):
+for f in tower_art:
     name = os.path.basename(f)
     w, h, px = png.read(f)
     spans = []

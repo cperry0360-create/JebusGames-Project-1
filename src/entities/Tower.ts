@@ -3,8 +3,8 @@ import type { TowerDef, TowerSpec } from '../types.ts'
 import { ySort } from '../systems/DepthSort.ts'
 import { pickFirst } from '../systems/Targeting.ts'
 import { boostedDamage } from '../systems/Combat.ts'
-import { makeShadow, muzzleFlash, PRESENTATION } from '../systems/Presentation.ts'
-import { applyRender } from '../systems/Art.ts'
+import { deathPuff, makeShadow, muzzleFlash, PRESENTATION } from '../systems/Presentation.ts'
+import { applyRender, hasTierArt, tierSprite } from '../systems/Art.ts'
 import { atSpecChoice, BASE_TIER, isMaxed, maxTier, nextStep, specById, statAt } from '../systems/Upgrades.ts'
 import rulesData from '../data/rules.json'
 import type { RulesDef } from '../types.ts'
@@ -66,6 +66,9 @@ export class Tower extends Phaser.GameObjects.Container {
     this.add(parts)
     scene.add.existing(this)
     ySort(this)
+    // Asked for rather than assumed: a tower built at tier 1 wears the same
+    // sprite `def.sprite` names, but the tier is what decides, not the default.
+    this.wearTier(false)
     this.drawTier()
     this.popIn()
   }
@@ -91,6 +94,40 @@ export class Tower extends Phaser.GameObjects.Container {
     const halfW = this.turret.displayWidth / 2
     const top = this.y - this.turret.displayHeight
     return x >= this.x - halfW && x <= this.x + halfW && y >= top && y <= this.y + 8
+  }
+
+  /**
+   * Puts on the sprite for the tier it is now.
+   *
+   * A tower with tier art changes silhouette as it grows, which is the primary
+   * read; one without keeps the sprite it has always had and loses nothing.
+   * The shadow is replaced with it, because a taller tower's footing is not
+   * the same width as a shorter one's.
+   *
+   * The anchor is the bottom centre of every tier, so the base stays where it
+   * was planted and the tower grows upward out of it.
+   */
+  private wearTier(animate: boolean): void {
+    const key = tierSprite(this.def.sprite, this.tier)
+    if (this.turret.texture.key === key) return
+
+    this.turret.setTexture(key)
+    applyRender(this.turret, key)
+    this.baseScale = this.turret.scaleY
+    this.shadow.destroy()
+    this.shadow = makeShadow(this.scene, key)
+    this.addAt(this.shadow, 0)
+
+    if (!animate) return
+    // Felt, not just seen. A puff at the footing covers the frame where one
+    // sprite becomes another, and the pop says the building grew rather than
+    // being swapped out from under the player.
+    deathPuff(this.scene, this.x, this.y + 2, 0xd8c9a8)
+    this.turret.setScale(this.baseScale * 0.82)
+    this.scene.tweens.add({
+      targets: this.turret, scaleX: this.baseScale, scaleY: this.baseScale,
+      duration: 260, ease: 'Back.easeOut',
+    })
   }
 
   /**
@@ -128,6 +165,12 @@ export class Tower extends Phaser.GameObjects.Container {
       this.pips.fillCircle(x, top, t.pipRadius)
       this.pips.lineStyle(2, 0x0d1016, 0.9).strokeCircle(x, top, t.pipRadius)
     }
+
+    // The scale-and-brighten stand-in is for towers whose art does not change.
+    // Where real tier sprites exist the silhouette carries the growth, and
+    // applying both would inflate a tier-3 tower well past the size it was
+    // drawn at. The pips stay either way, as the secondary read.
+    if (hasTierArt(this.def.sprite)) return
 
     const steps = this.tier - 1
     this.turret.setScale(this.baseScale * (1 + steps * t.scalePerTier))
@@ -341,6 +384,7 @@ export class Tower extends Phaser.GameObjects.Container {
     }
     this.scaffold?.destroy()
     this.scaffold = undefined
+    this.wearTier(true)
     this.drawTier()
     this.popIn()
     // A Tax Shelter that just grew its radius has to be recomputed against

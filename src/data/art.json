@@ -3,7 +3,7 @@
   "credit": "Three projectile tiles and the title scenery from Kenney Tower Defense (Top-Down), CC0. See public/assets/kenney/License.txt. Everything else the game draws is original art.",
   "note": "Every sprite the game draws is named here. `files` maps a key to a path under assetRoot, so a new art pack is a path change. `render` gives a key its anchor and on-screen height, so art of any source size drops in without touching code.",
   "files": {
-    "turret-ledger": "towers/tower_withholding.png",
+    "turret-ledger": "towers/tower_withholding_t1.png",
     "turret-writeoff": "towers/tower_writeoff.png",
     "turret-rounding": "towers/tower_rounding.png",
     "turret-escalation": "towers/tower_escalation.png",
@@ -57,7 +57,9 @@
     "ui-panel-dialog": "ui/panel_dialog.png",
     "prop-sign-moes": "props/sign_moes.png",
     "prop-sign-courjahan": "props/sign_courjahan.png",
-    "prop-pad": "props/pad_donotbuild.png"
+    "prop-pad": "props/pad_donotbuild.png",
+    "turret-ledger-t2": "towers/tower_withholding_t2.png",
+    "turret-ledger-t3": "towers/tower_withholding_t3.png"
   },
   "render": {
     "turret-escalation": {
@@ -93,12 +95,12 @@
       "contentHeight": 512
     },
     "turret-ledger": {
-      "anchorX": 0.4988,
+      "anchorX": 0.5,
       "anchorY": 1.0,
       "displayHeight": 87.1,
-      "shadowWidth": 70.6,
-      "contentWidth": 415,
-      "contentHeight": 512
+      "shadowWidth": 56.6,
+      "contentWidth": 213,
+      "contentHeight": 300
     },
     "turret-writeoff": {
       "anchorX": 0.5008,
@@ -389,6 +391,22 @@
       "displayHeight": 14.0,
       "contentWidth": 165,
       "contentHeight": 160
+    },
+    "turret-ledger-t2": {
+      "anchorX": 0.5,
+      "anchorY": 1.0,
+      "displayHeight": 107.7,
+      "shadowWidth": 61.0,
+      "contentWidth": 215,
+      "contentHeight": 371
+    },
+    "turret-ledger-t3": {
+      "anchorX": 0.5,
+      "anchorY": 1.0,
+      "displayHeight": 137.0,
+      "shadowWidth": 69.1,
+      "contentWidth": 239,
+      "contentHeight": 472
     }
   },
   "map": {
@@ -451,5 +469,12 @@
     "signDefault": "prop-sign-moes",
     "signBribed": "prop-sign-courjahan",
     "buildPad": "prop-pad"
+  },
+  "towerTiers": {
+    "turret-ledger": [
+      "turret-ledger",
+      "turret-ledger-t2",
+      "turret-ledger-t3"
+    ]
   }
 }

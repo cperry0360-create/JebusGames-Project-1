@@ -262,6 +262,11 @@ test('every file in the manifest is bound to something that draws it', () => {
   }
   for (const k of art.decor ?? []) claim(k)
   for (const k of art.greyable ?? []) claim(k)
+  // Per-tier tower sprites are named only here, and are drawn by Tower.wearTier
+  // through Art.tierSprite.
+  for (const set of Object.values(art.towerTiers ?? {})) {
+    for (const k of set as string[]) claim(k)
+  }
 
   // Anything the data files name: tower sprites and shots, enemies, ability
   // icons, hero art, the gnomes.

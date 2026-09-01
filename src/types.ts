@@ -526,7 +526,10 @@ export interface ArtDef {
     /** The three counter plates, each carrying its own icon and empty field. */
     counters: Record<string, string>
     /** The arcade button plates, by the weight of the action they carry. */
-    buttons: { primary: string; secondary: string; disabled: string }
+    buttons: { primary: string; secondary: string; disabled: string   /** Per-tier tower sprites, keyed by the tower's base sprite key. A tower
+   *  with no entry keeps one sprite at every tier. */
+  towerTiers?: Record<string, string[]>
+}
     /** The small square plate for an icon button, and its selected state. */
     iconButton: string
     iconButtonActive: string

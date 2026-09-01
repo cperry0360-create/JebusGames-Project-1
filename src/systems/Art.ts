@@ -32,6 +32,32 @@ export const ART = {
   generated: art.generated,
   /** Art the UI draws greyed out when it is unavailable. */
   greyable: art.greyable,
+  /**
+   * Per-tier sprites, keyed by the tower's base sprite.
+   *
+   * A tower with an entry here swaps its whole silhouette as it upgrades; one
+   * without keeps the single sprite it has always had. That is the whole
+   * mechanism, and it is why adding tier art for the next tower is three file
+   * entries, three render entries and one line in `towerTiers` — no code.
+   */
+  towerTiers: art.towerTiers ?? {},
+}
+
+/**
+ * The sprite a tower of this tier should be wearing.
+ *
+ * Falls back to the base key, so the five towers that have no tier art yet
+ * behave exactly as before and nothing has to know which is which.
+ */
+export function tierSprite(baseKey: string, tier: number): string {
+  const set = (art.towerTiers ?? {})[baseKey]
+  if (!set || set.length === 0) return baseKey
+  return set[Phaser.Math.Clamp(tier - 1, 0, set.length - 1)] ?? baseKey
+}
+
+/** Whether this tower's look changes with its tier at all. */
+export function hasTierArt(baseKey: string): boolean {
+  return ((art.towerTiers ?? {})[baseKey]?.length ?? 0) > 1
 }
 
 export const SPRITE_KEYS = Object.keys(art.files)

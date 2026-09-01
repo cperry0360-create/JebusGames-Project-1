@@ -327,12 +327,44 @@ const RENDER = JSON.parse(
 const onScreen = (key: string, zoom: number): number =>
   (RENDER[key]?.displayHeight ?? 0) * zoom
 
+const ART_JSON = JSON.parse(
+  readFileSync(new URL('../src/data/art.json', import.meta.url), 'utf8'),
+) as { towerTiers?: Record<string, string[]> }
+
 test('a tower fills the share of the screen the art was drawn for', () => {
+  // Tier 1 only. A tower with tier art is deliberately taller as it upgrades —
+  // that growth is the primary read on an upgrade — so holding every tier to
+  // one height would forbid the thing the art exists to do. The tiers are
+  // checked separately below.
+  const upperTiers = new Set(
+    Object.values(ART_JSON.towerTiers ?? {}).flatMap((set) => set.slice(1)),
+  )
   const z = display.camera.defaultZoom
   for (const key of Object.keys(RENDER).filter((k) => k.startsWith('turret-'))) {
+    if (upperTiers.has(key)) continue
     const h = onScreen(key, z)
     assert.ok(h >= 140 && h <= 160,
       `${key} renders ${h.toFixed(0)}px tall at the default zoom; the target is 140-160`)
+  }
+})
+
+test('an upgraded tower is visibly bigger, and not so big it leaves the board', () => {
+  const z = display.camera.defaultZoom
+  for (const [base, set] of Object.entries(ART_JSON.towerTiers ?? {})) {
+    const heights = set.map((k) => onScreen(k, z))
+    for (let i = 1; i < heights.length; i++) {
+      const grew = heights[i]! / heights[i - 1]!
+      assert.ok(grew > 1.1,
+        `${base} tier ${i + 1} is only ${((grew - 1) * 100).toFixed(0)}% taller than tier ${i}; ` +
+        'the silhouette is meant to be the primary read on an upgrade')
+      assert.ok(grew < 1.45,
+        `${base} tier ${i + 1} is ${grew.toFixed(2)}x tier ${i}; that is a different building`)
+    }
+    // A fully upgraded tower still has to sit on a phone screen beside the
+    // lane it is defending.
+    const tallest = heights[heights.length - 1]!
+    assert.ok(tallest <= 260,
+      `${base} at its top tier renders ${tallest.toFixed(0)}px tall; that is most of a phone`)
   }
 })
 

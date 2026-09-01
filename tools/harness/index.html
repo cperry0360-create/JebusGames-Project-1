@@ -1782,6 +1782,49 @@ async function run() {
     return
   }
 
+  if (scenario === 'towertiers') {
+    // The Withholding Tower changing shape as it upgrades.
+    g.status.peanuts = 99999
+    await build(3, 0)
+    const t = g.towers[0]
+    await lookAt(t.x, t.y)
+    const dump = (label) => {
+      note(label + ': tier=' + t.tier + ' texture=' + t.turret.texture.key +
+        ' source ' + t.turret.texture.source[0].width + 'x' + t.turret.texture.source[0].height +
+        ' world ' + t.turret.displayWidth.toFixed(1) + 'x' + t.turret.displayHeight.toFixed(1) +
+        ' on screen ' + Math.round(t.turret.displayHeight * g.cameras.main.zoom) + 'px' +
+        ' base at y=' + Math.round(t.y) + ' origin ' + t.turret.originX + ',' + t.turret.originY)
+    }
+    dump('tier 1')
+    await shot('towertiers-01')
+
+    for (const spec of [null, 'garnishment']) {
+      const baseY = t.y
+      t.beginUpgrade(spec)
+      await until(() => !t.upgrading, 30000)
+      await sleep(400)
+      dump('after upgrade' + (spec ? ' to ' + spec : ''))
+      note('   base stayed put: y ' + Math.round(baseY) + ' -> ' + Math.round(t.y) +
+        ' (drift ' + Math.round(Math.abs(t.y - baseY)) + 'px)')
+      await shot('towertiers-0' + (t.tier))
+    }
+
+    // And the five without tier art must be untouched by any of this.
+    g.status.peanuts = 99999
+    await build(1, 1)
+    const other = g.towers[1]
+    if (other) {
+      const before = other.turret.texture.key
+      other.beginUpgrade(null)
+      await until(() => !other.upgrading, 30000)
+      await sleep(200)
+      note('a tower with no tier art: ' + other.def.name + ' tier=' + other.tier +
+        ' texture ' + before + ' -> ' + other.turret.texture.key +
+        ' (unchanged=' + (before === other.turret.texture.key) + ')')
+    }
+    return
+  }
+
   if (scenario === 'heroblock') {
     // How many enemies does one man actually hold, and what does that cost him?
     // Measured before anything is changed, because the data says 3 and the
