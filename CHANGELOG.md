@@ -8,6 +8,16 @@ Art uploads made from the GitHub web UI all carry the same message,
 consecutively, because forty identical entries hide the ones that say
 something. The commit range is given so nothing is lost.
 
+- `11e5c16` 2026-09-01 — Merge the headless soak harness and the audit (#1)
+- `c8073a9` 2026-09-01 — Give the hero a body, and cut his markers down to three states
+- `4c50b2b` 2026-09-01 — Keep the uploaded reference sheets out of the deploy
+- `2d6ff9a` 2026-09-01 — Make a disabled button inert, and give both card rows one layout
+- `26c640b`..`39505b2` 2026-09-01 — 2 art uploads
+- `08744f3` 2026-09-01 — Put the other three ScaleManager subscriptions on the same footing
+- `284aead` 2026-09-01 — Check the scene's own status instead of a method Phaser does not have
+- `38ae908` 2026-09-01 — Fix the stale scale listener that outlived every run
+- `b4debf0` 2026-09-01 — Run the tests on branches and pull requests
+- `a7fcd3e` 2026-09-01 — Headless soak harness, 2,100 runs, and the audit
 - `c1910e0` 2026-09-01 — Gate Restructure to DAD MODE and reserve its slot
 - `113fd10` 2026-09-01 — Put the Scratch Ticket on its painted art
 - `792a891` 2026-09-01 — Rework the loadout screen onto the painted room

@@ -81,6 +81,8 @@ export interface SoakResult {
   outcome: 'won' | 'lost' | 'stuck'
   waves: number
   lives: number
+  /** 1-based wave on which the first life was lost; -1 if the run never lost one. */
+  firstLifeLostWave: number
   peanutsEarned: number
   kills: number
   seconds: number
@@ -181,6 +183,8 @@ export function simulate(seed: number, mode: SoakMode = 'normal'): SoakResult {
   )
   let peanutsEarned = 0
   let lives = RULES.startingLives
+  /** 1-based wave on which the first life was lost, or -1 if none ever was. */
+  let firstLifeLostWave = -1
   let kills = 0
   let unlocked = opening.slice()
   const enemies: SimEnemy[] = []
@@ -471,6 +475,10 @@ export function simulate(seed: number, mode: SoakMode = 'normal'): SoakResult {
           e.alive = false
           escaped++
           lives -= e.def.livesCost
+          // Measurement only: where the difficulty first bites. A run that
+          // ends 20/20 and a run that ends 20/20 having nearly lost one on
+          // wave 11 are the same number and very different games.
+          if (firstLifeLostWave < 0) firstLifeLostWave = waveIndex + 1
         }
       }
 
@@ -522,7 +530,7 @@ export function simulate(seed: number, mode: SoakMode = 'normal'): SoakResult {
 
   return {
     seed, hero: heroId, abilities: draftedAbilities, towers: opening,
-    outcome, waves: wavesReached, lives, peanutsEarned, kills,
+    outcome, waves: wavesReached, lives, firstLifeLostWave, peanutsEarned, kills,
     seconds: +now.toFixed(1), bannerPoints, findings, firedTowers, firedAbilities,
   }
 }
