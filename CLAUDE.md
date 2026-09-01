@@ -48,12 +48,30 @@ Anything drawn in screen space inside GameScene must be registered with
 **6. Ask before large refactors.**
 Propose the approach first and wait for confirmation before rewriting anything that already works.
 
-**7. Author character art at roughly 2x its render size, not 5x.**
-A sprite the GPU has to shrink by 5x loses its outline: a 4px line sampled
-down to under a pixel becomes a grey smear, which is what happened to the
-whole cast the first time round. 2x is the target — enough headroom for a
-pinch zoom, close enough to 1:1 that bilinear minification stays clean.
-Cory renders at ~61 world px, so his source is 208px tall, not 470.
+**7. Size character art against PHYSICAL pixels:**
+
+    source height >= world height x maxZoom x devicePixelRatio
+
+This rule used to say "roughly 2x the render size, not 5x", and it was
+measured in the wrong unit. Cory renders at 75.8 world px, so the old rule
+asked for a 152px source — but the canvas draws at device resolution now, and
+at maxZoom 2.37 on a devicePixelRatio-3 phone he occupies 539 physical pixels.
+The rule was under-provisioning a retina screen by 3x, and the art that broke
+it (470px, 6.2x the render size) is the art that is very nearly right.
+
+Both failure directions are real, so aim at the formula rather than above it:
+
+- **Too small** and the GPU magnifies, which is a soft, blurry sprite. That is
+  what the map plate does today at 1672px for a 1280-world-px surface.
+- **Too large** and the GPU minifies heavily. A 4px outline sampled down past
+  about 2x becomes a grey smear, which is what happened to the whole cast the
+  first time round, and there are no mipmaps to soften it (WebGL1, and 67 of
+  109 textures are non-power-of-two — see RENDER-QUALITY.md).
+
+With today's numbers — maxZoom 2.37, dpr capped at 3 by `Resolution.ts` — the
+multiplier on a sprite's world height is about **7x**, and the floor of the
+zoom band puts the worst minification at about 2.7x. Recompute rather than
+memorise 7: the zoom band moves.
 
 After any re-export, run `python3 tools/measure_art.py` and update
 `contentWidth`/`contentHeight` in `art.json`. Those are SOURCE extents and
