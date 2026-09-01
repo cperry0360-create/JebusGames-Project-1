@@ -276,3 +276,44 @@ test('every file in the manifest is bound to something that draws it', () => {
   assert.deepEqual(orphans, [],
     'these manifest keys are named by no role and no data file, so nothing can ever draw them')
 })
+
+test('every recorded content box fits inside the file it describes', () => {
+  // The test that would have caught a whole cast rendering at half size.
+  //
+  // `contentWidth` and `contentHeight` are the SOURCE extents of the artwork,
+  // and `fitInBox` divides a target size by them. `displayHeight` survives a
+  // re-export untouched — Phaser scales it by the texture's real height — but
+  // these two do not, and nothing noticed when the characters were re-exported
+  // from roughly 5x their render size down to 2x. The loadout portrait, fitted
+  // to a 96px box through a stale 470px content height against a 208px
+  // texture, would have drawn at 42px.
+  //
+  // Trimmed art records a content box smaller than its canvas, so the
+  // assertion is containment rather than equality. That is enough: a stale
+  // box is always the *old, larger* source, so it always overflows.
+  let checked = 0
+  for (const [key, cfg] of Object.entries(art.render) as [string, any][]) {
+    if (!cfg.contentWidth || !cfg.contentHeight) continue
+    const path = art.files[key]
+    if (!path) continue
+    const file = url(`../public/${art.assetRoot}${path}`)
+    if (!existsSync(file)) continue
+    const [w, h] = pngSize(readFileSync(file))
+    const sheet = cfg.sheet
+    // A sheet's frames are laid out across one file, so the box belongs to a
+    // frame and not to the whole strip.
+    const fw = sheet ? sheet.frameWidth : w
+    const fh = sheet ? sheet.frameHeight : h
+    checked++
+    assert.ok(cfg.contentWidth <= fw && cfg.contentHeight <= fh,
+      `${key} records a ${cfg.contentWidth}x${cfg.contentHeight} content box, ` +
+      `but ${path} is only ${fw}x${fh}. Re-run tools/measure_art.py.`)
+  }
+  assert.ok(checked > 20, `only ${checked} content boxes were checked`)
+})
+
+/** Width and height out of a PNG's IHDR, which is always the first chunk. */
+function pngSize(buf: Buffer): [number, number] {
+  assert.equal(buf.readUInt32BE(0), 0x89504e47, 'not a PNG')
+  return [buf.readUInt32BE(16), buf.readUInt32BE(20)]
+}

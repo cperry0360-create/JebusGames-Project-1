@@ -48,6 +48,19 @@ Anything drawn in screen space inside GameScene must be registered with
 **6. Ask before large refactors.**
 Propose the approach first and wait for confirmation before rewriting anything that already works.
 
+**7. Author character art at roughly 2x its render size, not 5x.**
+A sprite the GPU has to shrink by 5x loses its outline: a 4px line sampled
+down to under a pixel becomes a grey smear, which is what happened to the
+whole cast the first time round. 2x is the target — enough headroom for a
+pinch zoom, close enough to 1:1 that bilinear minification stays clean.
+Cory renders at ~61 world px, so his source is 208px tall, not 470.
+
+After any re-export, run `python3 tools/measure_art.py` and update
+`contentWidth`/`contentHeight` in `art.json`. Those are SOURCE extents and
+`fitInBox` divides by them, so they go stale silently. `displayHeight` is in
+world pixels and survives a re-export untouched, so leave it alone unless the
+art is meant to change size.
+
 ## Conventions
 
 - Prefer small, readable modules over clever abstractions

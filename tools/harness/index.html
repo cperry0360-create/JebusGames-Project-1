@@ -954,6 +954,86 @@ async function run() {
     return
   }
 
+  if (scenario === 'sprites') {
+    // On-screen sizes of the whole cast, after the art was re-exported from
+    // roughly 5x its render size down to 2x.
+    //
+    // `displayHeight` in the manifest is world pixels and Phaser divides it by
+    // the texture's real height, so a re-export cannot move it. What CAN move
+    // is anything that reads `contentWidth`/`contentHeight`, which are source
+    // extents — `fitInBox` in particular, which the loadout portrait uses.
+    // Both are measured here, because only one of them was ever at risk and
+    // the report should say which.
+    const z = g.cameras.main.zoom
+    note('camera zoom ' + z.toFixed(3))
+
+    g.status.peanuts = 99999
+    await build(0, 0)
+    g.startWave()
+    await until(() => g.enemies.length > 1, 30000)
+    await sleep(800)
+
+    const row = (label, obj) => {
+      if (!obj) { note('  ' + label + ': MISSING'); return }
+      note('  ' + label.padEnd(20) + ' tex ' + obj.texture.key.padEnd(20) +
+        ' src ' + obj.texture.source[0].width + 'x' + obj.texture.source[0].height +
+        '  world ' + obj.displayWidth.toFixed(1) + 'x' + obj.displayHeight.toFixed(1) +
+        '  on screen ' + Math.round(obj.displayWidth * z) + 'x' +
+        Math.round(obj.displayHeight * z) + 'px')
+    }
+
+    note('board, at zoom ' + z.toFixed(2) + ':')
+    row('tower', g.towers[0]?.turret)
+    row('hero cory', g.hero.list[1])
+    const seen = new Set()
+    for (const e of g.enemies) {
+      if (seen.has(e.art.texture.key)) continue
+      seen.add(e.art.texture.key)
+      row(e.def.name, e.art)
+    }
+
+    // The two gnomes and the Last Stand vehicle are not on the board yet.
+    g.status.abilities = ['gnomes']
+    g.cooldowns.register('gnomes', 1)
+    g.cooldowns.reset('gnomes')
+    const lead = g.enemies.reduce((a, b) => (a.distance > b.distance ? a : b))
+    const on = g.lane.pointAt(lead.distance + 70)
+    g.fireAbility('gnomes', on.x, on.y)
+    await sleep(400)
+    for (const f of g.fighters) row('gnome', f.art)
+
+    await lookAt(g.hero.x, g.hero.y)
+    await shot('sprites-01-board')
+
+    // Texture filtering. NEAREST on a 2x source is what this task exists to
+    // avoid, so it is read back off the live texture rather than assumed from
+    // the config.
+    const tex = game.textures.get('hero-cory').source[0]
+    note('filter: hero-cory scaleMode=' + tex.scaleMode +
+      ' (LINEAR=' + Phaser.ScaleModes.LINEAR + ', NEAREST=' + Phaser.ScaleModes.NEAREST + ')' +
+      ' game.config.antialias=' + game.config.antialias +
+      ' pixelArt=' + game.config.pixelArt);
+
+    // The portrait, which is the one thing a stale content box really breaks.
+    game.scene.stop('Game'); game.scene.stop('Hud')
+    game.scene.start('Loadout')
+    await until(() => running('Loadout'), 10000)
+    await sleep(700)
+    const flatten = (list, out = []) => {
+      for (const o of list) {
+        out.push(o)
+        if (o.list) flatten(o.list, out)
+      }
+      return out
+    }
+    const portrait = flatten(scene('Loadout').children.list)
+      .find((o) => o.texture && o.texture.key === 'hero-cory')
+    row('loadout portrait', portrait)
+    note('portrait fitted to a 96px box; anything far under that is a stale content box')
+    await shot('sprites-02-loadout')
+    return
+  }
+
   if (scenario === 'buildall') {
     // Does the director actually place towers on every pad, at a phone's
     // zoom, where most of them start off screen?

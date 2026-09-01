@@ -15,7 +15,18 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   width: display.width,
   height: display.height,
   backgroundColor: display.backgroundColor,
+  // Every character is authored at about 2x its render size, so the GPU is
+  // always minifying. Bilinear is the right filter for that and point
+  // sampling is the wrong one: NEAREST on a 2x source drops every other
+  // pixel, which is what turns a 4px outline into a broken dotted line.
+  //
+  // `pixelArt: false` already implies this, but it implies it by omission,
+  // and a future `pixelArt: true` for one sprite would silently point-filter
+  // the whole cast. Both are stated so the intent survives.
   pixelArt: false,
+  antialias: true,
+  // Positions only. This rounds where a sprite is drawn, never how it is
+  // sampled, so it does not fight the filter above.
   roundPixels: true,
   scale: {
     // RESIZE, not FIT: the canvas becomes the viewport instead of a fixed

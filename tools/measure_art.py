@@ -7,6 +7,14 @@ Run from the repository root:
 Nothing at runtime reads this. It is the record of where the anchor,
 displayHeight and shadowWidth numbers in art.json came from, so they can be
 re-derived rather than re-guessed when art changes.
+
+One caveat after a re-export. `anchorX`, `contentWidth` and `contentHeight`
+are read off the source pixels and must be copied into art.json every time
+the art changes size. `displayHeight` and `shadowWidth` are ON-SCREEN figures
+and already shipped; recomputing them from a re-exported file reproduces them
+only to within that file's own rounding — the gnomes came back 0.4px taller
+purely because 300 does not halve twice evenly. Where the difference is under
+a percent, keep what is in art.json. It is the size the game was tuned at.
 """
 
 import sys, glob, os, json
@@ -117,10 +125,16 @@ json.dump({'files': files, 'render': render}, open('/tmp/towerpatch.json', 'w'),
 # ---------------------------------------------------------------- enemies
 
 # The three enemies are 3/4 characters, already drawn to one scale relative to
-# each other with the brute tallest at 512px, so one uniform scale preserves
-# the artist's proportions. It is set so the brute stands a little shorter
-# than a tower (72.8px), which is what a big enemy beside a building should do.
+# each other with the brute the tallest, so one uniform scale preserves the
+# artist's proportions. It is set so the brute stands a little shorter than a
+# tower (72.8px), which is what a big enemy beside a building should do.
+#
+# The scale divisor is READ FROM THE ART, not written down here. The character
+# set has been re-exported once already, from roughly 5x its render size down
+# to 2x, and a hardcoded source height silently rescales the whole cast the
+# next time that happens.
 BRUTE_ON_SCREEN = 66.0
+BRUTE_SOURCE = 'public/assets/enemies/enemy_brute.png'
 
 ENEMY_KEY = {
     'enemy_brute.png':           ('enemy-notice',   0.90),
@@ -163,8 +177,9 @@ def foot_groups(low, cut):
 
 print('\n\nenemies')
 efiles, erender = {}, {}
-escale = BRUTE_ON_SCREEN / 512.0
-print(f'uniform scale {escale:.4f} (brute 512px -> {BRUTE_ON_SCREEN}px on screen)\n')
+brute_source_h = png.read(BRUTE_SOURCE)[1]
+escale = BRUTE_ON_SCREEN / brute_source_h
+print(f'uniform scale {escale:.4f} (brute {brute_source_h}px -> {BRUTE_ON_SCREEN}px on screen)\n')
 for f in sorted(glob.glob('public/assets/enemies/enemy_*.png')):
     name = os.path.basename(f)
     key, band = ENEMY_KEY[name]

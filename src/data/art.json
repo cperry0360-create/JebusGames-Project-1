@@ -127,44 +127,44 @@
       "contentHeight": 592
     },
     "enemy-notice": {
-      "anchorX": 0.4241,
+      "anchorX": 0.4233,
       "anchorY": 1.0,
       "displayHeight": 66.0,
       "shadowWidth": 43.3,
-      "contentWidth": 428,
-      "contentHeight": 512
+      "contentWidth": 189,
+      "contentHeight": 226
     },
     "enemy-shredder": {
-      "anchorX": 0.3579,
+      "anchorX": 0.3529,
       "anchorY": 1.0,
       "displayHeight": 35.2,
       "shadowWidth": 19.5,
-      "contentWidth": 271,
-      "contentHeight": 273
+      "contentWidth": 119,
+      "contentHeight": 120
     },
     "enemy-filer": {
-      "anchorX": 0.3675,
+      "anchorX": 0.3673,
       "anchorY": 1.0,
       "displayHeight": 43.7,
       "shadowWidth": 25.0,
-      "contentWidth": 366,
-      "contentHeight": 339
+      "contentWidth": 162,
+      "contentHeight": 150
     },
     "hero-cory": {
-      "anchorX": 0.6036,
+      "anchorX": 0.6005,
       "anchorY": 1.0,
       "displayHeight": 60.6,
       "shadowWidth": 35.4,
-      "contentWidth": 449,
-      "contentHeight": 470
+      "contentWidth": 199,
+      "contentHeight": 208
     },
     "hero-cory-ultimate": {
-      "anchorX": 0.5378,
+      "anchorX": 0.5384,
       "anchorY": 1.0,
       "displayHeight": 83.2,
       "shadowWidth": 127.3,
-      "contentWidth": 900,
-      "contentHeight": 588
+      "contentWidth": 704,
+      "contentHeight": 460
     },
     "ability-molotov": {
       "anchorX": 0.5,
@@ -230,12 +230,12 @@
       "fieldCentreY": 0.4948
     },
     "enemy-politician": {
-      "anchorX": 0.6033,
+      "anchorX": 0.6028,
       "anchorY": 1.0,
       "displayHeight": 82.5,
       "shadowWidth": 62.1,
-      "contentWidth": 639,
-      "contentHeight": 640
+      "contentWidth": 282,
+      "contentHeight": 282
     },
     "ui-btn-primary": {
       "contentWidth": 1407,
@@ -333,20 +333,20 @@
       "displayHeight": 72
     },
     "unit-gnome-rake": {
-      "anchorX": 0.5647,
+      "anchorX": 0.5611,
       "anchorY": 1.0,
       "displayHeight": 38.7,
       "shadowWidth": 22.4,
-      "contentWidth": 201,
-      "contentHeight": 300
+      "contentWidth": 90,
+      "contentHeight": 134
     },
     "unit-gnome-trowel": {
-      "anchorX": 0.5252,
+      "anchorX": 0.5217,
       "anchorY": 1.0,
       "displayHeight": 38.7,
       "shadowWidth": 24.0,
-      "contentWidth": 258,
-      "contentHeight": 300
+      "contentWidth": 115,
+      "contentHeight": 134
     },
     "fx-explosion": {
       "sheet": {

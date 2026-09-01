@@ -102,15 +102,23 @@ test('the three enemies are the painted art, standing on the ground', () => {
 })
 
 test('the enemies keep the sizes they were drawn at, relative to each other', () => {
-  // They arrived already scaled against each other with the brute tallest at
-  // 512px. Normalising them to a common height would throw that away, so every
-  // one has to sit at the same scale factor from its own source art.
+  // They arrived already scaled against each other with the brute the tallest.
+  // Normalising them to a common height would throw that away, so every one
+  // has to sit at the same scale factor from its own source art.
+  //
+  // The tolerance is relative, and it is not tight, because the cast has been
+  // re-exported once already: 226 / 120 / 150 / 282 are what 512 / 273 / 339 /
+  // 640 rounded to, and no two of them landed on exactly the same factor. That
+  // costs about half a percent. A genuine normalisation costs the full height
+  // ratio between the brute and the scout — a factor of nearly two — so this
+  // still catches the mistake it was written for.
+  const SPREAD = 0.015
   const scales = Object.values(enemies).map((e: any) => {
     const cfg = art.render[e.sprite]
     return cfg.displayHeight / cfg.contentHeight
   })
   for (const s of scales) {
-    assert.ok(Math.abs(s - scales[0]) < 1e-3,
+    assert.ok(Math.abs(s / scales[0] - 1) < SPREAD,
       `enemies draw at different scales (${scales.map((v) => v.toFixed(4)).join(', ')}); ` +
       'that is a normalised height, not the artist\'s proportions')
   }
