@@ -2296,6 +2296,76 @@ async function run() {
     return
   }
 
+  if (scenario === 'leak') {
+    // The reported crash: a stale ScaleManager listener belonging to a dead
+    // Game scene, firing 30s after teardown when the app is backgrounded.
+    //
+    // Three runs to completion, back to Title each time, then a background and
+    // foreground. Zero errors, and the listener count must not grow.
+    const scaleListeners = () => {
+      const ev = game.scale._events || game.scale._eventsCount !== undefined ? game.scale : null
+      if (!ev) return -1
+      const e = game.scale._events
+      if (!e || !e.resize) return 0
+      return Array.isArray(e.resize) ? e.resize.length : 1
+    }
+    const errors = []
+    addEventListener('error', (e) => errors.push('ERROR ' + e.message))
+    addEventListener('unhandledrejection', (e) => errors.push('REJECT ' + (e.reason?.message || e.reason)))
+
+    note('resize listeners at title: ' + scaleListeners())
+    const counts = []
+
+    for (let run = 1; run <= 3; run++) {
+      const gs = await startRun()
+      gs.status.peanuts = 99999
+      await sleep(400)
+      const during = scaleListeners()
+      // End the run the short way: the crash is about teardown, not about
+      // playing thirteen waves three times.
+      gs.endRun('lost')
+      await sleep(600)
+      // Back to Title, which stops Game and Hud.
+      game.scene.stop('Game')
+      game.scene.stop('Hud')
+      game.scene.start('Title')
+      await until(() => running('Title'), 10000)
+      await sleep(400)
+      const after = scaleListeners()
+      counts.push({ run, during, after })
+      note('run ' + run + ': listeners during=' + during + ' after teardown=' + after)
+    }
+
+    // The background/foreground that fires the crash. Phaser's refresh() emits
+    // resize into every listener the ScaleManager still holds.
+    note('backgrounding, then foregrounding, then forcing a refresh...')
+    game.scale.refresh()
+    await sleep(200)
+    document.dispatchEvent(new Event('visibilitychange'))
+    dispatchEvent(new Event('pagehide'))
+    await sleep(400)
+    dispatchEvent(new Event('pageshow'))
+    await sleep(400)
+    game.scale.refresh()
+    await sleep(200)
+    // And a real resize, which is what a rotation does.
+    game.scale.resize(innerWidth, innerHeight)
+    await sleep(400)
+    game.scale.refresh()
+    await sleep(600)
+
+    note('after background/foreground: listeners=' + scaleListeners() +
+      ' errors=' + errors.length)
+    for (const e of errors.slice(0, 6)) note('  ' + e)
+    const grew = counts.length > 1 && counts[counts.length - 1].after > counts[0].after
+    note('listener count run over run: ' +
+      counts.map((c) => c.after).join(' -> ') +
+      (grew ? '  *** GROWING ***' : '  (stable)'))
+    note('RESULT errors=' + errors.length + ' leaked=' + grew)
+    await shot('leak-01-after')
+    return
+  }
+
   if (scenario === 'heroblock') {
     // How many enemies does one man actually hold, and what does that cost him?
     // Measured before anything is changed, because the data says 3 and the

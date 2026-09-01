@@ -53,6 +53,7 @@ import { hudLayout, hudTakesPress, NO_INSETS, type HudLayout } from '../systems/
 import { cameraAcceptsGestures, LAYER } from '../systems/Layers.ts'
 import { barWidth, regions, slotDefs, type BarMetrics } from '../systems/AbilityBar.ts'
 import { safeAreaInsets } from '../systems/SafeArea.ts'
+import { onSceneResize, sceneIsLive } from '../systems/SceneEvents.ts'
 
 /** The HUD's layout constants, shared with HudScene so both agree. */
 const LAYOUT = PRESENTATION.hud.layout
@@ -255,8 +256,17 @@ export class GameScene extends Phaser.Scene {
     this.uiCam = this.cameras.add(0, 0, this.scale.width, this.scale.height)
     this.uiCam.setName('ui')
     this.applyBands()
-    this.scale.on('resize', () => {
-      this.uiCam.setSize(this.scale.width, this.scale.height)
+    // Registered through the scene, not straight onto the ScaleManager.
+    //
+    // The ScaleManager belongs to the GAME and outlives every run. This was
+    // `this.scale.on('resize', () => ...)` with no matching `off` and no name
+    // to pass to one, so each run left another arrow function closed over a
+    // dead scene on a live emitter. Backgrounding the app calls
+    // `ScaleManager.refresh()`, which emits `resize` into all of them, and the
+    // dead ones threw on `this.cameras.main`.
+    onSceneResize(this, () => {
+      if (!sceneIsLive(this)) return
+      this.uiCam?.setSize(this.scale.width, this.scale.height)
       this.applyBands()
     })
 
@@ -390,7 +400,16 @@ this.armReadyCountdown()
       // plugins tear down before this handler runs. A state provider that
       // throws there loses the whole state, which is the one thing a report
       // taken after the run has to carry.
-      zoom: Number((this.cameras?.main?.zoom ?? 0).toFixed(3)),
+      //
+      // Reported as a word rather than as 0 when the camera has gone. The
+      // fallback used to be `?? 0`, which made "the camera was torn down" and
+      // "the camera really was at zoom 0" the same line in a crash report —
+      // and the second of those would be a serious bug worth chasing, so the
+      // two must not look alike. Zoom is floored at cover zoom by `clampZoom`
+      // and cannot reach 0 in play; a test asserts that.
+      zoom: this.cameras?.main
+        ? Number(this.cameras.main.zoom.toFixed(3))
+        : 'unavailable (camera torn down)',
       escapedThisWave: this.escapedThisWave,
     }))
     setRunActive(true)
@@ -487,6 +506,11 @@ this.armReadyCountdown()
    * a rectangle of its own.
    */
   private applyBands(): void {
+    // Belt as well as braces. The listener is unregistered on shutdown now,
+    // but a `resize` already queued when the scene stopped can still be
+    // delivered afterwards — so this has to survive being called once more
+    // rather than trusting that it never will be.
+    if (!sceneIsLive(this)) return
     const W = this.scale.width
     const H = this.scale.height
     this.cameras.main.setViewport(0, 0, W, H)
