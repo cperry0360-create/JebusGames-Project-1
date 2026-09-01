@@ -3020,6 +3020,74 @@ async function run() {
     return
   }
 
+  if (scenario === 'buildmenu') {
+    // The BUILD-ON-EMPTY-PAD flow, which is a different component from the
+    // upgrade panel. Measures the panel against the viewport.
+    g.status.peanuts = 99999
+    await sleep(400)
+    note('viewport ' + VP.w + 'x' + VP.h)
+    // EVERY pad, not the first: the menu is anchored to the tile you tapped,
+    // so which one overflows depends on where it is. Testing one spot is how
+    // "it runs off the right edge" and "it runs off the bottom" can both be
+    // true and both be missed.
+    let worstAll = { spot: -1, r: 0, l: 0, b: 0, t: 0 }
+    for (const sp of g.build.freeSpots()) {
+      g.menu.close()
+      await sleep(60)
+      g.openBuildMenu(sp)
+      await until(() => g.menu && g.menu.isOpen, 3000)
+      await sleep(120)
+      let aX = 1e9, aY = 1e9, bX = -1e9, bY = -1e9
+      const w2 = (o) => {
+        if (o.list) { o.list.forEach(w2); return }
+        if (!o.getBounds) return
+        const b = o.getBounds()
+        if (b.width <= 0 || b.height <= 0) return
+        aX = Math.min(aX, b.x); aY = Math.min(aY, b.y)
+        bX = Math.max(bX, b.right); bY = Math.max(bY, b.bottom)
+      }
+      ;(g.menu.objects || []).forEach(w2)
+      const r = Math.max(0, bX - VP.w), l = Math.max(0, -aX)
+      const bo = Math.max(0, bY - VP.h), t = Math.max(0, -aY)
+      note('  spot ' + sp.index + ' at world ' + Math.round(sp.x) + ',' + Math.round(sp.y) +
+        ' -> panel ' + Math.round(bX - aX) + 'x' + Math.round(bY - aY) +
+        '  off R' + Math.round(r) + ' L' + Math.round(l) + ' B' + Math.round(bo) + ' T' + Math.round(t))
+      if (r + l + bo + t > worstAll.r + worstAll.l + worstAll.b + worstAll.t) {
+        worstAll = { spot: sp.index, r, l, b: bo, t }
+      }
+    }
+    note('  WORST: spot ' + worstAll.spot + '  right ' + Math.round(worstAll.r) +
+      '  left ' + Math.round(worstAll.l) + '  bottom ' + Math.round(worstAll.b) +
+      '  top ' + Math.round(worstAll.t))
+    const spot = g.build.freeSpots()[0]
+    const objs = g.menu.objects || []
+    let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9
+    const walk = (o) => {
+      if (o.list) { o.list.forEach(walk); return }
+      if (!o.getBounds) return
+      const b = o.getBounds()
+      if (b.width <= 0 || b.height <= 0) return
+      minX = Math.min(minX, b.x); minY = Math.min(minY, b.y)
+      maxX = Math.max(maxX, b.right); maxY = Math.max(maxY, b.bottom)
+    }
+    objs.forEach(walk)
+    note('  options offered: ' + (g.menu.options ? g.menu.options.length : '?'))
+    note('  panel bounds x ' + Math.round(minX) + '..' + Math.round(maxX) +
+      '  y ' + Math.round(minY) + '..' + Math.round(maxY))
+    note('  panel size ' + Math.round(maxX - minX) + 'x' + Math.round(maxY - minY) +
+      ' in a ' + VP.w + 'x' + VP.h + ' viewport')
+    const offR = maxX - VP.w, offL = -minX, offB = maxY - VP.h, offT = -minY
+    note('  overflow  right ' + Math.round(Math.max(0, offR)) +
+      '  left ' + Math.round(Math.max(0, offL)) +
+      '  bottom ' + Math.round(Math.max(0, offB)) +
+      '  top ' + Math.round(Math.max(0, offT)))
+    await shot('buildmenu-' + VP.w + 'x' + VP.h)
+    note('RESULT ' + (offR <= 1 && offL <= 1 && offB <= 1 && offT <= 1
+      ? 'the build menu fits the viewport'
+      : '*** THE BUILD MENU RUNS OFF THE SCREEN ***'))
+    return
+  }
+
   if (scenario === 'startrun') {
     // Actually press BEGIN THE RUN, on the longest loadout there is, at the
     // smallest viewport. Not "the button is on screen" — the button works and

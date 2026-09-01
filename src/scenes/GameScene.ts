@@ -1168,7 +1168,8 @@ this.armReadyCountdown()
     return best
   }
 
-  private openBuildMenu(spot: BuildSpot): void {
+  /** Public for the harness, which measures the panel against the viewport. */
+  openBuildMenu(spot: BuildSpot): void {
     this.deselectTower()
     // The pad is a world position; the menu is screen-space chrome.
     const cam = this.cameras.main
