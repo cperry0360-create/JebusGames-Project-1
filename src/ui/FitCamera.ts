@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import displayData from '../data/display.json'
 import { fitScale } from '../systems/CameraMath.ts'
+import { onSceneResize, sceneIsLive } from '../systems/SceneEvents.ts'
 
 /**
  * The fixed UI camera.
@@ -44,6 +45,7 @@ export function fitCameraToDesign(
     cam.centerOn(designW / 2, designH / 2)
   }
   apply()
-  scene.scale.on('resize', apply)
-  scene.events.once('shutdown', () => scene.scale.off('resize', apply))
+  // SHUTDOWN and DESTROY both, and guarded: a resize already in flight when
+  // the scene stopped still arrives, and `apply` reads the camera.
+  onSceneResize(scene, () => { if (sceneIsLive(scene)) apply() })
 }

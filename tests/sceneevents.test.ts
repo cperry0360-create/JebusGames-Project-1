@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { onSceneEvent, sceneIsLive } from '../src/systems/SceneEvents.ts'
 import { clampZoom } from '../src/systems/CameraMath.ts'
 
@@ -249,4 +249,47 @@ test('camera zoom cannot reach 0 in play, so 0 in a report means "gone"', () => 
     'the crash report still reports a missing camera as zoom 0')
   assert.match(game, /zoom: this\.cameras\?\.main[\s\S]{0,160}unavailable/,
     'the crash report does not distinguish a torn-down camera from a real zoom')
+})
+
+test('nothing in src subscribes to a game-owned emitter by hand', () => {
+  // The pattern guard. The crash was not "GameScene got this wrong", it was
+  // "a scene can subscribe to something that outlives it and nothing notices".
+  // Fixing the one site leaves the next one free to reappear, so this walks
+  // the whole tree.
+  //
+  // `scale` is the ScaleManager and `game.events` is the game's emitter; both
+  // belong to the GAME. A scene's own `this.events`, `this.input`, `this.time`
+  // and `this.tweens` are torn down by Phaser with the scene and are fine.
+  const walk = (dir: string): string[] =>
+    readdirSync(url(`../src/${dir}`), { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? walk(`${dir}/${e.name}`)
+        : e.name.endsWith('.ts') ? [`${dir}/${e.name}`] : [])
+
+  const offenders: string[] = []
+  for (const file of walk('.')) {
+    if (file.endsWith('SceneEvents.ts')) continue   // the helper itself
+    for (const [i, line] of code(file).split('\n').entries()) {
+      if (/\bscale\.on\(/.test(line)) offenders.push(`${file}:${i + 1} ${line.trim()}`)
+    }
+  }
+  assert.deepEqual(offenders, [],
+    'subscribe through onSceneResize/onSceneEvent so it unregisters with the scene')
+})
+
+test('every resize handler that reads a camera guards itself', () => {
+  // Unregistering is necessary but not sufficient: an event already queued
+  // when the scene stopped still arrives.
+  for (const [file, needle] of [
+    ['scenes/GameScene.ts', /onSceneResize\(this, \(\) => \{\s*if \(!sceneIsLive\(this\)\) return/],
+    ['scenes/HudScene.ts', /onSceneResize\(this, \(\) => \{ if \(sceneIsLive\(this\)\)/],
+    ['ui/FitCamera.ts', /onSceneResize\(scene, \(\) => \{ if \(sceneIsLive\(scene\)\)/],
+  ] as const) {
+    assert.match(code(file), needle, `${file} takes resizes without checking the scene is alive`)
+  }
+  // CameraRig guards inside the handler, which is a bound field.
+  const rig = code('systems/CameraRig.ts')
+  assert.match(rig, /onSceneResize\(scene, this\.onResize\)/)
+  const fn = rig.slice(rig.indexOf('private onResize'))
+  assert.match(fn.slice(0, fn.indexOf('\n  }')), /if \(!sceneIsLive\(this\.scene\)\) return/,
+    'CameraRig.onResize does not check the scene is alive')
 })

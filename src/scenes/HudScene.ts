@@ -18,6 +18,7 @@ import {
   barWidth, iconBox, regions, slotDefs, slotSignature,
   type BarMetrics, type SlotDef, type SlotRegion,
 } from '../systems/AbilityBar.ts'
+import { onSceneResize, sceneIsLive } from '../systems/SceneEvents.ts'
 
 /**
  * A placed slot's Phaser objects, and the region they were all built from.
@@ -91,8 +92,10 @@ export class HudScene extends Phaser.Scene {
     // A rotate or a URL-bar collapse changes the viewport, and every position
     // below is measured from it. Rebuilding is cheaper to keep correct than
     // repositioning thirty objects by hand.
-    this.scale.on('resize', this.relayout, this)
-    this.events.once('shutdown', () => this.scale.off('resize', this.relayout, this))
+    // Via the helper, so it comes off on DESTROY as well as SHUTDOWN. A scene
+    // removed outright never emits SHUTDOWN, and the hand-rolled pair here
+    // only listened for that one.
+    onSceneResize(this, () => { if (sceneIsLive(this)) this.relayout() })
 
     this.world = this.scene.get('Game') as GameScene
     this.slots = []

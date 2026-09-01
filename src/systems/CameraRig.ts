@@ -9,6 +9,7 @@ import {
   smoothing,
   worldAt,
 } from './CameraMath.ts'
+import { onSceneResize, sceneIsLive } from './SceneEvents.ts'
 
 /**
  * Pan and pinch over the map.
@@ -165,7 +166,11 @@ export class CameraRig {
     scene.input.on('pointerupoutside', this.onUp, this)
     // A mouse wheel is the desktop equivalent of a pinch.
     scene.input.on('wheel', this.onWheel, this)
-    scene.scale.on('resize', this.onResize, this)
+    // The input plugin is the scene's own and Phaser tears it down with the
+    // scene, so the five above are safe either way. The ScaleManager is not:
+    // it belongs to the game and outlives every run, so this one goes through
+    // the helper and comes off on SHUTDOWN and DESTROY both.
+    onSceneResize(scene, this.onResize)
   }
 
   /* ---------------------------------------------------------- accessors */
@@ -230,7 +235,7 @@ export class CameraRig {
     s.input.off('pointerup', this.onUp, this)
     s.input.off('pointerupoutside', this.onUp, this)
     s.input.off('wheel', this.onWheel, this)
-    s.scale.off('resize', this.onResize, this)
+    // The resize subscription unregisters itself; see the constructor.
   }
 
   /* ------------------------------------------------------- camera access */
@@ -563,6 +568,9 @@ export class CameraRig {
   }
 
   private onResize = (): void => {
+    // Reachable from the game-owned ScaleManager, so it has to survive one
+    // late delivery after the scene has gone: viewportChanged reads the camera.
+    if (!sceneIsLive(this.scene)) return
     // Cover zoom depends on the viewport's shape, so a rotate can leave the
     // camera below the floor and showing blank space past the map.
     this.viewportChanged()
