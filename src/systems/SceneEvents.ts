@@ -36,6 +36,13 @@ import type Phaser from 'phaser'
 const SHUTDOWN = 'shutdown'
 const DESTROY = 'destroy'
 
+/** Phaser.Scenes.SHUTDOWN. Anything at or past it is on its way out. */
+const SCENE_SHUTDOWN = 8
+
+/** The one field of Systems we read, structurally, so the Phaser typings are
+ *  not in the way. */
+interface SysStatus { settings?: { status?: number } }
+
 /** Anything with Phaser's on/off shape. The ScaleManager, the game's event
  *  emitter, an input plugin. */
 interface Emitter {
@@ -78,8 +85,15 @@ export function onSceneResize(scene: Phaser.Scene, handler: () => void): void {
  * called once more rather than relying on never being called.
  */
 export function sceneIsLive(scene: Phaser.Scene): boolean {
-  return !!scene.sys
-    && !scene.sys.isShuttingDown?.()
-    && !!scene.cameras
-    && !!scene.cameras.main
+  if (!scene.sys) return false
+  // Phaser.Scenes.SHUTDOWN and DESTROYED. Read structurally and compared as
+  // numbers because importing the constants would make this module depend on
+  // Phaser at runtime, and then the regression test could not load it. This
+  // catches the window between the SHUTDOWN event firing and the camera
+  // manager actually tearing down, which the check below cannot see.
+  const status = (scene.sys as unknown as SysStatus).settings?.status
+  if (status !== undefined && status >= SCENE_SHUTDOWN) return false
+  // The real crash: CameraManager.shutdown() sets `main` to undefined before
+  // emptying its list, so `cameras` survives a beat longer than `cameras.main`.
+  return !!scene.cameras && !!scene.cameras.main
 }

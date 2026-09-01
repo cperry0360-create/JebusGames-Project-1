@@ -22,6 +22,16 @@
 # It is not a substitute for CI. Errors whose text mentions a Phaser type can
 # still be cascade rather than fault; read what comes out rather than counting
 # it.
+#
+# And there is one blind spot it CANNOT close, which cost a red build. A file
+# that is NEW since the baseline reports only TS2307, "cannot find module
+# 'phaser'" — and because the import resolves to nothing, `Phaser` is `any`
+# here, so every member access on a Phaser type in that file typechecks
+# locally no matter what it says. CI, which has the real typings, then
+# rejects it. `sceneIsLive` called `scene.sys.isShuttingDown()`, which does
+# not exist, and the only local sign was the TS2307 line that looks exactly
+# like harmless cascade. The warning below flags those files; when you see
+# one, treat every Phaser member it touches as unverified.
 set -e
 BASE="${1:?usage: tsdiff.sh <known-green-commit>}"
 W=$(mktemp -d)
@@ -41,3 +51,12 @@ npx tsc --noEmit 2>&1 | norm > "$W/now"
 echo "baseline $BASE: $(wc -l < "$W/base") distinct errors; working tree: $(wc -l < "$W/now")"
 echo '--- introduced by the working tree ---'
 comm -13 "$W/base" "$W/now" || true
+
+# Files new since the baseline that import phaser: locally unchecked. See above.
+NEW=$(comm -13 "$W/base" "$W/now" | grep -oE "^[^:]+: error TS2307: Cannot find module 'phaser'" \
+  | cut -d: -f1 | sort -u || true)
+if [ -n "$NEW" ]; then
+  echo '--- WARNING: Phaser members in these files are NOT checked locally ---'
+  echo "$NEW"
+  echo '(`Phaser` is `any` without node_modules. Only CI can verify these.)'
+fi

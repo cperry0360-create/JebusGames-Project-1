@@ -53,23 +53,22 @@ function fakeScene() {
   const events = emitter()
   const scene = {
     events,
-    sys: { isShuttingDown: () => shuttingDown },
+    sys: { settings: { status: 5 } },   // Phaser.Scenes.RUNNING
     cameras: { main: { setViewport: () => {}, zoom: 1.72 } } as unknown,
   }
-  let shuttingDown = false
+  /** Phaser's order, which is what makes the crash the shape it is: the status
+   *  flips, `shutdown` is emitted, and only then does CameraManager.shutdown()
+   *  set `main` to undefined — leaving `cameras` itself in place. A handler
+   *  that reads `cameras.main.anything` in that state is the reported crash. */
+  const tearDown = (event: string, status: number) => {
+    scene.sys.settings.status = status
+    events.emit(event)
+    ;(scene.cameras as { main: unknown }).main = undefined
+  }
   return {
     scene,
-    /** What Phaser does: emit shutdown, then drop the plugins. */
-    shutdown() {
-      shuttingDown = true
-      events.emit('shutdown')
-      ;(scene as { cameras: unknown }).cameras = undefined
-    },
-    destroy() {
-      shuttingDown = true
-      events.emit('destroy')
-      ;(scene as { cameras: unknown }).cameras = undefined
-    },
+    shutdown: () => tearDown('shutdown', 8),   // Phaser.Scenes.SHUTDOWN
+    destroy: () => tearDown('destroy', 9),     // Phaser.Scenes.DESTROYED
   }
 }
 
@@ -132,12 +131,33 @@ test('the handler survives one more delivery even after unregistering', () => {
   assert.equal(sceneIsLive(s.scene as never), false, 'a torn-down scene reports itself live')
 
   // And with each piece missing individually.
-  assert.equal(sceneIsLive({ sys: { isShuttingDown: () => false } } as never), false, 'no cameras')
+  const running = { settings: { status: 5 } }   // Phaser.Scenes.RUNNING
+  assert.equal(sceneIsLive({ sys: running } as never), false, 'no cameras')
   assert.equal(
-    sceneIsLive({ sys: { isShuttingDown: () => false }, cameras: {} } as never), false,
-    'cameras with no main',
+    sceneIsLive({ sys: running, cameras: {} } as never), false, 'cameras with no main',
   )
   assert.equal(sceneIsLive({} as never), false, 'no sys at all')
+
+  // A scene whose status says it is going away is dead even while its camera
+  // manager is still standing — SHUTDOWN fires before the cameras are torn
+  // down, and a handler that runs in that window is the same bug one tick
+  // earlier.
+  const live = { sys: running, cameras: { main: {} } }
+  assert.equal(sceneIsLive(live as never), true, 'a running scene with a camera')
+  assert.equal(
+    sceneIsLive({ ...live, sys: { settings: { status: 8 } } } as never), false,
+    'SHUTDOWN with the camera still present',
+  )
+  assert.equal(
+    sceneIsLive({ ...live, sys: { settings: { status: 9 } } } as never), false,
+    'DESTROYED with the camera still present',
+  )
+  // A scene that is merely paused (backgrounded) is still live: it has to keep
+  // taking resizes or it comes back with the wrong viewport.
+  assert.equal(
+    sceneIsLive({ ...live, sys: { settings: { status: 6 } } } as never), true,
+    'a paused scene should still take resizes',
+  )
 })
 
 test('the listener does not accumulate run over run', () => {
