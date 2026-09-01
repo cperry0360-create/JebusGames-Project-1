@@ -2690,6 +2690,124 @@ async function run() {
     return
   }
 
+  if (scenario === 'playrun') {
+    // A full run played by something that behaves like a competent player:
+    // builds on every pad it can afford, upgrades what it has, spends its
+    // abilities whenever they come up, and keeps the hero on the lane.
+    //
+    // The draft is the variable. `arg` names the ability under test, so the
+    // same run can be played with Deferral, with the Scratch Ticket, or with
+    // a plain damage draft, and the per-wave numbers compared.
+    // Comma, not '+': a '+' in a query string decodes as a space.
+    const want = (arg || 'molotov').split(',')
+    const abilities = want.filter((w) => w !== 'deferral')
+    const specWanted = want.includes('deferral') ? 'deferral' : null
+    g.status.abilities = abilities.length ? abilities : ['molotov']
+    for (const id of g.status.abilities) {
+      g.cooldowns.register(id, g.abilityDef(id).cooldown)
+      g.cooldowns.reset(id)
+    }
+    if (specWanted) {
+      g.status.unlockedTowers = ['extension', 'withholding']
+      g.refreshMenuOptions()
+    }
+    note('draft: abilities=' + g.status.abilities.join(',') +
+      ' tier3=' + (specWanted || 'default') +
+      ' towers=' + g.status.unlockedTowers.join(','))
+
+    const perWave = []
+    let lastLives = g.status.lives
+    let lastEarned = g.status.peanutsEarned
+    let guard = 0
+    let everAtRisk = false
+
+    const spend = async () => {
+      // Build first, then upgrade. A board with more towers beats a board with
+      // better ones at this scale, which is what the economy rules intend.
+      for (let i = 0; i < SPOTS.length; i++) {
+        if (!g.build.isFree(i)) continue
+        const cheapest = Math.min(...g.status.unlockedTowers.map((id) => g.towerDefs[id].cost))
+        if (g.status.peanuts < cheapest) break
+        if (!(await build(i, 0))) break
+      }
+      for (const t of g.towers) {
+        if (t.upgrading || t.isMaxed) continue
+        const step = t.atSpecChoice
+          ? (t.def.specializations.find((x) => x.id === specWanted) ?? t.def.specializations[0])
+          : t.def.tiers[t.tier - 1]
+        if (!step || g.status.peanuts < step.cost) continue
+        g.status.peanuts -= step.cost
+        t.beginUpgrade(t.atSpecChoice ? step.id : null)
+      }
+    }
+
+    const useAbilities = () => {
+      if (g.enemies.length === 0) return
+      // Aim at whoever is furthest along, which is the one about to leak.
+      const lead = g.enemies.reduce((a, b) => (a.distance > b.distance ? a : b))
+      for (const id of g.status.abilities) {
+        if (!g.cooldowns.ready(id)) continue
+        const def = g.abilityDef(id)
+        if (def.targeting === 'instant') g.fireAbility(id, lead.x, lead.y)
+        else g.fireAbility(id, lead.x, lead.y)
+      }
+    }
+
+    while (g.status.phase !== 'won' && g.status.phase !== 'lost' && guard++ < 4000) {
+      if (g.status.phase === 'ready') {
+        const w = g.status.wave
+        if (w > 0) {
+          const lost = lastLives - g.status.lives
+          perWave.push({
+            wave: w,
+            lost,
+            earned: g.status.peanutsEarned - lastEarned,
+            purse: g.status.peanuts,
+            towers: g.towers.length,
+            lives: g.status.lives,
+          })
+          if (lost > 0) everAtRisk = true
+          lastLives = g.status.lives
+          lastEarned = g.status.peanutsEarned
+        }
+        await spend()
+        await key('Space')
+        await sleep(200)
+        continue
+      }
+      useAbilities()
+      // Keep him on the lane, ahead of the leader.
+      if (g.enemies.length > 0 && !g.hero.down) {
+        const lead = g.enemies.reduce((a, b) => (a.distance > b.distance ? a : b))
+        const p = g.lane.pointAt(Math.min(lead.distance + 90, g.lane.totalLength - 40))
+        if (Math.hypot(g.hero.rally.x - p.x, g.hero.rally.y - p.y) > 60) g.hero.setRally(p.x, p.y)
+      }
+      if (g.status.lives < 20) everAtRisk = true
+      await sleep(300)
+    }
+
+    // The last wave never reaches a 'ready' phase, so it is recorded here.
+    perWave.push({
+      wave: g.status.wave, lost: lastLives - g.status.lives,
+      earned: g.status.peanutsEarned - lastEarned, purse: g.status.peanuts,
+      towers: g.towers.length, lives: g.status.lives,
+    })
+
+    note('=== ' + (arg || 'molotov') + ' ===')
+    note('wave  lost  earned  purse  towers  lives')
+    for (const r of perWave) {
+      note(String(r.wave).padStart(4) + String(r.lost).padStart(6) +
+        String(r.earned).padStart(8) + String(r.purse).padStart(7) +
+        String(r.towers).padStart(8) + String(r.lives).padStart(7))
+    }
+    note('RESULT phase=' + g.status.phase + ' waves=' + g.status.wave +
+      '/' + g.status.waveCount + ' lives=' + g.status.lives + '/20' +
+      ' earned=' + g.status.peanutsEarned + ' kills=' + g.status.kills +
+      ' everAtRisk=' + everAtRisk)
+    await shot('playrun-' + (arg || 'molotov'))
+    return
+  }
+
   if (scenario === 'full') {
     let guard = 0
     let shotWave4 = false
