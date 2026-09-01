@@ -238,26 +238,6 @@
     "loseLabelSize": 34,
     "payoutSize": 78
   },
-  "heroMotion": {
-    "idle": {
-      "periodMs": 1500,
-      "riseY": 2.6,
-      "squash": 0.035
-    },
-    "walk": {
-      "periodMs": 440,
-      "riseY": 4.2,
-      "squash": 0.055,
-      "leanDegrees": 5
-    },
-    "attack": {
-      "lungeMs": 180,
-      "reachPx": 10,
-      "stretch": 0.14,
-      "outFraction": 0.35
-    },
-    "shadowBob": 0.1
-  },
   "heroMarkers": {
     "footRing": {
       "widthFraction": 0.6,
@@ -435,5 +415,12 @@
     "strokeColor": 15913067,
     "strokeWidth": 10,
     "markColor": 15913067
+  },
+  "heroFrames": {
+    "_note": "The hero clips. impactFrame is 1-based to match the filenames, and the damage fires on it rather than when the swing starts.",
+    "fps": 12,
+    "impactFrame": 3,
+    "walkFrames": 4,
+    "attackFrames": 4
   }
 }

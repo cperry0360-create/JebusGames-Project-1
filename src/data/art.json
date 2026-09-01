@@ -89,7 +89,15 @@
     "icon-damage": "ui/icon_damage.png",
     "icon-range": "ui/icon_range.png",
     "icon-firerate": "ui/icon_firerate.png",
-    "icon-armor": "ui/icon_armor.png"
+    "icon-armor": "ui/icon_armor.png",
+    "hero-cory-walk-1": "hero/hero_cory_walk_1.png",
+    "hero-cory-walk-2": "hero/hero_cory_walk_2.png",
+    "hero-cory-walk-3": "hero/hero_cory_walk_3.png",
+    "hero-cory-walk-4": "hero/hero_cory_walk_4.png",
+    "hero-cory-attack-1": "hero/hero_cory_attack_1.png",
+    "hero-cory-attack-2": "hero/hero_cory_attack_2.png",
+    "hero-cory-attack-3": "hero/hero_cory_attack_3.png",
+    "hero-cory-attack-4": "hero/hero_cory_attack_4.png"
   },
   "render": {
     "turret-escalation": {
@@ -517,6 +525,46 @@
       "anchorY": 0.5,
       "contentWidth": 256,
       "contentHeight": 256
+    },
+    "hero-cory-walk-1": {
+      "anchorX": 0.5653,
+      "anchorY": 0.9844,
+      "displayHeight": 78.8
+    },
+    "hero-cory-walk-2": {
+      "anchorX": 0.5653,
+      "anchorY": 0.9844,
+      "displayHeight": 78.8
+    },
+    "hero-cory-walk-3": {
+      "anchorX": 0.5653,
+      "anchorY": 0.9844,
+      "displayHeight": 78.8
+    },
+    "hero-cory-walk-4": {
+      "anchorX": 0.5653,
+      "anchorY": 0.9844,
+      "displayHeight": 78.8
+    },
+    "hero-cory-attack-1": {
+      "anchorX": 0.3974,
+      "anchorY": 0.9778,
+      "displayHeight": 79.1
+    },
+    "hero-cory-attack-2": {
+      "anchorX": 0.3974,
+      "anchorY": 0.9778,
+      "displayHeight": 79.1
+    },
+    "hero-cory-attack-3": {
+      "anchorX": 0.3974,
+      "anchorY": 0.9778,
+      "displayHeight": 79.1
+    },
+    "hero-cory-attack-4": {
+      "anchorX": 0.3974,
+      "anchorY": 0.9778,
+      "displayHeight": 79.1
     }
   },
   "map": {
@@ -639,6 +687,31 @@
     "icon-damage",
     "icon-range",
     "icon-firerate",
-    "icon-armor"
-  ]
+    "icon-armor",
+    "hero-cory-walk-1",
+    "hero-cory-walk-2",
+    "hero-cory-walk-3",
+    "hero-cory-walk-4",
+    "hero-cory-attack-1",
+    "hero-cory-attack-2",
+    "hero-cory-attack-3",
+    "hero-cory-attack-4"
+  ],
+  "hero": {
+    "_note": "Frame lists for the hero animations. Anchors and displayHeight are per SET, not shared: walk is 557x704 and attack is 787x720, their feet sit at different fractions of their canvases, and their figures are 677 and 690 source px tall. One anchor for both would step the hero sideways on every swing. Frame 1 of each set is the registration reference; frames 2-4 move relative to it, which is the animation.",
+    "idle": "hero-cory",
+    "walk": [
+      "hero-cory-walk-1",
+      "hero-cory-walk-2",
+      "hero-cory-walk-3",
+      "hero-cory-walk-4"
+    ],
+    "attack": [
+      "hero-cory-attack-1",
+      "hero-cory-attack-2",
+      "hero-cory-attack-3",
+      "hero-cory-attack-4"
+    ],
+    "attackImpactFrame": 3
+  }
 }

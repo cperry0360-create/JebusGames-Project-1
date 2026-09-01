@@ -35,6 +35,9 @@ export const ART = {
   decor: art.decor,
   brand: art.brand,
   generated: art.generated,
+  /** The hero's animation clips, by pose. Frame lists, not a sheet: the two
+   *  clips have different canvases and different anchors. */
+  hero: art.hero,
   /** Art the UI draws greyed out when it is unavailable. */
   greyable: art.greyable,
   /**

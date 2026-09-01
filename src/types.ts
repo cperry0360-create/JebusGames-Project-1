@@ -603,6 +603,21 @@ export interface ArtDef {
     jebusGames: string
     cpPlays: string
   }
+  /**
+   * The hero's animation clips.
+   *
+   * Frame lists rather than a spritesheet, because the two clips are not on
+   * one canvas: walk is 557x704 and attack 787x720, with their feet at
+   * different fractions of each. Each frame carries its own render entry, so
+   * the anchor is re-read on every swap.
+   */
+  hero: {
+    idle: string
+    walk: string[]
+    attack: string[]
+    /** 1-based, matching the filenames. The swing's damage fires on it. */
+    attackImpactFrame: number
+  }
   /** Textures the game draws for itself, named here so code never does. */
   generated: {
     groundShadow: string

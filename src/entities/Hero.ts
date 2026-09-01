@@ -3,9 +3,9 @@ import type { HeroDef } from '../types.ts'
 import { ySort } from '../systems/DepthSort.ts'
 import { pickNearest, withinRadius } from '../systems/Targeting.ts'
 import { applyHit, attackInterval, incomingDamage, outgoingDamage } from '../systems/LastStand.ts'
-import { HeroMotion, type MotionDef } from '../systems/HeroMotion.ts'
+import { HeroFrames, type FrameDef, type HeroPose } from '../systems/HeroFrames.ts'
 import { makeShadow, deathPuff } from '../systems/Presentation.ts'
-import { applyGroundRender } from '../systems/Art.ts'
+import { applyGroundRender, ART } from '../systems/Art.ts'
 import { facesLeft } from '../systems/Facing.ts'
 import presentationData from '../data/presentation.json'
 import { Enemy } from './Enemy.ts'
@@ -83,13 +83,23 @@ export class Hero extends Phaser.GameObjects.Container {
   private readonly homeX: number
   private readonly homeY: number
   /** Idle bob, walk bounce and attack lunge. He is never perfectly still. */
-  private readonly motion = new HeroMotion(PRESENTATION.heroMotion as MotionDef)
+  private readonly frames = new HeroFrames(PRESENTATION.heroFrames as FrameDef)
+  /** The pose and frame currently on the sprite, so the texture is only swapped
+   *  when it actually changes rather than every tick. */
+  private shownPose: HeroPose | '' = ''
+  private shownIndex = -1
+  /**
+   * The blow, held until the impact frame.
+   *
+   * A closure rather than a list of victims and a number, so the targets keep
+   * whatever type they had where they were chosen. Storing them in a typed
+   * field made the generic in `withinRadius` the problem instead.
+   */
+  private pendingHit: (() => void) | null = null
   /** The sprite's resting scale, from the manifest. The pose multiplies it, so
    *  this has to be captured once rather than read back off a posed sprite. */
   private baseScale = 1
   /** The shadow's resting size, for the same reason. */
-  private shadowW = 0
-  private shadowH = 0
 
   constructor(scene: Phaser.Scene, x: number, y: number, def: HeroDef) {
     super(scene, x, y)
@@ -239,7 +249,6 @@ export class Hero extends Phaser.GameObjects.Container {
     const dy = this.rallyY - this.y
     const dist = Math.hypot(dx, dy)
     let walking = false
-    let headingX = 0
     if (dist > 0.5) {
       const step = this.moveSpeed * dt
       if (dist > step) {
@@ -247,7 +256,6 @@ export class Hero extends Phaser.GameObjects.Container {
         this.y += (dy / dist) * step
         this.faceTowards(this.rallyX, this.rallyY)
         walking = true
-        headingX = dx
       } else {
         this.setPosition(this.rallyX, this.rallyY)
         // Arrived: he needs a moment before he can swing again.
@@ -261,20 +269,27 @@ export class Hero extends Phaser.GameObjects.Container {
         this.attackTimer = this.attackInterval
         // DAD MODE swings wildly at everything in range rather than picking a
         // target, which is the whole point of losing precision.
+        // The swing STARTS here; it does not land here. Who it lands on is
+        // chosen now, on the frame the player saw him commit, and the damage
+        // is applied on the animation's impact frame — otherwise the hit
+        // resolves before the axe has moved.
         const victims = this.lastStandActive && this.def.lastStand.hitsAllInRange
           ? withinRadius(enemies, this.x, this.y, this.attackRange)
           : [target]
-        for (const v of victims) onHit(v, this.damage)
-        // A lunge at what he actually swung at, rather than a scaleX pulse in
-        // place. The pulse was the same whichever way he was facing and read
-        // as a flinch.
-        this.motion.swingAt(target.x - this.x, target.y - this.y)
+        const damage = this.damage
+        // Anything that died between the swing starting and the axe landing is
+        // skipped. The swing is committed; the victim is not.
+        this.pendingHit = (): void => {
+          for (const v of victims) if (v.alive) onHit(v, damage)
+        }
+        this.frames.swing()
       }
     }
 
-    // The pose goes on last, after the frame's position and facing are final:
-    // it is a decoration of where he ended up, not an input to it.
-    this.applyPose(dt, walking, headingX)
+    // The frame goes on last, after the position and facing are final, and it
+    // carries the pending hit: the swing's damage is applied from inside here
+    // because that is where the impact frame is known.
+    this.applyPose(dt, walking)
 
     if (this.inVehicle) this.ram(enemies, onHit)
 
@@ -352,28 +367,63 @@ export class Hero extends Phaser.GameObjects.Container {
    */
   private captureRest(): void {
     this.baseScale = this.body_.scaleX
-    this.shadowW = this.shadow.displayWidth
-    this.shadowH = this.shadow.displayHeight
   }
 
   /**
-   * Puts this frame's pose on the sprite and its shadow.
+   * Puts the right frame on the sprite.
    *
-   * The lunge offset goes on with the facing applied, so a swing to his left
-   * moves him left however the art happens to be flipped; the body's x already
-   * carries the art offset, so the two are added rather than assigned.
+   * There is no offset, no rotation and no scale pulse here any more. The art
+   * moves because the art moves; anything this added on top would fight it,
+   * and the vertical oscillation it used to add is exactly what was asked to
+   * go. The texture is swapped only when the pose or the frame changes, so a
+   * held idle is one setTexture at the start and nothing after it.
    */
-  private applyPose(dt: number, walking: boolean, headingX: number): void {
-    const pose = this.motion.advance(dt, walking, headingX)
-    const rest = this.facingRight ? -this.artOffset : this.artOffset
-    this.body_.x = rest + pose.offsetX
-    this.body_.y = pose.offsetY
-    this.body_.setScale(this.baseScale * pose.scaleX, this.baseScale * pose.scaleY)
-    this.body_.setRotation(pose.rotation)
-    // The shadow does the opposite of the lift: he leaves the ground, so his
-    // contact patch shrinks. It does not lunge with him — a shadow that slides
-    // out from under a character reads as the character floating.
-    this.shadow.setDisplaySize(this.shadowW * pose.shadowScale, this.shadowH * pose.shadowScale)
+  private applyPose(dt: number, walking: boolean): void {
+    const st = this.frames.advance(dt, walking)
+
+    // DAD MODE has its own sprite and no clips of its own. Swapping frames
+    // under it would put a walking Cory back on screen mid-transformation.
+    if (this.inVehicle) {
+      if (st.impact && this.pendingHit) { this.pendingHit(); this.pendingHit = null }
+      return
+    }
+
+    // The damage lands on the impact frame, on the targets chosen when the
+    // swing began. A target that died in the meantime is skipped rather than
+    // hit — the swing is committed, the victim is not.
+    if (st.impact && this.pendingHit) {
+      this.pendingHit()
+      this.pendingHit = null
+    }
+
+    if (st.pose === this.shownPose && st.index === this.shownIndex) return
+    this.shownPose = st.pose
+    this.shownIndex = st.index
+    const key = this.frameKey(st.pose, st.index)
+    if (!key || !this.scene.textures.exists(key)) return
+    this.body_.setTexture(key)
+    // Re-anchored on every swap, because the two clips do NOT share a canvas
+    // or a foot fraction: walk is 557x704 and attack 787x720. Taking the
+    // anchor from the manifest per FRAME is what keeps his feet in one place
+    // across a transition.
+    this.artOffset = applyGroundRender(this.body_, key)
+    this.body_.x = this.facingRight ? -this.artOffset : this.artOffset
+    this.body_.setFlipX(this.facingRight)
+  }
+
+  /**
+   * The texture for a pose and frame, or the static idle when the animation
+   * art is not present.
+   *
+   * A missing clip must never blank the hero: he falls back to the standing
+   * pose he has always had and the game plays on, which is the same rule the
+   * build pad and the UI icons follow.
+   */
+  private frameKey(pose: HeroPose, index: number): string {
+    const clip = pose === 'walk' ? ART.hero.walk : pose === 'attack' ? ART.hero.attack : []
+    const key = clip[index]
+    if (key && this.scene.textures.exists(key)) return key
+    return this.def.bodySprite
   }
 
   private faceTowards(x: number, y: number): void {

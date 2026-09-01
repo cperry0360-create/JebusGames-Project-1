@@ -3088,6 +3088,87 @@ async function run() {
     return
   }
 
+  if (scenario === 'heroanim') {
+    // REGISTRATION. The two clips do not share a canvas, so the question is
+    // whether the hero MOVES ON SCREEN when the pose changes. Measured on the
+    // painted figure, not on the container: the container never moves, which
+    // is exactly why measuring it would prove nothing.
+    const h = g.hero
+    note('viewport ' + VP.w + 'x' + VP.h)
+    const AR = (await import('./js/data/art.json', { with: { type: 'json' } })).default
+    const sample = (label) => {
+      const b = h.body_ ? h.body_.getBounds() : null
+      if (!b) return null
+      // getBounds returns the TEXTURE rectangle, transparent padding included.
+      // The walk canvas has 27 source px of empty space below the feet and the
+      // attack canvas 16, so comparing bounds.bottom compares padding, not
+      // registration — the first run of this reported a 1.2px "shift" that was
+      // entirely the walk canvas's own margin. The anchored foot line is
+      // bounds.bottom minus that padding, and THAT is what must not move.
+      const r = AR.render[h.body_.texture.key] || {}
+      const pad = (1 - (r.anchorY ?? 1)) * b.height
+      const footLine = b.bottom - pad - h.y
+      // Feet and the horizontal centre of the figure, relative to the hero's
+      // own position. Those are what must hold still.
+      const v = { label, key: h.body_.texture.key,
+        footY: footLine, cx: b.centerX - h.x, w: b.width, hh: b.height,
+        figure: b.height - pad }
+      note('  ' + label.padEnd(10) + String(v.key).padEnd(22) +
+        ' anchored foot ' + v.footY.toFixed(2) +
+        '  figure height ' + v.figure.toFixed(1) +
+        '  bbox ' + v.w.toFixed(0) + 'x' + v.hh.toFixed(0))
+      return v
+    }
+    h.rallyX = h.x; h.rallyY = h.y
+    await sleep(500)
+    const idle = sample('idle')
+
+    // Walk: give him somewhere to go.
+    h.rallyX = h.x + 220
+    await until(() => h.body_.texture.key.indexOf('walk') >= 0, 4000)
+    await sleep(80)
+    const walk = sample('walk')
+
+    // Attack: put him ON the lane so the wave walks into him, rather than
+    // waiting at the centre of the map for enemies that never come. The first
+    // run of this waited 30s and reported "a swing was observed: false".
+    const p0 = g.lane.pointAt(360)
+    h.setPosition(p0.x, p0.y)
+    h.rallyX = p0.x; h.rallyY = p0.y
+    await sleep(400)
+    g.startWave()
+    const swung = await until(() => h.body_.texture.key.indexOf('attack') >= 0, 30000)
+    const atk = swung ? sample('attack') : null
+    note('  a swing was observed: ' + swung)
+
+    if (idle && walk && atk) {
+      const dFootW = Math.abs(walk.footY - idle.footY)
+      const dFootA = Math.abs(atk.footY - idle.footY)
+      const dCxW = Math.abs(walk.cx - idle.cx)
+      const dCxA = Math.abs(atk.cx - idle.cx)
+      const dCxWA = Math.abs(atk.cx - walk.cx)
+      note('  feet shift   idle->walk ' + dFootW.toFixed(1) + 'px   idle->attack ' + dFootA.toFixed(1) + 'px')
+      // The bounding-box centre is a WEAK check and is reported for context
+      // only: a raised weapon or an extended shield legitimately moves it
+      // without the character having moved at all. The feet are the contract.
+      note('  bbox centre (weapon moves this legitimately) idle->walk ' + dCxW.toFixed(1) +
+        'px  idle->attack ' + dCxA.toFixed(1) + 'px  walk->attack ' + dCxWA.toFixed(1) + 'px')
+      // Canvas ABOVE the anchor, not the figure: it still carries each
+      // canvas's own top padding, so the three differ by that padding rather
+      // than by the character's size. The real figure heights are
+      // 677*(78.8/704) and 690*(79.1/720), both 75.8, matching the idle —
+      // measured off the files, since the padding is not in the manifest.
+      note('  canvas above anchor  idle ' + idle.figure.toFixed(1) + '  walk ' + walk.figure.toFixed(1) +
+        '  attack ' + atk.figure.toFixed(1) + '  (padding differs; figures are all 75.8)')
+      const worstFoot = Math.max(dFootW, dFootA)
+      note('RESULT worst foot shift ' + worstFoot.toFixed(1) + 'px ' + (worstFoot < 3
+        ? '- the hero holds his ground across the clips'
+        : '*** THE HERO JUMPS WHEN THE POSE CHANGES ***'))
+    }
+    await shot('heroanim-' + VP.w + 'x' + VP.h)
+    return
+  }
+
   if (scenario === 'startrun') {
     // Actually press BEGIN THE RUN, on the longest loadout there is, at the
     // smallest viewport. Not "the button is on screen" — the button works and
