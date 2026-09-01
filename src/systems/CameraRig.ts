@@ -102,6 +102,17 @@ export class CameraRig {
   private targetZoom = 1
 
   /**
+   * Sets the zoom the rig is easing toward, clamped into the band.
+   *
+   * For tests and diagnostics. Writing `camera.zoom` directly does not work:
+   * the rig owns the zoom and eases back to its own target on the next frame,
+   * so an edge-of-band check done that way silently measures the default.
+   */
+  setTargetZoom(z: number): void {
+    this.targetZoom = this.clampZ(z)
+  }
+
+  /**
    * Where the camera actually is, as a float, owned here rather than read back
    * from `cam.scrollX`.
    *

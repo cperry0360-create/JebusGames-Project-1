@@ -101,6 +101,50 @@ test('variation never flips a prop or shrinks it away', () => {
   }
 })
 
+test('the scatter reads as texture, not as objects', () => {
+  // It was 179 props and looked like a field of obstacles competing with the
+  // lane. A third of that, spaced much further apart, with a real buffer of
+  // empty grass either side of the road.
+  const out = scatter(input, cfg.seed)
+  assert.ok(out.length >= 40 && out.length <= 80,
+    `${out.length} props; the target is roughly 56, a third of the 179 it started at`)
+
+  const r = cfg.rules
+  assert.ok(r.minGapPx >= 30, `a ${r.minGapPx}px minimum gap still lets props cluster`)
+  // The buffer either side of the lane, measured from the road EDGE rather
+  // than its centre — that is what the player sees as clear grass.
+  const clear = r.pathClearancePx - MAP.roadWidth / 2
+  assert.ok(clear >= 50,
+    `only ${clear.toFixed(0)}px of clear grass beside the road; the props crowd the path`)
+
+  // Density per unit area, so this stays meaningful if the map changes size.
+  const perMillion = out.length / (DISPLAY.width * DISPLAY.height) * 1e6
+  assert.ok(perMillion < 90, `${perMillion.toFixed(0)} props per million square units is a thicket`)
+})
+
+test('the four rare props are hard-capped, not merely unlikely', () => {
+  // "At most one or two each on the whole map" is a cap, not a probability —
+  // a weight can always roll high twice.
+  const RARE: Record<string, number> = {
+    'scatter-stump': 2, 'scatter-puddle': 1, 'scatter-tire-ruts': 1, 'scatter-mushrooms': 2,
+  }
+  for (const [key, cap] of Object.entries(RARE)) {
+    const kind = (cfg.kinds as ScatterKind[]).find((k) => k.key === key)
+    if (!kind) continue
+    assert.equal(kind.max, cap, `${key} is not capped at ${cap} in the data`)
+  }
+  // And the cap holds across many layouts, not just the shipped seed.
+  for (let seed = 1; seed <= 40; seed++) {
+    const out = scatter(input, cfg.seed + seed)
+    const counts = new Map<string, number>()
+    for (const p of out) counts.set(p.key, (counts.get(p.key) ?? 0) + 1)
+    for (const [key, cap] of Object.entries(RARE)) {
+      assert.ok((counts.get(key) ?? 0) <= cap,
+        `seed ${seed}: ${counts.get(key)} of ${key}, capped at ${cap}`)
+    }
+  }
+})
+
 test('the scatter is drawn beneath everything and takes no input', () => {
   const g = src('scenes/GameScene.ts')
   const fn = g.slice(g.indexOf('private createScatter()'), g.indexOf('private createAmbient()'))
@@ -116,9 +160,32 @@ test('exactly one build spot keeps the sign, and it is the one nearest the entra
   const fn = g.slice(g.indexOf('private createPads()'), g.indexOf('/** Shows the pads still free'))
   assert.match(fn, /const isSign = i === signIndex/, 'more than one spot can carry the sign')
   assert.match(fn, /MAP\.waypoints\[0\]/, 'the sign is not placed relative to the entrance')
-  // Falls back to the sign for every spot while the quiet art is a hook only.
-  assert.match(fn, /!hasQuiet/, 'a missing quiet marker leaves the board with no markers at all')
-  assert.match(fn, /this\.textures\.exists\(quietKey\)/, 'the fallback does not check the texture loaded')
+
+  // THE COUNT. There are seven build spots and exactly one may carry the full
+  // sign. This shipped with SEVEN of them: the quiet marker was a manifest
+  // hook whose art never arrived, so every pad took the fallback and the board
+  // shouted the same joke seven times.
+  //
+  // CI has no renderer, so the property is checked where it is decided: one
+  // index is chosen, and `isSign` is true for that index alone. The count on
+  // the real board is the harness's `signs` scenario.
+  const signIndexPicks = fn.match(/signIndex = i\b/g) ?? []
+  assert.equal(signIndexPicks.length, 1, 'the sign index is assigned from more than one place')
+  assert.ok(!/isSign = true/.test(fn), 'something can force a spot to carry the sign')
+
+  // And the fallback cannot be "the sign" any more. A generated marker means
+  // the one-sign rule holds whether or not the art has been uploaded.
+  assert.match(fn, /ART\.generated\.buildPad/,
+    'a missing upload still falls back to the sign, which is what put seven on the map')
+  assert.match(fn, /uploaded && this\.textures\.exists\(uploaded\)/,
+    'the uploaded art no longer takes precedence over the generated marker')
+  const boot = src('scenes/BootScene.ts')
+  assert.match(boot, /ensureBuildPadTexture\(this\)/, 'the marker is never generated')
+  // The quiet marker is roughly a third of the sign.
+  const P2 = read('presentation') as any
+  const ratio = P2.buildPad.quietHeight / P2.buildPad.signHeight
+  assert.ok(ratio > 0.25 && ratio < 0.45,
+    `the quiet marker is ${(ratio * 100).toFixed(0)}% of the sign; about a third was asked for`)
   // The art shrinks; the tap target does not. Taps are geometric, against
   // map.spotRadius, and never against the sprite.
   assert.ok(!/pads\[[^\]]*\]\.setInteractive/.test(g), 'a pad carries its own hit area')

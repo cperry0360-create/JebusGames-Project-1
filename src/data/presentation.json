@@ -126,7 +126,18 @@
     "quietHeight": 26,
     "quietJitterScale": 0.12,
     "quietJitterDegrees": 9,
-    "quietAlpha": 0.92
+    "quietAlpha": 0.92,
+    "marker": {
+      "textureWidth": 96,
+      "textureHeight": 78,
+      "softLayers": 7,
+      "rimColor": 3811864,
+      "soilColor": 7032622,
+      "soilDark": 5520418,
+      "stakeColor": 10122561,
+      "stakeDark": 7295016,
+      "stoneColor": 9276290
+    }
   },
   "restructure": {
     "liftPixels": 46,
@@ -258,12 +269,12 @@
     "scaleJitter": 0.1,
     "rotateDegrees": 6,
     "rules": {
-      "attempts": 900,
-      "minGapPx": 6,
-      "pathClearancePx": 46,
+      "attempts": 1200,
+      "minGapPx": 38,
+      "pathClearancePx": 96,
       "dirtBandPx": 26,
-      "buildSpotClearPx": 54,
-      "endClearPx": 70,
+      "buildSpotClearPx": 64,
+      "endClearPx": 96,
       "edgeInsetPx": 24
     },
     "kinds": [
@@ -330,28 +341,28 @@
       {
         "key": "scatter-stump",
         "surface": "grass",
-        "weight": 1,
+        "weight": 5,
         "radius": 16,
         "max": 2
       },
       {
         "key": "scatter-mushrooms",
         "surface": "grass",
-        "weight": 1,
+        "weight": 5,
         "radius": 8,
         "max": 2
       },
       {
         "key": "scatter-puddle",
         "surface": "dirt",
-        "weight": 1,
+        "weight": 5,
         "radius": 14,
         "max": 1
       },
       {
         "key": "scatter-tire-ruts",
         "surface": "dirt",
-        "weight": 1,
+        "weight": 5,
         "radius": 16,
         "max": 1
       }

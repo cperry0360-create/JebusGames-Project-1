@@ -12,6 +12,61 @@ export const PRESENTATION = presentationData
  * Builds the one soft ellipse every ground shadow reuses. Concentric ellipses
  * of falling alpha give a soft edge without a blur pass. Called once at boot.
  */
+/**
+ * The quiet build marker, drawn rather than uploaded.
+ *
+ * Exactly one build pad keeps the painted DO NOT BUILD HERE sign; the other
+ * six get this. It was specified as a manifest hook with a fallback to the
+ * sign — and the art has not landed, so every pad fell back and the board had
+ * SEVEN full-size signs on it shouting the same joke.
+ *
+ * A hook cannot be the whole answer when the fallback is the thing being
+ * fixed. This is generated at boot, like the ground shadow and the tavern
+ * glow, so the one-sign rule holds today. The uploaded pad art named in
+ * art.json still takes precedence the moment it exists.
+ */
+export function ensureBuildPadTexture(scene: Phaser.Scene): void {
+  const key = ART.generated.buildPad
+  if (scene.textures.exists(key)) return
+
+  const cfg = PRESENTATION.buildPad.marker
+  const w = cfg.textureWidth
+  const h = cfg.textureHeight
+  const g = scene.make.graphics({ x: 0, y: 0 }, false)
+
+  // A patch of turned earth: a soft rim so it sits in the grass rather than
+  // being stuck on top of it, then the pad, then a few stones.
+  const cx = w / 2
+  const cy = h * 0.62
+  const rx = w * 0.46
+  const ry = h * 0.30
+  for (let i = cfg.softLayers; i >= 1; i--) {
+    const t = i / cfg.softLayers
+    g.fillStyle(cfg.rimColor, 0.5 / cfg.softLayers)
+    g.fillEllipse(cx, cy, rx * 2 * t * 1.12, ry * 2 * t * 1.12)
+  }
+  g.fillStyle(cfg.soilColor, 0.95)
+  g.fillEllipse(cx, cy, rx * 2, ry * 2)
+  g.fillStyle(cfg.soilDark, 0.55)
+  g.fillEllipse(cx, cy + ry * 0.22, rx * 1.5, ry * 1.1)
+
+  // A short stake, leaning very slightly, with no board and no text on it.
+  const sx = cx + rx * 0.32
+  g.fillStyle(cfg.stakeColor, 1)
+  g.fillTriangle(sx - 3, cy - ry * 0.2, sx + 3, cy - ry * 0.2, sx + 1, cy - h * 0.52)
+  g.fillStyle(cfg.stakeDark, 1)
+  g.fillTriangle(sx + 1, cy - ry * 0.2, sx + 3, cy - ry * 0.2, sx + 1.5, cy - h * 0.52)
+
+  // Three stones, so it reads as prepared ground rather than a smudge.
+  g.fillStyle(cfg.stoneColor, 1)
+  for (const [px, py, pr] of [[-0.55, 0.1, 0.10], [0.42, 0.34, 0.075], [-0.12, 0.45, 0.06]]) {
+    g.fillEllipse(cx + rx * px, cy + ry * py, w * pr, w * pr * 0.72)
+  }
+
+  g.generateTexture(key, w, h)
+  g.destroy()
+}
+
 export function ensureShadowTexture(scene: Phaser.Scene): void {
   const key = ART.generated.groundShadow
   if (scene.textures.exists(key)) return

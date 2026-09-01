@@ -2366,6 +2366,82 @@ async function run() {
     return
   }
 
+  if (scenario === 'signs') {
+    // Exactly one full-size DO NOT BUILD HERE sign on the whole map.
+    const A = await import('./js/systems/Art.js')
+    const M = (await import('./js/data/map.json', { with: { type: 'json' } })).default
+    const signKey = A.ART.prop.buildPad
+    const pads = g.pads.map((p, i) => ({
+      i, key: p.texture.key,
+      h: Math.round(p.displayHeight), w: Math.round(p.displayWidth),
+      x: Math.round(p.x), y: Math.round(p.y),
+    }))
+    const signs = pads.filter((p) => p.key === signKey)
+    note('viewport ' + VP.w + 'x' + VP.h)
+    note('build pads: ' + pads.length)
+    for (const p of pads) note('   spot ' + p.i + '  ' + p.key + '  ' + p.w + 'x' + p.h + '  at ' + p.x + ',' + p.y)
+    note('FULL-SIZE SIGNS: ' + signs.length + (signs.length === 1 ? '  correct' : '  *** SHOULD BE EXACTLY 1 ***'))
+    const e = M.waypoints[0]
+    const d = M.buildSpots.map((sp, i) => [i, Math.hypot(sp[0] - e[0], sp[1] - e[1])])
+    d.sort((a, b) => a[1] - b[1])
+    note('nearest spot to the entrance is ' + d[0][0] + ' at ' + Math.round(d[0][1]) +
+      'px; the sign is on ' + g.signSpotIndex +
+      (d[0][0] === g.signSpotIndex ? '  correct' : '  *** WRONG SPOT ***'))
+    note('scatter props on the board: ' + g.scatterCount)
+    await shot('signs-' + VP.w + 'x' + VP.h)
+    return
+  }
+
+  if (scenario === 'edges') {
+    // Drag hard in all four directions, at min and max zoom, and check the
+    // view never reaches past the artwork. Flat green behind the map is what
+    // the player was seeing.
+    const cam = g.cameras.main
+    const D = (await import('./js/data/display.json', { with: { type: 'json' } })).default
+    const W = D.width, H = D.height
+    let worst = { name: '', over: 0 }
+    const check = (label) => {
+      const v = cam.worldView
+      const over = Math.max(-v.x, -v.y, v.right - W, v.bottom - H, 0)
+      if (over > worst.over) worst = { name: label, over }
+      return over
+    }
+    for (const zName of ['min', 'max']) {
+      const z = zName === 'min' ? D.camera.minZoom : D.camera.maxZoom
+      // Through the rig. Writing cam.zoom directly is eased away on the next
+      // frame, which is how the first version of this check reported 1.70 and
+      // 1.74 while claiming to be testing 1.31 and 2.37.
+      g.rig.setTargetZoom(z)
+      await until(() => Math.abs(cam.zoom - z) < 0.01, 4000)
+      await sleep(200)
+      note('at ' + zName + ' zoom ' + cam.zoom.toFixed(2) + ':')
+      for (const [dir, dx, dy] of [['left', 1600, 0], ['right', -1600, 0],
+                                   ['up', 0, 1600], ['down', 0, -1600]]) {
+        // A hard fling, then time for any bounce to play out.
+        const cx = VP.w / 2, cy = VP.h / 2
+        mouse('mousedown', cx, cy)
+        for (let i = 1; i <= 12; i++) {
+          mouse('mousemove', cx + (dx * i) / 12, cy + (dy * i) / 12)
+          await sleep(12)
+        }
+        mouse('mouseup', cx + dx, cy + dy)
+        // Momentum has to settle before the view is judged.
+        await sleep(1400)
+        const over = check(zName + '/' + dir)
+        const v = cam.worldView
+        note('   drag ' + dir.padEnd(6) + ' view x ' + Math.round(v.x) + '..' + Math.round(v.right) +
+          ' y ' + Math.round(v.y) + '..' + Math.round(v.bottom) +
+          (over > 0.5 ? '   *** ' + over.toFixed(0) + 'px OF GREEN ***' : '   inside the map'))
+      }
+    }
+    note('worst overscroll anywhere: ' + worst.over.toFixed(1) + 'px' +
+      (worst.over > 0.5 ? ' at ' + worst.name : ''))
+    note('RESULT ' + (worst.over <= 0.5 ? 'the view never leaves the artwork'
+      : '*** GREEN BLEEDS IN ***'))
+    await shot('edges-' + VP.w + 'x' + VP.h)
+    return
+  }
+
   if (scenario === 'tavern') {
     // The glow and smoke coordinates were estimated off the painted plate, so
     // they have to be looked at rather than trusted.

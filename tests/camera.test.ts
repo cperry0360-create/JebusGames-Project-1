@@ -383,10 +383,10 @@ test('the zoom range brackets the default rather than the viewport', () => {
   // so a pinch framed the entire map at 6% scale and every sprite on it read
   // as a speck. The player may adjust the framing; they may not leave it.
   const min = display.camera.minZoom
-  assert.ok(max / z >= 1.15 && max / z <= 1.35,
-    `the ceiling is ${(max / z).toFixed(2)}x the default; the band should be about 1.25x`)
-  assert.ok(min / z >= 0.78 && min / z <= 0.92,
-    `the floor is ${(min / z).toFixed(2)}x the default; the band should be about 0.85x`)
+  assert.ok(max / z >= 1.30 && max / z <= 1.45,
+    `the ceiling is ${(max / z).toFixed(2)}x the default; the band should be about 1.38x`)
+  assert.ok(min / z >= 0.71 && min / z <= 0.82,
+    `the floor is ${(min / z).toFixed(2)}x the default; the band should be about 0.76x`)
   // And the floor must actually bite on the smallest viewport, where cover is
   // lowest and the old floor did nothing at all.
   const small = coverZoom(568, 320, W, H)

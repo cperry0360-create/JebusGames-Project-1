@@ -497,7 +497,8 @@
     "cpPlays": "brand-cpplays"
   },
   "generated": {
-    "groundShadow": "gen-ground-shadow"
+    "groundShadow": "gen-ground-shadow",
+    "buildPad": "generated-build-pad"
   },
   "greyable": [
     "turret-ledger",

@@ -589,6 +589,7 @@ export interface ArtDef {
   /** Textures the game draws for itself, named here so code never does. */
   generated: {
     groundShadow: string
+    buildPad: string
   }
   /** Per-tier tower sprites, keyed by the tower's base sprite key. A tower
    *  with no entry keeps one sprite at every tier, which is the default and

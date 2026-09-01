@@ -729,8 +729,14 @@ this.armReadyCountdown()
     // The quiet marker is an optional manifest hook: the key and the path were
     // agreed before the art was drawn, so until the file lands every pad falls
     // back to the sign and the board still reads.
-    const quietKey = ART.prop.buildPadQuiet
-    const hasQuiet = !!quietKey && this.textures.exists(quietKey)
+    // The uploaded art if it has landed, otherwise the one generated at boot.
+    // A hook alone was not enough: the art never arrived, every pad fell back
+    // to the sign, and the board carried SEVEN full-size signs.
+    const uploaded = ART.prop.buildPadQuiet
+    const quietKey = uploaded && this.textures.exists(uploaded)
+      ? uploaded
+      : ART.generated.buildPad
+    const hasQuiet = this.textures.exists(quietKey)
     const cfg = PRESENTATION.buildPad
     const n = this.build.spots.length
 
