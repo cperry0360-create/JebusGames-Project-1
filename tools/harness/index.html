@@ -2173,6 +2173,60 @@ async function run() {
     return
   }
 
+  if (scenario === 'ticket') {
+    // The painted ticket, at whatever viewport the run was given, plus a
+    // re-check of the camera fix: scratching must never pan the board.
+    g.status.peanuts = 99999
+    await build(3, 0)
+    g.startWave()
+    await sleep(900)
+
+    const payout = arg === 'lose' ? { label: 'NOT A WINNER', payout: 0, weight: 1 }
+      : { label: '', payout: 140, weight: 1 }
+    g.showTicket(payout, 600)
+    await sleep(600)
+    const card = g.ticket
+    note('viewport ' + VP.w + 'x' + VP.h + ' card ' +
+      Math.round(card.cardW) + 'x' + Math.round(card.cardH) +
+      ' (viewport allows ' + VP.w + 'x' + VP.h + ')')
+    note('  fits on screen: ' + (card.cardW <= VP.w && card.cardH <= VP.h))
+    note('  modalOpen=' + g.modalOpen + ' HUD visible=' +
+      game.scene.getScene('Hud').cameras.main.visible)
+    await shot('ticket-01-covered-' + VP.w + 'x' + VP.h)
+
+    // Scratch across the panel, and watch the camera.
+    const cam = g.cameras.main
+    const before = Math.round(cam.scrollX) + ',' + Math.round(cam.scrollY)
+    const movesBefore = g.rig.moveCount
+    const cx = VP.w / 2, cy = VP.h / 2
+    // Enough passes to actually cross the reveal threshold: four strokes
+    // erased a visible X and still left the card under 38%.
+    // The camera is only meaningful WHILE the card is up. Once enough of the
+    // coating is gone the card pays out and closes, and a stroke still in
+    // flight after that is a drag on a board with no modal over it — which is
+    // supposed to pan.
+    const rows = [-0.28, -0.14, 0, 0.14, 0.28]
+    let after = before
+    outer: for (const r of rows) {
+      const yy = cy + r * card.cardH
+      mouse('mousedown', cx - card.cardW * 0.34, yy)
+      for (let i = 1; i <= 14; i++) {
+        if (!g.ticket?.active) { mouse('mouseup', cx, yy); break outer }
+        await move(cx - card.cardW * 0.34 + (card.cardW * 0.68 * i) / 14, yy)
+        after = Math.round(cam.scrollX) + ',' + Math.round(cam.scrollY)
+      }
+      mouse('mouseup', cx + card.cardW * 0.34, yy)
+      await sleep(40)
+    }
+    note('  camera ' + before + ' -> ' + after + (before === after ? '  UNMOVED' : '  *** MOVED ***') +
+      ' [rig accepted ' + (g.rig.moveCount - movesBefore) + ' moves while the card was up]')
+    await shot('ticket-02-scratched-' + VP.w + 'x' + VP.h)
+    await sleep(1400)
+    await shot('ticket-03-revealed-' + VP.w + 'x' + VP.h)
+    note('  peanuts after: ' + g.status.peanuts + ' message="' + g.status.message + '"')
+    return
+  }
+
   if (scenario === 'heroblock') {
     // How many enemies does one man actually hold, and what does that cost him?
     // Measured before anything is changed, because the data says 3 and the

@@ -1632,6 +1632,10 @@ this.armReadyCountdown()
       this.scale.height / 2, TICKET_DEPTH, {
       outcome,
       autoRevealSeconds,
+      // Dropped when it goes. It was left pointing at a destroyed card, which
+      // `modalOpen` tolerated because it asks for `active` — but anything that
+      // asked "is there a ticket?" got the wrong answer.
+      onClosed: () => { this.ticket = null },
       onCollect: (amount) => {
         if (amount <= 0) {
           // Losing has to land as an outcome rather than as nothing happening.

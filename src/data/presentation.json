@@ -164,5 +164,16 @@
     "sectionGap": 14,
     "headingGap": 16,
     "safeMargin": 40
+  },
+  "scratchCard": {
+    "cardHeight": 260,
+    "panelLeft": 0.082,
+    "panelRight": 0.907,
+    "panelTop": 0.298,
+    "panelBottom": 0.845,
+    "nibFraction": 0.075,
+    "revealFraction": 0.38,
+    "loseLabelSize": 34,
+    "payoutSize": 78
   }
 }

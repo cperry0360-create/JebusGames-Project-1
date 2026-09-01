@@ -62,7 +62,9 @@
     "turret-ledger-t3": "towers/tower_withholding_t3.png",
     "ui-nuke-up": "ui/btn_nuke_up.png",
     "ui-nuke-down": "ui/btn_nuke_down.png",
-    "ui-loadout-bg": "ui/loadout_bg.png"
+    "ui-loadout-bg": "ui/loadout_bg.png",
+    "ui-scratch-covered": "ui/scratch_covered.png",
+    "ui-scratch-revealed": "ui/scratch_revealed.png"
   },
   "render": {
     "turret-escalation": {
@@ -422,6 +424,14 @@
     "ui-loadout-bg": {
       "contentWidth": 1920,
       "contentHeight": 1080
+    },
+    "ui-scratch-covered": {
+      "contentWidth": 600,
+      "contentHeight": 406
+    },
+    "ui-scratch-revealed": {
+      "contentWidth": 600,
+      "contentHeight": 406
     }
   },
   "map": {
@@ -446,7 +456,11 @@
       "up": "ui-nuke-up",
       "down": "ui-nuke-down"
     },
-    "loadoutBackdrop": "ui-loadout-bg"
+    "loadoutBackdrop": "ui-loadout-bg",
+    "scratchCard": {
+      "covered": "ui-scratch-covered",
+      "revealed": "ui-scratch-revealed"
+    }
   },
   "fx": {
     "spark": "fx-hit-spark",

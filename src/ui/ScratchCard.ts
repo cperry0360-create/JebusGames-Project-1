@@ -1,9 +1,10 @@
 import Phaser from 'phaser'
 import { COLOR, FONT_DISPLAY, FONT_UI } from './Theme.ts'
-import { platePanel } from './Plate.ts'
 import { play } from '../systems/Audio.ts'
 import { LAYER } from '../systems/Layers.ts'
 import type { ScratchOutcome } from '../systems/Scratch.ts'
+import { ART, renderFor } from '../systems/Art.ts'
+import presentationData from '../data/presentation.json'
 
 /**
  * The Scratch Ticket overlay.
@@ -18,16 +19,20 @@ import type { ScratchOutcome } from '../systems/Scratch.ts'
  * player who ignores it loses nothing but the fun.
  */
 
-/** Coarse grid used to judge "enough of it is scratched" without reading pixels. */
+/** Coarse grid used to judge "enough of it is scratched" without reading
+ *  pixels. It covers the SILVER PANEL, not the whole card: the painted border
+ *  is not foil and scratching it would count toward a reveal that never
+ *  uncovers anything. */
 const CELLS_X = 14
 const CELLS_Y = 8
-const REVEAL_FRACTION = 0.38
-const NIB = 26
+const SC = presentationData.scratchCard
 
 export interface ScratchCardOptions {
   outcome: ScratchOutcome
   autoRevealSeconds: number
   onCollect: (payout: number) => void
+  /** Fired when the card has gone, so the scene can drop its reference. */
+  onClosed?: () => void
 }
 
 export class ScratchCard {
@@ -35,7 +40,15 @@ export class ScratchCard {
   private readonly opts: ScratchCardOptions
   private readonly layer: Phaser.GameObjects.Container
   private readonly foil: Phaser.GameObjects.RenderTexture
-  private readonly nib: Phaser.GameObjects.Graphics
+  /** Eraser radius, scaled from the panel so it feels the same at any size. */
+  private readonly nib: number = 26
+  private readonly nibArt: Phaser.GameObjects.Graphics
+  /** The silver coating's rectangle, in card coordinates. */
+  private readonly panel: { x: number; y: number; w: number; h: number }
+  /** The drawn card's size, for a harness run measuring it against the
+   *  viewport. */
+  readonly cardW: number = 0
+  readonly cardH: number = 0
   private readonly hint: Phaser.GameObjects.Text
   private readonly zone: Phaser.GameObjects.Zone
   /**
@@ -57,50 +70,68 @@ export class ScratchCard {
     this.scene = scene
     this.opts = opts
 
-    const w = 300
-    const h = 176
+    // Sized from the art, and from the viewport, so the whole ticket is on
+    // screen at 568x320 as well as on a desktop.
+    const cfg = renderFor(ART.ui.scratchCard.revealed)
+    const srcW = cfg.contentWidth ?? 600
+    const srcH = cfg.contentHeight ?? 406
+    const h = Math.min(SC.cardHeight, scene.scale.height * 0.62)
+    const scale = h / srcH
+    const w = srcW * scale
+    this.cardW = w
+    this.cardH = h
+
+    // The silver coating, as a rectangle in card coordinates.
+    const px = -w / 2 + SC.panelLeft * w
+    const py = -h / 2 + SC.panelTop * h
+    const pw = (SC.panelRight - SC.panelLeft) * w
+    const ph = (SC.panelBottom - SC.panelTop) * h
+    this.panel = { x: px, y: py, w: pw, h: ph }
+    this.nib = Math.max(10, Math.round(Math.min(pw, ph) * SC.nibFraction))
+
     this.layer = scene.add.container(x, y).setDepth(depth).setScale(0.6)
     scene.tweens.add({ targets: this.layer, scale: 1, duration: 220, ease: 'Back.easeOut' })
 
-    // The plate's chrome sits outside the card, not over it: sized from the
-    // foil plus the title above and the hint below, or the frame eats both.
-    const pw = w + 150
-    const ph = h + 240
-    const panel = platePanel(scene, -pw / 2, -ph / 2, pw, ph)
-    const title = scene.add.text(0, -h / 2 - 24, 'SCRATCH TICKET', {
-      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.ink, fontStyle: 'bold',
-    }).setOrigin(0.5, 0)
+    // The revealed ticket is the base layer. No plate behind it: the art is
+    // its own frame, and a dialog plate around a painted card reads as a
+    // picture of a card sitting inside a window.
+    const base = scene.add.image(0, 0, ART.ui.scratchCard.revealed).setDisplaySize(w, h)
 
-    // What is under the foil, drawn first so erasing the foil uncovers it.
-    const face = scene.add.graphics()
-    face.fillStyle(0x1b2430, 1).fillRoundedRect(-w / 2, -h / 2, w, h, 8)
-    // A losing ticket has to say so. Uncovering a blank card and being told
-    // nothing is confusing rather than funny, and 40% of them lose now.
+    // What the coating is hiding, drawn into the cream reveal area.
     const won = opts.outcome.payout > 0
-    const prize = scene.add.text(0, won ? -6 : -2, won ? `${opts.outcome.payout}` : opts.outcome.label, {
-      fontFamily: FONT_DISPLAY,
-      fontSize: won ? '58px' : '26px',
-      color: won ? COLOR.amber : COLOR.dim,
-      align: 'center',
-      wordWrap: { width: w - 24 },
-    }).setOrigin(0.5)
-    const unit = scene.add.text(0, 46, won ? 'PEANUTS' : 'BUT YOU LOOKED GOOD DOING IT', {
-      fontFamily: FONT_UI, fontSize: won ? '20px' : '13px', color: COLOR.dim,
-      fontStyle: 'bold', letterSpacing: won ? 3 : 1,
-      align: 'center', wordWrap: { width: w - 20 },
-    }).setOrigin(0.5)
+    const cx = px + pw / 2
+    const cy = py + ph / 2
+    const prize = scene.add.text(cx, cy,
+      won ? `${opts.outcome.payout}` : opts.outcome.label, {
+        fontFamily: FONT_DISPLAY,
+        fontSize: `${Math.round((won ? SC.payoutSize : SC.loseLabelSize) * scale)}px`,
+        color: won ? '#b4761f' : '#7a5c3a',
+        align: 'center',
+        wordWrap: { width: pw - 20 },
+      }).setOrigin(0.5)
+    const unit = won
+      ? scene.add.text(cx, cy + prize.height * 0.62, 'PEANUTS', {
+        fontFamily: FONT_UI, fontSize: `${Math.round(26 * scale)}px`,
+        color: '#8a6a2f', fontStyle: 'bold', letterSpacing: 3,
+      }).setOrigin(0.5, 0)
+      : scene.add.text(cx, cy + prize.height * 0.62, 'BUT YOU LOOKED GOOD DOING IT', {
+        fontFamily: FONT_UI, fontSize: `${Math.round(17 * scale)}px`,
+        color: '#8a6a2f', align: 'center', wordWrap: { width: pw - 30 },
+      }).setOrigin(0.5, 0)
 
-    // The foil itself: a render texture so it can be erased where dragged.
+    // The coating, as a render texture the size of the WHOLE card so the two
+    // sprites line up exactly, erased where the player drags.
     this.foil = scene.add.renderTexture(-w / 2, -h / 2, w, h).setOrigin(0, 0)
     this.paintFoil(w, h)
 
-    this.hint = scene.add.text(0, h / 2 + 12, 'drag to scratch', {
-      fontFamily: FONT_UI, fontSize: '16px', color: COLOR.dim,
+    this.hint = scene.add.text(0, h / 2 + 10, 'drag to scratch', {
+      fontFamily: FONT_UI, fontSize: '16px', color: COLOR.ink,
+      stroke: '#0d1016', strokeThickness: 4,
     }).setOrigin(0.5, 0)
 
-    // The eraser nib, stamped into the foil wherever the pointer drags.
-    this.nib = scene.make.graphics({ x: 0, y: 0 }, false)
-    this.nib.fillStyle(0xffffff, 1).fillCircle(NIB, NIB, NIB)
+    // The eraser nib, stamped into the coating wherever the pointer drags.
+    this.nibArt = scene.make.graphics({ x: 0, y: 0 }, false)
+    this.nibArt.fillStyle(0xffffff, 1).fillCircle(this.nib, this.nib, this.nib)
 
     // Oversized deliberately: the world camera can be panned and zoomed, and a
     // blocker sized to the viewport leaves a gap at the edges once it is.
@@ -112,13 +143,16 @@ export class ScratchCard {
       .setInteractive()
     this.blocker.on('pointerdown', () => { /* swallowed */ })
 
-    this.zone = scene.add.zone(0, 0, w, h).setInteractive({ useHandCursor: true })
+    // The drag target is the PANEL, not the card. Dragging the painted border
+    // is not scratching.
+    this.zone = scene.add.zone(px + pw / 2, py + ph / 2, pw, ph)
+      .setInteractive({ useHandCursor: true })
     this.zone.on('pointermove', (p: Phaser.Input.Pointer) => {
       if (p.isDown) this.scratchAt(p)
     })
     this.zone.on('pointerdown', (p: Phaser.Input.Pointer) => this.scratchAt(p))
 
-    this.layer.add([...panel, title, face, prize, unit, this.foil, this.hint, this.zone])
+    this.layer.add([base, prize, unit, this.foil, this.hint, this.zone])
 
     this.timer = scene.time.delayedCall(opts.autoRevealSeconds * 1000, () => this.reveal(true))
   }
@@ -141,36 +175,38 @@ export class ScratchCard {
   }
 
   destroy(): void {
+    if (this.closed) return
     this.closed = true
     this.timer?.remove()
-    this.nib.destroy()
+    this.nibArt.destroy()
     this.blocker.destroy()
     this.layer.destroy(true)
+    this.opts.onClosed?.()
   }
 
+  /** Lays the coating down: the covered sprite, at card size. */
   private paintFoil(w: number, h: number): void {
-    const g = this.scene.make.graphics({ x: 0, y: 0 }, false)
-    g.fillStyle(0x9aa6b4, 1).fillRoundedRect(0, 0, w, h, 8)
-    // Brushed streaks, so it reads as foil rather than a grey rectangle.
-    for (let i = 0; i < 26; i++) {
-      const y = (i / 26) * h
-      g.fillStyle(i % 2 === 0 ? 0xb4c0cd : 0x8794a3, 0.55)
-      g.fillRect(0, y, w, h / 34)
-    }
-    g.lineStyle(2, 0x6f7c8b, 1).strokeRoundedRect(1, 1, w - 2, h - 2, 8)
-    this.foil.draw(g, 0, 0)
-    g.destroy()
+    const img = this.scene.make.image(
+      { key: ART.ui.scratchCard.covered, add: false },
+    ).setOrigin(0, 0).setDisplaySize(w, h)
+    this.foil.draw(img, 0, 0)
+    img.destroy()
   }
 
   private scratchAt(p: Phaser.Input.Pointer): void {
     if (this.revealed || this.closed) return
     // Pointer is in world space; the foil is a child of a positioned container.
     const local = this.layer.getWorldTransformMatrix().applyInverse(p.worldX, p.worldY)
+    // Inside the SILVER PANEL, not merely inside the card. The painted border
+    // is part of the ticket, not coating, and erasing it would leave a hole in
+    // the artwork.
+    const pnl = this.panel
+    if (local.x < pnl.x || local.x > pnl.x + pnl.w) return
+    if (local.y < pnl.y || local.y > pnl.y + pnl.h) return
+
     const fx = local.x - this.foil.x
     const fy = local.y - this.foil.y
-    if (fx < 0 || fy < 0 || fx > this.foil.width || fy > this.foil.height) return
-
-    this.foil.erase(this.nib, fx - NIB, fy - NIB)
+    this.foil.erase(this.nibArt, fx - this.nib, fy - this.nib)
     // Voice-capped in audio.json, so a fast drag rasps rather than roars.
     play(this.scene, 'scratching')
     this.hint.setText('keep going')
@@ -178,21 +214,25 @@ export class ScratchCard {
     // Every cell the nib actually covers, not just the one under the pointer.
     // Counting one cell per event made a visibly cleared card still say "keep
     // going", because the nib erases a disc far wider than a single cell.
-    const cellW = this.foil.width / CELLS_X
-    const cellH = this.foil.height / CELLS_Y
-    const x0 = Math.max(0, Math.floor((fx - NIB) / cellW))
-    const x1 = Math.min(CELLS_X - 1, Math.floor((fx + NIB) / cellW))
-    const y0 = Math.max(0, Math.floor((fy - NIB) / cellH))
-    const y1 = Math.min(CELLS_Y - 1, Math.floor((fy + NIB) / cellH))
+    // The grid spans the panel, so "38% scratched" means 38% of the coating
+    // rather than 38% of a card that is mostly painted border.
+    const gx = local.x - pnl.x
+    const gy = local.y - pnl.y
+    const cellW = pnl.w / CELLS_X
+    const cellH = pnl.h / CELLS_Y
+    const x0 = Math.max(0, Math.floor((gx - this.nib) / cellW))
+    const x1 = Math.min(CELLS_X - 1, Math.floor((gx + this.nib) / cellW))
+    const y0 = Math.max(0, Math.floor((gy - this.nib) / cellH))
+    const y1 = Math.min(CELLS_Y - 1, Math.floor((gy + this.nib) / cellH))
     for (let cy = y0; cy <= y1; cy++) {
       for (let cx = x0; cx <= x1; cx++) {
         // Corners of the bounding box are outside the round nib.
-        const dx = (cx + 0.5) * cellW - fx
-        const dy = (cy + 0.5) * cellH - fy
-        if (dx * dx + dy * dy <= NIB * NIB) this.scratched.add(cy * CELLS_X + cx)
+        const dx = (cx + 0.5) * cellW - gx
+        const dy = (cy + 0.5) * cellH - gy
+        if (dx * dx + dy * dy <= this.nib * this.nib) this.scratched.add(cy * CELLS_X + cx)
       }
     }
-    if (this.scratched.size / (CELLS_X * CELLS_Y) >= REVEAL_FRACTION) this.reveal(false)
+    if (this.scratched.size / (CELLS_X * CELLS_Y) >= SC.revealFraction) this.reveal(false)
   }
 
   private reveal(auto: boolean): void {
@@ -201,7 +241,9 @@ export class ScratchCard {
     this.timer?.remove()
     this.zone.disableInteractive()
     this.hint.setText(auto ? 'auto-scratched' : 'paid out')
-    this.scene.tweens.add({ targets: this.foil, alpha: 0, duration: 220 })
+    // Wipes the rest of the coating off rather than fading the ticket: what is
+    // underneath stays, which is the whole point of a two-layer card.
+    this.scene.tweens.add({ targets: this.foil, alpha: 0, duration: auto ? 320 : 220 })
     this.opts.onCollect(this.opts.outcome.payout)
     this.scene.time.delayedCall(900, () => {
       if (this.closed) return

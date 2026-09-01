@@ -546,6 +546,9 @@ export interface ArtDef {
     /** The painted loadout room. The scene falls back to flat dark ground if
      *  the file itself does not load. */
     loadoutBackdrop: string
+    /** The two states of the painted ticket. Identical canvases, so one
+     *  overlays the other exactly. */
+    scratchCard: { covered: string; revealed: string }
   }
   /** Props painted onto the map rather than owned by an entity. */
   prop: {
