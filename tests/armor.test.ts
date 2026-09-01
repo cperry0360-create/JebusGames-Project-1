@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { canStun, damageAfterArmor, stunLockoutFor } from '../src/systems/Combat.ts'
+import { canStun, damageAfterArmor, diminishedSeconds, slowStacksAfter, stunLockoutFor } from '../src/systems/Combat.ts'
 import { statAt } from '../src/systems/Upgrades.ts'
 
 const url = (p: string) => new URL(p, import.meta.url)
@@ -194,4 +194,79 @@ test('the hero can survive the wave he is posted on', () => {
   const seconds = cory.maxHealth / (worst * cory.blockCapacity)
   assert.ok(seconds >= 10,
     `${cory.name} lasts ${seconds.toFixed(1)}s against ${cory.blockCapacity} of the heaviest attacker`)
+})
+
+test('a repeated stop on the same target gets shorter each time', () => {
+  // The lockout stops a stun being REFRESHED while it runs. It does nothing
+  // about the same tower stunning the same enemy again the moment it lapses,
+  // over and over, for the whole wave — which is what "a single tower should
+  // never hold a target indefinitely" is actually asking about.
+  const d = RULES.combat.stunDiminish
+  const base = 0.6
+
+  const lengths = [0, 1, 2, 3, 4].map((n) => diminishedSeconds(base, n, d))
+  assert.equal(lengths[0], base, 'the first stop should be full length')
+  for (let i = 1; i < lengths.length; i++) {
+    assert.ok(lengths[i]! < lengths[i - 1]! || lengths[i] === 0,
+      `stop ${i + 1} (${lengths[i]}s) is not shorter than stop ${i} (${lengths[i - 1]}s)`)
+  }
+  assert.equal(lengths[lengths.length - 1], 0,
+    'a target hit five times in a row should be immune by then, not merely inconvenienced')
+
+  // The floor is a hard stop rather than an ever-smaller sliver: a 0.05s
+  // freeze is a rendering glitch, not a mechanic.
+  assert.ok(d.minSeconds > 0, 'without a floor the stop shrinks forever but never ends')
+  for (const n of [0, 1, 2, 3, 4, 5]) {
+    const s = diminishedSeconds(base, n, d)
+    assert.ok(s === 0 || s >= d.minSeconds, `stop ${n} lasts ${s}s, under the ${d.minSeconds}s floor`)
+  }
+})
+
+test('the immunity window outlasts the stop that caused it', () => {
+  // Stated as a rule rather than as a pair of numbers that happen to work.
+  const mult = RULES.combat.stunLockoutMultiple
+  assert.ok(mult > 1, 'a lockout no longer than the stun is no lockout at all')
+  for (const stun of [0.3, 0.6, 1.2]) {
+    const lock = stunLockoutFor(stun, mult)
+    assert.ok(lock > stun,
+      `a ${stun}s stop locks out for ${lock}s; the target is stunnable again before it can move`)
+    // And the free window has to be long enough to matter against the fastest
+    // thing that can apply one.
+    assert.ok(lock - stun >= stun,
+      `a ${stun}s stop leaves only ${(lock - stun).toFixed(2)}s of freedom`)
+  }
+})
+
+test('a slow cannot be refreshed forever either', () => {
+  // The one that was genuinely unbounded. Measured in the harness: Deferral
+  // applies a 3.84s slow from a tower that fires every 0.81s, so any target it
+  // keeps shooting was slowed permanently. A slow is allowed to refresh — a
+  // slowed enemy is still walking — but "allowed to refresh" and "can never
+  // lapse" are not the same thing.
+  const d = RULES.combat.slowDiminish
+  const applied = 3.84
+  const lengths = [0, 1, 2, 3, 4, 5].map((n) => diminishedSeconds(applied, n, d))
+  for (let i = 1; i < lengths.length; i++) {
+    assert.ok(lengths[i]! < lengths[i - 1]! || lengths[i] === 0, 'slows do not diminish')
+  }
+  const fireInterval = 0.81
+  // The test that matters: after enough repeats the slow must expire between
+  // shots, so the enemy gets some of its speed back.
+  const lapses = lengths.some((s) => s < fireInterval)
+  assert.ok(lapses,
+    'even after five refreshes the slow still outlasts the tower\'s fire interval, ' +
+    'so it never lapses and the target is slowed permanently')
+})
+
+test('a target left alone becomes dangerous again', () => {
+  // The counterplay. Without a reset, diminishing returns just means every
+  // enemy is permanently immune by mid-wave, which is the opposite failure.
+  const d = RULES.combat.slowDiminish
+  assert.ok(d.windowSeconds > 0, 'the stacks never reset')
+  assert.equal(slowStacksAfter(d.windowSeconds + 0.1, 5, d), 0,
+    'stacks must clear once the target has been left alone for the window')
+  assert.equal(slowStacksAfter(d.windowSeconds - 0.1, 5, d), 5,
+    'stacks must survive inside the window, or nothing diminishes at all')
+  assert.ok(d.windowSeconds >= 3 && d.windowSeconds <= 12,
+    `a ${d.windowSeconds}s window is not a wave-scale memory`)
 })

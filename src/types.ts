@@ -85,6 +85,11 @@ export interface RulesDef {
      * held everything it touched still for the rest of the wave.
      */
     stunLockoutMultiple: number
+    /** Each successive stop on the same target inside the window is shorter
+     *  than the last, so one tower cannot hold one enemy forever. */
+    stunDiminish: { windowSeconds: number; factor: number; minSeconds: number }
+    /** The same rule for slows, which had no limit at all. */
+    slowDiminish: { windowSeconds: number; factor: number; minSeconds: number }
   }
   serverNuke: ServerNukeDef
   signBribe: SignBribeDef

@@ -1551,6 +1551,7 @@ this.armReadyCountdown()
       scratchTicket: (outcome, seconds) => this.showTicket(outcome, seconds),
       windUp: (seconds, fire) => this.windUp(seconds, fire),
       nuke: RULES.serverNuke,
+      slowDiminish: RULES.combat.slowDiminish,
       overlayDepth: OVERLAY_DEPTH,
     })
     this.status.mode = 'normal'
@@ -2219,14 +2220,15 @@ this.armReadyCountdown()
     this.damageEnemy(enemy, amount, tower.def.ignoresArmor || b.ignoresArmor === true, tower.armorPierce)
 
     const slow = tower.slowSeconds || (tower.splashRadius > 0 ? (b.splashSlowSeconds ?? 0) : 0)
-    if (slow > 0) enemy.applySlow(tower.def.slowFactor || 0.5, slow)
+    if (slow > 0) enemy.applySlow(tower.def.slowFactor || 0.5, slow, RULES.combat.slowDiminish)
     // A stun is its own effect, not a very strong slow. Routing it through
     // the slow system let it refresh on every shot, and a 0.6s stop refreshed
     // every 0.81s is a permanent one: Amendment stopped everything it touched
     // for the rest of the wave. `applyStun` refuses to re-apply until its
     // lockout has run out.
     if ((b.stunSeconds ?? 0) > 0) {
-      enemy.applyStun(b.stunSeconds as number, RULES.combat.stunLockoutMultiple)
+      enemy.applyStun(b.stunSeconds as number, RULES.combat.stunLockoutMultiple,
+        RULES.combat.stunDiminish)
     }
   }
 

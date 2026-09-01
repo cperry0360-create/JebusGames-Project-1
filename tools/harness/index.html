@@ -1917,6 +1917,85 @@ async function run() {
     return
   }
 
+  if (scenario === 'stunlock') {
+    // What Filing Extension's two tier-3 specializations actually do to an
+    // enemy, measured rather than reasoned about. The report says "Deferral
+    // stops enemies for 0.6s"; the data says Deferral is a 2.0s SLOW and
+    // Amendment is the 0.6s stun, so both are measured.
+    const spec = arg || 'deferral'
+    g.status.peanuts = 99999
+    // The menu only offers UNLOCKED towers, in draft order, so the index in
+    // the tower table is not the index in the menu. Force the unlock and take
+    // the first slot.
+    // The menu is rebuilt when a tower is UNLOCKED, not when it is opened, so
+    // setting the list is not enough on its own.
+    g.status.unlockedTowers = ['extension']
+    g.refreshMenuOptions()
+    // Optionally two of them, because "two of these stacking should not lock
+    // down the whole lane" is a different question from what one does.
+    const howMany = /2$/.test(spec) ? 2 : 1
+    const want = spec.replace(/2$/, '')
+    const free = g.build.spots.map((sp, i) => i).filter((i) => g.build.isFree(i))
+    for (let n = 0; n < howMany; n++) await build(free[n], 0)
+    const t = g.towers[0]
+    if (!t) { note('no tower built'); return }
+    note('towers built: ' + g.towers.length)
+    note('tower ' + t.def.name + ' fireInterval base ' + t.def.fireInterval)
+    // Wait on the TIER, not on `upgrading`: the flag is false for the frame
+    // between asking and the build starting, so `!upgrading` returns true
+    // immediately and the next upgrade is refused for being at the wrong tier.
+    for (const tw of g.towers) tw.beginUpgrade(null)
+    await until(() => g.towers.every((tw) => tw.tier === 2), 30000)
+    note('after first upgrade: tier=' + t.tier + ' upgrading=' + t.upgrading +
+      ' atSpecChoice=' + t.atSpecChoice +
+      ' specs=' + t.def.specializations.map((x) => x.id).join(','))
+    for (const tw of g.towers) tw.beginUpgrade(want)
+    await until(() => g.towers.every((tw) => tw.tier === 3), 30000)
+    note('spec=' + t.spec + ' tier=' + t.tier +
+      ' fireInterval ' + t.fireInterval.toFixed(3) + 's range ' + Math.round(t.range) +
+      ' slowSeconds ' + t.slowSeconds +
+      ' stunSeconds ' + (t.behaviour.stunSeconds ?? 0) +
+      ' chainTargets ' + (t.behaviour.chainTargets ?? 0))
+
+    g.status.wave = 5
+    g.startWave()
+    await until(() => g.enemies.length > 3, 30000)
+
+    // Follow individual enemies through the tower's range and record what
+    // fraction of the time they are stopped, slowed, or moving freely.
+    const track = new Map()
+    const t0 = performance.now()
+    while (performance.now() - t0 < 22000) {
+      await sleep(50)
+      for (const e of g.enemies) {
+        if (!e.alive) continue
+        const inAny = g.towers.some((tw) => Math.hypot(e.x - tw.x, e.y - tw.y) <= tw.range)
+        if (!inAny) continue
+        let r = track.get(e)
+        if (!r) { r = { n: 0, stunned: 0, slowed: 0, startDist: e.distance }; track.set(e, r) }
+        r.n++
+        if (e.stunned) r.stunned++
+        else if (e.slowed) r.slowed++
+        r.endDist = e.distance
+      }
+    }
+    const rows = [...track.values()].filter((r) => r.n >= 20)
+    if (rows.length === 0) { note('nothing stayed in range long enough'); return }
+    const mean = (f) => rows.reduce((a, r) => a + f(r), 0) / rows.length
+    note('tracked ' + rows.length + ' enemies inside range of ' + g.towers.length + ' tower(s):')
+    note('  stunned  ' + (100 * mean((r) => r.stunned / r.n)).toFixed(1) + '% of the time')
+    note('  slowed   ' + (100 * mean((r) => r.slowed / r.n)).toFixed(1) + '%')
+    note('  free     ' + (100 * mean((r) => 1 - (r.stunned + r.slowed) / r.n)).toFixed(1) + '%')
+    // The number that matters: how far did they actually get?
+    const secs = 22
+    note('  advanced ' + mean((r) => (r.endDist - r.startDist)).toFixed(0) +
+      'px while tracked; unimpeded that would be about ' +
+      Math.round(58 * secs * GAME_SPEED * mean((r) => r.n * 0.05 / secs)) + 'px')
+    await shot('stunlock-' + spec)
+    void t
+    return
+  }
+
   if (scenario === 'heroblock') {
     // How many enemies does one man actually hold, and what does that cost him?
     // Measured before anything is changed, because the data says 3 and the

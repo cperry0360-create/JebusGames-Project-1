@@ -1,8 +1,10 @@
 #!/bin/bash
 # Real-time run: the page drives the game and uploads its own screenshots.
 H="$(cd "$(dirname "$0")" && pwd)"
-S="$1"; WAIT="${2:-120}"; VP="${3:-}"
+S="$1"; WAIT="${2:-120}"; VP="${3:-}"; ARG="${4:-}"
 QS=""; [ -n "$VP" ] && QS="&vp=$VP"
+# Optional scenario argument, e.g. run.sh stunlock 60 "" deferral
+[ -n "$ARG" ] && QS="$QS&arg=$ARG"
 rm -f "$H/shots/report.json"
 python3 "$H/server.py" wait "$WAIT" &
 SRV=$!

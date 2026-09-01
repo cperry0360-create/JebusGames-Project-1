@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import type { EnemyDef, TaxPhase } from '../types.ts'
 import { Path } from '../systems/Path.ts'
 import { ySort } from '../systems/DepthSort.ts'
-import { canStun, damageAfterArmor, slowedSpeed, stunLockoutFor } from '../systems/Combat.ts'
+import { canStun, damageAfterArmor, diminishedSeconds, slowedSpeed, slowStacksAfter, stunLockoutFor, type DiminishDef } from '../systems/Combat.ts'
 import { makeShadow, PRESENTATION, floatingDamage, deathPuff } from '../systems/Presentation.ts'
 import { applyGroundRender } from '../systems/Art.ts'
 import { facesLeft } from '../systems/Facing.ts'
@@ -50,6 +50,14 @@ export class Enemy extends Phaser.GameObjects.Container {
    *  last one did. This is what stops a fast tower turning a 0.6s stop into a
    *  permanent one by re-applying it every shot. */
   private stunLockout = 0
+  /** How many stuns and slows have landed inside the diminishing window, and
+   *  how long since the last one. A target left alone becomes dangerous
+   *  again, so the counterplay is to move the pressure rather than to park one
+   *  tower on one lane. */
+  private stunStacks = 0
+  private sinceStun = 0
+  private slowStacks = 0
+  private sinceSlow = 0
   private bobPhase = Math.random() * Math.PI * 2
   /** Distance from the feet to the art's frame centre, negated on a flip. */
   private readonly artOffset: number
@@ -140,13 +148,21 @@ export class Enemy extends Phaser.GameObjects.Container {
     return Math.max(0, this.def.armor - this.armorShred)
   }
 
-  applySlow(factor: number, seconds: number): void {
+  applySlow(factor: number, seconds: number, diminish: DiminishDef): void {
     if (factor <= 0 || seconds <= 0) return
-    // A stronger slow replaces a weaker one; equal slows just refresh. Slows
-    // are allowed to refresh: a slowed enemy still moves, so a tower holding
-    // one at 45% speed indefinitely is the tower doing its job.
+    // A slowed enemy is still walking, so a tower holding one at 45% speed is
+    // the tower doing its job — but "allowed to refresh" and "can never lapse"
+    // are not the same thing, and nothing made the second one false. Measured:
+    // Deferral applies a 3.84s slow from a tower firing every 0.81s, so any
+    // target it keeps shooting is slowed permanently.
+    this.slowStacks = slowStacksAfter(this.sinceSlow, this.slowStacks, diminish)
+    const dealt = diminishedSeconds(seconds, this.slowStacks, diminish)
+    this.slowStacks++
+    this.sinceSlow = 0
+    if (dealt <= 0) return
+    // A stronger slow replaces a weaker one; equal slows just refresh.
     if (factor <= this.slowFactor || this.slowRemaining <= 0) this.slowFactor = factor
-    this.slowRemaining = Math.max(this.slowRemaining, seconds)
+    this.slowRemaining = Math.max(this.slowRemaining, dealt)
   }
 
   /**
@@ -157,11 +173,26 @@ export class Enemy extends Phaser.GameObjects.Container {
    * for 0.6s from a tower that fires every 0.81s, and refreshing on each shot
    * meant nothing it touched ever took another step.
    */
-  applyStun(seconds: number, lockoutMultiple: number): void {
+  applyStun(seconds: number, lockoutMultiple: number, diminish: DiminishDef): void {
     if (seconds <= 0) return
     if (!canStun(this.stunRemaining, this.stunLockout)) return
-    this.stunRemaining = seconds
-    this.stunLockout = stunLockoutFor(seconds, lockoutMultiple)
+    // Each stop inside the window is shorter than the last. The lockout alone
+    // only stopped a stun being refreshed while it ran; it did nothing to stop
+    // the same tower stunning the same target again the moment it lapsed,
+    // over and over, which is what "a single tower should never hold a target
+    // indefinitely" is actually about.
+    if (this.sinceStun > diminish.windowSeconds) this.stunStacks = 0
+    const dealt = diminishedSeconds(seconds, this.stunStacks, diminish)
+    this.stunStacks++
+    this.sinceStun = 0
+    if (dealt <= 0) {
+      // Too short to be worth applying, but it still costs the attacker the
+      // lockout — otherwise the tower simply tries again next shot.
+      this.stunLockout = stunLockoutFor(seconds, lockoutMultiple)
+      return
+    }
+    this.stunRemaining = dealt
+    this.stunLockout = stunLockoutFor(dealt, lockoutMultiple)
   }
 
   /** Haymaker knockback: shoved back along the lane it came from. */
@@ -189,6 +220,8 @@ export class Enemy extends Phaser.GameObjects.Container {
     }
     if (this.stunRemaining > 0) this.stunRemaining -= dt
     if (this.shreddingFor > 0) this.shreddingFor -= dt
+    this.sinceStun += dt
+    this.sinceSlow += dt
     if (this.stunLockout > 0) this.stunLockout -= dt
 
     // Stopped means stopped: it does not walk and it does not swing. Held here

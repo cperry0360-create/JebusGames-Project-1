@@ -10,7 +10,17 @@
     "earlyStartPeanutsPerSecond": 2
   },
   "combat": {
-    "stunLockoutMultiple": 2.5
+    "stunLockoutMultiple": 2.5,
+    "stunDiminish": {
+      "windowSeconds": 6.0,
+      "factor": 0.55,
+      "minSeconds": 0.15
+    },
+    "slowDiminish": {
+      "windowSeconds": 6.0,
+      "factor": 0.7,
+      "minSeconds": 0.4
+    }
   },
   "serverNuke": {
     "abilityId": "serverNuke",

@@ -3,6 +3,7 @@
 
 import Phaser from 'phaser'
 import { rollOutcome, type ScratchOutcome } from './Scratch.ts'
+import type { DiminishDef } from './Combat.ts'
 import type { AbilityDef, ServerNukeDef } from '../types.ts'
 import { withinRadius } from './Targeting.ts'
 import { Enemy } from '../entities/Enemy.ts'
@@ -17,6 +18,8 @@ export interface AbilityContext {
   /** Hands a drawn outcome to the UI, which shows the ticket and pays out
    *  when it is scratched or when it reveals itself. */
   scratchTicket: (outcome: ScratchOutcome, autoRevealSeconds: number) => void
+  /** Diminishing returns on a repeated slow, from rules.json. */
+  slowDiminish: DiminishDef
   /** Runs the long wind-up, then the payload. The scene owns the theatre. */
   windUp: (seconds: number, fire: () => void) => void
   summon: (x: number, y: number, count: number, seconds: number) => void
@@ -72,7 +75,7 @@ function glacier(def: AbilityDef, x: number, y: number, ctx: AbilityContext): vo
     callback: () => {
       elapsed += 0.25
       for (const e of withinRadius(ctx.enemies(), x, y, def.radius)) {
-        e.applySlow(def.slowFactor, 0.6)
+        e.applySlow(def.slowFactor, 0.6, ctx.slowDiminish)
       }
       if (elapsed >= def.duration) {
         timer.remove()
