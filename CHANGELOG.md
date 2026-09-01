@@ -1,0 +1,116 @@
+# Changelog
+
+Every commit deployed to GitHub Pages, newest first. `main` deploys on
+push, so this list is the deploy history.
+
+Art uploads made from the GitHub web UI all carry the same message,
+"Add files via upload". They are folded into a single line where they sit
+consecutively, because forty identical entries hide the ones that say
+something. The commit range is given so nothing is lost.
+
+- `c1910e0` 2026-09-01 — Gate Restructure to DAD MODE and reserve its slot
+- `113fd10` 2026-09-01 — Put the Scratch Ticket on its painted art
+- `792a891` 2026-09-01 — Rework the loadout screen onto the painted room
+- `79b25d3` 2026-09-01 — Add a full-run harness scenario that plays like a player
+- `23a8b2d` 2026-09-01 — Give the Server Nuke both of its moments
+- `9c367bb` 2026-09-01 — Diminishing returns on repeated stops and slows
+- `0edb405` 2026-09-01 — Repair two source-scanning tests broken by a visibility change
+- `e2699f5` 2026-09-01 — One layer order, one modal contract, and a Scratch Ticket that can lose
+- `1753799`..`a465491` 2026-08-31 — 2 art uploads
+- `ca656b7` 2026-09-01 — Move the nuke button preview out of the deploy
+- `090472e` 2026-08-31 — art upload
+- `1d02fc1` 2026-09-01 — Remove a scratch worktree committed as a gitlink
+- `666c4db` 2026-09-01 — Fix the two type errors CI caught, and make them catchable locally
+- `b3fbcf8` 2026-09-01 — Give the Withholding Tower a silhouette per tier
+- `4d30dc1` 2026-09-01 — Make the hero readable: capacity, transform, and impact
+- `5127b3e` 2026-09-01 — Lay the ability bar out from one region list
+- `7799101` 2026-08-31 — art upload
+- `7074669` 2026-09-01 — Move the tier preview sheet out of the deploy
+- `60db85a` 2026-09-01 — Propose the branching node map in DESIGN.md
+- `7806dbd` 2026-08-31 — art upload
+- `94ae3e5` 2026-09-01 — Re-fit the manifest to the pre-scaled character art
+- `0911f75`..`cb13b57` 2026-08-31 — 4 art uploads
+- `349e95e` 2026-08-31 — Fix the error panel firing on every load
+- `b96457d` 2026-08-31 — Painted muzzle flash, and the embers deleted rather than replaced
+- `3bd09af` 2026-08-31 — art upload
+- `77557c4` 2026-08-31 — Fix the build menu piling up its hit areas, and pan the harness to the pad
+- `ea40c8a` 2026-08-31 — Fix the harness building towers it never built
+- `2bc1169` 2026-08-31 — Painted rockets for the two splash towers
+- `02ced5f` 2026-08-31 — Cory can retreat, and the tower panel no longer hides the ring it is about
+- `a3c03c5` 2026-08-31 — Painted effect animations, the Kenney cleanup, and the hero's real problem
+- `7fbfb1c` 2026-08-31 — art upload
+- `015f69e` 2026-08-31 — Fix the backgrounding crash, revive the hero, fix the stun, tighten Meteor, lower the difficulty
+- `1215876`..`d238043` 2026-08-31 — 2 art uploads
+- `000e77f` 2026-08-31 — Inventory every Kenney asset still in the game
+- `9b8279b` 2026-08-31 — Replace the placeholder gnomes with the painted pair
+- `6445f73` 2026-08-31 — Diagnostics, crash reporting, and the stuck-cast bug
+- `5f2dd85` 2026-08-31 — art upload
+- `02c224b` 2026-08-31 — Put the DO NOT BUILD HERE sign on every build pad
+- `fb5c346` 2026-08-31 — art upload
+- `07e56d5` 2026-08-31 — Bring the camera in: towers render at 150px, not 87px
+- `978a684` 2026-08-31 — Revert the reserved HUD bands: full-bleed map, layout-based rectangles
+- `e55a7a9` 2026-08-31 — AUDIT #5: retire the display face from everything it cannot spell
+- `b1f97a0` 2026-08-31 — Stop the boss escaping into a win, and reserve the HUD bands
+- `d7c363f` 2026-08-31 — Give a run a verdict: a results screen paying Banner Points
+- `ffbd3f1` 2026-08-31 — Add PROTOTYPE-GAP.md: what the prototype got right that we do not
+- `f46c194` 2026-08-31 — Take the departments and the best roles from the prototype
+- `a3ed594` 2026-08-31 — Merge the uploaded prototype reference
+- `3bf2232` 2026-08-31 — Break the credits into departments and put Cory first
+- `569cf04` 2026-08-31 — Rebuild the credits as a long scrolling roll
+- `e697c34` 2026-08-31 — Give the hero abilities their own icons and their own shape in the bar
+- `82eccd0` 2026-08-31 — art upload
+- `7e9b460` 2026-08-31 — Strip the title screen and put the whole draw on one loadout screen
+- `8a9546b` 2026-08-31 — Speed the game up, start waves on a clock, and make upgrades legible
+- `97e00aa` 2026-08-31 — Fix the downed hero sprite, the inert tower, the nuke gate and the camera edge
+- `6fcc3e8` 2026-08-31 — Make the opening playable, cut the flavour back, drop the key letters
+- `00bbd8d` 2026-08-31 — Put a readable version stamp on the title screen
+- `d10bce3` 2026-08-31 — Add @types/node so the build stops failing on its own config
+- `8b70b63` 2026-08-31 — Gate portrait behind a rotate prompt instead of playing it
+- `d672d7c` 2026-08-31 — Replace the UI font, and fix what the bigger type exposed
+- `f880d1e` 2026-08-31 — Rewrite the camera gestures: real pinch, eased pan, momentum
+- `91bcb27` 2026-08-31 — Branching tier-3 tower upgrades, plus AUDIT findings 2, 4, 8 and 10
+- `76d20d6` 2026-08-31 — Stop iOS serving a stale build
+- `b5c8de7` 2026-08-31 — Split the world camera from the fixed UI camera
+- `2e18f79` 2026-08-31 — Expose the wave and enemy tables for assessment runs
+- `f6760c3` 2026-08-31 — Give the game a camera, and a way to pause and quit
+- `cce57ab` 2026-08-31 — Give armour real counterplay and retune the economy
+- `9f9c776` 2026-08-31 — Recompute support when a tower finishes a tier
+- `1b4adbf` 2026-08-31 — Refund the in-progress tier when a tower is sold
+- `eb86dda` 2026-08-31 — Fix three blocking interaction bugs
+- `af3ffd7` 2026-08-31 — Audit the build and write AUDIT.md
+- `af0a159` 2026-08-31 — Add sound
+- `4c50456` 2026-08-31 — Add the sign-bribe easter egg
+- `8e3a279` 2026-08-31 — Replace every drawn button and panel with the arcade plates
+- `89028c0` 2026-08-31 — Use the arcade button plates on the credits screen
+- `8a0fdea` 2026-08-31 — Build the credits screen
+- `2fde7b0` 2026-08-31 — Add The Politician, the act one boss
+- `4c3e05f`..`bedc847` 2026-08-30 — 2 art uploads
+- `3ef16a0` 2026-08-31 — Make the counter-plate render fields optional
+- `dfc1697` 2026-08-31 — Replace the HUD bar with three corner counters
+- `990fce9` 2026-08-30 — art upload
+- `c06cb01` 2026-08-31 — Add Server Nuke, the painted ability cards, and the ability renames
+- `f71dc1d` 2026-08-30 — art upload
+- `68e4142` 2026-08-30 — Drop fx.coin from ArtDef, and test for that drift
+- `dddfa32` 2026-08-30 — Cory in both forms, peanuts, and the Scratch Ticket
+- `7156831` 2026-08-30 — art upload
+- `657889b` 2026-08-30 — Fix the interaction model, tower scale and the bugs a screenshot shows
+- `65dcefa`..`2d204d0` 2026-08-30 — 3 art uploads
+- `2965113` 2026-08-30 — Swap in the painted enemies, measured from the art
+- `03b6914` 2026-08-30 — Replace the tile grid with the painted level plate
+- `a905a61` 2026-08-30 — art upload
+- `93fb1fd` 2026-08-30 — Add studio splash, title mark and a credits screen
+- `28a1698` 2026-08-30 — art upload
+- `af1d3d9` 2026-08-30 — Swap in the painted towers, with values measured from the art
+- `96b7c0b`..`5fbdefd` 2026-08-30 — 2 art uploads
+- `0deffcf` 2026-08-30 — Prepare the tower art swap: paths, base anchoring, ground shadows
+- `0e9cd40` 2026-08-30 — Fix RoadRole widening in the autotiler's corner check
+- `65e44e2` 2026-08-30 — Make art.json the only place a sprite is named
+- `111ed83` 2026-08-30 — Rename Tower.moveTo, which shadowed Container.moveTo
+- `6c2a143` 2026-08-30 — Add title, drafts, hero actives and a presentation pass
+- `fa28b34` 2026-08-30 — Build out Phase 1 on the Kenney tower defense pack
+- `4564286` 2026-08-30 — Drop .gitkeep from folders that now hold real files
+- `86c7243` 2026-08-30 — Fail the test script when no test files are found
+- `3dc16db` 2026-08-30 — Build the Phase 1 skeleton: grid, lane, waves, towers, Cory
+- `27bf294` 2026-08-30 — Scaffold Vite + Phaser 3 + TypeScript with GitHub Pages deploy
+- `53b6216` 2026-08-30 — Add DESIGN.md with Courjahan Defense design doc v2
+- `15be3b0` 2026-08-30 — Add CLAUDE.md with project instructions

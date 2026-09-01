@@ -1,0 +1,100 @@
+{
+ "runs": 2100,
+ "completed": 2100,
+ "seconds": 38.1,
+ "outcomes": {
+  "won": 1028,
+  "lost": 1072,
+  "stuck": 0
+ },
+ "flawlessWins": 1001,
+ "means": {
+  "waves": 10.28,
+  "lives": 10.9,
+  "peanutsEarned": 2889,
+  "kills": 224,
+  "bannerPoints": 67
+ },
+ "crashes": [],
+ "rejections": [],
+ "consoleHits": [],
+ "consoleHitCount": 0,
+ "findings": {
+  "idle-money": {
+   "count": 15,
+   "examples": [
+    {
+     "seed": 204,
+     "detail": "lost lives with 174 unspent and a free pad",
+     "wave": 7
+    },
+    {
+     "seed": 366,
+     "detail": "lost lives with 152 unspent and a free pad",
+     "wave": 7
+    },
+    {
+     "seed": 588,
+     "detail": "lost lives with 188 unspent and a free pad",
+     "wave": 7
+    },
+    {
+     "seed": 792,
+     "detail": "lost lives with 129 unspent and a free pad",
+     "wave": 7
+    },
+    {
+     "seed": 882,
+     "detail": "lost lives with 135 unspent and a free pad",
+     "wave": 7
+    }
+   ]
+  }
+ },
+ "neverFired": {
+  "towers": [
+   "shelter"
+  ],
+  "abilities": [
+   "serverNuke"
+  ]
+ },
+ "modes": {
+  "normal": {
+   "runs": 1200
+  },
+  "nobuild": {
+   "runs": 300
+  },
+  "supportonly": {
+   "runs": 300
+  },
+  "noabilities": {
+   "runs": 300
+  }
+ },
+ "coverage": {
+  "heroes": [
+   "cory"
+  ],
+  "levels": [
+   "level1"
+  ],
+  "towersSeen": [
+   "escalation",
+   "extension",
+   "rounding",
+   "withholding",
+   "writeoff"
+  ],
+  "abilitiesSeen": [
+   "chain",
+   "glacier",
+   "gnomes",
+   "haymaker",
+   "meteor",
+   "molotov",
+   "scratchTicket"
+  ]
+ }
+}
