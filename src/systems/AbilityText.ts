@@ -1,3 +1,4 @@
+import { lossRate, topPayout } from './Scratch.ts'
 import type { AbilityDef } from '../types.ts'
 
 /**
@@ -19,7 +20,13 @@ export function abilityLine(def: AbilityDef): string {
   if (def.slowFactor > 0) {
     effect.push(`slows to ${Math.round(def.slowFactor * 100)}% for ${def.duration}s`)
   }
-  if (def.payoutMax > 0) effect.push(`${def.payoutMin}-${def.payoutMax} peanuts`)
+  // A gamble is described as one. Quoting the range alone read as a promise,
+  // and the old range could not lose.
+  if (def.outcomes?.length) {
+    const best = topPayout(def.outcomes)
+    const loses = Math.round(lossRate(def.outcomes) * 100)
+    effect.push(`up to ${best} peanuts · ${loses}% pay nothing`)
+  }
   if (effect.length === 0 && def.radius > 0) effect.push(`${def.radius} radius`)
   return `${effect.join(' · ')} · ${def.cooldown}s cooldown`
 }

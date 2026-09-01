@@ -1825,6 +1825,98 @@ async function run() {
     return
   }
 
+  if (scenario === 'modal') {
+    // Three overlays, one rule: while a modal is up the board must not move,
+    // the HUD must not be drawn or touchable, and nothing behind it may act.
+    const hud = game.scene.getScene('Hud')
+    const cam = () => g.cameras.main
+    const camState = () => Math.round(cam().scrollX) + ',' + Math.round(cam().scrollY) +
+      ' zoom ' + cam().zoom.toFixed(3)
+
+    // Drags the pointer across the middle of the screen, the way scratching does.
+    const dragAcross = async (label) => {
+      const before = camState()
+      const movesBefore = g.rig.moveCount
+      // Read at the START. Scratching a card uncovers it, and an uncovered
+      // card pays out and closes — so a reading taken after the drag can
+      // describe a modal that is no longer there.
+      const modalAtStart = g.modalOpen
+      const cx = innerWidth / 2, cy = innerHeight / 2
+      for (const [dx, dy] of [[-120, 0], [120, 0], [0, -90], [0, 90], [-90, -70], [90, 70]]) {
+        mouse('mousedown', cx, cy)
+        for (let i = 1; i <= 8; i++) {
+          await move(cx + (dx * i) / 8, cy + (dy * i) / 8)
+        }
+        mouse('mouseup', cx + dx, cy + dy)
+        await sleep(40)
+      }
+      await sleep(200)
+      const after = camState()
+      note('  ' + label + ': modalOpen=' + modalAtStart + ' camera ' + before + ' -> ' + after +
+        (before === after ? '  UNMOVED' : '  *** MOVED ***') +
+        '  [rig enabled=' + g.rig.isEnabled + ' moves accepted=' +
+        (g.rig.moveCount - movesBefore) + ']')
+      return before === after
+    }
+
+    // The decisive check is not a flag but a tap. Scene-level input being off
+    // means the per-object `hit.input.enabled` flags stay true and are simply
+    // never consulted, so reading them would report the HUD as live when it is
+    // not. Press the thing and see whether anything happens.
+    const hudState = async (label) => {
+      let fired = 0
+      const orig = g.armAbility.bind(g)
+      const origH = g.castHaymaker.bind(g)
+      const origW = g.startWave.bind(g)
+      g.armAbility = (id) => { fired++; return orig(id) }
+      g.castHaymaker = () => { fired++; return origH() }
+      g.startWave = () => { fired++; return origW() }
+      for (const sl of hud.slots) {
+        const b = sl.hit.getBounds()
+        await click(b.centerX, b.centerY)
+        await sleep(50)
+      }
+      g.armAbility = orig; g.castHaymaker = origH; g.startWave = origW
+      note('  ' + label + ': HUD camera visible=' + hud.cameras.main.visible +
+        ' scene input=' + (hud.input ? hud.input.enabled : 'n/a') +
+        ' | tapped all ' + hud.slots.length + ' ability slots -> ' + fired +
+        ' reached the game' + (fired === 0 ? '  (dead, as required)' : ''))
+      return fired
+    }
+
+    g.status.peanuts = 99999
+    await build(3, 0)
+    g.startWave()
+    await sleep(1200)
+    note('no modal:')
+    await hudState('idle')
+    const movedFreely = !(await dragAcross('drag with nothing open'))
+    note('  (a drag with nothing open SHOULD move the camera: ' + movedFreely + ')')
+
+    // 1. The scratch card.
+    // Held open for the whole probe. The card reveals itself after 3.5s and
+    // destroys itself, and a drag that outlives it measures the wrong thing —
+    // which is exactly what the first run of this scenario did.
+    g.showTicket({ label: '', payout: 70, weight: 1 }, 600)
+    await sleep(500)
+    note('scratch card open (modalOpen=' + g.modalOpen + '):')
+    await hudState('with the card up')
+    await dragAcross('scratching in six directions')
+    await shot('modal-01-scratch')
+    g.ticket && g.ticket.destroy()
+    await sleep(300)
+
+    // 2. The results dialog, which is where the ability bar was drawing over
+    //    both buttons.
+    g.endRun('lost')
+    await sleep(700)
+    note('results dialog open (modalOpen=' + g.modalOpen + '):')
+    await hudState('with the results up')
+    await dragAcross('drag behind the results panel')
+    await shot('modal-02-results')
+    return
+  }
+
   if (scenario === 'heroblock') {
     // How many enemies does one man actually hold, and what does that cost him?
     // Measured before anything is changed, because the data says 3 and the

@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import type { ScratchOutcome } from '../systems/Scratch.ts'
 import type {
   AbilityDef, DraftDef, EnemyDef, HeroDef, MapDef, RulesDef, TowerDef, WavesDef,
 } from '../types.ts'
@@ -48,6 +49,7 @@ import { waveOutcome } from '../systems/Wave.ts'
 import { logEvent, provideState } from '../systems/Diagnostics.ts'
 import { heartbeat, setRunActive } from '../systems/Watchdog.ts'
 import { hudLayout, hudTakesPress, NO_INSETS, type HudLayout } from '../systems/HudLayout.ts'
+import { cameraAcceptsGestures, LAYER } from '../systems/Layers.ts'
 import { safeAreaInsets } from '../systems/SafeArea.ts'
 
 /** The HUD's layout constants, shared with HudScene so both agree. */
@@ -109,9 +111,11 @@ export interface GameStatus {
   alert: string
 }
 
-const OVERLAY_DEPTH = 150000
-/** Above everything the world draws, including announcements. */
-const TICKET_DEPTH = 190000
+/** Wave banners and rare-drop notices, above the board and below any panel. */
+const OVERLAY_DEPTH = LAYER.announcement
+/** A modal's content. See systems/Layers.ts for the whole order and for why
+ *  depth alone cannot put this above the HUD. */
+const TICKET_DEPTH = LAYER.modal
 /** Ground markings are ellipses, not circles: the map is painted in 3/4. */
 const PAD_SQUASH = 0.62
 
@@ -188,7 +192,8 @@ export class GameScene extends Phaser.Scene {
   private targetRing!: Phaser.GameObjects.Graphics
   private selected: Tower | null = null
   private restructuring: Tower | null = null
-  private ticket: ScratchCard | null = null
+  /** Public so a harness run can assert the modal contract from outside. */
+  ticket: ScratchCard | null = null
   /** One Server Nuke per run, dropped or not. */
   private nukeUsed = false
   /** Enemies that reached the exit during the current wave. Reset at its
@@ -541,9 +546,20 @@ this.armReadyCountdown()
     play(this, 'error')
   }
 
-  /** True while a modal owned by the world is up. The HUD dims behind it. */
+  /**
+   * True while any modal owned by the world is up.
+   *
+   * Every modal, not just `dialog`. This getter used to name only the dialog,
+   * so a scratch card left the camera live and left the whole HUD live with
+   * it. One list, and everything that has to stand down — the HUD, the camera
+   * rig, the world's own tap handling — asks this one question.
+   *
+   * The build menu and the tower panel are deliberately absent: both are
+   * anchored, non-modal panels that leave the board playable behind them.
+   */
   get modalOpen(): boolean {
     return this.dialog?.active === true
+      || this.ticket?.active === true
   }
 
   /**
@@ -1532,7 +1548,7 @@ this.armReadyCountdown()
       damage: (e, amount, pierce) => this.damageEnemy(e, amount, pierce),
       addPeanuts: (amount) => this.earn(amount),
       summon: (sx, sy, count, seconds) => this.summonFighters(sx, sy, count, seconds),
-      scratchTicket: (payout, seconds) => this.showTicket(payout, seconds),
+      scratchTicket: (outcome, seconds) => this.showTicket(outcome, seconds),
       windUp: (seconds, fire) => this.windUp(seconds, fire),
       nuke: RULES.serverNuke,
       overlayDepth: OVERLAY_DEPTH,
@@ -1591,14 +1607,21 @@ this.armReadyCountdown()
     this.asScreenSpace([wash, label])
   }
 
-  /** The ticket sits over the board and never pauses it. */
-  private showTicket(payout: number, autoRevealSeconds: number): void {
+  /** The ticket sits over the board and never pauses it. Public so a harness
+   *  run can hold one open for longer than its auto-reveal. */
+  showTicket(outcome: ScratchOutcome, autoRevealSeconds: number): void {
     this.ticket?.destroy()
     this.ticket = new ScratchCard(this, this.scale.width / 2,
       this.scale.height / 2, TICKET_DEPTH, {
-      payout,
+      outcome,
       autoRevealSeconds,
       onCollect: (amount) => {
+        if (amount <= 0) {
+          // Losing has to land as an outcome rather than as nothing happening.
+          this.status.message = 'Scratch Ticket: not a winner. Keep your day job.'
+          play(this, 'error')
+          return
+        }
         this.earn(amount)
         this.status.message = `Scratch Ticket: ${amount} peanuts.`
         play(this, 'peanuts')
@@ -1838,7 +1861,9 @@ this.armReadyCountdown()
     }
   }
 
-  private endRun(phase: 'won' | 'lost'): void {
+  /** Public for the harness, which has to be able to reach the results
+   *  dialog to check what draws over it. */
+  endRun(phase: 'won' | 'lost'): void {
     if (this.status.phase === 'won' || this.status.phase === 'lost') return
     this.status.phase = phase
     this.clearSelection()
@@ -1942,6 +1967,14 @@ this.armReadyCountdown()
     // than a freeze threaded through every system — and the camera below is
     // deliberately outside it, so the shake still plays over the held frame.
     const dt = this.hitPaused ? 0 : real * RULES.pacing.gameSpeed
+
+    // The camera is gated here, every frame, from one question — rather than
+    // by each overlay remembering to switch it off. Dialog remembered;
+    // ScratchCard did not, which is why dragging to scratch a card also
+    // dragged the board underneath it. The rig listens at the SCENE level, so
+    // an interactive object on top of the board does not stop it hearing the
+    // drag, and no amount of care inside an overlay would have.
+    this.rig.setEnabled(cameraAcceptsGestures(this.modalOpen))
 
     // The camera runs on real time. It is feel, not simulation, and a camera
     // that eased 40% faster would read as twitchy rather than as brisk.

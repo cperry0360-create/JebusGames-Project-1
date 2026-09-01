@@ -13,6 +13,7 @@ import { Dialog } from '../ui/Dialog.ts'
 import { play, resumeAudio } from '../systems/Audio.ts'
 import { hudLayout, NO_INSETS, type HudLayout, type Rect } from '../systems/HudLayout.ts'
 import { safeAreaInsets } from '../systems/SafeArea.ts'
+import { hudInteractive } from '../systems/Layers.ts'
 import {
   barWidth, iconBox, regions, slotDefs, slotSignature,
   type BarMetrics, type SlotDef, type SlotRegion,
@@ -418,13 +419,24 @@ export class HudScene extends Phaser.Scene {
   }
 
   update(): void {
-    // The HUD is a separate scene and renders after the world, so a dialog the
-    // world owns cannot cover it — the wave message ran straight through the
-    // panel's title and the ability bar sat on its bottom edge. Dimming this
-    // scene's camera pushes the whole HUD behind the modal in one move, and
-    // restores it exactly, without touching any object's own alpha. The HUD's
-    // own pause dialog is unaffected: the world has no modal open then.
-    this.cameras.main.setAlpha(this.world.modalOpen ? 0.3 : 1)
+    // The HUD is a separate scene and renders AFTER the world, so no depth the
+    // world can ask for will put a dialog above the ability bar. Dimming to
+    // 30% was the old answer and it was not one: the icons still drew over the
+    // results panel, over both its buttons, and they were still tappable.
+    //
+    // So the HUD stands down completely while a world modal is up — not drawn
+    // and not interactive. Both come off the same call, so it is not possible
+    // to hide it and leave it live, which is the shape the earlier bugs took.
+    //
+    // Its own pause dialog is unaffected: that is a HUD modal, and it lives
+    // here precisely so it keeps working while GameScene is paused. The
+    // question asked is about the WORLD's modals.
+    const live = hudInteractive(this.world.modalOpen)
+    this.cameras.main.setVisible(live)
+    // Phaser types the scene's input plugin as always present; it is not, in
+    // the frame before the scene is fully booted.
+    if (this.input) this.input.enabled = live
+    if (!live) return
 
     const s = this.world.status
 

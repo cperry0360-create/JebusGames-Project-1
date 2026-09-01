@@ -1,3 +1,4 @@
+import { expectedValue, lossRate, rollOutcome, topPayout, totalWeight } from '../src/systems/Scratch.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, existsSync, readdirSync } from 'node:fs'
@@ -274,7 +275,7 @@ test('six draftable actives plus the rare drop, each doing something distinct', 
   assert.ok(a.meteor.ticks > 1 && a.meteor.duration > 0, 'a barrage is repeated impacts over time')
   assert.ok(a.chain.ticks > 1, 'chain lightning needs jumps')
   assert.ok(a.chain.ignoresArmor, 'lightning should not care about armour')
-  assert.ok(a.scratchTicket.payoutMax > a.scratchTicket.payoutMin,
+  assert.ok((a.scratchTicket.outcomes?.length ?? 0) >= 3,
     'a Scratch Ticket with a fixed payout is not a scratch ticket')
   assert.equal(a.scratchTicket.targeting, 'instant', 'the ticket is not aimed anywhere')
   for (const [id, def] of Object.entries(a) as [string, any][]) {
@@ -289,15 +290,83 @@ test('ability cooldowns are spread, so they are not interchangeable', () => {
   assert.ok(Math.max(...cds) >= Math.min(...cds) * 2, 'every ability has roughly the same cooldown')
 })
 
-test('a Scratch Ticket can disappoint, and cannot hand over the board', () => {
+test('a Scratch Ticket is a gamble rather than an income stream', () => {
+  // It was `Between(60, 320)`: a uniform roll that could not lose, mean 190
+  // against a mean wave income of 322. At a 34s cooldown that is most of a
+  // run's earnings, free, with no decision attached.
   const t = abilities.scratchTicket
+  const outs = t.outcomes as Array<{ label: string; payout: number; weight: number }>
   const cheapest = Math.min(...Object.values(towers).map((tw: any) => tw.cost))
-  const dearest = Math.max(...Object.values(towers).map((tw: any) => tw.cost))
-  assert.ok(t.payoutMin < cheapest, 'every ticket buying a tower removes the gamble')
-  assert.ok(t.payoutMax >= cheapest, 'no ticket ever buying a tower removes the point')
-  assert.ok(t.payoutMax <= dearest * 3, 'a ticket should not hand over the whole board')
+  const ev = expectedValue(outs)
+
+  // What one wave pays, which is the yardstick the tuning is set against.
+  const perWave = Object.values((waves as any).waves).map((w: any) =>
+    w.spawns.reduce((n: number, sp: any) => n + sp.count * (enemies as any)[sp.enemy].peanutReward, 0)
+    + (rules as any).peanutsPerWaveCleared)
+  const meanWave = perWave.reduce((a: number, b: number) => a + b, 0) / perWave.length
+
+  assert.ok(lossRate(outs) >= 0.25,
+    `only ${(lossRate(outs) * 100).toFixed(0)}% of tickets lose; a ticket that always pays is not a gamble`)
+  assert.ok(lossRate(outs) <= 0.6,
+    `${(lossRate(outs) * 100).toFixed(0)}% of tickets lose; that is a punishment, not a gamble`)
+  assert.ok(outs.some((o) => o.payout <= 0 && o.label.trim().length > 0),
+    'a losing ticket must say something, or an uncovered blank card is just confusing')
+
+  assert.ok(ev > 0, 'the expected value should be positive; nobody drafts a losing bet')
+  assert.ok(ev < meanWave * 0.2,
+    `expected value ${ev.toFixed(0)} is ${(ev / meanWave * 100).toFixed(0)}% of a wave's income; ` +
+    'that is an economy rather than a flutter')
+
+  const top = topPayout(outs)
+  assert.ok(top >= cheapest, 'no ticket ever buying a tower removes the point')
+  assert.ok(top <= meanWave, `the top prize ${top} exceeds a whole wave's income (${meanWave.toFixed(0)})`)
+
+  // The big one has to be rare, or it is not the big one.
+  const jackpot = outs.filter((o) => o.payout === top)
+  const jackpotChance = jackpot.reduce((n, o) => n + o.weight, 0) / totalWeight(outs)
+  assert.ok(jackpotChance <= 0.03,
+    `the top prize comes up ${(jackpotChance * 100).toFixed(0)}% of the time`)
+
+  // And a typical result is small. The median matters more than the mean here:
+  // the mean can be dragged up by a jackpot nobody sees.
+  const sorted = [...outs].sort((a, b) => a.payout - b.payout)
+  let seen = 0
+  let median = 0
+  for (const o of sorted) {
+    seen += o.weight
+    if (seen >= totalWeight(outs) / 2) { median = o.payout; break }
+  }
+  assert.ok(median < meanWave * 0.15,
+    `the median ticket pays ${median}, which is not "noticeably less than a wave's income"`)
+
   assert.ok(t.autoRevealSeconds > 0 && t.autoRevealSeconds <= 6,
     'the ticket must reveal itself, and fast enough not to stall the wave')
+})
+
+test('the payout table is drawn from, in proportion', () => {
+  // The table is only worth tuning if the draw honours it.
+  const outs = abilities.scratchTicket.outcomes as Array<{ payout: number; weight: number }>
+  const counts = new Map<number, number>()
+  const N = 200_000
+  for (let i = 0; i < N; i++) {
+    const o = rollOutcome(outs as any, (i + 0.5) / N)
+    counts.set(o.payout, (counts.get(o.payout) ?? 0) + 1)
+  }
+  for (const o of outs) {
+    const want = o.weight / totalWeight(outs as any)
+    // Outcomes can share a payout, so compare against the combined weight.
+    const share = (counts.get(o.payout) ?? 0) / N
+    const combined = outs.filter((x) => x.payout === o.payout)
+      .reduce((n, x) => n + x.weight, 0) / totalWeight(outs as any)
+    assert.ok(Math.abs(share - combined) < 0.01,
+      `payout ${o.payout} came up ${(share * 100).toFixed(1)}% against a weight of ${(combined * 100).toFixed(1)}%`)
+    void want
+  }
+  // A sweep of the whole [0,1) range must produce the mean the table states.
+  let sum = 0
+  for (let i = 0; i < N; i++) sum += rollOutcome(outs as any, (i + 0.5) / N).payout
+  assert.ok(Math.abs(sum / N - expectedValue(outs as any)) < 0.5,
+    'the sampled mean does not match the table\'s expected value')
 })
 
 test("Cory's kit matches the design doc", () => {

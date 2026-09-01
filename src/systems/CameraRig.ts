@@ -204,7 +204,12 @@ export class CameraRig {
 
   /** Counts pointermove events the rig accepted, so a scenario can tell "the
    *  gesture did nothing" from "the events never arrived". */
-  private moveCount = 0
+  moveCount = 0
+
+  /** Whether the rig is currently listening. Read by the harness. */
+  get isEnabled(): boolean {
+    return this.enabled
+  }
 
   /** True when the gesture that just ended was a pan or a pinch, so its
    *  release must not be treated as a tap on the world. */

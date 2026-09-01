@@ -409,8 +409,9 @@ export interface AbilityDef {
   ticks: number
   slowFactor: number
   /** Scratch Ticket only: the payout is rolled from this range. */
-  payoutMin: number
-  payoutMax: number
+  /** The Scratch Ticket's payout table. Weighted, with losing lines: see
+   *  systems/Scratch.ts. Absent on every other ability. */
+  outcomes?: Array<{ label: string; payout: number; weight: number }>
   /** How long the ticket waits before scratching itself, in seconds. */
   autoRevealSeconds: number
   summonCount: number

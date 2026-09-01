@@ -2,6 +2,8 @@ import Phaser from 'phaser'
 import { COLOR, FONT_DISPLAY, FONT_UI } from './Theme.ts'
 import { platePanel } from './Plate.ts'
 import { play } from '../systems/Audio.ts'
+import { LAYER } from '../systems/Layers.ts'
+import type { ScratchOutcome } from '../systems/Scratch.ts'
 
 /**
  * The Scratch Ticket overlay.
@@ -23,7 +25,7 @@ const REVEAL_FRACTION = 0.38
 const NIB = 26
 
 export interface ScratchCardOptions {
-  payout: number
+  outcome: ScratchOutcome
   autoRevealSeconds: number
   onCollect: (payout: number) => void
 }
@@ -36,6 +38,16 @@ export class ScratchCard {
   private readonly nib: Phaser.GameObjects.Graphics
   private readonly hint: Phaser.GameObjects.Text
   private readonly zone: Phaser.GameObjects.Zone
+  /**
+   * Swallows every pointer event that is not on the card.
+   *
+   * The card is an interactive object, which is not the same as a modal: the
+   * camera rig listens at the SCENE level and heard every drag straight
+   * through it, so scratching panned the board underneath. The rig is now
+   * gated centrally (see systems/Layers.ts) and this stops taps outside the
+   * card reaching build pads and the lane.
+   */
+  private readonly blocker: Phaser.GameObjects.Rectangle
   private readonly scratched = new Set<number>()
   private revealed = false
   private closed = false
@@ -62,12 +74,20 @@ export class ScratchCard {
     // What is under the foil, drawn first so erasing the foil uncovers it.
     const face = scene.add.graphics()
     face.fillStyle(0x1b2430, 1).fillRoundedRect(-w / 2, -h / 2, w, h, 8)
-    const prize = scene.add.text(0, -6, `${opts.payout}`, {
-      fontFamily: FONT_DISPLAY, fontSize: '58px', color: COLOR.amber,
+    // A losing ticket has to say so. Uncovering a blank card and being told
+    // nothing is confusing rather than funny, and 40% of them lose now.
+    const won = opts.outcome.payout > 0
+    const prize = scene.add.text(0, won ? -6 : -2, won ? `${opts.outcome.payout}` : opts.outcome.label, {
+      fontFamily: FONT_DISPLAY,
+      fontSize: won ? '58px' : '26px',
+      color: won ? COLOR.amber : COLOR.dim,
+      align: 'center',
+      wordWrap: { width: w - 24 },
     }).setOrigin(0.5)
-    const unit = scene.add.text(0, 46, 'PEANUTS', {
-      fontFamily: FONT_UI, fontSize: '20px', color: COLOR.ink,
-      fontStyle: 'bold', letterSpacing: 3,
+    const unit = scene.add.text(0, 46, won ? 'PEANUTS' : 'BUT YOU LOOKED GOOD DOING IT', {
+      fontFamily: FONT_UI, fontSize: won ? '20px' : '13px', color: COLOR.dim,
+      fontStyle: 'bold', letterSpacing: won ? 3 : 1,
+      align: 'center', wordWrap: { width: w - 20 },
     }).setOrigin(0.5)
 
     // The foil itself: a render texture so it can be erased where dragged.
@@ -81,6 +101,16 @@ export class ScratchCard {
     // The eraser nib, stamped into the foil wherever the pointer drags.
     this.nib = scene.make.graphics({ x: 0, y: 0 }, false)
     this.nib.fillStyle(0xffffff, 1).fillCircle(NIB, NIB, NIB)
+
+    // Oversized deliberately: the world camera can be panned and zoomed, and a
+    // blocker sized to the viewport leaves a gap at the edges once it is.
+    this.blocker = scene.add
+      .rectangle(0, 0, scene.scale.width * 3, scene.scale.height * 3, 0x000000, 0.35)
+      .setOrigin(0.5)
+      .setDepth(LAYER.modalDim)
+      .setScrollFactor(0)
+      .setInteractive()
+    this.blocker.on('pointerdown', () => { /* swallowed */ })
 
     this.zone = scene.add.zone(0, 0, w, h).setInteractive({ useHandCursor: true })
     this.zone.on('pointermove', (p: Phaser.Input.Pointer) => {
@@ -97,11 +127,13 @@ export class ScratchCard {
   /** Everything the card draws, for a scene that splits its two cameras.
    *  It is all inside one container, so the container is the whole card. */
   get objects(): Phaser.GameObjects.GameObject[] {
-    return [this.layer]
+    return [this.blocker, this.layer]
   }
 
+  /** Any press while the card is up belongs to the card — on the foil or on
+   *  the blocker around it. Nothing behind it may act on one. */
   owns(objects: Phaser.GameObjects.GameObject[]): boolean {
-    return objects.includes(this.zone)
+    return objects.includes(this.zone) || objects.includes(this.blocker)
   }
 
   get active(): boolean {
@@ -112,6 +144,7 @@ export class ScratchCard {
     this.closed = true
     this.timer?.remove()
     this.nib.destroy()
+    this.blocker.destroy()
     this.layer.destroy(true)
   }
 
@@ -169,7 +202,7 @@ export class ScratchCard {
     this.zone.disableInteractive()
     this.hint.setText(auto ? 'auto-scratched' : 'paid out')
     this.scene.tweens.add({ targets: this.foil, alpha: 0, duration: 220 })
-    this.opts.onCollect(this.opts.payout)
+    this.opts.onCollect(this.opts.outcome.payout)
     this.scene.time.delayedCall(900, () => {
       if (this.closed) return
       this.scene.tweens.add({

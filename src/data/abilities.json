@@ -101,9 +101,44 @@
     "ticks": 0,
     "slowFactor": 0,
     "summonCount": 0,
-    "payoutMin": 60,
-    "payoutMax": 320,
-    "autoRevealSeconds": 3.5
+    "autoRevealSeconds": 3.5,
+    "outcomes": [
+      {
+        "label": "NOT A WINNER",
+        "payout": 0,
+        "weight": 26
+      },
+      {
+        "label": "BETTER LUCK, NERD",
+        "payout": 0,
+        "weight": 14
+      },
+      {
+        "label": "",
+        "payout": 15,
+        "weight": 30
+      },
+      {
+        "label": "",
+        "payout": 35,
+        "weight": 16
+      },
+      {
+        "label": "",
+        "payout": 70,
+        "weight": 9
+      },
+      {
+        "label": "",
+        "payout": 140,
+        "weight": 4
+      },
+      {
+        "label": "JACKPOT",
+        "payout": 300,
+        "weight": 1
+      }
+    ]
   },
   "serverNuke": {
     "name": "Server Nuke",

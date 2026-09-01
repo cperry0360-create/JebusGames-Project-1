@@ -2,6 +2,7 @@
 // this file only decides what shape each effect takes on screen.
 
 import Phaser from 'phaser'
+import { rollOutcome, type ScratchOutcome } from './Scratch.ts'
 import type { AbilityDef, ServerNukeDef } from '../types.ts'
 import { withinRadius } from './Targeting.ts'
 import { Enemy } from '../entities/Enemy.ts'
@@ -13,9 +14,9 @@ export interface AbilityContext {
   enemies: () => Enemy[]
   damage: (enemy: Enemy, amount: number, ignoresArmor: boolean) => void
   addPeanuts: (amount: number) => void
-  /** Hands a rolled payout to the UI, which shows the ticket and pays out
+  /** Hands a drawn outcome to the UI, which shows the ticket and pays out
    *  when it is scratched or when it reveals itself. */
-  scratchTicket: (payout: number, autoRevealSeconds: number) => void
+  scratchTicket: (outcome: ScratchOutcome, autoRevealSeconds: number) => void
   /** Runs the long wind-up, then the payload. The scene owns the theatre. */
   windUp: (seconds: number, fire: () => void) => void
   summon: (x: number, y: number, count: number, seconds: number) => void
@@ -204,10 +205,13 @@ function serverNuke(ctx: AbilityContext): void {
 }
 
 /**
- * Scratch Ticket. The payout is a range, not a number, and it is rolled here
- * rather than in the UI: the card uncovers a result that already exists.
+ * Scratch Ticket. The outcome is drawn here rather than in the UI: the card
+ * uncovers a result that already exists.
+ *
+ * A weighted table with losing lines on it, not a uniform range. The range it
+ * replaces could not lose and averaged 190 against a mean wave income of 322.
  */
 function scratchTicket(def: AbilityDef, ctx: AbilityContext): void {
-  const payout = Phaser.Math.Between(def.payoutMin, def.payoutMax)
-  ctx.scratchTicket(payout, def.autoRevealSeconds)
+  const outcome = rollOutcome(def.outcomes ?? [], Math.random())
+  ctx.scratchTicket(outcome, def.autoRevealSeconds)
 }

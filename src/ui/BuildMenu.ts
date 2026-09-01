@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { LAYER } from '../systems/Layers.ts'
 import type { TowerDef } from '../types.ts'
 import { towerIcon } from './TowerIcon.ts'
 import { iconPlate, platePanel } from './Plate.ts'
@@ -10,7 +11,7 @@ export interface BuildOption {
   def: TowerDef
 }
 
-const PANEL_DEPTH = 200000
+const PANEL_DEPTH = LAYER.panel
 const CELL_W = 108
 const CELL_H = 128
 /** The plate is square and sits at the top of its cell; the name and cost go
