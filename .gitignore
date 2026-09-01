@@ -17,3 +17,8 @@ tools/harness/tssrc/
 tools/harness/shots/
 tools/harness/profile/
 tools/harness/*.log
+
+# Scratch worktrees. tools/tsdiff.sh checks the tree out at another commit to
+# diff typecheck output; one of those escaped into the repo root and was
+# committed as a gitlink.
+/base
