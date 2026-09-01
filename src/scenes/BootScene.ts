@@ -4,7 +4,7 @@ import { queueArt } from '../systems/ArtLoader.ts'
 import { OPTIONAL_SPRITE_KEYS, REQUIRED_SPRITE_KEYS } from '../systems/Art.ts'
 import { initAudio, queueAudio } from '../systems/Audio.ts'
 import { registerEffectAnims } from '../systems/Effects.ts'
-import { ensureBuildPadTexture, ensureShadowTexture } from '../systems/Presentation.ts'
+import { ensureBuildGlowTexture, ensureBuildPadTexture, ensureShadowTexture } from '../systems/Presentation.ts'
 import { ensureGrey } from '../systems/Desaturate.ts'
 import { ART } from '../systems/Art.ts'
 import { COLOR, FONT_UI } from '../ui/Theme.ts'
@@ -70,6 +70,7 @@ export class BootScene extends Phaser.Scene {
     // Every ground shadow reuses one generated texture; build it once here.
     ensureShadowTexture(this)
     ensureBuildPadTexture(this)
+    ensureBuildGlowTexture(this)
     // Phaser's animation manager is global, so the effect animations are
     // registered once and every scene can play them.
     registerEffectAnims(this)

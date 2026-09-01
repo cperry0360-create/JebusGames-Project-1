@@ -590,6 +590,7 @@ export interface ArtDef {
   generated: {
     groundShadow: string
     buildPad: string
+    buildGlow: string
   }
   /** Per-tier tower sprites, keyed by the tower's base sprite key. A tower
    *  with no entry keeps one sprite at every tier, which is the default and

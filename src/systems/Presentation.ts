@@ -13,17 +13,25 @@ export const PRESENTATION = presentationData
  * of falling alpha give a soft edge without a blur pass. Called once at boot.
  */
 /**
- * The quiet build marker, drawn rather than uploaded.
+ * The build marker, drawn rather than uploaded.
  *
  * Exactly one build pad keeps the painted DO NOT BUILD HERE sign; the other
  * six get this. It was specified as a manifest hook with a fallback to the
  * sign — and the art has not landed, so every pad fell back and the board had
- * SEVEN full-size signs on it shouting the same joke.
+ * SEVEN full-size signs on it shouting the same joke. A hook cannot be the
+ * whole answer when the fallback is the thing being fixed, so it is generated
+ * at boot like the ground shadow and the tavern glow. The uploaded pad art
+ * named in art.json still takes precedence the moment it exists.
  *
- * A hook cannot be the whole answer when the fallback is the thing being
- * fixed. This is generated at boot, like the ground shadow and the tavern
- * glow, so the one-sign rule holds today. The uploaded pad art named in
- * art.json still takes precedence the moment it exists.
+ * The first version of this was a small brown smudge, and a smudge is what it
+ * read as: nothing about it said a tower could go there, and next to a rock it
+ * WAS a rock. What separates a buildable slot from a piece of scenery is
+ * REGULARITY — scatter props are irregular blobs at odd rotations, so the pad
+ * is a perfect ellipse with a hard kerb ring and four evenly spaced pegs on
+ * the compass points. Nothing that grew there is that symmetrical. It is also
+ * sized to the footprint a tower actually stands on rather than to a coin,
+ * because "how big is the thing I am about to place" is the question the
+ * marker exists to answer.
  */
 export function ensureBuildPadTexture(scene: Phaser.Scene): void {
   const key = ART.generated.buildPad
@@ -34,35 +42,71 @@ export function ensureBuildPadTexture(scene: Phaser.Scene): void {
   const h = cfg.textureHeight
   const g = scene.make.graphics({ x: 0, y: 0 }, false)
 
-  // A patch of turned earth: a soft rim so it sits in the grass rather than
-  // being stuck on top of it, then the pad, then a few stones.
   const cx = w / 2
-  const cy = h * 0.62
-  const rx = w * 0.46
-  const ry = h * 0.30
+  const cy = h / 2
+  // The kerb is the outermost thing, so the ellipse it rings is inset by its
+  // own width plus the soft halo outside it.
+  const rx = w * 0.42
+  const ry = h * 0.42
+
+  // A soft halo, so the pad sits in the grass instead of being stuck on top of
+  // it. Concentric and cheap, the same trick the ground shadow uses.
   for (let i = cfg.softLayers; i >= 1; i--) {
     const t = i / cfg.softLayers
-    g.fillStyle(cfg.rimColor, 0.5 / cfg.softLayers)
-    g.fillEllipse(cx, cy, rx * 2 * t * 1.12, ry * 2 * t * 1.12)
+    g.fillStyle(cfg.rimColor, 0.45 / cfg.softLayers)
+    g.fillEllipse(cx, cy, rx * 2 * t * 1.2, ry * 2 * t * 1.2)
   }
-  g.fillStyle(cfg.soilColor, 0.95)
+
+  // Prepared earth: raked flat, a shade lighter in the middle where the light
+  // falls, so it does not read as a hole.
+  g.fillStyle(cfg.soilDark, 1)
   g.fillEllipse(cx, cy, rx * 2, ry * 2)
-  g.fillStyle(cfg.soilDark, 0.55)
-  g.fillEllipse(cx, cy + ry * 0.22, rx * 1.5, ry * 1.1)
+  g.fillStyle(cfg.soilColor, 1)
+  g.fillEllipse(cx, cy - ry * 0.06, rx * 1.82, ry * 1.72)
 
-  // A short stake, leaning very slightly, with no board and no text on it.
-  const sx = cx + rx * 0.32
-  g.fillStyle(cfg.stakeColor, 1)
-  g.fillTriangle(sx - 3, cy - ry * 0.2, sx + 3, cy - ry * 0.2, sx + 1, cy - h * 0.52)
-  g.fillStyle(cfg.stakeDark, 1)
-  g.fillTriangle(sx + 1, cy - ry * 0.2, sx + 3, cy - ry * 0.2, sx + 1.5, cy - h * 0.52)
+  // The kerb. Two strokes rather than one: a lit top edge and a shadowed
+  // under-edge, which is what makes a flat ring read as a raised lip.
+  g.lineStyle(cfg.kerbWidth, cfg.kerbDark, 1)
+  g.strokeEllipse(cx, cy + cfg.kerbWidth * 0.4, rx * 2, ry * 2)
+  g.lineStyle(cfg.kerbWidth, cfg.kerbColor, 1)
+  g.strokeEllipse(cx, cy, rx * 2, ry * 2)
 
-  // Three stones, so it reads as prepared ground rather than a smudge.
-  g.fillStyle(cfg.stoneColor, 1)
-  for (const [px, py, pr] of [[-0.55, 0.1, 0.10], [0.42, 0.34, 0.075], [-0.12, 0.45, 0.06]]) {
-    g.fillEllipse(cx + rx * px, cy + ry * py, w * pr, w * pr * 0.72)
+  // Four pegs on the compass points. Evenly spaced and identical, which is the
+  // whole point: nothing in the scatter layer is evenly spaced.
+  g.fillStyle(cfg.pegColor, 1)
+  for (const a of [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2]) {
+    g.fillEllipse(cx + Math.cos(a) * rx, cy + Math.sin(a) * ry, cfg.pegSize, cfg.pegSize * 0.75)
   }
 
+  // A faint cross in the middle, the way a survey mark is set out. It says
+  // "this spot", where an empty disc only says "this area".
+  g.lineStyle(cfg.crossWidth, cfg.kerbColor, cfg.crossAlpha)
+  g.lineBetween(cx - rx * 0.30, cy, cx + rx * 0.30, cy)
+  g.lineBetween(cx, cy - ry * 0.34, cx, cy + ry * 0.34)
+
+  g.generateTexture(key, w, h)
+  g.destroy()
+}
+
+/**
+ * The glow that finds the eye, as its own texture so the pulse can be an alpha
+ * tween on one image rather than a Graphics redraw every frame on seven of
+ * them. Soft, warm and edgeless: the pad carries the shape, this carries only
+ * the "look here".
+ */
+export function ensureBuildGlowTexture(scene: Phaser.Scene): void {
+  const key = ART.generated.buildGlow
+  if (scene.textures.exists(key)) return
+
+  const cfg = PRESENTATION.buildPad.glow
+  const w = cfg.textureWidth
+  const h = cfg.textureHeight
+  const g = scene.make.graphics({ x: 0, y: 0 }, false)
+  for (let i = cfg.softLayers; i >= 1; i--) {
+    const t = i / cfg.softLayers
+    g.fillStyle(cfg.color, 1 / cfg.softLayers)
+    g.fillEllipse(w / 2, h / 2, w * t, h * t)
+  }
   g.generateTexture(key, w, h)
   g.destroy()
 }

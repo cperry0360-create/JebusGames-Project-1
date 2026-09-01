@@ -498,7 +498,8 @@
   },
   "generated": {
     "groundShadow": "gen-ground-shadow",
-    "buildPad": "generated-build-pad"
+    "buildPad": "generated-build-pad",
+    "buildGlow": "generated-build-glow"
   },
   "greyable": [
     "turret-ledger",

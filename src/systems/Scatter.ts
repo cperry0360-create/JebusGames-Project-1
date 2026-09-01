@@ -11,8 +11,16 @@
 // in Node, which matters because "nothing overlaps the path" is exactly the
 // kind of claim a screenshot can appear to support and be wrong about.
 
-/** Which ground a prop is drawn to sit on. */
-export type Surface = 'grass' | 'dirt' | 'either'
+/**
+ * Which ground a prop is drawn to sit on.
+ *
+ * There is deliberately no value meaning "anywhere". There used to be —
+ * `'either'` — and it was how six branches and four large ones ended up lying
+ * across the walking lane: `'either'` passed every surface test, including the
+ * one for the strip of dirt the enemies walk down. A prop is on the grass, or
+ * it is tucked against the edge of the lane. Nothing is on the lane.
+ */
+export type Surface = 'grass' | 'lane-edge'
 
 export interface ScatterKind {
   /** Manifest key. */
@@ -35,8 +43,16 @@ export interface ScatterRules {
   minGapPx: number
   /** How far a grass prop must stay from the centre of the lane. */
   pathClearancePx: number
-  /** How close to the lane centre a dirt prop must be. */
-  dirtBandPx: number
+  /**
+   * Half the painted road, plus a hair. NOTHING may be placed inside this of
+   * the lane centre — not the centre of a prop, and not its edge either: a
+   * lane-edge prop must clear it by its own radius, so the thing that touches
+   * the road is the grass under it and never the object.
+   */
+  laneHalfPx: number
+  /** How far past `laneHalfPx` a lane-edge prop may sit. Its own radius is
+   *  subtracted from the near end, so a fat prop starts further out. */
+  laneEdgeBandPx: number
   /** Keep-out radius around a build spot. */
   buildSpotClearPx: number
   /** Keep-out radius around the first and last on-map waypoints. */
@@ -138,17 +154,19 @@ export function scatter(input: ScatterInput, seed: number): Placement[] {
     if (ends.some((e) => Math.hypot(x - e[0]!, y - e[1]!) < r.endClearPx)) continue
 
     const d = distanceToPath(x, y, input.waypoints)
-    // What ground is this? Grass props carry grass in their bases and would
-    // put a tuft of it in the middle of the lane; dirt props carry dirt and
-    // would put a puddle in a field.
-    const onDirt = d <= r.dirtBandPx
+    // The lane itself, first and absolutely. The path has to read as a path,
+    // and a path with pebbles and branches strewn down the middle of it reads
+    // as rubble.
+    if (d < r.laneHalfPx) continue
+    const nearLane = d <= r.laneHalfPx + r.laneEdgeBandPx
     const onGrass = d >= r.pathClearancePx
-    if (!onDirt && !onGrass) continue
+    if (!nearLane && !onGrass) continue
 
     const eligible = input.kinds.filter((k) => {
       if (k.max !== undefined && (counts.get(k.key) ?? 0) >= k.max) return false
-      if (k.surface === 'either') return true
-      return k.surface === 'dirt' ? onDirt : onGrass
+      // A prop's own body must clear the road, not merely its anchor point.
+      if (k.surface === 'lane-edge') return nearLane && d - k.radius >= r.laneHalfPx
+      return onGrass
     })
     if (eligible.length === 0) continue
 

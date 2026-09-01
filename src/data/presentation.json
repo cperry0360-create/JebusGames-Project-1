@@ -117,26 +117,40 @@
     }
   },
   "buildPad": {
-    "pulseScale": 1.035,
-    "pulseMs": 1400,
+    "pulseScale": 1.05,
+    "pulseMs": 1800,
     "restTint": "#d4d8d0",
     "placingTint": "#f0f4ec",
     "hoverTint": "#ffffff",
     "signHeight": 74,
-    "quietHeight": 26,
-    "quietJitterScale": 0.12,
-    "quietJitterDegrees": 9,
-    "quietAlpha": 0.92,
+    "quietHeight": 44,
+    "quietJitterScale": 0.05,
+    "quietJitterDegrees": 0,
+    "quietAlpha": 0.95,
     "marker": {
-      "textureWidth": 96,
-      "textureHeight": 78,
-      "softLayers": 7,
-      "rimColor": 3811864,
-      "soilColor": 7032622,
-      "soilDark": 5520418,
-      "stakeColor": 10122561,
-      "stakeDark": 7295016,
-      "stoneColor": 9276290
+      "textureWidth": 176,
+      "textureHeight": 112,
+      "softLayers": 8,
+      "rimColor": 3812376,
+      "soilColor": 9270096,
+      "soilDark": 7034426,
+      "kerbColor": 13218953,
+      "kerbDark": 5522220,
+      "kerbWidth": 5,
+      "pegColor": 14206876,
+      "pegSize": 11,
+      "crossWidth": 3,
+      "crossAlpha": 0.3
+    },
+    "glowAffordableAlpha": 0.34,
+    "glowIdleAlpha": 0.12,
+    "glowPulseMs": 1900,
+    "glowScale": 1.28,
+    "glow": {
+      "textureWidth": 200,
+      "textureHeight": 128,
+      "softLayers": 10,
+      "color": 16770728
     }
   },
   "restructure": {
@@ -269,13 +283,14 @@
     "scaleJitter": 0.1,
     "rotateDegrees": 6,
     "rules": {
-      "attempts": 1200,
-      "minGapPx": 38,
+      "attempts": 1000,
+      "minGapPx": 44,
       "pathClearancePx": 96,
-      "dirtBandPx": 26,
       "buildSpotClearPx": 64,
       "endClearPx": 96,
-      "edgeInsetPx": 24
+      "edgeInsetPx": 24,
+      "laneHalfPx": 32,
+      "laneEdgeBandPx": 44
     },
     "kinds": [
       {
@@ -304,9 +319,10 @@
       },
       {
         "key": "scatter-pebbles",
-        "surface": "dirt",
-        "weight": 9,
-        "radius": 8
+        "surface": "grass",
+        "weight": 2,
+        "radius": 8,
+        "max": 3
       },
       {
         "key": "scatter-flowers-white",
@@ -322,21 +338,22 @@
       },
       {
         "key": "scatter-branch-large",
-        "surface": "either",
+        "surface": "grass",
         "weight": 3,
         "radius": 13
       },
       {
         "key": "scatter-branch-small",
-        "surface": "either",
+        "surface": "grass",
         "weight": 4,
         "radius": 9
       },
       {
         "key": "scatter-dirt-cracked",
-        "surface": "dirt",
-        "weight": 4,
-        "radius": 12
+        "surface": "grass",
+        "weight": 2,
+        "radius": 12,
+        "max": 2
       },
       {
         "key": "scatter-stump",
@@ -354,14 +371,14 @@
       },
       {
         "key": "scatter-puddle",
-        "surface": "dirt",
+        "surface": "lane-edge",
         "weight": 5,
         "radius": 14,
         "max": 1
       },
       {
         "key": "scatter-tire-ruts",
-        "surface": "dirt",
+        "surface": "lane-edge",
         "weight": 5,
         "radius": 16,
         "max": 1

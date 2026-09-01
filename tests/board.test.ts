@@ -35,14 +35,12 @@ test('the scatter is the same every run and every session', () => {
 
 test('nothing lands on the path, a build spot, an end, or the painted furniture', () => {
   const out = scatter(input, cfg.seed)
-  assert.ok(out.length > 40, `only ${out.length} props placed; the map would look bare`)
+  assert.ok(out.length > 24, `only ${out.length} props placed; the map would look bare`)
   const r = cfg.rules
   const grassOnly = new Set(
     (cfg.kinds as ScatterKind[]).filter((k) => k.surface === 'grass').map((k) => k.key),
   )
-  const dirtOnly = new Set(
-    (cfg.kinds as ScatterKind[]).filter((k) => k.surface === 'dirt').map((k) => k.key),
-  )
+  const radius = new Map((cfg.kinds as ScatterKind[]).map((k) => [k.key, k.radius]))
 
   for (const p of out) {
     const d = distanceToPath(p.x, p.y, MAP.waypoints)
@@ -50,9 +48,6 @@ test('nothing lands on the path, a build spot, an end, or the painted furniture'
     // the lane is the whole reason the surface rule exists.
     if (grassOnly.has(p.key)) {
       assert.ok(d >= r.pathClearancePx, `${p.key} is ${d.toFixed(0)}px from the lane centre`)
-    }
-    if (dirtOnly.has(p.key)) {
-      assert.ok(d <= r.dirtBandPx, `${p.key} is ${d.toFixed(0)}px from the lane; it belongs on dirt`)
     }
     for (const s of MAP.buildSpots) {
       assert.ok(Math.hypot(p.x - s[0], p.y - s[1]) >= r.buildSpotClearPx,
@@ -106,8 +101,8 @@ test('the scatter reads as texture, not as objects', () => {
   // lane. A third of that, spaced much further apart, with a real buffer of
   // empty grass either side of the road.
   const out = scatter(input, cfg.seed)
-  assert.ok(out.length >= 40 && out.length <= 80,
-    `${out.length} props; the target is roughly 56, a third of the 179 it started at`)
+  assert.ok(out.length >= 24 && out.length <= 42,
+    `${out.length} props; the target is roughly 33, down from 56 and from 179 before that`)
 
   const r = cfg.rules
   assert.ok(r.minGapPx >= 30, `a ${r.minGapPx}px minimum gap still lets props cluster`)
@@ -119,7 +114,55 @@ test('the scatter reads as texture, not as objects', () => {
 
   // Density per unit area, so this stays meaningful if the map changes size.
   const perMillion = out.length / (DISPLAY.width * DISPLAY.height) * 1e6
-  assert.ok(perMillion < 90, `${perMillion.toFixed(0)} props per million square units is a thicket`)
+  assert.ok(perMillion < 55, `${perMillion.toFixed(0)} props per million square units is a thicket`)
+})
+
+/**
+ * The one that matters, and the one that was missing.
+ *
+ * Fifteen of the previous fifty-six props sat on the walking lane — six small
+ * branches, four large ones, five pebbles and two patches of cracked dirt —
+ * and every test above passed the whole time. They passed because the surface
+ * rule had a value, `'either'`, that satisfied every check including the
+ * lane's, so the props that broke the rule were exactly the props exempt from
+ * it. The union no longer contains a value meaning "anywhere".
+ */
+test('the walking lane is clean, and the two exceptions are beside it, not on it', () => {
+  const out = scatter(input, cfg.seed)
+  const r = cfg.rules
+  const half = MAP.roadWidth / 2
+  const radius = new Map((cfg.kinds as ScatterKind[]).map((k) => [k.key, k.radius]))
+  const edgeKinds = new Set(
+    (cfg.kinds as ScatterKind[]).filter((k) => k.surface === 'lane-edge').map((k) => k.key),
+  )
+
+  // Only the puddle and the tire ruts may go near the lane at all, and only
+  // one of each. Pebbles and cracked dirt used to live ON it.
+  assert.deepEqual([...edgeKinds].sort(), ['scatter-puddle', 'scatter-tire-ruts'])
+
+  for (const p of out) {
+    const d = distanceToPath(p.x, p.y, MAP.waypoints)
+    // Not the anchor point — the BODY. A prop whose centre clears the road by
+    // 2px still has half of itself lying across it.
+    const near = d - (radius.get(p.key) ?? 0)
+    assert.ok(near >= half,
+      `${p.key} reaches to ${near.toFixed(0)}px of the lane centre; the road is ${half.toFixed(0)}px wide either side`)
+    if (!edgeKinds.has(p.key)) {
+      assert.ok(d >= r.pathClearancePx,
+        `${p.key} is ${d.toFixed(0)}px from the lane centre and is not one of the two allowed at the edge`)
+    }
+  }
+
+  // There is no way back to placing on the lane: nothing may claim a surface
+  // that skips the test.
+  const fn = src('systems/Scatter.ts')
+  assert.ok(!/Surface = [^\n]*'either'/.test(fn),
+    "the 'either' surface is back in the union; it exempts a prop from the lane rule")
+  assert.ok(!/surface === 'either'/.test(fn), "something tests for the 'either' surface again")
+  assert.ok(!(cfg.kinds as ScatterKind[]).some((k) => (k.surface as string) === 'either'),
+    'a prop kind claims a surface that skips the lane test')
+  assert.ok(/if \(d < r\.laneHalfPx\) continue/.test(fn),
+    'the lane rejection is no longer the first surface test')
 })
 
 test('the four rare props are hard-capped, not merely unlikely', () => {
@@ -181,11 +224,21 @@ test('exactly one build spot keeps the sign, and it is the one nearest the entra
     'the uploaded art no longer takes precedence over the generated marker')
   const boot = src('scenes/BootScene.ts')
   assert.match(boot, /ensureBuildPadTexture\(this\)/, 'the marker is never generated')
-  // The quiet marker is roughly a third of the sign.
+  // The pad has to read as a buildable slot at a glance, which it did not
+  // when it was a third of the sign: at 26px it was a brown smudge, and next
+  // to a rock it WAS a rock. It is bigger than every scatter prop and still
+  // clearly smaller than the one sign, which stays the loudest thing there.
   const P2 = read('presentation') as any
-  const ratio = P2.buildPad.quietHeight / P2.buildPad.signHeight
-  assert.ok(ratio > 0.25 && ratio < 0.45,
-    `the quiet marker is ${(ratio * 100).toFixed(0)}% of the sign; about a third was asked for`)
+  const padH = P2.buildPad.quietHeight
+  const ratio = padH / P2.buildPad.signHeight
+  assert.ok(ratio > 0.45 && ratio < 0.8,
+    `the pad is ${(ratio * 100).toFixed(0)}% of the sign; it should read as a slot, not as a second sign`)
+  // Bigger than the biggest thing it could be mistaken for. Scatter radii are
+  // half-extents, so the widest prop spans twice its radius, at native scale.
+  const widestProp = Math.max(...(cfg.kinds as ScatterKind[]).map((k) => k.radius)) * 2
+  const padW = padH * (P2.buildPad.marker.textureWidth / P2.buildPad.marker.textureHeight)
+  assert.ok(padW > widestProp * 1.5,
+    `the pad is ${padW.toFixed(0)}px across and the widest prop is ${widestProp}px; it will read as scenery`)
   // The art shrinks; the tap target does not. Taps are geometric, against
   // map.spotRadius, and never against the sprite.
   assert.ok(!/pads\[[^\]]*\]\.setInteractive/.test(g), 'a pad carries its own hit area')
