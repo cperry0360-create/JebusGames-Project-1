@@ -1,0 +1,65 @@
+<!doctype html><meta charset="utf-8"><title>reencode</title><body><script type="module">
+// Re-encodes one source image at several qualities and formats, and measures
+// what each one cost against the original pixels.
+//
+// Chromium is the encoder because this environment has no cwebp, no ImageMagick
+// and no PIL. That is not a compromise: the libwebp and libjpeg-turbo inside
+// the browser are the same libraries a command-line tool would call.
+const q = new URLSearchParams(location.search)
+const src = q.get('src')
+const out = []
+const log = (m) => { out.push(m); return fetch('/log', { method: 'POST', body: m }) }
+
+const img = new Image()
+img.src = '/' + src
+await img.decode()
+const w = img.naturalWidth, h = img.naturalHeight
+await log(`source ${src} ${w}x${h}`)
+
+const cv = new OffscreenCanvas(w, h)
+const ctx = cv.getContext('2d', { willReadFrequently: true })
+ctx.drawImage(img, 0, 0)
+const ref = ctx.getImageData(0, 0, w, h).data
+
+/** Peak signal-to-noise ratio against the source, plus the worst pixel. */
+async function compare(blob) {
+  const bmp = await createImageBitmap(blob)
+  const c2 = new OffscreenCanvas(w, h)
+  const x2 = c2.getContext('2d', { willReadFrequently: true })
+  x2.drawImage(bmp, 0, 0)
+  const d = x2.getImageData(0, 0, w, h).data
+  let sq = 0, worst = 0, worstAt = 0, n = 0
+  for (let i = 0; i < d.length; i += 4) {
+    for (let c = 0; c < 3; c++) {
+      const e = d[i + c] - ref[i + c]
+      sq += e * e
+      const a = e < 0 ? -e : e
+      if (a > worst) { worst = a; worstAt = i / 4 }
+      n++
+    }
+  }
+  const mse = sq / n
+  return {
+    psnr: mse === 0 ? Infinity : 10 * Math.log10(255 * 255 / mse),
+    rmse: Math.sqrt(mse),
+    worst,
+    worstAt: [worstAt % w, Math.floor(worstAt / w)],
+  }
+}
+
+const results = []
+for (const [type, quality] of [
+  ['image/webp', 0.95], ['image/webp', 0.9], ['image/webp', 0.85], ['image/webp', 0.8],
+  ['image/jpeg', 0.95], ['image/jpeg', 0.9], ['image/jpeg', 0.85],
+]) {
+  const blob = await cv.convertToBlob({ type, quality })
+  const m = await compare(blob)
+  const ext = type === 'image/webp' ? 'webp' : 'jpg'
+  const name = src.split('/').pop().replace(/\.png$/, '') + '_q' + Math.round(quality * 100) + '.' + ext
+  await fetch('/save/' + name, { method: 'POST', body: blob })
+  results.push({ name, bytes: blob.size, ...m })
+  await log(`${name.padEnd(30)} ${(blob.size / 1e6).toFixed(2)} MB   PSNR ${m.psnr.toFixed(1)} dB`
+    + `   RMSE ${m.rmse.toFixed(2)}   worst channel error ${m.worst} at ${m.worstAt}`)
+}
+await fetch('/done', { method: 'POST', body: JSON.stringify(results, null, 1) })
+</script></body>

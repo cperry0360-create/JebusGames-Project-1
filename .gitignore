@@ -22,3 +22,9 @@ tools/harness/*.log
 # diff typecheck output; one of those escaped into the repo root and was
 # committed as a gitlink.
 /base
+
+# The re-encoder writes its candidates and its browser profile here. The
+# numbers it prints are the output; the candidate files are working copies and
+# only the chosen one belongs in public/.
+tools/reencode/out/
+tools/reencode/profile/

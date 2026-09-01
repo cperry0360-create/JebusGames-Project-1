@@ -1,7 +1,7 @@
 import { expectedValue, lossRate, rollOutcome, topPayout, totalWeight } from '../src/systems/Scratch.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, existsSync, readdirSync } from 'node:fs'
+import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { specPoints, specSummary } from '../src/systems/Upgrades.ts'
 
 const url = (p: string) => new URL(p, import.meta.url)
@@ -35,7 +35,10 @@ test('every sprite key referenced anywhere resolves to a real file', () => {
 
 test('the art manifest points at files that exist on disk', () => {
   for (const [key, path] of Object.entries(art.files) as [string, string][]) {
-    assert.match(path, /^[\w-]+\/[\w.-]+\.png$/, `${key} -> ${path} is not an asset path`)
+    // PNG or WebP. WebP earns its place on one file — the map plate, which is
+    // a 3840x2160 painting with no transparency, where PNG spent 12.6MB on
+    // what a lossy codec does in 1.8MB with nothing visible to separate them.
+    assert.match(path, /^[\w-]+\/[\w.-]+\.(png|webp)$/, `${key} -> ${path} is not an asset path`)
     // A key on the `optional` list is a HOOK: the path is agreed before the
     // art is drawn, and the game falls back until the file lands. Everything
     // else must exist.
@@ -932,4 +935,46 @@ test('the blast throws no separate embers, because its own frames do', () => {
   }
   assert.ok(!existsSync(url('../public/assets/kenney/towerDefense_tile295.png')),
     'the ember tile still ships')
+})
+
+test('the deploy stays small enough to open on a phone', () => {
+  // WHY THIS EXISTS. A re-exported map plate arrived as a 12.6MB PNG — twice
+  // the whole rest of the art put together — and nothing in the repo would
+  // have said a word about it. A budget is the only thing that turns "somebody
+  // will notice" into "CI notices".
+  //
+  // Two caps, because the two kinds of asset cost different things. An IMAGE
+  // is on the boot path: the loading bar does not finish until it lands, so a
+  // heavy one is time the player spends looking at a progress bar. MUSIC
+  // streams — the soundtrack is an HTMLAudioElement that plays while it
+  // downloads — so a big track costs bandwidth but never blocks.
+  const root = url(`../public/${art.assetRoot}`)
+  const weigh = (dir: URL): Array<{ path: string; mb: number }> => {
+    const out: Array<{ path: string; mb: number }> = []
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const child = new URL(`${e.name}${e.isDirectory() ? '/' : ''}`, dir)
+      if (e.isDirectory()) out.push(...weigh(child))
+      else out.push({ path: child.pathname.slice(root.pathname.length), mb: statSync(child).size / 1e6 })
+    }
+    return out
+  }
+  const files = weigh(root)
+  const streamed = (p: string) => /^audio\/music\//.test(p)
+
+  // 3MB per image. The two full-screen backdrops sit just under it at 2.6 and
+  // 2.5MB and are the next candidates for the treatment the map plate got —
+  // they are PNGs with no transparency, which is the same trade. The cap is
+  // set to catch the next 12MB upload, not to force that work today.
+  const heavy = files.filter((f) => !streamed(f.path) && f.mb > 3)
+    .sort((a, b) => b.mb - a.mb)
+  assert.deepEqual(heavy.map((f) => `${f.path} ${f.mb.toFixed(1)}MB`), [],
+    'an image over 3MB is on the boot path; re-encode it rather than shipping it')
+
+  const music = files.filter((f) => streamed(f.path) && f.mb > 6)
+  assert.deepEqual(music.map((f) => `${f.path} ${f.mb.toFixed(1)}MB`), [],
+    'a music track this big is worth re-encoding even though it streams')
+
+  const total = files.reduce((a, f) => a + f.mb, 0)
+  assert.ok(total < 40,
+    `assets total ${total.toFixed(1)}MB, which is a long wait on a phone`)
 })

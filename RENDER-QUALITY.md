@@ -212,11 +212,49 @@ mixed with anything else. It is the change most likely to disturb layout.
 It is doing real damage at low resolution. At full resolution it is close to a
 no-op, and off it stops quantising edges entirely. Measure rather than assume.
 
-### 3. Re-export the map plate — art task, not a code task
+### 3. Re-export the map plate — DONE, at 3840x2160
 
-`1672x941` needs to be at least **2560x1440**, ideally **3840x2160**, to stop
+`1672x941` needed to be at least **2560x1440**, ideally **3840x2160**, to stop
 being magnified at the top of the zoom band on a retina screen. Nothing in code
 fixes a background smaller than the screen it is drawn on.
+
+It came back at the ideal size — and as a **12.6MB PNG**, which is two thirds
+of the whole deploy for one file. PNG is a poor fit for it: the plate is a
+painted illustration with no transparency, so its entropy is texture, and
+lossless coding only reached 2:1 against the raw pixels.
+
+It ships as **WebP at quality 90: 1.84MB**, which is *smaller than the 1672px
+PNG it replaces* (2.40MB) while carrying 5.3x the pixels. The candidates,
+measured against the source with `tools/reencode`:
+
+| | size | PSNR | RMSE |
+|---|---|---|---|
+| PNG (source) | 12.60MB | — | 0 |
+| **WebP q90** | **1.84MB** | **39.7 dB** | **2.65** |
+| WebP q85 | 1.45MB | 38.1 dB | 3.18 |
+| WebP q80 | 1.15MB | 36.5 dB | 3.83 |
+| JPEG q90 | 2.17MB | 39.4 dB | 2.73 |
+| JPEG q85 | 1.80MB | 38.1 dB | 3.18 |
+
+WebP beat JPEG at every quality: 15% smaller at q90 for slightly better PSNR,
+and it matched JPEG q85's quality at 19% fewer bytes. JPEG was viable — the
+plate has no alpha — and simply lost.
+
+Quality was checked where a person would see it rather than by the average
+pixel: crops of the arch mouth, the gate, a path edge, flat open grass and the
+worst-error pixel, magnified 2.4x, which is what the plate is magnified by at
+max zoom on a dpr-3 phone. Worst channel error over those crops was 17 to 33
+out of 255, all of it in the grass's own high-frequency paint texture. No
+ringing at the painted outlines, no banding in the flat gradients, nothing
+separable by eye.
+
+WebP's support floor is Safari 14 / iOS 14 (2020), Chrome 32, Firefox 65. No
+JPEG fallback ships; a second copy of the plate would give back a third of what
+the format saved, for browsers this game does not otherwise run on.
+
+**Still on PNG and worth the same treatment:** `ui/title_bg.png` (2.56MB) and
+`ui/loadout_bg.png` (2.45MB), both full-screen backdrops with no transparency.
+Together they are now the two largest images in the deploy.
 
 ### 4. Mipmaps: recommended against, for now
 
