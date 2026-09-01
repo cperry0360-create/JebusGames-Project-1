@@ -60,7 +60,7 @@ test('the run-end screen is on the screen it appears on, and cannot be left behi
     'the dialog is drawn by the world camera, so panning moves it off view')
 
   // And the run-end panel goes through it rather than drawing its own.
-  const end = /private endRun\([\s\S]*?\n  \}/.exec(game)
+  const end = /\n  (?:private )?endRun\(phase[\s\S]*?\n  \}/.exec(game)
   assert.ok(end, 'endRun is gone')
   assert.match(end[0], /this\.openDialog\(\{/, 'the run-end screen is hand-drawn again')
 
@@ -80,9 +80,14 @@ test('every full-screen overlay is drawn by the camera that does not move', () =
   // worst of them — it is a drag target, so off-view it is a soft lock.
   const game = src('scenes/GameScene.ts')
   for (const fn of ['windUp', 'showTicket', 'announceBoss', 'announce']) {
-    const from = game.indexOf(`private ${fn}(`)
+    // Matched with or without `private`: a method made public so the harness
+    // can drive it must not fall out of an invariant it is still subject to.
+    const from = Math.max(game.indexOf(`private ${fn}(`), game.indexOf(`\n  ${fn}(`))
     assert.ok(from > 0, `${fn} has moved; this test is checking nothing`)
-    const body = game.slice(from, game.indexOf('\n  private ', from + 10))
+    const nextPrivate = game.indexOf('\n  private ', from + 10)
+    const nextPublic = game.indexOf('\n\n  /**', from + 10)
+    const end = Math.min(...[nextPrivate, nextPublic].filter((n) => n > 0))
+    const body = game.slice(from, end)
     assert.doesNotMatch(body, /displayData\.(width|height)/,
       `${fn} positions against the design box rather than the viewport`)
     assert.match(body, /asScreenSpace\(/, `${fn} never hands its overlay to the UI camera`)

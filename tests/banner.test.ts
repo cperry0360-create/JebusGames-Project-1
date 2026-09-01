@@ -82,7 +82,7 @@ test('the results screen is not a star rating', () => {
   // DESIGN.md replaced the three-star system with the Banner. Stars would be a
   // regression, so nothing in the run-end path may draw one.
   const scene = src('scenes/GameScene.ts')
-  const end = /private endRun\([\s\S]*?\n  \}/.exec(scene)
+  const end = /\n  (?:private )?endRun\(phase[\s\S]*?\n  \}/.exec(scene)
   assert.ok(end, 'endRun is gone')
   // Comments stripped: this file is allowed to say why stars are gone.
   const code = end[0].split('\n').filter((l) => !l.trim().startsWith('//')).join('\n')
@@ -96,7 +96,7 @@ test('the results screen is not a star rating', () => {
 
 test('the results screen reports the run and cannot be dismissed into a dead board', () => {
   const scene = src('scenes/GameScene.ts')
-  const end = /private endRun\([\s\S]*?\n  \}/.exec(scene)![0]
+  const end = /\n  (?:private )?endRun\(phase[\s\S]*?\n  \}/.exec(scene)![0]
   for (const row of ['Waves survived', 'Lives remaining', 'Kills', 'Peanuts earned']) {
     assert.ok(end.includes(row), `the results screen does not report "${row}"`)
   }
