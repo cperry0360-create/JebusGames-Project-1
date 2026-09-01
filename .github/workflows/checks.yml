@@ -1,0 +1,32 @@
+# Tests and typecheck, on every branch and every pull request.
+#
+# The deploy workflow only runs on a push to main, so until now a branch or a
+# pull request got no CI at all — "CI green" could only ever mean "green after
+# it was already deployed". This runs the same two checks the deploy job runs,
+# and publishes nothing.
+name: Checks
+
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-audit --no-fund
+      - run: npm test
+      - run: npx tsc --noEmit
