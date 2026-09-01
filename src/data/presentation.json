@@ -108,7 +108,13 @@
     "draftedIcon": 64,
     "heroPitch": 76,
     "heroIcon": 64,
-    "groupGap": 26
+    "groupGap": 26,
+    "emptySocket": {
+      "fillAlpha": 0.14,
+      "strokeAlpha": 0.09,
+      "strokeWidth": 1,
+      "inset": 8
+    }
   },
   "buildPad": {
     "pulseScale": 1.035,
@@ -161,9 +167,20 @@
     "safeRight": 0.76,
     "minContentWidth": 520,
     "maxContentWidth": 720,
-    "sectionGap": 14,
-    "headingGap": 16,
-    "safeMargin": 40
+    "sectionGap": 4,
+    "headingGap": 4,
+    "safeMargin": 40,
+    "cardPad": 9,
+    "cardIconColumn": 80,
+    "cardIconBox": 58,
+    "rerollFadeMs": 170,
+    "rerollStaggerMs": 55,
+    "copy": {
+      "drawnAtRandom": "Drawn at random for this run.",
+      "rerollLabel": "REROLL"
+    },
+    "buttonHeight": 48,
+    "cardPadBottom": 15
   },
   "scratchCard": {
     "cardHeight": 260,

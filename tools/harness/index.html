@@ -2167,9 +2167,106 @@ async function run() {
           ': ' + lines.map((l) => l.trim()).join(' / ').slice(0, 90))
       }
     }
+    // Text must stay inside the card it belongs to. Measuring against the
+    // design box alone missed the actual complaint: the specials descriptions
+    // ran past their own card borders and under their own icons, which is
+    // well inside 1280x720.
+    const spill = []
+    for (const c of sc.cards) {
+      const plate = c.parts.find((o) => o.type === 'Rectangle' && o.getBounds)
+      if (!plate) continue
+      const pb = plate.getBounds()
+      // The icon's column, so an overlap with it can be reported as one.
+      const kids = c.face.list || []
+      const icons = kids.filter((o) => o.type === 'Image' || o.type === 'Sprite')
+      for (const o of kids) {
+        if (o.type !== 'Text' || String(o.text ?? '').trim() === '') continue
+        const b = o.getBounds()
+        if (b.x < pb.x - 1 || b.right > pb.right + 1 || b.bottom > pb.bottom + 1 || b.y < pb.y - 1) {
+          spill.push(JSON.stringify(String(o.text).slice(0, 20)) + ' outside its card')
+        }
+        for (const ic of icons) {
+          const ib = ic.getBounds()
+          if (b.x < ib.right - 1 && b.right > ib.x + 1 && b.y < ib.bottom - 1 && b.bottom > ib.y + 1) {
+            spill.push(JSON.stringify(String(o.text).slice(0, 20)) + ' overlaps its icon')
+          }
+        }
+      }
+    }
+    note('text outside its card or over its icon: ' + (spill.length ? spill.join(' | ') : 'none'))
+
+    // Equal heights within each row.
+    const rows = {}
+    for (const c of sc.cards) {
+      const plate = c.parts.find((o) => o.type === 'Rectangle' && o.getBounds)
+      if (!plate) continue
+      const b = plate.getBounds()
+      const key = Math.round(b.y / 10)
+      ;(rows[key] = rows[key] || []).push(Math.round(b.height))
+    }
+    for (const c of sc.cards) {
+      const plate = c.parts.find((o) => o.type === 'Rectangle' && o.getBounds)
+      const pb = plate ? plate.getBounds() : null
+      const kids = (c.face.list || []).filter((o) => o.type === 'Text')
+      note('  card w' + (pb ? Math.round(pb.width) : '?') + ' h' + (pb ? Math.round(pb.height) : '?') +
+        ': ' + kids.map((t) => JSON.stringify(String(t.text).slice(0, 16)) + ' w' +
+          Math.round(t.width) + ' x' + Math.round(t.getBounds().width)).join(' '))
+    }
+    note('card heights by row: ' + Object.values(rows)
+      .map((hs) => hs.join('/') + (new Set(hs).size > 1 ? ' *** UNEQUAL ***' : '')).join('  '))
+
+    // The one overlap the design-box check cannot see: the button row sitting
+    // on top of the last card because its y was clamped to the screen.
+    const btnTexts = drawn.filter((o) => o.type === 'Text' && /BEGIN|REROLL/.test(String(o.text ?? '')))
+    const btnTop = Math.min(...btnTexts.map((o) => o.getBounds().y)) - 16
+    note('  button row top y ' + Math.round(btnTop) + ' vs lowest card edge ' + Math.round(maxY) +
+      (btnTop < maxY ? '  *** BUTTONS OVER THE CARDS ***' : '  clear'))
+    note('buttons: ' + drawn.filter((o) => o.type === 'Text' &&
+      /BEGIN|REROLL/.test(String(o.text ?? ''))).map((o) => JSON.stringify(String(o.text))).join(' '))
     note('scenes running at capture: ' +
       game.scene.getScenes(true).map((x) => x.scene.key).join(','))
     await shot('loadout-' + VP.w + 'x' + VP.h)
+
+    // The reroll: one whole-hand redeal, spent once, button stays but goes dead.
+    const hand = () => {
+      const t = sc.cards.map((c) => (c.face.list || [])
+        .filter((o) => o.type === 'Text').map((o) => String(o.text)).join('|'))
+      return t.join(' // ')
+    }
+    const before = hand()
+    const btn = drawn.find((o) => o.type === 'Text' && /REROLL/.test(String(o.text ?? '')))
+    const bb = btn.getBounds()
+    // Design coordinates -> screen, so the click lands where the button is.
+    // The UI camera is a CONTAIN fit: it has a zoom AND a viewport offset, so
+    // scrollX alone is not the transform. worldView is the rectangle of design
+    // space the camera shows, and cam.x/cam.y are where that lands on screen.
+    const toScreen = (x, y) => {
+      const c = sc.cameras.main
+      return {
+        x: c.x + (x - c.worldView.x) * c.zoom,
+        y: c.y + (y - c.worldView.y) * c.zoom,
+      }
+    }
+    const p1 = toScreen(bb.centerX, bb.centerY)
+    await click(p1.x, p1.y)
+    await sleep(900)
+    const after = hand()
+    note('  reroll changed the hand: ' + (before !== after ? 'YES' : 'NO *** SAME HAND ***'))
+    note('  rerolls left after one press: ' + sc.rerollsLeft)
+    const btn2 = sc.children.list.concat(...sc.children.list.map((o) => o.list || []))
+      .find((o) => o.type === 'Text' && /REROLL/.test(String(o.text ?? '')))
+    note('  button label now: ' + (btn2 ? JSON.stringify(String(btn2.text)) : 'GONE *** it should stay ***'))
+    await shot('loadout-rerolled-' + VP.w + 'x' + VP.h)
+
+    // And a second press must do nothing at all.
+    const twice = hand()
+    const bb2 = btn2.getBounds()
+    const p2 = toScreen(bb2.centerX, bb2.centerY)
+    await click(p2.x, p2.y)
+    await sleep(700)
+    note('  second press changed the hand: ' +
+      (hand() !== twice ? 'YES *** it should be spent ***' : 'no') +
+      ' (rerollsLeft=' + sc.rerollsLeft + ')')
     return
   }
 
@@ -2246,6 +2343,55 @@ async function run() {
     note('  ' + shownOf().join('  '))
     const before = positions().join('|')
 
+    // And does a tap on its reserved slot do anything? Nine points across the
+    // whole reserved box, not just the middle: the report was that it responds,
+    // and one probe at the centre proves only the centre.
+    const slot = hud.slots.find((sl) => sl.region.id === 'restructure')
+    let reached = 0
+    const orig = g.armRestructure.bind(g)
+    g.armRestructure = () => { reached++; return orig() }
+    const bb = slot.hit.getBounds()
+    note('  socket box ' + Math.round(bb.x) + ',' + Math.round(bb.y) + ' ' +
+      Math.round(bb.width) + 'x' + Math.round(bb.height) +
+      ' hitInInputList=' + !!slot.hit.input +
+      ' hitVisible=' + slot.hit.visible +
+      ' frameAlpha=' + slot.frame.alpha + ' iconVisible=' + slot.icon.visible)
+    // The direct armRestructure() above raised a refusal, and its toast lives
+    // for a couple of seconds. Waited out, or the first probes read it as
+    // their own — which is exactly the false positive it produced first time.
+    const was = { mode: g.status.mode, msg: g.status.message, alert: g.status.alert || '',
+                  toast: '', sel: !!g.selected, rally: !!g.heroSelected }
+    const bad = []
+    for (const fx of [0.08, 0.5, 0.92]) {
+      for (const fy of [0.08, 0.5, 0.92]) {
+        const x = bb.x + bb.width * fx, y = bb.y + bb.height * fy
+        await click(x, y)
+        await sleep(80)
+        const t = hud.activeToast
+        const now = {
+          mode: g.status.mode,
+          alert: g.status.alert || '',
+          toast: t && t.active && t.visible && t.list ? t.list.map((c) => c.text || '').join('') : '',
+          msg: g.status.message,
+          rally: !!g.heroSelected,
+          sel: !!g.selected,
+        }
+        // `msg` is excluded: the status banner is a timed wave announcement
+        // that reverts to the idle hint on its own, so it changes during the
+        // probe whether or not anything is tapped. It is printed separately.
+        const diff = Object.keys(now).filter((k) =>
+          k !== 'msg' && String(now[k]) !== String(was[k] ?? ''))
+        if (diff.length) {
+          bad.push('(' + fx + ',' + fy + ') ' +
+            diff.map((k) => k + ': "' + was[k] + '" -> "' + now[k] + '"').join(', '))
+        }
+        g.status.alert = ''
+      }
+    }
+    note('  tapping the empty socket reached armRestructure ' + reached + ' times')
+    note('  banner after the taps: "' + g.status.message + '"')
+    note('  taps that changed anything: ' + (bad.length ? bad.join(' | ') : 'NONE'))
+    g.armRestructure = orig
     // Does it refuse?
     let armed = g.status.mode
     g.armRestructure()
@@ -2254,16 +2400,6 @@ async function run() {
       ' (was ' + armed + ') alert="' + g.status.alert + '"' +
       (g.status.mode === 'restructure' ? '  *** ALLOWED ***' : '  refused'))
 
-    // And does a tap on its reserved slot do anything?
-    const slot = hud.slots.find((sl) => sl.region.id === 'restructure')
-    let reached = 0
-    const orig = g.armRestructure.bind(g)
-    g.armRestructure = () => { reached++; return orig() }
-    const bb = slot.hit.getBounds()
-    await click(bb.centerX, bb.centerY)
-    await sleep(150)
-    note('  tapping the empty socket reached the game ' + reached + ' times')
-    g.armRestructure = orig
     await shot('restructure-01-hidden-' + VP.w + 'x' + VP.h)
 
     // Into DAD MODE.

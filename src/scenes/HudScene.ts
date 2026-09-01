@@ -47,6 +47,11 @@ const RULES = rulesData as unknown as RulesDef
  *  frames, so nothing is drawn behind them. */
 const ICON_H = 64
 
+/** How faint the empty reserved socket is. See drawSlots. */
+const SOCKET = presentationData.abilityBar.emptySocket as {
+  fillAlpha: number; strokeAlpha: number; strokeWidth: number; inset: number
+}
+
 /** UI lives in its own scene so the world can Y-sort freely without the HUD
  *  ever landing in the middle of the sort order. */
 export class HudScene extends Phaser.Scene {
@@ -415,6 +420,11 @@ export class HudScene extends Phaser.Scene {
         .rectangle(region.cx, region.cy, region.pitch, region.boxH, 0xffffff, 0.001)
         .setInteractive({ useHandCursor: true })
       hit.on('pointerdown', () => {
+        // Guarded here as well as by the hit area. Taking the rectangle out of
+        // hit-testing is the real fix, but it happens in drawSlots, and a
+        // handler that trusts the frame before it to have run is exactly the
+        // kind of gap this bar has now been through twice.
+        if (!this.slotShown(region, this.world.status)) return
         if (region.kind === 'ability') this.world.armAbility(region.id)
         else if (region.kind === 'haymaker') this.world.castHaymaker()
         else this.world.armRestructure()
@@ -632,22 +642,41 @@ export class HudScene extends Phaser.Scene {
       const shown = this.slotShown(r, s)
       slot.icon.setVisible(shown)
       slot.timer.setVisible(shown)
-      slot.hit.input!.enabled = shown
+
+      // Inert means inert. `input.enabled = false` was not enough on its own:
+      // it leaves the rectangle registered, still hit-tested for hover, still
+      // carrying the hand cursor, and still swallowing the press so nothing
+      // under it sees the tap either. disableInteractive takes it out of the
+      // input list; setVisible(false) makes Phaser's own willRender check
+      // exclude it as well, so there are two independent reasons it can never
+      // be reached rather than one flag that has to be right every frame.
+      if (slot.hit.visible !== shown) {
+        slot.hit.setVisible(shown)
+        if (shown) slot.hit.setInteractive({ useHandCursor: true })
+        else slot.hit.disableInteractive()
+      }
+
       if (!shown) {
         slot.sweep.clear()
         slot.frame.clear()
-        // The socket takes the shape of the slot it is standing in for: a
-        // circle among the round hero medallions, a rounded rect among the
-        // rectangular drafted plates. A rectangle sitting between two
-        // medallions reads as a different kind of thing having gone wrong.
-        slot.frame.fillStyle(0x0d1016, 0.42)
-        slot.frame.lineStyle(2, 0xf6ecd9, 0.16)
+        // A hole in the middle of the bar reads as a rendering fault, so the
+        // slot is not left blank — but the socket that stands in for it must
+        // not read as a button either. It is a recess: no bright rim, no
+        // plate, a shade darker than the bar it sits in and drawn well inside
+        // the space a live icon would fill. Alphas are in presentation.json
+        // because "faint enough" is a judgement made by looking at it.
+        const e = SOCKET
+        slot.frame.fillStyle(0x000000, e.fillAlpha)
+        slot.frame.lineStyle(e.strokeWidth, 0xf6ecd9, e.strokeAlpha)
+        // It takes the shape of the slot it stands in for: a circle among the
+        // round hero medallions, a rounded rect among the drafted plates.
         if (r.hero) {
-          slot.frame.fillCircle(r.cx, r.cy, r.boxH / 2 - 3)
-          slot.frame.strokeCircle(r.cx, r.cy, r.boxH / 2 - 3)
+          slot.frame.fillCircle(r.cx, r.cy, r.boxH / 2 - e.inset)
+          slot.frame.strokeCircle(r.cx, r.cy, r.boxH / 2 - e.inset)
         } else {
-          slot.frame.fillRoundedRect(r.x + 6, r.y + 2, r.pitch - 12, r.boxH - 4, 10)
-          slot.frame.strokeRoundedRect(r.x + 6, r.y + 2, r.pitch - 12, r.boxH - 4, 10)
+          const i = e.inset
+          slot.frame.fillRoundedRect(r.x + i, r.y + i - 4, r.pitch - i * 2, r.boxH - i * 2 + 8, 8)
+          slot.frame.strokeRoundedRect(r.x + i, r.y + i - 4, r.pitch - i * 2, r.boxH - i * 2 + 8, 8)
         }
         continue
       }

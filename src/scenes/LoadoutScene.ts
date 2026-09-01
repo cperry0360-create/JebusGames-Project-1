@@ -15,6 +15,7 @@ import { fitCameraToDesign } from '../ui/FitCamera.ts'
 import { abilityLine, towerLine, towerStats } from '../systems/AbilityText.ts'
 import { ART, renderFor } from '../systems/Art.ts'
 import presentationData from '../data/presentation.json'
+import { play } from '../systems/Audio.ts'
 
 const HEROES = heroesData as Record<string, HeroDef>
 const TOWERS = towersData as Record<string, TowerDef>
@@ -63,8 +64,37 @@ export class LoadoutScene extends Phaser.Scene {
     // is cut off, and no gesture is bound to it. Menus never pan or zoom.
     fitCameraToDesign(this)
 
-    const run = runState()
-    const rng = makeRng(run.seed)
+    this.rerollsLeft = DRAFT.rerollsPerRun
+    this.deal(runState().seed)
+
+    this.contentWidth = this.drawBackdrop()
+    this.render()
+  }
+
+  /** How many redeals are left. One per run; see the reroll button. */
+  private rerollsLeft = 0
+  /** Whether the next render's cards fly in. Only a reroll sets it. */
+  private animateArrival = false
+  /** Bumped per reroll and mixed into the seed, so a redeal is still a
+   *  function of the run's seed and the same seed always plays out the same
+   *  way — a reroll is a second card off a known deck, not a random one. */
+  private dealNumber = 0
+
+  /**
+   * Deals a whole loadout: hero, both towers, both specials.
+   *
+   * One function rather than a first-deal path and a reroll path, so a reroll
+   * cannot draw from a different pool or apply a different rule than the
+   * opening hand did.
+   */
+  private deal(seed: number): void {
+    const rng = makeRng(seed)
+
+    // Phase 1 has one hero, so this draws Cory every time. It is written as a
+    // draw anyway: the reroll is specified as rerolling the hero too, and the
+    // day a second hero lands this needs no edit.
+    const heroPool = Object.keys(HEROES)
+    const heroId = heroPool[Math.floor(rng() * heroPool.length)] ?? 'cory'
 
     // Server Nuke is a mid-run drop, never a starting hand.
     const pool = Object.keys(ABILITIES).filter((id) => ABILITIES[id].draftable)
@@ -74,10 +104,47 @@ export class LoadoutScene extends Phaser.Scene {
     }))
     const opening = draftOpeningTowers(towerPool, DRAFT, rng)
     const reserve = reserveTowers(towerPool, opening, rng)
-    setRunState({ abilities, openingTowers: opening, reserveTowers: reserve })
+    setRunState({ heroId, abilities, openingTowers: opening, reserveTowers: reserve })
+  }
 
-    this.contentWidth = this.drawBackdrop()
+  /**
+   * A second deal, once per run.
+   *
+   * The whole hand at once and never a slot at a time: per-slot rerolls turn
+   * a draft into a shopping trip, and the point of the screen is that the run
+   * dealt you this and you play it.
+   */
+  private reroll(): void {
+    if (this.rerollsLeft <= 0) return
+    this.rerollsLeft -= 1
+    this.dealNumber += 1
+    play(this, 'upgrade')
+
+    // The old cards leave before the new ones arrive, so the change is a
+    // change and not a silent substitution the player can miss.
+    const going = this.cards.map((c) => c.face)
+    let done = 0
+    const rebuild = (): void => {
+      done += 1
+      if (done < going.length) return
+      this.redeal()
+    }
+    if (going.length === 0) { this.redeal(); return }
+    going.forEach((face, i) => {
+      this.tweens.add({
+        targets: face, alpha: 0, scaleY: 0.86, y: face.y - 10,
+        duration: LO.rerollFadeMs, delay: i * LO.rerollStaggerMs, ease: 'Quad.easeIn',
+        onComplete: rebuild,
+      })
+    })
+  }
+
+  /** The second half of a reroll: draw a new hand and fly it in. */
+  private redeal(): void {
+    this.deal(runState().seed + this.dealNumber * 7919)
+    this.animateArrival = true
     this.render()
+    this.animateArrival = false
   }
 
   /** How wide the panels may be, decided by the illustration behind them.
@@ -156,10 +223,18 @@ export class LoadoutScene extends Phaser.Scene {
     const run = runState()
     const hero = HEROES[run.heroId] ?? HEROES.cory
 
-    this.add.text(W / 2, 8, 'YOUR LOADOUT', {
+    const title = this.add.text(W / 2, 8, 'YOUR LOADOUT', {
       fontFamily: FONT_DISPLAY, fontSize: '44px', color: COLOR.ink,
       stroke: '#0d1016', strokeThickness: 6,
     }).setOrigin(0.5, 0)
+    // Nothing on this screen said the hand was dealt rather than chosen, so a
+    // player who drew two single-target towers had no way to know that was the
+    // draw and not the game's opinion of how it should be played.
+    const drawn = this.add.text(W / 2, title.y + title.height - 2, LO.copy.drawnAtRandom, {
+      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.dim,
+      stroke: '#0d1016', strokeThickness: 4,
+    }).setOrigin(0.5, 0)
+    this.layer.add([title, drawn])
 
     // Laid out top to bottom with one gap between sections rather than three
     // hand-picked y values, so the rhythm cannot drift when a card changes
@@ -167,16 +242,35 @@ export class LoadoutScene extends Phaser.Scene {
     // The plate's chrome reaches about 10px above the box it is given, so a
     // heading set tight against a card is drawn underneath its frame. The gap
     // clears the chrome rather than the box.
-    let y = 72
+    let y = 72 + 20
     y = this.heroSection(hero, y) + LO.sectionGap
     y = this.towerSection(run.openingTowers, y) + LO.sectionGap
     y = this.abilitySection(run.abilities, y) + LO.sectionGap
 
-    const b = plateButton(this, W / 2, Math.min(y + 30, H - 34), 300, 54, 'BEGIN THE RUN', () => {
+    // Two buttons on one row: the reroll is a choice about this screen, so it
+    // belongs beside the button that leaves it rather than tucked in a corner.
+    // Follows the content. It used to be clamped to the bottom of the screen,
+    // which does not make room — it just draws the buttons on top of the last
+    // row of cards, and on a 568x320 phone that is exactly what it did. If the
+    // stack ever grows past the box the layout test catches it, which is a
+    // failure worth seeing rather than one hidden under a button.
+    // +36, not +22: `y` is the bottom of the card's BOX, and the plate's
+    // nine-slice chrome hangs about 14px below that. Measuring to the box put
+    // the button row three pixels inside the last card.
+    const by = y + 36
+    const begin = plateButton(this, W / 2 + 90, by, 300, LO.buttonHeight, 'BEGIN THE RUN', () => {
       this.scene.start('Game')
       this.scene.launch('Hud')
     }, 24)
-    this.layer.add(b.parts)
+    const left = this.rerollsLeft
+    const reroll = plateButton(this, W / 2 - 190, by, 240, LO.buttonHeight,
+      `${LO.copy.rerollLabel} (${left} left)`, () => this.reroll(), 22)
+    // Spent, it stays on the screen greyed rather than disappearing: a button
+    // that vanishes takes the knowledge that the option existed with it. And
+    // greyed now means genuinely inert — a disabled plate is off the input
+    // list, so it cannot be pressed and cannot swallow a press either.
+    if (left <= 0) reroll.setEnabled(false)
+    this.layer.add([...reroll.parts, ...begin.parts])
 
     // Every card is face-up for now. The reveal lands here.
     for (const c of this.cards) c.reveal()
@@ -205,12 +299,23 @@ export class LoadoutScene extends Phaser.Scene {
     const face = this.add.container(x + w / 2, y)
     const parts: Phaser.GameObjects.GameObject[] = [backing, ...plate, face]
     this.layer.add(parts)
+    const index = this.cards.length
     const c: Card = {
       parts,
       face,
-      // Instant today. When the cards start face-down this becomes the flip,
-      // and nothing that builds a face has to know about it.
-      reveal: () => face.setAlpha(1),
+      // Instant on the opening hand; animated after a reroll, so a redeal is
+      // visibly a redeal rather than the same screen with different words on
+      // it. When the cards start face-down this becomes the flip, and nothing
+      // that builds a face has to know about it.
+      reveal: () => {
+        if (!this.animateArrival) { face.setAlpha(1); return }
+        face.setAlpha(0).setScale(1, 0.86).setY(face.y - 10)
+        this.tweens.add({
+          targets: face, alpha: 1, scaleY: 1, y: face.y + 10,
+          duration: LO.rerollFadeMs * 1.6, delay: index * LO.rerollStaggerMs,
+          ease: 'Back.easeOut',
+        })
+      },
     }
     this.cards.push(c)
     return c
@@ -258,6 +363,82 @@ export class LoadoutScene extends Phaser.Scene {
   }
 
   /**
+   * One card face, for every card in both rows.
+   *
+   * The two rows used to be two different components. The tower face put its
+   * icon in a left column and then drew its stats and description CENTRED
+   * across the whole card, so the text ran back under the icon; the specials
+   * face did the same thing with no stat line, and its description started at
+   * y=78 while the icon reached y=95, so the words were drawn straight over
+   * the picture and out past the card's own border.
+   *
+   * The fix is not a nudge, it is a column. The icon owns a fixed-width strip
+   * on the left and nothing else is ever drawn inside it; everything else is
+   * left-aligned in the strip beside it and wrapped to that strip's width. A
+   * card cannot overflow because no text is ever given a width the card does
+   * not have.
+   */
+  private cardFace(
+    cw: number,
+    icon: (cx: number, cy: number, box: number) => Phaser.GameObjects.GameObject[],
+    name: string,
+    cost: string | null,
+    stats: string | null,
+    body: string,
+  ): { parts: Phaser.GameObjects.GameObject[]; bottom: number } {
+    const pad = LO.cardPad
+    const col = LO.cardIconColumn
+    const tx = -cw / 2 + col
+    const tw = cw - col - pad
+
+    // The price goes UNDER the icon, not beside the name. Sharing the name's
+    // line cost it 37px of a 200px column on a small phone, which was enough
+    // to wrap "WITHHOLDING TOWER" onto a second line and make the whole row
+    // 26px taller than it needed to be. The icon column has the height going
+    // spare, and a picture with a price under it is a price tag.
+    const box = LO.cardIconBox
+    const costText = cost === null ? null : this.add.text(
+      -cw / 2 + col / 2, pad + box + 4, cost, {
+        fontFamily: FONT_UI, fontSize: '22px', color: COLOR.amber, fontStyle: 'bold',
+      },
+    ).setOrigin(0.5, 0)
+    const nameText = this.add.text(tx, pad, name.toUpperCase(), {
+      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.ink, fontStyle: 'bold',
+      wordWrap: { width: tw },
+    }).setOrigin(0, 0)
+
+    let ty = pad + nameText.height + 6
+    const statsText = stats === null ? null : this.add.text(tx, ty, stats, {
+      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.ink,
+      wordWrap: { width: tw },
+    }).setOrigin(0, 0)
+    if (statsText) ty += statsText.height + 4
+
+    const bodyText = this.add.text(tx, ty, body, {
+      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.dim, ...BODY_SPACING,
+      wordWrap: { width: tw },
+    }).setOrigin(0, 0)
+
+    const parts = [
+      ...icon(-cw / 2 + col / 2, pad + box / 2, box),
+      nameText, bodyText,
+    ]
+    if (costText) parts.push(costText)
+    if (statsText) parts.push(statsText)
+
+    // The taller of the two columns decides the card, so a short description
+    // never crops the icon and a tall one never runs off the plate.
+    // The bottom inset is larger than the top one: the plate's chrome reaches
+    // further in at the foot than at the head, and a last line set to the same
+    // padding as the first sits on the frame.
+    const iconColumnBottom = pad + box + (costText ? 4 + costText.height : 0)
+    return {
+      parts,
+      bottom: Math.max(ty + bodyText.height, iconColumnBottom) + LO.cardPadBottom,
+    }
+  }
+
+  /**
    * The two opening towers, described to the same depth as the specials.
    *
    * They used to show a name and a price while the ability cards showed full
@@ -267,48 +448,28 @@ export class LoadoutScene extends Phaser.Scene {
   private towerSection(ids: string[], top: number): number {
     const y = this.heading('TOWERS', top)
     return this.cardRow(ids, y, (id, cw) => {
-      const def = TOWERS[id]
-      const icon = towerIcon(this, -cw / 2 + 52, 66, def.sprite, 62)
-      // The price is measured first so the name can be wrapped to what is
-      // left. Escalation Clause is long enough to run straight under its own
-      // cost otherwise.
-      const cost = this.add.text(cw / 2 - 12, 12, `${def.cost}`, {
-        fontFamily: FONT_UI, fontSize: '22px', color: COLOR.amber, fontStyle: 'bold',
-      }).setOrigin(1, 0)
-      const name = this.add.text(-cw / 2 + 96, 12, def.name.toUpperCase(), {
-        fontFamily: FONT_UI, fontSize: '22px', color: COLOR.ink, fontStyle: 'bold',
-        wordWrap: { width: cw - 96 - 12 - cost.width - 14 },
-      }).setOrigin(0, 0)
-      const bandBottom = Math.max(78, 12 + name.height + 10)
-      const stats = this.add.text(0, bandBottom, towerStats(def), {
-        fontFamily: FONT_UI, fontSize: '22px', color: COLOR.ink,
-        align: 'center', wordWrap: { width: cw - 20 },
-      }).setOrigin(0.5, 0)
-      const what = this.add.text(0, bandBottom + stats.height + 4, towerLine(def), {
-        fontFamily: FONT_UI, fontSize: '22px', color: COLOR.dim, ...BODY_SPACING,
-        align: 'center', wordWrap: { width: cw - 20 },
-      }).setOrigin(0.5, 0)
-      return {
-        parts: [...icon, name, cost, stats, what],
-        bottom: bandBottom + stats.height + 4 + what.height + 12,
-      }
+      const def = TOWERS[id]!
+      return this.cardFace(
+        cw,
+        (cx, cy, box) => towerIcon(this, cx, cy, def.sprite, box),
+        def.name, `${def.cost}`, towerStats(def), towerLine(def),
+      )
     })
   }
 
   private abilitySection(ids: string[], top: number): number {
     const y = this.heading('SPECIALS', top)
     return this.cardRow(ids, y, (id, cw) => {
-      const def = ABILITIES[id]
-      const icon = this.add.image(-cw / 2 + 52, 62, def.icon)
-      fitInBox(icon, def.icon, 66)
-      const name = this.add.text(-cw / 2 + 96, 12, def.name.toUpperCase(), {
-        fontFamily: FONT_UI, fontSize: '22px', color: COLOR.ink, fontStyle: 'bold',
-      }).setOrigin(0, 0)
-      const what = this.add.text(0, 78, abilityLine(def), {
-        fontFamily: FONT_UI, fontSize: '22px', color: COLOR.dim, ...BODY_SPACING,
-        align: 'center', wordWrap: { width: cw - 20 },
-      }).setOrigin(0.5, 0)
-      return { parts: [icon, name, what], bottom: 78 + what.height + 12 }
+      const def = ABILITIES[id]!
+      return this.cardFace(
+        cw,
+        (cx, cy, box) => {
+          const img = this.add.image(cx, cy, def.icon)
+          fitInBox(img, def.icon, box)
+          return [img]
+        },
+        def.name, null, null, abilityLine(def),
+      )
     })
   }
 

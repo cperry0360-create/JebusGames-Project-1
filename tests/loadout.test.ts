@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { abilityLine } from '../src/systems/AbilityText.ts'
+import { abilityLine, towerLine, towerStats } from '../src/systems/AbilityText.ts'
 
 const url = (p: string) => new URL(p, import.meta.url)
 const src = (p: string) => readFileSync(url(`../src/${p}`), 'utf8')
@@ -35,10 +35,12 @@ test('the loadout screen shows the whole hand in three sections', () => {
   for (const section of ['HERO', 'TOWERS', 'SPECIALS']) {
     assert.ok(s.includes(`'${section}'`), `the loadout screen has no ${section} section`)
   }
-  // One way in. The two-step draft made the player click through the same
-  // information twice and never showed them the whole hand at once.
-  const buttons = s.match(/plateButton\(/g) ?? []
-  assert.equal(buttons.length, 1, `${buttons.length} buttons on a screen that needs one`)
+  // One way IN. The two-step draft made the player click through the same
+  // information twice and never showed them the whole hand at once, so there
+  // is exactly one button that leaves this screen. The reroll button is not
+  // one: it redeals and stays put.
+  const starts = s.match(/scene\.start\(/g) ?? []
+  assert.equal(starts.length, 1, `${starts.length} ways off the loadout screen; there should be one`)
   assert.match(s, /platePanel\(/, 'the cards are not on the dialog plate')
 })
 
@@ -89,4 +91,64 @@ test('an active describes itself in numbers it actually has', () => {
     assert.ok(line.split('·').length >= 2, `${id} reads as "${line}", which says nothing about what it does`)
     assert.ok(line.length <= 60, `${id} reads as "${line}" (${line.length} chars), too long for a card`)
   }
+})
+
+test('both card rows are built by the same component', () => {
+  // They were two components with two layouts, and the specials one drew its
+  // description straight over its icon and out past the card's border.
+  const s = src('scenes/LoadoutScene.ts')
+  const towers = s.slice(s.indexOf('private towerSection'), s.indexOf('private abilitySection'))
+  const specials = s.slice(s.indexOf('private abilitySection'), s.indexOf('private cardRow'))
+  for (const [name, body] of [['towerSection', towers], ['abilitySection', specials]] as const) {
+    assert.match(body, /this\.cardFace\(/, `${name} does not use the shared card face`)
+    // No section lays out its own text: that is how the two drifted apart.
+    assert.ok(!/this\.add\.text\(/.test(body), `${name} still positions its own text`)
+  }
+  // And the shared face keeps the icon and the words in separate columns.
+  const face = s.slice(s.indexOf('private cardFace'), s.indexOf('private towerSection'))
+  assert.match(face, /const tx = -cw \/ 2 \+ col/, 'the text column is not offset past the icon')
+  assert.match(face, /wordWrap: \{ width: tw \}/, 'body text is not wrapped to the text column')
+})
+
+test('no player-facing card text quotes an engine unit', () => {
+  // "Hits everything within 64px" and "128 radius" were both on the screen.
+  const towers = read('towers')
+  const abilities = read('abilities')
+  const lines: string[] = []
+  for (const def of Object.values(towers) as any[]) lines.push(towerStats(def), towerLine(def))
+  for (const def of Object.values(abilities) as any[]) lines.push(abilityLine(def))
+  for (const line of lines) {
+    assert.ok(!/\b\d+\s*px\b/i.test(line), `"${line}" quotes pixels`)
+    assert.ok(!/\bradius\b/i.test(line), `"${line}" says "radius"`)
+    assert.ok(!/\b(tick|ms|msec)\b/i.test(line), `"${line}" quotes an engine unit`)
+    // A bare number followed by "range" is the same problem wearing a label.
+    assert.ok(!/\d\s* ?range\b/i.test(line), `"${line}" quotes a range in engine units`)
+  }
+})
+
+test('the reroll is one whole-hand redeal, and its count is data', () => {
+  const draft = read('draft') as any
+  assert.equal(typeof draft.rerollsPerRun, 'number', 'the reroll count is not in draft.json')
+
+  const s = src('scenes/LoadoutScene.ts')
+  assert.match(s, /this\.rerollsLeft = DRAFT\.rerollsPerRun/, 'the reroll count is hardcoded')
+  assert.match(s, /if \(this\.rerollsLeft <= 0\) return/, 'a spent reroll can be spent again')
+  assert.match(s, /this\.rerollsLeft -= 1/, 'the reroll is never spent')
+  // Spent, the button stays on screen greyed rather than disappearing.
+  assert.match(s, /if \(left <= 0\) reroll\.setEnabled\(false\)/,
+    'the spent reroll button is not greyed out')
+  // One deal function, so a redeal cannot draw by different rules than the
+  // opening hand did, and it redeals everything rather than one slot.
+  const deal = s.slice(s.indexOf('private deal('), s.indexOf('private reroll('))
+  for (const part of ['heroId', 'abilities', 'openingTowers', 'reserveTowers']) {
+    assert.ok(deal.includes(part), `a redeal does not redraw ${part}`)
+  }
+  assert.match(s, /this\.deal\(runState\(\)\.seed/, 'a redeal is not derived from the run seed')
+})
+
+test('the loadout says the hand was dealt, not chosen', () => {
+  const s = src('scenes/LoadoutScene.ts')
+  assert.match(s, /LO\.copy\.drawnAtRandom/, 'the randomness subtext is not shown')
+  const copy = (read('presentation') as any).loadout.copy
+  assert.match(copy.drawnAtRandom, /random/i, 'the subtext does not mention the draw')
 })

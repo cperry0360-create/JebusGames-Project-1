@@ -15,7 +15,7 @@ cp -r "$SRC/src" "$H/tssrc"
 find "$H/tssrc" -name '*.ts' -print0 | xargs -0 sed -i \
   -e "s/^import Phaser from 'phaser'$/const Phaser = (globalThis as any).Phaser/" \
   -e "s/\(from '[^']*\)\.ts'/\1.js'/g" \
-  -e "s/\(import [A-Za-z]* from '[^']*\.json'\)/\1 with { type: 'json' }/g"
+  -e "s/\(import [A-Za-z]* from '[^']*\.json'\)$/\1 with { type: 'json' }/g"
 
 cat > "$H/tssrc/tsconfig.json" <<'TSC'
 {

@@ -1,5 +1,28 @@
 import { lossRate, topPayout } from './Scratch.ts'
+import wordingData from '../data/wording.json' with { type: 'json' }
 import type { AbilityDef, TowerDef } from '../types.ts'
+
+interface Band { upTo: number; word: string }
+const WORDING = wordingData as unknown as Record<string, Band[]>
+
+/**
+ * A distance, said the way a player would say it.
+ *
+ * The game measures in world pixels and the cards were quoting them: "hits
+ * everything within 64px", "128 radius", "180 range". Those are engine units
+ * and they mean nothing to anybody who has not read the source — and a number
+ * without a unit is worse, because it invites a comparison against a scale
+ * that was never shown.
+ *
+ * The words still rank, so two towers can be compared; they just rank in
+ * language. Bands are in wording.json because where "wide" becomes "huge" is
+ * a judgement about the map, and the map will change.
+ */
+function say(kind: string, px: number): string {
+  const bands = WORDING[kind] ?? []
+  for (const b of bands) if (px <= b.upTo) return b.word
+  return bands[bands.length - 1]?.word ?? ''
+}
 
 /**
  * What an active actually does, in one line of mechanics.
@@ -36,7 +59,10 @@ function bound(value: number | string, word: string): string {
 export function abilityLine(def: AbilityDef): string {
   const effect: string[] = []
   if (def.damage > 0) {
-    effect.push(`${bound(def.damage, 'damage')}${def.radius > 0 ? `, ${bound(def.radius, 'radius')}` : ''}`)
+    // "12 damage, huge area", not "12 damage over a huge area": this is a
+    // stat line, and the article costs eight characters on a card that has to
+    // hold two more clauses after it.
+    effect.push(`${bound(def.damage, 'damage')}${def.radius > 0 ? `, ${say('areaAdjective', def.radius).toLowerCase()}` : ''}`)
   }
   if (def.summonCount > 0) {
     effect.push(`${bound(def.summonCount, 'blockers')} for ${tight(def.duration, 's')}`)
@@ -51,7 +77,7 @@ export function abilityLine(def: AbilityDef): string {
     const loses = Math.round(lossRate(def.outcomes) * 100)
     effect.push(`up to ${bound(best, 'peanuts')} · ${loses}% pay nothing`)
   }
-  if (effect.length === 0 && def.radius > 0) effect.push(bound(def.radius, 'radius'))
+  if (effect.length === 0 && def.radius > 0) effect.push(`Covers ${say('area', def.radius)}`)
   // An ability whose effect is not expressible in its own stat block — the
   // Server Nuke deletes the board, which is damage 0 and radius 0 — carries
   // one written line instead. Everything else still describes itself.
@@ -72,9 +98,9 @@ export function abilityLine(def: AbilityDef): string {
 export function towerStats(def: TowerDef): string {
   const rate = (1 / def.fireInterval).toFixed(1)
   if (def.supportRadius > 0) {
-    return `${bound(def.supportRadius, 'radius')} · +${Math.round(def.supportDamageBonus * 100)}% damage`
+    return `${say('areaAdjective', def.supportRadius)} · +${Math.round(def.supportDamageBonus * 100)}% damage`
   }
-  return `${bound(def.damage, 'dmg')} · ${bound(def.range, 'range')} · ${tight(rate, '/s')}`
+  return `${bound(def.damage, 'damage')} · ${say('range', def.range)} · ${tight(rate, '/sec')}`
 }
 
 /**
@@ -87,7 +113,7 @@ export function towerStats(def: TowerDef): string {
 export function towerLine(def: TowerDef): string {
   const traits: string[] = []
   if (def.supportRadius > 0) return 'Buffs every tower standing inside it. Cannot attack.'
-  if (def.splashRadius > 0) traits.push(`hits everything within ${tight(def.splashRadius, 'px')}`)
+  if (def.splashRadius > 0) traits.push(`hits everything in ${say('area', def.splashRadius)}`)
   if (def.slowFactor > 0) traits.push(`slows what it hits to ${Math.round(def.slowFactor * 100)}%`)
   if (def.ignoresArmor) traits.push('ignores armour entirely')
   else if (def.armorPierce > 0) traits.push(`cuts ${bound(def.armorPierce, 'armour')}`)

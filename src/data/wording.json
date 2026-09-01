@@ -1,0 +1,19 @@
+{
+  "_note": "How engine distances are spoken to the player. The game measures in world pixels; the player is never shown one. Bands are inclusive of upTo and read in order, so the last band is the catch-all.",
+  "area": [
+    { "upTo": 70, "word": "a small area" },
+    { "upTo": 120, "word": "a wide area" },
+    { "upTo": 99999, "word": "a huge area" }
+  ],
+  "areaAdjective": [
+    { "upTo": 70, "word": "Small area" },
+    { "upTo": 120, "word": "Wide area" },
+    { "upTo": 99999, "word": "Huge area" }
+  ],
+  "range": [
+    { "upTo": 150, "word": "Short reach" },
+    { "upTo": 220, "word": "Fair reach" },
+    { "upTo": 300, "word": "Long reach" },
+    { "upTo": 99999, "word": "Very long reach" }
+  ]
+}

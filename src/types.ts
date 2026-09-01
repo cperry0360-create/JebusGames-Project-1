@@ -450,6 +450,8 @@ export interface DraftDef {
   damageArchetypes: string[]
   answerArchetypes: string[]
   towerWeights: Record<string, number>
+  /** Whole-hand redeals allowed on the loadout screen, before the run starts. */
+  rerollsPerRun: number
 }
 
 export interface WaveSpawnDef {

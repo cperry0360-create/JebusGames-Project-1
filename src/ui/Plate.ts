@@ -254,10 +254,21 @@ export function plateButton(
     parts: [...on, ...off, t, hit],
     setLabel: fitLabel,
     setEnabled: (v: boolean) => {
+      // Idempotent: the HUD calls this every frame with the same value, and
+      // re-registering a hit area sixty times a second is both waste and a
+      // way to end up in the input list twice.
+      if (v === enabled) return
       enabled = v
       on.forEach((p) => p.setVisible(v))
       off.forEach((p) => p.setVisible(!v))
       t.setColor(v ? COLOR.ink : '#6f7a86')
+      // A disabled button also stops taking the pointer. The flag above is
+      // enough to make the handlers do nothing, but on its own it leaves the
+      // rectangle in the input list: it still lights the hand cursor, still
+      // fires hover, and still swallows the press so that nothing underneath
+      // sees the tap either. Off the list, a disabled button is a picture.
+      if (v) hit.setInteractive({ useHandCursor: true })
+      else hit.disableInteractive()
     },
   }
 }

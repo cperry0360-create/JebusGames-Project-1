@@ -1,10 +1,18 @@
 {
   "towersAtStart": 2,
   "unlockedTypeCap": 4,
-  "unlockAfterWave": [4, 8],
+  "unlockAfterWave": [
+    4,
+    8
+  ],
   "abilitiesDrawn": 2,
-  "damageArchetypes": ["single-target"],
-  "answerArchetypes": ["aoe", "control"],
+  "damageArchetypes": [
+    "single-target"
+  ],
+  "answerArchetypes": [
+    "aoe",
+    "control"
+  ],
   "towerWeights": {
     "withholding": 5,
     "writeoff": 3,
@@ -12,5 +20,6 @@
     "escalation": 2,
     "extension": 4,
     "shelter": 3
-  }
+  },
+  "rerollsPerRun": 1
 }

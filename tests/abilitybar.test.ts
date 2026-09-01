@@ -167,10 +167,20 @@ test('the HUD hides Restructure rather than removing it', () => {
   // the bar with a different set of slots.
   assert.match(hud, /slotShown\([\s\S]{0,400}kind !== 'restructure' \|\| s\.lastStand/,
     'Restructure is not gated on DAD MODE in the HUD')
-  assert.match(hud, /slot\.hit\.input!\.enabled = shown/,
-    'a hidden slot is still tappable')
+  // A hidden slot is out of hit-testing entirely, not merely flagged off:
+  // `input.enabled = false` leaves the rectangle registered, hovering, and
+  // swallowing the press.
+  assert.match(hud, /slot\.hit\.disableInteractive\(\)/,
+    'a hidden slot is not taken out of hit-testing')
+  assert.match(hud, /slot\.hit\.setVisible\(shown\)/,
+    'a hidden slot still renders, so Phaser will still hit-test it')
+  assert.ok(!/slot\.hit\.input!\.enabled/.test(hud),
+    'the hidden slot is still relying on the flag that was not enough')
+  // And the handler refuses on its own, so no frame window can dispatch one.
+  assert.match(hud, /if \(!this\.slotShown\(region, this\.world\.status\)\) return/,
+    'the slot handler dispatches without checking the slot is shown')
   // An empty socket, not a greyed copy of the icon.
-  assert.match(hud, /strokeCircle\(r\.cx, r\.cy, r\.boxH \/ 2 - 3\)/,
+  assert.match(hud, /strokeCircle\(r\.cx, r\.cy, r\.boxH \/ 2 - e\.inset\)/,
     'the reserved slot is not drawn as an empty socket')
 
   const game = readFileSync(new URL('../src/scenes/GameScene.ts', import.meta.url), 'utf8')
@@ -178,4 +188,18 @@ test('the HUD hides Restructure rather than removing it', () => {
     'armRestructure is not gated on DAD MODE')
   assert.match(game, /cancelRestructure\(\)/,
     'a relocation in progress is not cancelled when DAD MODE ends')
+})
+
+test('a disabled button stops taking the pointer, not just the click', () => {
+  // The audit finding behind the reserved-slot report, in its general form:
+  // three places set a flag the handler checks and left the hit rectangle
+  // registered. A button like that still hovers, still shows the hand cursor,
+  // and still swallows the press so nothing beneath it sees the tap.
+  const plate = readFileSync(new URL('../src/ui/Plate.ts', import.meta.url), 'utf8')
+  const fn = plate.slice(plate.indexOf('setEnabled: (v: boolean)'))
+  const body = fn.slice(0, fn.indexOf('\n    },'))
+  assert.match(body, /hit\.disableInteractive\(\)/,
+    'a disabled plate keeps its hit area, so it still eats the tap')
+  assert.match(body, /hit\.setInteractive\(/,
+    'a re-enabled plate never gets its hit area back')
 })
