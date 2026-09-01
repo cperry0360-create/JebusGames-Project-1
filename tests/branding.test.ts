@@ -373,3 +373,16 @@ test('ATTRIBUTIONS.md and the credits roll agree with the data', () => {
   assert.deepEqual(cards.map((c: { name: string }) => c.name).sort(), ['COURTLAND', 'HAN'],
     'Courtland and Han no longer get their own cards')
 })
+
+test('the bundled engine carries its licence notice', () => {
+  // MIT requires the copyright notice to travel with any substantial portion
+  // of the software, and a bundled engine is one. Vite inlines Phaser into the
+  // built JavaScript, so nothing carried it until the audit found this.
+  const credits = JSON.parse(readFileSync(url('../src/data/credits.json'), 'utf8'))
+  const flat = JSON.stringify(credits.blocks)
+  assert.match(flat, /PHASER — MIT/, 'the engine is not credited in the roll')
+  assert.match(flat, /Richard Davey/, 'the roll does not carry the copyright line MIT requires')
+  const attributions = readFileSync(url('../ATTRIBUTIONS.md'), 'utf8')
+  assert.match(attributions, /Phaser/, 'ATTRIBUTIONS.md does not list the engine')
+  assert.match(attributions, /MIT/, 'ATTRIBUTIONS.md does not record the engine licence')
+})

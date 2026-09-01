@@ -27,6 +27,7 @@ items — both music tracks — are the only ones where crediting is a
 | **Kenney Future** (`KenneyFuture.ttf`) | The display face: the title, the department headers, the names at the end | kenney.nl font package | **CC0 1.0** — verbatim from `public/assets/fonts/License.txt`: *"License: (Creative Commons Zero, CC0) … Support us by crediting (Kenney or www.kenney.nl), this is not mandatory."* | No | Yes — same line, "fonts" named in its note |
 | **"Electric Dream"** — Of Far Different Nature | Level 1 gameplay music | <https://opengameart.org/content/electric-dream> | **CC BY 4.0** | **Yes** | Yes — MUSIC section |
 | **"Battle BGM"** — syncopika | Title, loadout and credits music | <https://opengameart.org/content/battle-bgm> | **CC BY 3.0** | **Yes** | Yes — MUSIC section |
+| **Phaser** | The engine. Ships inside the bundle. | phaser.io / npm `phaser` | **MIT** — read from `LICENSE.md` in the package: *"The MIT License (MIT) … Copyright (c) 2026 Richard Davey, Phaser Studio Inc."* | Yes, the copyright notice must travel with the bundle | **No — see below** |
 
 ## What could and could not be verified
 
@@ -55,6 +56,22 @@ items — both music tracks — are the only ones where crediting is a
 licence version, and the required attribution wording.** CC-BY requires the
 credit to be given "in the manner specified by the author", and that wording is
 on the page neither of us can currently reach.
+
+## Gaps found by this audit
+
+**Phaser was not credited anywhere.** It is MIT, and MIT requires the copyright
+notice and permission text to be included with any substantial portion of the
+software — which a bundled engine is. Vite inlines the library into the built
+JavaScript, so nothing carried the notice.
+
+Fixed by adding it to the credits roll's PROGRAMMING department and to this
+file. The full licence text lives with the package; a link and the copyright
+line is the ordinary practice for a bundled MIT library, and is what the roll
+now carries.
+
+Nothing else was missing: the three Kenney packs and the font were already
+credited (and are CC0, so were not required to be), and both music tracks were
+added to the roll in the same change that added the tracks themselves.
 
 ## Original work
 

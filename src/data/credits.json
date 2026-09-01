@@ -358,6 +358,18 @@
       "name": "CORY"
     },
     {
+      "kind": "credit",
+      "role": "Engine",
+      "name": "PHASER \u2014 MIT"
+    },
+    {
+      "kind": "note",
+      "lines": [
+        "Phaser is (c) Richard Davey, Phaser Studio Inc., used under the MIT licence.",
+        "None of this would run without it."
+      ]
+    },
+    {
       "kind": "division",
       "text": "ART DEPARTMENT"
     },
