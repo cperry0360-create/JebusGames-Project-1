@@ -29,6 +29,10 @@ export class Enemy extends Phaser.GameObjects.Container {
   blocker: Blocker | null = null
   /** Armour stripped by Cory's Depreciation passive. */
   armorShred = 0
+  /** Seconds left on the "Cory is filing this one down" mark. Set by the
+   *  passive and allowed to lapse, so one frame out of his radius does not
+   *  make the mark flicker. */
+  shreddingFor = 0
   /** Counts down to the next tax. Only The Politician uses it. */
   private taxTimer = 0
 
@@ -168,6 +172,10 @@ export class Enemy extends Phaser.GameObjects.Container {
   }
 
   shredArmor(amount: number, max: number): void {
+    // Only counts as "being shredded" while there is armour left to take. A
+    // Late Filer has none, and marking it would tell the player the passive is
+    // doing something for them when it is not.
+    if (this.effectiveArmor > 0) this.shreddingFor = 0.2
     this.armorShred = Math.min(max, this.armorShred + amount)
   }
 
@@ -180,6 +188,7 @@ export class Enemy extends Phaser.GameObjects.Container {
       if (this.slowRemaining <= 0) this.slowFactor = 0
     }
     if (this.stunRemaining > 0) this.stunRemaining -= dt
+    if (this.shreddingFor > 0) this.shreddingFor -= dt
     if (this.stunLockout > 0) this.stunLockout -= dt
 
     // Stopped means stopped: it does not walk and it does not swing. Held here
@@ -239,7 +248,16 @@ export class Enemy extends Phaser.GameObjects.Container {
   /** Stopped reads paler than slowed, so the two can be told apart on a board
    *  where both are happening at once. */
   private tintForStatus(): void {
-    this.art.setTint(this.stunned ? 0xd6ecff : this.slowed ? 0x8fd0ff : 0xffffff)
+    // Order is priority. Stunned and slowed are things being done TO it that
+    // change what it can do; the shred mark only says its armour is going, so
+    // it yields to both.
+    const shredded = this.shreddingFor > 0
+    this.art.setTint(
+      this.stunned ? 0xd6ecff
+        : this.slowed ? 0x8fd0ff
+          : shredded ? 0xf0c46a
+            : 0xffffff,
+    )
   }
 
   /** Mirrors the art when the lane turns back to the left. */

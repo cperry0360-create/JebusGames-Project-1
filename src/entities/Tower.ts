@@ -253,11 +253,36 @@ export class Tower extends Phaser.GameObjects.Container {
   }
 
   /** Restructure moves a built tower without rebuilding it. */
+  /**
+   * Moves to a new pad, and is seen to move.
+   *
+   * It used to teleport, which is why Restructure read as a menu operation
+   * rather than as a hero picking a building up. Three beats — lift, carry,
+   * set down — is the smallest sequence that says a thing was moved rather
+   * than replaced, and the arc is what makes it legible at a glance across a
+   * board where the two pads may be nowhere near each other.
+   *
+   * Y-sorting is redone on landing, not on lift: the tower is above the board
+   * while it travels and belongs in the sort order of where it lands.
+   */
   relocate(x: number, y: number, spot: number): void {
+    const cfg = PRESENTATION.restructure
     this.spot = spot
-    this.setPosition(x, y)
-    ySort(this)
-    this.popIn()
+    const from = { x: this.x, y: this.y }
+
+    this.scene.tweens.chain({
+      targets: this,
+      tweens: [
+        { y: from.y - cfg.liftPixels, duration: cfg.liftMs, ease: 'Quad.easeOut' },
+        { x, y: y - cfg.liftPixels, duration: cfg.travelMs, ease: 'Sine.easeInOut' },
+        { y, duration: cfg.dropMs, ease: 'Quad.easeIn' },
+      ],
+      onComplete: () => {
+        this.setPosition(x, y)
+        ySort(this)
+        this.popIn()
+      },
+    })
   }
 
   tick(dt: number, enemies: Enemy[], fire: (tower: Tower, target: Enemy) => void): void {

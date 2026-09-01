@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { shouldTrigger, atThreshold, outgoingDamage, attackInterval, incomingDamage } from '../src/systems/LastStand.ts'
+import { applyHit, shouldTrigger, atThreshold, outgoingDamage, attackInterval, incomingDamage } from '../src/systems/LastStand.ts'
 import { damageAfterArmor, boostedDamage, slowedSpeed } from '../src/systems/Combat.ts'
 import { openingPurse } from '../src/systems/Economy.ts'
 
@@ -481,4 +481,71 @@ test('the countdown runs on real seconds, not the scaled clock', () => {
   const game = src('scenes/GameScene.ts')
   assert.match(game, /this\.tickReadyCountdown\(real\)/,
     'the countdown is fed the scaled clock, so its length changes with game speed')
+})
+
+test('a hero never skips his transform, however big the hit', () => {
+  // The bug: health was reduced, then death was checked, then the threshold.
+  // A hit that carried him from above 25% to zero or below therefore killed
+  // him outright and Last Stand never happened — which is what the testers
+  // meant by "he goes straight past 25%". At wave 8 with no towers, three
+  // Final Notices hitting for 12 each cross the whole 90hp band inside one
+  // exchange, so this was routine and not a corner case.
+  const max = heroes.cory.maxHealth
+  const floor = max * ls.healthThreshold
+
+  // A hit that lands squarely inside the band: transforms, as it always did.
+  const inside = applyHit(max * 0.4, max, max * 0.2, ls, false)
+  assert.equal(inside.triggers, true)
+  assert.equal(inside.down, false)
+
+  // A hit far bigger than the band. He stops at the threshold.
+  const huge = applyHit(max * 0.9, max, max * 5, ls, false)
+  assert.equal(huge.down, false, 'a big enough hit still killed him through the transform')
+  assert.equal(huge.triggers, true)
+  assert.equal(huge.health, floor, 'he should be left standing exactly at the threshold')
+
+  // Landing exactly on the threshold still counts as crossing it.
+  const exact = applyHit(max * 0.5, max, max * 0.25, ls, false)
+  assert.equal(exact.triggers, true)
+  assert.equal(exact.health, floor)
+
+  // And the floor is not a permanent shield: once used, he dies normally.
+  const after = applyHit(floor, max, max * 5, ls, true)
+  assert.equal(after.down, true, 'the transform floor must not apply twice')
+  assert.equal(after.health, 0)
+  assert.equal(after.triggers, false)
+
+  // A hit that leaves him above the band changes nothing.
+  const light = applyHit(max, max, 1, ls, false)
+  assert.equal(light.triggers, false)
+  assert.equal(light.down, false)
+  assert.equal(light.health, max - 1)
+})
+
+test('the transformation cannot be interrupted by killing him during it', () => {
+  // He leaves the board for half a second to change. Without a window the
+  // wave standing on him simply carries on hitting the empty space, and the
+  // one scripted beat the hero has is worth nothing.
+  const pause = ls.transformPauseMs / 1000
+  assert.ok(ls.invulnerableSeconds > pause,
+    `invulnerability lasts ${ls.invulnerableSeconds}s but the transformation takes ${pause}s`)
+  // Long enough to act on the other side of it, short enough not to be a
+  // free second of combat.
+  assert.ok(ls.invulnerableSeconds <= 2,
+    `${ls.invulnerableSeconds}s of invulnerability is a phase, not a transition`)
+})
+
+test('the hero holds a stated number of enemies and no more', () => {
+  // The capacity is real in the code and was invisible on the screen, which is
+  // why a pile of enemies standing on one man read as him blocking all of
+  // them. The pips over his health bar are drawn from this number, so it has
+  // to be a number rather than a shape.
+  const cap = heroes.cory.blockCapacity
+  assert.ok(Number.isInteger(cap) && cap > 0, `blockCapacity is ${cap}`)
+  assert.ok(cap <= 5, `${cap} pips will not fit over a health bar`)
+  assert.ok(heroes.cory.blockRange > 0, 'he blocks at no range at all')
+  // The block ring is drawn at blockRange and the passive's ring at the shred
+  // radius; if they were the same size the player would read one circle.
+  assert.notEqual(heroes.cory.passive.armorShredRadius, heroes.cory.blockRange,
+    'the shred ring and the block ring would draw on top of each other')
 })

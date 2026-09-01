@@ -24,7 +24,7 @@ import { Cooldowns } from '../systems/Cooldowns.ts'
 import { unlockedTowerCount } from '../systems/Draft.ts'
 import { runState, setRunState } from '../systems/RunState.ts'
 import { castAbility } from '../systems/AbilityRunner.ts'
-import { PRESENTATION, floatingDamage } from '../systems/Presentation.ts'
+import { PRESENTATION, floatingDamage, hitPause } from '../systems/Presentation.ts'
 import { play, playRotating, resetVoices } from '../systems/Audio.ts'
 import { Enemy } from '../entities/Enemy.ts'
 import type { Blocker } from '../entities/Enemy.ts'
@@ -155,6 +155,9 @@ export class GameScene extends Phaser.Scene {
   private readonly screenSpace: Phaser.GameObjects.GameObject[] = []
   /** Set at press time when the press belonged to a menu, ticket or dialog. */
   private pressTakenByUi = false
+  /** Held still for a beat on a big impact. See `castHaymaker`. Public so a
+   *  harness run can assert the pause happened rather than infer it. */
+  hitPaused = false
   /** Child count at the last camera split, so new objects get assigned. */
   private splitAt = -1
   private spawner!: WaveSpawner
@@ -689,6 +692,54 @@ this.armReadyCountdown()
     this.markerLayer.lineBetween(r.x, r.y - 4, r.x, r.y - 40)
     this.markerLayer.fillStyle(0x4fa3e3, a)
     this.markerLayer.fillTriangle(r.x + 1, r.y - 40, r.x + 22, r.y - 34, r.x + 1, r.y - 28)
+
+    // Depreciation, which had no visual at all.
+    //
+    // The passive shreds armour off anything standing near him, and a player
+    // who has run the hero for three waves still cannot say what he does. A
+    // translucent disc at the shred radius says where it reaches; the enemies
+    // inside it are marked separately, in `tickPassive`, so the ring and the
+    // marks cannot disagree about who is being shredded.
+    if (!this.hero.down) {
+      const pas = this.hero.def.passive
+      const rr = pas.armorShredRadius
+      const y = this.hero.y + this.hero.footOffsetY
+      const beat = 0.5 + 0.5 * Math.sin(this.time.now / 620)
+      // Read against grass, not against a mockup. The first pass at 5% fill
+      // and a 2px line vanished completely on a green board at the default
+      // zoom, which is the same failure as having no ring at all.
+      this.markerLayer.fillStyle(0xc9a227, 0.10 + beat * 0.05)
+      this.markerLayer.fillEllipse(this.hero.x, y, rr * 2, rr * 2 * PAD_SQUASH)
+      this.markerLayer.lineStyle(3, 0xe0b93a, 0.55 + beat * 0.25)
+      this.markerLayer.strokeEllipse(this.hero.x, y, rr * 2, rr * 2 * PAD_SQUASH)
+      // Ticks on the rim, so it reads as a working radius rather than as a
+      // decorative pool of light.
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2 + this.time.now / 2600
+        const ox = Math.cos(a) * rr
+        const oy = Math.sin(a) * rr * PAD_SQUASH
+        this.markerLayer.lineBetween(
+          this.hero.x + ox * 0.9, y + oy * 0.9, this.hero.x + ox, y + oy,
+        )
+      }
+    }
+
+    // His reach as a blocker, and whether he has a hand free.
+    //
+    // Inside this ring he grabs; beyond it, and once all three hands are full,
+    // enemies walk by untouched. Drawn faint while he has room and amber the
+    // moment he does not, because "he is full, they are getting past" is a
+    // thing the player has to be able to read at a glance rather than infer
+    // from a pile of sprites.
+    if (!this.hero.down) {
+      const br = this.hero.blockRange
+      const y = this.hero.y + this.hero.footOffsetY
+      const full = this.hero.blocking >= this.hero.def.blockCapacity
+      const beat = 0.5 + 0.5 * Math.sin(this.time.now / 150)
+      this.markerLayer.lineStyle(full ? 3 : 2, full ? 0xf2a03c : 0xf6ecd9,
+        full ? 0.55 + beat * 0.35 : 0.22)
+      this.markerLayer.strokeEllipse(this.hero.x, y, br * 2, br * 2 * PAD_SQUASH)
+    }
 
     // Pulling out of a fight costs him: while the window is open he takes
     // extra damage, and the player has to be able to see that it is open.
@@ -1272,7 +1323,12 @@ this.armReadyCountdown()
     this.rig.setEnabled(true)
   }
 
+  /** Whether the CANCEL button is on the glass. Read by the harness, which is
+   *  how it was caught outliving the mode it belongs to. */
+  cancelVisible = false
+
   private setCancelVisible(on: boolean): void {
+    this.cancelVisible = on
     for (const part of this.cancelBtn.parts) {
       (part as Phaser.GameObjects.Image).setVisible?.(on)
     }
@@ -1589,14 +1645,30 @@ this.armReadyCountdown()
     }
     this.cooldowns.start('haymaker')
     play(this, 'haymaker')
-    this.damageEnemy(target, hm.damage, hm.ignoresArmor)
-    target.knockBack(hm.knockbackPixels)
+
+    // The biggest hit in the game, and it used to read as a slightly larger
+    // spark. Four things carry an impact and it had one of them.
+    //
+    // 1. The pause. One held frame is what makes the eye read a collision
+    //    rather than a health bar changing, and it costs nothing.
+    // 2. The spark, at nearly twice the size, so it covers the target rather
+    //    than sitting on it.
+    // 3. The shake, longer and harder than a tower's.
+    // 4. The number, which is 130 and should look like 130.
+    //
+    // The knockback was already in the data at 150px and already applied; what
+    // it lacked was anything around it to make the throw legible.
     const s = PRESENTATION.shake
+    this.damageEnemy(target, hm.damage, hm.ignoresArmor, 0, false)
+    target.knockBack(hm.knockbackPixels)
+    floatingDamage(this, target.x, target.centreY, hm.damage, true, undefined,
+      EFFECT_MS.haymakerNumberScale)
     this.cameras.main.shake(s.haymakerMs, s.haymakerIntensity)
     playEffect(this, ART.fx.spark, target.x, target.centreY, {
       size: EFFECT_MS.haymakerSparkSize, depth: target.y + 8,
-      durationMs: EFFECT_MS.hitSparkMs + 80,
+      durationMs: EFFECT_MS.hitSparkMs + 140,
     })
+    hitPause(this, EFFECT_MS.haymakerHitPauseMs, (on) => { this.hitPaused = on })
     this.status.message = `${hm.name}!`
   }
 
@@ -1644,9 +1716,17 @@ this.armReadyCountdown()
     this.refreshSupport()
     this.cooldowns.start('restructure')
     play(this, 'upgrade')
-    this.status.message = `${moving.def.name} restructured. No charge.`
+    const cd = this.hero.def.restructure.cooldown
+    // Named, not "No charge." It costs a 22-second cooldown, and a message
+    // saying otherwise is why the ability read as a free UI convenience.
+    this.status.message = `${moving.def.name} restructured. Back in ${cd}s.`
     this.restructuring = null
     this.status.mode = 'normal'
+    // The CANCEL button was never taken down here, so after one successful
+    // move it stayed on the screen for the rest of the encounter. That is what
+    // made Restructure look like a permanent mode toggle rather than an
+    // ability on a cooldown — the button outlived the mode it belonged to.
+    this.setCancelVisible(false)
     this.drawSpots()
     this.rangeRing.clear()
   }
@@ -1856,7 +1936,12 @@ this.armReadyCountdown()
     // spawners spawn, towers fire and cooldowns tick, all at the same multiple.
     // Scaling the clock rather than each speed in turn is what makes the game
     // faster without moving any part of the tuning relative to another.
-    const dt = real * RULES.pacing.gameSpeed
+    //
+    // `holdFrames` is the hit pause. Everything the world simulates comes off
+    // this one number, so holding the world still on impact is one flag rather
+    // than a freeze threaded through every system — and the camera below is
+    // deliberately outside it, so the shake still plays over the held frame.
+    const dt = this.hitPaused ? 0 : real * RULES.pacing.gameSpeed
 
     // The camera runs on real time. It is feel, not simulation, and a camera
     // that eased 40% faster would read as twitchy rather than as brisk.
@@ -1983,8 +2068,6 @@ this.armReadyCountdown()
   /** The hero and any summoned fighters hold enemies up. Whoever is closest
    *  to the exit gets held first, since they are the real threat. */
   private tickEngagement(): void {
-    for (const e of this.enemies) e.blocker = null
-
     const holders: Array<{ who: Blocker; range: number; capacity: number }> = []
     if (this.hero.alive) {
       holders.push({ who: this.hero, range: this.hero.blockRange, capacity: this.hero.def.blockCapacity })
@@ -1992,13 +2075,50 @@ this.armReadyCountdown()
     for (const f of this.fighters) {
       if (f.alive) holders.push({ who: f, range: this.hero.def.blockRange, capacity: 1 })
     }
+    const live = new Map(holders.map((h) => [h.who, h]))
+
+    // A grip, once taken, is kept.
+    //
+    // The assignment used to be cleared and rebuilt from scratch every frame,
+    // with the slots going to whoever was furthest along the lane. Held
+    // enemies stop while the ones behind them keep walking, so the ordering
+    // inverts constantly and the three slots changed hands over and over. The
+    // capacity was still honoured — never four at once — but *which* three
+    // were being held churned, and a crowd standing on one man with the grip
+    // rotating through it looks exactly like a man blocking all of them.
+    //
+    // Now a hold is released only when it stops being possible: the enemy or
+    // the holder is gone, or the enemy has left the ring. Everything else
+    // walks past, and goes on walking past.
+    let heldByHero = 0
+    for (const e of this.enemies) {
+      const h = e.blocker ? live.get(e.blocker) : undefined
+      if (!h || !e.alive || !e.blockable
+          || Math.hypot(e.x - h.who.x, e.y - h.who.y) > h.range) {
+        e.blocker = null
+        continue
+      }
+      h.capacity--
+      if (h.who === this.hero) heldByHero++
+    }
 
     for (const h of holders) {
+      if (h.capacity <= 0) continue
       const near = withinRadius(this.enemies, h.who.x, h.who.y, h.range)
         .filter((e) => e.blocker === null && e.blockable)
+      // Whoever is closest to the exit is the real threat, so they are grabbed
+      // first out of whatever room is left.
       near.sort((a, b) => b.distance - a.distance)
-      for (const e of near.slice(0, h.capacity)) e.blocker = h.who
+      for (const e of near.slice(0, h.capacity)) {
+        e.blocker = h.who
+        if (h.who === this.hero) heldByHero++
+      }
     }
+
+    // What the pips over his health bar and the ring under his feet report.
+    // Read from the rule rather than recounted, so the number shown is the
+    // number the engagement actually used.
+    this.hero.blocking = heldByHero
   }
 
   private tickEnemies(dt: number): void {
@@ -2106,9 +2226,16 @@ this.armReadyCountdown()
     })
   }
 
-  private damageEnemy(enemy: Enemy, damage: number, ignoresArmor: boolean, pierce = 0): void {
+  private damageEnemy(
+    enemy: Enemy,
+    damage: number,
+    ignoresArmor: boolean,
+    pierce = 0,
+    /** Off for a hit that draws its own, bigger number. */
+    showNumber = true,
+  ): void {
     if (!enemy.alive) return
-    if (enemy.hurt(damage, ignoresArmor, true, pierce)) {
+    if (enemy.hurt(damage, ignoresArmor, showNumber, pierce)) {
       play(this, 'death')
       logEvent('death', `${enemy.def.name} +${enemy.def.peanutReward}`)
       this.status.kills++
@@ -2198,8 +2325,14 @@ this.armReadyCountdown()
     this.cameras.main.flash(340, 255, 90, 60)
     this.cameras.main.shake(s.lastStandMs, s.lastStandIntensity)
     play(this, 'last-stand', 0.85)
+    // The world stops for a moment. Everything else here — flash, shake,
+    // sting, banner — was already firing and it still went past unnoticed,
+    // because the wave carried on walking straight through it. A held beat is
+    // what turns a set of simultaneous effects into a moment.
+    hitPause(this, EFFECT_MS.lastStandHoldMs, (on) => { this.hitPaused = on })
     this.announce(ls.name, COLOR.fire)
-    this.status.message = `${ls.name}! Damage doubled, defence gone.`
+    this.status.message =
+      `${ls.name}! Damage doubled, defence gone. He cannot be touched for a moment.`
   }
 
   private leak(enemy: Enemy): void {

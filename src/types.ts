@@ -262,6 +262,9 @@ export interface LastStandDef {
   transformShakeMs: number
   transformFlashMs: number
   transformPauseMs: number
+  /** He cannot be hurt while the transformation plays. Without it the
+   *  transform is a cinematic he can be killed during. */
+  invulnerableSeconds: number
 }
 
 export interface PassiveDef {

@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import type { HeroDef } from '../types.ts'
 import { ySort } from '../systems/DepthSort.ts'
 import { pickNearest, withinRadius } from '../systems/Targeting.ts'
-import { attackInterval, incomingDamage, outgoingDamage, shouldTrigger } from '../systems/LastStand.ts'
+import { applyHit, attackInterval, incomingDamage, outgoingDamage } from '../systems/LastStand.ts'
 import { makeShadow, deathPuff } from '../systems/Presentation.ts'
 import { applyGroundRender } from '../systems/Art.ts'
 import { facesLeft } from '../systems/Facing.ts'
@@ -46,6 +46,15 @@ export class Hero extends Phaser.GameObjects.Container {
   /** Seconds left of the window where breaking off a fight costs extra
    *  damage. The scene draws a marker while this is running. */
   retreatVulnerableFor = 0
+  /** Seconds left of the transformation window, during which nothing can hurt
+   *  him. Last Stand is the hero's one scripted moment and it was possible to
+   *  be killed in the middle of it. */
+  invulnerableFor = 0
+  /** How many enemies he is holding right now, and the most he may hold. The
+   *  scene sets the first every frame; both are read by the HUD and by the
+   *  at-capacity marker, so the number the player is shown is the number the
+   *  engagement rule actually used. */
+  blocking = 0
 
   private readonly body_: Phaser.GameObjects.Sprite
   private shadow: Phaser.GameObjects.Image
@@ -191,6 +200,10 @@ export class Hero extends Phaser.GameObjects.Container {
       if (this.reviveIn <= 0) this.revive()
       return
     }
+    // Counted down before the transforming gate, not after it: the window
+    // exists precisely to cover the half-second he spends transforming, and a
+    // timer that only ticks once the transformation is over covers nothing.
+    if (this.invulnerableFor > 0) this.invulnerableFor -= dt
     if (this.transforming) return
 
     if (this.retreatVulnerableFor > 0) this.retreatVulnerableFor -= dt
@@ -269,17 +282,26 @@ export class Hero extends Phaser.GameObjects.Container {
   /** Returns 'lastStand' or 'down' when this hit changed his state. */
   hurt(amount: number): 'none' | 'lastStand' | 'down' {
     if (this.down) return 'none'
+    // The transformation is not a window to kill him in.
+    if (this.invulnerableFor > 0) return 'none'
 
     const exposed = this.retreatVulnerableFor > 0 ? this.def.retreat.damageTakenMultiplier : 1
-    this.health -= incomingDamage(amount, this.def.lastStand, this.lastStandActive) * exposed
+    const damage = incomingDamage(amount, this.def.lastStand, this.lastStandActive) * exposed
+
+    // One rule, in one place, so death cannot be decided before the transform
+    // is. See `applyHit`: a hit that would carry him through the 25% band
+    // leaves him standing at it instead of killing him outright.
+    const out = applyHit(
+      this.health, this.def.maxHealth, damage, this.def.lastStand, this.lastStandUsed,
+    )
+    this.health = out.health
     this.drawBar()
 
-    if (this.health <= 0) {
-      this.health = 0
+    if (out.down) {
       this.goDown()
       return 'down'
     }
-    if (shouldTrigger(this.health, this.def.maxHealth, this.def.lastStand, this.lastStandUsed)) {
+    if (out.triggers) {
       this.triggerLastStand()
       return 'lastStand'
     }
@@ -309,6 +331,11 @@ export class Hero extends Phaser.GameObjects.Container {
     this.lastStandUsed = true
     this.lastStandActive = true
     this.transforming = true
+    // He goes away for half a second to change. Nothing may kill him while he
+    // is off the board doing it, and he comes back with a moment to act — the
+    // transformation is the hero's one scripted beat and it is worth nothing
+    // if the wave standing on him simply carries on hitting the empty space.
+    this.invulnerableFor = ls.invulnerableSeconds
 
     const cam = this.scene.cameras.main
     cam.shake(ls.transformShakeMs, 0.012)
@@ -347,6 +374,8 @@ export class Hero extends Phaser.GameObjects.Container {
     this.down = true
     this.reviveIn = this.def.reviveSeconds
     this.lastStandActive = false
+    this.invulnerableFor = 0
+    this.blocking = 0
     this.bar.setVisible(false)
     this.shadow.setVisible(false)
     deathPuff(this.scene, this.x, this.y, 0xff8f7a)
@@ -424,5 +453,28 @@ export class Hero extends Phaser.GameObjects.Container {
     // The 25% mark, so the Last Stand threshold is legible before it fires.
     const markX = -w / 2 + w * this.def.lastStand.healthThreshold
     this.bar.lineStyle(1, 0xf6ecd9, 0.7).lineBetween(markX, y, markX, y + 5)
+
+    // How many of his hands are full.
+    //
+    // He holds three enemies and no more; the rest walk past. That was already
+    // true in the code and invisible on the screen, so what a player saw was a
+    // pile of eight enemies standing on one man and the obvious conclusion was
+    // that he was blocking all of them and losing. Three pips over the health
+    // bar say what the rule actually is, and turn amber together the moment
+    // there is no room left — which is the moment the next enemy walks by.
+    const cap = this.def.blockCapacity
+    if (cap > 0 && !this.down) {
+      const full = this.blocking >= cap
+      const pipW = 5
+      const pipGap = 3
+      const totalW = cap * pipW + (cap - 1) * pipGap
+      const py = y - 7
+      for (let i = 0; i < cap; i++) {
+        const px = -totalW / 2 + i * (pipW + pipGap)
+        const held = i < this.blocking
+        this.bar.fillStyle(held ? (full ? 0xf2a03c : 0xf6ecd9) : 0x14181f, held ? 1 : 0.75)
+        this.bar.fillRect(px, py, pipW, 4)
+      }
+    }
   }
 }

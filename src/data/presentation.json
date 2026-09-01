@@ -16,11 +16,14 @@
     "deathPuffMs": 300,
     "hitSparkSize": 46,
     "chainSparkSize": 42,
-    "haymakerSparkSize": 68,
+    "haymakerSparkSize": 132,
     "bribeSparkSize": 34,
     "deathPuffSize": 62,
     "muzzleMs": 110,
-    "muzzleGrow": 1.5
+    "muzzleGrow": 1.5,
+    "haymakerHitPauseMs": 90,
+    "haymakerNumberScale": 1.9,
+    "lastStandHoldMs": 220
   },
   "facing": {
     "deadZone": 0.15
@@ -54,8 +57,8 @@
     "leakIntensity": 0.005,
     "lastStandMs": 420,
     "lastStandIntensity": 0.011,
-    "haymakerMs": 180,
-    "haymakerIntensity": 0.007
+    "haymakerMs": 260,
+    "haymakerIntensity": 0.016
   },
   "hud": {
     "plateHeight": 44,
@@ -113,5 +116,11 @@
     "restTint": "#d4d8d0",
     "placingTint": "#f0f4ec",
     "hoverTint": "#ffffff"
+  },
+  "restructure": {
+    "liftPixels": 46,
+    "liftMs": 170,
+    "travelMs": 300,
+    "dropMs": 200
   }
 }

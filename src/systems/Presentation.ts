@@ -59,6 +59,8 @@ export function floatingDamage(
   big = false,
   /** Overrides the number, for things that are not damage. */
   label?: string,
+  /** Bigger than a normal hit, for a hit that is. */
+  scale = 1,
 ): void {
   const d = PRESENTATION.damageNumbers
   const text = scene.add
@@ -76,14 +78,35 @@ export function floatingDamage(
   const half = text.width / 2 + 6
   text.x = Phaser.Math.Clamp(text.x, half, scene.cameras.main.width - half)
 
+  // A number that lands bigger than it settles. Only the ones asked for it get
+  // it: an ordinary tower hit does not need a flourish, and Haymaker does.
+  if (scale !== 1) {
+    text.setScale(scale * 1.35)
+    scene.tweens.add({ targets: text, scale, duration: 150, ease: 'Back.easeOut' })
+  }
+
   scene.tweens.add({
     targets: text,
-    y: y - 18 - d.risePixels,
+    y: y - 18 - d.risePixels * (scale > 1 ? 1.6 : 1),
     alpha: 0,
-    duration: d.durationMs,
+    duration: d.durationMs * (scale > 1 ? 1.5 : 1),
     ease: 'Quad.easeOut',
     onComplete: () => text.destroy(),
   })
+}
+
+/**
+ * A beat of stillness on impact.
+ *
+ * The oldest trick in the book and the reason a big hit feels big: the frame
+ * where the punch lands is held, so the eye reads a collision rather than a
+ * number changing. Everything the world simulates runs off one scaled delta,
+ * so pausing is one flag rather than a per-system freeze.
+ */
+export function hitPause(scene: Phaser.Scene, ms: number, hold: (on: boolean) => void): void {
+  if (ms <= 0) return
+  hold(true)
+  scene.time.delayedCall(ms, () => hold(false))
 }
 
 /**

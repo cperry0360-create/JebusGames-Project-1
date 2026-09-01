@@ -25,7 +25,10 @@ const MAP = (await import('./js/data/map.json', { with: { type: 'json' } })).def
 const SPOTS = MAP.buildSpots
 
 const q = new URLSearchParams(location.search)
+const GAME_SPEED = 1.4
 const scenario = q.get('s') || 'game'
+/** Optional scenario argument, e.g. ?s=heroblock&arg=7 */
+const arg = q.get('arg')
 // The window is sized by --window-size, and the canvas follows it through
 // Phaser's RESIZE mode exactly as it does on a real phone. Reading it back
 // here so the log says what was actually tested.
@@ -1683,6 +1686,211 @@ async function run() {
     note('survivability: 2 gnomes (90hp each) gone in ' +
       Math.round(performance.now() - t0) + 'ms after ' + hits.length + ' hits for ' +
       hits.reduce((a, b) => a + b, 0) + ' damage; a Late Filer does 7 every 1.0s')
+    return
+  }
+
+  if (scenario === 'herofx') {
+    // The four things a player is supposed to be able to see.
+    const hero = g.hero
+    g.status.peanuts = 99999
+    await build(3, 0)
+    // Wave 6 is five Final Notices and ten Shredders. It has to be a wave with
+    // armour in it: Depreciation strips armour, and two of the three enemy
+    // types have none, so against waves 1-3 the passive genuinely does nothing
+    // and no amount of effects would make it read.
+    g.status.wave = Number(arg || 5)
+    g.startWave()
+    await until(() => g.enemies.length > 2, 30000)
+
+    const spot = g.lane.pointAt(g.lane.totalLength * 0.5)
+    hero.setRally(spot.x, spot.y)
+    await until(() => Math.hypot(hero.x - spot.x, hero.y - spot.y) < 12, 20000)
+    await lookAt(hero.x, hero.y)
+
+    // 1. Depreciation. A ring at the shred radius, and a mark on what is in it.
+    // Specifically an ARMOURED one. The Final Notice walks at 40 and the
+    // Shredder at 122, so waiting for "any enemy in the ring" reliably catches
+    // the one type the passive cannot do anything to.
+    await until(() => g.enemies.some((e) => e.def.armor > 0 &&
+      Math.hypot(e.x - hero.x, e.y - hero.y) < hero.def.passive.armorShredRadius), 45000)
+    await sleep(1400)
+    const inRing = g.enemies.filter((e) =>
+      Math.hypot(e.x - hero.x, e.y - hero.y) < hero.def.passive.armorShredRadius)
+    note('passive: ' + inRing.length + ' enemies in the ' +
+      hero.def.passive.armorShredRadius + 'px ring; shred marks on ' +
+      inRing.filter((e) => e.shreddingFor > 0).length +
+      '; armour now ' + inRing.map((e) => e.def.armor + '->' + e.effectiveArmor.toFixed(1)).join(' '))
+    note('blocking ' + hero.blocking + ' of ' + hero.def.blockCapacity)
+    await shot('herofx-01-passive')
+
+    // 2. Haymaker.
+    g.cooldowns.reset('haymaker')
+    const before = g.enemies.map((e) => ({ e, x: e.x, y: e.y, hp: e.health }))
+    g.castHaymaker()
+    await sleep(60)
+    note('haymaker: hitPaused=' + g.hitPaused)
+    await shot('herofx-02-haymaker')
+    await sleep(500)
+    const moved = before
+      .filter((b) => b.e.active)
+      .map((b) => Math.round(Math.hypot(b.e.x - b.x, b.e.y - b.y)))
+      .filter((d) => d > 4)
+    note('haymaker: knocked back ' + moved.join(',') + 'px (data says ' +
+      hero.def.haymaker.knockbackPixels + '); hitPaused now ' + g.hitPaused)
+
+    // 3. Restructure, which should travel rather than teleport.
+    const tower = g.towers[0]
+    const freeSpot = g.build.spots.findIndex((sp, i) => g.build.isFree(i))
+    if (tower && freeSpot >= 0) {
+      const from = { x: tower.x, y: tower.y }
+      g.cooldowns.reset('restructure')
+      g.armRestructure()
+      g.doRestructure(tower.x, tower.y)
+      g.doRestructure(g.build.spots[freeSpot].x, g.build.spots[freeSpot].y)
+      await sleep(180)
+      const mid = { x: tower.x, y: tower.y }
+      note('restructure: from ' + Math.round(from.x) + ',' + Math.round(from.y) +
+        ' -> at 180ms ' + Math.round(mid.x) + ',' + Math.round(mid.y) +
+        ' (lifted ' + Math.round(from.y - mid.y) + 'px)')
+      await lookAt(tower.x, tower.y)
+      await shot('herofx-03-restructure')
+      await sleep(700)
+      note('restructure: landed ' + Math.round(tower.x) + ',' + Math.round(tower.y) +
+        ' target ' + Math.round(g.build.spots[freeSpot].x) + ',' +
+        Math.round(g.build.spots[freeSpot].y) +
+        '; cooldown ' + g.cooldowns.secondsLeft('restructure').toFixed(1) + 's of ' +
+        hero.def.restructure.cooldown + 's, ready=' + g.cooldowns.ready('restructure') +
+        '; mode=' + g.status.mode + ' CANCEL visible=' + g.cancelVisible)
+    }
+
+    // 4. Last Stand, forced, and the invulnerability that makes it happen.
+    await lookAt(hero.x, hero.y)
+    hero.health = hero.def.maxHealth * 0.3
+    const killed = hero.hurt(hero.def.maxHealth * 4)
+    note('a hit four times his total health at 30%: result=' + killed +
+      ' health=' + Math.round(hero.health) + '/' + hero.def.maxHealth +
+      ' (threshold ' + Math.round(hero.def.maxHealth * hero.def.lastStand.healthThreshold) + ')' +
+      ' lastStandActive=' + hero.lastStandActive + ' down=' + hero.down)
+    note('invulnerable for ' + hero.invulnerableFor.toFixed(2) + 's; a further huge hit: ' +
+      hero.hurt(9999) + ' health=' + Math.round(hero.health))
+    await sleep(200)
+    await shot('herofx-04-laststand-flash')
+    await sleep(900)
+    await shot('herofx-05-dadmode')
+    note('after the transform: sprite=' + hero.list[1].texture.key +
+      ' active=' + hero.lastStandActive + ' down=' + hero.down)
+    return
+  }
+
+  if (scenario === 'heroblock') {
+    // How many enemies does one man actually hold, and what does that cost him?
+    // Measured before anything is changed, because the data says 3 and the
+    // tester says "all of them".
+    g.status.peanuts = 0                       // no towers: the hero alone
+    const hero = g.hero
+    const def = hero.def
+    note('data: maxHealth=' + def.maxHealth + ' blockCapacity=' + def.blockCapacity +
+      ' blockRange=' + def.blockRange + ' lastStand at ' +
+      Math.round(def.lastStand.healthThreshold * 100) + '% (' +
+      Math.round(def.maxHealth * def.lastStand.healthThreshold) + 'hp)')
+
+    // Park him on the lane so a whole wave walks into him.
+    const spot = g.lane.pointAt(g.lane.totalLength * 0.55)
+    hero.setRally(spot.x, spot.y)
+    // Wave 1 is four Late Filers, which never reaches the cap and so proves
+    // nothing about it. Wave 8 is 32 across three types and is what the tester
+    // was describing.
+    g.status.wave = Number(arg || 7)
+    g.startWave()
+    await until(() => g.enemies.length > 0, 30000)
+    await until(() => Math.hypot(hero.x - spot.x, hero.y - spot.y) < 12, 20000)
+
+    // Where he is standing, as a distance along the lane, so "walked past him"
+    // is measured along the path rather than as straight-line distance.
+    const heroDist = g.lane.totalLength * 0.55
+    // The decisive question is not how many are flagged at once — the data
+    // says 3 and the code slices to 3 — but whether the flag STAYS on the same
+    // three. It is cleared and reassigned every frame, and the attack timer is
+    // deliberately carried across a lost slot, so if the slot rotates then
+    // every enemy in range keeps swinging at its own full rate and the
+    // capacity limits nothing at all.
+    const timeline = []
+    const reachedHim = new Set()
+    let attacks = 0
+    const attackers = new Set()
+    const heldEver = new Set()
+    let churn = 0
+    let prevHeld = ''
+    const origHurt = hero.hurt.bind(hero)
+    hero.hurt = (amt) => { attacks++; return origHurt(amt) }
+
+    let samples = 0, heldSum = 0, inRangeSum = 0, maxHeld = 0
+    let dmg = 0, lastHp = hero.health
+    const t0 = performance.now()
+    let lastStandAt = -1, deadAt = -1, passedBy = 0
+    const seenPast = new Set()
+
+    while (performance.now() - t0 < 26000) {
+      await sleep(100)
+      const inRange = g.enemies.filter((e) =>
+        e.alive && Math.hypot(e.x - hero.x, e.y - hero.y) <= hero.blockRange)
+      const held = g.enemies.filter((e) => e.blocker === hero)
+      for (const e of held) heldEver.add(e)
+      for (const e of inRange) attackers.add(e)
+      const sig = held.map((e) => g.enemies.indexOf(e)).sort().join(',')
+      if (sig !== prevHeld) churn++
+      prevHeld = sig
+      samples++; heldSum += held.length; inRangeSum += inRange.length
+      if (held.length > maxHeld) maxHeld = held.length
+      if (hero.health < lastHp) dmg += lastHp - hero.health
+      lastHp = hero.health
+      if (lastStandAt < 0 && hero.lastStandActive) lastStandAt = performance.now() - t0
+      if (deadAt < 0 && !hero.alive) deadAt = performance.now() - t0
+      // Anything that got past his block ring and kept walking.
+      // Only while he is alive: once he is down everything walks past and the
+      // number stops meaning anything.
+      if (hero.alive) {
+        for (const e of g.enemies) {
+          if (e.alive && e.distance > heroDist + hero.blockRange && !seenPast.has(e)) {
+            seenPast.add(e); passedBy++
+          }
+        }
+        for (const e of g.enemies) {
+          if (e.alive && e.distance > heroDist - hero.blockRange) reachedHim.add(e)
+        }
+      }
+      if (samples % 10 === 0) {
+        timeline.push(Math.round((performance.now() - t0) / 1000) + 's:' +
+          ' in=' + inRange.length + ' held=' + held.length +
+          ' past=' + passedBy + ' hp=' + Math.round(hero.health))
+      }
+      if (deadAt >= 0) break
+    }
+    const secs = (performance.now() - t0) / 1000
+    note('over ' + secs.toFixed(1) + 's of real time (game runs at ' + GAME_SPEED + 'x):')
+    note('  enemies inside his block ring, mean: ' + (inRangeSum / samples).toFixed(2))
+    note('  enemies he actually held,     mean: ' + (heldSum / samples).toFixed(2) +
+      '  peak: ' + maxHeld + '  (capacity ' + def.blockCapacity + ')')
+    note('  damage taken: ' + Math.round(dmg) + ' over ' + secs.toFixed(1) + 's = ' +
+      (dmg / secs).toFixed(1) + '/s real, ' + (dmg / (secs * GAME_SPEED)).toFixed(1) + '/s game')
+    note('  health ' + Math.round(hero.health) + '/' + def.maxHealth)
+    note('  Last Stand fired: ' + (lastStandAt >= 0 ? 'yes at ' + Math.round(lastStandAt) + 'ms' : 'NO'))
+    note('  died: ' + (deadAt >= 0 ? 'yes at ' + Math.round(deadAt) + 'ms' : 'no'))
+    if (lastStandAt >= 0 && deadAt >= 0) {
+      note('  window between Last Stand and death: ' + Math.round(deadAt - lastStandAt) + 'ms');
+    }
+    note('  while he was alive: ' + reachedHim.size + ' enemies reached him, ' +
+      passedBy + ' got past (' +
+      (reachedHim.size ? Math.round(100 * passedBy / reachedHim.size) : 0) + '%)')
+    timeline.forEach((l) => note('    ' + l))
+    note('  distinct enemies that ever held a block slot: ' + heldEver.size +
+      ' (capacity is ' + def.blockCapacity + ')')
+    note('  the held set changed on ' + churn + ' of ' + samples + ' samples')
+    note('  invulnerable window: ' + def.lastStand.invulnerableSeconds + 's')
+    note('  attacks landed on him: ' + attacks + '; ceiling for ' + def.blockCapacity +
+      ' concurrent Late Filers over ' + (secs * GAME_SPEED).toFixed(1) + ' game-seconds is ' +
+      Math.round(def.blockCapacity * secs * GAME_SPEED / 1.0))
+    await shot('heroblock-01');
     return
   }
 

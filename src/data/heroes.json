@@ -53,7 +53,8 @@
       "rammingKnockbackPixels": 54,
       "transformShakeMs": 420,
       "transformFlashMs": 260,
-      "transformPauseMs": 500
+      "transformPauseMs": 500,
+      "invulnerableSeconds": 1.2
     },
     "ultimateSprite": "hero-cory-ultimate",
     "fighterSprites": [
