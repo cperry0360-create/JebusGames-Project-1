@@ -242,10 +242,20 @@ async function edgeCheck(label) {
   note(`${label}: edges ${JSON.stringify(out)} — ${bars === 0 ? 'MAP TO ALL EDGES' : bars + ' edge(s) still a bar'}`)
 }
 
+let bootBroken = false
 async function toTitle() {
   await until(() => game.textures.exists('map-level1') && game.textures.exists('enemy-notice'), 30000)
   const ok = await until(() => running('Title'), 15000)
-  note('splash -> title: ' + ok)
+  note('splash -> title: ' + ok + (ok ? '' : '   *** THE GAME DID NOT BOOT ***'))
+  // Loud, because quiet is what let a broken boot ship. This printed `false`
+  // in three separate runs while every scenario carried on regardless — the
+  // scenarios force-start their scenes after stopping Boot, so a game that
+  // cannot get past Splash still produces a full set of screenshots.
+  if (!ok) {
+    note('  BOOT FAILED. Everything below this line is a scenario forcing scenes')
+    note('  to start by hand and proves nothing about whether the game runs.')
+    bootBroken = true
+  }
   return ok
 }
 async function startRun() {
@@ -321,6 +331,56 @@ let g = null
 async function run() {
   const okTitle = await toTitle()
   if (scenario === 'title') { await shot('title'); return }
+  if (scenario === 'realboot') {
+    // The whole path, with nothing forced. Boot -> Splash -> Title -> Loadout
+    // -> Game -> Hud, each one waited for rather than started by hand. This is
+    // the scenario that would have caught the outage: every other one stops
+    // Boot and starts what it needs, so a game that cannot boot still produces
+    // a full set of screenshots.
+    const steps = []
+    const reach = async (key, how) => {
+      if (how) how()
+      const ok = await until(() => running(key), 15000)
+      steps.push(key + '=' + (ok ? 'built' : 'FAILED'))
+      note('  ' + key.padEnd(9) + (ok ? 'built' : '*** FAILED TO BUILD ***'))
+      return ok
+    }
+    note('viewport ' + VP.w + 'x' + VP.h)
+    note('booting with nothing forced:')
+    steps.push('Title=' + (okTitle ? 'built' : 'FAILED'))
+    note('  Title    ' + (okTitle ? 'built' : '*** FAILED TO BUILD ***'))
+    let ok = okTitle
+    if (ok) ok = await reach('Loadout', () => scene('Title').scene.start('Loadout'))
+    if (ok) {
+      ok = await reach('Game', () => {
+        const lo = scene('Loadout')
+        lo.scene.start('Game'); lo.scene.launch('Hud')
+      })
+    }
+    if (ok) ok = await reach('Hud')
+    await sleep(700)
+
+    // And the level actually drew something, rather than building an empty scene.
+    const g2 = scene('Game')
+    const drawn = g2 ? g2.children.list.filter((o) => o.visible !== false).length : 0
+    const plate = game.textures.exists('map-level1')
+    note('  the level drew ' + drawn + ' objects; map plate present: ' + plate)
+    note('  optional art absent: ' + JSON.stringify(
+      (await import('./js/systems/Art.js')).OPTIONAL_SPRITE_KEYS.filter((k) => !game.textures.exists(k))))
+    note('  required art absent: ' + JSON.stringify(
+      (await import('./js/systems/Art.js')).REQUIRED_SPRITE_KEYS.filter((k) => !game.textures.exists(k))))
+    // The banner is a DOM element, and a canvas screenshot cannot show one —
+    // so it is checked here rather than looked for in the picture.
+    const banner = document.getElementById('missing-art')
+    note('  missing-art banner in the DOM: ' + (banner ? JSON.stringify(banner.textContent.slice(0, 70)) : 'none'))
+    await shot('realboot-' + VP.w + 'x' + VP.h)
+    note('RESULT ' + (steps.every((s) => s.endsWith('built')) && drawn > 20
+      ? 'every scene built and the level rendered'
+      : '*** ' + steps.join(' ') + ' drew=' + drawn + ' ***'))
+    return
+  }
+
+
   if (scenario === 'diag') {
     // The diagnostics, which only matter if they work when everything else
     // does not. Three things to prove: the hidden screen opens, a thrown
@@ -3653,8 +3713,9 @@ async function run() {
 try { await run() } catch (e) { note('DIRECTOR ERROR: ' + e.message + ' | ' + String(e.stack).slice(0, 400)) }
 
 const gs = scene('Game')
+if (bootBroken) log.unshift('*** BOOT FAILED — see below ***')
 await post('/done', JSON.stringify({
-  scenario, log,
+  scenario, bootFailed: bootBroken, log,
   status: gs?.status ?? null,
   towers: gs?.towers?.length, enemies: gs?.enemies?.length, spots: SPOTS.length,
   heroAt: gs?.hero ? [Math.round(gs.hero.x), Math.round(gs.hero.y)] : null,

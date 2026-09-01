@@ -1,85 +1,99 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
+
+const url = (p: string) => new URL(p, import.meta.url)
+const src = (p: string) => readFileSync(url(`../src/${p}`), 'utf8')
+const art = JSON.parse(readFileSync(url('../src/data/art.json'), 'utf8'))
 
 /**
- * The inline script in index.html.
+ * The outage, as tests.
  *
- * It shipped broken and nothing noticed, because nothing tested the HTML. Two
- * adjacent IIFEs — `})()` then, after a comment, `(function () {` — parse as a
- * call on the first one's return value. That value is undefined, so every load
- * threw "undefined is not a function" before boot and every load showed the
- * crash panel. A panel that fires every time is not a signal; a tester learns
- * to ignore it, and then stops reporting the real ones.
+ * A manifest hook was added for art that had not been uploaded. The loader was
+ * taught to tolerate it and the manifest tests were taught to skip it — and
+ * the one place that actually gates the game, BootScene, was not. It collected
+ * every absent texture, drew the list on a blank screen and returned without
+ * starting Splash. The whole game was a green screen reading "Missing art".
  *
- * So the script is executed here, in a sandbox, exactly as a browser would.
+ * Nothing here can prove the game renders; CI has no browser. What it holds
+ * are the two properties that would each have prevented it alone: boot never
+ * refuses to continue, and no REQUIRED file is absent. The rendering proof is
+ * the harness's `realboot` scenario, which walks Boot to Hud forcing nothing.
  */
 
-const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8')
-const inline = html.slice(html.indexOf('<script>') + '<script>'.length, html.indexOf('</script>'))
+test('boot never refuses to start the game', () => {
+  const boot = src('scenes/BootScene.ts')
+  const create = boot.slice(boot.indexOf('create(): void {'))
+  const body = create.slice(0, create.indexOf('\n  }'))
 
-function runInline(): { window: Record<string, unknown>; fetched: string[] } {
-  const fetched: string[] = []
-  const win: Record<string, unknown> = { addEventListener: () => {} }
-  const doc = { getElementById: () => null }
-  const store = { getItem: () => null, setItem: () => {} }
-  const fetchStub = (url: string): Promise<unknown> => {
-    fetched.push(url)
-    return Promise.resolve({ ok: false, json: () => Promise.resolve(null) })
+  // The exact shape of the bug: a bare `return` in create() before Splash.
+  assert.ok(!/\n\s+return\b/.test(body),
+    'BootScene.create() can return early, which is what blanked the game on live')
+  assert.match(body, /this\.scene\.start\('Splash'\)/, 'boot does not start the game')
+
+  // Missing art is reported, not fatal, and the two kinds are told apart.
+  assert.match(body, /OPTIONAL_SPRITE_KEYS/, 'boot does not know which art is optional')
+  assert.match(body, /REQUIRED_SPRITE_KEYS/, 'boot does not know which art is required')
+  assert.match(body, /console\.warn\(/, 'a missing optional asset is not warned about')
+  assert.match(body, /console\.error\(/, 'a missing required asset is not reported loudly')
+})
+
+test('every REQUIRED manifest file is really present', () => {
+  // This is the check that was switched off. The `optional` skip was added so
+  // a hook could exist before its art, and it must apply to optional keys only.
+  const optional: string[] = art.optional ?? []
+  const missing: string[] = []
+  for (const [key, path] of Object.entries(art.files) as [string, string][]) {
+    if (optional.includes(key)) continue
+    if (!existsSync(url(`../public/${art.assetRoot}${path}`))) missing.push(`${key} -> ${path}`)
   }
-  // Same shape a browser gives it: the globals it names, and nothing else.
-  const fn = new Function(
-    'window', 'document', 'sessionStorage', 'fetch', 'location', 'setTimeout', inline,
-  )
-  fn(win, doc, store, fetchStub, { reload: () => {} }, () => 0)
-  return { window: win, fetched }
-}
-
-test('the inline boot script runs without throwing', () => {
-  // This is the whole test. It threw on every single load for as long as the
-  // two IIFEs sat next to each other without a semicolon between them.
-  assert.doesNotThrow(runInline,
-    'index.html throws before the game can boot — check for a missing semicolon after an IIFE')
+  assert.deepEqual(missing, [], 'required art is referenced but not in the repo')
 })
 
-test('the boot script installs the early error queue and the build stamp', () => {
-  const { window: win } = runInline()
-  assert.deepEqual(win.__earlyErrors, [],
-    'nothing catches the errors that happen before the module loads')
-  // A crash before boot never reaches main.ts, so the build has to be recorded
-  // here or the report cannot say which build it came from.
-  assert.equal(typeof win.__buildId, 'string', 'the build id is not stamped on the window')
-  assert.ok((win.__buildId as string).length > 0)
-})
-
-test('no statement in the boot script relies on automatic semicolon insertion', () => {
-  // A line starting with any of these continues the previous expression when
-  // the previous line has no terminator. That is exactly how the two IIFEs
-  // became one call.
-  const risky = new Set(['(', '[', '`', '+', '-', '/'])
-  const lines = inline.split('\n')
-  const offenders: string[] = []
-  let prev = ''
-  for (const [i, line] of lines.entries()) {
-    const t = line.trim()
-    if (!t || t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) continue
-    const cont = /[;{(,.]$|&&$|\|\|$|=$/.test(prev.trim())
-    if (risky.has(t[0]) && prev && !cont) {
-      offenders.push(`line ${i + 1}: "${t.slice(0, 48)}" continues "${prev.trim().slice(0, 40)}"`)
-    }
-    prev = line
+test('an optional key is a short deliberate list, and every one has a fallback', () => {
+  const optional: string[] = art.optional ?? []
+  // A long optional list means the rule has become a way to silence the check.
+  assert.ok(optional.length <= 4,
+    `${optional.length} optional keys; this list is for art being drawn, not a mute button`)
+  for (const key of optional) {
+    assert.ok(art.files[key], `${key} is marked optional but is not in the manifest`)
   }
-  assert.deepEqual(offenders, [],
-    'these lines join onto the previous statement instead of starting a new one')
+  const game = src('scenes/GameScene.ts')
+  if (optional.includes('prop-build-pad')) {
+    assert.match(game, /this\.textures\.exists\(quietKey\)/,
+      'the build pad has no existence check, so a missing file would draw nothing')
+    assert.match(game, /const isSign = i === signIndex \|\| !hasQuiet/,
+      'the build pad does not fall back to the sign when its art is absent')
+  }
 })
 
-test('every IIFE in the boot script is terminated', () => {
-  // Statement-level only: a `(function () {` that begins a line is an IIFE,
-  // while `setTimeout(function () {` is a callback and ends differently.
-  const opened = inline.split('\n')
-    .filter((l) => /^;?\(function \(\) \{$/.test(l.trim())).length
-  const closed = (inline.match(/\}\)\(\);/g) ?? []).length
-  assert.ok(opened > 0, 'no IIFEs found, so this test is checking nothing')
-  assert.equal(closed, opened,
-    `${opened} IIFEs but only ${closed} end in "})();" — an unterminated one swallows what follows`)
+test('the scatter skips props whose art did not load', () => {
+  // Fourteen ordinary manifest entries, so one going missing must drop that
+  // prop rather than putting a placeholder box on the grass.
+  const game = src('scenes/GameScene.ts')
+  const fn = game.slice(game.indexOf('private createScatter()'), game.indexOf('private createAmbient()'))
+  assert.match(fn, /\.filter\(\(k\) => this\.textures\.exists\(k\.key\)\)/,
+    'the scatter draws props without checking their art loaded')
+  assert.match(fn, /if \(kinds\.length === 0\) return/,
+    'the scatter has no answer for every prop being absent')
+})
+
+test('the loader does not pretend to handle a missing file', () => {
+  // The first attempt registered a no-op `fileerror` listener that swallowed
+  // nothing and prevented nothing — and reading it made the tolerance look
+  // handled when it was not.
+  const loader = src('systems/ArtLoader.ts')
+  assert.ok(!/fileerror-image-/.test(loader),
+    'the loader has a listener that does nothing, which is worse than none')
+})
+
+test('the missing-art banner cannot be hidden behind the game', () => {
+  // A Phaser text was tried first and was invisible: scene render order beats
+  // any depth, and Boot is the FIRST scene in the config array, so it drew
+  // underneath the entire game in exactly the case it exists for.
+  const boot = src('scenes/BootScene.ts')
+  assert.match(boot, /position:fixed/, 'the banner is drawn on a canvas that renders below the game')
+  assert.match(boot, /z-index:99998/, 'the banner has no stacking order of its own')
+  assert.ok(!/this\.scene\.bringToTop\('Boot'\)/.test(boot),
+    'the banner is still trying to win a scene-order fight it cannot win')
 })

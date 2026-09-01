@@ -10,6 +10,17 @@ obvious the moment you look at a frame.
 ```bash
 PHASER_DIST=/path/to/phaser.min.js tools/harness/build.sh
 tools/harness/run.sh ui 180        # scenario, seconds to wait
+tools/harness/run.sh realboot 90   # RUN THIS BEFORE ANY PUSH
+```
+
+`realboot` walks Boot -> Splash -> Title -> Loadout -> Game -> Hud with
+**nothing forced**, and fails if any scene does not build. Every other
+scenario stops Boot and starts the scenes it needs by hand, so a game that
+cannot boot at all still produces a full set of screenshots — which is exactly
+how a green screen shipped to live. `toTitle()` printed `splash -> title:
+false` in three separate runs and every one of them carried on regardless.
+
+```
 ```
 
 Screenshots and a JSON report land in `tools/harness/shots/`.

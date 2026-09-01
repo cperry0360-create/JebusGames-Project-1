@@ -65,6 +65,40 @@ export function hasTierArt(baseKey: string): boolean {
 export const SPRITE_KEYS = Object.keys(art.files)
 
 /**
+ * Keys whose file may legitimately not be there.
+ *
+ * A manifest hook is how new art is requested: the key and the path are agreed
+ * first, the file lands later, and the game falls back until it does. The
+ * fallback is the caller's job — `this.textures.exists(key)` and an
+ * alternative — and NOTHING here may stop the game because one is absent.
+ *
+ * This list cost a live outage. `prop-build-pad` was added as a hook, the
+ * loader and the manifest tests were both taught to tolerate it, and the one
+ * place that actually gates the game — BootScene, which refused to start
+ * Splash if any key was missing — was not. The result was a green screen and
+ * the word "Missing art".
+ */
+export const OPTIONAL_SPRITE_KEYS: string[] = (art as { optional?: string[] }).optional ?? []
+
+/**
+ * Everything else: art the game cannot sensibly run without.
+ *
+ * Every map plate, every unit, every tower, every UI plate, every HUD icon.
+ * A missing one is a real fault and says so loudly — but it still does not
+ * stop the game, because a player looking at Phaser's magenta placeholder can
+ * at least tell you what is wrong, and a player looking at a green screen
+ * cannot.
+ */
+export const REQUIRED_SPRITE_KEYS = SPRITE_KEYS.filter(
+  (k) => !OPTIONAL_SPRITE_KEYS.includes(k),
+)
+
+/** True when this key is allowed to be absent. */
+export function isOptionalArt(key: string): boolean {
+  return OPTIONAL_SPRITE_KEYS.includes(key)
+}
+
+/**
  * Scales a sprite so its *artwork* is `targetHeight` tall, ignoring any
  * transparent margin in the canvas, and anchors it on the artwork's centre.
  * Logos are padded and slightly off-centre, so sizing by the texture would
