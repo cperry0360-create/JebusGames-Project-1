@@ -35,7 +35,7 @@ test('the scatter is the same every run and every session', () => {
 
 test('nothing lands on the path, a build spot, an end, or the painted furniture', () => {
   const out = scatter(input, cfg.seed)
-  assert.ok(out.length > 24, `only ${out.length} props placed; the map would look bare`)
+  assert.ok(out.length >= 10, `only ${out.length} props placed; the map would look bare`)
   const r = cfg.rules
   const grassOnly = new Set(
     (cfg.kinds as ScatterKind[]).filter((k) => k.surface === 'grass').map((k) => k.key),
@@ -101,8 +101,8 @@ test('the scatter reads as texture, not as objects', () => {
   // lane. A third of that, spaced much further apart, with a real buffer of
   // empty grass either side of the road.
   const out = scatter(input, cfg.seed)
-  assert.ok(out.length >= 24 && out.length <= 42,
-    `${out.length} props; the target is roughly 33, down from 56 and from 179 before that`)
+  assert.ok(out.length >= 10 && out.length <= 14,
+    `${out.length} props; the board is dressed back to 10-14, from 33, 56 and 179 before that`)
 
   const r = cfg.rules
   assert.ok(r.minGapPx >= 30, `a ${r.minGapPx}px minimum gap still lets props cluster`)
@@ -114,7 +114,44 @@ test('the scatter reads as texture, not as objects', () => {
 
   // Density per unit area, so this stays meaningful if the map changes size.
   const perMillion = out.length / (DISPLAY.width * DISPLAY.height) * 1e6
-  assert.ok(perMillion < 55, `${perMillion.toFixed(0)} props per million square units is a thicket`)
+  assert.ok(perMillion < 20, `${perMillion.toFixed(0)} props per million square units is a thicket`)
+})
+
+/**
+ * Rocks and grass, and nothing else — for now.
+ *
+ * The board is being dressed back to see what it actually wants. The other ten
+ * props are NOT deleted: they keep their art, their manifest entry, their
+ * weight and their cap, and they are one `enabled` flag from returning. So
+ * this test checks the dealt hand rather than the list, because the list is
+ * deliberately still full.
+ */
+test('only rocks and grass tufts are dealt, and the rest are parked not deleted', () => {
+  const ALLOWED = [
+    'scatter-grass-small', 'scatter-grass-tall',
+    'scatter-rock-large', 'scatter-rock-medium', 'scatter-rock-small',
+  ]
+  const out = scatter(input, cfg.seed)
+  const dealt = [...new Set(out.map((p) => p.key))].sort()
+  for (const k of dealt) {
+    assert.ok(ALLOWED.includes(k), `${k} is on the board; only rocks and grass should be dealt`)
+  }
+  // Every kind that is switched off must still be here in full, so turning one
+  // back on is a one-character edit rather than an archaeology exercise.
+  const kinds = cfg.kinds as ScatterKind[]
+  const parked = kinds.filter((k) => k.enabled === false)
+  assert.ok(parked.length >= 10, `only ${parked.length} props are parked; some have been deleted`)
+  for (const k of parked) {
+    assert.ok(k.weight > 0 && k.radius > 0,
+      `${k.key} was parked by gutting it rather than by switching it off`)
+  }
+  // And the manifest still names them, so the art still ships.
+  const manifest = read('art').scatter as Record<string, string>
+  const named = new Set(Object.values(manifest))
+  for (const k of parked) {
+    if (k.key === 'scatter-grass-small') continue // art not delivered yet
+    assert.ok(named.has(k.key), `${k.key} was dropped from the art manifest`)
+  }
 })
 
 /**

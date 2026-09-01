@@ -283,8 +283,8 @@
     "scaleJitter": 0.1,
     "rotateDegrees": 6,
     "rules": {
-      "attempts": 1000,
-      "minGapPx": 44,
+      "attempts": 600,
+      "minGapPx": 130,
       "pathClearancePx": 96,
       "buildSpotClearPx": 64,
       "endClearPx": 96,
@@ -302,19 +302,19 @@
       {
         "key": "scatter-rock-small",
         "surface": "grass",
-        "weight": 8,
+        "weight": 7,
         "radius": 8
       },
       {
         "key": "scatter-rock-medium",
         "surface": "grass",
-        "weight": 5,
+        "weight": 4,
         "radius": 12
       },
       {
         "key": "scatter-rock-large",
         "surface": "grass",
-        "weight": 3,
+        "weight": 2,
         "radius": 17
       },
       {
@@ -322,66 +322,83 @@
         "surface": "grass",
         "weight": 2,
         "radius": 8,
-        "max": 3
+        "max": 3,
+        "enabled": false
       },
       {
         "key": "scatter-flowers-white",
         "surface": "grass",
         "weight": 4,
-        "radius": 8
+        "radius": 8,
+        "enabled": false
       },
       {
         "key": "scatter-flowers-yellow",
         "surface": "grass",
         "weight": 4,
-        "radius": 8
+        "radius": 8,
+        "enabled": false
       },
       {
         "key": "scatter-branch-large",
         "surface": "grass",
         "weight": 3,
-        "radius": 13
+        "radius": 13,
+        "enabled": false
       },
       {
         "key": "scatter-branch-small",
         "surface": "grass",
         "weight": 4,
-        "radius": 9
+        "radius": 9,
+        "enabled": false
       },
       {
         "key": "scatter-dirt-cracked",
         "surface": "grass",
         "weight": 2,
         "radius": 12,
-        "max": 2
+        "max": 2,
+        "enabled": false
       },
       {
         "key": "scatter-stump",
         "surface": "grass",
         "weight": 5,
         "radius": 16,
-        "max": 2
+        "max": 2,
+        "enabled": false
       },
       {
         "key": "scatter-mushrooms",
         "surface": "grass",
         "weight": 5,
         "radius": 8,
-        "max": 2
+        "max": 2,
+        "enabled": false
       },
       {
         "key": "scatter-puddle",
         "surface": "lane-edge",
         "weight": 5,
         "radius": 14,
-        "max": 1
+        "max": 1,
+        "enabled": false
       },
       {
         "key": "scatter-tire-ruts",
         "surface": "lane-edge",
         "weight": 5,
         "radius": 16,
-        "max": 1
+        "max": 1,
+        "enabled": false
+      },
+      {
+        "key": "scatter-grass-small",
+        "surface": "grass",
+        "weight": 8,
+        "radius": 7,
+        "enabled": false
       }
     ]
   },

@@ -30,6 +30,16 @@ export interface ScatterKind {
   weight: number
   /** Hard cap on the whole map. Rare props carry a small one. */
   max?: number
+  /**
+   * Whether this kind is placed at all. Default true.
+   *
+   * A kind that is switched off stays in the manifest, on disk and in this
+   * list, with its weight, cap and surface intact — it is simply not dealt.
+   * That is deliberately not the same as deleting it: the board is being
+   * dressed back to rocks and grass to see what it wants, and the other ten
+   * props have to be one flag away from coming back.
+   */
+  enabled?: boolean
   /** Radius this prop claims, in world px, for spacing against its neighbours. */
   radius: number
 }
@@ -163,6 +173,7 @@ export function scatter(input: ScatterInput, seed: number): Placement[] {
     if (!nearLane && !onGrass) continue
 
     const eligible = input.kinds.filter((k) => {
+      if (k.enabled === false) return false
       if (k.max !== undefined && (counts.get(k.key) ?? 0) >= k.max) return false
       // A prop's own body must clear the road, not merely its anchor point.
       if (k.surface === 'lane-edge') return nearLane && d - k.radius >= r.laneHalfPx
