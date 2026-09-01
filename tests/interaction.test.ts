@@ -467,3 +467,65 @@ test('a paused game can always be un-paused', () => {
   assert.match(quit, /onCancel: \(\) => this\.resumeGame\(\)/,
     'backing out of the quit prompt no longer resumes the game')
 })
+
+/**
+ * THE TOWER PANEL'S ACTIONS ARE ICONS.
+ *
+ * Icons only on the buttons, at 40 screen pixels and never smaller, with the
+ * price beneath the plate rather than on it. The harness `icons` scenario
+ * measures the rendered result; these lock the rules that produce it.
+ */
+test('the upgrade ring is icons at 40px with the price beneath', () => {
+  const panel = src('ui/TowerPanel.ts')
+  const game = src('scenes/GameScene.ts')
+
+  // The floor, and the reason for it. Below 40 a 256px source is minified past
+  // 6x and the outlines break up.
+  const px = /const BTN_ICON = (\d+)/.exec(panel)
+  assert.ok(px && Number(px[1]) >= 40, `button icons are ${px?.[1]}px; 40 is the floor`)
+
+  // The options carry an icon and a price. A label field would let a word back
+  // onto a 38px plate.
+  assert.match(panel, /confirm\?: \{ icon: string; price: number/,
+    'the confirm button still takes a text label')
+  assert.match(panel, /extra\?: \{ icon: string; price: number/,
+    'the sell button still takes a text label')
+  assert.match(panel, /plateButton\(scene, bx, btnY, bw, BTN_H, '',/,
+    'a label is being passed to the button plate')
+  assert.doesNotMatch(game, /label: `UPGRADE|label: `SELL|label: `SPECIALIZE/,
+    'the caller still passes worded labels to the tower panel')
+
+  // Beneath, not on. The price sits below the plate's bottom edge.
+  assert.match(panel, /btnY \+ BTN_H \/ 2 \+ PRICE_GAP/,
+    'the price is not positioned below the plate')
+  assert.match(panel, /this\.height = btnY \+ BTN_H \/ 2 \+ PRICE_GAP \+ PRICE_H \+ PAD/,
+    'the panel reserves no room under the buttons, so the price would be clipped')
+
+  // The plate is added BEFORE the icon, or it covers it. This shipped wrong
+  // once: the measurements said a 40px icon was correctly placed and the
+  // screen showed two empty coloured bars.
+  const plateAt = panel.indexOf('parts.push(...btn.parts)')
+  const glyphAt = panel.indexOf('parts.push(glyph)')
+  assert.ok(plateAt > 0 && glyphAt > plateAt,
+    'the icon is added before the button plate, so the plate draws over it')
+
+  // Unaffordable reads as locked rather than as a greyed-out picture of the
+  // thing the player wanted.
+  assert.match(panel, /b\.enabled === false \? 'locked' : b\.icon/,
+    'a disabled button does not show the padlock')
+})
+
+test('every icon resolves through one place, so none can miss its fallback', () => {
+  const artSrc = src('systems/Art.ts')
+  const panel = src('ui/TowerPanel.ts')
+  const icons = read('art').ui.icons as Record<string, string>
+  // All ten are declared, and every name the panel asks for is one of them.
+  assert.ok(Object.keys(icons).length >= 10, `only ${Object.keys(icons).length} icons declared`)
+  for (const name of ['upgrade', 'sell', 'target', 'locked', 'damage', 'range', 'firerate', 'armor']) {
+    assert.ok(icons[name], `${name} is used but not in the manifest`)
+  }
+  // The resolver checks existence; a caller cannot get a key any other way.
+  assert.match(artSrc, /if \(key && scene\.textures\.exists\(key\)\) return key/,
+    'the resolver does not check the texture actually loaded')
+  assert.doesNotMatch(panel, /ART\.icons\[/, 'the panel indexes the icon map directly')
+})

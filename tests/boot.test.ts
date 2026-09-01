@@ -53,10 +53,33 @@ test('every REQUIRED manifest file is really present', () => {
 test('an optional key is a short deliberate list, and every one has a fallback', () => {
   const optional: string[] = art.optional ?? []
   // A long optional list means the rule has become a way to silence the check.
-  assert.ok(optional.length <= 4,
+  // The cap is generous enough for one family of icons and no more: ten UI
+  // icons share a single fallback and are one decision, not ten. What stops
+  // this becoming a mute button is the rule below, not the number — every
+  // optional key must resolve to something that draws.
+  assert.ok(optional.length <= 14,
     `${optional.length} optional keys; this list is for art being drawn, not a mute button`)
   for (const key of optional) {
     assert.ok(art.files[key], `${key} is marked optional but is not in the manifest`)
+  }
+  // Every optional icon goes through one resolver, so no call site can forget
+  // the fallback — which is exactly how the build-pad miss reached players.
+  const iconKeys = Object.values((art.ui.icons ?? {}) as Record<string, string>)
+  const missingFallback = iconKeys.filter((k) => !optional.includes(k))
+  assert.deepEqual(missingFallback, [],
+    'a UI icon is not on the optional list, so a missing file would fail loudly')
+  if (iconKeys.length > 0) {
+    const artSrc = src('systems/Art.ts')
+    assert.match(artSrc, /export function icon\(scene: Phaser\.Scene, name: string\): string/,
+      'there is no single resolver for icons')
+    assert.match(artSrc, /return ART\.generated\.iconMissing/,
+      'the resolver does not fall back to the stand-in')
+    assert.match(src('scenes/BootScene.ts'), /ensureIconFallbackTexture\(this\)/,
+      'the stand-in is never generated, so the fallback resolves to nothing')
+    // And nothing reaches around it.
+    const panel = src('ui/TowerPanel.ts')
+    assert.doesNotMatch(panel, /ART\.icons\[/, 'the panel bypasses the resolver')
+    assert.match(panel, /icon\(scene, /, 'the panel does not use the resolver')
   }
   const game = src('scenes/GameScene.ts')
   if (optional.includes('prop-build-pad')) {

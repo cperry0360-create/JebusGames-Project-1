@@ -556,6 +556,9 @@ export interface ArtDef {
     /** null once towers ship as one sprite carrying their own base. */
     /** The painted title illustration. null falls back to a flat panel. */
     titleBackdrop: string | null
+    /** Named action and stat icons, read through `icon()` so a missing file
+     *  resolves to the visible stand-in rather than an empty key. */
+    icons: Record<string, string>
     /** The three counter plates, each carrying its own icon and empty field. */
     counters: Record<string, string>
     /** The arcade button plates, by the weight of the action they carry. */
@@ -605,6 +608,7 @@ export interface ArtDef {
     groundShadow: string
     buildPad: string
     buildGlow: string
+    iconMissing: string
   }
   /** Per-tier tower sprites, keyed by the tower's base sprite key. A tower
    *  with no entry keeps one sprite at every tier, which is the default and

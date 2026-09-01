@@ -45,8 +45,8 @@ import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { platePanel, plateButton, type PlateButton } from '../ui/Plate.ts'
 import { SignBribe } from '../ui/SignBribe.ts'
 import { CameraRig } from '../systems/CameraRig.ts'
-import { Dialog, type DialogChoice, type DialogOptions, type DialogRow } from '../ui/Dialog.ts'
-import { TowerPanel } from '../ui/TowerPanel.ts'
+import { Dialog, type DialogChoice, type DialogOptions } from '../ui/Dialog.ts'
+import { TowerPanel, type PanelRow } from '../ui/TowerPanel.ts'
 import { maxTier, nextStep, sellValue, specPoints, statAt } from '../systems/Upgrades.ts'
 import { canAffordAny, openingPurse } from '../systems/Economy.ts'
 import { addBannerPoints, hasClearedARun, recordRunCleared } from '../systems/Save.ts'
@@ -1332,7 +1332,8 @@ this.armReadyCountdown()
    * What a built tower is for. Tapping one used to print a sentence and do
    * nothing, which left the player with peanuts and no way to spend them.
    */
-  private openTowerPanel(tower: Tower): void {
+  /** Public for the harness, which measures the icons and the price badges. */
+  openTowerPanel(tower: Tower): void {
     const def = tower.def
     const step = nextStep(def, tower.tier)
     const refund = sellValue(def, tower.tier + (tower.upgrading ? 1 : 0),
@@ -1357,28 +1358,39 @@ this.armReadyCountdown()
     // the tower on a phone screen 390px tall, so every row it does not need is
     // a row that would push it over the board it is supposed to be beside.
     // The tier goes in the subtitle, and the two prices go on their buttons.
-    const rows: DialogRow[] = []
+    const rows: PanelRow[] = []
     if (support) {
       const nextBonus = after('supportDamageBonus')
       rows.push({
+        icon: 'damage',
         label: 'Nearby damage',
         value: nextBonus === null
           ? `+${Math.round(tower.supportDamageBonus * 100)}%`
           : `+${Math.round(tower.supportDamageBonus * 100)}% → +${Math.round(nextBonus * 100)}%`,
       })
-      rows.push({ label: 'Radius', value: shift(tower.supportRadius, after('supportRadius')) })
+      rows.push({ icon: 'range', label: 'Radius', value: shift(tower.supportRadius, after('supportRadius')) })
     } else {
-      rows.push({ label: 'Damage', value: shift(tower.damage, after('damage'), 1) })
-      rows.push({ label: 'Range', value: shift(tower.range, after('range')) })
+      rows.push({ icon: 'damage', label: 'Damage', value: shift(tower.damage, after('damage'), 1) })
+      rows.push({ icon: 'range', label: 'Range', value: shift(tower.range, after('range')) })
       const nextInterval = after('fireInterval')
       rows.push({
+        icon: 'firerate',
         label: 'Rate',
         value: nextInterval === null
           ? `${n(1 / tower.fireInterval, 2)}/s`
           : `${n(1 / tower.fireInterval, 2)}/s → ${n(1 / nextInterval, 2)}/s`,
       })
       if (tower.splashRadius > 0) {
-        rows.push({ label: 'Splash', value: shift(tower.splashRadius, after('splashRadius')) })
+        rows.push({ icon: 'range', label: 'Splash', value: shift(tower.splashRadius, after('splashRadius')) })
+      }
+      // Only when it does any. A row reading "0" tells the player nothing
+      // except that there is a row.
+      if (tower.armorPierce > 0 || tower.def.ignoresArmor) {
+        rows.push({
+          icon: 'armor',
+          label: tower.def.ignoresArmor ? 'Armour' : 'Cuts armour',
+          value: tower.def.ignoresArmor ? 'Ignored' : shift(tower.armorPierce, after('armorPierce')),
+        })
       }
     }
 
@@ -1410,15 +1422,22 @@ this.armReadyCountdown()
       rows,
       confirm: (choosing || (step !== null && !tower.upgrading))
         ? {
-          // The price is on the button. A cost buried in a row above it is a
-          // cost the player has to go looking for before they can decide.
-          label: choosing ? `SPECIALIZE · ${specPrice}` : `UPGRADE · ${step?.cost ?? 0}`,
+          // Icon only, with the price under the button. The cost still has to
+          // be next to the thing it buys — a number buried in a row above is a
+          // number the player goes looking for before they can decide — but it
+          // does not have to be ON the plate to be next to it.
+          //
+          // Two different actions, two different icons: a straight tier
+          // upgrade, and the branch choice that closes one path for good.
+          icon: choosing ? 'target' : 'upgrade',
+          price: choosing ? specPrice : (step?.cost ?? 0),
           enabled: affordable,
           onPick: () => (choosing ? this.openSpecChoice(tower) : this.upgradeTower(tower)),
         }
         : undefined,
       extra: {
-        label: `SELL · ${refund}`,
+        icon: 'sell',
+        price: refund,
         onPick: () => this.sellTower(tower),
       },
       onPreview: (on) => {

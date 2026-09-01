@@ -24,6 +24,9 @@ export const ART = {
   files: art.files,
   map: art.map,
   ui: art.ui,
+  /** Named UI icons. Read through `icon()`, never directly, so a missing file
+   *  resolves to the visible stand-in instead of an empty texture key. */
+  icons: (art.ui as { icons?: Record<string, string> }).icons ?? {},
   /** Props painted onto the map rather than owned by an entity. */
   prop: art.prop as { signDefault: string; signBribed: string; buildPad: string; buildPadQuiet?: string },
   scatter: (art as { scatter?: Record<string, string> }).scatter ?? {},
@@ -142,6 +145,20 @@ export function contentWidthAt(key: string, targetHeight: number): number {
 
 /** Centred at natural size unless the manifest says otherwise. */
 const DEFAULT_RENDER: SpriteRender = { anchorX: 0.5, anchorY: 0.5 }
+
+/**
+ * The texture for a named UI icon, or the stand-in when it did not load.
+ *
+ * One resolver rather than a check at each call site, because the build-pad
+ * miss got through precisely by having the fallback in some places and not in
+ * the one that mattered. A caller cannot forget this: there is no other way to
+ * get an icon key.
+ */
+export function icon(scene: Phaser.Scene, name: string): string {
+  const key = ART.icons[name]
+  if (key && scene.textures.exists(key)) return key
+  return ART.generated.iconMissing
+}
 
 export function renderFor(key: string): SpriteRender {
   return { ...DEFAULT_RENDER, ...(art.render[key] ?? {}) }

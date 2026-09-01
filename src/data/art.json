@@ -79,7 +79,17 @@
     "scatter-pebbles": "props/pebbles.png",
     "scatter-stump": "props/stump.png",
     "scatter-mushrooms": "props/mushrooms.png",
-    "prop-build-pad": "props/build_pad.png"
+    "prop-build-pad": "props/build_pad.png",
+    "icon-upgrade": "ui/icon_upgrade.png",
+    "icon-sell": "ui/icon_sell.png",
+    "icon-target": "ui/icon_target.png",
+    "icon-confirm": "ui/icon_confirm.png",
+    "icon-cancel": "ui/icon_cancel.png",
+    "icon-locked": "ui/icon_locked.png",
+    "icon-damage": "ui/icon_damage.png",
+    "icon-range": "ui/icon_range.png",
+    "icon-firerate": "ui/icon_firerate.png",
+    "icon-armor": "ui/icon_armor.png"
   },
   "render": {
     "turret-escalation": {
@@ -447,6 +457,66 @@
     "ui-scratch-revealed": {
       "contentWidth": 600,
       "contentHeight": 406
+    },
+    "icon-upgrade": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 256,
+      "contentHeight": 256
+    },
+    "icon-sell": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 256,
+      "contentHeight": 256
+    },
+    "icon-target": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 256,
+      "contentHeight": 256
+    },
+    "icon-confirm": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 256,
+      "contentHeight": 256
+    },
+    "icon-cancel": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 256,
+      "contentHeight": 256
+    },
+    "icon-locked": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 256,
+      "contentHeight": 256
+    },
+    "icon-damage": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 256,
+      "contentHeight": 256
+    },
+    "icon-range": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 256,
+      "contentHeight": 256
+    },
+    "icon-firerate": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 256,
+      "contentHeight": 256
+    },
+    "icon-armor": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 256,
+      "contentHeight": 256
     }
   },
   "map": {
@@ -475,6 +545,18 @@
     "scratchCard": {
       "covered": "ui-scratch-covered",
       "revealed": "ui-scratch-revealed"
+    },
+    "icons": {
+      "upgrade": "icon-upgrade",
+      "sell": "icon-sell",
+      "target": "icon-target",
+      "confirm": "icon-confirm",
+      "cancel": "icon-cancel",
+      "locked": "icon-locked",
+      "damage": "icon-damage",
+      "range": "icon-range",
+      "firerate": "icon-firerate",
+      "armor": "icon-armor"
     }
   },
   "fx": {
@@ -499,7 +581,8 @@
   "generated": {
     "groundShadow": "gen-ground-shadow",
     "buildPad": "generated-build-pad",
-    "buildGlow": "generated-build-glow"
+    "buildGlow": "generated-build-glow",
+    "iconMissing": "generated-icon-missing"
   },
   "greyable": [
     "turret-ledger",
@@ -546,6 +629,16 @@
     "mushrooms": "scatter-mushrooms"
   },
   "optional": [
-    "prop-build-pad"
+    "prop-build-pad",
+    "icon-upgrade",
+    "icon-sell",
+    "icon-target",
+    "icon-confirm",
+    "icon-cancel",
+    "icon-locked",
+    "icon-damage",
+    "icon-range",
+    "icon-firerate",
+    "icon-armor"
   ]
 }

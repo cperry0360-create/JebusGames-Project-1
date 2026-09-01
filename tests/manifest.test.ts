@@ -109,7 +109,11 @@ test('art.json and the ArtDef type describe the same manifest', () => {
     const declared: string[] = []
     let depth = 0
     for (const line of block.split('\n')) {
-      const m = /^\s*(\w+):/.exec(line)
+      // `?:` as well as `:`. An optional field is still a role the manifest
+      // has to carry, and a regex that skipped it would let exactly the drift
+      // this test exists to catch back in through the one marker nobody looks
+      // at twice.
+      const m = /^\s*(\w+)\??:/.exec(line)
       if (m && depth === 0) declared.push(m[1])
       depth += (line.match(/\{/g) ?? []).length - (line.match(/\}/g) ?? []).length
     }

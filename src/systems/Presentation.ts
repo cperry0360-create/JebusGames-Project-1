@@ -112,6 +112,58 @@ export function ensureBuildGlowTexture(scene: Phaser.Scene): void {
   g.destroy()
 }
 
+/**
+ * The stand-in for a UI icon whose file did not arrive.
+ *
+ * The build-pad miss taught this the expensive way: an optional asset that
+ * silently falls back to nothing is indistinguishable from a broken screen,
+ * and one that fails loudly takes the game down with it. So a missing icon
+ * draws THIS — an obviously-wrong dashed box with a question mark, at the
+ * right size and in the right place. The button still works, the layout still
+ * holds, and anyone looking at it can see exactly which slot is empty.
+ *
+ * BootScene logs which keys were missing alongside it, so it is findable in
+ * the console as well as visible on the glass.
+ */
+export function ensureIconFallbackTexture(scene: Phaser.Scene): void {
+  const key = ART.generated.iconMissing
+  if (scene.textures.exists(key)) return
+
+  const cfg = PRESENTATION.iconFallback
+  const n = cfg.size
+  const g = scene.make.graphics({ x: 0, y: 0 }, false)
+  const inset = n * 0.12
+  const side = n - inset * 2
+
+  g.fillStyle(cfg.fillColor, cfg.fillAlpha)
+  g.fillRoundedRect(inset, inset, side, side, n * 0.1)
+  // Dashed, because a solid box reads as a deliberate shape and this must
+  // read as an absence.
+  g.lineStyle(cfg.strokeWidth, cfg.strokeColor, 1)
+  const dashes = 8
+  for (let i = 0; i < dashes * 4; i += 2) {
+    const t = (i % (dashes * 4)) / (dashes * 4)
+    const along = t * 4
+    const seg = Math.floor(along)
+    const f = along - seg
+    const pts = [
+      [inset + side * f, inset], [n - inset, inset + side * f],
+      [n - inset - side * f, n - inset], [inset, n - inset - side * f],
+    ][seg] ?? [inset, inset]
+    g.fillStyle(cfg.strokeColor, 1)
+    g.fillRect(pts[0]! - cfg.strokeWidth / 2, pts[1]! - cfg.strokeWidth / 2,
+      cfg.strokeWidth * 3, cfg.strokeWidth * 3)
+  }
+  // The mark itself: a stem and a dot, drawn rather than typed so this needs
+  // no font to have loaded.
+  g.fillStyle(cfg.markColor, 1)
+  g.fillRoundedRect(n * 0.44, n * 0.30, n * 0.12, n * 0.30, n * 0.05)
+  g.fillCircle(n * 0.5, n * 0.70, n * 0.075)
+
+  g.generateTexture(key, n, n)
+  g.destroy()
+}
+
 export function ensureShadowTexture(scene: Phaser.Scene): void {
   const key = ART.generated.groundShadow
   if (scene.textures.exists(key)) return

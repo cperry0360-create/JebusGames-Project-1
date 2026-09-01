@@ -426,5 +426,14 @@
     "perExtra": 0.003,
     "maxIntensity": 0.02,
     "durationMs": 210
+  },
+  "iconFallback": {
+    "_note": "Drawn in place of a UI icon whose file is missing. Deliberately wrong-looking: the layout holds and the button works, but nobody mistakes it for finished art.",
+    "size": 256,
+    "fillColor": 1778736,
+    "fillAlpha": 0.55,
+    "strokeColor": 15913067,
+    "strokeWidth": 10,
+    "markColor": 15913067
   }
 }

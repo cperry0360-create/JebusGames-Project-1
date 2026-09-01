@@ -3,6 +3,7 @@ import { platePanel, plateButton, type PlateButton } from './Plate.ts'
 import { COLOR, FONT_UI } from './Theme.ts'
 import type { Rect } from '../systems/HudLayout.ts'
 import { play } from '../systems/Audio.ts'
+import { fitInBox, icon } from '../systems/Art.ts'
 
 /**
  * The panel a built tower opens, anchored beside the tower.
@@ -21,6 +22,8 @@ import { play } from '../systems/Audio.ts'
 export interface PanelRow {
   label: string
   value: string
+  /** A name from art.json's ui.icons, drawn to the left of the label. */
+  icon?: string
   accent?: boolean
 }
 
@@ -38,8 +41,11 @@ export interface TowerPanelOptions {
   title: string
   subtitle?: string
   rows: PanelRow[]
-  confirm?: { label: string; onPick: () => void; enabled?: boolean }
-  extra?: { label: string; onPick: () => void }
+  /** The action buttons carry an ICON and a PRICE, never a label. A word on a
+   *  38px button was truncated on the narrow panel long before the icons
+   *  arrived; the price is the only text, and it sits under the button. */
+  confirm?: { icon: string; price: number; onPick: () => void; enabled?: boolean }
+  extra?: { icon: string; price: number; onPick: () => void }
   /** Raised while the upgrade button is hovered or held, so the caller can
    *  emphasise the projected range ring. */
   onPreview?: (on: boolean) => void
@@ -50,6 +56,22 @@ const WIDTH = 250
 const PAD = 12
 const ROW_H = 19
 const BTN_H = 38
+/**
+ * The icon size on the button, in panel units — which are CSS pixels, so this
+ * is 40 screen pixels and stays 40 at every device scale: the panel is drawn
+ * by the UI camera, which carries the device ratio in its zoom rather than in
+ * these numbers.
+ *
+ * Forty is a floor, not a preference. Below it the 256px source is being
+ * minified past 6x and the outlines break up, which is the same failure the
+ * cast had before rule 7 was restated.
+ */
+const BTN_ICON = 40
+/** The stat-row icons, which sit beside 15px text rather than on a button. */
+const ROW_ICON = 17
+const PRICE_GAP = 3
+const PRICE_SIZE = 15
+const PRICE_H = 18
 /** How far below the tower's base the panel sits, and how far above its head
  *  when it has to flip. */
 const GAP = 12
@@ -92,10 +114,18 @@ export class TowerPanel {
     }
     y += 8
 
-    // Label left, value right, against the panel's inner face.
+    // Icon left, label beside it, value right, against the panel's inner face.
     const rowParts: Phaser.GameObjects.GameObject[] = []
     for (const row of opts.rows) {
-      rowParts.push(scene.add.text(PAD + 4, y, row.label, {
+      let textX = PAD + 4
+      if (row.icon) {
+        const key = icon(scene, row.icon)
+        const glyph = scene.add.image(PAD + 4 + ROW_ICON / 2, y + ROW_H / 2 - 2, key)
+        fitInBox(glyph, key, ROW_ICON)
+        rowParts.push(glyph)
+        textX = PAD + 4 + ROW_ICON + 6
+      }
+      rowParts.push(scene.add.text(textX, y, row.label, {
         fontFamily: FONT_UI, fontSize: '15px', color: COLOR.dim,
       }).setOrigin(0, 0))
       rowParts.push(scene.add.text(WIDTH - PAD - 4, y, row.value, {
@@ -105,12 +135,17 @@ export class TowerPanel {
       y += ROW_H
     }
 
-    const row: Array<{ label: string; onPick: () => void; enabled?: boolean; primary: boolean }> = []
+    const row: Array<{
+      icon: string; price: number; onPick: () => void; enabled?: boolean; primary: boolean
+    }> = []
     if (opts.confirm) row.push({ ...opts.confirm, primary: true })
     if (opts.extra) row.push({ ...opts.extra, primary: false })
 
     const btnY = y + 10 + BTN_H / 2
-    this.height = btnY + BTN_H / 2 + PAD
+    // Room under the button for the price. It goes BENEATH rather than on the
+    // face: an icon and a number sharing a 38px plate leaves too little of
+    // either, and the icon is what the player aims at.
+    this.height = btnY + BTN_H / 2 + PRICE_GAP + PRICE_H + PAD
 
     // Plate first, then everything on top of it: the container draws in the
     // order it is given.
@@ -123,9 +158,13 @@ export class TowerPanel {
     const bw = row.length > 0 ? (WIDTH - PAD * 2 - gap * (row.length - 1)) / row.length : 0
     row.forEach((b, i) => {
       const bx = PAD + bw / 2 + i * (bw + gap)
-      const btn = plateButton(scene, bx, btnY, bw, BTN_H, b.label,
+      // No text on the plate at all. plateButton still owns the plate, the
+      // enabled/disabled art and the hit area; the label is empty and the icon
+      // is drawn over it.
+      const btn = plateButton(scene, bx, btnY, bw, BTN_H, '',
         () => { b.onPick(); this.close() }, 14, b.primary ? 'primary' : 'secondary')
       if (b.enabled === false) btn.setEnabled(false)
+
       // Hovering or holding the upgrade button emphasises the projected ring.
       if (b.primary && opts.onPreview) {
         btn.hit.on('pointerover', () => opts.onPreview?.(true))
@@ -133,7 +172,28 @@ export class TowerPanel {
         btn.hit.on('pointerdown', () => opts.onPreview?.(true))
       }
       this.buttons.push(btn)
+      // The PLATE FIRST, then the icon on top of it. The container draws in
+      // the order it is given, and pushing the glyph before the button put the
+      // plate over it: the measurements said a 40px icon was in the right
+      // place and the screen showed two empty coloured bars.
       parts.push(...btn.parts)
+
+      // A button the player cannot afford says so with the padlock rather than
+      // by being a greyed-out picture of the thing they wanted.
+      const name = b.enabled === false ? 'locked' : b.icon
+      const key = icon(scene, name)
+      const glyph = scene.add.image(bx, btnY, key)
+      fitInBox(glyph, key, BTN_ICON)
+      if (b.enabled === false) glyph.setAlpha(0.75)
+      parts.push(glyph)
+
+      // Beneath the plate, never on it.
+      const price = scene.add.text(bx, btnY + BTN_H / 2 + PRICE_GAP, String(b.price), {
+        fontFamily: FONT_UI, fontSize: `${PRICE_SIZE}px`, fontStyle: 'bold',
+        color: b.enabled === false ? COLOR.danger : COLOR.amber,
+        stroke: '#0d1016', strokeThickness: 3,
+      }).setOrigin(0.5, 0)
+      parts.push(price)
     })
 
     this.layer.add(parts)

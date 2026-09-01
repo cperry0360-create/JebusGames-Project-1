@@ -2961,6 +2961,65 @@ async function run() {
     return
   }
 
+  if (scenario === 'icons') {
+    // The tower panel with the real icons: sizes, that no button carries text,
+    // and that the price sits below the plate rather than on it.
+    g.status.peanuts = 99999
+    await build(3, 0)
+    await sleep(400)
+    const t = g.towers[0]
+    g.openTowerPanel ? g.openTowerPanel(t) : g.selectTower(t)
+    await until(() => !!g.panel, 5000)
+    await sleep(500)
+    note('viewport ' + VP.w + 'x' + VP.h + '  dpr ' + (window.devicePixelRatio || 1))
+    const layer = g.panel.layer
+    const kids = layer.list
+    const imgs = kids.filter((o) => o.texture && /icon-|generated-icon/.test(o.texture.key))
+    // Non-empty only. plateButton keeps its own label object and we pass '',
+    // so every button carries an empty Text that draws nothing — counting it
+    // reported the price as sitting on the plate when it is not there at all.
+    const texts = kids.filter((o) => o.type === 'Text' && String(o.text ?? '').trim() !== '')
+    note('panel: ' + kids.length + ' objects, ' + imgs.length + ' icons, ' + texts.length + ' texts')
+    for (const im of imgs) {
+      const b = im.getBounds()
+      note('  ' + String(im.texture.key).padEnd(24) +
+        Math.round(b.width) + 'x' + Math.round(b.height) +
+        ' at ' + Math.round(b.centerX) + ',' + Math.round(b.centerY))
+    }
+    // No button may carry a word. The only text on a button row is the price,
+    // and it must sit BELOW the plate.
+    let worstIconPx = 999, labelsOnButtons = 0, priceOnPlate = 0
+    for (const btn of g.panel.buttons || []) {
+      const hb = btn.hit.getBounds()
+      const label = String(btn.text?.text ?? '')
+      if (label.trim() !== '') labelsOnButtons++
+      const inside = imgs.filter((im) => {
+        const b = im.getBounds()
+        return Math.abs(b.centerX - hb.centerX) < 4 && Math.abs(b.centerY - hb.centerY) < 4
+      })
+      for (const im of inside) worstIconPx = Math.min(worstIconPx, im.getBounds().height)
+      for (const tx of texts) {
+        const b = tx.getBounds()
+        if (Math.abs(b.centerX - hb.centerX) < 6 && b.centerY < hb.bottom - 2 && b.centerY > hb.y) {
+          priceOnPlate++
+          note('    OVERLAP: "' + tx.text + '" centreY ' + Math.round(b.centerY) +
+            ' inside plate ' + Math.round(hb.y) + '..' + Math.round(hb.bottom))
+        }
+      }
+      note('  button at ' + Math.round(hb.centerX) + ',' + Math.round(hb.centerY) +
+        ' ' + Math.round(hb.width) + 'x' + Math.round(hb.height) +
+        '  label="' + label + '"  icon ' + (inside.length ? Math.round(inside[0].getBounds().height) + 'px' : 'NONE'))
+    }
+    note('  smallest button icon: ' + worstIconPx + 'px  (floor is 40)')
+    note('  buttons carrying text: ' + labelsOnButtons + ' (must be 0)')
+    note('  prices drawn on a plate: ' + priceOnPlate + ' (must be 0)')
+    await shot('icons-' + VP.w + 'x' + VP.h)
+    const ok = worstIconPx >= 40 && labelsOnButtons === 0 && priceOnPlate === 0 && imgs.length >= 4
+    note('RESULT ' + (ok ? 'icons only, at 40px, prices beneath'
+      : '*** THE UPGRADE RING IS NOT RIGHT ***'))
+    return
+  }
+
   if (scenario === 'startrun') {
     // Actually press BEGIN THE RUN, on the longest loadout there is, at the
     // smallest viewport. Not "the button is on screen" — the button works and
