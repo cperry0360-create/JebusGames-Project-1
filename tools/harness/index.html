@@ -1686,6 +1686,93 @@ async function run() {
     return
   }
 
+  if (scenario === 'abilitybar') {
+    // The reported freeze: once the Server Nuke drops, no ability can be
+    // tapped, while tower panels go on opening normally.
+    const hud = game.scene.getScene('Hud')
+    const dump = (label) => {
+      const rows = hud.slots.map((s) => {
+        const r = s.region
+        const b = s.hit.getBounds()
+        const ib = s.icon.getBounds()
+        return '    ' + r.id.padEnd(14) +
+          ' region x' + Math.round(r.x) + '-' + Math.round(r.x + r.pitch) +
+          ' centre ' + Math.round(r.cx) + ',' + Math.round(r.cy) +
+          ' | hit ' + Math.round(b.x) + '-' + Math.round(b.right) +
+          ' | icon centre ' + Math.round(ib.centerX) + ',' + Math.round(ib.centerY) +
+          ' | dx=' + Math.round(Math.abs(ib.centerX - b.centerX))
+      })
+      note(label + ' (' + hud.slots.length + ' slots)')
+      rows.forEach(note)
+      // Gaps between adjacent hit rectangles: one seam is by design, two is
+      // the bar split into groups.
+      const xs = hud.slots.map((s) => s.hit.getBounds()).sort((a, b) => a.x - b.x)
+      const gaps = []
+      for (let i = 1; i < xs.length; i++) {
+        const g2 = Math.round(xs[i].x - xs[i - 1].right)
+        if (g2 > 2) gaps.push(g2)
+      }
+      note('    seams: ' + (gaps.length ? gaps.join('px, ') + 'px' : 'none'))
+    }
+
+    // Does a tap on a slot actually reach the game? Counted rather than
+    // assumed: the freeze was a hit rectangle that did not survive a frame.
+    const tapReaches = async (i) => {
+      const slot = hud.slots[i]
+      if (!slot) return 'no slot ' + i
+      let fired = 0
+      const orig = g.armAbility.bind(g)
+      const origH = g.castHaymaker.bind(g)
+      const origR = g.armRestructure.bind(g)
+      g.armAbility = (id) => { fired++; return orig(id) }
+      g.castHaymaker = () => { fired++; return origH() }
+      g.armRestructure = () => { fired++; return origR() }
+      const b = slot.hit.getBounds()
+      await click(b.centerX, b.centerY)
+      await sleep(160)
+      // Disarm, so the next probe tap cannot be read as casting this one.
+      g.status.pendingAbility = null
+      g.status.mode = 'normal'
+      g.armAbility = orig; g.castHaymaker = origH; g.armRestructure = origR
+      return fired > 0 ? 'REACHED' : 'DEAD'
+    }
+
+    // Count rebuilds. Every frame is the failure mode.
+    let builds = 0
+    const origBuild = hud.buildSlots.bind(hud)
+    hud.buildSlots = () => { builds++; return origBuild() }
+
+    g.startWave()
+    await sleep(1500)
+    dump('four slots, before the drop')
+    for (let i = 0; i < hud.slots.length; i++) {
+      note('    tap ' + hud.slots[i].region.id + ': ' + (await tapReaches(i)))
+    }
+    builds = 0
+    await sleep(1000)
+    note('rebuilds over 1s with a stable hand: ' + builds)
+    await shot('abilitybar-01-four')
+
+    // Now the drop.
+    g.status.rareAbility = 'serverNuke'
+    g.cooldowns.reset('serverNuke')
+    await sleep(600)
+    dump('five slots, after the Server Nuke drops')
+    await shot('abilitybar-02-five')
+    for (let i = 0; i < hud.slots.length; i++) {
+      note('    tap ' + hud.slots[i].region.id + ': ' + (await tapReaches(i)))
+    }
+    builds = 0
+    await sleep(1000)
+    note('rebuilds over 1s after the drop: ' + builds + ' (every frame is the bug)')
+    dump('after the taps')
+    g.status.mode = 'normal'
+    g.status.pendingAbility = ''
+    await sleep(400)
+    await shot('abilitybar-03-idle')
+    return
+  }
+
   if (scenario === 'nuke') {
     // Force the drop, then watch the wind-up and the payload.
     for (const i of [3, 1]) await build(i, 0)

@@ -607,16 +607,27 @@ test('the ability bar groups the hero medallions and spaces them apart', () => {
     `hero pitch ${bar.heroPitch} is not wider than the drafted pitch ${bar.draftedPitch}`)
   assert.ok(bar.groupGap > 0, 'nothing separates the two groups')
 
-  const hud = readFileSync(new URL('../src/scenes/HudScene.ts', import.meta.url), 'utf8')
   // The hero pair goes last and together, after everything the run dealt.
-  const build = hud.slice(hud.indexOf('private buildSlots'))
-  const body = build.slice(0, build.indexOf('\n  private ', 10))
-  assert.ok(body.indexOf('rareAbility') < body.indexOf("id: 'haymaker'"),
+  // The order itself is asserted against the real function in
+  // tests/abilitybar.test.ts; what is checked here is that the order still has
+  // exactly one owner. It used to be spelled out twice — once where the bar
+  // was built and once where the check for "has the hand changed?" was made —
+  // and the two spellings put the rare drop in different places, which
+  // rebuilt the bar every frame and made every icon on it dead to touch.
+  const hud = readFileSync(new URL('../src/scenes/HudScene.ts', import.meta.url), 'utf8')
+  assert.ok(!/\[\s*\.\.\.\s*s\w*\.abilities\s*,/.test(hud),
+    'HudScene spells out the slot order inline again; it belongs to AbilityBar.slotDefs')
+  assert.equal((hud.match(/heroSlots|slotDefs\(/g) ?? []).length > 0, true,
+    'HudScene no longer builds its slots through AbilityBar.slotDefs')
+
+  const source = readFileSync(new URL('../src/systems/AbilityBar.ts', import.meta.url), 'utf8')
+  const fn = source.slice(source.indexOf('export function slotDefs'))
+  const body = fn.slice(0, fn.indexOf('\nexport '))
+  assert.ok(body.indexOf('rareAbility') < body.indexOf('heroSlots'),
     'the rare drop is pushed after the hero abilities, splitting the medallion pair')
-  assert.ok(body.indexOf("id: 'haymaker'") < body.indexOf("id: 'restructure'"),
-    'the two hero abilities are not adjacent')
+
   // And the armed outline follows the shape rather than boxing a circle.
-  assert.match(hud, /slot\.hero[\s\S]{0,120}strokeCircle/,
+  assert.match(hud, /r\.hero[\s\S]{0,120}strokeCircle/,
     'a round medallion is outlined with a rectangle when armed')
 })
 

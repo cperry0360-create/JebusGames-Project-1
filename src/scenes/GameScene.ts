@@ -47,7 +47,7 @@ import { bannerPointsFor, verdictFor, type RunOutcome } from '../systems/Banner.
 import { waveOutcome } from '../systems/Wave.ts'
 import { logEvent, provideState } from '../systems/Diagnostics.ts'
 import { heartbeat, setRunActive } from '../systems/Watchdog.ts'
-import { hudLayout, NO_INSETS, type HudLayout } from '../systems/HudLayout.ts'
+import { hudLayout, hudTakesPress, NO_INSETS, type HudLayout } from '../systems/HudLayout.ts'
 import { safeAreaInsets } from '../systems/SafeArea.ts'
 
 /** The HUD's layout constants, shared with HudScene so both agree. */
@@ -759,7 +759,13 @@ this.armReadyCountdown()
         || (this.ticket?.active === true && this.ticket.owns(over))
         || this.dialog?.owns(over) === true
         || this.panel?.owns(over) === true
-      void p
+        // The HUD is a different scene, so none of its objects are ever in
+        // `over` and the checks above cannot see them. Without this a tap on
+        // the ability bar also lands on the board: arming one ability and then
+        // tapping a second one cast the first at the bar's own position, which
+        // is how a Server Nuke could be spent without the player ever touching
+        // the lane.
+        || hudTakesPress(this.layout, p.x, p.y)
     })
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
       if (this.pressTakenByUi) return

@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { collisions, hudLayout, overlaps, NO_INSETS, type Insets } from '../src/systems/HudLayout.ts'
+import { collisions, hudLayout, hudTakesPress, overlaps, NO_INSETS, type Insets } from '../src/systems/HudLayout.ts'
 import presentation from '../src/data/presentation.json' with { type: 'json' }
 
 const url = (p: string) => new URL(p, import.meta.url)
@@ -130,4 +130,53 @@ test('what was right about the bands survived the revert', () => {
     'the boss bar is unconstrained again, so it runs under the start button')
   assert.match(boss[0], /this\.message\.setVisible\(!boss\)/,
     'the boss bar and the wave message can be up at once, in the same place')
+})
+
+test('a press on the HUD is not also a press on the board', () => {
+  // The HUD renders in its own scene, so its interactive objects never appear
+  // in the world scene's hit list — the world's "was this taken by UI?" check
+  // is blind to every one of them. The consequence was not cosmetic: arming an
+  // ability and then tapping a second icon cast the first one at the ability
+  // bar's own position, spending a Server Nuke without the player going
+  // anywhere near the lane.
+  for (const [name, w, h] of VIEWPORTS) {
+    const L = hudLayout({ width: w, height: h, insets: NO_INSETS, ...WIDEST }, CFG)
+
+    const centre = (r: { x: number; y: number; width: number; height: number }) =>
+      [r.x + r.width / 2, r.y + r.height / 2] as const
+
+    for (const [label, rect] of [
+      ['ability bar', L.abilities],
+      ['start button', L.startButton],
+      ['mute', L.mute],
+      ['pause', L.pause],
+    ] as const) {
+      const [cx, cy] = centre(rect)
+      assert.ok(hudTakesPress(L, cx, cy),
+        `${name}: a press on the ${label} must belong to the HUD`)
+    }
+
+    // And the board is still tappable, or nothing can be built. The panel area
+    // is where the build menu opens, which is the world's own UI.
+    const [px, py] = centre(L.panelArea)
+    assert.ok(!hudTakesPress(L, px, py),
+      `${name}: the board must still take presses`)
+  }
+})
+
+test('the HUD claims presses only where it has something to press', () => {
+  // A guard that swallowed the whole bottom band would make the lane under it
+  // untappable, which is worse than the bug it fixes.
+  const L = hudLayout({ width: 1280, height: 720, insets: NO_INSETS, ...WIDEST }, CFG)
+  let claimed = 0
+  const step = 8
+  for (let x = 0; x < 1280; x += step) {
+    for (let y = 0; y < 720; y += step) {
+      if (hudTakesPress(L, x, y)) claimed++
+    }
+  }
+  const share = claimed / ((1280 / step) * (720 / step))
+  assert.ok(share < 0.12,
+    `the HUD claims ${(share * 100).toFixed(1)}% of the screen; that is a band, not four controls`)
+  assert.ok(share > 0.01, `the HUD claims only ${(share * 100).toFixed(1)}%; the guard is not working`)
 })

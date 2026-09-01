@@ -198,3 +198,24 @@ export function collisions(layout: HudLayout): string[] {
   }
   return hits
 }
+
+/**
+ * Whether a press at this screen point belongs to the HUD.
+ *
+ * The HUD is a separate scene, so its interactive objects never appear in the
+ * world scene's hit list and the world's own "was this press taken by UI?"
+ * check cannot see them. Every tap on an ability icon therefore also reached
+ * the board — which meant tapping a second ability *cast the first one at the
+ * bottom of the screen*, silently spending it. That is how a Server Nuke could
+ * be consumed by a tap that never went near the lane.
+ *
+ * Only the rectangles that actually accept a press are listed. `panelArea` is
+ * most of the board and `messageRow` is text, so neither takes a tap away from
+ * the world.
+ */
+export function hudTakesPress(layout: HudLayout, x: number, y: number): boolean {
+  const inside = (r: Rect): boolean =>
+    x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height
+  return inside(layout.abilities) || inside(layout.startButton)
+    || inside(layout.mute) || inside(layout.pause)
+}

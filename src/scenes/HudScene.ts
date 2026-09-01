@@ -13,23 +13,27 @@ import { Dialog } from '../ui/Dialog.ts'
 import { play, resumeAudio } from '../systems/Audio.ts'
 import { hudLayout, NO_INSETS, type HudLayout, type Rect } from '../systems/HudLayout.ts'
 import { safeAreaInsets } from '../systems/SafeArea.ts'
+import {
+  barWidth, iconBox, regions, slotDefs, slotSignature,
+  type BarMetrics, type SlotDef, type SlotRegion,
+} from '../systems/AbilityBar.ts'
 
+/**
+ * A placed slot's Phaser objects, and the region they were all built from.
+ *
+ * The region is carried rather than copied field by field: the icon, the
+ * frame, the sweep and the hit rectangle are every one of them positioned
+ * from `region`, so there is no second set of coordinates to fall out of step
+ * with the first. See `systems/AbilityBar.ts` for why that matters here
+ * specifically.
+ */
 interface SlotView {
-  id: string
-  kind: 'ability' | 'haymaker' | 'restructure'
-  /** True for Cory's own two, which are round medallions rather than plates. */
-  hero: boolean
+  region: SlotRegion
   frame: Phaser.GameObjects.Graphics
   sweep: Phaser.GameObjects.Graphics
   icon: Phaser.GameObjects.Image
   timer: Phaser.GameObjects.Text
   hit: Phaser.GameObjects.Rectangle
-  x: number
-  y: number
-  /** This slot's own width; the two shapes do not share a grid. */
-  pitch: number
-  /** Icon box height for this slot, after any shrink the layout applied. */
-  boxH: number
 }
 
 const HUD = presentationData.hud
@@ -150,15 +154,32 @@ export class HudScene extends Phaser.Scene {
     this.buildPauseButton(L.pause.x + L.pause.width / 2, L.pause.y + L.pause.height / 2)
   }
 
+  /**
+   * The slots this run currently holds, in bar order.
+   *
+   * Everything downstream — the row's width, the icons, the hit rectangles,
+   * and the check for whether the bar needs rebuilding — comes from this one
+   * call, so none of them can be laid out for a different hand than the others.
+   */
+  private currentSlotDefs(): SlotDef[] {
+    const s = this.world.status
+    const hero = this.world.heroDef()
+    const heroSlots: SlotDef[] = [
+      { id: 'haymaker', kind: 'haymaker', icon: hero.haymaker.icon, hero: true },
+      { id: 'restructure', kind: 'restructure', icon: hero.restructure.icon, hero: true },
+    ]
+    return slotDefs(
+      s.abilities,
+      s.rareAbility,
+      (id) => this.world.abilityDef(id),
+      heroSlots,
+    )
+  }
+
   /** The ability row's width, from the hand this run was dealt. Needed before
    *  the slots are built, because the layout places them. */
   private measureAbilities(): number {
-    const bar = presentationData.abilityBar
-    const s = this.world.status
-    const drafted = s.abilities.length + (s.rareAbility ? 1 : 0)
-    const hero = 2
-    const gap = drafted > 0 ? bar.groupGap : 0
-    return drafted * bar.draftedPitch + hero * bar.heroPitch + gap
+    return barWidth(this.currentSlotDefs(), presentationData.abilityBar as BarMetrics)
   }
 
   /** A counter number, scaled down if it no longer fits its plate's field. */
@@ -312,6 +333,28 @@ export class HudScene extends Phaser.Scene {
     this.scene.restart()
   }
 
+  /**
+   * Re-runs the layout for a hand that has changed size.
+   *
+   * A rare drop makes the row wider mid-run, and the row is centred between
+   * the two corner buttons — so its rectangle has to be measured again or the
+   * new icon is laid out in space that was never reserved. Only the layout is
+   * recomputed; the rest of the HUD has not moved, and restarting the scene to
+   * add one icon would throw away the boss bar and every running tween.
+   */
+  private relayoutAbilities(): void {
+    this.layout = hudLayout(
+      {
+        width: this.scale.width,
+        height: this.scale.height,
+        insets: safeAreaInsets(),
+        countersWidth: this.countersWidth,
+        abilitiesWidth: this.measureAbilities(),
+      },
+      LAYOUT,
+    )
+  }
+
   private buildStartButton(box: Rect): void {
     const x = box.x
     const y = box.y
@@ -321,8 +364,12 @@ export class HudScene extends Phaser.Scene {
       () => this.world.startWave(), 16)
   }
 
-  /** Two drafted abilities, Cory's own two actives, and the rare drop if it
-   *  has turned up. The slots are rebuilt when that set changes. */
+  /**
+   * Builds the bar from one region list.
+   *
+   * Everything positioned here — icon, frame, cooldown sweep, hit rectangle —
+   * reads the same `SlotRegion`. Nothing recomputes a coordinate.
+   */
   private buildSlots(): void {
     for (const s of this.slots) {
       s.frame.destroy(); s.sweep.destroy(); s.icon.destroy()
@@ -330,73 +377,44 @@ export class HudScene extends Phaser.Scene {
     }
     this.slots = []
 
-    const s = this.world.status
-    const hero = this.world.heroDef()
     // No key letters. This is a touch game; Q W E R meant nothing on a phone
     // and the labels were four more things crowding a 64px icon.
-    // Two groups, and the order says which is which. Everything the run dealt
-    // — the drafted actives and the rare drop — comes first as rectangular
-    // arcade plates; Cory's own two come last as round medallions. The shape
-    // is the signal, so the layout keeps each group whole rather than
-    // interleaving them or forcing both into one grid.
-    const defs: Array<{ id: string; kind: SlotView['kind']; icon: string; hero: boolean }> = []
-    s.abilities.forEach((id) => {
-      const def = this.world.abilityDef(id)
-      if (def) defs.push({ id, kind: 'ability', icon: def.icon, hero: false })
-    })
-    if (s.rareAbility) {
-      const def = this.world.abilityDef(s.rareAbility)
-      if (def) defs.push({ id: s.rareAbility, kind: 'ability', icon: def.icon, hero: false })
-    }
-    defs.push({ id: 'haymaker', kind: 'haymaker', icon: hero.haymaker.icon, hero: true })
-    defs.push({ id: 'restructure', kind: 'restructure', icon: hero.restructure.icon, hero: true })
-    this.slotKeys = defs.map((d) => d.id).join(',')
+    const bar = presentationData.abilityBar as BarMetrics
+    const defs = this.currentSlotDefs()
+    this.slotKeys = slotSignature(defs)
 
-    const bar = presentationData.abilityBar
     // The layout may have shrunk the row to keep it off the corner buttons on
     // a narrow phone; the icons follow it rather than being drawn at a size
     // the rectangle does not have room for.
     const k = this.layout.abilityScale
-    const pitchOf = (d: { hero: boolean }): number =>
-      (d.hero ? bar.heroPitch : bar.draftedPitch) * k
-    const iconOf = (d: { hero: boolean }): number => (d.hero ? bar.heroIcon : bar.draftedIcon) * k
-    const groupGap = bar.groupGap * k
-    const iconH = ICON_H * k
+    const placed = regions(defs, bar, {
+      x: this.layout.abilities.x,
+      y: this.layout.abilities.y,
+      scale: k,
+      iconH: ICON_H,
+    })
 
-    // Along the bottom centre, where a hero's actives belong, between the two
-    // corner buttons.
-    let x = this.layout.abilities.x
-    const bottomY = this.layout.abilities.y
-    defs.forEach((d, i) => {
-      if (i > 0 && d.hero && !defs[i - 1]!.hero) x += groupGap
-      const pitch = pitchOf(d)
-      const box = iconOf(d)
-      const y = bottomY
-      const cx = x + pitch / 2
-      const cy = y + iconH / 2
+    for (const region of placed) {
       const frame = this.add.graphics()
-      const icon = this.add.image(cx, cy, d.icon)
-      fitInBox(icon, d.icon, box)
+      const icon = this.add.image(region.cx, region.cy, region.icon)
+      fitInBox(icon, region.icon, iconBox(region, bar, k))
       const sweep = this.add.graphics()
-      const timer = this.add.text(cx, cy, '', {
+      const timer = this.add.text(region.cx, region.cy, '', {
         fontFamily: FONT_UI, fontSize: `${Math.round(19 * k)}px`,
         fontStyle: 'bold', color: COLOR.ink,
         stroke: '#0d1016', strokeThickness: 5,
       }).setOrigin(0.5)
-      const hit = this.add.rectangle(cx, cy, pitch, iconH, 0xffffff, 0.001)
+      const hit = this.add
+        .rectangle(region.cx, region.cy, region.pitch, region.boxH, 0xffffff, 0.001)
         .setInteractive({ useHandCursor: true })
       hit.on('pointerdown', () => {
-        if (d.kind === 'ability') this.world.armAbility(d.id)
-        else if (d.kind === 'haymaker') this.world.castHaymaker()
+        if (region.kind === 'ability') this.world.armAbility(region.id)
+        else if (region.kind === 'haymaker') this.world.castHaymaker()
         else this.world.armRestructure()
       })
 
-      this.slots.push({
-        id: d.id, kind: d.kind, hero: d.hero, frame, sweep, icon, timer, hit,
-        x, y, pitch, boxH: iconH,
-      })
-      x += pitch
-    })
+      this.slots.push({ region, frame, sweep, icon, timer, hit })
+    }
   }
 
   update(): void {
@@ -418,8 +436,20 @@ export class HudScene extends Phaser.Scene {
     // Scene creation order is not guaranteed, so wait for the game scene to
     // have populated its status before drawing anything that depends on it.
     if (s.heroName === '') return
-    const wanted = [...s.abilities, 'haymaker', 'restructure', s.rareAbility ?? ''].join(',')
-    if (!this.slotsBuilt || wanted !== this.slotKeys + (s.rareAbility ? '' : ',')) {
+    // Both sides of this comparison are now the same function of the same
+    // state. The version it replaces built one string in bar order and the
+    // other with the rare drop moved to the end, so from the moment the Server
+    // Nuke landed the two could never match: the bar was destroyed and rebuilt
+    // every frame, and a hit rectangle that does not survive a frame can never
+    // complete a tap. That is what made the whole row dead to touch while
+    // tower panels went on opening normally.
+    const wanted = slotSignature(this.currentSlotDefs())
+    if (!this.slotsBuilt || wanted !== this.slotKeys) {
+      // The row is also re-measured, not just re-built. A fifth icon is wider
+      // than the rectangle the layout reserved for four at scene creation, and
+      // laying five slots inside it is what split the bar into two groups with
+      // a gap down the middle.
+      this.relayoutAbilities()
       this.buildSlots()
       this.slotsBuilt = true
     }
@@ -569,17 +599,18 @@ export class HudScene extends Phaser.Scene {
    */
   private drawSlots(s: GameScene['status']): void {
     for (const slot of this.slots) {
-      const ready = this.world.cooldowns.ready(slot.id)
-      const usable = this.slotUsable(slot, s)
-      const armed = s.pendingAbility === slot.id
-        || (slot.kind === 'restructure' && s.mode === 'restructure')
-      const left = this.world.cooldowns.secondsLeft(slot.id)
+      const r = slot.region
+      const ready = this.world.cooldowns.ready(r.id)
+      const usable = this.slotUsable(r, s)
+      const armed = s.pendingAbility === r.id
+        || (r.kind === 'restructure' && s.mode === 'restructure')
+      const left = this.world.cooldowns.secondsLeft(r.id)
 
-      const base = this.world.abilityIcon(slot.id) ?? slot.icon.texture.key
+      const base = this.world.abilityIcon(r.id) ?? slot.icon.texture.key
       const wantKey = usable ? base : greyKey(base)
       if (this.textures.exists(wantKey) && slot.icon.texture.key !== wantKey) {
         slot.icon.setTexture(wantKey)
-        fitInBox(slot.icon, base, slot.boxH)
+        fitInBox(slot.icon, base, r.boxH)
       }
       slot.icon.setTint(ready && usable ? 0xffffff : 0x8a8a8a)
 
@@ -591,10 +622,10 @@ export class HudScene extends Phaser.Scene {
       slot.frame.clear()
       if (armed) {
         slot.frame.lineStyle(3, COLOR.accent, 0.95)
-        if (slot.hero) {
-          slot.frame.strokeCircle(slot.x + slot.pitch / 2, slot.y + slot.boxH / 2, slot.boxH / 2 + 3)
+        if (r.hero) {
+          slot.frame.strokeCircle(r.cx, r.cy, r.boxH / 2 + 3)
         } else {
-          slot.frame.strokeRoundedRect(slot.x + 4, slot.y - 2, slot.pitch - 8, slot.boxH + 4, 8)
+          slot.frame.strokeRoundedRect(r.x + 4, r.y - 2, r.pitch - 8, r.boxH + 4, 8)
         }
       }
 
@@ -602,10 +633,10 @@ export class HudScene extends Phaser.Scene {
 
       slot.sweep.clear()
       if (!ready) {
-        const p = this.world.cooldowns.progress(slot.id)
+        const p = this.world.cooldowns.progress(r.id)
         slot.sweep.fillStyle(0x000000, 0.5)
         slot.sweep.slice(
-          slot.x + slot.pitch / 2, slot.y + slot.boxH / 2, slot.boxH * 0.42,
+          r.cx, r.cy, r.boxH * 0.42,
           Phaser.Math.DegToRad(-90 + 360 * p), Phaser.Math.DegToRad(270), false,
         )
         slot.sweep.fillPath()
@@ -615,7 +646,7 @@ export class HudScene extends Phaser.Scene {
 
   /** Castable at all, ignoring cooldown: the hero has to be up for his own
    *  actives, and a rare drop is only usable while it is held. */
-  private slotUsable(slot: SlotView, s: GameScene['status']): boolean {
+  private slotUsable(slot: SlotRegion, s: GameScene['status']): boolean {
     if (slot.kind !== 'ability') return !s.heroDown
     if (slot.id === s.rareAbility) return true
     return s.abilities.includes(slot.id)
