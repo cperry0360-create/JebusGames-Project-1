@@ -368,10 +368,12 @@ test('ATTRIBUTIONS.md and the credits roll agree with the data', () => {
   const flat = JSON.stringify(credits.blocks)
   assert.match(flat, /KENNEY/, 'the roll no longer credits Kenney')
   assert.match(flat, /"MUSIC"/, 'the roll has no MUSIC section')
-  // The two names that are not Cory still get their own presentation.
+  // The names that are not Cory still get their own presentation: a card each,
+  // not a line in the list. Elijah joined them when he recorded the goblin.
   const cards = credits.blocks.filter((b: { kind: string }) => b.kind === 'card')
-  assert.deepEqual(cards.map((c: { name: string }) => c.name).sort(), ['COURTLAND', 'HAN'],
-    'Courtland and Han no longer get their own cards')
+  assert.deepEqual(cards.map((c: { name: string }) => c.name).sort(),
+    ['COURTLAND', 'ELIJAH', 'HAN'],
+    'one of the family cards went missing from the roll')
 })
 
 test('the bundled engine carries its licence notice', () => {

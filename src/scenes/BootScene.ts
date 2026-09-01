@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import displayData from '../data/display.json'
 import { queueArt } from '../systems/ArtLoader.ts'
 import { OPTIONAL_SPRITE_KEYS, REQUIRED_SPRITE_KEYS } from '../systems/Art.ts'
-import { initAudio, queueAudio } from '../systems/Audio.ts'
+import { initAudio, missingCues, queueAudio } from '../systems/Audio.ts'
 import { registerEffectAnims } from '../systems/Effects.ts'
 import {
   ensureBuildGlowTexture, ensureBuildPadTexture, ensureIconFallbackTexture, ensureShadowTexture,
@@ -69,6 +69,16 @@ export class BootScene extends Phaser.Scene {
       console.error('[art] MISSING REQUIRED TEXTURES:', missingRequired.join(', '))
       this.missingRequired = missingRequired
     }
+    // Sound gets the same treatment, and for the same reason. A cue whose file
+    // 404s is silent, and silence is exactly what a cue that was never fired
+    // sounds like — so an absent file has to SAY so rather than being
+    // indistinguishable from a wiring bug. Reported, never fatal: the loader
+    // has already finished and the game is about to start either way.
+    const missingAudio = missingCues(this)
+    if (missingAudio.length > 0) {
+      console.error('[audio] MISSING CUES:', missingAudio.join(', '))
+      this.missingAudio = missingAudio
+    }
     // Every ground shadow reuses one generated texture; build it once here.
     ensureShadowTexture(this)
     ensureBuildPadTexture(this)
@@ -83,11 +93,13 @@ export class BootScene extends Phaser.Scene {
     this.scene.start('Splash')
     // Drawn over the running game rather than instead of it, so the fault is
     // reportable without being fatal.
-    if (this.missingRequired.length > 0) this.showMissingBanner()
+    if (this.missingRequired.length > 0 || this.missingAudio.length > 0) this.showMissingBanner()
   }
 
   /** Required art that did not load. Empty on a healthy boot. */
   private missingRequired: string[] = []
+  /** Sound cues whose file did not load. Empty on a healthy boot. */
+  private missingAudio: string[] = []
 
   /**
    * A banner naming what is missing, over a game that is still running.
@@ -104,12 +116,14 @@ export class BootScene extends Phaser.Scene {
   private showMissingBanner(): void {
     const doc = globalThis.document
     if (!doc?.body) return
-    const list = this.missingRequired
     const el = doc.createElement('div')
     el.id = 'missing-art'
-    el.textContent = `MISSING ART (${list.length}): ${list.slice(0, 8).join(', ')}`
-      + (list.length > 8 ? ` and ${list.length - 8} more` : '')
-      + '   — tap to dismiss'
+    const say = (what: string, list: string[]): string =>
+      list.length === 0 ? ''
+        : `MISSING ${what} (${list.length}): ${list.slice(0, 8).join(', ')}`
+          + (list.length > 8 ? ` and ${list.length - 8} more` : '')
+    el.textContent = [say('ART', this.missingRequired), say('AUDIO', this.missingAudio)]
+      .filter((s) => s !== '').join('   |   ') + '   — tap to dismiss'
     el.setAttribute('style', [
       'position:fixed', 'left:0', 'right:0', 'top:0', 'z-index:99998',
       'background:#c1443a', 'color:#fff', 'font:12px/1.4 monospace',

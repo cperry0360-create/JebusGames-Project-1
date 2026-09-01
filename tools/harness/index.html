@@ -2384,6 +2384,99 @@ async function run() {
     return
   }
 
+  if (scenario === 'goblin') {
+    // "Only the very first enemy to emerge from the entrance archway in a run."
+    //
+    // Four ways to get that wrong, so all four are watched here rather than
+    // sampled: per enemy, per wave, at the spawn instead of at the arch, and
+    // once ever instead of once per run.
+    const MAPD = (await import('./js/data/map.json', { with: { type: 'json' } })).default
+    const AJ = (await import('./js/data/audio.json', { with: { type: 'json' } })).default
+    const mouthX = MAPD.entrance.emergeFromX
+    note('viewport ' + VP.w + 'x' + VP.h)
+    note('lane starts at x=' + MAPD.waypoints[0][0] + ', off the plate behind the stone;' +
+      ' the arch mouth is x=' + mouthX + '. A cue fired at the spawn would be ' +
+      Math.round(mouthX - MAPD.waypoints[0][0]) + ' world px early, with the enemy invisible.')
+    note('arch mouth x=' + mouthX + '  cue gain ' + AJ.cues['goblin-spawn'].gain +
+      ' on bus "' + AJ.cues['goblin-spawn'].bus + '" at ' + AJ.buses[AJ.cues['goblin-spawn'].bus])
+
+    // Every cue the game plays, with the argument it was played at. Patched on
+    // the manager rather than on the module, so what is recorded is what the
+    // real code path actually asked the engine for.
+    const heard = []
+    const realPlay = game.sound.play.bind(game.sound)
+    game.sound.play = (key, cfg) => {
+      heard.push({ key, vol: cfg && cfg.volume, t: performance.now() })
+      return realPlay(key, cfg)
+    }
+    note('cue file loaded: ' + game.cache.audio.exists('goblin-spawn'))
+
+    const goblins = () => heard.filter((h) => h.key === 'goblin-spawn')
+    const t0 = performance.now()
+    // Where the first enemy was, and how visible it was, at the moment the
+    // line fired. This is the whole "timed with the fade-in, not before" claim.
+    let atCue = null
+    let firstSeen = null
+    const watch = () => {
+      for (const e of g.enemies) {
+        if (!e.alive) continue
+        const a = e.art ? e.art.alpha : 1
+        if (firstSeen === null && a > 0) firstSeen = { x: e.x, t: performance.now() }
+      }
+      if (atCue === null && goblins().length > 0) {
+        const e = g.enemies.find((x) => x.alive)
+        atCue = e
+          ? { x: Math.round(e.x), alpha: e.art ? +e.art.alpha.toFixed(3) : 1,
+              t: goblins()[0].t }
+          : { x: null, alpha: null, t: goblins()[0].t }
+      }
+    }
+
+    g.startWave()
+    while (performance.now() - t0 < 22000) { watch(); await sleep(30) }
+    await shot('goblin-arch-' + VP.w + 'x' + VP.h)
+
+    const first = goblins()[0]
+    note('wave 1: the line played ' + goblins().length + ' time(s)' +
+      (goblins().length === 1 ? '  correct' : '  *** SHOULD BE EXACTLY 1 ***'))
+    if (first) {
+      note('  volume asked for: ' + first.vol.toFixed(3) +
+        '   (gain x bus x master volume)')
+      note('  leading enemy at the moment it fired: x=' + atCue.x +
+        '  alpha=' + atCue.alpha +
+        (atCue.x !== null && atCue.x >= mouthX - 2
+          ? '   at or past the arch mouth' : '   *** BEFORE THE ARCH MOUTH ***'))
+      note('  fired ' + (firstSeen ? Math.round(first.t - firstSeen.t) + 'ms after' : 'on the same tick as') +
+        ' the first enemy became visible at all (0 would be exactly on the fade-in)')
+    }
+    note('  other cues heard this wave: ' +
+      JSON.stringify([...new Set(heard.map((h) => h.key))].filter((k) => k !== 'goblin-spawn')))
+
+    // Not per wave. Let wave one finish and wave two start.
+    const before = goblins().length
+    const t1 = performance.now()
+    while (performance.now() - t1 < 30000) {
+      if (g.status.phase === 'ready') g.startWave()
+      await sleep(120)
+    }
+    note('after reaching wave ' + g.status.wave + ': total plays ' + goblins().length +
+      (goblins().length === before ? '  still once — not per wave' : '  *** PLAYED AGAIN ***'))
+
+    // But once per RUN, not once ever. A fresh run greets the player again.
+    heard.length = 0
+    game.scene.stop('Game'); game.scene.stop('Hud')
+    await sleep(300)
+    await startRun()
+    const t2 = performance.now()
+    while (performance.now() - t2 < 20000 && goblins().length === 0) {
+      if (scene('Game').status.phase === 'ready') scene('Game').startWave()
+      await sleep(80)
+    }
+    note('RESULT second run: the line played ' + goblins().length + ' time(s)' +
+      (goblins().length === 1 ? '  correct — once per run' : '  *** the second run is silent ***'))
+    return
+  }
+
   if (scenario === 'looptrack') {
     // The level 1 track does not loop seamlessly and fades out at the end, so
     // it repeats with a gap and fades back in rather than cutting. Watched at

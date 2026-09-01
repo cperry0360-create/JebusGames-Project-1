@@ -82,12 +82,12 @@
     },
     {
       "kind": "credit",
-      "role": "Person Who Said \u201cJust Ship It\u201d",
+      "role": "Person Who Said “Just Ship It”",
       "name": "CORY"
     },
     {
       "kind": "credit",
-      "role": "Person Who Said \u201cNot Like That\u201d",
+      "role": "Person Who Said “Not Like That”",
       "name": "CORY"
     },
     {
@@ -360,7 +360,7 @@
     {
       "kind": "credit",
       "role": "Engine",
-      "name": "PHASER \u2014 MIT"
+      "name": "PHASER — MIT"
     },
     {
       "kind": "note",
@@ -386,7 +386,7 @@
     {
       "kind": "credit",
       "role": "Assets",
-      "name": "KENNEY \u2014 CC0"
+      "name": "KENNEY — CC0"
     },
     {
       "kind": "note",
@@ -494,7 +494,7 @@
     },
     {
       "kind": "credit",
-      "role": "Armour Shredding Supervisor\u2019s Supervisor",
+      "role": "Armour Shredding Supervisor’s Supervisor",
       "name": "CORY"
     },
     {
@@ -566,6 +566,18 @@
       "roles": [
         "Music Supervisor",
         "Soundtrack Curation"
+      ]
+    },
+    {
+      "kind": "gap",
+      "height": 54
+    },
+    {
+      "kind": "card",
+      "name": "ELIJAH",
+      "roles": [
+        "Voice Actor",
+        "The Goblin"
       ]
     },
     {
@@ -816,7 +828,7 @@
     },
     {
       "kind": "credit",
-      "role": "Anyone who ever said \u201cyou should make a game\u201d",
+      "role": "Anyone who ever said “you should make a game”",
       "name": "THIS IS YOUR FAULT"
     },
     {

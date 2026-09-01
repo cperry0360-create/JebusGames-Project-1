@@ -392,6 +392,12 @@ export interface AudioCue {
    *  this, and stacked copies of one sample are mud, not volume. */
   maxVoices: number
   format: string
+  /** Which bus this cue rides, if any. A voice line needs balancing against
+   *  the effects as a group rather than one gain at a time. */
+  bus?: string
+  /** How long this cue actually sounds. Only needed when it runs longer than
+   *  the default voice hold, which is every cue that is not a one-shot. */
+  durationMs?: number
 }
 
 export interface AudioDef {
@@ -399,6 +405,8 @@ export interface AudioDef {
   credit: string
   /** Path prefix under the site root. */
   root: string
+  /** Per-bus multipliers, applied on top of a cue's own gain. */
+  buses?: Record<string, number>
   cues: Record<string, AudioCue>
 }
 

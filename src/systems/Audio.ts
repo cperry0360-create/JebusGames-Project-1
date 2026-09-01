@@ -32,7 +32,13 @@ export const CUE_KEYS = Object.keys(AUDIO.cues)
 export type Cue = string
 
 /** How long a cue is considered to still be sounding, when the browser will
- *  not tell us. Kenney's one-shots are all well under this. */
+ *  not tell us. Kenney's one-shots are all well under this.
+ *
+ *  A cue LONGER than this declares its own `durationMs`. The goblin line runs
+ *  1.44s: left on the default it would be treated as finished 540ms before it
+ *  is, and a second trigger inside that window would play a second copy over
+ *  the first — the one voice cap it has would be counting a voice that is
+ *  still sounding as free. */
 const VOICE_MS = 900
 
 let volume = 0.7
@@ -221,6 +227,20 @@ export function queueAudio(scene: Phaser.Scene): void {
   }
 }
 
+/**
+ * Cues whose file is not in the cache after loading.
+ *
+ * The same treatment the art has: a file that did not arrive is REPORTED, not
+ * fatal, and never a blank screen. Sound is a nicety and the wave keeps coming
+ * without it — but a cue that is silent because its file 404s is
+ * indistinguishable, from the outside, from a cue that is silent because the
+ * code never fired it, and that is a whole evening of looking in the wrong
+ * place.
+ */
+export function missingCues(scene: Phaser.Scene): string[] {
+  return CUE_KEYS.filter((cue) => !scene.cache.audio.exists(cue))
+}
+
 export function getVolume(): number {
   return volume
 }
@@ -269,9 +289,9 @@ export function toggleMuted(): boolean {
 }
 
 /** True when this cue has room for another copy right now. */
-function claimVoice(cue: Cue, cap: number): boolean {
+function claimVoice(cue: Cue, cap: number, holdMs: number): boolean {
   const now = Date.now()
-  const live = (voices.get(cue) ?? []).filter((t) => now - t < VOICE_MS)
+  const live = (voices.get(cue) ?? []).filter((t) => now - t < holdMs)
   if (live.length >= cap) {
     voices.set(cue, live)
     return false
@@ -290,11 +310,20 @@ export function play(scene: Phaser.Scene, cue: Cue, scale = 1): void {
   if (muted || volume <= 0 || unavailable) return
   const def = AUDIO.cues[cue]
   if (!def) return
-  if (!claimVoice(cue, def.maxVoices)) return
+  // A cue whose file did not load is skipped BEFORE it claims a voice, so a
+  // missing file cannot silently hold a capped cue's only slot. Boot has
+  // already said which ones those are.
+  if (!scene.cache.audio.exists(cue)) return
+  if (!claimVoice(cue, def.maxVoices, def.durationMs ?? VOICE_MS)) return
 
   try {
     if (scene.sound.locked) return
-    scene.sound.play(cue, { volume: def.gain * scale * volume })
+    // The bus, if the cue names one. A voice line is a different KIND of
+    // sound from a 50ms impact and has to be balanced against the effects as a
+    // group; without this the only knob is one cue's gain, and there is
+    // nothing to move when a second line arrives.
+    const bus = def.bus ? (AUDIO.buses?.[def.bus] ?? 1) : 1
+    scene.sound.play(cue, { volume: def.gain * bus * scale * volume })
   } catch {
     // A cue that will not play is not worth a crash.
   }

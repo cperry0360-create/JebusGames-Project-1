@@ -230,6 +230,15 @@
       "gain": 0.9,
       "maxVoices": 1,
       "format": "wav"
+    },
+    "goblin-spawn": {
+      "file": "sfx-goblin-spawn",
+      "gain": 1.0,
+      "maxVoices": 1,
+      "format": "wav",
+      "bus": "voice",
+      "_note": "Elijah, recorded for this. 1.44s at -1.4 dBFS peak, -14.8 dBFS over its loudest half — measured, not guessed. gain 1.0 on the voice bus (0.9) puts it at -15.7 dBFS out, between `won` and `lost` and well under the Last Stand, and peaking at -2.3 dBFS. It is far longer than any other cue, which is why it declares its own durationMs.",
+      "durationMs": 1440
     }
   },
   "music": {
@@ -240,5 +249,9 @@
       "music_battle.mp3",
       "music_airport_attack.mp3"
     ]
+  },
+  "_buses": "A cue can name a bus, and the bus's own level multiplies it. The goblin line is a 1.44s voice recording sitting among 50ms impacts: it needs balancing against the effects as a GROUP, not by nudging one gain until it sits right and having nothing to move when a second line arrives.",
+  "buses": {
+    "voice": 0.9
   }
 }

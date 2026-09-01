@@ -198,6 +198,9 @@ export class GameScene extends Phaser.Scene {
    *  the camera in continuous motion. */
   private lastGateShake = -99999
   private gateBurst = 0
+  /** Whether the goblin has already said his line this run. One per RUN, not
+   *  per wave and not per enemy. */
+  private greeted = false
   /** Which spot keeps the full DO NOT BUILD HERE sign. The rest get the quiet
    *  marker; see createPads. Public so a harness run can check there is
    *  exactly one and that it is the one nearest the entrance. */
@@ -377,6 +380,7 @@ export class GameScene extends Phaser.Scene {
     this.status.abilities = [...run.abilities]
     // The rare drop does not survive a run, and is never drafted into one.
     this.status.rareAbility = null
+    this.greeted = false
     this.status.bossName = ''
     this.status.bossHealth = 0
     this.status.bossMax = 0
@@ -2241,6 +2245,22 @@ this.armReadyCountdown()
         const def = ENEMIES[id]
         if (!def) continue
         const enemy = new Enemy(this, def, this.lane, this.gateway)
+        // The goblin's line, once per run, on the FIRST enemy to actually come
+        // out of the arch. Hung off the emergence rather than the spawn so it
+        // lands with the fade-in — spawning happens off the plate, behind the
+        // stonework, where there is nothing to hear it about.
+        //
+        // The flag is set INSIDE the callback, not here. Claiming it at spawn
+        // would spend the line on an enemy that has not emerged yet, and one
+        // that dies short of the mouth would take the only greeting of the run
+        // with it.
+        if (!this.greeted) {
+          enemy.onEmerge = () => {
+            if (this.greeted) return
+            this.greeted = true
+            play(this, 'goblin-spawn')
+          }
+        }
         logEvent('spawn', `${id} hp=${def.maxHealth}`)
         this.enemies.push(enemy)
         if (def.tier === 'boss') this.announceBoss(enemy)

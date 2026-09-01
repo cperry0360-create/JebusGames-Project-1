@@ -154,3 +154,109 @@ test('a paused run is not reported as a frozen one', () => {
   assert.match(game, /Events\.RESUME, \(\) => setRunActive\(true\)/,
     'resuming the scene leaves the watchdog disarmed')
 })
+
+// ------------------------------------------------------------- the goblin line
+
+/**
+ * "Only the very first enemy to emerge from the entrance archway in a run."
+ *
+ * Four separate ways to get that wrong, and each has bitten something in this
+ * codebase before: per enemy, per wave, per spawn rather than per emergence,
+ * and once ever rather than once per run.
+ */
+test('the goblin says his line once per run, at the arch, not at the spawn', () => {
+  const game = src('scenes/GameScene.ts')
+  const enemy = src('entities/Enemy.ts')
+
+  // Hung off the emergence, which is the tick the fade-in starts — not the
+  // constructor, which runs off the plate behind the stonework.
+  assert.match(game, /enemy\.onEmerge = \(\) => \{/,
+    'the line is not hung off the arch emergence')
+  assert.doesNotMatch(game, /play\(this, 'goblin-spawn'\)[\s\S]{0,40}new Enemy/,
+    'the line plays at the spawn, before there is anything to see')
+  assert.match(enemy, /onEmerge: \(\(\) => void\) \| null/, 'Enemy has no emergence hook')
+
+  // Fired exactly once per enemy: the handler is taken and cleared BEFORE it
+  // is called, so a re-entrant call cannot find it still set.
+  const emerge = enemy.slice(enemy.indexOf('private applyEmergence'))
+  assert.match(emerge.slice(0, emerge.indexOf('\n  }')),
+    /const fn = this\.onEmerge\s*\n\s*this\.onEmerge = null\s*\n\s*fn\?\.\(\)/,
+    'the emergence hook is not cleared before it is called, so it can fire twice')
+
+  // Once per RUN. The flag is reset when a run is set up, so a second run
+  // greets the player again.
+  assert.match(game, /private greeted = false/, 'nothing remembers the line was said')
+  assert.match(game, /\n\s*this\.greeted = false\n/, 'the flag is never reset, so run two is silent')
+
+  // And claimed inside the callback, not at the spawn: an enemy that dies
+  // short of the mouth must not take the run's only greeting with it.
+  const hook = game.slice(game.indexOf('if (!this.greeted) {'))
+  const body = hook.slice(0, hook.indexOf('\n        }') + 1)
+  assert.match(body, /onEmerge = \(\) => \{[\s\S]*this\.greeted = true/,
+    'the flag is claimed at the spawn rather than at the arch')
+})
+
+test('a voice line is balanced as a group, and long enough to need its own hold', () => {
+  const cue = audio.cues['goblin-spawn']
+  assert.ok(cue, 'the goblin line is not in the manifest')
+
+  // Its own level relative to the other effects, so a second line can be added
+  // without re-tuning the first by hand.
+  assert.ok(cue.bus, 'the voice line has no bus, so it can only be balanced one cue at a time')
+  assert.ok(audio.buses?.[cue.bus] > 0, `bus "${cue.bus}" has no level`)
+  const mgr = src('systems/Audio.ts')
+  assert.match(mgr, /AUDIO\.buses\?\.\[def\.bus\]/, 'the bus level is never applied')
+
+  // 1.44s against a default hold of 900ms. Left on the default the cue would
+  // be counted as finished while it is still sounding, and a second trigger
+  // inside that window would lay a second copy over the first.
+  assert.ok(cue.durationMs >= 1440, 'the goblin line does not declare how long it runs')
+  const hold = Number(/const VOICE_MS = (\d+)/.exec(mgr)?.[1])
+  assert.ok(cue.durationMs > hold,
+    'this cue is shorter than the default hold, so declaring a duration means nothing')
+  assert.match(mgr, /claimVoice\(cue, def\.maxVoices, def\.durationMs \?\? VOICE_MS\)/,
+    'the declared duration is not used, so the voice cap counts a sounding cue as free')
+
+  // Nothing in the game stops a playing sound, so the line cannot be cut off
+  // by something firing over it. That is a property worth holding onto.
+  for (const f of ['systems/Audio.ts', 'scenes/GameScene.ts', 'scenes/HudScene.ts']) {
+    assert.doesNotMatch(src(f), /sound\.stopAll\(|sound\.removeAll\(/,
+      `${f} stops every sound, which would cut the voice line off mid-word`)
+  }
+})
+
+test('a cue whose file did not load is reported, and never played', () => {
+  // The same treatment the art has. Silence from a 404 and silence from a cue
+  // nobody fired are indistinguishable from the outside, and that is an
+  // evening spent looking in the wrong place.
+  const mgr = src('systems/Audio.ts')
+  assert.match(mgr, /export function missingCues\(/, 'nothing can tell which cues failed to load')
+  assert.match(mgr, /if \(!scene\.cache\.audio\.exists\(cue\)\) return/,
+    'a missing cue is still played, and burns its voice cap doing it')
+
+  const boot = src('scenes/BootScene.ts')
+  assert.match(boot, /FILE_LOAD_ERROR/, 'a failed load is not noticed')
+  assert.match(boot, /missingCues\(this\)/, 'boot never checks which cues arrived')
+  assert.match(boot, /\[audio\] MISSING CUES:/, 'a missing cue is not reported')
+  assert.match(boot, /missingAudio\.length > 0\) this\.showMissingBanner\(\)/,
+    'a missing cue is not surfaced anywhere the player or tester can see it')
+  // Reported, never fatal: boot still starts the game.
+  const create = boot.slice(boot.indexOf('create(): void {'))
+  assert.ok(!/\n\s+return\b/.test(create.slice(0, create.indexOf('\n  }'))),
+    'the audio check gave boot a way to refuse to start the game')
+})
+
+test('Elijah is credited for the line he recorded', () => {
+  const credits = read('credits')
+  const cards = credits.blocks.filter((b: any) => b.kind === 'card')
+  const eli = cards.find((c: any) => c.name === 'ELIJAH')
+  assert.ok(eli, 'the voice actor has no card in the roll')
+  assert.ok(eli.roles.some((r: string) => /voice/i.test(r)), 'his card does not say what he did')
+  // The same treatment Courtland and Han have: a card of his own, not a line
+  // in a list.
+  for (const name of ['COURTLAND', 'HAN']) {
+    assert.ok(cards.some((c: any) => c.name === name), `${name}'s card went missing`)
+  }
+  const attributions = readFileSync(url('../ATTRIBUTIONS.md'), 'utf8')
+  assert.match(attributions, /Elijah/, 'the voice line is not recorded in ATTRIBUTIONS.md')
+})

@@ -126,6 +126,14 @@ export class Enemy extends Phaser.GameObjects.Container {
    * whole change exists to remove. The shadow rides the alpha too, so nothing
    * casts a contact shadow while it is still under the stonework.
    */
+  /**
+   * Called once, on the tick this enemy reaches the arch mouth and starts to
+   * fade in. Not on spawn: it spawns off the plate behind the arch and walks
+   * to the mouth first, so a cue hung off the constructor fires while there is
+   * still nothing to see.
+   */
+  onEmerge: (() => void) | null = null
+
   private applyEmergence(dt: number): void {
     // Stops writing once it is fully out, so the attack tween — which also
     // animates scaleX — is never fought over. Nothing is fighting anything
@@ -133,7 +141,12 @@ export class Enemy extends Phaser.GameObjects.Container {
     // did, and that is the shape of bug this file has had before.
     if (this.emerged) return
     if (this.sinceMouth < 0) {
-      if (this.distance >= this.mouthDistance) this.sinceMouth = 0
+      if (this.distance >= this.mouthDistance) {
+        this.sinceMouth = 0
+        const fn = this.onEmerge
+        this.onEmerge = null
+        fn?.()
+      }
     } else {
       this.sinceMouth += dt * 1000
     }
