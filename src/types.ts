@@ -407,6 +407,8 @@ export interface AudioDef {
   root: string
   /** Per-bus multipliers, applied on top of a cue's own gain. */
   buses?: Record<string, number>
+  /** What every other cue is multiplied by while a voice line is sounding. */
+  voiceDuck?: number
   cues: Record<string, AudioCue>
 }
 

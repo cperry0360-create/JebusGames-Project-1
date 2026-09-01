@@ -1899,7 +1899,6 @@ this.armReadyCountdown()
       return
     }
     this.cooldowns.start('haymaker')
-    play(this, 'haymaker')
 
     // The biggest hit in the game, and it used to read as a slightly larger
     // spark. Four things carry an impact and it had one of them.
@@ -1915,6 +1914,15 @@ this.armReadyCountdown()
     // it lacked was anything around it to make the throw legible.
     const s = PRESENTATION.shake
     this.damageEnemy(target, hm.damage, hm.ignoresArmor, 0, false)
+    // Both sounds go on the PUNCH, here, not on the press. Every way this can
+    // be refused — cooldown, hero down, nothing in reach — has already
+    // returned above, so a press that does not land a punch says nothing.
+    //
+    // The line first and the impact second, because the duck only reaches what
+    // starts AFTER a line: played the other way round the punch would sit on
+    // top of the words rather than under them.
+    play(this, 'haymaker-voice')
+    play(this, 'haymaker')
     target.knockBack(hm.knockbackPixels)
     floatingDamage(this, target.x, target.centreY, hm.damage, true, undefined,
       EFFECT_MS.haymakerNumberScale)
@@ -2723,6 +2731,12 @@ this.armReadyCountdown()
     const s = PRESENTATION.shake
     this.cameras.main.flash(340, 255, 90, 60)
     this.cameras.main.shake(s.lastStandMs, s.lastStandIntensity)
+    // The line BEFORE the sting, deliberately. It runs 2.2 seconds, right
+    // through the transformation and the invulnerability window, and nothing
+    // cuts it — but the duck only reaches what starts after a line, so the
+    // sting has to follow the words to step back for them. See the voice bus
+    // in Audio.ts.
+    play(this, 'dadmode-voice')
     play(this, 'last-stand', 0.85)
     // The world stops for a moment. Everything else here — flash, shake,
     // sting, banner — was already firing and it still went past unnoticed,

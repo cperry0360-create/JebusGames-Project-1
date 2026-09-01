@@ -2,7 +2,7 @@
 
 ## Kenney — CC0 1.0 Universal (public domain)
 
-32 of the game's 39 cues come from Kenney's free audio packs, fetched from the
+32 of the game's 41 cues come from Kenney's free audio packs, fetched from the
 GitHub mirror at <https://github.com/ETdoFresh/kenney.nl> by `tools/getsfx.py`,
 which records exactly which file became which cue.
 
@@ -18,9 +18,17 @@ exists because they deserve it anyway. <https://kenney.nl/>
 
 ## Recorded for this project
 
-`sfx-goblin-spawn.wav` is a voice line, recorded by **Elijah**: the goblin's
-greeting, heard once per run as the first enemy comes out of the entrance arch.
-Original to this project.
+Three cues are voice lines, all recorded by **Elijah** and original to this
+project:
+
+| Cue | Line |
+|---|---|
+| `sfx-goblin-spawn.wav` | the goblin's greeting, once per run, as the first enemy comes out of the entrance arch |
+| `sfx-haymaker-voice.wav` | the Haymaker landing |
+| `sfx-dadmode-voice.wav` | DAD MODE |
+
+They ride a bus of their own so the three can be balanced as a group, and
+everything else steps back while one is talking.
 
 ## Synthesised for this project
 

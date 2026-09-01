@@ -47,6 +47,20 @@ let muted = false
 const voices = new Map<Cue, number[]>()
 
 /**
+ * The bus the recorded lines ride, and until when one is sounding.
+ *
+ * A voice line is a person talking, and the game does not stop for it: five
+ * towers firing over the top is what makes one unintelligible. Nothing here
+ * cuts a sound off — Phaser mixes, it does not steal voices — so what this
+ * does is make everything that STARTS during a line start quieter. That is the
+ * case that matters, because the effects are all short and restarting
+ * constantly; a sound already in flight is over within a fraction of a second
+ * anyway.
+ */
+const VOICE_BUS = 'voice'
+let voiceUntil = 0
+
+/**
  * True once the browser has refused to give us an audio device and we have
  * stopped asking. The game keeps running; it just runs silently.
  *
@@ -323,7 +337,14 @@ export function play(scene: Phaser.Scene, cue: Cue, scale = 1): void {
     // group; without this the only knob is one cue's gain, and there is
     // nothing to move when a second line arrives.
     const bus = def.bus ? (AUDIO.buses?.[def.bus] ?? 1) : 1
-    scene.sound.play(cue, { volume: def.gain * bus * scale * volume })
+    // A voice line wins whatever else is going on. Two lines overlapping keeps
+    // the later end of the two rather than the later line's own: whichever is
+    // still talking is still talking.
+    const now = Date.now()
+    const isVoice = def.bus === VOICE_BUS
+    if (isVoice) voiceUntil = Math.max(voiceUntil, now + (def.durationMs ?? VOICE_MS))
+    const duck = !isVoice && now < voiceUntil ? (AUDIO.voiceDuck ?? 1) : 1
+    scene.sound.play(cue, { volume: def.gain * bus * duck * scale * volume })
   } catch {
     // A cue that will not play is not worth a crash.
   }
@@ -344,4 +365,7 @@ export function playRotating(scene: Phaser.Scene, group: string, cues: Cue[], sc
 export function resetVoices(): void {
   voices.clear()
   rotation.clear()
+  // A line that was talking when the run ended is not talking on the next one,
+  // and leaving this set would duck the first second of it.
+  voiceUntil = 0
 }

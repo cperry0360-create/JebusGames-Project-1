@@ -233,12 +233,30 @@
     },
     "goblin-spawn": {
       "file": "sfx-goblin-spawn",
-      "gain": 1.0,
+      "gain": 0.721,
       "maxVoices": 1,
       "format": "wav",
       "bus": "voice",
-      "_note": "Elijah, recorded for this. 1.44s at -1.4 dBFS peak, -14.8 dBFS over its loudest half — measured, not guessed. gain 1.0 on the voice bus (0.9) puts it at -15.7 dBFS out, between `won` and `lost` and well under the Last Stand, and peaking at -2.3 dBFS. It is far longer than any other cue, which is why it declares its own durationMs.",
+      "_note": "Elijah. 1.44s at -1.4 dBFS peak, -14.8 dBFS over its loudest half. Its gain moved from 1.0 to 0.721 when the bus went to 1.25; the product is unchanged, so it sounds exactly as it did.",
       "durationMs": 1440
+    },
+    "haymaker-voice": {
+      "file": "sfx-haymaker-voice",
+      "gain": 0.809,
+      "maxVoices": 1,
+      "format": "wav",
+      "bus": "voice",
+      "durationMs": 950,
+      "_note": "Elijah. 0.95s at -1.8 dBFS peak, -15.8 dBFS over its loudest half. Fired on the punch landing, not on the button press."
+    },
+    "dadmode-voice": {
+      "file": "sfx-dadmode-voice",
+      "gain": 0.962,
+      "maxVoices": 1,
+      "format": "wav",
+      "bus": "voice",
+      "durationMs": 2200,
+      "_note": "Elijah. 2.2s at -2.5 dBFS peak, -17.3 dBFS over its loudest half. The longest cue in the game by a second, and it plays over the transformation sting and through the invulnerability window without being cut."
     }
   },
   "music": {
@@ -250,8 +268,10 @@
       "music_airport_attack.mp3"
     ]
   },
-  "_buses": "A cue can name a bus, and the bus's own level multiplies it. The goblin line is a 1.44s voice recording sitting among 50ms impacts: it needs balancing against the effects as a GROUP, not by nudging one gain until it sits right and having nothing to move when a second line arrives.",
+  "_buses": "A cue can name a bus, and the bus level multiplies it. The three voice lines are recordings of a person among 50ms impacts: they need balancing against the effects as a GROUP. Measured, not guessed — each line's gain is set from the RMS of its loudest half so all three land at -15.7 dBFS out. The bus sits above 1 so no single gain has to.",
   "buses": {
-    "voice": 0.9
-  }
+    "voice": 1.25
+  },
+  "voiceDuck": 0.5,
+  "_voiceDuck": "While a voice line is sounding, every other cue starts at half level. A line is a person talking and the game does not stop for it: a wave of towers firing over the top is what makes one unintelligible. Nothing is cut off — Phaser mixes rather than steals voices — so this only moves what starts DURING the line, which is the case that matters, since the effects are all short and restarting constantly."
 }

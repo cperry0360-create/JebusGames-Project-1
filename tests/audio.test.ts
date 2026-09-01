@@ -61,11 +61,28 @@ test('the brief\'s whole event list is covered', () => {
   for (const cue of required) assert.ok(audio.cues[cue], `no cue for "${cue}"`)
 })
 
-test('the Last Stand is the loudest thing in the game', () => {
+test('the Last Stand is the loudest EFFECT, and only a voice line sits above it', () => {
   // It is the hero's one transformation. Nothing should sit above it.
-  const ls = audio.cues['last-stand'].gain
+  //
+  // Compared on OUTPUT level, not on the raw gain. A bus multiplies whatever a
+  // cue asks for, so once the voice bus went above 1 this check would have
+  // passed on cues that are audibly louder than the sting — the number in the
+  // file stops being what comes out of the speaker the moment a bus exists.
+  const out = (def: any) => def.gain * (def.bus ? (audio.buses?.[def.bus] ?? 1) : 1)
+  const ls = out(audio.cues['last-stand'])
   for (const [cue, def] of Object.entries(audio.cues) as [string, any][]) {
-    assert.ok(def.gain <= ls, `"${cue}" (${def.gain}) is mixed above the Last Stand (${ls})`)
+    if (def.bus === 'voice') continue
+    assert.ok(out(def) <= ls + 1e-9,
+      `"${cue}" (${out(def).toFixed(3)}) is mixed above the Last Stand (${ls.toFixed(3)})`)
+  }
+  // The exception, deliberately: the lines are meant to be heard OVER the
+  // effects they land on, and the DAD MODE line plays on top of this very
+  // sting. A line you cannot make out under its own transformation is not a
+  // line. It is bounded, though — nothing may be wildly above the sting.
+  for (const [cue, def] of Object.entries(audio.cues) as [string, any][]) {
+    if (def.bus !== 'voice') continue
+    assert.ok(out(def) <= ls * 1.5,
+      `voice line "${cue}" at ${out(def).toFixed(3)} is far above the Last Stand (${ls.toFixed(3)})`)
   }
 })
 
@@ -197,23 +214,23 @@ test('the goblin says his line once per run, at the arch, not at the spawn', () 
 })
 
 test('a voice line is balanced as a group, and long enough to need its own hold', () => {
-  const cue = audio.cues['goblin-spawn']
-  assert.ok(cue, 'the goblin line is not in the manifest')
-
-  // Its own level relative to the other effects, so a second line can be added
-  // without re-tuning the first by hand.
-  assert.ok(cue.bus, 'the voice line has no bus, so it can only be balanced one cue at a time')
-  assert.ok(audio.buses?.[cue.bus] > 0, `bus "${cue.bus}" has no level`)
+  const lines = Object.entries(audio.cues).filter(([, d]: [string, any]) => d.bus === 'voice')
+  assert.equal(lines.length, 3, 'expected three recorded lines on the voice bus')
   const mgr = src('systems/Audio.ts')
-  assert.match(mgr, /AUDIO\.buses\?\.\[def\.bus\]/, 'the bus level is never applied')
-
-  // 1.44s against a default hold of 900ms. Left on the default the cue would
-  // be counted as finished while it is still sounding, and a second trigger
-  // inside that window would lay a second copy over the first.
-  assert.ok(cue.durationMs >= 1440, 'the goblin line does not declare how long it runs')
   const hold = Number(/const VOICE_MS = (\d+)/.exec(mgr)?.[1])
-  assert.ok(cue.durationMs > hold,
-    'this cue is shorter than the default hold, so declaring a duration means nothing')
+
+  for (const [name, cue] of lines as [string, any][]) {
+    // Their own level relative to the effects, so a fourth line can be added
+    // without re-tuning the first three by hand.
+    assert.ok(audio.buses?.[cue.bus] > 0, `bus "${cue.bus}" has no level`)
+    // Every line runs past the default hold. Left on the default the cue would
+    // be counted as finished while it is still sounding, and a second trigger
+    // inside that window would lay a second copy over the first.
+    assert.ok(cue.durationMs > hold,
+      `"${name}" does not declare a duration longer than the ${hold}ms default hold`)
+    assert.equal(cue.maxVoices, 1, `"${name}" can talk over itself`)
+  }
+  assert.match(mgr, /AUDIO\.buses\?\.\[def\.bus\]/, 'the bus level is never applied')
   assert.match(mgr, /claimVoice\(cue, def\.maxVoices, def\.durationMs \?\? VOICE_MS\)/,
     'the declared duration is not used, so the voice cap counts a sounding cue as free')
 
@@ -259,4 +276,82 @@ test('Elijah is credited for the line he recorded', () => {
   }
   const attributions = readFileSync(url('../ATTRIBUTIONS.md'), 'utf8')
   assert.match(attributions, /Elijah/, 'the voice line is not recorded in ATTRIBUTIONS.md')
+})
+
+test('the three lines are levelled against each other, measured not guessed', () => {
+  // Each _note records what was measured off the file: the RMS of its loudest
+  // half. The gains are set from those, so all three come out at one level —
+  // and this checks the gains against the measurements rather than against a
+  // number somebody remembered.
+  const lines = Object.entries(audio.cues).filter(([, d]: [string, any]) => d.bus === 'voice')
+  const levels = lines.map(([name, d]: [string, any]) => {
+    const m = /(-?\d+(?:\.\d+)?) dBFS over its loudest half/.exec(d._note ?? '')
+    assert.ok(m, `"${name}" does not record what was measured off the file`)
+    return { name, out: Number(m[1]) + 20 * Math.log10(d.gain * audio.buses.voice) }
+  })
+  const spread = Math.max(...levels.map((l) => l.out)) - Math.min(...levels.map((l) => l.out))
+  assert.ok(spread <= 1,
+    `the lines are ${spread.toFixed(1)} dB apart: ` +
+    levels.map((l) => `${l.name} ${l.out.toFixed(1)}`).join(', '))
+
+  // No cue gain above 1: the bus carries the group, so a single cue never has
+  // to. That keeps every gain comparable with every other cue in the file.
+  for (const [name, d] of lines as [string, any][]) {
+    assert.ok(d.gain <= 1, `"${name}" asks for a gain of ${d.gain}`)
+  }
+})
+
+test('a voice line wins when something else plays over it', () => {
+  const mgr = src('systems/Audio.ts')
+  assert.ok(audio.voiceDuck > 0 && audio.voiceDuck < 1,
+    'nothing steps back for a voice line')
+  assert.match(mgr, /AUDIO\.voiceDuck \?\? 1/, 'the duck is configured but never applied')
+  assert.match(mgr, /const duck = !isVoice && now < voiceUntil/,
+    'the duck is applied to the voice line itself, or to nothing')
+  // Two lines overlapping keeps the later END, not the later line's own: what
+  // is still talking is still talking.
+  assert.match(mgr, /voiceUntil = Math\.max\(voiceUntil, now \+/,
+    'a short line starting during a long one would end the duck early')
+  // And it does not survive the run that set it.
+  const reset = mgr.slice(mgr.indexOf('export function resetVoices'))
+  assert.match(reset.slice(0, reset.indexOf('\n}')), /voiceUntil = 0/,
+    'a line still sounding when a run ended would duck the start of the next one')
+})
+
+test('each line is wired to the moment it describes, not to the button', () => {
+  const game = src('scenes/GameScene.ts')
+
+  // HAYMAKER: on the punch. Every refusal returns before the damage, so a
+  // press that lands nothing says nothing.
+  const cast = game.slice(game.indexOf('castHaymaker(): void {'))
+  const body = cast.slice(0, cast.indexOf('\n  }'))
+  const refusals = body.indexOf('this.cooldowns.start')
+  assert.ok(body.indexOf("play(this, 'haymaker-voice')") > refusals,
+    'the line plays before the ability has committed, so a refused press talks')
+  assert.match(body, /this\.damageEnemy\(target[^\n]*\n(?:\s*\/\/[^\n]*\n)*\s*play\(this, 'haymaker-voice'\)/,
+    'the line is not on the punch landing')
+
+  // DAD MODE: on the trigger, alongside the sting rather than instead of it.
+  const ann = game.slice(game.indexOf('private announceLastStand()'))
+  const annBody = ann.slice(0, ann.indexOf('\n  }'))
+  assert.match(annBody, /play\(this, 'last-stand'/, 'the transformation sting is gone')
+  assert.match(annBody, /play\(this, 'dadmode-voice'\)/, 'DAD MODE does not say anything')
+
+  // ORDER MATTERS, and it is not obvious. The duck only reaches what starts
+  // AFTER a line, so an effect played first sits on top of the words instead
+  // of under them. Measured in the harness: with the sting second it comes out
+  // at 0.297 against the line's 0.842; with it first, at full level.
+  assert.ok(annBody.indexOf("'dadmode-voice'") < annBody.indexOf("'last-stand'"),
+    'the sting is played before the line, so it never steps back for it')
+  assert.ok(body.indexOf("'haymaker-voice'") < body.indexOf("play(this, 'haymaker')"),
+    'the punch effect is played before the line, so it never steps back for it')
+  // 2.2s, and the invulnerability window is shorter than that — so the line is
+  // still talking after the moment it belongs to has passed, which is exactly
+  // why nothing may cut it.
+  const heroes = read('heroes')
+  const inv = Object.values(heroes as Record<string, any>)
+    .map((h) => h.lastStand?.invulnerableSeconds).filter((v) => typeof v === 'number')
+  assert.ok(inv.length > 0, 'no hero declares an invulnerability window')
+  assert.ok(audio.cues['dadmode-voice'].durationMs > Math.max(...inv) * 1000,
+    'the line is shorter than the window it plays over, so this proves nothing')
 })

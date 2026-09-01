@@ -2477,6 +2477,113 @@ async function run() {
     return
   }
 
+  if (scenario === 'voices') {
+    // The two new lines, on the moments they belong to — and the thing that
+    // cannot be checked from the source, which is what actually comes out at
+    // the mixer when a wave is firing over the top of one.
+    const AJ = (await import('./js/data/audio.json', { with: { type: 'json' } })).default
+    const A = await import('./js/systems/Audio.js')
+    const BUS = AJ.buses.voice, DUCK = AJ.voiceDuck, VOL = A.getVolume()
+    note('viewport ' + VP.w + 'x' + VP.h)
+    note('voice bus ' + BUS + ', everything else ducks to ' + DUCK +
+      ' while a line is sounding, master volume ' + VOL)
+    for (const k of ['goblin-spawn', 'haymaker-voice', 'dadmode-voice']) {
+      note('  ' + k.padEnd(15) + ' loaded=' + game.cache.audio.exists(k) +
+        '  gain ' + AJ.cues[k].gain + '  ' + AJ.cues[k].durationMs + 'ms' +
+        '  expect volume ' + (AJ.cues[k].gain * BUS * VOL).toFixed(3))
+    }
+
+    const heard = []
+    const realPlay = game.sound.play.bind(game.sound)
+    game.sound.play = (key, cfg) => {
+      heard.push({ key, vol: cfg && cfg.volume, t: performance.now() })
+      return realPlay(key, cfg)
+    }
+    const since = (t) => heard.filter((h) => h.t >= t)
+    const got = (k) => heard.filter((h) => h.key === k)
+
+    // --- HAYMAKER, refused. A press that lands no punch says nothing.
+    const before = got('haymaker-voice').length
+    g.castHaymaker()   // no wave yet, so nothing is in reach
+    note('refused press (nothing in reach): line played ' +
+      (got('haymaker-voice').length - before) + ' time(s)' +
+      (got('haymaker-voice').length === before ? '  correct — silent' : '  *** IT TALKED ***'))
+
+    // --- HAYMAKER, landed.
+    // Onto the lane: the hero starts well off it, and a wave that never comes
+    // within haymaker range proves nothing about a cue fired on the punch.
+    const wp = (await import('./js/data/map.json', { with: { type: 'json' } })).default.waypoints
+    const mid = wp[Math.floor(wp.length / 2)]
+    g.orderHero(mid[0], mid[1])
+    g.startWave()
+    const reached = await until(() => g.enemies.some((e) =>
+      e.alive && Math.hypot(e.x - g.hero.x, e.y - g.hero.y) <= g.hero.def.haymaker.range), 60000)
+    note('an enemy came into haymaker range: ' + reached +
+      '  (hero at ' + Math.round(g.hero.x) + ',' + Math.round(g.hero.y) + ')')
+    const tPunch = performance.now()
+    g.castHaymaker()
+    const hv = got('haymaker-voice')[0]
+    note('haymaker: line played ' + got('haymaker-voice').length + ' time(s)' +
+      (hv ? '  at volume ' + hv.vol.toFixed(3) : '  *** SILENT ***'))
+    if (hv) {
+      const want = AJ.cues['haymaker-voice'].gain * BUS * VOL
+      note('   expected ' + want.toFixed(3) + ' — ' +
+        (Math.abs(hv.vol - want) < 0.001 ? 'matches' : '*** MIXED WRONG ***'))
+      // The punch's own impact cue goes off in the same call. It must have
+      // stepped back for the line rather than sitting on top of it.
+      const punch = since(tPunch).find((h) => h.key === 'haymaker')
+      const full = AJ.cues.haymaker.gain * VOL
+      note('   the punch effect alongside it: ' +
+        (punch ? punch.vol.toFixed(3) + ' against ' + full.toFixed(3) + ' unducked — ' +
+          (punch.vol < full * 0.75 ? 'stepped back' : '*** DID NOT DUCK ***')
+          : 'not heard'))
+    }
+
+    // --- DAD MODE. Through the game's own damage path, which is the only
+    // route into announceLastStand.
+    const tDad = performance.now()
+    g.damageHero(99999)
+    await sleep(120)
+    const dv = got('dadmode-voice')[0]
+    const sting = since(tDad).find((h) => h.key === 'last-stand')
+    note('DAD MODE: lastStandActive=' + g.hero.lastStandActive +
+      '  line ' + (dv ? 'played at ' + dv.vol.toFixed(3) : '*** SILENT ***') +
+      '  sting ' + (sting ? 'played at ' + sting.vol.toFixed(3) : 'MISSING'))
+    if (dv && sting) {
+      note('   the line is ' + (20 * Math.log10(dv.vol / sting.vol)).toFixed(1) +
+        ' dB over the sting it plays across' +
+        (dv.vol > sting.vol ? '  — audible over its own transformation' : '  *** BURIED ***'))
+    }
+
+    // --- And it is not cut off. Watch the whole 2.2s with a wave firing.
+    const dur = AJ.cues['dadmode-voice'].durationMs
+    const t0 = performance.now()
+    while (performance.now() - t0 < dur + 300) await sleep(50)
+    // Measured from the LINE, not from the damage. hero-hit and the sting are
+    // played in the same synchronous call, and a cue that started before the
+    // line cannot step back for it — counting those as failures said the duck
+    // was broken when it was doing exactly what it can.
+    const tLine = dv ? dv.t : tDad
+    const during = heard.filter((h) => h.t >= tLine && h.t <= tLine + dur && h.key !== 'dadmode-voice')
+    const kinds = [...new Set(during.map((h) => h.key))]
+    let ducked = 0, plain = 0
+    for (const h of during) {
+      const def = AJ.cues[h.key]
+      if (!def || def.bus === 'voice') continue
+      const full = def.gain * VOL
+      if (h.vol < full * 0.75) ducked++; else plain++
+    }
+    note('while the line was talking, ' + during.length + ' other cue(s) started: ' +
+      JSON.stringify(kinds))
+    note('   ducked ' + ducked + ', at full level ' + plain)
+    note('   the line was never stopped: ' +
+      (got('dadmode-voice').length === 1 ? 'played once and left alone' : '*** RETRIGGERED ***'))
+    note('RESULT ' + (hv && dv && plain === 0 && got('dadmode-voice').length === 1
+      ? 'both lines fire on their moment, mixed as measured, and everything else steps back'
+      : '*** see above ***'))
+    return
+  }
+
   if (scenario === 'looptrack') {
     // The level 1 track does not loop seamlessly and fades out at the end, so
     // it repeats with a gap and fades back in rather than cutting. Watched at
