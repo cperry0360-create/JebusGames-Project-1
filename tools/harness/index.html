@@ -2848,6 +2848,119 @@ async function run() {
     return
   }
 
+  if (scenario === 'nuke') {
+    // WHERE IS THE NUKE BUTTON, REALLY. Reports the ability-bar slot and the
+    // launch overlay's button: position, size, which camera draws each, and
+    // whether the hit area matches what is drawn.
+    const hud = scene('Hud')
+    const uiCam = g.cameras.cameras.find((c) => c.name === 'ui')
+    const worldCam = g.cameras.main
+    const D = (await import('./js/data/display.json', { with: { type: 'json' } })).default
+    const dpr = window.devicePixelRatio || 1
+    note('viewport ' + VP.w + 'x' + VP.h + '  dpr ' + dpr +
+      '  world zoom ' + worldCam.zoom.toFixed(2))
+
+    // Grant it the way the game does.
+    g.status.rareAbility = 'serverNuke'
+    // Generous: the software rasteriser runs at a few frames a second at
+    // device resolution, and the bar rebuilds on an update tick.
+    await sleep(4000)
+    note('slot key string now: ' + (hud.slotKeys || '(none)'))
+
+    const all = []
+    const walkAll = (list, lvl) => { for (const o of list) { all.push([o, lvl]); if (o.list) walkAll(o.list, lvl + 1) } }
+    walkAll(hud.children.list, 0)
+    note('--- ABILITY BAR SLOTS (Hud) ---')
+    for (const sl of hud.slots || []) {
+      const r = sl.region
+      const ib = sl.icon.getBounds()
+      const hb = sl.hit.getBounds()
+      note('  ' + String(r.id).padEnd(14) + ' slot x=' + Math.round(r.x) + ' cx=' + Math.round(r.cx) +
+        ' boxH=' + Math.round(r.boxH) + '  icon ' + Math.round(ib.width) + 'x' + Math.round(ib.height) +
+        ' at ' + Math.round(ib.centerX) + ',' + Math.round(ib.centerY) +
+        '  hit ' + Math.round(hb.width) + 'x' + Math.round(hb.height) +
+        ' at ' + Math.round(hb.centerX) + ',' + Math.round(hb.centerY) +
+        '  visible=' + sl.icon.visible + ' interactive=' + !!(sl.hit.input && sl.hit.input.enabled))
+    }
+
+    const passes = []
+    // Now the launch overlay.
+    g.openNukeLaunch()
+    await sleep(900)
+    const ov = g.nukeLaunch
+    note('--- LAUNCH OVERLAY ---')
+    note('  overlay open: ' + !!ov)
+    if (ov && ov.button) {
+      const b = ov.button.getBounds()
+      const inWorld = worldCam && !worldCam.renderList ? '?' : null
+      note('  button ' + Math.round(b.width) + 'x' + Math.round(b.height) +
+        ' at ' + Math.round(b.centerX) + ',' + Math.round(b.centerY) +
+        '  texture ' + ov.button.texture.key +
+        '  scrollFactor ' + ov.button.scrollFactorX)
+      // The FILTER LIVES ON THE CONTAINER, not on a child inside it: a
+      // container renders its whole subtree, so a child's own cameraFilter is
+      // never consulted. Reading the child reported "drawn by both cameras"
+      // for an overlay that was correctly split.
+      const layer = ov.layer
+      note('  layer scrollFactor ' + layer.scrollFactorX +
+        '  children ' + layer.list.length)
+      note('  world cam ignores the layer: ' + ((layer.cameraFilter & worldCam.id) !== 0))
+      note('  ui cam ignores the layer:    ' + (uiCam ? ((layer.cameraFilter & uiCam.id) !== 0) : 'no ui cam'))
+      note('  blocker: world ignores ' + ((ov.blocker.cameraFilter & worldCam.id) !== 0) +
+        ', ui ignores ' + (uiCam ? ((ov.blocker.cameraFilter & uiCam.id) !== 0) : '?'))
+      const hb2 = ov.hit.getBounds()
+      note('  hit ' + Math.round(hb2.width) + 'x' + Math.round(hb2.height) +
+        ' at ' + Math.round(hb2.centerX) + ',' + Math.round(hb2.centerY) +
+        '   button/hit centre delta ' +
+        Math.round(Math.hypot(hb2.centerX - b.centerX, hb2.centerY - b.centerY)) + 'px')
+      note('  viewport is ' + VP.w + 'x' + VP.h + ', so on-screen means 0..' + VP.w)
+      const off = b.x < -1 || b.right > VP.w + 1 || b.y < -1 || b.bottom > VP.h + 1
+      note('  RESULT button ' + (off ? '*** OFF SCREEN / OVERSIZED ***' : 'is within the viewport'))
+    }
+    // THE ACCEPTANCE TEST: tap it, at both ends of the zoom band, through the
+    // real input system. A button that measures correctly and does not fire is
+    // still broken.
+    const D2 = D.camera
+    const dz = window.devicePixelRatio || 1
+    for (const [name, z] of [['min', D2.minZoom * dz], ['max', D2.maxZoom * dz]]) {
+      // Re-grant AND re-open. The first pass consumes the nuke, so granting
+      // alone leaves no overlay and the second pass measured nothing — which
+      // read as "did not fire" when the button was never on screen.
+      if (!g.nukeLaunch) {
+        g.status.rareAbility = 'serverNuke'
+        await sleep(500)
+        g.openNukeLaunch()
+        await until(() => !!g.nukeLaunch, 4000)
+        await sleep(300)
+      }
+      g.rig.setTargetZoom(z)
+      await until(() => Math.abs(worldCam.zoom - z) < 0.05, 5000)
+      await sleep(250)
+      const o2 = g.nukeLaunch
+      if (!o2) { note('  at ' + name + ' zoom: no overlay open'); continue }
+      const bb = o2.button.getBounds()
+      const hb = o2.hit.getBounds()
+      note('  at ' + name + ' zoom ' + worldCam.zoom.toFixed(2) + ': button ' +
+        Math.round(bb.width) + 'x' + Math.round(bb.height) + ' at ' +
+        Math.round(bb.centerX) + ',' + Math.round(bb.centerY) +
+        '  hit ' + Math.round(hb.width) + 'x' + Math.round(hb.height))
+      const before = g.enemies.length
+      const firedBefore = g.status.rareAbility
+      await click(hb.centerX, hb.centerY)
+      await sleep(1200)
+      const fired = g.status.rareAbility !== firedBefore || !g.nukeLaunch
+      note('    tapped at ' + Math.round(hb.centerX) + ',' + Math.round(hb.centerY) +
+        ' -> fired: ' + (fired ? 'YES' : 'NO *** NOT TAPPABLE ***') +
+        '  (rareAbility ' + String(firedBefore) + ' -> ' + String(g.status.rareAbility) + ')')
+      await shot('nuke-' + name + '-' + VP.w + 'x' + VP.h)
+      passes.push(fired)
+    }
+    note('RESULT ' + (passes.length === 2 && passes.every(Boolean)
+      ? 'the nuke button is tappable and fires at both ends of the zoom band'
+      : '*** THE NUKE BUTTON DID NOT FIRE ***'))
+    return
+  }
+
   if (scenario === 'startrun') {
     // Actually press BEGIN THE RUN, on the longest loadout there is, at the
     // smallest viewport. Not "the button is on screen" — the button works and

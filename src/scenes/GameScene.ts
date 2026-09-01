@@ -310,6 +310,11 @@ export class GameScene extends Phaser.Scene {
         this.uiCam.setSize(this.scale.width, this.scale.height)
         fitUiCamera(this, this.uiCam)
       }
+      // A panel composed against the old viewport is re-centred against the
+      // new one. The camera moves on a resize; without this the content does
+      // not, and an open panel drifts towards an edge by half the difference.
+      this.nukeLaunch?.recentre(viewW(this), viewH(this))
+      this.nukeEarned?.recentre(viewW(this), viewH(this))
       this.applyBands()
     })
 
@@ -2553,7 +2558,9 @@ this.armReadyCountdown()
    * `fireAbility` once the dome has actually been pressed, so nothing that
    * merely opens this panel can spend the drop.
    */
-  private openNukeLaunch(): void {
+  /** Public for the harness, which taps this button at both ends of the
+   *  zoom band to prove it fires. */
+  openNukeLaunch(): void {
     if (this.nukeLaunch?.active) return
     this.nukeLaunch = new NukeLaunchOverlay(
       this,

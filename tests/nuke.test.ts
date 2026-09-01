@@ -126,3 +126,82 @@ test('the drop is still rare', () => {
   assert.ok(n.dropChance > 0, 'the drop can never happen')
   assert.deepEqual(n.dropFromTiers, ['elite', 'boss'], 'the drop comes off ordinary enemies')
 })
+
+/**
+ * THE NUKE BUTTON IS A HUD ELEMENT, NOT A THING ON THE MAP.
+ *
+ * Reported as a giant red disc off the left edge that could not be tapped —
+ * the signature of something drawn by the world camera and scaled by its zoom.
+ * It is not: the harness `nuke` scenario measures the world camera ignoring
+ * the panel, the panel holding position and size across the whole zoom band,
+ * and the button firing at both ends of it. These lock the properties that
+ * make that true, so the class cannot come back silently.
+ */
+test('both nuke panels are screen space, and nothing draws them on the map', () => {
+  const game = src('scenes/GameScene.ts')
+  const ov = src('ui/NukeOverlays.ts')
+
+  // Registered with the camera split. Without this a panel is drawn by BOTH
+  // cameras: once pinned correctly and once on the map at world scale.
+  assert.match(game, /this\.asScreenSpace\(this\.nukeLaunch\.objects\)/,
+    'the launch panel is not registered as screen space')
+  assert.match(game, /this\.asScreenSpace\(this\.nukeEarned\.objects\)/,
+    'the earned panel is not registered as screen space')
+  // Everything visible must be inside one of the two objects the split is
+  // given, or the stragglers are world-drawn.
+  assert.equal((ov.match(/get objects\(\)/g) ?? []).length, 2, 'a panel exposes no objects to split')
+  assert.match(ov, /return \[this\.blocker, this\.layer\]/, 'the split is given something else')
+  assert.equal((ov.match(/this\.layer\.add\(\[/g) ?? []).length, 2,
+    'a panel does not put its content in the layer, so the split misses it')
+  // Pinned, so panning cannot move them. Counted on the two things the split
+  // is actually given rather than on every call in the file — the earned
+  // panel's blast effect pins itself too, and a bare count made this assert
+  // a number rather than a property.
+  assert.equal((ov.match(/this\.layer = scene\.add\.container\(0, 0\)[^\n]*setScrollFactor\(0\)/g) ?? []).length, 2,
+    'a panel layer scrolls with the map')
+  assert.equal((ov.match(/\.setScrollFactor\(0\)\n\s*if \(opts|blocker[\s\S]{0,200}?setScrollFactor\(0\)/g) ?? []).length >= 2, true,
+    'a blocker scrolls with the map')
+
+  // The launch button's hit area is derived from the button it draws, so the
+  // two cannot drift apart.
+  assert.match(ov, /const bw = this\.button\.displayWidth \* 0\.62/,
+    'the hit box is no longer measured from the button')
+  assert.match(ov, /this\.hit = scene\.add\.rectangle\(W \/ 2, cy, bw, bh/,
+    'the hit box is not on the button')
+})
+
+test('a panel re-centres when the viewport changes under it', () => {
+  const ov = src('ui/NukeOverlays.ts')
+  const game = src('scenes/GameScene.ts')
+  // Composed once against the viewport it opened on. The UI camera IS
+  // re-centred on a resize, so a panel that is not moves off-centre by half
+  // the difference — a phone rotating, or iOS collapsing the URL bar, with a
+  // panel open.
+  assert.equal((ov.match(/recentre\(w: number, h: number\)/g) ?? []).length, 2,
+    'a panel cannot be re-centred')
+  assert.match(ov, /this\.layer\.setPosition\(\(w - this\.builtW\) \/ 2/,
+    'the re-centre does not use the size it was built against')
+  assert.equal((ov.match(/this\.builtW = W/g) ?? []).length, 2,
+    'a panel does not record the viewport it was composed for')
+  assert.match(game, /this\.nukeLaunch\?\.recentre\(viewW\(this\), viewH\(this\)\)/,
+    'nothing re-centres the launch panel on a resize')
+  assert.match(game, /this\.nukeEarned\?\.recentre\(viewW\(this\), viewH\(this\)\)/,
+    'nothing re-centres the earned panel on a resize')
+})
+
+test('the nuke sits in the ability bar like any other ability', () => {
+  const hud = src('scenes/HudScene.ts')
+  const bar = src('systems/AbilityBar.ts')
+  const abilities = read('abilities')
+  // It goes through the same slot list as the drafted actives — not a special
+  // case with its own placement, which is how it would end up somewhere else.
+  assert.match(hud, /s\.rareAbility,/, 'the rare drop is not fed into the slot list')
+  assert.match(bar, /export function slotDefs\(/, 'the one place slots are described is gone')
+  // Same icon family, same box. A slot rendering the 600x495 button art
+  // instead of the 256px icon is the "giant red disc" shape of failure.
+  assert.equal(abilities.serverNuke.icon, 'ability-servernuke',
+    'the bar slot would draw the launch button art rather than the ability icon')
+  const render = read('art').render['ability-servernuke']
+  assert.ok(render && render.contentWidth && render.contentHeight,
+    'without content extents fitInBox cannot size the icon and draws it native')
+})

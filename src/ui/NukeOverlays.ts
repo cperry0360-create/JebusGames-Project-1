@@ -42,8 +42,12 @@ function fitToViewport(scene: Phaser.Scene, want: number, share: number): number
  */
 export class NukeEarnedOverlay {
   private readonly scene: Phaser.Scene
-  private readonly blocker: Phaser.GameObjects.Rectangle
-  private readonly layer: Phaser.GameObjects.Container
+  readonly blocker: Phaser.GameObjects.Rectangle
+  /** Public for the harness, which checks which camera draws it. */
+  readonly layer: Phaser.GameObjects.Container
+  /** The viewport this panel was composed against; see recentre. */
+  private builtW = 0
+  private builtH = 0
   readonly medallion: Phaser.GameObjects.Image
   readonly headline: Phaser.GameObjects.Text
   readonly subhead: Phaser.GameObjects.Text
@@ -77,6 +81,8 @@ export class NukeEarnedOverlay {
     this.blocker.on('pointerdown', () => this.skip())
 
     this.layer = scene.add.container(0, 0).setDepth(LAYER.modal).setScrollFactor(0)
+    this.builtW = W
+    this.builtH = H
 
     // Sized against the viewport, not against the design box: at 568x320 a
     // 260px medallion plus two lines of display type does not fit, and the
@@ -121,6 +127,24 @@ export class NukeEarnedOverlay {
   get objects(): Phaser.GameObjects.GameObject[] {
     return [this.blocker, this.layer]
   }
+
+  /**
+   * Re-centres the panel when the viewport changes under it.
+   *
+   * Everything here is composed once, absolutely, against the viewport as it
+   * was at that moment — a button at W/2, a heading above it. The UI camera IS
+   * re-centred on a resize, so without this the two disagree and the panel
+   * sits off-centre by half the difference: rotate a phone, or let iOS
+   * collapse the URL bar while the panel is open, and the content walks
+   * towards an edge while the camera stays where it is.
+   *
+   * Shifting the container by half the delta is exact for centred content and
+   * costs nothing, which is why it is done rather than rebuilding.
+   */
+  recentre(w: number, h: number): void {
+    this.layer.setPosition((w - this.builtW) / 2, (h - this.builtH) / 2)
+  }
+
 
   owns(objects: Phaser.GameObjects.GameObject[]): boolean {
     return objects.includes(this.blocker)
@@ -225,8 +249,12 @@ export class NukeEarnedOverlay {
  */
 export class NukeLaunchOverlay {
   private readonly scene: Phaser.Scene
-  private readonly blocker: Phaser.GameObjects.Rectangle
-  private readonly layer: Phaser.GameObjects.Container
+  readonly blocker: Phaser.GameObjects.Rectangle
+  /** Public for the harness, which checks which camera draws it. */
+  readonly layer: Phaser.GameObjects.Container
+  /** The viewport this panel was composed against; see recentre. */
+  private builtW = 0
+  private builtH = 0
   readonly button: Phaser.GameObjects.Image
   readonly hit: Phaser.GameObjects.Rectangle
   readonly closeHit: Phaser.GameObjects.Rectangle
@@ -250,6 +278,8 @@ export class NukeLaunchOverlay {
     this.blocker.on('pointerdown', () => {})
 
     this.layer = scene.add.container(0, 0).setDepth(LAYER.modal).setScrollFactor(0)
+    this.builtW = W
+    this.builtH = H
 
     const cfg = renderFor(ART.ui.nukeButton.up)
     const btnH = fitToViewport(scene, LAUNCH.buttonHeight, 0.62)
@@ -317,6 +347,24 @@ export class NukeLaunchOverlay {
   get objects(): Phaser.GameObjects.GameObject[] {
     return [this.blocker, this.layer]
   }
+
+  /**
+   * Re-centres the panel when the viewport changes under it.
+   *
+   * Everything here is composed once, absolutely, against the viewport as it
+   * was at that moment — a button at W/2, a heading above it. The UI camera IS
+   * re-centred on a resize, so without this the two disagree and the panel
+   * sits off-centre by half the difference: rotate a phone, or let iOS
+   * collapse the URL bar while the panel is open, and the content walks
+   * towards an edge while the camera stays where it is.
+   *
+   * Shifting the container by half the delta is exact for centred content and
+   * costs nothing, which is why it is done rather than rebuilding.
+   */
+  recentre(w: number, h: number): void {
+    this.layer.setPosition((w - this.builtW) / 2, (h - this.builtH) / 2)
+  }
+
 
   owns(objects: Phaser.GameObjects.GameObject[]): boolean {
     return objects.includes(this.blocker)
