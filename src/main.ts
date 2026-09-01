@@ -7,7 +7,7 @@ import { logEvent, setBuildLabel } from './systems/Diagnostics.ts'
 import { installWatchdog } from './systems/Watchdog.ts'
 import { guardAudioPromises } from './systems/Audio.ts'
 import { installLifecycle } from './systems/Lifecycle.ts'
-import { disableMusic, refreshMusicVolume, unlockMusic } from './systems/Music.ts'
+import { disableMusic, installMusicGesture, refreshMusicVolume, unlockMusic } from './systems/Music.ts'
 import { onAudioGesture, onAudioMixChanged, onAudioUnavailable } from './systems/Audio.ts'
 import { VERSION_LABEL } from './systems/Build.ts'
 
@@ -57,6 +57,10 @@ async function start(): Promise<void> {
   // volume slider have to reach it explicitly.
   onAudioMixChanged(refreshMusicVolume)
   onAudioGesture(unlockMusic)
+  // And directly on the DOM as well. Phaser's input is dispatched from its
+  // update loop rather than from the gesture, which on iOS is the difference
+  // between play() being allowed and being rejected.
+  installMusicGesture()
   onAudioUnavailable(() => disableMusic())
 
   // A freeze carries no exception, so nothing else in the diagnostics would

@@ -21,7 +21,7 @@
 
 import musicData from '../data/music.json' with { type: 'json' }
 import { stamped } from './Build.ts'
-import { getVolume, isMuted } from './Audio.ts'
+import { audioContext, getVolume, isMuted } from './Audio.ts'
 import {
   currentId, deckGain, loaded, newMix, request, settling, step,
 } from './MusicMix.ts'
@@ -51,6 +51,27 @@ export const SCREEN_TRACKS = MUSIC.screens
 
 /** The elements, one per deck slot. The bookkeeping lives in MusicMix. */
 const els: Array<HTMLAudioElement | null> = [null, null]
+/**
+ * Each deck's Web Audio output stage, when the element could be routed.
+ *
+ * WHY THIS EXISTS. An HTMLAudioElement playing on its own goes out through
+ * iOS's *ringer* channel, which the hardware silent switch mutes. Web Audio
+ * does not. So on an iPad with the side switch set to Mute the sound effects
+ * played and the soundtrack did not, on the same build and the same URL — the
+ * effects are Phaser sounds on Web Audio and the music was a bare element.
+ *
+ * Routing the element through `createMediaElementSource` keeps the streaming
+ * (the point of using an element for a 9MB file) while moving the OUTPUT onto
+ * the Web Audio graph, where the switch does not reach it.
+ *
+ * Null entries mean the routing was not possible and the element is playing
+ * on its own; `applyLevels` handles both.
+ */
+const nodes: Array<{ source: MediaElementAudioSourceNode; gain: GainNode } | null> = [null, null]
+/** Whether routing has been attempted for the element in each slot.
+ *  `createMediaElementSource` throws if called twice on one element, so the
+ *  retry below has to know it has already tried. */
+const routeTried = [false, false]
 const mix = newMix()
 
 /** Set once the player has actually gestured. Nothing plays before it. */
@@ -62,6 +83,35 @@ let backgrounded = false
 let ticker: ReturnType<typeof setInterval> | null = null
 /** Turned off for good if the browser will not give us audio. */
 let broken = false
+/**
+ * Why the soundtrack is not playing, in words a player can act on, or ''.
+ *
+ * Surfaced rather than swallowed. What cannot be detected from here is the one
+ * cause most likely to be behind a silent iPad — the hardware ring/silent
+ * switch — because nothing in the web platform reports it. The Web Audio
+ * routing above is the mitigation for that; this is for everything that DOES
+ * announce itself.
+ */
+let problem = ''
+let onProblem: ((why: string) => void) | null = null
+
+/** What to say if the player asks why there is no music. Empty when fine. */
+export function musicProblem(): string {
+  return problem
+}
+
+/** Told when music becomes unavailable, so a screen can say so. */
+export function onMusicProblem(fn: ((why: string) => void) | null): void {
+  onProblem = fn
+  if (fn && problem) fn(problem)
+}
+
+function fail(why: string): void {
+  if (problem) return
+  problem = why
+  console.warn('[music]', why)
+  onProblem?.(why)
+}
 
 const TICK_MS = 50
 
@@ -76,11 +126,49 @@ function applyLevels(): void {
     const d = mix.decks[i]!
     if (!el) continue
     const gain = d.id ? (MUSIC.tracks[d.id]?.gain ?? 1) : 1
+    const level = Math.max(0, Math.min(1, deckGain(d, gain) * master))
+    // The context can arrive after the element did — Phaser creates it on the
+    // first gesture, and a track can be asked for in the same tick. Routing a
+    // moment late is silent and correct; never routing is the bug.
+    if (!nodes[i] && !routeTried[i]) route(i, el)
     try {
-      el.volume = Math.max(0, Math.min(1, deckGain(d, gain) * master))
+      const routed = nodes[i]
+      if (routed) {
+        // The element stays at 1 and the graph carries the level. Setting both
+        // would multiply them, and the crossfade would run twice as steep.
+        el.volume = 1
+        routed.gain.gain.value = level
+      } else {
+        el.volume = level
+      }
     } catch {
-      // A detached element. Nothing to do; the next swap replaces it.
+      // A detached element or a closed context. Nothing to do; the next swap
+      // replaces both.
     }
+  }
+}
+
+/**
+ * Puts one deck's element on the Web Audio graph, if the browser will.
+ *
+ * Deliberately best-effort. `createMediaElementSource` throws if the element
+ * has already been routed, and is missing on some older engines; a browser
+ * that refuses simply keeps the element's own output, which is what the game
+ * had before. It is never worth losing the music to gain the routing.
+ */
+function route(i: number, el: HTMLAudioElement): void {
+  const ctx = audioContext()
+  if (!ctx || typeof ctx.createMediaElementSource !== 'function') return
+  routeTried[i] = true
+  try {
+    const source = ctx.createMediaElementSource(el)
+    const gain = ctx.createGain()
+    gain.gain.value = 0
+    source.connect(gain)
+    gain.connect(ctx.destination)
+    nodes[i] = { source, gain }
+  } catch {
+    nodes[i] = null
   }
 }
 
@@ -100,6 +188,13 @@ function tick(): void {
 
 /** Stops and detaches one deck's element. */
 function release(i: number): void {
+  const routed = nodes[i]
+  if (routed) {
+    try { routed.source.disconnect() } catch { /* already gone */ }
+    try { routed.gain.disconnect() } catch { /* already gone */ }
+    nodes[i] = null
+  }
+  routeTried[i] = false
   const el = els[i]
   if (!el) return
   try { el.pause() } catch { /* already gone */ }
@@ -130,6 +225,31 @@ export function unlockMusic(): void {
   if (unlocked) return
   unlocked = true
   if (wanted) playTrack(wanted)
+}
+
+/**
+ * Listens for the gesture on the DOM itself, not through Phaser's input.
+ *
+ * This is the second half of the iOS story. Phaser unlocks its own Web Audio
+ * context from listeners it puts on `document.body`, which run inside the
+ * gesture's own call stack. The soundtrack was unlocked from
+ * `scene.input.once('pointerdown')` — and Phaser QUEUES DOM pointer events and
+ * dispatches them from its update loop, a frame later and in a different task.
+ * Safari's rule is that `play()` must be called during the gesture, so the
+ * soundtrack was relying on the transient-activation window still being open.
+ * Usually it is. On a slow first frame it is not, and the effects come up
+ * while the music does not.
+ *
+ * Not `once`: a rejected play() puts `unlocked` back to false so the next real
+ * tap can retry, and a spent listener would make that retry impossible.
+ */
+export function installMusicGesture(): void {
+  const doc = globalThis.document
+  if (!doc) return
+  const go = (): void => { unlockMusic() }
+  for (const ev of ['pointerdown', 'touchend', 'mousedown', 'keydown']) {
+    doc.addEventListener(ev, go, { capture: true, passive: true })
+  }
 }
 
 /** What the game currently wants to hear. Used by the harness. */
@@ -164,9 +284,19 @@ export function currentPosition(): number {
 export function deckReport(): Array<{ id: string | null; volume: number; paused: boolean }> {
   return els.map((el, i) => ({
     id: mix.decks[i]?.id ?? null,
-    volume: el ? el.volume : 0,
+    // The EFFECTIVE level, not the element's. Once a deck is routed through
+    // the Web Audio graph its element sits at 1 and the gain node carries the
+    // fade, so reading el.volume would report every deck as full — and "only
+    // one track is ever audible" is a claim about these numbers.
+    volume: el ? (nodes[i] ? nodes[i]!.gain.gain.value : el.volume) : 0,
     paused: el ? el.paused : true,
   }))
+}
+
+/** Which decks are on the Web Audio graph. The harness checks this is the
+ *  path in use, since it is the whole reason the iPad was silent. */
+export function routedDecks(): boolean[] {
+  return nodes.map((n) => n !== null)
 }
 
 /**
@@ -200,19 +330,46 @@ export function playTrack(id: string | null): void {
   // file up front. Nine megabytes of MP3 is about a hundred decoded.
   el.preload = 'auto'
   el.loop = def.loop
+  // iOS will not play an element inline without this, and a soundtrack is
+  // never a full-screen video.
+  el.setAttribute('playsinline', '')
+  el.crossOrigin = 'anonymous'
   el.src = urlFor(def)
   el.volume = 0
   els[startDeck] = el
+
+  // A LOAD FAILURE USED TO BE SILENT. Nothing listened for `error`, so a 404,
+  // a codec the device will not take, or a stalled transfer left the game
+  // playing nothing with no way to find out why — which is indistinguishable
+  // from every other reason music might not be audible, and made this exact
+  // report impossible to diagnose from the outside.
+  el.addEventListener('error', () => {
+    const code = el.error?.code
+    const why = code === 1 ? 'the download was aborted'
+      : code === 2 ? 'the network dropped it'
+        : code === 3 ? 'this device cannot decode it'
+          : code === 4 ? 'the file is missing or the format is unsupported'
+            : 'the browser gave no reason'
+    fail(`could not load ${def.file}.${def.format}: ${why}`)
+  }, { once: true })
+
+  route(startDeck, el)
 
   const started = el.play()
   if (started && typeof started.catch === 'function') {
     // A rejected play() is the browser refusing, not a crash — most often a
     // gesture we thought we had and did not. Remembered, and retried on the
     // next real one.
-    started.catch(() => {
+    started.catch((err: unknown) => {
       unlocked = false
       release(startDeck)
       mix.decks[startDeck] = { id: null, target: 0, level: 0 }
+      const name = (err as { name?: string } | null)?.name
+      // NotAllowedError is a missing gesture and will be retried; anything
+      // else is a refusal the player should be told about.
+      if (name && name !== 'NotAllowedError') {
+        fail(`the browser refused to play the soundtrack (${name})`)
+      }
     })
   }
   applyLevels()

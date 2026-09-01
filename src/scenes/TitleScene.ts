@@ -11,7 +11,8 @@ import { VERSION_LABEL } from '../systems/Build.ts'
 import { logEvent } from '../systems/Diagnostics.ts'
 import { ART } from '../systems/Art.ts'
 import { fitCameraToDesign } from '../ui/FitCamera.ts'
-import { musicForScene } from '../systems/Music.ts'
+import { musicForScene, musicProblem, onMusicProblem } from '../systems/Music.ts'
+import { sceneIsLive } from '../systems/SceneEvents.ts'
 
 const BRANDING = brandingData as BrandingDef
 
@@ -58,6 +59,25 @@ export class TitleScene extends Phaser.Scene {
       fontFamily: FONT_UI, fontSize: '24px', color: COLOR.ink,
       stroke: '#0d1016', strokeThickness: 4, ...BODY_SPACING,
     }).setOrigin(0.5)
+
+    // If the soundtrack cannot play, say so here rather than leaving the
+    // player to wonder why one game is silent and another is not. Only ever
+    // shown on real evidence — a load failure or a refusal the browser
+    // named — so a working game never carries an apology.
+    const musicNote = this.add.text(W / 2, 250, '', {
+      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.dim,
+      stroke: '#0d1016', strokeThickness: 3, align: 'center',
+      wordWrap: { width: W - 160 }, ...BODY_SPACING,
+    }).setOrigin(0.5).setVisible(false)
+    const sayMusic = (why: string): void => {
+      if (!sceneIsLive(this)) return
+      musicNote.setText(`No music: ${why}.`).setVisible(true)
+    }
+    if (musicProblem()) sayMusic(musicProblem())
+    // The callback is global and outlives this scene, so it is guarded by
+    // sceneIsLive rather than unregistered: each new Title replaces it, and a
+    // stale one from a scene that has gone returns without touching anything.
+    onMusicProblem(sayMusic)
 
     plateButton(this, W / 2, 386, 320, 68, 'START RUN', () => this.start(), 28)
     plateButton(this, W / 2, 470, 260, 56, 'CREDITS', () => this.scene.start('Credits'), 22, 'secondary')

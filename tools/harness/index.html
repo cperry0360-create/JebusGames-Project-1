@@ -2260,6 +2260,7 @@ async function run() {
       const rep = M.deckReport()
       const playing = rep.filter((d) => !d.paused && d.volume > 0.001)
       note('  ' + label.padEnd(22) +
+        ' routed=' + JSON.stringify(M.routedDecks()) +
         ' track=' + String(M.currentTrack()) +
         '  decks=' + JSON.stringify(M.audibleTracks()) +
         '  elements=' + M.liveElementCount() +

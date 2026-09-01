@@ -159,3 +159,74 @@ test('the two tracks land at the same perceived level', () => {
     assert.ok(peak < -1, `${id} peaks at ${peak.toFixed(1)} dBFS, which leaves no headroom`)
   }
 })
+
+/**
+ * WHY MUSIC WAS SILENT ON AN IPAD WHILE THE EFFECTS PLAYED.
+ *
+ * A bare HTMLAudioElement outputs on iOS's ringer channel, which the hardware
+ * silent switch mutes; Web Audio does not. The effects are Phaser sounds on
+ * Web Audio and the soundtrack was a bare element, so one device muted half
+ * the game. These guard the two halves of the fix and the reporting path that
+ * made the original report undiagnosable from the outside.
+ */
+test('the soundtrack shares the Web Audio graph rather than playing on its own', () => {
+  const music = src('systems/Music.ts')
+  // Routed through the same context the sound effects use, so both land on
+  // the same output and the silent switch reaches neither.
+  assert.match(music, /createMediaElementSource/,
+    'the soundtrack plays straight out of the element, where the ringer switch mutes it')
+  assert.match(music, /audioContext\(\)/, 'it makes its own context instead of sharing Phaser\'s')
+  assert.match(src('systems/Audio.ts'), /export function audioContext\(\)/,
+    'the shared context is not reachable')
+
+  // Still streaming. Decoding a 9MB track into Web Audio is the thing this
+  // module exists to avoid, and createMediaElementSource does not do that.
+  assert.match(music, /new Audio\(\)/, 'the element is gone, so the track is being decoded whole')
+  assert.doesNotMatch(music, /decodeAudioData/, 'the soundtrack is being decoded into memory')
+
+  // And the routing is best-effort: a browser that refuses must fall back to
+  // the element rather than lose the music.
+  const fn = /function route\([\s\S]*?\n\}/.exec(music)
+  assert.ok(fn, 'the routing helper is gone')
+  assert.match(fn[0], /catch/, 'a browser that refuses to route loses the music entirely')
+  assert.match(music, /const routed = nodes\[i\]/, 'the level is not applied to both paths')
+})
+
+test('the gesture is taken from the DOM, not from Phaser input', () => {
+  const music = src('systems/Music.ts')
+  // Phaser queues DOM pointer events and dispatches them from its update
+  // loop, a frame later and in a different task. iOS requires play() during
+  // the gesture itself.
+  assert.match(music, /doc\.addEventListener\(ev, go/,
+    'the unlock still rides on Phaser input, which is dispatched a frame late')
+  assert.match(music, /'pointerdown', 'touchend', 'mousedown', 'keydown'/,
+    'not every gesture kind unlocks the soundtrack')
+  // Not once: a rejected play() resets `unlocked` so the next tap retries, and
+  // a spent listener would make the retry impossible.
+  assert.doesNotMatch(/doc\.addEventListener\(ev, go[^)]*\)/.exec(music)?.[0] ?? '', /once: true/,
+    'the retry after a rejected play() can never fire')
+  assert.match(src('main.ts'), /installMusicGesture\(\)/, 'the DOM listener is never installed')
+})
+
+test('a load failure is surfaced instead of swallowed', () => {
+  const music = src('systems/Music.ts')
+  assert.match(music, /el\.addEventListener\('error'/,
+    'nothing listens for a load error, so a missing or undecodable track is silent')
+  // Every MediaError code is turned into something a player can act on.
+  for (const code of [1, 2, 3, 4]) {
+    assert.ok(new RegExp(`code === ${code}`).test(music), `MediaError ${code} has no message`)
+  }
+  assert.match(music, /export function musicProblem\(\)/, 'the reason cannot be read back')
+  assert.match(music, /export function onMusicProblem\(/, 'no screen can be told')
+  // A refusal the browser named is reported; a missing gesture is not, since
+  // it retries.
+  assert.match(music, /name !== 'NotAllowedError'/,
+    'a missing gesture would be reported as a failure on every first load')
+
+  // And it reaches the player.
+  const title = src('scenes/TitleScene.ts')
+  assert.match(title, /onMusicProblem\(sayMusic\)/, 'the title screen never shows the reason')
+  assert.match(title, /No music: /, 'the message does not say what is wrong')
+  assert.match(title, /setVisible\(false\)/,
+    'the notice is shown even when the music is fine')
+})

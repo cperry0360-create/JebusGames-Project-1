@@ -117,10 +117,36 @@ function messageOf(err: unknown): string {
   return typeof err === 'string' ? err : 'the browser refused the audio device'
 }
 
+/**
+ * The game's Web Audio context, for anything that needs to share it.
+ *
+ * The soundtrack does. Routing its elements through this context is what puts
+ * music on the same output path as the sound effects — which on iOS is the
+ * difference between obeying the ring/silent switch and ignoring it. Sharing
+ * Phaser's context rather than making a second one also means the soundtrack
+ * inherits Phaser's unlock, which happens on a real DOM listener.
+ */
+let sharedContext: AudioContext | undefined
+/** Any scene or game seen so far, so the context can be resolved on demand
+ *  rather than only when something happened to ask for it earlier. */
+let audioHost: Phaser.Scene | Phaser.Game | undefined
+
+export function audioContext(): AudioContext | undefined {
+  // Resolved lazily. Caching it only as a side effect of `contextOf` made the
+  // soundtrack's routing depend on call ORDER: unlocking from a DOM listener
+  // can beat Phaser's input dispatch, and the first track then started before
+  // anything had looked the context up, so it played unrouted.
+  if (!sharedContext && audioHost) contextOf(audioHost)
+  return sharedContext
+}
+
 /** The live context, if there is one. Phaser only has one under Web Audio. */
 function contextOf(scene: Phaser.Scene | Phaser.Game): AudioContext | undefined {
   const sound = (scene as Phaser.Scene).sound ?? (scene as Phaser.Game).sound
-  return (sound as { context?: AudioContext } | undefined)?.context
+  audioHost = scene
+  const ctx = (sound as { context?: AudioContext } | undefined)?.context
+  if (ctx) sharedContext = ctx
+  return ctx
 }
 
 export function initAudio(): void {
@@ -135,6 +161,7 @@ export function initAudio(): void {
  * suspended, so the first click also asks for it explicitly. Once is enough.
  */
 export function unlockAudio(scene: Phaser.Scene): void {
+  audioHost = scene
   const resume = (): void => {
     void resumeAudio(scene)
     // The soundtrack needs the same gesture: an HTMLAudioElement asked to
