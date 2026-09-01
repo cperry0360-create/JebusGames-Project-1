@@ -804,7 +804,16 @@ test('nothing ships a font or a pack file the game never asks for', () => {
 
   // And nothing under public/ is a working file: an underscore prefix is how
   // the art references were marked, and they belong in reference/.
-  for (const dir of ['fx', 'units', 'props', 'hero', 'enemies', 'towers']) {
+  //
+  // Every directory, found by walking, not a list. The list was fx, units,
+  // props, hero, enemies and towers — and `ui` was not on it, so three
+  // reference sheets shipped through this check unnoticed. A named set of
+  // directories only guards the directories somebody remembered.
+  const dirs = readdirSync(url('../public/assets'), { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+  assert.ok(dirs.length >= 6, 'the asset directories are not being walked')
+  for (const dir of dirs) {
     for (const f of readdirSync(url(`../public/assets/${dir}`))) {
       assert.ok(!f.startsWith('_'), `public/assets/${dir}/${f} is a reference file in the deploy`)
     }

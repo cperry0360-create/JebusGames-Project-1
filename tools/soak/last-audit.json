@@ -1,0 +1,62 @@
+{
+ "manifest": {
+  "keys": 62,
+  "orphanKeys": [],
+  "missingFiles": [],
+  "unreferencedFilesOnDisk": [],
+  "unreferencedKilobytes": 0
+ },
+ "typescript": {
+  "strict": true,
+  "totalErrors": 513,
+  "phaserCascade": 454,
+  "other": [
+   "src/entities/Enemy.ts(233,13): error TS2345: Argument of type 'this' is not assignable to parameter of type 'Sortable'.",
+   "src/entities/Enemy.ts(270,11): error TS2345: Argument of type 'this' is not assignable to parameter of type 'Sortable'.",
+   "src/entities/Fighter.ts(57,11): error TS2345: Argument of type 'this' is not assignable to parameter of type 'Sortable'.",
+   "src/entities/Fighter.ts(81,32): error TS2345: Argument of type 'Enemy[]' is not assignable to parameter of type 'Targetable[]'.",
+   "src/entities/Fighter.ts(87,15): error TS2345: Argument of type 'Targetable' is not assignable to parameter of type 'Enemy'.",
+   "src/entities/Fighter.ts(95,11): error TS2345: Argument of type 'this' is not assignable to parameter of type 'Sortable'.",
+   "src/entities/Hero.ts(101,11): error TS2345: Argument of type 'this' is not assignable to parameter of type 'Sortable'.",
+   "src/entities/Hero.ts(211,32): error TS2345: Argument of type 'Enemy[]' is not assignable to parameter of type 'Targetable[]'.",
+   "src/entities/Hero.ts(212,5): error TS2322: Type 'Targetable | null' is not assignable to type 'Enemy | null'.",
+   "src/entities/Hero.ts(240,26): error TS2345: Argument of type 'Enemy[]' is not assignable to parameter of type 'Targetable[]'.",
+   "src/entities/Hero.ts(242,40): error TS2345: Argument of type 'Targetable' is not assignable to parameter of type 'Enemy'.",
+   "src/entities/Hero.ts(254,34): error TS2345: Argument of type 'Enemy[]' is not assignable to parameter of type 'Targetable[]'.",
+   "src/entities/Hero.ts(258,11): error TS2345: Argument of type 'this' is not assignable to parameter of type 'Sortable'.",
+   "src/entities/Hero.ts(268,34): error TS2345: Argument of type 'Enemy[]' is not assignable to parameter of type 'Targetable[]'.",
+   "src/entities/Hero.ts(269,27): error TS2345: Argument of type 'Targetable' is not assignable to parameter of type 'Enemy'.",
+   "src/entities/Hero.ts(270,23): error TS2345: Argument of type 'Targetable' is not assignable to parameter of type 'Enemy'.",
+   "src/entities/Hero.ts(271,13): error TS2345: Argument of type 'Targetable' is not assignable to parameter of type 'Enemy'.",
+   "src/entities/Hero.ts(431,11): error TS2345: Argument of type 'this' is not assignable to parameter of type 'Sortable'.",
+   "src/entities/Projectile.ts(39,11): error TS2345: Argument of type 'this' is not assignable to parameter of type 'Sortable'.",
+   "src/entities/Projectile.ts(68,11): error TS2345: Argument of type 'this' is not assignable to parameter of type 'Sortable'.",
+   "src/entities/Tower.ts(70,11): error TS2345: Argument of type 'this' is not assignable to parameter of type 'Sortable'.",
+   "src/entities/Tower.ts(327,15): error TS2345: Argument of type 'this' is not assignable to parameter of type 'Sortable'.",
+   "src/entities/Tower.ts(340,30): error TS2345: Argument of type 'Enemy[]' is not assignable to parameter of type 'Targetable[]'.",
+   "src/entities/Tower.ts(347,9): error TS2367: This comparison appears to be unintentional because the types 'Enemy | null' and 'Targetable' have no overlap.",
+   "src/entities/Tower.ts(348,7): error TS2740: Type 'Targetable' is missing the following properties from type 'Enemy': def, maxHealth, health, status, and 41 more.",
+   "src/entities/Tower.ts(356,16): error TS2345: Argument of type 'Targetable' is not assignable to parameter of type 'Enemy'.",
+   "src/scenes/GameScene.ts(1485,18): error TS7006: Parameter 'tw' implicitly has an 'any' type.",
+   "src/scenes/GameScene.ts(1605,18): error TS7006: Parameter 'tw' implicitly has an 'any' type.",
+   "src/scenes/GameScene.ts(1687,32): error TS2345: Argument of type 'Enemy[]' is not assignable to parameter of type 'Targetable[]'.",
+   "src/scenes/GameScene.ts(1708,22): error TS2345: Argument of type 'Targetable' is not assignable to parameter of type 'Enemy'."
+  ]
+ },
+ "deadExports": [
+  "systems/Art.ts: contentWidthAt",
+  "systems/ArtLoader.ts: ART_CREDIT",
+  "systems/Audio.ts: CUE_KEYS",
+  "systems/Audio.ts: setMuted",
+  "systems/Desaturate.ts: GREY",
+  "systems/Save.ts: DEFAULT_SAVE",
+  "systems/Save.ts: MAX_REPORT_CHARS",
+  "systems/Save.ts: bannerTotal",
+  "systems/Upgrades.ts: investedIn",
+  "systems/Watchdog.ts: stopWatchdog",
+  "ui/FitCamera.ts: DESIGN_WIDTH",
+  "ui/FitCamera.ts: DESIGN_HEIGHT",
+  "ui/Theme.ts: TYPE",
+  "ui/Theme.ts: menuSize"
+ ]
+}
