@@ -421,3 +421,49 @@ test('reopening the build menu replaces its hit areas rather than piling them up
   assert.ok(open.indexOf('this.close(') < open.indexOf('this.hitAreas = []'),
     'the list is cleared before the menu it belongs to is closed')
 })
+
+/**
+ * PAUSE MUST BE REVERSIBLE.
+ *
+ * The reported failure: tapping pause froze the game and the pause button then
+ * did nothing. The cause was not the disabled-button audit — it was that a
+ * Dialog's dim backdrop closes it on a tap unless told otherwise, and `close()`
+ * is not `onCancel`. Tapping beside the PAUSED panel took the dialog away
+ * without resuming, leaving `paused` true over a paused GameScene, and the old
+ * `if (this.paused) return` then refused to reopen the only control that could
+ * undo it.
+ *
+ * CI has no renderer, so what is checked here is the two invariants that make
+ * the state unreachable. The behavioural proof — pause during a wave, tap the
+ * backdrop, resume, and assert enemies advance again — is the harness's
+ * `pauseresume` and `pausedismiss` scenarios.
+ */
+test('a paused game can always be un-paused', () => {
+  const hud = src('scenes/HudScene.ts')
+  const openPause = hud.slice(hud.indexOf('private openPause()'), hud.indexOf('private showPanel('))
+
+  // 1. The dialog that pauses the world cannot be waved away. Every other
+  //    dialog may be, because the game runs on underneath it; this one IS the
+  //    way the game runs on.
+  assert.match(openPause, /dismissable: false/,
+    'the pause dialog is dismissable again; tapping the backdrop strands the game')
+
+  // 2. And the flag can never lock the player out on its own. A `paused` flag
+  //    with no panel behind it is a broken state, not a reason to do nothing.
+  assert.ok(!/if \(this\.paused\) return/.test(openPause),
+    'openPause early-returns on the flag alone, so a stranded flag is permanent')
+  assert.match(openPause, /if \(this\.paused && this\.panel\) return/,
+    'the re-entry guard no longer requires a panel to actually be up')
+
+  // The quit confirmation is reached FROM the pause dialog, so the world is
+  // paused behind it and the same trap applies.
+  const quit = hud.slice(hud.indexOf('private confirmQuit()'), hud.indexOf('private quitToTitle()'))
+  assert.match(quit, /dismissable: false/,
+    'the quit confirmation is dismissable, and it sits over a paused world')
+
+  // Whatever closes the pause dialog must resume: RESUME, and KEEP PLAYING.
+  assert.match(openPause, /onPick: \(\) => this\.resumeGame\(\)/,
+    'RESUME no longer resumes the game')
+  assert.match(quit, /onCancel: \(\) => this\.resumeGame\(\)/,
+    'backing out of the quit prompt no longer resumes the game')
+})

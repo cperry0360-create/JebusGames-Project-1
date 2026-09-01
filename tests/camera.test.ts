@@ -385,16 +385,27 @@ test('the zoom range brackets the default rather than the viewport', () => {
   const min = display.camera.minZoom
   assert.ok(max / z >= 1.30 && max / z <= 1.45,
     `the ceiling is ${(max / z).toFixed(2)}x the default; the band should be about 1.38x`)
-  assert.ok(min / z >= 0.71 && min / z <= 0.82,
-    `the floor is ${(min / z).toFixed(2)}x the default; the band should be about 0.76x`)
+  // The floor is deliberately much further from the default than the ceiling
+  // is. The band is lopsided on purpose: the ceiling cannot go higher because
+  // a tier-3 Withholding tower is already 325px tall at max zoom, which is
+  // the whole of a 320px screen. Zooming OUT has no such limit, and being
+  // unable to see the board was the complaint.
+  assert.ok(min / z >= 0.42 && min / z <= 0.50,
+    `the floor is ${(min / z).toFixed(2)}x the default; the band should be about 0.45x`)
   // And the floor must actually bite on the smallest viewport, where cover is
   // lowest and the old floor did nothing at all.
   const small = coverZoom(568, 320, W, H)
   assert.ok(clampZoom(0, small, max, min) === min,
     'on a small viewport the design floor is not what stops the zoom-out')
-  const seen = (568 / min) * (320 / min) / (W * H)
-  assert.ok(seen < 0.25,
-    `at min zoom a 568x320 phone still sees ${(seen * 100).toFixed(0)}% of the map`)
+  // Nearly the whole board, never quite all of it. Both halves matter: the
+  // floor was raised three times because the player could not see enough, and
+  // it is bounded because framing the entire map makes every sprite a speck.
+  const widthSeen = (844 / min) / W
+  assert.ok(widthSeen >= 0.80 && widthSeen <= 0.90,
+    `at min zoom an 844x390 screen sees ${(widthSeen * 100).toFixed(0)}% of the map's width; about 85% was asked for`)
+  const seen = (844 / min) * (390 / min) / (W * H)
+  assert.ok(seen < 0.70,
+    `at min zoom an 844x390 screen sees ${(seen * 100).toFixed(0)}% of the map; the whole board should stay out of reach`)
   // And zooming all the way out still fills the screen, at every viewport.
   const sizes: Array<[number, number]> = [[568, 320], [844, 390], [1080, 810], [1440, 900]]
   for (const [vw, vh] of sizes) {

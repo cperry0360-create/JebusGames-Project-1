@@ -2470,6 +2470,146 @@ async function run() {
     return
   }
 
+  if (scenario === 'pauseresume') {
+    // THE REPORTED FAILURE, end to end and through real input: start a run,
+    // start a wave, tap PAUSE, tap RESUME, and check the wave actually moves
+    // again. "The dialog closed" is not the assertion — enemies advancing is.
+    for (const k of ['Title', 'Splash', 'Credits', 'Boot', 'Loadout']) game.scene.stop(k)
+    const RS = await import('./js/systems/RunState.js')
+    RS.setRunState({ heroId: 'cory', openingTowers: ['withholding', 'rounding'],
+      abilities: ['molotov', 'glacier'], reserveTowers: [] })
+    game.scene.start('Game')
+    await until(() => running('Game'), 12000)
+    await until(() => running('Hud'), 12000)
+    await sleep(700)
+    const g = scene('Game'), hud = scene('Hud')
+    note('viewport ' + VP.w + 'x' + VP.h)
+
+    // Get a wave moving, so "did it resume" has something to measure.
+    g.startWave()
+    await until(() => g.enemies.length > 0, 12000)
+    await sleep(700)
+    const before = g.enemies[0] ? { x: g.enemies[0].x, y: g.enemies[0].y } : null
+    note('wave running, ' + g.enemies.length + ' enemies on the board')
+    await shot('pause-01-playing-' + VP.w + 'x' + VP.h)
+
+    // Tap PAUSE where it actually is, through the DOM.
+    const pr = hud.layout.pause
+    await click(pr.x + pr.width / 2, pr.y + pr.height / 2)
+    await sleep(500)
+    const paused = !game.scene.isActive('Game')
+    note('after tapping pause: Game active = ' + game.scene.isActive('Game') +
+      '  (paused = ' + paused + ')')
+    const all = []
+    const walkAll = (list) => { for (const o of list) { all.push(o); if (o.list) walkAll(o.list) } }
+    walkAll(hud.children.list)
+    const resume = all.find((o) => o.type === 'Text' && /RESUME/.test(String(o.text ?? '')))
+    note('RESUME label found: ' + (resume ? 'YES' : 'NO *** the dialog did not open ***'))
+    await shot('pause-02-paused-' + VP.w + 'x' + VP.h)
+
+    // Is anything actually able to receive the tap?
+    note('  Hud input enabled: ' + (hud.input ? hud.input.enabled : 'no input plugin'))
+    note('  Hud camera visible: ' + hud.cameras.main.visible)
+    const hits = []
+    for (const o of all) {
+      if (!o.input || !o.input.enabled) continue
+      const b = o.getBounds ? o.getBounds() : null
+      if (b) hits.push(Math.round(b.centerX) + ',' + Math.round(b.centerY) +
+        ' ' + Math.round(b.width) + 'x' + Math.round(b.height))
+    }
+    note('  interactive objects in the Hud: ' + hits.length)
+
+    if (resume) {
+      const rb = resume.getBounds()
+      note('pressing RESUME at ' + Math.round(rb.centerX) + ',' + Math.round(rb.centerY))
+      await click(rb.centerX, rb.centerY)
+      await sleep(600)
+    }
+    const backOn = game.scene.isActive('Game')
+    note('after tapping RESUME: Game active = ' + backOn)
+
+    // The real question: is the world moving again?
+    await sleep(900)
+    const after = g.enemies[0] ? { x: g.enemies[0].x, y: g.enemies[0].y } : null
+    const moved = before && after ? Math.hypot(after.x - before.x, after.y - before.y) : -1
+    note('the lead enemy moved ' + (moved < 0 ? 'n/a' : moved.toFixed(1) + 'px') + ' across the pause')
+    await shot('pause-03-resumed-' + VP.w + 'x' + VP.h)
+    note('RESULT ' + (paused && backOn && moved > 2
+      ? 'pause and resume both work'
+      : '*** THE GAME CANNOT BE RESUMED ***'))
+    return
+  }
+
+  if (scenario === 'pausedismiss') {
+    // THE LOCK-UP. Tap pause, then tap the dim backdrop instead of RESUME.
+    // The dialog is dismissable, so the backdrop closes it — without calling
+    // onCancel and without resuming the world. GameScene stays paused, the
+    // HUD's `paused` flag stays true, and the pause button's own guard then
+    // refuses to open the dialog again. No way back.
+    for (const k of ['Title', 'Splash', 'Credits', 'Boot', 'Loadout']) game.scene.stop(k)
+    const RS = await import('./js/systems/RunState.js')
+    RS.setRunState({ heroId: 'cory', openingTowers: ['withholding', 'rounding'],
+      abilities: ['molotov', 'glacier'], reserveTowers: [] })
+    game.scene.start('Game')
+    await until(() => running('Game'), 12000)
+    await until(() => running('Hud'), 12000)
+    await sleep(700)
+    const g = scene('Game'), hud = scene('Hud')
+    note('viewport ' + VP.w + 'x' + VP.h)
+    g.startWave()
+    await until(() => g.enemies.length > 0, 12000)
+    await sleep(600)
+    const before = { x: g.enemies[0].x, y: g.enemies[0].y }
+
+    const pr = hud.layout.pause
+    await click(pr.x + pr.width / 2, pr.y + pr.height / 2)
+    await sleep(400)
+    note('1. tapped PAUSE      -> Game active = ' + game.scene.isActive('Game'))
+
+    // The backdrop: a corner, well away from the panel in the middle.
+    await click(12, 12)
+    await sleep(400)
+    const all = []
+    const walkAll = (list) => { for (const o of list) { all.push(o); if (o.list) walkAll(o.list) } }
+    walkAll(hud.children.list)
+    const stillUp = all.some((o) => o.type === 'Text' && /RESUME/.test(String(o.text ?? '')))
+    note('2. tapped the BACKDROP -> dialog still up = ' + stillUp +
+      ', Game active = ' + game.scene.isActive('Game'))
+    await shot('dismiss-01-after-backdrop-' + VP.w + 'x' + VP.h)
+
+    // Now try to get back in. This is the move a real player makes.
+    await click(pr.x + pr.width / 2, pr.y + pr.height / 2)
+    await sleep(500)
+    const all2 = []
+    walkAll(hud.children.list)
+    for (const o of hud.children.list) all2.push(o)
+    const reopened = []
+    const walk2 = (list) => { for (const o of list) { reopened.push(o); if (o.list) walk2(o.list) } }
+    walk2(hud.children.list)
+    const back = reopened.some((o) => o.type === 'Text' && /RESUME/.test(String(o.text ?? '')))
+    note('3. tapped PAUSE again -> dialog reopened = ' + back +
+      ', Game active = ' + game.scene.isActive('Game'))
+
+    // The panel must have survived the backdrop tap, because that tap is what
+    // used to strand the game. Then finish the journey the player would.
+    const resume = reopened.find((o) => o.type === 'Text' && /RESUME/.test(String(o.text ?? '')))
+    if (resume) {
+      const rb = resume.getBounds()
+      await click(rb.centerX, rb.centerY)
+      await sleep(600)
+    }
+    note('4. tapped RESUME      -> Game active = ' + game.scene.isActive('Game'))
+    await sleep(900)
+    const after = { x: g.enemies[0].x, y: g.enemies[0].y }
+    const moved = Math.hypot(after.x - before.x, after.y - before.y)
+    note('the lead enemy moved ' + moved.toFixed(1) + 'px in total')
+    await shot('dismiss-02-recovered-' + VP.w + 'x' + VP.h)
+    note('RESULT ' + (back && game.scene.isActive('Game') && moved > 2
+      ? 'the backdrop cannot strand the game, and RESUME still works'
+      : '*** THE GAME IS FROZEN AND THE PAUSE BUTTON NO LONGER RESPONDS ***'))
+    return
+  }
+
   if (scenario === 'startrun') {
     // Actually press BEGIN THE RUN, on the longest loadout there is, at the
     // smallest viewport. Not "the button is on screen" — the button works and

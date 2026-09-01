@@ -13,7 +13,7 @@
     "zoomLambda": 11,
     "momentumDecay": 0.0022,
     "momentumMinSpeed": 35,
-    "minZoom": 1.31,
+    "minZoom": 0.776,
     "boundsMarginPx": 0
   }
 }

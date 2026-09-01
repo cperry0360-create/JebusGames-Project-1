@@ -284,8 +284,25 @@ export class HudScene extends Phaser.Scene {
     hit.on('pointerdown', () => this.openPause())
   }
 
+  /**
+   * The pause dialog.
+   *
+   * The guard here is `this.paused && this.panel`, not `this.paused`, and the
+   * difference is the whole bug. The dim backdrop of a Dialog closes it on a
+   * tap unless it is told otherwise — deliberately, so a panel over a live
+   * battlefield is never a trap. But `close()` is not `onCancel`: it takes the
+   * dialog away without running the handler, so tapping beside the PAUSED
+   * panel left `paused` true and GameScene paused with nothing on screen, and
+   * the old `if (this.paused) return` then refused to reopen the one control
+   * that could undo it. A frozen board and a dead pause button.
+   *
+   * Two independent fixes, because either alone would leave the trap set for
+   * the next dialog that pauses something: this panel is not dismissable at
+   * all, AND a `paused` flag with no panel behind it is now treated as the
+   * thing that is wrong rather than as a reason to do nothing.
+   */
   private openPause(): void {
-    if (this.paused) return
+    if (this.paused && this.panel) return
     this.paused = true
     play(this, 'open')
     this.scene.pause('Game')
@@ -296,6 +313,10 @@ export class HudScene extends Phaser.Scene {
       extra: { label: 'RESTART', onPick: () => this.restartRun() },
       cancelLabel: 'QUIT',
       onCancel: () => this.confirmQuit(),
+      // A paused world is left only on purpose. Every other dialog may be
+      // waved away because the game carries on underneath it; this one IS the
+      // way the game carries on.
+      dismissable: false,
       dim: 0.55,
     })
   }
@@ -330,6 +351,9 @@ export class HudScene extends Phaser.Scene {
       confirm: { label: 'QUIT', onPick: () => this.quitToTitle() },
       cancelLabel: 'KEEP PLAYING',
       onCancel: () => this.resumeGame(),
+      // Reached from the pause dialog, so the world is paused behind it and
+      // the same trap applies.
+      dismissable: false,
       dim: 0.6,
     })
   }
