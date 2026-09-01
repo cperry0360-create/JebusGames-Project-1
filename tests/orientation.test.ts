@@ -55,7 +55,10 @@ test('the canvas fills the true viewport with no letterbox', () => {
   assert.match(css, /#game\s*\{[^}]*height:\s*100dvh/,
     'without dvh the canvas is the wrong height while Safari\'s URL bar collapses')
   const config = src('config.ts')
-  assert.match(config, /Phaser\.Scale\.RESIZE/, 'a fixed scale mode letterboxes instead of filling')
+  assert.match(config, /Phaser\.Scale\.NONE/, 'a fixed scale mode letterboxes instead of filling')
+  // NONE only fills because Resolution sizes it to the parent every time.
+  assert.match(src('systems/Resolution.ts'), /getBoundingClientRect/,
+    'the canvas is sized from something other than the parent box it lives in')
 })
 
 test('portrait shows the gate and landscape does not', () => {
@@ -102,9 +105,14 @@ test('an orientation change re-measures more than once', () => {
   assert.match(gate, /visualViewport/, "iOS's URL bar collapse raises no plain resize event")
   assert.match(gate, /requestAnimationFrame\(measure\)/, 'only one measurement is taken')
   assert.match(gate, /setTimeout\(measure/, 'no late re-measure, so a slow rotate is missed')
-  assert.match(gate, /game\.scale\.refresh\(\)/, 'nothing tells the scale manager to re-read')
-  // resize() to window dimensions would fight the 100dvh parent.
-  assert.doesNotMatch(gate, /scale\.resize\(/,
+  assert.match(gate, /applyResolution\(game\)/, 'nothing tells the scale manager to re-read')
+  // refresh() no longer resizes anything: under NONE it re-reads bounds and
+  // stops. Calling it here would look right and do nothing.
+  assert.doesNotMatch(gate, /game\.scale\.refresh\(\)/,
+    'refresh() does not resize the canvas under the NONE scale mode')
+  // The measurement must still come from the parent, not the window: the
+  // parent is 100dvh and the two disagree while Safari's URL bar collapses.
+  assert.doesNotMatch(src('systems/Resolution.ts'), /resize\(\s*(globalThis|window)\.innerWidth/,
     'forcing window dimensions overrides the parent box the canvas actually lives in')
 })
 

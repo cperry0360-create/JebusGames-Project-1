@@ -2,6 +2,7 @@ import Phaser from 'phaser'
 import { getVolume, isMuted, play, setVolume, toggleMuted } from '../systems/Audio.ts'
 import { iconPlate } from './Plate.ts'
 import { COLOR, FONT_UI } from './Theme.ts'
+import { viewH } from '../systems/Resolution.ts'
 
 /**
  * The settings, such as they are: mute, and a volume that steps rather than
@@ -33,7 +34,7 @@ export class AudioToggle {
     x: number,
     y: number,
     size = 40,
-    bottomLimit = scene.scale.height,
+    bottomLimit = viewH(scene),
   ) {
     this.plate = iconPlate(scene, x, y, size, size)
     this.glyph = scene.add.graphics()

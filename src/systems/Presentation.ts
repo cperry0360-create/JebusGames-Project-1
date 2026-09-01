@@ -4,6 +4,7 @@
 import Phaser from 'phaser'
 import presentationData from '../data/presentation.json'
 import { applyRender, ART, renderFor } from './Art.ts'
+import { deviceScale } from './Resolution.ts'
 import { EFFECT_MS, playEffect } from './Effects.ts'
 
 export const PRESENTATION = presentationData
@@ -175,7 +176,11 @@ export function floatingDamage(
 
   // Kept on screen: a long label on something near the edge was half cut off.
   const half = text.width / 2 + 6
-  text.x = Phaser.Math.Clamp(text.x, half, scene.cameras.main.width - half)
+  // Divided by the device scale so this stays exactly the number it was
+  // before the canvas went to device resolution. It compares a world x against
+  // a camera pixel width, which was always approximate; making it correct is a
+  // separate change from making the canvas sharp.
+  text.x = Phaser.Math.Clamp(text.x, half, scene.cameras.main.width / deviceScale() - half)
 
   // A number that lands bigger than it settles. Only the ones asked for it get
   // it: an ordinary tower hit does not need a flourish, and Haymaker does.

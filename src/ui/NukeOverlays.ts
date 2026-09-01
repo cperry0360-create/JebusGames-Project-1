@@ -23,13 +23,14 @@ import { ART, fitContentHeight, renderFor } from '../systems/Art.ts'
 import { EFFECT_MS, playEffect } from '../systems/Effects.ts'
 import { play } from '../systems/Audio.ts'
 import presentationData from '../data/presentation.json'
+import { viewH, viewW } from '../systems/Resolution.ts'
 
 const EARNED = presentationData.serverNuke.earned
 const LAUNCH = presentationData.serverNuke.launch
 
 /** Fits a size to the viewport so nothing is clipped on a small phone. */
 function fitToViewport(scene: Phaser.Scene, want: number, share: number): number {
-  const room = Math.min(scene.scale.width, scene.scale.height) * share
+  const room = Math.min(viewW(scene), viewH(scene)) * share
   return Math.min(want, room)
 }
 
@@ -65,8 +66,8 @@ export class NukeEarnedOverlay {
     this.onDone = onDone
     this.target = target
 
-    const W = scene.scale.width
-    const H = scene.scale.height
+    const W = viewW(scene)
+    const H = viewH(scene)
 
     this.blocker = scene.add
       .rectangle(W / 2, H / 2, W * 3, H * 3, 0x000000, EARNED.dim)
@@ -156,7 +157,7 @@ export class NukeEarnedOverlay {
     }
 
     // The blast is BEHIND the medallion, so the icon stays readable through it.
-    const blast = playEffect(s, ART.fx.blast, s.scale.width / 2, s.scale.height / 2, {
+    const blast = playEffect(s, ART.fx.blast, viewW(s) / 2, viewH(s) / 2, {
       size: fitToViewport(s, EARNED.blastSize, 1.15),
       depth: LAYER.modal - 1,
       durationMs: EFFECT_MS.blastMs * 1.4,
@@ -235,8 +236,8 @@ export class NukeLaunchOverlay {
 
   constructor(scene: Phaser.Scene, onLaunch: () => void, onCancel: () => void) {
     this.scene = scene
-    const W = scene.scale.width
-    const H = scene.scale.height
+    const W = viewW(scene)
+    const H = viewH(scene)
 
     this.blocker = scene.add
       .rectangle(W / 2, H / 2, W * 3, H * 3, 0x000000, LAUNCH.dim)

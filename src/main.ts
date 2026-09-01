@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { gameConfig } from './config.ts'
 import { installOrientationGate } from './systems/Orientation.ts'
+import { applyResolution } from './systems/Resolution.ts'
 import { installErrorPanel, report, setReloadHandler } from './systems/ErrorPanel.ts'
 import { logEvent, setBuildLabel } from './systems/Diagnostics.ts'
 import { installWatchdog } from './systems/Watchdog.ts'
@@ -41,6 +42,10 @@ async function start(): Promise<void> {
   await waitForFonts()
   document.getElementById('boot')?.remove()
   const game = new Phaser.Game(gameConfig)
+  // Before any scene measures anything. The scale mode is NONE, so nothing
+  // else sizes the canvas and the first frame would otherwise be drawn at the
+  // 1280x720 config size regardless of the device.
+  applyResolution(game)
   setReloadHandler(() => globalThis.location.reload())
 
   // Leaving the tab and coming back is a state the game enters deliberately:

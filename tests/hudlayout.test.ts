@@ -81,7 +81,9 @@ test('the map is full-bleed: nothing is reserved from the board', () => {
   const game = src('scenes/GameScene.ts')
   const apply = /private applyBands\([\s\S]*?\n  \}/.exec(game)
   assert.ok(apply, 'the camera setup is gone')
-  assert.match(apply[0], /setViewport\(0, 0, W, H\)/,
+  // Full canvas, from the origin. In PHYSICAL pixels: the viewport is the
+  // canvas, unlike the HUD band arithmetic beside it, which is CSS pixels.
+  assert.match(apply[0], /setViewport\(0, 0, this\.scale\.width, this\.scale\.height\)/,
     'the world camera is inset again, so the map no longer reaches the edges')
   assert.doesNotMatch(game, /this\.bands|bandsFor/,
     'the reserved-band geometry is back')

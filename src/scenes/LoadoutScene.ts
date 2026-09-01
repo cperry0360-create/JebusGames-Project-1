@@ -16,6 +16,7 @@ import { ART, renderFor } from '../systems/Art.ts'
 import presentationData from '../data/presentation.json'
 import { play } from '../systems/Audio.ts'
 import { musicForScene } from '../systems/Music.ts'
+import { viewH, viewW } from '../systems/Resolution.ts'
 
 const HEROES = heroesData as Record<string, HeroDef>
 const TOWERS = towersData as Record<string, TowerDef>
@@ -193,8 +194,8 @@ export class LoadoutScene extends Phaser.Scene {
 
     // What the camera can see, in design units.
     const zoom = this.cameras.main.zoom || 1
-    const visW = Math.max(W, this.scale.width / zoom)
-    const visH = Math.max(H, this.scale.height / zoom)
+    const visW = Math.max(W, viewW(this) / zoom)
+    const visH = Math.max(H, viewH(this) / zoom)
 
     const cfg = renderFor(key)
     const srcW = cfg.contentWidth ?? 1920

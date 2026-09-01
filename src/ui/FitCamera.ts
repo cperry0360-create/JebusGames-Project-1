@@ -39,6 +39,12 @@ export function fitCameraToDesign(
     // Whatever the fit leaves over is the game's dark chrome, not the grass
     // green the world camera clears to.
     cam.setBackgroundColor(0x10161d)
+    // The one deliberate read of the PHYSICAL viewport in the game.
+    //
+    // Everything else measures in CSS pixels via Resolution.viewW/viewH, but
+    // this fits a fixed design box to whatever the canvas actually is — so
+    // handing it device pixels is exactly right, and is why the menu screens
+    // came out at full resolution with no other change when the canvas did.
     cam.setZoom(fitScale(scene.scale.width, scene.scale.height, designW, designH))
     // Centre the design box in the viewport. Any leftover is the camera's own
     // background colour, which is the game's dark ground.

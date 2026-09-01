@@ -54,7 +54,7 @@ test('the run-end screen is on the screen it appears on, and cannot be left behi
   // the camera that does not move.
   const open = /private openDialog\([\s\S]*?\n  \}/.exec(game)
   assert.ok(open, 'openDialog is gone')
-  assert.match(open[0], /this\.scale\.width \/ 2, this\.scale\.height \/ 2/,
+  assert.match(open[0], /viewW\(this\) \/ 2, viewH\(this\) \/ 2/,
     'the dialog is not centred on the live viewport')
   assert.match(open[0], /this\.asScreenSpace\(this\.dialog\.objects\)/,
     'the dialog is drawn by the world camera, so panning moves it off view')
@@ -66,7 +66,7 @@ test('the run-end screen is on the screen it appears on, and cannot be left behi
 
   // A phone in landscape can be 320px tall and a results panel is taller than
   // that. A panel that runs off the screen takes its buttons with it.
-  assert.match(dialog, /Math\.min\(1, \(scene\.scale\.height - MARGIN\) \/ h/,
+  assert.match(dialog, /Math\.min\(1, \(viewH\(scene\) - MARGIN\) \/ h/,
     'a dialog taller than the viewport is not scaled to fit')
   const btn = /plateButton\(scene, bx, btnY, bw, (\d+),/.exec(dialog)
   assert.ok(btn && Number(btn[1]) >= 44,

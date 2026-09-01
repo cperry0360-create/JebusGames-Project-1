@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import {
   anchorCenter,
   centerRange,
@@ -63,9 +63,16 @@ test('the default view shows about half the map, not all of it', () => {
 
 test('the canvas fills the viewport rather than sitting in a fixed box', () => {
   const config = src('config.ts')
-  assert.match(config, /Phaser\.Scale\.RESIZE/,
+  // NONE, driven by hand from Resolution.ts. It was RESIZE, which fills the
+  // viewport but hard-sets canvas.width to the parent's CSS size and ignores
+  // zoom — a third of the pixels on a retina phone. The property that matters
+  // is unchanged (no letterbox, no fixed box); the mechanism is not.
+  assert.match(config, /Phaser\.Scale\.NONE/,
     'FIT letterboxes the game into a fixed box in the middle of the screen')
+  assert.match(src('systems/Resolution.ts'), /scale\.resize\(cssW \* dpr, cssH \* dpr\)/,
+    'nothing sizes the canvas, and NONE mode will not do it by itself')
   assert.doesNotMatch(config, /CENTER_BOTH/, 'centring a full-viewport canvas does nothing but confuse')
+  assert.doesNotMatch(config, /Phaser\.Scale\.FIT/, 'FIT letterboxes')
   assert.match(config, /activePointers:\s*[23-9]/, 'a pinch needs more than one pointer')
 
   const page = readFileSync(url('../index.html'), 'utf8')
@@ -433,4 +440,73 @@ test('the interface does not zoom with the board', () => {
     'the cancel button is a world object and would grow with the zoom')
   assert.match(game, /asScreenSpace\(this\.menu\.objects\)/,
     'the build menu is a world object and would grow with the zoom')
+})
+
+/**
+ * THE CANVAS CARRIES DEVICE PIXELS.
+ *
+ * Phaser's RESIZE mode sets `canvas.width` to the parent's CSS size and
+ * ignores the scale manager's zoom, so on a devicePixelRatio-3 phone the
+ * canvas held a third of the screen's linear resolution and the compositor
+ * stretched it back. NONE plus a zoom of 1/dpr is the only combination
+ * Phaser 3 offers that gives a full-resolution canvas at the right size.
+ *
+ * The behavioural proof is the harness `pixels` scenario, which reads the real
+ * canvas against a real devicePixelRatio. What is checked here is that the
+ * three parts that make it work cannot drift apart.
+ */
+test('the canvas is sized in device pixels, and layout is not', () => {
+  const res = src('systems/Resolution.ts')
+  const config = src('config.ts')
+
+  // 1. The mode, and the zoom that pairs with it. Either alone is wrong:
+  //    NONE without the zoom gives a canvas three times too big on screen.
+  assert.match(config, /Phaser\.Scale\.NONE/, 'RESIZE ignores zoom and forces CSS-pixel canvas size')
+  assert.match(res, /setZoom\(1 \/ dpr\)/, 'without the reciprocal zoom the canvas is dpr times too large')
+  assert.match(res, /resize\(cssW \* dpr, cssH \* dpr\)/, 'the canvas is not given device pixels')
+
+  // 2. The scale is clamped. Some devices report 4 or more, and fill cost
+  //    rises with the square while the eye stops resolving the difference.
+  const cap = /const MAX_SCALE = (\d+)/.exec(res)
+  assert.ok(cap && Number(cap[1]) >= 2 && Number(cap[1]) <= 3,
+    'the device scale is uncapped, so a 4x phone pays 16x the fill cost')
+  assert.match(res, /Math\.min\(MAX_SCALE/, 'the cap is declared but not applied')
+
+  // 3. Layout stays in CSS pixels. This is what keeps the typography floors,
+  //    the HUD layout and the safe-area insets meaning what they say — the
+  //    device scale is carried by the camera zoom, not by forty constants.
+  assert.match(res, /scene\.scale\.width \/ deviceScale\(\)/, 'viewW no longer converts')
+  assert.match(res, /cam\.setZoom\(deviceScale\(\)\)/, 'a UI camera does not carry the device scale')
+
+  // And nothing outside this module reads the raw physical size, with one
+  // deliberate exception: fitCameraToDesign fits a design box to the real
+  // canvas, so physical is exactly what it wants.
+  const dir = new URL('../src/', import.meta.url)
+  const offenders: string[] = []
+  const walk = (d: URL): void => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const u = new URL(e.name + (e.isDirectory() ? '/' : ''), d)
+      if (e.isDirectory()) { walk(u); continue }
+      if (!e.name.endsWith('.ts')) continue
+      if (e.name === 'Resolution.ts' || e.name === 'FitCamera.ts') continue
+      // Per line, because GameScene legitimately reads the physical size for
+      // one thing: the UI camera's VIEWPORT, which is the canvas. Its
+      // coordinate space is still CSS pixels — that is what the zoom does.
+      for (const line of readFileSync(u, 'utf8').split('\n')) {
+        if (!/\.scale\.(width|height)\b/.test(line)) continue
+        // A camera VIEWPORT is the canvas, so physical is correct for it.
+        // Only layout reads are the mistake this is looking for.
+        if (/uiCam|cameras\.add\(|setViewport\(/.test(line)) continue
+        offenders.push(`${e.name}: ${line.trim()}`)
+      }
+    }
+  }
+  walk(dir)
+  assert.deepEqual(offenders, [],
+    'these read the physical viewport as if it were CSS pixels; use viewW/viewH')
+
+  // 4. The world camera's band is in screen pixels per world unit, and a
+  //    screen pixel is a device pixel now.
+  assert.match(src('scenes/GameScene.ts'), /defaultZoom: displayData\.camera\.defaultZoom \* deviceScale\(\)/,
+    'the zoom band was not scaled, so a retina phone sees three times the map')
 })

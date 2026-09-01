@@ -2,6 +2,7 @@ import Phaser from 'phaser'
 import { platePanel, plateButton } from './Plate.ts'
 import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from './Theme.ts'
 import { play } from '../systems/Audio.ts'
+import { viewH, viewW } from '../systems/Resolution.ts'
 
 /**
  * A modal panel on the dialog plate.
@@ -116,7 +117,7 @@ export class Dialog {
     // battlefield: the wave keeps coming while the player hunts for the way
     // out. The tap is still consumed, so dismissing never also acts on the map.
     this.blocker = scene.add
-      .rectangle(0, 0, scene.scale.width * 2, scene.scale.height * 2, 0x000000, opts.dim ?? 0.45)
+      .rectangle(0, 0, viewW(scene) * 2, viewH(scene) * 2, 0x000000, opts.dim ?? 0.45)
       .setOrigin(0.5)
       .setInteractive()
     if (opts.dismissable !== false) this.blocker.on('pointerdown', () => this.close())
@@ -295,7 +296,7 @@ export class Dialog {
     // rows is taller than that, and a panel that runs off the screen takes its
     // buttons with it — which on the results screen would be a dead end. So
     // the whole panel is scaled to fit rather than trusted to be short enough.
-    this.fit = Math.min(1, (scene.scale.height - MARGIN) / h, (scene.scale.width - MARGIN) / w)
+    this.fit = Math.min(1, (viewH(scene) - MARGIN) / h, (viewW(scene) - MARGIN) / w)
     this.layer.setScale(this.fit * 0.86)
     scene.tweens.add({
       targets: this.layer, scale: this.fit, duration: 170, ease: 'Back.easeOut',

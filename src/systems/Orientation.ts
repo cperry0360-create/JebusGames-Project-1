@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { applyResolution } from './Resolution.ts'
 
 /**
  * The orientation gate.
@@ -202,12 +203,12 @@ export function installOrientationGate(game: Phaser.Game): void {
    */
   const settle = (): void => {
     const measure = (): void => {
-      // RESIZE mode: `refresh` re-reads the parent element's bounds and sizes
-      // the canvas to match. Deliberately not `resize(innerWidth, innerHeight)`
-      // — the parent is 100dvh, which is not innerHeight while Safari's URL bar
-      // is collapsing, and forcing it would make the canvas taller than the box
-      // it sits in.
-      game.scale.refresh()
+      // Under NONE the scale manager does not size anything by itself, so
+      // `refresh()` is no longer enough — it re-reads bounds without resizing
+      // the canvas. applyResolution measures the parent (still the parent, not
+      // innerHeight, for the URL-bar reason) and sizes the canvas to it at full
+      // device resolution.
+      applyResolution(game)
       sync()
     }
     measure()

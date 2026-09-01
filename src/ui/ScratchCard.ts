@@ -5,6 +5,7 @@ import { LAYER } from '../systems/Layers.ts'
 import type { ScratchOutcome } from '../systems/Scratch.ts'
 import { ART, renderFor } from '../systems/Art.ts'
 import presentationData from '../data/presentation.json'
+import { viewH, viewW } from '../systems/Resolution.ts'
 
 /**
  * The Scratch Ticket overlay.
@@ -75,7 +76,7 @@ export class ScratchCard {
     const cfg = renderFor(ART.ui.scratchCard.revealed)
     const srcW = cfg.contentWidth ?? 600
     const srcH = cfg.contentHeight ?? 406
-    const h = Math.min(SC.cardHeight, scene.scale.height * 0.62)
+    const h = Math.min(SC.cardHeight, viewH(scene) * 0.62)
     const scale = h / srcH
     const w = srcW * scale
     this.cardW = w
@@ -136,7 +137,7 @@ export class ScratchCard {
     // Oversized deliberately: the world camera can be panned and zoomed, and a
     // blocker sized to the viewport leaves a gap at the edges once it is.
     this.blocker = scene.add
-      .rectangle(0, 0, scene.scale.width * 3, scene.scale.height * 3, 0x000000, 0.35)
+      .rectangle(0, 0, viewW(scene) * 3, viewH(scene) * 3, 0x000000, 0.35)
       .setOrigin(0.5)
       .setDepth(LAYER.modalDim)
       .setScrollFactor(0)

@@ -29,10 +29,16 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   // sampled, so it does not fight the filter above.
   roundPixels: true,
   scale: {
-    // RESIZE, not FIT: the canvas becomes the viewport instead of a fixed
-    // 1280x720 box letterboxed inside it. The world stays 1280x720 and the
-    // camera moves over it, so no gameplay coordinate changes.
-    mode: Phaser.Scale.RESIZE,
+    // NONE, and driven by hand from Resolution.ts. It was RESIZE, which makes
+    // the canvas the viewport — but RESIZE sets `canvas.width` to the parent's
+    // CSS size and ignores zoom, so the canvas held a third of the pixels a
+    // retina phone has and the compositor stretched it back up. NONE plus a
+    // zoom of 1/dpr is the only combination Phaser 3 offers that gives a
+    // full-resolution canvas at the right physical size.
+    //
+    // The world is still 1280x720 and the camera still moves over it; what
+    // changed is that a screen pixel is now a device pixel.
+    mode: Phaser.Scale.NONE,
     autoCenter: Phaser.Scale.NO_CENTER,
     width: display.width,
     height: display.height,

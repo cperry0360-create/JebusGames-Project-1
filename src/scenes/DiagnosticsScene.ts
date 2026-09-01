@@ -7,6 +7,7 @@ import {
 import { copyText } from '../systems/ErrorPanel.ts'
 import { clearStoredReport, storedReport } from '../systems/Save.ts'
 import { VERSION_LABEL } from '../systems/Build.ts'
+import { fitUiCamera, viewH, viewW } from '../systems/Resolution.ts'
 
 /**
  * The hidden diagnostics screen.
@@ -33,9 +34,12 @@ export class DiagnosticsScene extends Phaser.Scene {
   }
 
   create(): void {
-    const W = this.scale.width
-    const H = this.scale.height
-    this.cameras.main.setViewport(0, 0, W, H)
+    const W = viewW(this)
+    const H = viewH(this)
+    // Viewport in physical pixels because it is the canvas; everything drawn
+    // below is in CSS pixels, which fitUiCamera makes the coordinate space.
+    this.cameras.main.setViewport(0, 0, this.scale.width, this.scale.height)
+    fitUiCamera(this)
     this.add.rectangle(0, 0, W, H, 0x10161d).setOrigin(0, 0)
 
     this.add.text(16, 10, 'DIAGNOSTICS', {
@@ -135,7 +139,7 @@ export class DiagnosticsScene extends Phaser.Scene {
   }
 
   private flash(text: string): void {
-    const t = this.add.text(this.scale.width / 2, this.scale.height - 68, text, {
+    const t = this.add.text(viewW(this) / 2, viewH(this) - 68, text, {
       fontFamily: FONT_UI, fontSize: '16px', color: COLOR.good, fontStyle: 'bold',
     }).setOrigin(0.5)
     this.tweens.add({

@@ -19,6 +19,7 @@ import {
   type BarMetrics, type SlotDef, type SlotRegion,
 } from '../systems/AbilityBar.ts'
 import { onSceneResize, sceneIsLive } from '../systems/SceneEvents.ts'
+import { fitUiCamera, viewH, viewW } from '../systems/Resolution.ts'
 
 /**
  * A placed slot's Phaser objects, and the region they were all built from.
@@ -102,14 +103,18 @@ export class HudScene extends Phaser.Scene {
     // only listened for that one.
     onSceneResize(this, () => { if (sceneIsLive(this)) this.relayout() })
 
+    // The HUD is laid out in CSS pixels — typography floors, plate sizes and
+    // the safe-area insets are all in them — and drawn at device resolution.
+    fitUiCamera(this)
+
     this.world = this.scene.get('Game') as GameScene
     this.slots = []
     this.slotsBuilt = false
     this.slotKeys = ''
     this.lastPeanuts = -1
     this.lastLives = -1
-    const W = this.scale.width
-    const H = this.scale.height
+    const W = viewW(this)
+    const H = viewH(this)
 
     // Where everything goes, worked out once. The map is full-bleed underneath
     // all of it — there are no bars — so nothing collides because the
@@ -324,7 +329,7 @@ export class HudScene extends Phaser.Scene {
   /** A dialog owned by the HUD, so it keeps working while Game is paused. */
   private showPanel(opts: ConstructorParameters<typeof Dialog>[4]): void {
     this.panel?.close()
-    this.panel = new Dialog(this, this.scale.width / 2, this.scale.height / 2, 90000, opts)
+    this.panel = new Dialog(this, viewW(this) / 2, viewH(this) / 2, 90000, opts)
     this.panel.onClosed(() => { this.panel = undefined })
   }
 
@@ -381,8 +386,8 @@ export class HudScene extends Phaser.Scene {
   private relayoutAbilities(): void {
     this.layout = hudLayout(
       {
-        width: this.scale.width,
-        height: this.scale.height,
+        width: viewW(this),
+        height: viewH(this),
         insets: safeAreaInsets(),
         countersWidth: this.countersWidth,
         abilitiesWidth: this.measureAbilities(),
@@ -582,10 +587,10 @@ export class HudScene extends Phaser.Scene {
    */
   private toast(text: string): void {
     this.activeToast?.destroy()
-    const label = this.add.text(this.scale.width / 2, this.layout.abilities.y - 6, text, {
+    const label = this.add.text(viewW(this) / 2, this.layout.abilities.y - 6, text, {
       fontFamily: FONT_UI, fontSize: '17px', color: COLOR.ink,
       fontStyle: 'bold', align: 'center',
-      wordWrap: { width: this.scale.width - 80 },
+      wordWrap: { width: viewW(this) - 80 },
     }).setOrigin(0.5, 1).setDepth(500)
     const pad = 14
     const pill = this.add.rectangle(

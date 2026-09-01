@@ -59,6 +59,7 @@ import { barWidth, regions, slotDefs, type BarMetrics } from '../systems/Ability
 import { safeAreaInsets } from '../systems/SafeArea.ts'
 import { onSceneResize, sceneIsLive } from '../systems/SceneEvents.ts'
 import { musicForScene } from '../systems/Music.ts'
+import { deviceScale, fitUiCamera, viewH, viewW } from '../systems/Resolution.ts'
 
 /** The HUD's layout constants, shared with HudScene so both agree. */
 const LAYOUT = PRESENTATION.hud.layout
@@ -276,8 +277,14 @@ export class GameScene extends Phaser.Scene {
     resetVoices()
 
     // Created before anything registers itself as screen space.
+    //
+    // Its VIEWPORT is the canvas, so it is sized in physical pixels; its
+    // COORDINATE SPACE is CSS pixels, which is what fitUiCamera arranges by
+    // zooming it to the device scale. Screen-space UI is laid out in CSS
+    // pixels exactly as before and drawn at full device resolution.
     this.uiCam = this.cameras.add(0, 0, this.scale.width, this.scale.height)
     this.uiCam.setName('ui')
+    fitUiCamera(this, this.uiCam)
     this.applyBands()
     // Registered through the scene, not straight onto the ScaleManager.
     //
@@ -289,7 +296,10 @@ export class GameScene extends Phaser.Scene {
     // dead ones threw on `this.cameras.main`.
     onSceneResize(this, () => {
       if (!sceneIsLive(this)) return
-      this.uiCam?.setSize(this.scale.width, this.scale.height)
+      if (this.uiCam) {
+        this.uiCam.setSize(this.scale.width, this.scale.height)
+        fitUiCamera(this, this.uiCam)
+      }
       this.applyBands()
     })
 
@@ -362,7 +372,7 @@ this.armReadyCountdown()
     // player was stuck casting. This is the way out.
     // Above the ability row rather than on it: at a fixed `height - 96` this
     // landed on the icons on a phone, which is where the thumb already is.
-    this.cancelBtn = plateButton(this, this.scale.width / 2,
+    this.cancelBtn = plateButton(this, viewW(this) / 2,
       this.layout.abilities.y - 30,
       190, 44, 'CANCEL', () => this.clearSelection(), 16, 'secondary')
     for (const part of this.cancelBtn.parts) {
@@ -383,9 +393,14 @@ this.armReadyCountdown()
       // zoom the centre of the board is a patch of grass.
       startX: MAP.heroStart[0],
       startY: MAP.heroStart[1],
-      defaultZoom: displayData.camera.defaultZoom,
-      maxZoom: displayData.camera.maxZoom,
-      minZoom: displayData.camera.minZoom,
+      // Scaled by the device ratio. These are screen pixels per world unit,
+      // and a screen pixel is a device pixel now, so a band written against
+      // CSS pixels would show three times as much map on a retina phone.
+      // Cover zoom needs no such treatment: it is derived from the camera's
+      // own size, which is already physical.
+      defaultZoom: displayData.camera.defaultZoom * deviceScale(),
+      maxZoom: displayData.camera.maxZoom * deviceScale(),
+      minZoom: displayData.camera.minZoom * deviceScale(),
       boundsMarginPx: displayData.camera.boundsMarginPx,
       tapSlopPx: displayData.camera.tapSlopPx,
       panSpeed: displayData.camera.panSpeed,
@@ -538,11 +553,19 @@ this.armReadyCountdown()
     // delivered afterwards — so this has to survive being called once more
     // rather than trusting that it never will be.
     if (!sceneIsLive(this)) return
-    const W = this.scale.width
-    const H = this.scale.height
-    this.cameras.main.setViewport(0, 0, W, H)
+    // Two different units, deliberately, and this is the one place in the game
+    // where both appear in the same function.
+    //
+    // The world camera's VIEWPORT is the canvas, so it is physical pixels: set
+    // it in CSS pixels and the world renders into the top-left ninth of a
+    // retina canvas. The HUD band arithmetic below is a LAYOUT, so it is CSS
+    // pixels, like every other layout in the game.
+    this.cameras.main.setViewport(0, 0, this.scale.width, this.scale.height)
     this.layout = hudLayout(
-      { width: W, height: H, insets: safeAreaInsets(), countersWidth: 0, abilitiesWidth: 0 },
+      {
+        width: viewW(this), height: viewH(this),
+        insets: safeAreaInsets(), countersWidth: 0, abilitiesWidth: 0,
+      },
       LAYOUT,
     )
     this.rig?.viewportChanged()
@@ -651,7 +674,7 @@ this.armReadyCountdown()
   /** One dialog at a time, and it owns every tap while it is up. */
   private openDialog(opts: DialogOptions): void {
     this.dialog?.close()
-    this.dialog = new Dialog(this, this.scale.width / 2, this.scale.height / 2,
+    this.dialog = new Dialog(this, viewW(this) / 2, viewH(this) / 2,
       TICKET_DEPTH, opts)
     this.asScreenSpace(this.dialog.objects)
     // Panning is off while a modal owns the screen, and back on when it goes.
@@ -1679,8 +1702,8 @@ this.armReadyCountdown()
     // Generous: the tween's own duration plus room for a slow frame. Anything
     // past this and the tween is gone, not late.
     this.castUntil = this.time.now + seconds * 1000 + 2000
-    const W = this.scale.width
-    const H = this.scale.height
+    const W = viewW(this)
+    const H = viewH(this)
     const cam = this.cameras.main
 
     const wash = this.add.graphics().setDepth(TICKET_DEPTH)
@@ -1720,8 +1743,8 @@ this.armReadyCountdown()
    *  run can hold one open for longer than its auto-reveal. */
   showTicket(outcome: ScratchOutcome, autoRevealSeconds: number): void {
     this.ticket?.destroy()
-    this.ticket = new ScratchCard(this, this.scale.width / 2,
-      this.scale.height / 2, TICKET_DEPTH, {
+    this.ticket = new ScratchCard(this, viewW(this) / 2,
+      viewH(this) / 2, TICKET_DEPTH, {
       outcome,
       autoRevealSeconds,
       // Dropped when it goes. It was left pointing at a destroyed card, which
@@ -2064,7 +2087,7 @@ this.armReadyCountdown()
   }
 
   private announce(text: string, color: string): void {
-    const t = this.add.text(this.scale.width / 2, this.scale.height * 0.3, text, {
+    const t = this.add.text(viewW(this) / 2, viewH(this) * 0.3, text, {
       fontFamily: FONT_UI, fontSize: '40px', fontStyle: 'bold', color,
       stroke: '#0d1016', strokeThickness: 7, letterSpacing: 2,
     }).setOrigin(0.5).setDepth(OVERLAY_DEPTH + 20).setScale(0.5)
@@ -2221,8 +2244,8 @@ this.armReadyCountdown()
   }
 
   private announceBoss(boss: Enemy): void {
-    const W = this.scale.width
-    const mid = this.scale.height / 2
+    const W = viewW(this)
+    const mid = viewH(this) / 2
     play(this, 'boss', 0.95)
     this.cameras.main.shake(600, 0.007)
 
@@ -2542,8 +2565,8 @@ this.armReadyCountdown()
     const width = barWidth(defs, bar)
     const layout = hudLayout(
       {
-        width: this.scale.width,
-        height: this.scale.height,
+        width: viewW(this),
+        height: viewH(this),
         insets: safeAreaInsets(),
         countersWidth: 0,
         abilitiesWidth: width,
@@ -2558,7 +2581,7 @@ this.armReadyCountdown()
     })
     const mine = placed.find((r) => r.id === id) ?? placed[placed.length - 1]
     if (!mine) {
-      return { x: this.scale.width / 2, y: this.scale.height - 50, height: 64 }
+      return { x: viewW(this) / 2, y: viewH(this) - 50, height: 64 }
     }
     return { x: mine.cx, y: mine.cy, height: mine.boxH }
   }

@@ -58,6 +58,11 @@ const { guardAudioPromises } = await import('./js/systems/Audio.js')
 guardAudioPromises()
 const game = new Phaser.Game(gameConfig)
 window.game = game
+// The scale mode is NONE, so nothing sizes the canvas by itself. main.ts does
+// this immediately after constructing the game and the harness must too, or it
+// runs the whole suite against a 1280x720 canvas that ignores ?vp= entirely.
+const { applyResolution } = await import('./js/systems/Resolution.js')
+applyResolution(game)
 const { installLifecycle } = await import('./js/systems/Lifecycle.js')
 window.lifecycle = installLifecycle(game)
 note('visibilityState at boot: ' + document.visibilityState)
@@ -244,8 +249,11 @@ async function edgeCheck(label) {
 
 let bootBroken = false
 async function toTitle() {
-  await until(() => game.textures.exists('map-level1') && game.textures.exists('enemy-notice'), 30000)
-  const ok = await until(() => running('Title'), 15000)
+  await until(() => game.textures.exists('map-level1') && game.textures.exists('enemy-notice'), 60000)
+  // Generous, because a software rasteriser at device resolution runs the
+  // whole boot at a few frames a second and 15s is not enough to distinguish
+  // 'did not boot' from 'is still booting'.
+  const ok = await until(() => running('Title'), 60000)
   note('splash -> title: ' + ok + (ok ? '' : '   *** THE GAME DID NOT BOOT ***'))
   // Loud, because quiet is what let a broken boot ship. This printed `false`
   // in three separate runs while every scenario carried on regardless — the
@@ -272,7 +280,12 @@ function toScreen(wx, wy) {
   const cam = scene('Game').cameras.main
   // The world camera's viewport is inset by the reserved HUD band, so its
   // origin is not the top-left of the screen any more.
-  return [(wx - cam.worldView.x) * cam.zoom + cam.x, (wy - cam.worldView.y) * cam.zoom + cam.y]
+  // Camera arithmetic gives CANVAS pixels, which are device pixels now that
+  // the canvas renders at full resolution. Mouse events carry CSS pixels, so
+  // the two differ by the device ratio and every click misses without this.
+  const d = window.devicePixelRatio || 1
+  return [((wx - cam.worldView.x) * cam.zoom + cam.x) / d,
+    ((wy - cam.worldView.y) * cam.zoom + cam.y) / d]
 }
 /** Pans the board to a world point and waits for the camera to settle. */
 async function lookAt(wx, wy) {
@@ -404,8 +417,9 @@ async function run() {
     const cam = t.cameras.main
     const toUI = (o) => {
       const b = o.getBounds()
-      return [(b.centerX - cam.worldView.x) * cam.zoom + cam.x,
-        (b.centerY - cam.worldView.y) * cam.zoom + cam.y]
+      const d = window.devicePixelRatio || 1
+      return [((b.centerX - cam.worldView.x) * cam.zoom + cam.x) / d,
+        ((b.centerY - cam.worldView.y) * cam.zoom + cam.y) / d]
     }
     for (const o of taps) note('  target ' + JSON.stringify(toUI(o).map(Math.round)) +
       ' ' + Math.round(o.width) + 'x' + Math.round(o.height))
@@ -2407,14 +2421,21 @@ async function run() {
       return over
     }
     for (const zName of ['min', 'max']) {
-      const z = zName === 'min' ? D.camera.minZoom : D.camera.maxZoom
+      // Scaled by the device ratio, exactly as GameScene scales the band it
+      // hands the rig. The raw JSON numbers are in screen pixels per world
+      // unit against a CSS pixel; the rig's are against a device pixel. Asking
+      // for the raw floor on a retina screen asks for something below the
+      // floor, and both ends then clamp to the same value.
+      const dz = window.devicePixelRatio || 1
+      const z = (zName === 'min' ? D.camera.minZoom : D.camera.maxZoom) * dz
       // Through the rig. Writing cam.zoom directly is eased away on the next
       // frame, which is how the first version of this check reported 1.70 and
       // 1.74 while claiming to be testing 1.31 and 2.37.
       g.rig.setTargetZoom(z)
       await until(() => Math.abs(cam.zoom - z) < 0.01, 4000)
       await sleep(200)
-      note('at ' + zName + ' zoom ' + cam.zoom.toFixed(2) + ':')
+      note('at ' + zName + ' zoom ' + cam.zoom.toFixed(2) + ' (' +
+        (cam.width / cam.zoom / W * 100).toFixed(1) + '% of the map width):')
       for (const [dir, dx, dy] of [['left', 1600, 0], ['right', -1600, 0],
                                    ['up', 0, 1600], ['down', 0, -1600]]) {
         // A hard fling, then time for any bounce to play out.
@@ -2628,6 +2649,18 @@ async function run() {
     note('  devicePixelRatio: ' + window.devicePixelRatio)
     note('  canvas backing store: ' + c.width + 'x' + c.height)
     note('  canvas CSS size:      ' + Math.round(r.width) + 'x' + Math.round(r.height))
+    {
+      const g3 = scene('Game')
+      if (g3) {
+        note('  Game world cam: ' + g3.cameras.main.width + 'x' + g3.cameras.main.height +
+          '  zoom ' + g3.cameras.main.zoom.toFixed(3))
+        const ui = g3.cameras.cameras.find((c) => c.name === 'ui')
+        if (ui) note('  Game ui cam:    ' + ui.width + 'x' + ui.height + '  zoom ' + ui.zoom.toFixed(3))
+      }
+      const h3 = scene('Hud')
+      if (h3) note('  Hud cam:        ' + h3.cameras.main.width + 'x' + h3.cameras.main.height +
+        '  zoom ' + h3.cameras.main.zoom.toFixed(3))
+    }
     note('  game.scale: ' + game.scale.width + 'x' + game.scale.height +
       '  displaySize ' + Math.round(game.scale.displaySize.width) + 'x' +
       Math.round(game.scale.displaySize.height))
@@ -2738,8 +2771,9 @@ async function run() {
 
     // Press it for real, through the input system, at its screen position.
     const cam = sc.cameras.main
-    const sx = cam.x + (bb.centerX - cam.worldView.x) * cam.zoom
-    const sy = cam.y + (bb.centerY - cam.worldView.y) * cam.zoom
+    const dscale = window.devicePixelRatio || 1
+    const sx = (cam.x + (bb.centerX - cam.worldView.x) * cam.zoom) / dscale
+    const sy = (cam.y + (bb.centerY - cam.worldView.y) * cam.zoom) / dscale
     note('pressing at screen ' + Math.round(sx) + ',' + Math.round(sy) +
       ' (viewport is ' + VP.w + 'x' + VP.h + ')')
     await click(sx, sy)
