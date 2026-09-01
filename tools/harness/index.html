@@ -3392,6 +3392,110 @@ async function run() {
     return
   }
 
+  if (scenario === 'menustate') {
+    // IS TOWER SELECTION PLAYABLE? Read-only: nothing here changes the game,
+    // it only tries to use it the way a thumb would.
+    //
+    // Overflow measured in pixels is not the same question as "can you buy a
+    // tower". A panel hanging off the bottom is only unplayable if the thing
+    // you have to press is the part that is off. So this presses.
+    g.status.peanuts = 99999
+    await sleep(400)
+    note('viewport ' + VP.w + 'x' + VP.h)
+    note('components in play: BuildMenu=' + (g.menu ? g.menu.constructor.name : 'none') +
+      '  TowerPanel=' + (g.panel ? g.panel.constructor.name : 'not open yet'))
+
+    // --- BUILD ON AN EMPTY PAD, at every spot.
+    let usable = 0, blocked = []
+    for (const sp of g.build.freeSpots()) {
+      g.menu.close(); await sleep(60)
+      g.openBuildMenu(sp)
+      await until(() => g.menu && g.menu.isOpen, 3000)
+      await sleep(120)
+      // The buttons, not the panel: a hit area below the viewport cannot be
+      // pressed however visible the plate above it is.
+      const hits = []
+      const findHits = (o) => {
+        if (o.list) { o.list.forEach(findHits); return }
+        if (o.input && o.input.enabled && o.getBounds) {
+          const b = o.getBounds()
+          if (b.width > 0 && b.height > 0) hits.push(b)
+        }
+      }
+      ;(g.menu.objects || []).forEach(findHits)
+      const off = hits.filter((b) => b.bottom > VP.h || b.right > VP.w || b.x < 0 || b.y < 0)
+      const reachable = hits.length - off.length
+      note('  spot ' + sp.index + ': ' + hits.length + ' pressable region(s), ' +
+        reachable + ' fully on screen' +
+        (off.length ? '  *** ' + off.length + ' off the edge ***' : ''))
+      for (const b of off) {
+        note('      one sits at y ' + Math.round(b.y) + '..' + Math.round(b.bottom) +
+          ' against a ' + VP.h + 'px viewport')
+      }
+      if (off.length === 0 && hits.length > 0) usable++
+      else { blocked.push(sp.index); await shot('menustate-open' + sp.index + '-' + VP.w + 'x' + VP.h) }
+    }
+    note('  BUILD: ' + usable + ' of ' + g.build.freeSpots().length +
+      ' pads have every button on screen; blocked at spots ' + JSON.stringify(blocked))
+    g.menu.close(); await sleep(80)
+
+    // --- Does a real tap-and-hold actually buy one, at a pad that measured OK?
+    const okSpot = g.build.freeSpots().find((sp) => !blocked.includes(sp.index))
+    if (okSpot) {
+      const before = g.towers.length
+      await build(okSpot.index, 0)
+      note('  a real press at spot ' + okSpot.index + ': towers ' + before + ' -> ' + g.towers.length +
+        (g.towers.length > before ? '  BUILT' : '  *** NOTHING HAPPENED ***'))
+    }
+    // --- And at a blocked one, to say whether the overflow is fatal or ugly.
+    // A SYNTHETIC PRESS PROVES NOTHING ABOUT REACH, and reading it as if it
+    // did is a mistake this probe made once. `mouse()` dispatches the event on
+    // game.canvas directly, so Phaser hit-tests a point 194px below the bottom
+    // of the screen exactly as happily as one in the middle of it — every
+    // blocked spot reported "built anyway" while its buttons were off the
+    // display. A thumb cannot make that event; the OS has nothing there to
+    // hit. So the press is recorded as WIRING evidence only, and the geometry
+    // above is what answers whether a person can play.
+    for (const idx of blocked) {
+      const before = g.towers.length
+      await build(idx, 0)
+      note('  synthetic press at spot ' + idx + ' (wiring only, reach is decided above): towers '
+        + before + ' -> ' + g.towers.length +
+        (g.towers.length > before ? '  the handler works' : '  *** the handler is broken too ***'))
+      await shot('menustate-blocked' + idx + '-' + VP.w + 'x' + VP.h)
+    }
+
+    // --- SELECT AN EXISTING TOWER: the other half of "tower selection".
+    if (g.towers.length > 0) {
+      const t = g.towers[0]
+      await lookAt(t.x, t.y)
+      g.openTowerPanel(t)
+      await sleep(250)
+      let aX = 1e9, aY = 1e9, bX = -1e9, bY = -1e9
+      const hits = []
+      const w2 = (o) => {
+        if (o.list) { o.list.forEach(w2); return }
+        if (!o.getBounds) return
+        const b = o.getBounds()
+        if (b.width <= 0 || b.height <= 0) return
+        aX = Math.min(aX, b.x); aY = Math.min(aY, b.y)
+        bX = Math.max(bX, b.right); bY = Math.max(bY, b.bottom)
+        if (o.input && o.input.enabled) hits.push(b)
+      }
+      ;(g.panel && g.panel.objects ? g.panel.objects : []).forEach(w2)
+      const off = hits.filter((b) => b.bottom > VP.h || b.right > VP.w || b.x < 0 || b.y < 0)
+      note('  UPGRADE PANEL: ' + Math.round(bX - aX) + 'x' + Math.round(bY - aY) +
+        ' at ' + Math.round(aX) + ',' + Math.round(aY) +
+        '  overflow R' + Math.round(Math.max(0, bX - VP.w)) +
+        ' L' + Math.round(Math.max(0, -aX)) +
+        ' B' + Math.round(Math.max(0, bY - VP.h)) +
+        ' T' + Math.round(Math.max(0, -aY)))
+      note('  ' + hits.length + ' pressable region(s), ' + off.length + ' off the edge')
+      await shot('menustate-upgrade-' + VP.w + 'x' + VP.h)
+    }
+    return
+  }
+
   if (scenario === 'buildmenu') {
     // The BUILD-ON-EMPTY-PAD flow, which is a different component from the
     // upgrade panel. Measures the panel against the viewport.
