@@ -36,7 +36,8 @@ test('every track file is really there, and its name is URL-safe', () => {
     const path = `public/${MUSIC.root}${t.file}.${t.format}`
     assert.ok(existsSync(url(`../${path}`)), `${id} -> ${path} is missing`)
     // The upload arrived as "Of Far Different Nature - Electric Dream
-    // (CC-BY).mp3". Spaces and parentheses in a public/ path need
+    // (CC-BY).mp3", and the goblin line as "sfx_goblin_spawn.wav". Spaces and
+    // parentheses in a public/ path need
     // percent-encoding and break the moment somebody builds the URL by
     // concatenation, which is exactly how the manifest builds it.
     assert.match(t.file, /^[a-z0-9_]+$/,
@@ -61,14 +62,14 @@ test('a crossfade overlaps, and lands on exactly one track', () => {
   const m = newMix()
   request(m, 'battle')
   settle(m)
-  request(m, 'electricDream')
+  request(m, 'airportAttack')
   // Mid-fade both are audible; that is what makes it a crossfade and not a cut.
   step(m, 0.25)
   const mid = m.decks.filter((d) => d.level > 0)
   assert.equal(mid.length, 2, 'the change was a cut, not a crossfade')
   settle(m)
-  assert.deepEqual(loaded(m), ['electricDream'])
-  assert.equal(currentId(m), 'electricDream')
+  assert.deepEqual(loaded(m), ['airportAttack'])
+  assert.equal(currentId(m), 'airportAttack')
 })
 
 test('nothing accumulates over a long session', () => {
@@ -93,7 +94,7 @@ test('a deck that has faded out is released, not left streaming silently', () =>
   const m = newMix()
   request(m, 'battle')
   settle(m)
-  request(m, 'electricDream')
+  request(m, 'airportAttack')
   const released = settle(m)
   assert.ok(released.length >= 1, 'the outgoing deck was never released')
   assert.equal(loaded(m).length, 1, 'the silent track is still attached')
@@ -103,25 +104,40 @@ test('a fast there-and-back leaves the track rising, not fading', () => {
   // Game -> Title -> Game inside one crossfade. The middle request must not
   // leave the original on its way down.
   const m = newMix()
-  request(m, 'electricDream')
+  request(m, 'airportAttack')
   settle(m)
   request(m, 'battle')
   step(m, 0.2)
-  request(m, 'electricDream')
+  request(m, 'airportAttack')
   settle(m)
-  assert.equal(currentId(m), 'electricDream')
+  assert.equal(currentId(m), 'airportAttack')
   assert.equal(m.decks[m.front]!.level, 1, 'the track it came back to is not at full volume')
   assert.equal(loaded(m).length, 1)
 })
 
 test('the two tracks are levelled against each other, not by one number', () => {
   const gains = Object.values(MUSIC.tracks).map((t: any) => t.gain)
-  assert.ok(gains.every((g) => g > 0 && g <= 1), 'a gain is outside 0..1')
+  assert.ok(gains.every((g) => g > 0), 'a gain is zero or negative')
   assert.notEqual(gains[0], gains[1],
     'both tracks use the same gain, which is the thing that was asked not to happen')
-  // Electric Dream is heavily compressed and peaks at full scale.
-  assert.ok(MUSIC.tracks.electricDream.gain <= 0.4,
-    `Electric Dream at ${MUSIC.tracks.electricDream.gain} will be far louder than the rest of the mix`)
+
+  // A gain ABOVE 1 is allowed, and is not an oversight.
+  //
+  // Airport Attack is a MIDI render sitting 9.7 dB quieter than the mastered
+  // track it shares the game with, so matching them needs boost, not cut. That
+  // is only possible because the soundtrack runs through a Web Audio gain
+  // node — an HTMLAudioElement's `volume` throws above 1. So a gain over 1
+  // carries an obligation: the element path has to be clamped separately, and
+  // the node has a ceiling of its own.
+  const music = src('systems/Music.ts')
+  const ceiling = Number(/MAX_NODE_GAIN = ([\d.]+)/.exec(music)?.[1])
+  assert.ok(Number.isFinite(ceiling), 'Music.ts has no ceiling on the gain node')
+  for (const [id, t] of Object.entries(MUSIC.tracks) as [string, any][]) {
+    assert.ok(t.gain <= ceiling,
+      `${id} asks for ${t.gain}, above the gain node's own ceiling of ${ceiling}`)
+  }
+  assert.match(music, /nodes\[i\] \? MAX_NODE_GAIN : 1/,
+    'the element path is not clamped to 1, so an unrouted deck would throw on a boosted track')
 })
 
 test('music obeys mute, the volume slider, the gesture and the tab', () => {
@@ -229,4 +245,33 @@ test('a load failure is surfaced instead of swallowed', () => {
   assert.match(title, /No music: /, 'the message does not say what is wrong')
   assert.match(title, /setVisible\(false\)/,
     'the notice is shown even when the music is fine')
+})
+
+test('the level 1 track repeats with a gap and a fade, not a cut', () => {
+  // It ends on a fade and does not meet its own beginning, so a native loop
+  // cuts from silence straight into a downbeat.
+  const t = MUSIC.tracks[MUSIC.screens.Game]
+  assert.ok(t.loop, 'the level track does not repeat at all')
+  assert.ok(t.loopGapMs > 0, 'the repeat is a hard cut: no gap')
+  assert.ok(t.loopFadeMs > 0, 'it comes back at full level rather than fading in')
+
+  const m = src('systems/Music.ts')
+  // The element must NOT loop itself where a gap is asked for; the gap and the
+  // fade are ours, and el.loop would jump the queue.
+  assert.match(m, /el\.loop = def\.loop && !gapped/,
+    'the element loops itself, so the gap and fade never happen')
+  assert.match(m, /addEventListener\('ended'/, 'nothing notices the track ending')
+  // A track change during the gap replaces the element; the old one must not
+  // restart over the new.
+  assert.match(m, /if \(els\[startDeck\] !== el\) return/,
+    'a track changed during the gap would be played over by the old one')
+
+  // THE BUG THE HARNESS FOUND. Zeroing loopFade without pushing it to the
+  // graph left the gain node at full through the gap, so the restarted track's
+  // first 50ms — its downbeat — played at full level before the ramp's first
+  // tick pulled it down. Measured: 1.071 at the restart, 0.153 a tick later.
+  const ended = m.slice(m.indexOf("addEventListener('ended'"))
+  const handler = ended.slice(0, ended.indexOf('loopTimers[startDeck] = setTimeout'))
+  assert.match(handler, /loopFade\[startDeck\] = 0[\s\S]*applyLevels\(\)/,
+    'the fade is zeroed but never applied, so the repeat arrives at full level')
 })

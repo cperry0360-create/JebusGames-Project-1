@@ -233,12 +233,12 @@
     }
   },
   "music": {
-    "note": "The soundtrack is declared in music.json \u2014 what plays where, its level, and its attribution together. Listed here so audio.json remains the whole audio manifest.",
+    "note": "The soundtrack is declared in music.json — what plays where, its level, and its attribution together. Listed here so audio.json remains the whole audio manifest.",
     "manifest": "src/data/music.json",
     "root": "assets/audio/music/",
     "files": [
       "music_battle.mp3",
-      "music_electric_dream.mp3"
+      "music_airport_attack.mp3"
     ]
   }
 }

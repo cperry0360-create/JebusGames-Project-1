@@ -1,8 +1,8 @@
 {
-  "_note": "The soundtrack: what plays where, how loud, and who it belongs to. One file for both, deliberately \u2014 a track that plays and has no attribution recorded is a licence breach, and keeping the two together makes that impossible to do by accident.",
+  "_note": "The soundtrack: what plays where, how loud, and who it belongs to. One file for both, deliberately — a track that plays and has no attribution recorded is a licence breach, and keeping the two together makes that impossible to do by accident.",
   "root": "assets/audio/music/",
   "crossfadeMs": 1000,
-  "_volumes": "Levelled against each other, not by one shared number. Electric Dream is heavily compressed and peaks at full scale; the battle track is orchestral with real dynamic range. Matched by MEASUREMENT rather than by ear \u2014 loudHalfRmsDb is the RMS of each track's loudest half in 300ms windows, which is roughly what the ear responds to. gain multiplies the player's own music volume. At these gains both land at about -15.3 dBFS.",
+  "_volumes": "Levelled against each other, not by one shared number. Matched by MEASUREMENT rather than by ear — loudHalfRmsDb is the RMS of each track's loudest half in 300ms windows, which is roughly what the ear responds to. gain multiplies the player's own music volume. Measured by the harness's `levels` scenario, which decodes the real files in Chromium.",
   "tracks": {
     "battle": {
       "file": "music_battle",
@@ -14,30 +14,35 @@
       "license": "CC BY 3.0",
       "source": "https://opengameart.org/content/battle-bgm",
       "verified": false,
-      "_verify": "UNVERIFIED. The file carries no ID3 title, artist or licence \u2014 only an ffmpeg encoder tag \u2014 and opengameart.org is blocked by this environment's egress proxy, so neither the artist nor the URL could be confirmed from the repo or the source page. Recorded as supplied. Confirm before release.",
+      "_verify": "UNVERIFIED. The file carries no ID3 title, artist or licence — only an ffmpeg encoder tag — and opengameart.org is blocked by this environment's egress proxy, so neither the artist nor the URL could be confirmed from the repo or the source page. Recorded as supplied. Confirm before release.",
       "loudHalfRmsDb": -9.4,
       "peakDb": 0.2
     },
-    "electricDream": {
-      "file": "music_electric_dream",
+    "airportAttack": {
+      "file": "music_airport_attack",
       "format": "mp3",
-      "gain": 0.35,
+      "gain": 1.53,
       "loop": true,
-      "title": "Electric Dream",
-      "artist": "Of Far Different Nature",
-      "license": "CC BY 4.0",
-      "source": "https://opengameart.org/content/electric-dream",
-      "verified": true,
-      "_verify": "Artist and title confirmed from the file's own ID3 tags (TPE1 'Of Far Different Nature', TIT2 'Electric Dream (CC-BY)'). The source URL itself could not be reached from this environment.",
-      "loudHalfRmsDb": -6.2,
-      "peakDb": 0.0
+      "loopGapMs": 900,
+      "loopFadeMs": 700,
+      "title": "Airport Attack",
+      "artist": "Ivan Stanton",
+      "artistHandle": "northivanastan",
+      "license": "CC0",
+      "source": "https://opengameart.org/content/airport-attack",
+      "rendering": "Rendered from MIDI with the FluidR3 GM soundfont (MIT).",
+      "verified": false,
+      "_verify": "Artist, licence and URL recorded as supplied. opengameart.org is blocked by this environment’s egress proxy, so the source page could not be opened. CC0 requires no attribution; the credit is given regardless.",
+      "loudHalfRmsDb": -19.1,
+      "peakDb": -5.8,
+      "_gain": "Above 1 deliberately. This is a MIDI render at -19.1 dBFS against a mastered track at -9.4, so matching them needs +3.7 dB. It is safe: the track peaks at -5.8 dBFS, so +3.7 leaves -2.1 dBFS of headroom. Only possible because the soundtrack runs through a Web Audio gain node - an element's volume cannot exceed 1."
     }
   },
   "_screens": "Scene key to track id. A scene not listed keeps whatever is playing, which is what carries the battle track across Title -> Loadout without a restart.",
   "screens": {
     "Title": "battle",
     "Loadout": "battle",
-    "Game": "electricDream",
+    "Game": "airportAttack",
     "Credits": "battle"
   }
 }

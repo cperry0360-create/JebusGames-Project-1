@@ -32,6 +32,11 @@ export interface TrackDef {
   /** Levelled by ear against the other tracks. Multiplies the player's volume. */
   gain: number
   loop: boolean
+  /** Silence between the end and the restart, for a track that fades out and
+   *  therefore cannot loop seamlessly. 0 or absent means a native loop. */
+  loopGapMs?: number
+  /** How long the restart takes to come back up. */
+  loopFadeMs?: number
   title: string
   artist: string
   license: string
@@ -114,6 +119,24 @@ function fail(why: string): void {
 }
 
 const TICK_MS = 50
+/** How far above unity a routed deck may be driven. Enough to lift a quiet
+ *  render onto the same footing as a mastered one, and not enough to clip
+ *  anything mastered sensibly in the first place. */
+const MAX_NODE_GAIN = 2
+
+/**
+ * Per-deck fade multiplier for a looping restart, 0..1.
+ *
+ * Separate from the crossfade level, which belongs to MusicMix and describes
+ * moving BETWEEN tracks. This describes one track coming back round.
+ */
+const loopFade = [1, 1]
+const loopTimers: Array<ReturnType<typeof setTimeout> | null> = [null, null]
+
+function clearLoopTimer(i: number): void {
+  const t = loopTimers[i]
+  if (t !== null && t !== undefined) { clearTimeout(t); loopTimers[i] = null }
+}
 
 function urlFor(def: TrackDef): string {
   return stamped(`${MUSIC.root}${def.file}.${def.format}`)
@@ -126,7 +149,12 @@ function applyLevels(): void {
     const d = mix.decks[i]!
     if (!el) continue
     const gain = d.id ? (MUSIC.tracks[d.id]?.gain ?? 1) : 1
-    const level = Math.max(0, Math.min(1, deckGain(d, gain) * master))
+    // The ceiling differs by path. A gain node can go above 1, which is what
+    // lets a quiet MIDI render sit level with a mastered track; an element's
+    // volume throws above 1. Clamped per path rather than to the lower of the
+    // two, or the quiet track could never be brought up.
+    const raw = deckGain(d, gain) * master * loopFade[i]!
+    const level = Math.max(0, Math.min(nodes[i] ? MAX_NODE_GAIN : 1, raw))
     // The context can arrive after the element did — Phaser creates it on the
     // first gesture, and a track can be asked for in the same tick. Routing a
     // moment late is silent and correct; never routing is the bug.
@@ -279,6 +307,50 @@ export function currentPosition(): number {
   return 0
 }
 
+/** The current track's length in seconds, or 0 while it is still loading. */
+export function currentDuration(): number {
+  for (let i = 0; i < els.length; i++) {
+    const el = els[i]
+    if (mix.decks[i]?.id === currentId(mix) && el) {
+      return Number.isFinite(el.duration) ? el.duration : 0
+    }
+  }
+  return 0
+}
+
+/**
+ * Whether the element is looping ITSELF.
+ *
+ * False for a gapped track, and that is the point: the gap and the fade back
+ * in are ours, and `el.loop` would cut from the tail's silence straight into
+ * the downbeat. The harness checks this rather than trusting the config, since
+ * the two disagreeing is exactly the bug.
+ */
+export function loopAttribute(): boolean {
+  for (let i = 0; i < els.length; i++) {
+    if (mix.decks[i]?.id === currentId(mix) && els[i]) return els[i]!.loop
+  }
+  return false
+}
+
+/**
+ * Jumps the current track. FOR THE HARNESS ONLY.
+ *
+ * The loop seam is 91 seconds into the track, and a check that waits 91
+ * seconds for it is a check nobody runs — which is how an unverified claim
+ * about the seam would end up in the changelog. Nothing in the game calls this.
+ */
+export function seekCurrent(seconds: number): void {
+  for (let i = 0; i < els.length; i++) {
+    if (mix.decks[i]?.id === currentId(mix) && els[i]) {
+      try {
+        els[i]!.currentTime = Math.max(0, seconds)
+      } catch { /* not seekable yet */ }
+      return
+    }
+  }
+}
+
 /** What each deck is actually outputting. For the harness: "only one track is
  *  ever audible" is a claim about these numbers. */
 export function deckReport(): Array<{ id: string | null; volume: number; paused: boolean }> {
@@ -329,7 +401,12 @@ export function playTrack(id: string | null): void {
   // Streams: the browser fetches as it plays rather than decoding the whole
   // file up front. Nine megabytes of MP3 is about a hundred decoded.
   el.preload = 'auto'
-  el.loop = def.loop
+  // A track that ends on a fade does not meet its own beginning, so a native
+  // loop cuts from silence straight into a downbeat. Where the data asks for a
+  // gap, the element does NOT loop itself: it is restarted after a pause and
+  // faded back in, which reads as the piece coming round again.
+  const gapped = def.loop && (def.loopGapMs ?? 0) > 0
+  el.loop = def.loop && !gapped
   // iOS will not play an element inline without this, and a soundtrack is
   // never a full-screen video.
   el.setAttribute('playsinline', '')
@@ -352,6 +429,38 @@ export function playTrack(id: string | null): void {
             : 'the browser gave no reason'
     fail(`could not load ${def.file}.${def.format}: ${why}`)
   }, { once: true })
+
+  if (gapped) {
+    el.addEventListener('ended', () => {
+      // Only if this element still owns the slot. A track change during the
+      // gap replaces it, and the old one must not restart over the new.
+      if (els[startDeck] !== el) return
+      clearLoopTimer(startDeck)
+      loopFade[startDeck] = 0
+      // Pushed to the graph NOW, not when the ramp's first tick arrives.
+      // Without this the gain node stays at full through the gap, and the
+      // restarted track's first 50ms — its downbeat — plays at full level
+      // before the fade takes over. Measured in the harness: the level read
+      // 1.071 at the restart and 0.153 a tick later, which is the hard cut
+      // this gap exists to avoid, moved 50ms to the right.
+      applyLevels()
+      loopTimers[startDeck] = setTimeout(() => {
+        if (els[startDeck] !== el) return
+        try {
+          el.currentTime = 0
+          const again = el.play()
+          if (again && typeof again.catch === 'function') again.catch(() => { /* refused */ })
+        } catch { /* the element went away underneath us */ }
+        const stepUp = TICK_MS / Math.max(1, def.loopFadeMs ?? 1)
+        const ramp = setInterval(() => {
+          if (els[startDeck] !== el) { clearInterval(ramp); return }
+          loopFade[startDeck] = Math.min(1, (loopFade[startDeck] ?? 0) + stepUp)
+          applyLevels()
+          if ((loopFade[startDeck] ?? 1) >= 1) clearInterval(ramp)
+        }, TICK_MS)
+      }, def.loopGapMs ?? 0)
+    })
+  }
 
   route(startDeck, el)
 

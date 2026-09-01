@@ -15,7 +15,9 @@
 // and uploads what it sees. No game logic lives here.
 const post = (path, body) => fetch(path, { method: 'POST', body }).catch(() => {})
 const log = []
-const note = (m) => { log.push(m); post('/log', m) }
+// Also to the console: /done carries the whole log, but a scenario that HANGS
+// never posts it, and the console is then the only record of how far it got.
+const note = (m) => { log.push(m); console.log('NOTE ' + m); post('/log', m) }
 addEventListener('error', (e) => note('PAGE ERROR ' + e.message + ' @' + e.lineno))
 addEventListener('unhandledrejection', (e) => note('REJECT ' + (e.reason?.message || e.reason)))
 
@@ -2370,7 +2372,8 @@ async function run() {
     note('difference at those gains: ' +
       (20 * Math.log10((a.rms * a.gain) / (b.rms * b.gain))).toFixed(1) + ' dB' +
       '  (0 dB would be matched)')
-    const ref = out.find((t) => t.id === 'electricDream')
+    // The mastered track is the reference; the MIDI render is levelled to it.
+    const ref = out.find((t) => t.id === 'battle')
     for (const t of out) {
       if (t.id === ref.id) continue
       note('to match ' + ref.id + ' at ' + ref.gain + ', ' + t.id + ' wants gain ' +
@@ -2378,6 +2381,70 @@ async function run() {
     }
     note('headroom check: loudest output would be ' +
       db(Math.max(...out.map((t) => t.peak * t.gain))) + ' dBFS peak')
+    return
+  }
+
+  if (scenario === 'looptrack') {
+    // The level 1 track does not loop seamlessly and fades out at the end, so
+    // it repeats with a gap and fades back in rather than cutting. Watched at
+    // the seam rather than assumed: seek to just before the end and follow it
+    // over.
+    const M = await import('./js/systems/Music.js')
+    const MJ = (await import('./js/data/music.json', { with: { type: 'json' } })).default
+    const id = MJ.screens.Game
+    const t = MJ.tracks[id]
+    note('level 1 track: ' + id + '  "' + t.title + '" by ' + t.artist + '  ' + t.license)
+    note('gap ' + t.loopGapMs + 'ms, fade back in over ' + t.loopFadeMs + 'ms')
+
+    M.unlockMusic()
+    M.playTrack(id)
+    await until(() => M.currentTrack() === id, 8000)
+    await sleep(800)
+    const rep0 = M.deckReport().find((d) => d.id === id)
+    if (!rep0 || rep0.paused) { note('*** the track is not playing; no audio device? ***'); return }
+    note('playing: duration ' + M.currentDuration().toFixed(1) + 's  looping attribute: ' +
+      M.loopAttribute() + '  (false is correct for a gapped loop — the gap is ours)')
+
+    // Land 1.2s from the end and sample across the seam.
+    M.seekCurrent(Math.max(0, M.currentDuration() - 1.2))
+    const samples = []
+    const t0 = performance.now()
+    while (performance.now() - t0 < 6000) {
+      const d = M.deckReport().find((x) => x.id === id)
+      samples.push({ ms: Math.round(performance.now() - t0), pos: +M.currentPosition().toFixed(2),
+        vol: d ? +d.volume.toFixed(3) : 0 })
+      await sleep(100)
+    }
+    // The seam is where the position goes backwards.
+    let wrap = -1
+    for (let i = 1; i < samples.length; i++) if (samples[i].pos < samples[i - 1].pos) { wrap = i; break }
+    if (wrap < 0) { note('*** never reached the end of the track in 6s ***'); return }
+    // The gap starts when the position STOPS, not at the wrap: the element
+    // holds its last position while it is paused, so the wrap is the end of
+    // the gap rather than the start of it. Measuring from the wrap alone
+    // reported a 100ms gap where there was a 900ms one.
+    let stop = wrap - 1
+    while (stop > 0 && samples[stop - 1].pos === samples[wrap - 1].pos) stop--
+    const gapMs = samples[wrap].ms - samples[stop].ms
+    note('seam: position froze at +' + samples[stop].ms + 'ms, restarted at +' +
+      samples[wrap].ms + 'ms  — gap ' + gapMs + 'ms (asked for ' + t.loopGapMs + ')')
+    for (const s of samples.slice(Math.max(0, stop - 2), wrap + 12)) {
+      note('   +' + String(s.ms).padStart(4) + 'ms  pos ' + String(s.pos).padStart(7) +
+        's  level ' + s.vol.toFixed(3))
+    }
+    // Silence is not "level 0" during the gap — the element is PAUSED, and the
+    // gain node is a separate thing. What has to be true is that the track
+    // comes back QUIETLY and rises, rather than arriving at full level.
+    const after = samples.slice(wrap, wrap + 14)
+    const top = Math.max(...samples.map((s) => s.vol))
+    const startedQuiet = after[0].vol <= top * 0.35
+    const rose = after[after.length - 1].vol > after[0].vol
+    const gapOk = Math.abs(gapMs - t.loopGapMs) <= 250
+    note('RESULT ' + (gapOk && startedQuiet && rose
+      ? 'gapped ' + gapMs + 'ms and faded back in from ' + after[0].vol.toFixed(3) +
+        ' to ' + after[after.length - 1].vol.toFixed(3) + ' — not a hard cut'
+      : '*** wrong: gap ' + gapMs + 'ms (want ' + t.loopGapMs + '), came back at ' +
+        after[0].vol.toFixed(3) + ' of ' + top.toFixed(3) + ', rose ' + rose + ' ***'))
     return
   }
 

@@ -49,7 +49,10 @@ interface Block {
 /** Track attributions. Creative Commons tracks must name the artist and the
  *  licence, so this is data rather than copy in a scene. */
 const MUSIC = musicData as unknown as {
-  tracks: Record<string, { title: string; artist: string; source?: string; license?: string }>
+  tracks: Record<string, {
+    title: string; artist: string; source?: string; license?: string
+    rendering?: string
+  }>
 }
 
 /**
@@ -306,6 +309,10 @@ export class CreditsScene extends Phaser.Scene {
       ty += this.centred(t.artist, ty + 2, 26, COLOR.amber, FONT_UI, 1)
       const provenance = [t.source, t.license].filter(Boolean).join('  ·  ')
       if (provenance) ty += this.centred(provenance, ty + 2, 22, COLOR.dim, FONT_UI, 0)
+      // How a track got from what the artist published to what the game plays.
+      // Airport Attack was released as a MIDI file: what ships here is a render
+      // of it, and the soundfont that did the rendering carries its own licence.
+      if (t.rendering) ty += this.centred(t.rendering, ty + 2, 20, COLOR.dim, FONT_UI, 0)
       ty += 26
     }
     return ty - y
