@@ -11,6 +11,7 @@ import { VERSION_LABEL } from '../systems/Build.ts'
 import { logEvent } from '../systems/Diagnostics.ts'
 import { ART } from '../systems/Art.ts'
 import { fitCameraToDesign } from '../ui/FitCamera.ts'
+import { musicForScene } from '../systems/Music.ts'
 
 const BRANDING = brandingData as BrandingDef
 
@@ -23,6 +24,10 @@ export class TitleScene extends Phaser.Scene {
   }
 
   create(): void {
+    // What plays here is data; see music.json. A scene not listed keeps
+    // whatever is already playing, which is what carries the battle track
+    // across Title -> Loadout without a restart.
+    musicForScene('Title')
     // Fixed UI camera: the design box is fitted into the viewport so nothing
     // is cut off, and no gesture is bound to it. Menus never pan or zoom.
     fitCameraToDesign(this)

@@ -20,6 +20,7 @@
 import Phaser from 'phaser'
 import { logEvent } from './Diagnostics.ts'
 import { audioUnavailable, onAudioUnavailable, resumeAudio, suspendAudio } from './Audio.ts'
+import { pauseMusic, resumeMusic } from './Music.ts'
 import { toast } from '../ui/Toast.ts'
 
 /** The loader. Pausing a scene mid-preload stalls it. */
@@ -75,6 +76,9 @@ export function installLifecycle(game: Phaser.Game): Lifecycle {
     logEvent('lifecycle', 'backgrounded')
     pauseScenes()
     suspendAudio(game)
+    // The soundtrack is not a Phaser sound, so pauseAll does not reach it.
+    // Paused rather than stopped, so coming back resumes the same bar.
+    pauseMusic()
   }
 
   const foreground = (): void => {
@@ -84,6 +88,7 @@ export function installLifecycle(game: Phaser.Game): Lifecycle {
 
     // Audio first, and awaited, so the scenes are not running while the device
     // is still being handed back. The promise cannot reject.
+    resumeMusic()
     void resumeAudio(game).then((ok) => {
       if (ok || audioUnavailable()) return
       // Still suspended rather than failed: the browser wants a gesture it has

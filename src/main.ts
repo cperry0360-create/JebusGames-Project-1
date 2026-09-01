@@ -6,6 +6,8 @@ import { logEvent, setBuildLabel } from './systems/Diagnostics.ts'
 import { installWatchdog } from './systems/Watchdog.ts'
 import { guardAudioPromises } from './systems/Audio.ts'
 import { installLifecycle } from './systems/Lifecycle.ts'
+import { disableMusic, refreshMusicVolume, unlockMusic } from './systems/Music.ts'
+import { onAudioGesture, onAudioMixChanged, onAudioUnavailable } from './systems/Audio.ts'
 import { VERSION_LABEL } from './systems/Build.ts'
 
 // First, before anything can throw. A game that dies on the way up has to say
@@ -46,6 +48,11 @@ async function start(): Promise<void> {
   // in a known order. Without this, iOS suspending the AudioContext on the way
   // out crashed the game on the way in.
   installLifecycle(game)
+  // The soundtrack rides on its own elements, so the mute control and the
+  // volume slider have to reach it explicitly.
+  onAudioMixChanged(refreshMusicVolume)
+  onAudioGesture(unlockMusic)
+  onAudioUnavailable(() => disableMusic())
 
   // A freeze carries no exception, so nothing else in the diagnostics would
   // notice it. This is the only thing that does.

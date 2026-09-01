@@ -2165,6 +2165,147 @@ async function run() {
     return
   }
 
+  if (scenario === 'music') {
+    // Requirement 8: title, loadout, a full level, back to title, three times.
+    // Only one track audible at a time, and nothing accumulating.
+    const M = await import('./js/systems/Music.js')
+    // The harness never produces a real user gesture the browser trusts, so
+    // the unlock is asked for directly. Everything after this is the real
+    // code path.
+    const A = await import('./js/systems/Audio.js')
+    note('audio unavailable: ' + A.audioUnavailable() + '  muted: ' + A.isMuted() + '  volume: ' + A.getVolume())
+    M.unlockMusic()
+    M.playTrack('battle')
+    await sleep(400)
+    note('after a direct playTrack: track=' + M.currentTrack() + ' elements=' + document.querySelectorAll('audio').length)
+
+    const state = (label) => {
+      // Counted through the module, not the DOM: `new Audio()` is never
+      // attached to the document, so querySelectorAll finds nothing and would
+      // have reported a clean bill of health whatever the code did.
+      const rep = M.deckReport()
+      const playing = rep.filter((d) => !d.paused && d.volume > 0.001)
+      note('  ' + label.padEnd(22) +
+        ' track=' + String(M.currentTrack()) +
+        '  decks=' + JSON.stringify(M.audibleTracks()) +
+        '  elements=' + M.liveElementCount() +
+        '  audible=' + playing.length +
+        '  ' + JSON.stringify(rep.map((d) => (d.id ?? '-') + '@' + d.volume.toFixed(2))))
+      return { els: M.liveElementCount(), decks: M.audibleTracks().length, audible: playing.length }
+    }
+
+    const worst = { els: 0, decks: 0, audible: 0 }
+    const record = (s) => {
+      worst.els = Math.max(worst.els, s.els)
+      worst.decks = Math.max(worst.decks, s.decks)
+      worst.audible = Math.max(worst.audible, s.audible)
+    }
+
+    note('viewport ' + VP.w + 'x' + VP.h)
+    for (let run = 1; run <= 3; run++) {
+      note('run ' + run + ':')
+      for (const k of ['Game', 'Loadout', 'Credits']) game.scene.stop(k)
+      game.scene.start('Title')
+      await until(() => running('Title'), 8000)
+      await sleep(1400)
+      record(state('title'))
+      const afterTitle = M.currentTrack()
+
+      game.scene.stop('Title')
+      game.scene.start('Loadout')
+      await until(() => running('Loadout'), 8000)
+      await sleep(300)
+      const afterLoadout = M.currentTrack()
+      record(state('loadout'))
+      note('    title -> loadout kept the same track: ' +
+        (afterTitle === afterLoadout ? 'YES (' + afterTitle + ')' : 'NO *** it changed ***'))
+      // And it must not have restarted: the element is the same object and
+      // its clock has kept running.
+      const t1 = M.currentPosition()
+      await sleep(700)
+      const t2 = M.currentPosition()
+      note('    and it kept playing rather than restarting: ' +
+        (t2 > t1 ? 'YES (' + t1.toFixed(1) + 's -> ' + t2.toFixed(1) + 's)' : 'position did not advance (no audio device?)'))
+
+      game.scene.stop('Loadout')
+      game.scene.start('Game')
+      game.scene.start('Hud')
+      await until(() => running('Game'), 10000)
+      await sleep(1600)
+      record(state('level'))
+
+      game.scene.stop('Game'); game.scene.stop('Hud')
+      game.scene.start('Title')
+      await until(() => running('Title'), 8000)
+      await sleep(1600)
+      record(state('back to title'))
+    }
+    note('WORST OVER 3 RUNS: <audio> elements=' + worst.els +
+      '  decks loaded=' + worst.decks + '  audible at once=' + worst.audible)
+    note('RESULT ' + (worst.els <= 2 && worst.decks <= 2 && worst.audible <= 1
+      ? 'no accumulation, never more than one audible'
+      : '*** LEAK ***'))
+    return
+  }
+
+  if (scenario === 'levels') {
+    // Level-matching, measured rather than guessed.
+    //
+    // "By ear" is not available to me, so the next most honest thing is to
+    // measure what the ear is responding to: not peak, which both files hit,
+    // but the RMS of the loud parts — roughly how loud a track SEEMS.
+    const MJ = (await import('./js/data/music.json', { with: { type: 'json' } })).default
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    const out = []
+    for (const [id, t] of Object.entries(MJ.tracks)) {
+      const res = await fetch('/' + MJ.root + t.file + '.' + t.format)
+      const buf = await ctx.decodeAudioData(await res.arrayBuffer())
+      const ch = buf.getChannelData(0)
+      // Window into 300ms blocks, take the RMS of each, then average the
+      // loudest half. Averaging everything lets a quiet intro drag an
+      // orchestral track's number down and mis-match it against a
+      // wall-of-sound electro one.
+      const win = Math.floor(buf.sampleRate * 0.3)
+      const blocks = []
+      let peak = 0
+      for (let i = 0; i + win < ch.length; i += win) {
+        let sum = 0
+        for (let j = i; j < i + win; j++) {
+          const v = ch[j]
+          sum += v * v
+          const a = v < 0 ? -v : v
+          if (a > peak) peak = a
+        }
+        blocks.push(Math.sqrt(sum / win))
+      }
+      blocks.sort((a, b) => b - a)
+      const loud = blocks.slice(0, Math.max(1, Math.floor(blocks.length / 2)))
+      const rms = loud.reduce((a, b) => a + b, 0) / loud.length
+      const db = (x) => (20 * Math.log10(Math.max(1e-6, x))).toFixed(1)
+      out.push({ id, gain: t.gain, rms, peak, secs: buf.duration })
+      note(id.padEnd(14) + ' ' + Math.round(buf.duration) + 's  peak ' + db(peak) + ' dBFS' +
+        '  loud-half RMS ' + db(rms) + ' dBFS  (configured gain ' + t.gain + ')')
+    }
+    // What the two would sound like at their configured gains, and what gain
+    // would actually match them.
+    const [a, b] = out
+    const db = (x) => (20 * Math.log10(Math.max(1e-6, x))).toFixed(1)
+    note('at the configured gains: ' +
+      out.map((t) => t.id + ' ' + db(t.rms * t.gain) + ' dBFS').join('  vs  '))
+    note('difference at those gains: ' +
+      (20 * Math.log10((a.rms * a.gain) / (b.rms * b.gain))).toFixed(1) + ' dB' +
+      '  (0 dB would be matched)')
+    const ref = out.find((t) => t.id === 'electricDream')
+    for (const t of out) {
+      if (t.id === ref.id) continue
+      note('to match ' + ref.id + ' at ' + ref.gain + ', ' + t.id + ' wants gain ' +
+        ((ref.rms * ref.gain) / t.rms).toFixed(3) + '  (currently ' + t.gain + ')')
+    }
+    note('headroom check: loudest output would be ' +
+      db(Math.max(...out.map((t) => t.peak * t.gain))) + ' dBFS peak')
+    return
+  }
+
   if (scenario === 'tavern') {
     // The glow and smoke coordinates were estimated off the painted plate, so
     // they have to be looked at rather than trusted.

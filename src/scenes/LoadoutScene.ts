@@ -16,6 +16,7 @@ import { abilityLine, towerLine, towerStats } from '../systems/AbilityText.ts'
 import { ART, renderFor } from '../systems/Art.ts'
 import presentationData from '../data/presentation.json'
 import { play } from '../systems/Audio.ts'
+import { musicForScene } from '../systems/Music.ts'
 
 const HEROES = heroesData as Record<string, HeroDef>
 const TOWERS = towersData as Record<string, TowerDef>
@@ -60,6 +61,10 @@ export class LoadoutScene extends Phaser.Scene {
   }
 
   create(): void {
+    // What plays here is data; see music.json. A scene not listed keeps
+    // whatever is already playing, which is what carries the battle track
+    // across Title -> Loadout without a restart.
+    musicForScene('Loadout')
     // Fixed UI camera: the design box is fitted into the viewport so nothing
     // is cut off, and no gesture is bound to it. Menus never pan or zoom.
     fitCameraToDesign(this)

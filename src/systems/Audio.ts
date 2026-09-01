@@ -137,6 +137,9 @@ export function initAudio(): void {
 export function unlockAudio(scene: Phaser.Scene): void {
   const resume = (): void => {
     void resumeAudio(scene)
+    // The soundtrack needs the same gesture: an HTMLAudioElement asked to
+    // play before one does not queue, it rejects.
+    onGesture?.()
   }
   scene.input.once('pointerdown', resume)
   scene.input.keyboard?.once('keydown', resume)
@@ -202,11 +205,35 @@ export function isMuted(): boolean {
 export function setVolume(v: number): void {
   volume = Math.max(0, Math.min(1, v))
   writeSave({ ...loadSave(), volume, muted })
+  onMixChanged?.()
+}
+
+/**
+ * Called whenever mute or volume moves.
+ *
+ * A callback rather than a direct import of Music: Music already imports this
+ * module for the master volume, and two modules importing each other is how a
+ * circular import ends up undefined at load time.
+ */
+let onMixChanged: (() => void) | null = null
+
+export function onAudioMixChanged(fn: (() => void) | null): void {
+  onMixChanged = fn
+}
+
+/** Called on the first real user gesture, for the same reason. */
+let onGesture: (() => void) | null = null
+
+export function onAudioGesture(fn: (() => void) | null): void {
+  onGesture = fn
 }
 
 export function setMuted(v: boolean): void {
   muted = v
   writeSave({ ...loadSave(), volume, muted })
+  // The soundtrack has its own gain and its own elements, so it does not go
+  // quiet just because Phaser's sounds do.
+  onMixChanged?.()
 }
 
 export function toggleMuted(): boolean {

@@ -9,7 +9,7 @@ rm -f "$H/shots/report.json"
 python3 "$H/server.py" wait "$WAIT" &
 SRV=$!
 sleep 1
-"${CHROMIUM:-/opt/pw-browsers/chromium}" --headless=new --disable-gpu --no-sandbox --hide-scrollbars \
+"${CHROMIUM:-/opt/pw-browsers/chromium}" --headless=new --disable-gpu --no-sandbox --hide-scrollbars --autoplay-policy=no-user-gesture-required \
   --window-size=1400,900 --enable-logging=stderr --v=0 \
   --user-data-dir="$H/profile" \
   "http://127.0.0.1:8899/index.html?s=$S$QS" > "$H/shots/$S.err" 2>&1 &

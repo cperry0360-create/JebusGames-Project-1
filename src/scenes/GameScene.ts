@@ -58,6 +58,7 @@ import { cameraAcceptsGestures, LAYER } from '../systems/Layers.ts'
 import { barWidth, regions, slotDefs, type BarMetrics } from '../systems/AbilityBar.ts'
 import { safeAreaInsets } from '../systems/SafeArea.ts'
 import { onSceneResize, sceneIsLive } from '../systems/SceneEvents.ts'
+import { musicForScene } from '../systems/Music.ts'
 
 /** The HUD's layout constants, shared with HudScene so both agree. */
 const LAYOUT = PRESENTATION.hud.layout
@@ -252,6 +253,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
+    // What plays here is data; see music.json. A scene not listed keeps
+    // whatever is already playing, which is what carries the battle track
+    // across Title -> Loadout without a restart.
+    musicForScene('Game')
     // create() runs again on restart, so every field carrying state from the
     // previous run has to be cleared here, not just declared above.
     this.enemies = []

@@ -6,6 +6,7 @@ import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { ART, fitContentHeight } from '../systems/Art.ts'
 import { fitCameraToDesign } from '../ui/FitCamera.ts'
 import { play } from '../systems/Audio.ts'
+import { musicForScene } from '../systems/Music.ts'
 
 const W = displayData.width
 const H = displayData.height
@@ -47,7 +48,9 @@ interface Block {
 
 /** Track attributions. Creative Commons tracks must name the artist and the
  *  licence, so this is data rather than copy in a scene. */
-const MUSIC = musicData as { tracks: Array<{ title: string; artist: string; source?: string; license?: string }> }
+const MUSIC = musicData as unknown as {
+  tracks: Record<string, { title: string; artist: string; source?: string; license?: string }>
+}
 
 /**
  * The credits roll.
@@ -85,6 +88,10 @@ export class CreditsScene extends Phaser.Scene {
   }
 
   create(): void {
+    // What plays here is data; see music.json. A scene not listed keeps
+    // whatever is already playing, which is what carries the battle track
+    // across Title -> Loadout without a restart.
+    musicForScene('Credits')
     fitCameraToDesign(this)
     this.add.rectangle(0, 0, W, H, 0x10161d).setOrigin(0, 0)
     this.decorateBackdrop()
@@ -294,7 +301,7 @@ export class CreditsScene extends Phaser.Scene {
    */
   private tracks(y: number): number {
     let ty = y
-    for (const t of MUSIC.tracks) {
+    for (const t of Object.values(MUSIC.tracks)) {
       ty += this.centred(t.title, ty, 30, COLOR.ink, FONT_UI, 1)
       ty += this.centred(t.artist, ty + 2, 26, COLOR.amber, FONT_UI, 1)
       const provenance = [t.source, t.license].filter(Boolean).join('  ·  ')

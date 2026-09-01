@@ -320,14 +320,56 @@ test('every music track carries the attribution its licence requires', () => {
   // not a missing nicety. The roll reads these from music.json, so this is
   // the only place that can catch an entry added without its credit.
   const music = JSON.parse(readFileSync(url('../src/data/music.json'), 'utf8'))
-  assert.ok(Array.isArray(music.tracks) && music.tracks.length > 0, 'no tracks are credited')
-  for (const t of music.tracks as Array<Record<string, string>>) {
-    assert.ok((t.title ?? '').trim().length > 0, 'a track has no title')
-    // A track whose licence names a Creative Commons variant MUST name the
-    // artist. One with no licence recorded yet is a to-do, not a breach.
-    if (/\bCC\b|creative commons/i.test(t.license ?? '')) {
-      assert.ok((t.artist ?? '').trim().length > 0,
-        `"${t.title}" is licensed ${t.license} and names no artist`)
+  const tracks = Object.values(music.tracks) as Array<Record<string, unknown>>
+  assert.ok(tracks.length > 0, 'no tracks are credited')
+  for (const t of tracks) {
+    const title = String(t.title ?? '')
+    assert.ok(title.trim().length > 0, 'a track has no title')
+    // Both tracks here are Creative Commons, which makes naming the artist and
+    // the licence a condition of use rather than a nicety. A track that plays
+    // and is not credited is a breach, so this guards the data the roll reads.
+    assert.ok(String(t.artist ?? '').trim().length > 0, `"${title}" names no artist`)
+    assert.ok(String(t.license ?? '').trim().length > 0, `"${title}" records no licence`)
+    assert.ok(String(t.source ?? '').trim().length > 0, `"${title}" records no source URL`)
+    // Unverified entries must SAY so, and say why, rather than looking settled.
+    if (t.verified !== true) {
+      assert.ok(String(t._verify ?? '').length > 20,
+        `"${title}" is unverified and does not record why`)
     }
   }
+})
+
+test('ATTRIBUTIONS.md and the credits roll agree with the data', () => {
+  // Two records of the same obligation drift apart the moment one is edited
+  // alone. Both are generated from, or checked against, music.json.
+  const attributions = readFileSync(url('../ATTRIBUTIONS.md'), 'utf8')
+  const music = JSON.parse(readFileSync(url('../src/data/music.json'), 'utf8'))
+  for (const t of Object.values(music.tracks) as Array<Record<string, string>>) {
+    assert.ok(attributions.includes(t.title), `ATTRIBUTIONS.md does not list "${t.title}"`)
+    assert.ok(attributions.includes(t.artist), `ATTRIBUTIONS.md does not credit ${t.artist}`)
+    assert.ok(attributions.includes(t.source), `ATTRIBUTIONS.md does not record ${t.title}'s source`)
+  }
+  // An unverified entry has to be flagged in the record too, not just the data.
+  const unverified = (Object.values(music.tracks) as Array<Record<string, unknown>>)
+    .filter((t) => t.verified !== true)
+  if (unverified.length > 0) {
+    assert.match(attributions, /NOT verified/,
+      'a track could not be verified and ATTRIBUTIONS.md does not say so')
+  }
+  // Kenney is CC0, which the shipped licence file has to actually say — the
+  // point of the audit was to confirm rather than assume.
+  const kenney = readFileSync(url('../public/assets/kenney/License.txt'), 'utf8')
+  assert.match(kenney, /Creative Commons Zero/i, 'the Kenney pack licence is not what we claim')
+  const font = readFileSync(url('../public/assets/fonts/License.txt'), 'utf8')
+  assert.match(font, /Creative Commons Zero/i, 'the font licence is not what we claim')
+
+  // And the roll still names them.
+  const credits = JSON.parse(readFileSync(url('../src/data/credits.json'), 'utf8'))
+  const flat = JSON.stringify(credits.blocks)
+  assert.match(flat, /KENNEY/, 'the roll no longer credits Kenney')
+  assert.match(flat, /"MUSIC"/, 'the roll has no MUSIC section')
+  // The two names that are not Cory still get their own presentation.
+  const cards = credits.blocks.filter((b: { kind: string }) => b.kind === 'card')
+  assert.deepEqual(cards.map((c: { name: string }) => c.name).sort(), ['COURTLAND', 'HAN'],
+    'Courtland and Han no longer get their own cards')
 })
