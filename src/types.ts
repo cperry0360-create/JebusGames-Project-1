@@ -417,6 +417,8 @@ export interface AbilityDef {
   /** The Scratch Ticket's payout table. Weighted, with losing lines: see
    *  systems/Scratch.ts. Absent on every other ability. */
   outcomes?: Array<{ label: string; payout: number; weight: number }>
+  /** For an ability whose effect is not in its numbers. */
+  blurb?: string
   /** How long the ticket waits before scratching itself, in seconds. */
   autoRevealSeconds: number
   summonCount: number
@@ -541,6 +543,9 @@ export interface ArtDef {
     /** The launch button's two states. Same box, chrome ring in the same
      *  place, so swapping reads as the dome depressing. */
     nukeButton: { up: string; down: string }
+    /** The painted loadout room. The scene falls back to flat dark ground if
+     *  the file itself does not load. */
+    loadoutBackdrop: string
   }
   /** Props painted onto the map rather than owned by an entity. */
   prop: {

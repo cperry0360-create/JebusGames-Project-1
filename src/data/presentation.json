@@ -153,5 +153,16 @@
       "closeSize": 56,
       "closeMargin": 18
     }
+  },
+  "loadout": {
+    "overlayAlpha": 0.2,
+    "panelAlpha": 0.9,
+    "safeLeft": 0.17,
+    "safeRight": 0.76,
+    "minContentWidth": 520,
+    "maxContentWidth": 720,
+    "sectionGap": 14,
+    "headingGap": 16,
+    "safeMargin": 40
   }
 }

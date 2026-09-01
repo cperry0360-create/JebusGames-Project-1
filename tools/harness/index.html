@@ -2098,6 +2098,81 @@ async function run() {
     return
   }
 
+  if (scenario === 'loadout') {
+    // The loadout screen, measured rather than eyeballed.
+    // Game and Hud too: they render AFTER Loadout in the scene order, so if
+    // either is alive it draws straight over the screen under test.
+    for (const k of ['Title', 'Splash', 'Credits', 'Boot', 'Game', 'Hud']) game.scene.stop(k)
+    game.scene.start('Loadout')
+    await until(() => running('Loadout'), 10000)
+    await sleep(900)
+    const sc = scene('Loadout')
+    const cam = sc.cameras.main
+    note('viewport ' + VP.w + 'x' + VP.h + ' zoom ' + cam.zoom.toFixed(3) +
+      ' content width ' + Math.round(sc.contentWidth))
+
+    // Everything with a size, flattened.
+    const all = []
+    const walk = (list) => { for (const o of list) { all.push(o); if (o.list) walk(o.list) } }
+    walk(sc.children.list)
+    const drawn = all.filter((o) => o.getBounds && o.type !== 'Container' && o.visible !== false)
+
+    // The design box is what must contain the layout: the camera is a CONTAIN
+    // fit, so anything outside 0..1280 x 0..720 is off the fitted area even
+    // though the backdrop deliberately overspills it.
+    const over = []
+    for (const o of drawn) {
+      if (o.texture && o.texture.key === 'ui-loadout-bg') continue
+      if (o.type === 'Rectangle' && o.width > 1200) continue
+      const b = o.getBounds()
+      if (b.height < 1 || b.width < 1) continue
+      if (b.y < -1 || b.bottom > 721 || b.x < -1 || b.right > 1281) {
+        over.push((o.text ? JSON.stringify(String(o.text).slice(0, 22)) : o.type) +
+          ' ' + Math.round(b.x) + ',' + Math.round(b.y) +
+          ' ' + Math.round(b.width) + 'x' + Math.round(b.height))
+      }
+    }
+    note('outside the design box: ' + (over.length ? over.join(' | ') : 'nothing'))
+
+    const texts = drawn.filter((o) => o.type === 'Text' && String(o.text ?? '').trim() !== '')
+
+    // The safe band the illustration leaves clear.
+    //
+    // Measured from the CARDS, not from every object on the screen: a
+    // zero-content Text reports a box while drawing nothing, and one of them
+    // was pinning the measured extent to a number that did not move however
+    // narrow the cards got.
+    let minX = 9999, maxX = -9999, maxY = -9999
+    for (const c of sc.cards) {
+      for (const o of c.parts) {
+        if (!o.getBounds || o.type === 'Container') continue
+        const b = o.getBounds()
+        if (b.width < 1 || b.height < 1) continue
+        minX = Math.min(minX, b.x); maxX = Math.max(maxX, b.right)
+        maxY = Math.max(maxY, b.bottom)
+      }
+    }
+    note('card extent x ' + Math.round(minX) + '..' + Math.round(maxX) +
+      ' (safe band ' + Math.round(sc.safeBand.left) + '..' + Math.round(sc.safeBand.right) + ')')
+    note('  breaches the safe band: ' +
+      ((minX < sc.safeBand.left - 1 || maxX > sc.safeBand.right + 1) ? 'YES' : 'no'))
+    note('  lowest card edge y ' + Math.round(maxY) + ' of 720')
+
+    // Wrapped text: how many lines, and did anything split a value from its unit.
+    for (const t of texts) {
+      const lines = t.getWrappedText ? t.getWrappedText() : [String(t.text)]
+      if (lines.length > 1) {
+        const bad = lines.some((l, i) => i > 0 && /^(s|px|\/s|peanuts|radius|damage|cooldown)\b/.test(l.trim()))
+        note('  wrapped ' + lines.length + ' lines' + (bad ? '  *** SPLIT A UNIT ***' : '') +
+          ': ' + lines.map((l) => l.trim()).join(' / ').slice(0, 90))
+      }
+    }
+    note('scenes running at capture: ' +
+      game.scene.getScenes(true).map((x) => x.scene.key).join(','))
+    await shot('loadout-' + VP.w + 'x' + VP.h)
+    return
+  }
+
   if (scenario === 'heroblock') {
     // How many enemies does one man actually hold, and what does that cost him?
     // Measured before anything is changed, because the data says 3 and the

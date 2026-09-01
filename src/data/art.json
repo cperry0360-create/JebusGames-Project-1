@@ -61,7 +61,8 @@
     "turret-ledger-t2": "towers/tower_withholding_t2.png",
     "turret-ledger-t3": "towers/tower_withholding_t3.png",
     "ui-nuke-up": "ui/btn_nuke_up.png",
-    "ui-nuke-down": "ui/btn_nuke_down.png"
+    "ui-nuke-down": "ui/btn_nuke_down.png",
+    "ui-loadout-bg": "ui/loadout_bg.png"
   },
   "render": {
     "turret-escalation": {
@@ -417,6 +418,10 @@
     "ui-nuke-down": {
       "contentWidth": 600,
       "contentHeight": 495
+    },
+    "ui-loadout-bg": {
+      "contentWidth": 1920,
+      "contentHeight": 1080
     }
   },
   "map": {
@@ -440,7 +445,8 @@
     "nukeButton": {
       "up": "ui-nuke-up",
       "down": "ui-nuke-down"
-    }
+    },
+    "loadoutBackdrop": "ui-loadout-bg"
   },
   "fx": {
     "spark": "fx-hit-spark",

@@ -53,9 +53,21 @@ test('the loadout is built so cards can be dealt face down later', () => {
   assert.match(s, /for \(const c of this\.cards\) c\.reveal\(\)/,
     'nothing calls reveal, so adding the animation would mean finding every card first')
   // Every section has to build through the same helper, or one of them will be
-  // the odd one out when the reveal lands.
-  const faces = s.match(/c\.face\.add\(/g) ?? []
-  assert.ok(faces.length >= 3, `only ${faces.length} sections put their content on a card face`)
+  // the odd one out when the reveal lands. Counting `c.face.add(` calls was a
+  // proxy for that and stopped being one when the two rows started sharing a
+  // `cardRow` helper — which is more uniform, not less. What is checked now is
+  // the property itself: each section reaches a card, and no section builds a
+  // plate of its own.
+  for (const section of ['heroSection', 'towerSection', 'abilitySection']) {
+    const from = s.indexOf(`private ${section}(`)
+    assert.ok(from > 0, `${section} is gone`)
+    const body = s.slice(from, s.indexOf('\n  private ', from + 10))
+    assert.match(body, /this\.(card|cardRow)\(/,
+      `${section} does not build its content on a card`)
+    assert.ok(!body.includes('platePanel('),
+      `${section} draws its own plate instead of going through card()`)
+  }
+  assert.match(s, /c\.face\.add\(/, 'nothing puts content on a card face at all')
 })
 
 test('the old two-step draft screen is gone, not just bypassed', () => {

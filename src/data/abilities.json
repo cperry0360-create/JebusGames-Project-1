@@ -153,8 +153,7 @@
     "ticks": 0,
     "slowFactor": 0,
     "summonCount": 0,
-    "payoutMin": 0,
-    "payoutMax": 0,
-    "autoRevealSeconds": 0
+    "autoRevealSeconds": 0,
+    "blurb": "Deletes every enemy on the board"
   }
 }
