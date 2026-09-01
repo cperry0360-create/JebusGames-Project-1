@@ -128,6 +128,9 @@ test('the manifest is complete enough to load a whole game', () => {
 test('every file in the manifest exists under assetRoot', () => {
   for (const [key, path] of Object.entries(art.files) as [string, string][]) {
     assert.ok(!path.startsWith('/'), `${key} path should be relative to assetRoot`)
+    // An `optional` key is a HOOK: the path is agreed before the art exists,
+    // and the game falls back until the file lands. See ArtLoader.
+    if ((art.optional ?? []).includes(key)) continue
     assert.ok(existsSync(url(`../public/${art.assetRoot}${path}`)), `${key} -> ${path} is missing`)
   }
 })
@@ -239,7 +242,13 @@ test('every manifest section is re-exported by ART', () => {
   const exported = new Set([...block.slice(0, block.indexOf('\n}')).matchAll(/^\s*(\w+): art\./gm)]
     .map((m) => m[1]))
   for (const section of Object.keys(art)) {
+    // `optional` and `scatter` are re-exported with a fallback rather than
+    // straight through, so the naive `x: art.x` match does not see them.
     if (section === 'note' || section === 'render') continue
+    if (section === 'optional' || section === 'scatter') {
+      assert.match(src, new RegExp(`${section}:\\s*\\(art`), `ART never exports "${section}"`)
+      continue
+    }
     assert.ok(exported.has(section), `art.json has a "${section}" section that ART never exports`)
   }
 })
@@ -261,6 +270,10 @@ test('every file in the manifest is bound to something that draws it', () => {
     }
   }
   for (const k of art.decor ?? []) claim(k)
+  // The scatter layer names its keys in presentation.json and draws them from
+  // that list; the manifest section is the lookup.
+  for (const k of Object.values(art.scatter ?? {})) claim(k as string)
+  for (const k of art.optional ?? []) claim(k as string)
   for (const k of art.greyable ?? []) claim(k)
   // Per-tier tower sprites are named only here, and are drawn by Tower.wearTier
   // through Art.tierSprite.

@@ -1,5 +1,5 @@
 {
-  "scrollSeconds": 90,
+  "scrollSeconds": 60,
   "names": [
     {
       "lit": "COUR",
@@ -82,12 +82,12 @@
     },
     {
       "kind": "credit",
-      "role": "Person Who Said “Just Ship It”",
+      "role": "Person Who Said \u201cJust Ship It\u201d",
       "name": "CORY"
     },
     {
       "kind": "credit",
-      "role": "Person Who Said “Not Like That”",
+      "role": "Person Who Said \u201cNot Like That\u201d",
       "name": "CORY"
     },
     {
@@ -374,7 +374,7 @@
     {
       "kind": "credit",
       "role": "Assets",
-      "name": "KENNEY — CC0"
+      "name": "KENNEY \u2014 CC0"
     },
     {
       "kind": "note",
@@ -482,7 +482,7 @@
     },
     {
       "kind": "credit",
-      "role": "Armour Shredding Supervisor’s Supervisor",
+      "role": "Armour Shredding Supervisor\u2019s Supervisor",
       "name": "CORY"
     },
     {
@@ -543,6 +543,29 @@
       "kind": "credit",
       "role": "Person Who Noticed There Was No Audio",
       "name": "CORY"
+    },
+    {
+      "kind": "gap",
+      "height": 54
+    },
+    {
+      "kind": "card",
+      "name": "COURTLAND",
+      "roles": [
+        "Music Supervisor",
+        "Soundtrack Curation"
+      ]
+    },
+    {
+      "kind": "gap",
+      "height": 54
+    },
+    {
+      "kind": "division",
+      "text": "MUSIC"
+    },
+    {
+      "kind": "tracks"
     },
     {
       "kind": "division",
@@ -721,6 +744,22 @@
     },
     {
       "kind": "gap",
+      "height": 54
+    },
+    {
+      "kind": "card",
+      "name": "HAN",
+      "roles": [
+        "Craft Services",
+        "Catering"
+      ]
+    },
+    {
+      "kind": "gap",
+      "height": 54
+    },
+    {
+      "kind": "gap",
       "height": 90
     },
     {
@@ -765,7 +804,7 @@
     },
     {
       "kind": "credit",
-      "role": "Anyone who ever said “you should make a game”",
+      "role": "Anyone who ever said \u201cyou should make a game\u201d",
       "name": "THIS IS YOUR FAULT"
     },
     {

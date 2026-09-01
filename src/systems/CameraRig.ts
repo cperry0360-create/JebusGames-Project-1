@@ -57,8 +57,14 @@ export interface CameraLimits {
   /** Absolute zoom the run starts at, chosen so a tower renders at the size
    *  the art was drawn for. Raised to cover on a viewport that needs more. */
   defaultZoom: number
-  /** Absolute ceiling, about 1.6x the default. */
+  /** Absolute ceiling, a little above the default. */
   maxZoom: number
+  /** Absolute floor, a little below it. The band is deliberately narrow: the
+   *  player may adjust the framing, never zoom out far enough to take in the
+   *  whole map, which is what made everything read small. */
+  minZoom?: number
+  /** How far past the map edge the view may reach before panning stops. */
+  boundsMarginPx?: number
   /** Movement in screen pixels that turns a tap into a pan. */
   tapSlopPx: number
   /** Map travel per unit of finger travel. Below 1 so a drag is not twitchy. */
@@ -241,7 +247,7 @@ export class CameraRig {
   /* ------------------------------------------------------- camera access */
 
   private clampZ(z: number): number {
-    return clampZoom(z, this.cover, this.limits.maxZoom)
+    return clampZoom(z, this.cover, this.limits.maxZoom, this.limits.minZoom ?? 0)
   }
 
   private writeCenter(
@@ -329,8 +335,9 @@ export class CameraRig {
     // which reads as the camera losing its place rather than as resistance.
     // Clamped every frame, target and actual alike, so the edge is never
     // crossed in the first place and there is nothing to correct.
-    const rx = centerRange(cam.width, this.limits.worldWidth, z)
-    const ry = centerRange(cam.height, this.limits.worldHeight, z)
+    const m = this.limits.boundsMarginPx ?? 0
+    const rx = centerRange(cam.width, this.limits.worldWidth, z, m)
+    const ry = centerRange(cam.height, this.limits.worldHeight, z, m)
     const cx = Math.min(Math.max(this.targetCenterX, rx.min), rx.max)
     const cy = Math.min(Math.max(this.targetCenterY, ry.min), ry.max)
     // Momentum must not keep pushing into a wall it cannot pass.

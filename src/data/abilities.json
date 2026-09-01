@@ -104,39 +104,35 @@
     "autoRevealSeconds": 3.5,
     "outcomes": [
       {
-        "label": "NOT A WINNER",
         "payout": 0,
-        "weight": 26
+        "weight": 17,
+        "label": "NOT A WINNER"
       },
       {
-        "label": "BETTER LUCK, NERD",
         "payout": 0,
+        "weight": 8,
+        "label": "BETTER LUCK, NERD"
+      },
+      {
+        "payout": 40,
+        "weight": 28
+      },
+      {
+        "payout": 75,
+        "weight": 22
+      },
+      {
+        "payout": 150,
         "weight": 14
       },
       {
-        "label": "",
-        "payout": 15,
-        "weight": 30
-      },
-      {
-        "label": "",
-        "payout": 35,
-        "weight": 16
-      },
-      {
-        "label": "",
-        "payout": 70,
-        "weight": 9
-      },
-      {
-        "label": "",
-        "payout": 140,
-        "weight": 4
-      },
-      {
-        "label": "JACKPOT",
         "payout": 300,
-        "weight": 1
+        "weight": 8
+      },
+      {
+        "payout": 900,
+        "weight": 3,
+        "label": "JACKPOT"
       }
     ]
   },

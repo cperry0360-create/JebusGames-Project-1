@@ -30,8 +30,19 @@ export function coverZoom(
  * decided what size a tower should actually be. The ceiling is now an absolute
  * zoom, raised to the floor if a viewport is wide enough to need more.
  */
-export function clampZoom(requested: number, cover: number, maxZoom: number): number {
-  return Math.min(Math.max(requested, cover), Math.max(cover, maxZoom))
+export function clampZoom(
+  requested: number,
+  cover: number,
+  maxZoom: number,
+  minZoom = 0,
+): number {
+  // Cover is a floor the viewport imposes; minZoom is a floor the DESIGN
+  // imposes, and the real floor is whichever is higher. Without the second
+  // one the band is only as tight as the widest phone allows: at 568x320
+  // cover is 0.444, so "you may not zoom out past 2.07" meant nothing at all
+  // and a pinch still framed the entire map at 6% scale.
+  const floor = Math.max(cover, minZoom)
+  return Math.min(Math.max(requested, floor), Math.max(floor, maxZoom))
 }
 
 /**
@@ -103,10 +114,15 @@ export function centerRange(
   viewSize: number,
   worldSize: number,
   zoom: number,
+  /** How far past the world edge the view may reach. Small and deliberate:
+   *  a hard stop exactly on the edge makes the arch and the gate sit jammed
+   *  against the screen border, and a large one shows the void the clamp
+   *  exists to hide. */
+  marginPx = 0,
 ): { min: number; max: number } {
   const half = viewSize / (2 * Math.max(zoom, 0.0001))
   if (half * 2 >= worldSize) return { min: worldSize / 2, max: worldSize / 2 }
-  return { min: half, max: worldSize - half }
+  return { min: half - marginPx, max: worldSize - half + marginPx }
 }
 
 

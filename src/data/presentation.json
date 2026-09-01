@@ -121,7 +121,12 @@
     "pulseMs": 1400,
     "restTint": "#d4d8d0",
     "placingTint": "#f0f4ec",
-    "hoverTint": "#ffffff"
+    "hoverTint": "#ffffff",
+    "signHeight": 74,
+    "quietHeight": 26,
+    "quietJitterScale": 0.12,
+    "quietJitterDegrees": 9,
+    "quietAlpha": 0.92
   },
   "restructure": {
     "liftPixels": 46,
@@ -230,6 +235,128 @@
       "appearMs": 200,
       "appearFromScale": 0.7,
       "fadeOutMs": 300
+    }
+  },
+  "scatter": {
+    "seed": 20260901,
+    "nativeScale": 0.5,
+    "scaleJitter": 0.1,
+    "rotateDegrees": 6,
+    "rules": {
+      "attempts": 900,
+      "minGapPx": 6,
+      "pathClearancePx": 46,
+      "dirtBandPx": 26,
+      "buildSpotClearPx": 54,
+      "endClearPx": 70,
+      "edgeInsetPx": 24
+    },
+    "kinds": [
+      {
+        "key": "scatter-grass-tall",
+        "surface": "grass",
+        "weight": 10,
+        "radius": 9
+      },
+      {
+        "key": "scatter-rock-small",
+        "surface": "grass",
+        "weight": 8,
+        "radius": 8
+      },
+      {
+        "key": "scatter-rock-medium",
+        "surface": "grass",
+        "weight": 5,
+        "radius": 12
+      },
+      {
+        "key": "scatter-rock-large",
+        "surface": "grass",
+        "weight": 3,
+        "radius": 17
+      },
+      {
+        "key": "scatter-pebbles",
+        "surface": "dirt",
+        "weight": 9,
+        "radius": 8
+      },
+      {
+        "key": "scatter-flowers-white",
+        "surface": "grass",
+        "weight": 4,
+        "radius": 8
+      },
+      {
+        "key": "scatter-flowers-yellow",
+        "surface": "grass",
+        "weight": 4,
+        "radius": 8
+      },
+      {
+        "key": "scatter-branch-large",
+        "surface": "either",
+        "weight": 3,
+        "radius": 13
+      },
+      {
+        "key": "scatter-branch-small",
+        "surface": "either",
+        "weight": 4,
+        "radius": 9
+      },
+      {
+        "key": "scatter-dirt-cracked",
+        "surface": "dirt",
+        "weight": 4,
+        "radius": 12
+      },
+      {
+        "key": "scatter-stump",
+        "surface": "grass",
+        "weight": 1,
+        "radius": 16,
+        "max": 2
+      },
+      {
+        "key": "scatter-mushrooms",
+        "surface": "grass",
+        "weight": 1,
+        "radius": 8,
+        "max": 2
+      },
+      {
+        "key": "scatter-puddle",
+        "surface": "dirt",
+        "weight": 1,
+        "radius": 14,
+        "max": 1
+      },
+      {
+        "key": "scatter-tire-ruts",
+        "surface": "dirt",
+        "weight": 1,
+        "radius": 16,
+        "max": 1
+      }
+    ]
+  },
+  "ambient": {
+    "glowColor": 16755029,
+    "minAlpha": 0.75,
+    "maxAlpha": 1.0,
+    "periodSeconds": 1.9,
+    "periodVariance": 0.45,
+    "smoke": {
+      "rate": 1.6,
+      "lifespanMs": 3000,
+      "riseSpeed": 16,
+      "driftSpeed": 9,
+      "startScale": 0.1,
+      "endScale": 0.42,
+      "alpha": 0.34,
+      "tint": 14213847
     }
   }
 }

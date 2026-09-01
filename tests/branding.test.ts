@@ -118,8 +118,13 @@ test('the credits are a roll, not a page', () => {
   assert.ok(credits.scrollSeconds >= 45 && credits.scrollSeconds <= 90,
     `a ${credits.scrollSeconds}s roll is not the slow scroll this is meant to be`)
   const scene = src('scenes/CreditsScene.ts')
-  assert.match(scene, /this\.tweens\.add\(\{[\s\S]{0,200}duration: creditsData\.scrollSeconds/,
-    'nothing scrolls, or the duration is hardcoded away from the data')
+  // The roll is now a chain of legs with a hold on each card, so the duration
+  // is apportioned across them rather than being one tween's `duration`. What
+  // still has to be true is that the total comes from the data.
+  assert.match(scene, /const total = creditsData\.scrollSeconds \* 1000/,
+    'the scroll duration is hardcoded away from the data')
+  assert.match(scene, /this\.tweens\.add\(\{[\s\S]{0,220}duration: Math\.max\(1, total \*/,
+    'nothing scrolls, or a leg does not take its share of the total')
   assert.match(scene, /ease: 'Linear'/, 'credits that ease look like they are buffering')
   // Nobody is held here.
   assert.match(scene, /pointerdown[\s\S]{0,60}leave\(\)/, 'the roll cannot be skipped by tapping')
@@ -185,7 +190,12 @@ test('the roll is broken into departments, not one flat list', () => {
   const under = new Map<string, number>()
   for (const b of blocks) {
     if (b.kind === 'division') { seen = b.text as string; under.set(seen, 0) }
-    if (b.kind === 'credit' && seen !== null) under.set(seen, (under.get(seen) ?? 0) + 1)
+    // A `tracks` block is a whole section's worth of content read from
+    // music.json — the MUSIC department has no hand-written credit lines
+    // because its entries arrive with the tracks.
+    if ((b.kind === 'credit' || b.kind === 'tracks' || b.kind === 'card') && seen !== null) {
+      under.set(seen, (under.get(seen) ?? 0) + (b.kind === 'credit' ? 1 : 3))
+    }
   }
   for (const [name, n] of under) {
     assert.ok(n >= 3, `department "${name}" has ${n} credits under it`)
@@ -229,8 +239,17 @@ test('the roll has room to be read', () => {
   assert.match(scene, /'\.'\.repeat/, 'the dot leaders are gone')
   // Speed follows length: a longer roll at the same duration just scrolls
   // faster, which is the opposite of readable.
-  assert.ok(credits.scrollSeconds >= 70,
-    `${credits.scrollSeconds}s for a roll this long is a blur`)
+  // The roll is 12,444px tall. `scrollSeconds` is the MOTION time, and at 60s
+  // that is 219 px/sec — 0.21s per credit line. That is deliberate for eighty
+  // lines that all say CORY, and impossible for the two that do not, so the
+  // scroll stops on a card instead of being slowed for everything.
+  assert.ok(credits.scrollSeconds >= 55,
+    `${credits.scrollSeconds}s for a roll this long is a blur even for a joke`)
+  const scene2 = readFileSync(url('../src/scenes/CreditsScene.ts'), 'utf8')
+  const hold = /const CARD_HOLD_MS = (\d+)/.exec(scene2)
+  assert.ok(hold && Number(hold[1]) >= 1000,
+    'nothing stops the scroll on a card, so the two real names fly past')
+  assert.match(scene2, /this\.cardStops\.push/, 'the roll does not know where its cards are')
 })
 
 test('a studio mark is placed on the line it is laid out on', () => {
@@ -294,4 +313,21 @@ test('the studio cards open the roll in the right order', () => {
   assert.equal(first[0]!.art, 'jebusGames', 'JebusGames does not open the roll')
   assert.equal(first[1]!.text, 'IN COLLABORATION WITH')
   assert.equal(first[2]!.art, 'cpPlays', 'CP Plays does not follow the collaboration line')
+})
+
+test('every music track carries the attribution its licence requires', () => {
+  // A CC-BY track that ships without naming its artist is a licence breach,
+  // not a missing nicety. The roll reads these from music.json, so this is
+  // the only place that can catch an entry added without its credit.
+  const music = JSON.parse(readFileSync(url('../src/data/music.json'), 'utf8'))
+  assert.ok(Array.isArray(music.tracks) && music.tracks.length > 0, 'no tracks are credited')
+  for (const t of music.tracks as Array<Record<string, string>>) {
+    assert.ok((t.title ?? '').trim().length > 0, 'a track has no title')
+    // A track whose licence names a Creative Commons variant MUST name the
+    // artist. One with no licence recorded yet is a to-do, not a breach.
+    if (/\bCC\b|creative commons/i.test(t.license ?? '')) {
+      assert.ok((t.artist ?? '').trim().length > 0,
+        `"${t.title}" is licensed ${t.license} and names no artist`)
+    }
+  }
 })

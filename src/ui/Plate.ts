@@ -156,6 +156,25 @@ export function platePanel(
   return parts
 }
 
+/**
+ * How far a panel's painted frame reaches in from its box, per side.
+ *
+ * Content padded by a hand-picked number is padded against the BOX, and the
+ * box is not what the player sees — the nine-slice's corners and edges sit
+ * inside it. A cost drawn 9px from the left edge of a panel whose frame is
+ * 14px wide is drawn on the frame. This is the number to pad against.
+ */
+export function panelInset(
+  scene: Phaser.Scene,
+  w: number,
+  h: number,
+  chrome = chromeFor(w, h),
+): { left: number; right: number; top: number; bottom: number } {
+  const s = slices(scene, ART.ui.panel)
+  const k = Math.min(chrome, (w * 0.9) / (s.left + s.right), (h * 0.9) / (s.top + s.bottom))
+  return { left: s.left * k, right: s.right * k, top: s.top * k, bottom: s.bottom * k }
+}
+
 export interface PlateButton {
   hit: Phaser.GameObjects.Rectangle
   text: Phaser.GameObjects.Text

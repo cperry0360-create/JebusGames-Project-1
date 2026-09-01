@@ -20,8 +20,11 @@ import type { BuildSpot } from '../systems/BuildSystem.ts'
 import { WaveSpawner } from '../systems/WaveSpawner.ts'
 import { withinRadius, pickNearest } from '../systems/Targeting.ts'
 import { GROUND_DEPTH } from '../systems/DepthSort.ts'
+import { makeRng } from '../systems/Draft.ts'
+import { scatter, type ScatterKind, type Rect } from '../systems/Scatter.ts'
+import { installAmbient, type AmbientDef, type AmbientStyle } from '../systems/Ambient.ts'
 import { dashArcs, HeroMarkers, type MarkersDef } from '../systems/HeroMarkers.ts'
-import { ART, applyRender } from '../systems/Art.ts'
+import { ART, applyRender, fitContentHeight } from '../systems/Art.ts'
 import { EFFECT_MS, playEffect, sizeForRadius } from '../systems/Effects.ts'
 import { Cooldowns } from '../systems/Cooldowns.ts'
 import { unlockedTowerCount } from '../systems/Draft.ts'
@@ -183,6 +186,13 @@ export class GameScene extends Phaser.Scene {
 
   /** One marker per build spot, created once and then shown or hidden. */
   private pads: Phaser.GameObjects.Image[] = []
+  /** Which spot keeps the full DO NOT BUILD HERE sign. The rest get the quiet
+   *  marker; see createPads. Public so a harness run can check there is
+   *  exactly one and that it is the one nearest the entrance. */
+  signSpotIndex = 0
+  /** How many decoration props were placed. Read by the harness; the density
+   *  knob is `scatter.rules.attempts`, and this is what it produced. */
+  scatterCount = 0
   private markerLayer!: Phaser.GameObjects.Graphics
   /** The dashed circle showing what an upgrade would make this tower's reach.
    *  Its own layer, because rangeRing is cleared and redrawn constantly. */
@@ -370,6 +380,8 @@ this.armReadyCountdown()
       startY: MAP.heroStart[1],
       defaultZoom: displayData.camera.defaultZoom,
       maxZoom: displayData.camera.maxZoom,
+      minZoom: displayData.camera.minZoom,
+      boundsMarginPx: displayData.camera.boundsMarginPx,
       tapSlopPx: displayData.camera.tapSlopPx,
       panSpeed: displayData.camera.panSpeed,
       pinchDamping: displayData.camera.pinchDamping,
@@ -443,6 +455,8 @@ this.armReadyCountdown()
    */
   private drawPlate(): void {
     const plate = this.add.image(0, 0, ART.map[MAP.plate]).setOrigin(0, 0).setDepth(GROUND_DEPTH)
+    this.createScatter()
+    this.createAmbient()
     plate.setDisplaySize(displayData.width, displayData.height)
   }
 
@@ -657,13 +671,96 @@ this.armReadyCountdown()
    * Built once and thereafter only shown, hidden and tinted. The alternative
    * was creating and destroying seven sprites on every hover.
    */
+  /**
+   * The decoration layer.
+   *
+   * Laid out by rule from a fixed seed rather than by hand, so it is identical
+   * every run and "more" or "fewer" is one number in presentation.json rather
+   * than an afternoon of dragging. Every placement is inert: no hit area, no
+   * pointer events, nothing that can take a tap meant for the board.
+   *
+   * Depth sits above the map plate and below the build pads, and every entity
+   * sorts by its own y from 0 upward, so a prop can never draw over a unit.
+   */
+  private createScatter(): void {
+    const cfg = PRESENTATION.scatter
+    const kinds = (cfg.kinds as ScatterKind[]).filter((k) => this.textures.exists(k.key))
+    if (kinds.length === 0) return
+    const placements = scatter({
+      worldWidth: displayData.width,
+      worldHeight: displayData.height,
+      waypoints: MAP.waypoints,
+      buildSpots: MAP.buildSpots,
+      exclude: (MAP.scatterExclude ?? []) as Rect[],
+      kinds,
+      rules: cfg.rules,
+      scaleJitter: cfg.scaleJitter,
+      rotateDegrees: cfg.rotateDegrees,
+    }, cfg.seed)
+
+    for (const p of placements) {
+      const img = this.add.image(p.x, p.y, p.key).setDepth(GROUND_DEPTH + 1)
+      // The art is delivered at 2x, so it renders at half its native pixels;
+      // the jitter multiplies that rather than replacing it.
+      img.setScale(cfg.nativeScale * p.scale)
+      img.setRotation(p.rotation)
+      // Bottom-anchored, so a rock sits ON the grass rather than hovering over
+      // its own centre.
+      img.setOrigin(0.5, 0.9)
+    }
+    this.scatterCount = placements.length
+  }
+
+  /** Warm flicker over the tavern's windows and lanterns, and smoke from its
+   *  chimney. Decoration only; see Ambient.ts for the lifetime rules. */
+  private createAmbient(): void {
+    const def = MAP.ambient as AmbientDef | undefined
+    if (!def || (def.lights.length === 0 && def.chimneys.length === 0)) return
+    installAmbient(this, def, PRESENTATION.ambient as AmbientStyle, GROUND_DEPTH + 2)
+  }
+
   private createPads(): void {
-    const key = ART.prop.buildPad
+    const signKey = ART.prop.buildPad
+    // The quiet marker is an optional manifest hook: the key and the path were
+    // agreed before the art was drawn, so until the file lands every pad falls
+    // back to the sign and the board still reads.
+    const quietKey = ART.prop.buildPadQuiet
+    const hasQuiet = !!quietKey && this.textures.exists(quietKey)
     const cfg = PRESENTATION.buildPad
     const n = this.build.spots.length
+
+    // Exactly ONE sign, at the spot nearest where the enemies come in, because
+    // that is where the player looks first. Seven of them was seven copies of
+    // the same joke shouting over the board they are standing on.
+    const entrance = this.build.spots.length > 0 ? MAP.waypoints[0]! : [0, 0]
+    let signIndex = 0
+    let best = Infinity
+    this.build.spots.forEach((spot, i) => {
+      const d = Math.hypot(spot.x - entrance[0]!, spot.y - entrance[1]!)
+      if (d < best) { best = d; signIndex = i }
+    })
+    this.signSpotIndex = signIndex
+
+    // Deterministic per spot, so the jitter is part of the map's furniture and
+    // not a thing that shuffles between sessions.
+    const jitter = makeRng(0x5EED ^ this.build.spots.length)
+
     this.pads = this.build.spots.map((spot, i) => {
+      const isSign = i === signIndex || !hasQuiet
+      const key = isSign ? signKey : quietKey!
       const img = this.add.image(spot.x, spot.y, key).setDepth(GROUND_DEPTH + 5)
       applyRender(img, key)
+      if (isSign) {
+        fitContentHeight(img, key, cfg.signHeight)
+      } else {
+        // About a third of the sign's footprint, and varied so seven of them
+        // do not read as one object stamped seven times: a few degrees of
+        // rotation and about a tenth of scale, both per instance.
+        fitContentHeight(img, key, cfg.quietHeight)
+        img.setScale(img.scale * (1 + (jitter() * 2 - 1) * cfg.quietJitterScale))
+        img.setRotation(((jitter() * 2 - 1) * cfg.quietJitterDegrees) * Math.PI / 180)
+        img.setAlpha(cfg.quietAlpha)
+      }
       const base = img.scale
       // A slow breath, so an empty pad reads as something to press rather than
       // as scenery. Scale only: the tint carries the state, and two things

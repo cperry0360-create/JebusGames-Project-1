@@ -25,7 +25,9 @@ export const ART = {
   map: art.map,
   ui: art.ui,
   /** Props painted onto the map rather than owned by an entity. */
-  prop: art.prop,
+  prop: art.prop as { signDefault: string; signBribed: string; buildPad: string; buildPadQuiet?: string },
+  scatter: (art as { scatter?: Record<string, string> }).scatter ?? {},
+  optional: (art as { optional?: string[] }).optional ?? [],
   fx: art.fx,
   decor: art.decor,
   brand: art.brand,

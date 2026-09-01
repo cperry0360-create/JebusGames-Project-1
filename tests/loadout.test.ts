@@ -106,7 +106,10 @@ test('both card rows are built by the same component', () => {
   }
   // And the shared face keeps the icon and the words in separate columns.
   const face = s.slice(s.indexOf('private cardFace'), s.indexOf('private towerSection'))
-  assert.match(face, /const tx = -cw \/ 2 \+ col/, 'the text column is not offset past the icon')
+  assert.match(face, /const tx = -cw \/ 2 \+ pad \+ col/, 'the text column is not offset past the icon')
+  // Padded against the painted frame, not the box: the frame reaches further
+  // in than the box edge and a hand-picked pad put the cost on the chrome.
+  assert.match(face, /panelInset\(this, cw/, 'the card pads against its box rather than its frame')
   assert.match(face, /wordWrap: \{ width: tw \}/, 'body text is not wrapped to the text column')
 })
 
@@ -151,4 +154,77 @@ test('the loadout says the hand was dealt, not chosen', () => {
   assert.match(s, /LO\.copy\.drawnAtRandom/, 'the randomness subtext is not shown')
   const copy = (read('presentation') as any).loadout.copy
   assert.match(copy.drawnAtRandom, /random/i, 'the subtext does not mention the draw')
+})
+
+/**
+ * Every card, every entry — not whatever the seed dealt.
+ *
+ * This screen's overflow has been reported and "fixed" three times. Each fix
+ * was verified against one random draw, so each fix verified a different
+ * subset and none of them covered Filing Extension, which has the longest
+ * body in the set.
+ *
+ * CI has no renderer, so this cannot measure pixels. What it CAN do is check
+ * the two things that were actually wrong, both of which are arithmetic:
+ * the padding was measured against the card's BOX while the painted frame
+ * reaches much further in (27.9px at the sides and 31.4px at the top, against
+ * a pad of 9), and the hero card had a second layout that nobody updated.
+ * Pixel verification is the harness's `everyloadout` scenario, which renders
+ * all fourteen entries at both viewports.
+ */
+test('every card pads against its painted frame, not its box', () => {
+  const s = src('scenes/LoadoutScene.ts')
+
+  const face = s.slice(s.indexOf('private cardFace'), s.indexOf('private towerSection'))
+  assert.match(face, /panelInset\(this, cw/, 'the card face pads against its box')
+  for (const [side, name] of [['left', 'pad'], ['right', 'padR'], ['top', 'padT']] as const) {
+    assert.match(face, new RegExp(`const ${name} = Math\\.max\\([^)]*Math\\.ceil\\(frame\\.${side}\\)`),
+      `the card face does not pad its ${side} edge by the frame`)
+  }
+  assert.match(face, /Math\.ceil\(frame\.bottom\)/, 'the card face does not pad its bottom by the frame')
+  // The top rail is deeper than the side rails, so the top must not reuse the
+  // side inset. That mistake put all fourteen names 1px onto the chrome.
+  assert.ok(!/const padT = Math\.max\([^)]*frame\.left/.test(face),
+    'the top pad is taken from the side inset')
+
+  // The hero card is the one that was 19px out at the top AND the bottom,
+  // because it never went through the shared face and kept a flat pad of 12.
+  const hero = s.slice(s.indexOf('private heroSection'), s.indexOf('private cardFace'))
+  assert.match(hero, /panelInset\(this, w/, 'the hero card still pads against its box')
+  assert.ok(!/const pad = 12\b/.test(hero), 'the hero card still uses the flat pad that overflowed')
+})
+
+test('every hero, tower and special is covered, and none is too long to fit', () => {
+  // Enumerated, not sampled. The budget is the measured worst case: at
+  // 568x320 the narrowest card gives a 162px text column, and the deepest
+  // body that fits it is the Scratch Ticket's at five lines. A new string
+  // longer than that has not been shown to fit and must be measured before it
+  // ships.
+  const towers = read('towers')
+  const abilities = read('abilities')
+  const heroes = read('heroes')
+  const WORST = 57   // characters; the Scratch Ticket line, measured at 5 lines
+
+  let combinations = 0
+  const tooLong: string[] = []
+  for (const [hid, h] of Object.entries(heroes) as [string, any][]) {
+    for (const [tid, t] of Object.entries(towers) as [string, any][]) {
+      for (const [aid, a] of Object.entries(abilities) as [string, any][]) {
+        combinations++
+        const cards: Array<[string, string]> = [
+          [`hero ${hid}`, h.blurb],
+          [`tower ${tid}`, towerStats(t)],
+          [`tower ${tid}`, towerLine(t)],
+          [`special ${aid}`, abilityLine(a)],
+        ]
+        for (const [what, text] of cards) {
+          if (text.length > WORST) tooLong.push(`${what}: ${text.length} chars — "${text}"`)
+        }
+      }
+    }
+  }
+  assert.equal(combinations, Object.keys(heroes).length * Object.keys(towers).length
+    * Object.keys(abilities).length, 'not every combination was enumerated')
+  assert.deepEqual([...new Set(tooLong)], [],
+    'a card body is longer than the longest one measured to fit')
 })

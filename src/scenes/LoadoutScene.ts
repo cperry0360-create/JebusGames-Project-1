@@ -8,7 +8,7 @@ import draftData from '../data/draft.json'
 import { draftAbilities, draftOpeningTowers, makeRng, reserveTowers } from '../systems/Draft.ts'
 import { runState, setRunState } from '../systems/RunState.ts'
 import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
-import { plateButton, platePanel } from '../ui/Plate.ts'
+import { panelInset, plateButton, platePanel } from '../ui/Plate.ts'
 import { towerIcon } from '../ui/TowerIcon.ts'
 import { fitInBox } from '../systems/Art.ts'
 import { fitCameraToDesign } from '../ui/FitCamera.ts'
@@ -216,6 +216,13 @@ export class LoadoutScene extends Phaser.Scene {
     )
   }
 
+  /** The painted frame's inner inset for a card of this width. Exposed so a
+   *  harness run measures against the frame the player sees rather than the
+   *  box behind it. */
+  frameInsetFor(w: number): { left: number; right: number; top: number; bottom: number } {
+    return panelInset(this, w, 120)
+  }
+
   private render(): void {
     this.layer?.destroy(true)
     this.layer = this.add.container(0, 0)
@@ -330,7 +337,12 @@ export class LoadoutScene extends Phaser.Scene {
     // It used to be 96px in a 136px card, floated left of a text block that
     // started 150px in — a small picture with a gap either side of it.
     const portraitBox = 104
-    const pad = 12
+    // Against the painted frame, like every other card. Padded by a flat 12
+    // it put CORY 19px above the frame's top rail and his kit 19px below the
+    // bottom one — the worst overflow on the screen, and one that no random
+    // draw could ever miss, yet three passes did.
+    const frame = panelInset(this, w, 140)
+    const pad = Math.max(12, Math.ceil(Math.max(frame.left, frame.top, frame.bottom)) + 2)
     const textX = -w / 2 + pad + portraitBox + 18
 
     const name = this.add.text(textX, 0, hero.name.toUpperCase(), {
@@ -386,10 +398,20 @@ export class LoadoutScene extends Phaser.Scene {
     stats: string | null,
     body: string,
   ): { parts: Phaser.GameObjects.GameObject[]; bottom: number } {
-    const pad = LO.cardPad
+    // Padded against the painted frame, not against the box. The frame's
+    // corners reach in further than the box edge, so a hand-picked 9px put the
+    // cost on top of the chrome — which is exactly what was reported, and what
+    // measuring against the backing rectangle could never see.
+    const frame = panelInset(this, cw, 120)
+    const pad = Math.max(LO.cardPad, Math.ceil(frame.left) + 2)
+    const padR = Math.max(LO.cardPad, Math.ceil(frame.right) + 2)
+    // The frame is not square. Its top rail is deeper than its side rails, so
+    // padding the top by the LEFT inset put every card's name one pixel onto
+    // the chrome — on all fourteen entries, at both viewports.
+    const padT = Math.max(LO.cardPad, Math.ceil(frame.top) + 2)
     const col = LO.cardIconColumn
-    const tx = -cw / 2 + col
-    const tw = cw - col - pad
+    const tx = -cw / 2 + pad + col
+    const tw = cw - pad - col - padR
 
     // The price goes UNDER the icon, not beside the name. Sharing the name's
     // line cost it 37px of a 200px column on a small phone, which was enough
@@ -398,16 +420,16 @@ export class LoadoutScene extends Phaser.Scene {
     // spare, and a picture with a price under it is a price tag.
     const box = LO.cardIconBox
     const costText = cost === null ? null : this.add.text(
-      -cw / 2 + col / 2, pad + box + 4, cost, {
+      -cw / 2 + pad + col / 2, padT + box + 4, cost, {
         fontFamily: FONT_UI, fontSize: '22px', color: COLOR.amber, fontStyle: 'bold',
       },
     ).setOrigin(0.5, 0)
-    const nameText = this.add.text(tx, pad, name.toUpperCase(), {
+    const nameText = this.add.text(tx, padT, name.toUpperCase(), {
       fontFamily: FONT_UI, fontSize: '22px', color: COLOR.ink, fontStyle: 'bold',
       wordWrap: { width: tw },
     }).setOrigin(0, 0)
 
-    let ty = pad + nameText.height + 6
+    let ty = padT + nameText.height + 6
     const statsText = stats === null ? null : this.add.text(tx, ty, stats, {
       fontFamily: FONT_UI, fontSize: '22px', color: COLOR.ink,
       wordWrap: { width: tw },
@@ -420,7 +442,7 @@ export class LoadoutScene extends Phaser.Scene {
     }).setOrigin(0, 0)
 
     const parts = [
-      ...icon(-cw / 2 + col / 2, pad + box / 2, box),
+      ...icon(-cw / 2 + pad + col / 2, padT + box / 2, box),
       nameText, bodyText,
     ]
     if (costText) parts.push(costText)
@@ -431,10 +453,11 @@ export class LoadoutScene extends Phaser.Scene {
     // The bottom inset is larger than the top one: the plate's chrome reaches
     // further in at the foot than at the head, and a last line set to the same
     // padding as the first sits on the frame.
-    const iconColumnBottom = pad + box + (costText ? 4 + costText.height : 0)
+    const iconColumnBottom = padT + box + (costText ? 4 + costText.height : 0)
     return {
       parts,
-      bottom: Math.max(ty + bodyText.height, iconColumnBottom) + LO.cardPadBottom,
+      bottom: Math.max(ty + bodyText.height, iconColumnBottom)
+        + Math.max(LO.cardPadBottom, Math.ceil(frame.bottom) + 2),
     }
   }
 

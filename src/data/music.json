@@ -1,0 +1,17 @@
+{
+  "_note": "Track attributions for the credits roll. A Creative Commons track must name its artist and its licence — that is an obligation, not a courtesy — so it lives here as data and a track can be credited the day it is chosen. `source` should be the page the track was taken from; fill it in as each is confirmed.",
+  "tracks": [
+    {
+      "title": "Electric Dream",
+      "artist": "Of Far Different Nature",
+      "source": "",
+      "license": "CC BY 4.0"
+    },
+    {
+      "title": "Battle theme",
+      "artist": "",
+      "source": "",
+      "license": ""
+    }
+  ]
+}

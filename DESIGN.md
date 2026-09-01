@@ -799,3 +799,23 @@ So the work is not wiring, it is these four decisions:
 
 Recommendation: ship the mulligan now, revisit 3 when the Banner tree lands,
 and do not build 4 unless the tester still wants it after the mulligan.
+
+## Deliberately unbalanced
+
+Things knowingly left wrong, so nobody "fixes" them by accident and so the
+debt is written down rather than remembered.
+
+### Scratch Ticket, raised 1 Sep
+
+Expected value raised from **25 to ~100 peanuts** per use as a deliberate
+overtune for playtesting. It is not balanced and is not meant to be yet.
+
+The history matters: it was previously nerfed **from 190**, because at that
+level it earned 59% of a wave's income on its own and the correct play was to
+ignore the towers and scratch. The distribution now keeps a real 25% chance of
+nothing and adds a 3% jackpot at 900, so the excitement comes from the shape
+rather than from a guaranteed trickle.
+
+**Revisit once level two exists and difficulty is actually being tuned.** The
+intended long-term target is **somewhere between 40 and 60** — above the 25 it
+was nerfed to, well below where it distorts the run.

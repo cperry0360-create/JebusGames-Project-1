@@ -64,7 +64,22 @@
     "ui-nuke-down": "ui/btn_nuke_down.png",
     "ui-loadout-bg": "ui/loadout_bg.png",
     "ui-scratch-covered": "ui/scratch_covered.png",
-    "ui-scratch-revealed": "ui/scratch_revealed.png"
+    "ui-scratch-revealed": "ui/scratch_revealed.png",
+    "scatter-rock-large": "props/rock_large.png",
+    "scatter-rock-medium": "props/rock_medium.png",
+    "scatter-rock-small": "props/rock_small.png",
+    "scatter-grass-tall": "props/grass_tall.png",
+    "scatter-flowers-white": "props/flowers_white.png",
+    "scatter-flowers-yellow": "props/flowers_yellow.png",
+    "scatter-dirt-cracked": "props/dirt_cracked.png",
+    "scatter-puddle": "props/puddle.png",
+    "scatter-tire-ruts": "props/tire_ruts.png",
+    "scatter-branch-large": "props/branch_large.png",
+    "scatter-branch-small": "props/branch_small.png",
+    "scatter-pebbles": "props/pebbles.png",
+    "scatter-stump": "props/stump.png",
+    "scatter-mushrooms": "props/mushrooms.png",
+    "prop-build-pad": "props/build_pad.png"
   },
   "render": {
     "turret-escalation": {
@@ -502,7 +517,8 @@
   "prop": {
     "signDefault": "prop-sign-moes",
     "signBribed": "prop-sign-courjahan",
-    "buildPad": "prop-pad"
+    "buildPad": "prop-pad",
+    "buildPadQuiet": "prop-build-pad"
   },
   "towerTiers": {
     "turret-ledger": [
@@ -510,5 +526,24 @@
       "turret-ledger-t2",
       "turret-ledger-t3"
     ]
-  }
+  },
+  "scatter": {
+    "rock_large": "scatter-rock-large",
+    "rock_medium": "scatter-rock-medium",
+    "rock_small": "scatter-rock-small",
+    "grass_tall": "scatter-grass-tall",
+    "flowers_white": "scatter-flowers-white",
+    "flowers_yellow": "scatter-flowers-yellow",
+    "dirt_cracked": "scatter-dirt-cracked",
+    "puddle": "scatter-puddle",
+    "tire_ruts": "scatter-tire-ruts",
+    "branch_large": "scatter-branch-large",
+    "branch_small": "scatter-branch-small",
+    "pebbles": "scatter-pebbles",
+    "stump": "scatter-stump",
+    "mushrooms": "scatter-mushrooms"
+  },
+  "optional": [
+    "prop-build-pad"
+  ]
 }

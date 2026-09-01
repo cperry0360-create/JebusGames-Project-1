@@ -5,13 +5,15 @@
   "backgroundColor": "#2f7d3f",
   "camera": {
     "defaultZoom": 1.72,
-    "maxZoom": 2.75,
+    "maxZoom": 2.15,
     "tapSlopPx": 12,
     "panSpeed": 0.82,
     "pinchDamping": 0.6,
     "followLambda": 15,
     "zoomLambda": 11,
     "momentumDecay": 0.0022,
-    "momentumMinSpeed": 35
+    "momentumMinSpeed": 35,
+    "minZoom": 1.46,
+    "boundsMarginPx": 16
   }
 }

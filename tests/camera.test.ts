@@ -378,8 +378,23 @@ test('the hero is the size he was drawn to be', () => {
 test('the zoom range brackets the default rather than the viewport', () => {
   const z = display.camera.defaultZoom
   const max = display.camera.maxZoom
-  assert.ok(max / z >= 1.45 && max / z <= 1.75,
-    `the ceiling is ${(max / z).toFixed(2)}x the default; about 1.6x was the intent`)
+  // A NARROW band, deliberately. The ceiling used to sit 1.6x above the
+  // default and the floor was cover zoom, which on a 568x320 phone is 0.444 —
+  // so a pinch framed the entire map at 6% scale and every sprite on it read
+  // as a speck. The player may adjust the framing; they may not leave it.
+  const min = display.camera.minZoom
+  assert.ok(max / z >= 1.15 && max / z <= 1.35,
+    `the ceiling is ${(max / z).toFixed(2)}x the default; the band should be about 1.25x`)
+  assert.ok(min / z >= 0.78 && min / z <= 0.92,
+    `the floor is ${(min / z).toFixed(2)}x the default; the band should be about 0.85x`)
+  // And the floor must actually bite on the smallest viewport, where cover is
+  // lowest and the old floor did nothing at all.
+  const small = coverZoom(568, 320, W, H)
+  assert.ok(clampZoom(0, small, max, min) === min,
+    'on a small viewport the design floor is not what stops the zoom-out')
+  const seen = (568 / min) * (320 / min) / (W * H)
+  assert.ok(seen < 0.25,
+    `at min zoom a 568x320 phone still sees ${(seen * 100).toFixed(0)}% of the map`)
   // And zooming all the way out still fills the screen, at every viewport.
   const sizes: Array<[number, number]> = [[568, 320], [844, 390], [1080, 810], [1440, 900]]
   for (const [vw, vh] of sizes) {

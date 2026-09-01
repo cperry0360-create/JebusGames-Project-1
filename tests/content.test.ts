@@ -36,6 +36,10 @@ test('every sprite key referenced anywhere resolves to a real file', () => {
 test('the art manifest points at files that exist on disk', () => {
   for (const [key, path] of Object.entries(art.files) as [string, string][]) {
     assert.match(path, /^[\w-]+\/[\w.-]+\.png$/, `${key} -> ${path} is not an asset path`)
+    // A key on the `optional` list is a HOOK: the path is agreed before the
+    // art is drawn, and the game falls back until the file lands. Everything
+    // else must exist.
+    if ((art.optional ?? []).includes(key)) continue
     assert.ok(existsSync(url(`../public/${art.assetRoot}${path}`)), `${key} -> ${path} is missing from public/assets`)
   }
 })
@@ -318,13 +322,35 @@ test('a Scratch Ticket is a gamble rather than an income stream', () => {
     'a losing ticket must say something, or an uncovered blank card is just confusing')
 
   assert.ok(ev > 0, 'the expected value should be positive; nobody drafts a losing bet')
-  assert.ok(ev < meanWave * 0.2,
+  // DELIBERATELY OVERTUNED, 1 Sep. EV was raised from 25 to ~100 for
+  // playtesting, which is about a third of a wave's income — well past the 20%
+  // this used to hold. The ceiling is raised rather than removed, and it is
+  // tied to the written decision: if the note goes, the old limit comes back.
+  const design = readFileSync(url('../DESIGN.md'), 'utf8')
+  const overtuned = /## Deliberately unbalanced[\s\S]*Scratch Ticket/.test(design)
+  const ceiling = overtuned ? 0.35 : 0.2
+  assert.ok(ev < meanWave * ceiling,
     `expected value ${ev.toFixed(0)} is ${(ev / meanWave * 100).toFixed(0)}% of a wave's income; ` +
-    'that is an economy rather than a flutter')
+    (overtuned
+      ? 'past even the deliberate overtune recorded in DESIGN.md'
+      : 'that is an economy rather than a flutter'))
+  if (overtuned) {
+    // The overtune is temporary by construction: the note has to say what the
+    // real target is, or "revisit later" never happens.
+    assert.match(design, /between 40 and 60/,
+      'the overtune note does not record the intended long-term target')
+  }
 
   const top = topPayout(outs)
   assert.ok(top >= cheapest, 'no ticket ever buying a tower removes the point')
-  assert.ok(top <= meanWave, `the top prize ${top} exceeds a whole wave's income (${meanWave.toFixed(0)})`)
+  // The jackpot is meant to be memorable and to change what the player does
+  // next, which means it has to be worth more than a wave. Bounded all the
+  // same, and bounded to the SAME written decision as the expected value: no
+  // note in DESIGN.md, no oversized prize.
+  const jackpotCeiling = overtuned ? meanWave * 3 : meanWave
+  assert.ok(top <= jackpotCeiling,
+    `the top prize ${top} is more than ${(jackpotCeiling / meanWave).toFixed(1)} waves of income ` +
+    `(${meanWave.toFixed(0)} each)`)
 
   // The big one has to be rare, or it is not the big one.
   const jackpot = outs.filter((o) => o.payout === top)

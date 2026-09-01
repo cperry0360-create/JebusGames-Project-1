@@ -2098,6 +2098,185 @@ async function run() {
     return
   }
 
+  if (scenario === 'rollspeed') {
+    for (const k of ['Title', 'Splash', 'Boot', 'Game', 'Hud', 'Loadout']) game.scene.stop(k)
+    game.scene.start('Credits')
+    await until(() => running('Credits'), 8000)
+    await sleep(300)
+    const sc = scene('Credits')
+    const C = (await import('./js/data/credits.json', { with: { type: 'json' } })).default
+    let bottom = 0
+    for (const o of sc.roll.list) {
+      if (!o.getBounds) continue
+      const b = o.getBounds()
+      bottom = Math.max(bottom, b.bottom - sc.roll.y)
+    }
+    const H = 720
+    const travel = bottom + H
+    note('roll height ' + Math.round(bottom) + 'px, travel ' + Math.round(travel) + 'px')
+    for (const secs of [50, 60, 70, 80, 90, 100]) {
+      note('   ' + String(secs).padStart(3) + 's -> ' + (travel / secs).toFixed(0) + ' px/sec' +
+        (secs === C.scrollSeconds ? '   <- configured' : ''))
+    }
+    // A 26px credit line occupies LINE_H = 46px, so this is how long one line
+    // is on screen at each speed.
+    note('one credit line is on screen for:')
+    for (const secs of [60, 75, 90]) {
+      note('   ' + secs + 's -> ' + ((H) / (travel / secs)).toFixed(1) + 's per screenful, ' +
+        (46 / (travel / secs)).toFixed(2) + 's per line')
+    }
+    return
+  }
+
+  if (scenario === 'fps') {
+    // Framerate with the scatter, the tavern ambience and a full wave.
+    g.status.peanuts = 99999
+    await build(3, 0)
+    await build(1, 1)
+    g.startWave()
+    await sleep(9000)
+    const sample = async (label) => {
+      const frames = []
+      let last = performance.now()
+      const t0 = performance.now()
+      while (performance.now() - t0 < 4000) {
+        await new Promise((r) => requestAnimationFrame(r))
+        const now = performance.now()
+        frames.push(now - last)
+        last = now
+      }
+      frames.sort((a, b) => a - b)
+      const mean = frames.reduce((a, b) => a + b, 0) / frames.length
+      const p95 = frames[Math.floor(frames.length * 0.95)]
+      note('  ' + label + ': ' + (1000 / mean).toFixed(1) + ' fps mean, worst 5% of frames ' +
+        p95.toFixed(1) + 'ms, ' + frames.length + ' frames')
+    }
+    note('viewport ' + VP.w + 'x' + VP.h)
+    note('scatter props on the board: ' + g.scatterCount)
+    note('enemies alive: ' + g.enemies.length + '  towers: ' + g.towers.length)
+    await sample('with scatter + ambience')
+
+    // The same board with the decoration hidden, so the cost is measured
+    // rather than asserted.
+    const deco = g.children.list.filter((o) => o.depth <= -900 + 3 && o.visible)
+    for (const o of deco) o.setVisible(false)
+    await sample('decoration hidden (' + deco.length + ' objects)')
+    for (const o of deco) o.setVisible(true)
+    return
+  }
+
+  if (scenario === 'tavern') {
+    // The glow and smoke coordinates were estimated off the painted plate, so
+    // they have to be looked at rather than trusted.
+    const cam = g.cameras.main
+    const M = (await import('./js/data/map.json', { with: { type: 'json' } })).default
+    const lights = M.ambient.lights
+    const cx = lights.reduce((a, l) => a + l.x, 0) / lights.length
+    const cy = lights.reduce((a, l) => a + l.y, 0) / lights.length
+    cam.centerOn(cx, cy - 20)
+    note('lights ' + lights.length + ' centred on ' + Math.round(cx) + ',' + Math.round(cy))
+    note('chimney ' + JSON.stringify(M.ambient.chimneys))
+    await sleep(400)
+    await shot('tavern-01-' + VP.w + 'x' + VP.h)
+    await sleep(2200)
+    await shot('tavern-02-smoke-' + VP.w + 'x' + VP.h)
+    // Alphas must be moving, and not in unison.
+    const glows = g.children.list.filter((o) => o.type === 'Image' && o.blendMode === 1)
+    note('additive glows on the board: ' + glows.length)
+    const a1 = glows.map((o) => o.alpha.toFixed(3))
+    await sleep(500)
+    const a2 = glows.map((o) => o.alpha.toFixed(3))
+    note('alphas moved: ' + (a1.join() !== a2.join() ? 'yes' : 'NO *** static ***'))
+    note('all in unison: ' + (new Set(a2).size <= 1 ? 'YES *** they should differ ***' : 'no, ' + new Set(a2).size + ' distinct'))
+    note('alpha range now ' + Math.min(...glows.map((o) => o.alpha)).toFixed(2) +
+      '..' + Math.max(...glows.map((o) => o.alpha)).toFixed(2))
+    return
+  }
+
+  if (scenario === 'everyloadout') {
+    // EVERY hero, EVERY tower and EVERY special, each one forced into both
+    // slots of its row so it is measured in the narrowest card it can get.
+    for (const k of ['Title', 'Splash', 'Credits', 'Boot', 'Game', 'Hud']) game.scene.stop(k)
+    const RS = await import('./js/systems/RunState.js')
+    const towers = Object.keys((await import('./js/data/towers.json', { with: { type: 'json' } })).default)
+    const abil = (await import('./js/data/abilities.json', { with: { type: 'json' } })).default
+    const heroes = Object.keys((await import('./js/data/heroes.json', { with: { type: 'json' } })).default)
+    const specials = Object.keys(abil)
+
+    let combos = 0
+    const bad = []
+    const table = []
+
+    const render = async (hero, tp, sp) => {
+      RS.setRunState({ heroId: hero, openingTowers: tp, abilities: sp })
+      game.scene.stop('Loadout')
+      game.scene.start('Loadout')
+      await until(() => running('Loadout'), 6000)
+      await sleep(50)
+      combos++
+      const sc = scene('Loadout')
+      for (const c of sc.cards) {
+        // Measured against the PAINTED FRAME's inner edge, not the backing
+        // rectangle: the backing sits 5px inside the box, the nine-slice's
+        // corners reach much further, and text can clear one and sit on the
+        // other. That gap is why three passes of this "verified clean".
+        const plate = c.parts.find((o) => o.type === 'Rectangle' && o.getBounds)
+        if (!plate) continue
+        const pb = plate.getBounds()
+        const inset = sc.frameInsetFor(pb.width + 10)
+        const safe = {
+          x: pb.x - 5 + inset.left, right: pb.right + 5 - inset.right,
+          y: pb.y - 5 + inset.top, bottom: pb.bottom + 5 - inset.bottom,
+        }
+        const kids = c.face.list || []
+        const icons = kids.filter((o) => o.type === 'Image' || o.type === 'Sprite')
+        for (const o of kids) {
+          if (o.type !== 'Text' || String(o.text ?? '').trim() === '') continue
+          const bb = o.getBounds()
+          const label = JSON.stringify(String(o.text).slice(0, 30))
+          const over = []
+          if (bb.x < safe.x - 1) over.push('LEFT by ' + Math.round(safe.x - bb.x))
+          if (bb.right > safe.right + 1) over.push('RIGHT by ' + Math.round(bb.right - safe.right))
+          if (bb.bottom > safe.bottom + 1) over.push('BOTTOM by ' + Math.round(bb.bottom - safe.bottom))
+          if (bb.y < safe.y - 1) over.push('TOP by ' + Math.round(safe.y - bb.y))
+          for (const ic of icons) {
+            const ib = ic.getBounds()
+            if (bb.x < ib.right - 1 && bb.right > ib.x + 1 && bb.y < ib.bottom - 1 && bb.bottom > ib.y + 1) {
+              over.push('OVER THE ICON')
+            }
+          }
+          if (over.length) bad.push([hero, tp[0], sp[0]].join('/') + '  ' + label + '  ' + over.join(', '))
+          const lines = o.getWrappedText ? o.getWrappedText().length : 1
+          table.push({ what: [hero, tp[0], sp[0]].join('/'), text: String(o.text), lines, h: Math.round(bb.height), w: Math.round(bb.width) })
+        }
+      }
+    }
+
+    for (const h of heroes) await render(h, [towers[0], towers[1]], [specials[0], specials[1]])
+    for (const t of towers) await render(heroes[0], [t, t], [specials[0], specials[1]])
+    for (const sp of specials) await render(heroes[0], [towers[0], towers[1]], [sp, sp])
+
+    {
+      const sc = scene('Loadout')
+      const plate = sc.cards[1].parts.find((o) => o.type === 'Rectangle' && o.getBounds)
+      const pb = plate.getBounds()
+      const inset = sc.frameInsetFor(pb.width + 10)
+      note('card box w ' + Math.round(pb.width + 10) +
+        '  painted frame reaches in L' + inset.left.toFixed(1) + ' R' + inset.right.toFixed(1) +
+        ' T' + inset.top.toFixed(1) + ' B' + inset.bottom.toFixed(1) +
+        '  (the old pad was 9)')
+    }
+    note('viewport ' + VP.w + 'x' + VP.h)
+    note('combinations rendered: ' + combos +
+      '  (' + heroes.length + ' heroes + ' + towers.length + ' towers + ' + specials.length + ' specials)')
+    const worst = table.slice().sort((x, y) => y.lines - x.lines || y.w - x.w).slice(0, 6)
+    note('longest rendered bodies:')
+    for (const w of worst) note('   ' + w.lines + ' lines, ' + w.h + 'px tall, ' + w.w + 'px wide  ' + w.what + '  ' + JSON.stringify(w.text.slice(0, 46)))
+    note('OVERFLOWS: ' + (bad.length ? bad.length : 'none'))
+    for (const b of bad.slice(0, 16)) note('   ' + b)
+    return
+  }
+
   if (scenario === 'loadout') {
     // The loadout screen, measured rather than eyeballed.
     // Game and Hud too: they render AFTER Loadout in the scene order, so if
