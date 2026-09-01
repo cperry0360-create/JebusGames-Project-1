@@ -27,7 +27,9 @@ export class Tower extends Phaser.GameObjects.Container {
   private pendingSpec: string | null = null
 
   private readonly turret: Phaser.GameObjects.Sprite
-  private readonly shadow: Phaser.GameObjects.Image
+  /** Not readonly: a tower with tier art replaces its shadow when it grows,
+   *  because a taller building's footing is not the same width. */
+  private shadow: Phaser.GameObjects.Image
   private cooldown = 0
   /** Seconds left on the tier currently going up, or 0 when it is finished. */
   private buildLeft = 0

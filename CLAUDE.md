@@ -61,6 +61,17 @@ After any re-export, run `python3 tools/measure_art.py` and update
 world pixels and survives a re-export untouched, so leave it alone unless the
 art is meant to change size.
 
+## Typechecking
+
+`npm install` fails in the agent environment (the registry returns 403), so
+there is no `node_modules` and `tsc` cannot resolve `phaser`. Every file that
+imports it loses its base class and about 165 cascade errors fall out. Running
+`tsc` and reading the output tells you nothing.
+
+Use `sh tools/tsdiff.sh <known-green-commit>` instead. It typechecks the
+working tree and a commit CI already accepted, and reports only the
+difference. Two real errors reached CI before this existed.
+
 ## Conventions
 
 - Prefer small, readable modules over clever abstractions
