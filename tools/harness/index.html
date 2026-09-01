@@ -2610,6 +2610,106 @@ async function run() {
     return
   }
 
+  if (scenario === 'pixels') {
+    // RENDER-QUALITY DIAGNOSTIC. Reports only; changes nothing.
+    const c = game.canvas, r = c.getBoundingClientRect()
+    note('=== 1. CONFIG ===')
+    const cfg = game.config
+    note('  renderer: ' + (game.renderer.type === Phaser.WEBGL ? 'WEBGL' : 'CANVAS'))
+    note('  pixelArt: ' + cfg.pixelArt + '   antialias: ' + cfg.antialias +
+      '   antialiasGL: ' + cfg.antialiasGL)
+    note('  roundPixels: ' + cfg.roundPixels + '   mipmapFilter: ' +
+      JSON.stringify(cfg.mipmapFilter))
+    note('  scale mode: ' + cfg.scaleMode + ' (RESIZE=' + Phaser.Scale.RESIZE + ')' +
+      '   autoRound: ' + cfg.autoRound)
+    note('  config.resolution: ' + cfg.resolution + '   (Phaser ' + Phaser.VERSION + ')')
+
+    note('=== 2. CANVAS vs DEVICE PIXELS ===')
+    note('  devicePixelRatio: ' + window.devicePixelRatio)
+    note('  canvas backing store: ' + c.width + 'x' + c.height)
+    note('  canvas CSS size:      ' + Math.round(r.width) + 'x' + Math.round(r.height))
+    note('  game.scale: ' + game.scale.width + 'x' + game.scale.height +
+      '  displaySize ' + Math.round(game.scale.displaySize.width) + 'x' +
+      Math.round(game.scale.displaySize.height))
+    const backingPerCss = c.width / Math.max(1, r.width)
+    note('  BACKING STORE PER CSS PIXEL: ' + backingPerCss.toFixed(3) +
+      '   (device wants ' + window.devicePixelRatio + ')')
+    note('  => rendering at ' + (backingPerCss / window.devicePixelRatio * 100).toFixed(0) +
+      '% of the device\'s physical resolution')
+
+    note('=== 3. FILTERING AND MIPMAPS ===')
+    const gl = game.renderer.gl
+    note('  renderer mipmapFilter: ' + game.renderer.mipmapFilter +
+      '  (NEAREST=' + (gl ? gl.NEAREST : '?') + ', LINEAR=' + (gl ? gl.LINEAR : '?') +
+      ', LINEAR_MIPMAP_LINEAR=' + (gl ? gl.LINEAR_MIPMAP_LINEAR : '?') + ')')
+    const sample = ['hero-cory', 'turret-ledger', 'enemy-filer', 'map-level1',
+      'scatter-rock-large', 'ui-plate-wide']
+    for (const k of sample) {
+      if (!game.textures.exists(k)) { note('  ' + k + ': NOT LOADED'); continue }
+      const src = game.textures.get(k).source[0]
+      note('  ' + k.padEnd(20) + ' ' + src.width + 'x' + src.height +
+        '  scaleMode=' + src.scaleMode + ' (LINEAR=' + Phaser.ScaleModes.LINEAR +
+        ', NEAREST=' + Phaser.ScaleModes.NEAREST + ')' +
+        '  mipmaps=' + (src.glTexture && src.isPowerOf2 ? 'possible' : 'no (NPOT)') +
+        '  POT=' + src.isPowerOf2)
+    }
+
+    note('  GL context: ' + (window.WebGL2RenderingContext && gl instanceof WebGL2RenderingContext
+      ? 'WebGL2 (NPOT mipmaps ALLOWED)' : 'WebGL1 (NPOT mipmaps FORBIDDEN by spec)'))
+    let npot = 0, tot = 0
+    for (const k of game.textures.getTextureKeys()) {
+      const src = game.textures.get(k).source[0]
+      if (!src) continue
+      tot++
+      if (!src.isPowerOf2) npot++
+    }
+    note('  textures: ' + tot + ' total, ' + npot + ' non-power-of-two')
+
+    note('=== 4/5. SOURCE PIXELS vs SCREEN PIXELS ===')
+    const disp = (await import('./js/data/display.json', { with: { type: 'json' } })).default
+    const art = (await import('./js/data/art.json', { with: { type: 'json' } })).default
+    const Z = disp.camera
+    note('  zoom band: min ' + Z.minZoom + '  default ' + Z.defaultZoom + '  max ' + Z.maxZoom)
+    // The map plate is not in art.render and has no displayHeight, so it fell
+    // out of the table below. It is the single biggest thing on screen.
+    {
+      const ms = game.textures.get('map-level1').source[0]
+      const g2 = scene('Game')
+      const plate = g2 && g2.children.list.find((o) => o.texture && o.texture.key === 'map-level1')
+      const worldW = plate ? plate.displayWidth : disp.width
+      note('  MAP PLATE  source ' + ms.width + 'x' + ms.height + '  drawn at ' +
+        Math.round(worldW) + ' world px')
+      for (const [lbl, z] of [['min', Z.minZoom], ['default', Z.defaultZoom], ['max', Z.maxZoom]]) {
+        const onScreen = worldW * z
+        const ratio = onScreen / ms.width
+        note('    @' + lbl.padEnd(8) + ' ' + Math.round(onScreen) + 'px on screen from ' +
+          ms.width + 'px of source = ' + ratio.toFixed(2) + 'x' +
+          (ratio > 1 ? '  *** MAGNIFIED ***' : ''))
+      }
+    }
+    note('  key                  source   world   screen@min  @default  @max   worst ratio')
+    const rows = []
+    for (const [k, rr] of Object.entries(art.render)) {
+      if (!rr.displayHeight || !game.textures.exists(k)) continue
+      const srcH = game.textures.get(k).source[0].height
+      const atMax = rr.displayHeight * Z.maxZoom
+      const ratio = atMax / srcH
+      rows.push({ k, srcH, world: rr.displayHeight,
+        mn: rr.displayHeight * Z.minZoom, df: rr.displayHeight * Z.defaultZoom, mx: atMax, ratio })
+    }
+    rows.sort((a, b) => b.ratio - a.ratio)
+    for (const q of rows) {
+      note('  ' + q.k.padEnd(20) + ' ' + String(q.srcH).padStart(5) + '  ' +
+        q.world.toFixed(0).padStart(6) + '  ' + q.mn.toFixed(0).padStart(9) + '  ' +
+        q.df.toFixed(0).padStart(8) + '  ' + q.mx.toFixed(0).padStart(5) + '   ' +
+        q.ratio.toFixed(2) + (q.ratio > 1 ? '  *** MAGNIFIED ***' : ''))
+    }
+    const mag = rows.filter((q) => q.ratio > 1)
+    note('  sprites magnified beyond their source at max zoom: ' + mag.length +
+      (mag.length ? ' -> ' + mag.map((q) => q.k).join(', ') : ''))
+    return
+  }
+
   if (scenario === 'startrun') {
     // Actually press BEGIN THE RUN, on the longest loadout there is, at the
     // smallest viewport. Not "the button is on screen" — the button works and
