@@ -9,11 +9,15 @@ rm -f "$H/shots/report.json"
 python3 "$H/server.py" wait "$WAIT" &
 SRV=$!
 sleep 1
-# DPR=3 sh run.sh ... runs at a retina device ratio. The default of 1 is a
-# blind spot with a history: it hid the modal scrim covering only the top-left
-# quadrant, and it hid the ring anchor landing 401px from its pad. Anything
-# that mixes canvas pixels with CSS pixels is invisible at 1.
-DPRFLAG=""; [ -n "$DPR" ] && DPRFLAG="--force-device-scale-factor=$DPR"
+# THE DEFAULT IS 3, and it used to be 1. That default was a blind spot with a
+# history: it hid the modal scrim covering only the top-left quadrant, and it
+# hid the build ring landing 401px from its pad. Both are invisible at 1,
+# because that is the one ratio where canvas pixels and CSS pixels are the same
+# number. A phone is not that ratio.
+#
+# DPR=1 sh run.sh ... to go back, and both.sh runs a scenario at 1 AND 3 and
+# fails if the two disagree about anything in screen space.
+DPRFLAG="--force-device-scale-factor=${DPR:-3}"
 "${CHROMIUM:-/opt/pw-browsers/chromium}" --headless=new --disable-gpu --no-sandbox --hide-scrollbars --autoplay-policy=no-user-gesture-required \
   --window-size=1400,900 --enable-logging=stderr --v=0 $DPRFLAG \
   --user-data-dir="$H/profile" \

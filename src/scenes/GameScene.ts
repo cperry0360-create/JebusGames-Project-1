@@ -61,7 +61,7 @@ import { barWidth, regions, slotDefs, type BarMetrics } from '../systems/Ability
 import { safeAreaInsets } from '../systems/SafeArea.ts'
 import { onSceneResize, sceneIsLive } from '../systems/SceneEvents.ts'
 import { musicForScene } from '../systems/Music.ts'
-import { deviceScale, fitUiCamera, viewH, viewW } from '../systems/Resolution.ts'
+import { deviceScale, fitUiCamera, viewH, viewW, worldToScreen } from '../systems/Resolution.ts'
 
 /** The HUD's layout constants, shared with HudScene so both agree. */
 const LAYOUT = PRESENTATION.hud.layout
@@ -1249,11 +1249,10 @@ this.armReadyCountdown()
   /** The pad or tower's position, on the glass, right now. */
   private padAnchor(spot: BuildSpot): { x: number; y: number } | null {
     if (!this.build.isFree(spot.index)) return null
-    const cam = this.cameras.main
-    return {
-      x: (spot.x - cam.worldView.x) * cam.zoom + cam.x,
-      y: (spot.y - cam.worldView.y) * cam.zoom + cam.y,
-    }
+    // CSS pixels, which is what the ring's geometry is written in. Doing this
+    // by hand here returned canvas pixels and put the ring 401px from the pad
+    // on a dpr-3 phone; see worldToScreen.
+    return worldToScreen(this, spot.x, spot.y)
   }
 
   /**
@@ -1576,11 +1575,7 @@ this.armReadyCountdown()
     // A sold tower is gone from the list, and its ring must close rather
     // than hang over an empty pad.
     if (!this.towers.includes(tower)) return null
-    const cam = this.cameras.main
-    return {
-      x: (tower.x - cam.worldView.x) * cam.zoom + cam.x,
-      y: (tower.y - cam.worldView.y) * cam.zoom + cam.y,
-    }
+    return worldToScreen(this, tower.x, tower.y)
   }
 
   /** Public so a harness run can drive the branch without the ring. */

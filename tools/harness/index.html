@@ -56,6 +56,7 @@ setRunState({
 // layout collision this harness exists to find.
 // The boot wiring main.ts does, so the harness drives the shipping game and
 // not a version of it with the lifecycle and audio guards missing.
+const RES = await import('./js/systems/Resolution.js')
 const { guardAudioPromises } = await import('./js/systems/Audio.js')
 guardAudioPromises()
 const game = new Phaser.Game(gameConfig)
@@ -5506,6 +5507,67 @@ async function run() {
 }
 
 try { await run() } catch (e) { note('DIRECTOR ERROR: ' + e.message + ' | ' + String(e.stack).slice(0, 400)) }
+
+/**
+ * THE DEVICE-RATIO FINGERPRINT, emitted after every scenario.
+ *
+ * The harness ran at devicePixelRatio 1 by default and that blind spot hid two
+ * separate bugs — the modal scrim covering a quarter of the screen, and the
+ * build ring landing 401px from its pad. Both were the same confusion: canvas
+ * pixels compared against CSS pixels, identical numbers at dpr 1 and three
+ * times apart at 3.
+ *
+ * Remembering to run a dpr-3 pass is not a fix, so this is not something to
+ * remember. Every run ends by printing the mapping from world and layout
+ * coordinates into screen space, in CSS pixels, and `both.sh` runs the
+ * scenario at 1 and at 3 and FAILS if the two disagree. The property is
+ * simply: screen space must not depend on the device ratio.
+ *
+ * Deliberately state-independent. The camera is parked on a fixed point at a
+ * fixed zoom first, because the game itself is not deterministic across two
+ * runs at different rasterising speeds — but this mapping is a function of the
+ * viewport and the ratio alone, which is exactly what is being compared.
+ */
+function fingerprint() {
+  const out = []
+  const fp = (k, v) => out.push('FP ' + k + ' = ' + v)
+  const r2 = (n) => (Math.round(n * 100) / 100).toFixed(2)
+  const gs = scene('Game')
+  fp('viewport', VP.w + 'x' + VP.h)
+  try {
+    const R = RES
+    fp('viewW/viewH', gs ? r2(R.viewW(gs)) + ',' + r2(R.viewH(gs)) : 'no game scene')
+    if (gs) {
+      // Parked, so the two runs compare the same camera rather than whatever
+      // each happened to be looking at when it finished.
+      const cam = gs.cameras.main
+      gs.rig && gs.rig.setEnabled(false)
+      cam.setZoom(1.72 * R.deviceScale())
+      cam.centerOn(640, 360)
+      cam.preRender()
+      for (const [wx, wy] of [[0, 0], [320, 180], [640, 360], [960, 540], [1280, 720]]) {
+        const p = R.worldToScreen(gs, wx, wy)
+        fp('world ' + wx + ',' + wy, r2(p.x) + ',' + r2(p.y))
+      }
+      const ui = gs.cameras.cameras.find((c) => c.name === 'ui')
+      if (ui) {
+        fp('uiCam view', [ui.worldView.x, ui.worldView.y, ui.worldView.width, ui.worldView.height]
+          .map(r2).join(','))
+      }
+    }
+    const hud = scene('Hud')
+    if (hud && hud.layout) {
+      for (const k of ['counters', 'startButton', 'messageRow', 'heroRow', 'abilities', 'mute', 'pause']) {
+        const r = hud.layout[k]
+        if (r) fp('hud ' + k, [r.x, r.y, r.width, r.height].map(r2).join(','))
+      }
+    }
+  } catch (e) {
+    fp('ERROR', e.message)
+  }
+  for (const line of out) note(line)
+}
+fingerprint()
 
 const gs = scene('Game')
 if (bootBroken) log.unshift('*** BOOT FAILED — see below ***')

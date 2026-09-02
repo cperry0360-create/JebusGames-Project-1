@@ -89,6 +89,42 @@ export function applyResolution(game: Phaser.Game): void {
 }
 
 /**
+ * A world point, as the CSS pixels every layout in the game is written in.
+ *
+ * THIS EXISTS BECAUSE ITS ABSENCE COST THREE BUGS. The arithmetic is four
+ * terms long and every call site wrote it out by hand:
+ *
+ *     (wx - cam.worldView.x) * cam.zoom + cam.x
+ *
+ * That is correct, and it yields CANVAS pixels — the world camera's zoom
+ * carries the device ratio. Everything it was then compared against —
+ * `viewW`/`viewH`, the HUD rectangles, the ring's usable area — is in CSS
+ * pixels. At devicePixelRatio 1 the two are the same number and every check
+ * passed; at 3 the anchor came out three times too large and the build ring
+ * was clamped to the edge of the screen, 401px from the pad it belonged to.
+ *
+ * The same confusion, in the other direction, put the modal scrim over the
+ * top-left quadrant, and, in a third form, made a harness probe report a
+ * correctly-placed tower as off screen.
+ *
+ * So the conversion lives here, beside `viewW` and `viewH`, and returns what
+ * they return. A call site that wants screen space now has one thing to reach
+ * for and no arithmetic to get wrong.
+ */
+export function worldToScreen(
+  scene: Phaser.Scene,
+  wx: number,
+  wy: number,
+  cam: Phaser.Cameras.Scene2D.Camera = scene.cameras.main,
+): { x: number; y: number } {
+  const dpr = deviceScale()
+  return {
+    x: ((wx - cam.worldView.x) * cam.zoom + cam.x) / dpr,
+    y: ((wy - cam.worldView.y) * cam.zoom + cam.y) / dpr,
+  }
+}
+
+/**
  * A UI camera that renders a CSS-pixel layout at full device resolution.
  *
  * Zoom is about the camera's centre, so centring it on the middle of the

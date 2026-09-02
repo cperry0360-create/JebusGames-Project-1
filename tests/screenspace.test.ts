@@ -15,6 +15,19 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
 const read = (f: string) => readFileSync(url(f), 'utf8')
 
 /**
+ * ONE BUG CLASS: canvas pixels compared against CSS pixels.
+ *
+ * The game has two units and they are the same number only at
+ * devicePixelRatio 1. `viewW`/`viewH`, every HUD rectangle and every layout
+ * constant are CSS pixels. Camera arithmetic — `(wx - cam.worldView.x) *
+ * cam.zoom` — yields canvas pixels, because the world camera's zoom carries
+ * the device ratio. Mixing them has cost three bugs so far: the modal scrim
+ * covering only the top-left quadrant, the build ring landing 401px from its
+ * pad, and a harness probe reporting a correctly-placed tower as off screen.
+ *
+ * This file guards the shapes that caused them. It was called scrim.test.ts
+ * when it only knew about the first.
+ *
  * The modal dim must cover the SCREEN, at every device pixel ratio.
  *
  * These are source-shape assertions, and they are deliberately narrow: the
@@ -35,6 +48,35 @@ const read = (f: string) => readFileSync(url(f), 'utf8')
  * These two tests guard the two shapes that caused it, so a reintroduction
  * fails in CI rather than on a phone.
  */
+
+test('a world point becomes screen space through one function', () => {
+  // The arithmetic is four terms long and every call site used to write it
+  // out. It is correct, and it returns CANVAS pixels — which is fine right up
+  // until the result is compared with something in CSS pixels, which is what
+  // every layout in the game is written in. At dpr 1 the two agree and every
+  // check passes; at 3 the build ring was clamped to the screen edge, 401px
+  // from the pad it belonged to.
+  const res = read('../src/systems/Resolution.ts')
+  assert.match(res, /export function worldToScreen\(/,
+    'there is still no world-to-screen helper, so every call site does it by hand')
+  // And it converts. A helper that returned canvas pixels would be the same
+  // bug with a nicer name on it.
+  assert.match(res, /\(\(wx - cam\.worldView\.x\) \* cam\.zoom \+ cam\.x\) \/ dpr/,
+    'worldToScreen does not divide by the device ratio, so it returns canvas pixels')
+
+  const offenders: string[] = []
+  for (const f of sourceFiles('../src')) {
+    if (f.endsWith('systems/Resolution.ts')) continue
+    const src = read(f)
+    src.split('\n').forEach((line, i) => {
+      if (/worldView\.[xy]\)\s*\*\s*cam\.zoom/.test(line)) {
+        offenders.push(`${f.replace('../', '')}:${i + 1}`)
+      }
+    })
+  }
+  assert.deepEqual(offenders, [],
+    'project a world point with worldToScreen; done by hand it returns canvas pixels')
+})
 
 test('nothing on the UI camera ignores camera scroll', () => {
   // setScrollFactor(0) is the wrong tool for screen space in GameScene. The UI
