@@ -49,10 +49,13 @@ test('saving a setting does not wipe the unlock', () => {
   // Audio owns volume and mute and writes the whole save object. Writing only
   // its own two fields would drop runsCleared on the first volume change.
   const audio = src('systems/Audio.ts')
-  const calls = audio.split('\n').filter((l) => l.includes('writeSave('))
+  // Matched across the whole CALL, not one line: a writer that names four
+  // fields is a multi-line call, and a line-by-line check reads its first line
+  // as a bare `writeSave({` and fails a writer that is perfectly correct.
+  const calls = audio.match(/writeSave\(\{[\s\S]*?\n  \}\)/g) ?? []
   assert.ok(calls.length > 0, 'Audio no longer writes the save; this test is checking nothing')
-  for (const line of calls) {
-    assert.match(line, /\.\.\.loadSave\(\)/,
-      `"${line.trim()}" replaces the whole save and would drop every field it does not name`)
+  for (const call of calls) {
+    assert.match(call, /\.\.\.loadSave\(\)/,
+      'a writeSave in Audio.ts replaces the whole save and would drop every field it does not name')
   }
 })

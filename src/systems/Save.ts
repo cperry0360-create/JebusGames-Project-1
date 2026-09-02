@@ -10,9 +10,23 @@
 
 const KEY = 'courjahan.save.v1'
 
+/** The three things the player can set the level of, independently. */
+export type Channel = 'sfx' | 'music' | 'voice'
+
 export interface SaveData {
-  /** Master volume, 0 to 1. */
+  /**
+   * Sound-effects volume, 0 to 1.
+   *
+   * Named `volume` because that is what it was when it was the only one, and
+   * renaming a saved key throws away every player's setting for the sake of a
+   * tidier name.
+   */
   volume: number
+  /** Music volume, 0 to 1. Separate, because music is the one thing a player
+   *  turns down without wanting to lose the game's own sounds. */
+  musicVolume: number
+  /** Voice-line volume, 0 to 1. */
+  voiceVolume: number
   muted: boolean
   /**
    * How many runs have been cleared, ever.
@@ -43,7 +57,8 @@ export interface SaveData {
 }
 
 export const DEFAULT_SAVE: SaveData = {
-  volume: 0.7, muted: false, runsCleared: 0, bannerPoints: 0, lastReport: '',
+  volume: 0.7, musicVolume: 1, voiceVolume: 1,
+  muted: false, runsCleared: 0, bannerPoints: 0, lastReport: '',
 }
 
 /** localStorage is small and shared; a report is truncated rather than
@@ -67,6 +82,12 @@ export function loadSave(): SaveData {
     const parsed = JSON.parse(raw) as Partial<SaveData>
     return {
       volume: clamp01(parsed.volume, DEFAULT_SAVE.volume),
+      // Both default to full rather than to the old single value. A save
+      // written before there were three sliders has one number in it, and it
+      // was the SFX slider — reusing it for music would silently move the
+      // music balance for everyone who had ever touched the old control.
+      musicVolume: clamp01(parsed.musicVolume, DEFAULT_SAVE.musicVolume),
+      voiceVolume: clamp01(parsed.voiceVolume, DEFAULT_SAVE.voiceVolume),
       muted: parsed.muted === true,
       runsCleared: count(parsed.runsCleared),
       bannerPoints: count(parsed.bannerPoints),

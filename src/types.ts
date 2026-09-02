@@ -397,6 +397,10 @@ export interface AudioCue {
   /** How long this cue actually sounds. Only needed when it runs longer than
    *  the default voice hold, which is every cue that is not a one-shot. */
   durationMs?: number
+  /** Silence at the head of the recording, in ms, measured off the file. A
+   *  caller that needs the first WORD to land on a moment starts the cue this
+   *  much earlier. */
+  leadInMs?: number
 }
 
 export interface AudioDef {

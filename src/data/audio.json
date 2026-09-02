@@ -256,6 +256,8 @@
       "format": "wav",
       "bus": "voice",
       "durationMs": 2200,
+      "leadInMs": 260,
+      "_leadInMs": "Silence at the head of the recording, measured off the file in 20ms windows: speech starts at 0.26s and the first syllable is the loudest window in the whole line. It is subtracted from the transformation delay so the WORD lands on the frame the SUV appears rather than 240ms ahead of it.",
       "_note": "Elijah. 2.2s at -2.5 dBFS peak, -17.3 dBFS over its loudest half. The longest cue in the game by a second, and it plays over the transformation sting and through the invulnerability window without being cut."
     },
     "politician": {

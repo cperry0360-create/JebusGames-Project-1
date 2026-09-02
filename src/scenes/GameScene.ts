@@ -31,7 +31,7 @@ import { unlockedTowerCount } from '../systems/Draft.ts'
 import { runState, setRunState } from '../systems/RunState.ts'
 import { castAbility } from '../systems/AbilityRunner.ts'
 import { PRESENTATION, floatingDamage, hitPause } from '../systems/Presentation.ts'
-import { play, playRotating, resetVoices } from '../systems/Audio.ts'
+import { cueLeadInMs, play, playRotating, resetVoices } from '../systems/Audio.ts'
 import { Enemy } from '../entities/Enemy.ts'
 import type { Blocker } from '../entities/Enemy.ts'
 import { Tower } from '../entities/Tower.ts'
@@ -358,6 +358,18 @@ export class GameScene extends Phaser.Scene {
       play(this, 'build')
       logEvent('hero', 'revived at the entrance')
       this.status.message = `${heroDef.name} is back on his feet.`
+    })
+    // The DAD MODE sting, on the frame the SUV appears rather than on the
+    // frame he starts changing. Once per run by construction: the
+    // transformation cannot re-arm inside an encounter.
+    //
+    // It follows the voice line rather than preceding it, which is what makes
+    // it step back for it — the duck only reaches a cue that STARTS during a
+    // line. See announceLastStand for the timing, and the voice bus in
+    // Audio.ts for the rule.
+    this.hero.on('transformed', () => {
+      play(this, 'last-stand', 0.85)
+      logEvent('hero', 'DAD MODE transformation complete')
     })
 
     // A floor rather than a constant: the opening instruction is to build a
@@ -2862,13 +2874,25 @@ this.armReadyCountdown()
     const s = PRESENTATION.shake
     this.cameras.main.flash(340, 255, 90, 60)
     this.cameras.main.shake(s.lastStandMs, s.lastStandIntensity)
-    // The line BEFORE the sting, deliberately. It runs 2.2 seconds, right
-    // through the transformation and the invulnerability window, and nothing
-    // cuts it — but the duck only reaches what starts after a line, so the
-    // sting has to follow the words to step back for them. See the voice bus
-    // in Audio.ts.
-    play(this, 'dadmode-voice')
-    play(this, 'last-stand', 0.85)
+
+    // THE LINE LANDS ON THE SUV, not on the flash.
+    //
+    // The sequence was: everything at once on the frame he drops to 25%, and
+    // the SUV appearing 500ms later. So the words were 240ms ahead of the only
+    // thing on screen they are about — he was still a man fading out while the
+    // line was already talking.
+    //
+    // Measured off the recording in 20ms windows: 260ms of silence, then
+    // speech, and that first syllable is the loudest window in the whole line.
+    // Starting the cue at transformPauseMs minus that lead-in puts the WORD on
+    // the frame the vehicle appears.
+    const lead = Math.max(0, ls.transformPauseMs - cueLeadInMs('dadmode-voice'))
+    this.time.delayedCall(lead, () => play(this, 'dadmode-voice'))
+
+    // The sting is not played here. It lands ON the transformation, which is
+    // 500ms away, so it hangs off the hero's own 'transformed' event —
+    // registered in create() beside 'revived'. Two timers set to the same
+    // number is not synchronisation, it is a coincidence maintained by hand.
     // The world stops for a moment. Everything else here — flash, shake,
     // sting, banner — was already firing and it still went past unnoticed,
     // because the wave carried on walking straight through it. A held beat is

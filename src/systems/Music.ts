@@ -29,7 +29,8 @@ import {
 export interface TrackDef {
   file: string
   format: string
-  /** Levelled by ear against the other tracks. Multiplies the player's volume. */
+  /** Levelled by MEASUREMENT against the other tracks — the RMS of each
+   *  track's loudest half. Multiplies busGain and the player's music slider. */
   gain: number
   loop: boolean
   /** Silence between the end and the restart, for a track that fades out and
@@ -47,6 +48,9 @@ export interface TrackDef {
 const MUSIC = musicData as unknown as {
   root: string
   crossfadeMs: number
+  /** Every track, multiplied by this before the player's music slider. It is
+   *  where the balance against the voice lines lives; see music.json. */
+  busGain?: number
   tracks: Record<string, TrackDef>
   screens: Record<string, string>
 }
@@ -143,12 +147,19 @@ function urlFor(def: TrackDef): string {
 }
 
 function applyLevels(): void {
-  const master = isMuted() || broken ? 0 : getVolume()
+  // THE MUSIC'S OWN SLIDER, not the effects'. Music is the one thing a player
+  // turns down without wanting to lose the game's own sounds.
+  const master = isMuted() || broken ? 0 : getVolume('music')
   for (let i = 0; i < els.length; i++) {
     const el = els[i]
     const d = mix.decks[i]!
     if (!el) continue
-    const gain = d.id ? (MUSIC.tracks[d.id]?.gain ?? 1) : 1
+    // The bus sits under the slider so the slider can be at 100% and still be
+    // balanced. Measured: the two tracks are levelled with each other at
+    // -15.4 dBFS and the four voice lines land at -15.7, so music was three
+    // tenths of a decibel LOUDER than a person talking. See music.json.
+    const bus = MUSIC.busGain ?? 1
+    const gain = (d.id ? (MUSIC.tracks[d.id]?.gain ?? 1) : 1) * bus
     // The ceiling differs by path. A gain node can go above 1, which is what
     // lets a quiet MIDI render sit level with a mastered track; an element's
     // volume throws above 1. Clamped per path rather than to the lower of the

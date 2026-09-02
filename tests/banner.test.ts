@@ -132,13 +132,15 @@ test('Banner Points persist, and nothing else in the save can wipe them', () => 
   assert.match(save, /bannerPoints: 0/, 'a fresh save does not start the total at zero')
   // Every writer must preserve the fields it does not own, or the first volume
   // change after a run would spend the player's whole history.
-  const writers = save.split('\n').filter((l) => l.includes('writeSave({'))
-  for (const line of writers) {
-    assert.match(line, /\.\.\.save|\.\.\.loadSave\(\)/,
-      `"${line.trim()}" replaces the whole save and would drop the Banner total`)
+  // Matched across the whole CALL, not one line: a writer that names four
+  // fields is a multi-line call, and a line-by-line check reads its first line
+  // as a bare `writeSave({` and fails a writer that is perfectly correct.
+  for (const call of save.match(/writeSave\(\{[\s\S]*?\}\)/g) ?? []) {
+    assert.match(call, /\.\.\.save|\.\.\.loadSave\(\)/,
+      `a writer in Save.ts replaces the whole save and would drop the Banner total`)
   }
   const audio = src('systems/Audio.ts')
-  for (const line of audio.split('\n').filter((l) => l.includes('writeSave('))) {
+  for (const line of audio.match(/writeSave\(\{[\s\S]*?\n  \}\)/g) ?? []) {
     assert.match(line, /\.\.\.loadSave\(\)/, `"${line.trim()}" would drop the Banner total`)
   }
 })

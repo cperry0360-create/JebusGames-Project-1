@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import type { AudioDef } from '../types.ts'
 import audioData from '../data/audio.json'
 import { logEvent } from './Diagnostics.ts'
-import { loadSave, writeSave } from './Save.ts'
+import { type Channel, loadSave, writeSave } from './Save.ts'
 import { stamped } from './Build.ts'
 
 /**
@@ -41,7 +41,16 @@ export type Cue = string
  *  still sounding as free. */
 const VOICE_MS = 900
 
-let volume = 0.7
+/**
+ * THREE CHANNELS, not one master.
+ *
+ * Music is the one thing a player turns down without wanting to lose the
+ * game's own sounds, and a recorded line is a different kind of sound again —
+ * it is a person talking, and it is the thing the mix has to protect. They are
+ * set independently and stored independently. `sfx` keeps the old save key,
+ * because renaming it would throw away every player's setting.
+ */
+const volumes: Record<Channel, number> = { sfx: 0.7, music: 1, voice: 1 }
 let muted = false
 /** Cue -> timestamps of the copies currently counted as sounding. */
 const voices = new Map<Cue, number[]>()
@@ -171,7 +180,9 @@ function contextOf(scene: Phaser.Scene | Phaser.Game): AudioContext | undefined 
 
 export function initAudio(): void {
   const save = loadSave()
-  volume = save.volume
+  volumes.sfx = save.volume
+  volumes.music = save.musicVolume
+  volumes.voice = save.voiceVolume
   muted = save.muted
 }
 
@@ -255,17 +266,36 @@ export function missingCues(scene: Phaser.Scene): string[] {
   return CUE_KEYS.filter((cue) => !scene.cache.audio.exists(cue))
 }
 
-export function getVolume(): number {
-  return volume
+/**
+ * Silence at the head of a recording, in milliseconds.
+ *
+ * Zero for a synthesised sting, which starts on its first sample. A voice line
+ * does not: the DAD MODE line has 260ms of room tone before the first
+ * syllable, and a caller that needs the WORD to land on a particular frame has
+ * to start the cue that much earlier. Measured off the file and recorded in
+ * the manifest beside the cue, not guessed at the call site.
+ */
+export function cueLeadInMs(cue: Cue): number {
+  return AUDIO.cues[cue]?.leadInMs ?? 0
+}
+
+export function getVolume(channel: Channel = 'sfx'): number {
+  return volumes[channel]
 }
 
 export function isMuted(): boolean {
   return muted
 }
 
-export function setVolume(v: number): void {
-  volume = Math.max(0, Math.min(1, v))
-  writeSave({ ...loadSave(), volume, muted })
+export function setVolume(v: number, channel: Channel = 'sfx'): void {
+  volumes[channel] = Math.max(0, Math.min(1, v))
+  writeSave({
+    ...loadSave(),
+    volume: volumes.sfx,
+    musicVolume: volumes.music,
+    voiceVolume: volumes.voice,
+    muted,
+  })
   onMixChanged?.()
 }
 
@@ -291,7 +321,13 @@ export function onAudioGesture(fn: (() => void) | null): void {
 
 export function setMuted(v: boolean): void {
   muted = v
-  writeSave({ ...loadSave(), volume, muted })
+  writeSave({
+    ...loadSave(),
+    volume: volumes.sfx,
+    musicVolume: volumes.music,
+    voiceVolume: volumes.voice,
+    muted,
+  })
   // The soundtrack has its own gain and its own elements, so it does not go
   // quiet just because Phaser's sounds do.
   onMixChanged?.()
@@ -321,9 +357,14 @@ function claimVoice(cue: Cue, cap: number, holdMs: number): boolean {
  * in audio.json.
  */
 export function play(scene: Phaser.Scene, cue: Cue, scale = 1): void {
-  if (muted || volume <= 0 || unavailable) return
+  if (muted || unavailable) return
   const def = AUDIO.cues[cue]
   if (!def) return
+  // The channel this cue rides. A player who has turned the effects down has
+  // not turned the voice lines down, and the check has to be per channel or
+  // one slider at zero silences the others.
+  const channel: Channel = def.bus === VOICE_BUS ? 'voice' : 'sfx'
+  if (volumes[channel] <= 0) return
   // A cue whose file did not load is skipped BEFORE it claims a voice, so a
   // missing file cannot silently hold a capped cue's only slot. Boot has
   // already said which ones those are.
@@ -344,7 +385,7 @@ export function play(scene: Phaser.Scene, cue: Cue, scale = 1): void {
     const isVoice = def.bus === VOICE_BUS
     if (isVoice) voiceUntil = Math.max(voiceUntil, now + (def.durationMs ?? VOICE_MS))
     const duck = !isVoice && now < voiceUntil ? (AUDIO.voiceDuck ?? 1) : 1
-    scene.sound.play(cue, { volume: def.gain * bus * duck * scale * volume })
+    scene.sound.play(cue, { volume: def.gain * bus * duck * scale * volumes[channel] })
   } catch {
     // A cue that will not play is not worth a crash.
   }

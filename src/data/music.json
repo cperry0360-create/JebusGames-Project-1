@@ -2,6 +2,8 @@
   "_note": "The soundtrack: what plays where, how loud, and who it belongs to. One file for both, deliberately — a track that plays and has no attribution recorded is a licence breach, and keeping the two together makes that impossible to do by accident.",
   "root": "assets/audio/music/",
   "crossfadeMs": 1000,
+  "busGain": 0.282,
+  "_busGain": "Every track, multiplied by this before the player's music slider. MEASURED: the two tracks are levelled with each other at -15.4 dBFS out, and the four voice lines land at -15.7 — so music was three tenths of a decibel LOUDER than a person talking, which is why it buried them. 0.282 is -11 dB, putting music at -26.4 dBFS and roughly eleven decibels under the voice. It lives here rather than in the slider so the slider can sit at 100% and still be balanced: a control that has to default to 28% to sound right reads as broken.",
   "_volumes": "Levelled against each other, not by one shared number. Matched by MEASUREMENT rather than by ear — loudHalfRmsDb is the RMS of each track's loudest half in 300ms windows, which is roughly what the ear responds to. gain multiplies the player's own music volume. Measured by the harness's `levels` scenario, which decodes the real files in Chromium.",
   "tracks": {
     "battle": {

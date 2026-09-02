@@ -472,6 +472,11 @@ export class Hero extends Phaser.GameObjects.Container {
       this.scene.cameras.main.shake(160, 0.008)
       this.transforming = false
       this.drawBar()
+      // THE MOMENT OF THE TRANSFORMATION, announced rather than left to two
+      // timers that happen to agree. Everything that has to land ON the SUV
+      // appearing — the sting, and the voice line's first word, which is
+      // scheduled to arrive here — hangs off this.
+      this.emit('transformed')
     })
     this.drawBar()
   }

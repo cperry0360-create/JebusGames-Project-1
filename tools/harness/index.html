@@ -2904,6 +2904,216 @@ async function run() {
     return
   }
 
+  if (scenario === 'facing') {
+    // WHICH WAY CORY IS POINTING, watched rather than reasoned about.
+    //
+    // The rule asked for: face the direction of travel while moving, face the
+    // target while attacking, target beats movement, and keep the last facing
+    // when idle. The art is drawn facing LEFT — checked by eye against
+    // hero_cory_walk_1.png — so `flipX` true means he is facing RIGHT.
+    const hero = g.hero
+    const wrong = []
+    const sample = (label, expectRight, extra) => {
+      const right = hero.body_.flipX === true
+      const ok = expectRight === null || right === expectRight
+      if (!ok) wrong.push(label)
+      note('  ' + label.padEnd(34) + 'facing ' + (right ? 'RIGHT' : 'LEFT ') +
+        (expectRight === null ? '' : (ok ? '  correct' : '  *** WRONG ***')) +
+        (extra ? '   ' + extra : ''))
+      return right
+    }
+
+    // --- WALKING. Ordered left, then right, sampled all the way there.
+    const hx = hero.x, hy = hero.y
+    for (const [dir, dx] of [['left', -260], ['right', 260]]) {
+      g.orderHero(hx + dx, hy)
+      await sleep(120)
+      let flips = 0
+      let last = hero.body_.flipX
+      let backwards = 0
+      const t0 = performance.now()
+      while (performance.now() - t0 < 2600 && Math.abs(hero.x - (hx + dx)) > 4) {
+        const moving = hero.body_.flipX
+        if (moving !== last) { flips++; last = moving }
+        // Walking backwards: facing right while travelling left, or the
+        // reverse. Sampled every frame, not at the ends.
+        const travellingRight = (hx + dx) > hero.x
+        if (moving !== travellingRight) backwards++
+        await new Promise((r) => requestAnimationFrame(r))
+      }
+      note('walking ' + dir + ': ' + flips + ' flip(s) on the way, ' +
+        backwards + ' frame(s) facing the wrong way')
+      sample('  arrived, walking ' + dir, dx > 0)
+      if (backwards > 2) wrong.push('walked ' + dir + ' backwards for ' + backwards + ' frames')
+      await sleep(200)
+    }
+
+    // --- IDLE. He keeps the last facing rather than snapping to a default.
+    g.orderHero(hero.x, hero.y)
+    await sleep(600)
+    sample('idle after walking right', true, 'last facing kept')
+
+    // --- ATTACKING. An enemy on each side while he stands still.
+    g.startWave()
+    await until(() => g.enemies.some((e) => e.alive), 40000)
+    // Put him on the lane so enemies actually reach him.
+    const wp = (await import('./js/data/map.json', { with: { type: 'json' } })).default.waypoints
+    const mid = wp[Math.floor(wp.length / 2)]
+    g.orderHero(mid[0], mid[1])
+    await until(() => Math.hypot(hero.x - mid[0], hero.y - mid[1]) < 6, 20000)
+    const engaged = await until(() => hero.engaged, 60000)
+    note('engaged an enemy: ' + engaged)
+    if (engaged) {
+      let mismatched = 0
+      let swings = 0
+      let lastPose = ''
+      const t1 = performance.now()
+      while (performance.now() - t1 < 6000) {
+        const t = hero.lastTarget
+        if (t && t.alive) {
+          const targetRight = t.x > hero.x
+          const facingRight = hero.body_.flipX === true
+          // Only judged where the target is clearly to one side: within the
+          // dead zone either answer is right and snapping would be the bug.
+          const dx2 = Math.abs(t.x - hero.x)
+          if (dx2 > 12 && facingRight !== targetRight) mismatched++
+        }
+        const pose = hero.frames && hero.frames.attacking ? 'attack' : 'other'
+        if (pose === 'attack' && lastPose !== 'attack') swings++
+        lastPose = pose
+        await new Promise((r) => requestAnimationFrame(r))
+      }
+      note('  ' + swings + ' swing(s) watched, ' + mismatched +
+        ' frame(s) facing away from the target' +
+        (mismatched === 0 ? '  correct' : '  *** SWINGING BACKWARDS ***'))
+      if (mismatched > 0) wrong.push(mismatched + ' frames swinging away from the target')
+    }
+    await shot('facing-' + VP.w + 'x' + VP.h)
+    note('RESULT ' + (wrong.length === 0
+      ? 'he faces where he is going and what he is hitting, and keeps it when idle'
+      : '*** ' + wrong.join('; ') + ' ***'))
+    return
+  }
+
+  if (scenario === 'dadsync') {
+    // WHEN the DAD MODE line lands, against WHEN the SUV appears.
+    //
+    // The visual transformation is not the flash: he fades out on the frame he
+    // drops to 25%, and the vehicle appears transformPauseMs later. The line
+    // has 260ms of silence at its head, so it is started that much before the
+    // vehicle in order for the WORD to land on it.
+    const AJ = (await import('./js/data/audio.json', { with: { type: 'json' } })).default
+    const HJ = (await import('./js/data/heroes.json', { with: { type: 'json' } })).default
+    const ls = HJ.cory.lastStand
+    const cue = AJ.cues['dadmode-voice']
+    note('transformPauseMs ' + ls.transformPauseMs + '   line lead-in ' + cue.leadInMs +
+      'ms   so the cue should start at ' + (ls.transformPauseMs - cue.leadInMs) + 'ms')
+
+    const heard = []
+    const realPlay = game.sound.play.bind(game.sound)
+    game.sound.play = (key, cfg) => {
+      heard.push({ key, vol: cfg && cfg.volume, t: performance.now() })
+      return realPlay(key, cfg)
+    }
+
+    const hero = g.hero
+    let swapped = -1
+    hero.on('transformed', () => { swapped = performance.now() })
+    const before = hero.body_.texture.key
+    const t0 = performance.now()
+    // Through the scene's own path, which is what plays the sound: calling
+    // hero.hurt directly transforms him in silence.
+    g.damageHero(hero.def.maxHealth * 0.8)
+    await sleep(2000)
+    const voice = heard.find((h) => h.key === 'dadmode-voice')
+    const sting = heard.find((h) => h.key === 'last-stand')
+    const ms = (h) => h ? Math.round(h.t - t0) : null
+    note('sprite ' + before + ' -> ' + hero.body_.texture.key)
+    note('  SUV appeared at        ' + (swapped < 0 ? 'NEVER' : Math.round(swapped - t0) + 'ms'))
+    note('  voice cue started at   ' + ms(voice) + 'ms   at volume ' +
+      (voice ? voice.vol.toFixed(3) : '-'))
+    note('  its first word at      ' + (voice ? ms(voice) + cue.leadInMs : '-') + 'ms')
+    note('  sting started at       ' + ms(sting) + 'ms   at volume ' +
+      (sting ? sting.vol.toFixed(3) : '-'))
+    const wordAt = voice ? (voice.t - t0) + cue.leadInMs : NaN
+    const drift = Math.abs(wordAt - (swapped - t0))
+    const stingDucked = voice && sting && sting.t > voice.t
+    note('  word against the SUV: ' + (Number.isFinite(drift) ? drift.toFixed(0) + 'ms apart' : 'n/a'))
+    note('RESULT ' + (drift < 90 && stingDucked
+      ? 'the line lands on the transformation, and the sting still follows it'
+      : '*** ' + (drift >= 90 ? 'out by ' + drift.toFixed(0) + 'ms ' : '') +
+        (stingDucked ? '' : 'the sting precedes the line') + '***'))
+    await shot('dadsync-' + VP.w + 'x' + VP.h)
+    return
+  }
+
+  if (scenario === 'mix') {
+    // THE MIX, decoded rather than judged. Music against the voice lines
+    // against the effects, at the levels the game actually plays them.
+    const AJ = (await import('./js/data/audio.json', { with: { type: 'json' } })).default
+    const MJ = (await import('./js/data/music.json', { with: { type: 'json' } })).default
+    const A = await import('./js/systems/Audio.js')
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    const db = (x) => (20 * Math.log10(Math.max(1e-6, x))).toFixed(1)
+
+    const loudHalf = async (url) => {
+      const res = await fetch(url)
+      const buf = await ctx.decodeAudioData(await res.arrayBuffer())
+      const ch = buf.getChannelData(0)
+      const win = Math.floor(buf.sampleRate * 0.3)
+      const blocks = []
+      for (let i = 0; i + win < ch.length; i += win) {
+        let sum = 0
+        for (let j = i; j < i + win; j++) sum += ch[j] * ch[j]
+        blocks.push(Math.sqrt(sum / win))
+      }
+      if (blocks.length === 0) {
+        let sum = 0
+        for (let j = 0; j < ch.length; j++) sum += ch[j] * ch[j]
+        return Math.sqrt(sum / Math.max(1, ch.length))
+      }
+      blocks.sort((a, b) => b - a)
+      const loud = blocks.slice(0, Math.max(1, Math.floor(blocks.length / 2)))
+      return loud.reduce((a, b) => a + b, 0) / loud.length
+    }
+
+    note('sfx slider ' + A.getVolume('sfx') + '   music slider ' + A.getVolume('music') +
+      '   voice slider ' + A.getVolume('voice') + '   music bus ' + MJ.busGain)
+    const rows = []
+    for (const [id, t] of Object.entries(MJ.tracks)) {
+      const rms = await loudHalf('/' + MJ.root + t.file + '.' + t.format)
+      const out = rms * t.gain * MJ.busGain * A.getVolume('music')
+      rows.push({ kind: 'music', id, out })
+      note('  music ' + id.padEnd(14) + ' file ' + db(rms) + ' dBFS  x gain ' + t.gain +
+        ' x bus ' + MJ.busGain + '  -> ' + db(out) + ' dBFS')
+    }
+    for (const [id, c] of Object.entries(AJ.cues)) {
+      const isVoice = c.bus === 'voice'
+      if (!isVoice && !['tower-a', 'hit-a', 'peanuts', 'build'].includes(id)) continue
+      const rms = await loudHalf('/' + AJ.root + c.file + '.' + c.format)
+      const bus = c.bus ? (AJ.buses[c.bus] ?? 1) : 1
+      const out = rms * c.gain * bus * A.getVolume(isVoice ? 'voice' : 'sfx')
+      rows.push({ kind: isVoice ? 'voice' : 'sfx', id, out })
+      note('  ' + (isVoice ? 'voice ' : 'sfx   ') + id.padEnd(14) + ' file ' + db(rms) +
+        ' dBFS  x gain ' + c.gain + ' x bus ' + bus + '  -> ' + db(out) + ' dBFS')
+    }
+    const mean = (k) => {
+      const v = rows.filter((r) => r.kind === k).map((r) => r.out)
+      return v.reduce((a, b) => a + b, 0) / Math.max(1, v.length)
+    }
+    const musicDb = 20 * Math.log10(mean('music'))
+    const voiceDb = 20 * Math.log10(mean('voice'))
+    const sfxDb = 20 * Math.log10(mean('sfx'))
+    note('MEANS  music ' + musicDb.toFixed(1) + '   voice ' + voiceDb.toFixed(1) +
+      '   sfx ' + sfxDb.toFixed(1) + ' dBFS')
+    const under = voiceDb - musicDb
+    note('music sits ' + under.toFixed(1) + ' dB under the voice lines')
+    note('RESULT ' + (under >= 9.5 && under <= 12.5
+      ? 'music is 10 to 12 dB under the voice, as asked'
+      : '*** ' + under.toFixed(1) + ' dB, outside the 10-12 target ***'))
+    return
+  }
+
   if (scenario === 'looptrack') {
     // The level 1 track does not loop seamlessly and fades out at the end, so
     // it repeats with a gap and fades back in rather than cutting. Watched at

@@ -140,8 +140,12 @@ test('no audio call can escape as an unhandled rejection', () => {
 
 test('play is silent rather than loud when the device is gone', () => {
   const audio = src('systems/Audio.ts')
-  assert.match(audio, /if \(muted \|\| volume <= 0 \|\| unavailable\) return/,
+  assert.match(audio, /if \(muted \|\| unavailable\) return/,
     'play still tries to sound a cue after the device was refused')
+  // And per CHANNEL, not on one master: a player who muted the effects has
+  // not muted the voice lines, and one shared check at zero silenced both.
+  assert.match(audio, /if \(volumes\[channel\] <= 0\) return/,
+    'a cue is played from a channel the player has turned all the way down')
 })
 
 test('backgrounding is a state the game enters, not something that happens to it', () => {
@@ -248,13 +252,18 @@ test('the Politician speaks when he appears, once, and is never cut off', () => 
   assert.doesNotMatch(game, /politician[\s\S]{0,200}?\.stop\(\)/,
     'something stops the line, which would cut him off mid-sentence')
 
-  // The DAD MODE arrangement is deliberate and unchanged: the line goes first
-  // and the sting follows it, because the duck only reaches what STARTS during
-  // a line. Anything that reordered those two would quietly undo it.
-  const ls = game.slice(game.indexOf('private announceLastStand()'))
-  const lsBody = ls.slice(0, ls.indexOf('\n  }'))
-  assert.ok(lsBody.indexOf("play(this, 'dadmode-voice')") < lsBody.indexOf("play(this, 'last-stand'"),
-    'the DAD MODE sting now precedes the line, so it no longer steps back for it')
+  // The DAD MODE arrangement is deliberate and still holds after the line was
+  // re-timed onto the transformation: the line starts at transformPauseMs
+  // MINUS its lead-in and the sting on the transformation itself, so the line
+  // is still first and the sting still steps back for it. The duck only
+  // reaches what STARTS during a line.
+  const dad = (audio.cues as any)['dadmode-voice']
+  const ls = read('heroes').cory.lastStand
+  assert.ok(dad.leadInMs < ls.transformPauseMs,
+    `a ${dad.leadInMs}ms lead-in against a ${ls.transformPauseMs}ms transformation would `
+    + 'start the line at or before the sting')
+  assert.match(game, /this\.hero\.on\('transformed', \(\) => \{\s*\n\s*play\(this, 'last-stand'/,
+    'the sting no longer waits for the transformation')
 })
 
 test('a voice line is balanced as a group, and long enough to need its own hold', () => {
@@ -397,18 +406,44 @@ test('each line is wired to the moment it describes, not to the button', () => {
   assert.match(body, /this\.damageEnemy\(target[^\n]*\n(?:\s*\/\/[^\n]*\n)*\s*play\(this, 'haymaker-voice'\)/,
     'the line is not on the punch landing')
 
-  // DAD MODE: on the trigger, alongside the sting rather than instead of it.
+  // DAD MODE: ON THE TRANSFORMATION, not on the frame he drops to 25%.
+  //
+  // The SUV appears `transformPauseMs` after the trigger — half a second — and
+  // everything used to fire at once at the start, so the line was talking
+  // while he was still a man fading out. The cue is started early by exactly
+  // the silence at the head of the recording, so the first WORD lands on the
+  // frame the vehicle appears.
   const ann = game.slice(game.indexOf('private announceLastStand()'))
   const annBody = ann.slice(0, ann.indexOf('\n  }'))
-  assert.match(annBody, /play\(this, 'last-stand'/, 'the transformation sting is gone')
-  assert.match(annBody, /play\(this, 'dadmode-voice'\)/, 'DAD MODE does not say anything')
+  assert.match(annBody, /cueLeadInMs\('dadmode-voice'\)/,
+    'the line is not aligned to the recording, so its first word lands early')
+  assert.match(annBody, /ls\.transformPauseMs - cueLeadInMs/,
+    'the line is not aligned to the transformation')
+  assert.match(annBody, /delayedCall\(lead, \(\) => play\(this, 'dadmode-voice'\)\)/,
+    'DAD MODE does not say anything')
+  const audioSrc = src('systems/Audio.ts')
+  assert.match(audioSrc, /export function cueLeadInMs\(/, 'nothing reads a cue lead-in')
+  const voice = (audio.cues as any)['dadmode-voice']
+  assert.ok(voice.leadInMs > 0 && voice.leadInMs < voice.durationMs,
+    `a ${voice.leadInMs}ms lead-in is not silence at the head of a ${voice.durationMs}ms line`)
 
-  // ORDER MATTERS, and it is not obvious. The duck only reaches what starts
-  // AFTER a line, so an effect played first sits on top of the words instead
-  // of under them. Measured in the harness: with the sting second it comes out
-  // at 0.297 against the line's 0.842; with it first, at full level.
-  assert.ok(annBody.indexOf("'dadmode-voice'") < annBody.indexOf("'last-stand'"),
-    'the sting is played before the line, so it never steps back for it')
+  // AND THE STING LANDS THERE TOO, hung off the hero's own event rather than a
+  // second timer set to the same number — two timers agreeing is a
+  // coincidence maintained by hand, not synchronisation.
+  assert.match(game, /this\.hero\.on\('transformed', \(\) => \{\s*\n\s*play\(this, 'last-stand', 0\.85\)/,
+    'the transformation sting is gone, or no longer waits for the transformation')
+  assert.match(src('entities/Hero.ts'), /this\.emit\('transformed'\)/,
+    'the hero never says the transformation finished')
+  assert.doesNotMatch(annBody, /play\(this, 'last-stand'/,
+    'the sting is back on the trigger frame, ahead of the thing it is about')
+
+  // ORDER STILL MATTERS, and it is not obvious. The duck only reaches what
+  // starts AFTER a line, so an effect played first sits on top of the words
+  // instead of under them. Measured in the harness: with the sting second it
+  // comes out at 0.297 against the line's 0.842; with it first, at full level.
+  // The line starts at transformPauseMs minus its lead-in and the sting at
+  // transformPauseMs, so the line is still first.
+  assert.ok(voice.leadInMs > 0, 'with no lead-in the sting and the line start together')
   assert.ok(body.indexOf("'haymaker-voice'") < body.indexOf("play(this, 'haymaker')"),
     'the punch effect is played before the line, so it never steps back for it')
   // 2.2s, and the invulnerability window is shorter than that — so the line is

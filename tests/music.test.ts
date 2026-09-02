@@ -6,6 +6,7 @@ import { currentId, loaded, newMix, request, settling, step } from '../src/syste
 const url = (p: string) => new URL(p, import.meta.url)
 const src = (p: string) => readFileSync(url(`../src/${p}`), 'utf8')
 const MUSIC = JSON.parse(readFileSync(url('../src/data/music.json'), 'utf8'))
+const read = (n: string) => JSON.parse(readFileSync(url(`../src/data/${n}.json`), 'utf8'))
 
 /** Runs a fade to completion, returning the decks released along the way. */
 function settle(m: ReturnType<typeof newMix>): number[] {
@@ -143,7 +144,9 @@ test('the two tracks are levelled against each other, not by one number', () => 
 test('music obeys mute, the volume slider, the gesture and the tab', () => {
   const m = src('systems/Music.ts')
   assert.match(m, /isMuted\(\)/, 'music ignores the mute control')
-  assert.match(m, /getVolume\(\)/, 'music ignores the volume setting')
+  // ITS OWN slider, not the effects'. Music is the one thing a player turns
+  // down without wanting to lose the game's own sounds.
+  assert.match(m, /getVolume\('music'\)/, 'music rides the sound-effects slider')
   // Its own gain on top of the player's, so it mixes independently of SFX.
   assert.match(m, /MUSIC\.tracks\[d\.id\]\?\.gain/, 'music has no level of its own')
   // iOS: nothing before a gesture, and a refused play() is not a crash.
@@ -274,4 +277,69 @@ test('the level 1 track repeats with a gap and a fade, not a cut', () => {
   const handler = ended.slice(0, ended.indexOf('loopTimers[startDeck] = setTimeout'))
   assert.match(handler, /loopFade\[startDeck\] = 0[\s\S]*applyLevels\(\)/,
     'the fade is zeroed but never applied, so the repeat arrives at full level')
+})
+
+test('music sits about eleven decibels under the voice lines', () => {
+  // MEASURED, not judged. Every level here is the RMS of a file's loudest half
+  // in 300ms windows, which is roughly what the ear responds to, times what
+  // the mixer multiplies it by.
+  //
+  //   before   music -15.4 dBFS   voice -15.7 dBFS   music 0.3 dB LOUDER
+  //   after    music -26.4 dBFS   voice -15.7 dBFS   music 11.0 dB under
+  //
+  // The busGain is where the balance lives rather than the slider's default,
+  // so the slider can sit at 100% and still be right: a control that has to
+  // default to 28% to sound correct reads as broken.
+  const music = read('music')
+  const audio = read('audio')
+  const bus = music.busGain
+  assert.ok(typeof bus === 'number' && bus > 0, 'music has no bus gain')
+
+  const db = (x: number): number => 20 * Math.log10(x)
+  const trackOut = Object.entries(music.tracks).map(([id, t]: [string, any]) => {
+    assert.ok(typeof t.loudHalfRmsDb === 'number',
+      `track "${id}" records no measured level, so this cannot be checked`)
+    return { id, out: t.loudHalfRmsDb + db(t.gain * bus) }
+  })
+  // The tracks stay levelled with each other; the bus moves them together.
+  const spread = Math.max(...trackOut.map((t) => t.out)) - Math.min(...trackOut.map((t) => t.out))
+  assert.ok(spread < 0.5,
+    `the tracks come out ${spread.toFixed(1)} dB apart: `
+    + trackOut.map((t) => `${t.id} ${t.out.toFixed(1)}`).join(', '))
+
+  // The voice lines, from their own measured levels — the same arithmetic
+  // audio.test.ts holds them to.
+  const voiceBus = audio.buses.voice
+  const voices = Object.entries(audio.cues)
+    .filter(([, c]: [string, any]) => c.bus === 'voice')
+    .map(([name, c]: [string, any]) => {
+      const measured = /(-?\d+\.\d+) dBFS over its loudest half/.exec(c._note ?? '')
+      assert.ok(measured, `"${name}" does not record the level it was measured at`)
+      return Number(measured![1]) + db(c.gain * voiceBus)
+    })
+  const voiceOut = voices.reduce((a, b) => a + b, 0) / voices.length
+  const musicOut = trackOut.reduce((a, t) => a + t.out, 0) / trackOut.length
+  const under = voiceOut - musicOut
+  assert.ok(under >= 10 && under <= 12,
+    `music is ${under.toFixed(1)} dB under the voice lines; the target is 10 to 12`)
+})
+
+test('the three channels are separate, and separately remembered', () => {
+  // Music is the one thing a player turns down without wanting to lose the
+  // game's own sounds, and a recorded line is a different kind of sound again.
+  const save = src('systems/Save.ts')
+  const audio = src('systems/Audio.ts')
+  for (const field of ['musicVolume', 'voiceVolume']) {
+    assert.match(save, new RegExp(`${field}: number`), `the save cannot remember ${field}`)
+    assert.match(save, new RegExp(`${field}: clamp01\\(parsed\\.${field}`),
+      `${field} is not validated on the way in`)
+  }
+  // The old single key keeps its name. Renaming it would throw away every
+  // player's setting for the sake of a tidier name.
+  assert.match(save, /volume: clamp01\(parsed\.volume/, 'the sound-effects key was renamed')
+  assert.match(audio, /const volumes: Record<Channel, number>/, 'there is still one master volume')
+  assert.match(audio, /getVolume\(channel: Channel = 'sfx'\)/,
+    'getVolume cannot be asked about a channel')
+  assert.match(audio, /const channel: Channel = def\.bus === VOICE_BUS \? 'voice' : 'sfx'/,
+    'a cue does not know which channel it rides')
 })
