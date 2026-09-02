@@ -266,8 +266,20 @@ test('the fonts and sound cues are bundled', () => {
   for (const f of ['KenneyFuture.ttf', 'License.txt']) {
     assert.ok(existsSync(url(`../public/assets/fonts/${f}`)), `missing font asset ${f}`)
   }
-  for (const s of ['sfx-dadmode', 'sfx-build', 'sfx-leak', 'sfx-cast']) {
-    assert.ok(existsSync(url(`../public/assets/audio/${s}.wav`)), `missing sound cue ${s}`)
+  // The .wav that a cue actually names. Read from the manifest rather than
+  // listed here: this used to name four files by hand, and all four had been
+  // superseded by .ogg versions months before anybody noticed they were still
+  // in the deploy.
+  const audio = JSON.parse(readFileSync(url('../src/data/audio.json'), 'utf8'))
+  for (const [id, cue] of Object.entries(audio.cues) as Array<[string, any]>) {
+    const file = `${cue.file}.${cue.format ?? audio.format ?? 'ogg'}`
+    assert.ok(existsSync(url(`../public/${audio.root}${file}`)),
+      `cue "${id}" names ${file}, which is not in the deploy`)
+  }
+  // And the four that nothing names are gone rather than shipping quietly.
+  for (const s of ['sfx-build', 'sfx-cast', 'sfx-leak', 'sfx-tax']) {
+    assert.ok(!existsSync(url(`../public/assets/audio/${s}.wav`)),
+      `${s}.wav is back in the deploy; nothing references it and tools/mksfx.py can regenerate it`)
   }
   assert.ok(existsSync(url('../public/assets/kenney/License.txt')), 'the art pack license must ship with the art')
 })

@@ -50,7 +50,7 @@ interface Block {
  *  licence, so this is data rather than copy in a scene. */
 const MUSIC = musicData as unknown as {
   tracks: Record<string, {
-    title: string; artist: string; source?: string; license?: string
+    title: string; artist: string; source?: string; license?: string; artistUrl?: string
     rendering?: string
   }>
 }
@@ -307,6 +307,12 @@ export class CreditsScene extends Phaser.Scene {
     for (const t of Object.values(MUSIC.tracks)) {
       ty += this.centred(t.title, ty, 30, COLOR.ink, FONT_UI, 1)
       ty += this.centred(t.artist, ty + 2, 26, COLOR.amber, FONT_UI, 1)
+      // Where the artist asked to be pointed at, which is not always where the
+      // track was found. syncopika asks for his Bandcamp; CC BY only obliges
+      // the name and the licence, so this is a request honoured rather than a
+      // condition met, and it belongs under his name rather than in the
+      // provenance line with the licence.
+      if (t.artistUrl) ty += this.centred(t.artistUrl, ty + 2, 22, COLOR.amber, FONT_UI, 0)
       const provenance = [t.source, t.license].filter(Boolean).join('  ·  ')
       if (provenance) ty += this.centred(provenance, ty + 2, 22, COLOR.dim, FONT_UI, 0)
       // How a track got from what the artist published to what the game plays.

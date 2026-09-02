@@ -30,7 +30,7 @@ required, and it is credited anyway.
 | **Kenney Future** (`KenneyFuture.ttf`) | The display face: the title, the department headers, the names at the end | kenney.nl font package | **CC0 1.0** — verbatim from `public/assets/fonts/License.txt`: *"License: (Creative Commons Zero, CC0) … Support us by crediting (Kenney or www.kenney.nl), this is not mandatory."* | No | Yes — same line, "fonts" named in its note |
 | **"Airport Attack"** — Ivan Stanton (*northivanastan* on OpenGameArt) | Level 1 gameplay music | <https://opengameart.org/content/airport-attack> | **CC0** | No — given anyway | Yes — MUSIC section |
 | **FluidR3 GM soundfont** | Rendering "Airport Attack" from the MIDI the artist published to the MP3 the game ships | FluidR3 GM (Frank Wen) | **MIT** | Yes | Yes — named on the track's own credit line |
-| **"Battle BGM"** — syncopika | Title, loadout and credits music | <https://opengameart.org/content/battle-bgm> | **CC BY 3.0** | **Yes** | Yes — MUSIC section |
+| **"Battle BGM"** — syncopika | Title, loadout and credits music | <https://opengameart.org/content/battle-bgm> · artist's own page <https://greenbearmusic.bandcamp.com> | **CC BY 3.0** | **Yes** | Yes — MUSIC section, with the Bandcamp link under his name |
 | **Phaser** | The engine. Ships inside the bundle. | phaser.io / npm `phaser` | **MIT** — read from `LICENSE.md` in the package: *"The MIT License (MIT) … Copyright (c) 2026 Richard Davey, Phaser Studio Inc."* | Yes, the copyright notice must travel with the bundle | **No — see below** |
 
 ## What could and could not be verified
@@ -50,11 +50,15 @@ required, and it is credited anyway.
 - **Both opengameart.org URLs.** `opengameart.org` is blocked by this
   development environment's network egress proxy, so neither source page could
   be opened. The URLs are recorded as supplied.
-- **Everything about "Battle BGM".** The file arrived as `battle.mp3` with
-  **no ID3 title, artist, album or licence** — only an encoder tag
-  (`TSSE = Lavf52.93.0`, i.e. ffmpeg). The artist *syncopika*, the title, the
-  CC BY 3.0 licence and the URL are all recorded from what was supplied and
-  **none of them could be confirmed against the file or the source page.**
+- **"Battle BGM" — now confirmed by the project owner (2026-09-02),** not by
+  anything readable here. The file arrived as `battle.mp3` with **no ID3
+  title, artist, album or licence** — only an encoder tag
+  (`TSSE = Lavf52.93.0`, i.e. ffmpeg), and opengameart.org is blocked by this
+  environment's egress proxy, so the source page still cannot be opened. The
+  artist *syncopika*, the CC BY 3.0 licence and the URL stand on the owner's
+  confirmation. He also asks that his Bandcamp, <https://greenbearmusic.bandcamp.com>,
+  be linked wherever the track is used; CC BY 3.0 does not require that, and it
+  is honoured anyway, in this table and on his line in the credits roll.
 - **Everything about "Airport Attack" except the audio itself.** The MP3
   carries no ID3 title, artist or licence. The artist *Ivan Stanton*
   (*northivanastan*), the CC0 licence, the URL, and the fact that it was

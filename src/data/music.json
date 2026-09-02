@@ -12,9 +12,11 @@
       "title": "Battle BGM",
       "artist": "syncopika",
       "license": "CC BY 3.0",
+      "artistUrl": "https://greenbearmusic.bandcamp.com",
+      "_artistUrl": "The artist asks that his Bandcamp be linked wherever the track is used. CC BY 3.0 only obliges the name and the licence, so this is a request rather than a condition — and it costs one line of the roll to honour.",
       "source": "https://opengameart.org/content/battle-bgm",
-      "verified": false,
-      "_verify": "UNVERIFIED. The file carries no ID3 title, artist or licence — only an ffmpeg encoder tag — and opengameart.org is blocked by this environment's egress proxy, so neither the artist nor the URL could be confirmed from the repo or the source page. Recorded as supplied. Confirm before release.",
+      "verified": true,
+      "_verify": "CONFIRMED BY THE PROJECT OWNER, 2026-09-02: syncopika, CC BY 3.0, https://opengameart.org/content/battle-bgm. The file itself still carries no ID3 title, artist or licence — only an ffmpeg encoder tag — and opengameart.org is blocked by this environment's egress proxy, so this rests on the owner's confirmation rather than on anything readable here.",
       "loudHalfRmsDb": -9.4,
       "peakDb": 0.2
     },
