@@ -571,13 +571,28 @@ test('every ring button is an icon at 40px with the price beneath, never a word'
   // The plate is added BEFORE the icon, or it covers it. This shipped wrong
   // once: the measurements said a 40px icon was correctly placed and the
   // screen showed two empty coloured bars.
-  const add = ring.indexOf('this.ringLayer.add([...plate.parts, glyph, price, hit])')
+  const add = ring.indexOf(
+    'this.ringLayer.add([...plate.parts, glyph, ...(lock ? [lock] : []), price, hit])')
   assert.ok(add > 0, 'the ring no longer adds its parts in one place')
 
-  // Unaffordable reads as locked rather than as a greyed-out picture of the
-  // thing the player wanted.
-  assert.match(ring, /if \(!option\.affordable\) \{\s*\n\s*const key = icon\(this\.scene, 'locked'\)/,
-    'a disabled option does not show the padlock')
+  // AN UNAFFORDABLE OPTION KEEPS ITS OWN PICTURE, dimmed, with a padlock badge
+  // over the corner. It used to be replaced by a padlock outright, and that
+  // reasoning held for exactly one locked option — a padlock says "not yet"
+  // where a greyed-out picture just looks broken. It fails at two: a player
+  // short of peanuts is short for several options at once, and two identical
+  // padlocks say nothing about what they are saving up for.
+  assert.match(ring, /const key = option\.sprite && this\.scene\.textures\.exists\(option\.sprite\)/,
+    'the glyph no longer starts from the option\'s own picture')
+  assert.match(ring, /if \(!option\.affordable\) \{[\s\S]{0,220}?g\.setAlpha\(CFG\.lockedAlpha\)/,
+    'a locked option is not dimmed')
+  assert.match(ring, /private makeLock\(\): Phaser\.GameObjects\.Image \{[\s\S]{0,200}?icon\(this\.scene, 'locked'\)/,
+    'there is no padlock badge')
+  assert.ok(cfg.lockBadgeSize > 0 && cfg.lockBadgeSize < cfg.iconSize,
+    `a ${cfg.lockBadgeSize}px badge on a ${cfg.iconSize}px icon is not a badge`)
+  // The picture must not be REPLACED by the padlock anywhere.
+  const glyphFn = ring.slice(ring.indexOf('private makeGlyph('), ring.indexOf('private makeLock('))
+  assert.doesNotMatch(glyphFn, /icon\(this\.scene, 'locked'\)/,
+    'the padlock is back in place of the option\'s own picture')
 
   // The build half uses icons too. It was a text grid using none of the ten.
   const game = src('scenes/GameScene.ts')

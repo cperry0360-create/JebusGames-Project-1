@@ -420,7 +420,15 @@
     "_headerIconSize": "The picture at the top of the description panel, so the player can see which ring button they are reading about. Smaller than iconSize deliberately: that 40px floor is for buttons a thumb has to hit, and this one is not pressed. The 14px it gives back is the difference between the panel fitting a notched phone and reporting that it does not.",
     "_confirmHeight": "Tall enough to actually carry a 40px icon. It was 38, which is shorter than the icon standing on it — the floor is a floor, and a plate that cannot hold it is the plate that has to grow.",
     "titleMinSize": 13,
-    "_titleMinSize": "The title gives way last, because it is what a player reads first — but two lines of 16px title is 40px of a 238px budget on the smallest phone."
+    "_titleMinSize": "The title gives way last, because it is what a player reads first — but two lines of 16px title is 40px of a 238px budget on the smallest phone.",
+    "arcMaxOptions": 3,
+    "_arcMaxOptions": "At or below this many options the ring is not a ring: the buttons go on a tight arc directly against the pad instead. Fitting an ellipse to two options puts them at top and bottom and then grows the radius until the plates separate, which is a 50x194 vertical column — a line, not a ring, and 124px of empty space between two buttons about the same pad. The loadout hands out two towers, so this is the NORMAL case rather than an edge one.",
+    "arcSpreadDeg": 118,
+    "_arcSpreadDeg": "How wide the tight arc fans. Wide enough that two 50px plates separate at a radius that still hugs the anchor, narrow enough that the group reads as one thing sitting above the pad rather than as buttons scattered around it.",
+    "lockBadgeSize": 20,
+    "_lockBadgeSize": "The padlock corner-badge on an option the player cannot afford yet. Small, because it is the second thing the button says: the first is WHICH option this is, and that is the option's own picture, dimmed. A padlock instead of the picture was the original choice and the reasoning held for one locked option — a padlock says 'not yet' where a greyed-out picture just looks broken. It fails at two, because then both buttons are the same padlock and the player cannot tell what they are saving for, which is the common case.",
+    "lockedAlpha": 0.5,
+    "lockedTint": 9082022
   },
   "pathBand": {
     "_note": "The stretch of lane a summon may be dropped on, drawn as an outline along the two road edges rather than as a filled band. A fill over painted grass and a painted road reads as a stain; the edge is where the information is. Pale blue, not green: a green line on green grass is invisible exactly where it matters.",

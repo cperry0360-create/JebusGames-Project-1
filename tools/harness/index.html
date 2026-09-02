@@ -2813,6 +2813,36 @@ async function run() {
     return
   }
 
+  if (scenario === 'locked') {
+    // What an option the player cannot afford looks like. It used to be a
+    // padlock INSTEAD of the tower's picture, which is fine for one locked
+    // option and useless for two: both buttons become the same padlock and
+    // nothing says what you are saving up for.
+    g.status.peanuts = 0
+    await lookAt(SPOTS[3][0], SPOTS[3][1])
+    const [sx, sy] = toScreen(SPOTS[3][0], SPOTS[3][1])
+    await click(sx, sy)
+    await sleep(500)
+    const r = g.ring
+    if (!r) { note('*** the ring did not open ***'); return }
+    note('peanuts ' + g.status.peanuts + ', options ' +
+      r.buttons.map((b) => b.option.id + (b.option.affordable ? '' : ' LOCKED')).join(', '))
+    for (const b of r.buttons) {
+      note('  ' + b.option.id.padEnd(14) +
+        ' glyph texture ' + b.glyph.texture.key +
+        '  alpha ' + b.glyph.alpha.toFixed(2) +
+        '  tinted ' + (b.glyph.isTinted === true) +
+        '  padlock badge ' + (b.lock ? b.lock.texture.key + ' at +' +
+          Math.round(b.lock.x - b.glyph.x) + ',' + Math.round(b.lock.y - b.glyph.y) : 'none'))
+    }
+    const distinct = new Set(r.buttons.map((b) => b.glyph.texture.key)).size
+    note('distinct pictures across ' + r.buttons.length + ' locked options: ' + distinct +
+      (distinct === r.buttons.length ? '  each option still says which one it is'
+        : '  *** TWO OPTIONS LOOK THE SAME ***'))
+    await shot('locked-' + VP.w + 'x' + VP.h)
+    return
+  }
+
   if (scenario === 'looptrack') {
     // The level 1 track does not loop seamlessly and fades out at the end, so
     // it repeats with a gap and fades back in rather than cutting. Watched at

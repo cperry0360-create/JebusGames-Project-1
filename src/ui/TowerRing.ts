@@ -105,6 +105,8 @@ interface ButtonParts {
   plate: ReturnType<typeof iconPlate>
   hit: Phaser.GameObjects.Rectangle
   glyph: Phaser.GameObjects.Image
+  /** The padlock corner-badge, on an option that cannot be bought yet. */
+  lock?: Phaser.GameObjects.Image
   price: Phaser.GameObjects.Text
 }
 
@@ -174,10 +176,10 @@ export class TowerRing {
   private buildRing(): void {
     for (const [i, option] of this.opts.options.entries()) {
       const plate = iconPlate(this.scene, 0, 0, CFG.buttonSize, CFG.buttonSize)
-      // An option that cannot be bought shows the padlock rather than a greyed
-      // picture of the thing the player wanted. The icon is the answer to
-      // "what is this?", and a faded one answers it worse.
+      // An option that cannot be bought shows its OWN picture, dimmed, with a
+      // padlock badge in the corner. See makeGlyph.
       const glyph = this.makeGlyph(option, CFG.iconSize)
+      const lock = option.affordable ? undefined : this.makeLock()
 
       const price = this.scene.add.text(0, 0, String(option.price), {
         fontFamily: FONT_UI, fontSize: `${uiSize(CFG.priceSize)}px`, fontStyle: 'bold',
@@ -203,32 +205,49 @@ export class TowerRing {
 
       // Plate first, then the glyph on top of it: the container draws in the
       // order it is given, and pushing the icon first put the plate over it.
-      this.ringLayer.add([...plate.parts, glyph, price, hit])
-      this.buttons.push({ option, plate, hit, glyph, price })
+      // Plate, picture, badge, price, hit area — in draw order.
+      this.ringLayer.add([...plate.parts, glyph, ...(lock ? [lock] : []), price, hit])
+      this.buttons.push({ option, plate, hit, glyph, lock, price })
     }
   }
 
   /**
    * The picture on a button: the tower itself where there is one, the named
-   * action icon otherwise, and the padlock over either when it cannot be
-   * bought — a padlock says "not yet" where a greyed-out picture of the thing
-   * you wanted just looks broken.
+   * action icon otherwise — and ALWAYS that picture, dimmed, when the option
+   * cannot be bought yet. The padlock is a small badge over the corner rather
+   * than a replacement for it.
+   *
+   * This replaced the padlock outright, and the original reasoning was sound
+   * for exactly one locked option: a padlock says "NOT YET" where a greyed-out
+   * picture of the thing you wanted just looks broken or misdrawn. What it
+   * misses is that one is not the common case. A player who is short of
+   * peanuts is short for several options at once, and two padlocks side by
+   * side are two identical buttons — the player cannot see what they are
+   * saving up FOR, which is the only question a locked button has to answer.
+   *
+   * So the picture stays and carries the state instead: dimmed and cooled off,
+   * which reads as unavailable, with the padlock badge saying why.
    */
   private makeGlyph(option: RingOption, size: number): Phaser.GameObjects.Image {
-    if (!option.affordable) {
-      const key = icon(this.scene, 'locked')
-      const g = this.scene.add.image(0, 0, key).setAlpha(0.8)
-      fitInBox(g, key, size)
-      return g
-    }
-    if (option.sprite && this.scene.textures.exists(option.sprite)) {
-      const g = this.scene.add.image(0, 0, option.sprite)
-      fitInBox(g, option.sprite, size)
-      return g
-    }
-    const key = icon(this.scene, option.icon)
+    const key = option.sprite && this.scene.textures.exists(option.sprite)
+      ? option.sprite
+      : icon(this.scene, option.icon)
     const g = this.scene.add.image(0, 0, key)
     fitInBox(g, key, size)
+    if (!option.affordable) {
+      g.setAlpha(CFG.lockedAlpha)
+      // Tinted as well as faded: alpha alone over a dark plate reads as a
+      // dim picture, and the cool grey is what says "off".
+      g.setTint(CFG.lockedTint)
+    }
+    return g
+  }
+
+  /** The padlock badge, in the plate's bottom-right corner. */
+  private makeLock(): Phaser.GameObjects.Image {
+    const key = icon(this.scene, 'locked')
+    const g = this.scene.add.image(0, 0, key)
+    fitInBox(g, key, CFG.lockBadgeSize)
     return g
   }
 
@@ -443,9 +462,26 @@ export class TowerRing {
     if (!anchor) { this.close(); return }
     const area = this.opts.area()
 
-    // Both together: the ring and the panel constrain each other, and placing
-    // one and then the other cannot solve a ring sitting in the middle of a
-    // strip that has room for both only if the ring moves aside first.
+    // AN ANCHOR OFF THE USABLE AREA IS ALWAYS A CALLER BUG, and this is where
+    // it shows. The ring is clamped inside the area whatever it is handed, so
+    // a bad anchor does not crash or draw off screen — it produces a tidy,
+    // on-screen ring nowhere near the pad that opened it, and every geometric
+    // check still passes. That is exactly what happened: the anchor was
+    // computed in canvas pixels and compared against an area in CSS pixels, so
+    // at devicePixelRatio 3 it came out three times too large, landed far
+    // outside the area, and the ring sat 401px from its pad for anyone on a
+    // retina phone. It took a video to notice.
+    //
+    // Said once, loudly, rather than silently absorbed. `worldToScreen` is the
+    // fix; this is the tripwire for the next one.
+    if (anchor.x < area.x - 1 || anchor.x > area.x + area.width + 1
+      || anchor.y < area.y - 1 || anchor.y > area.y + area.height + 1) {
+      this.reportOnce('The tower menu opened away from its pad.')
+      console.error('[ring] anchor', anchor, 'is outside the usable area', area)
+    }
+
+    // Both together: the ring and the panel constrain each other. The panel is
+    // what moves; see fitRingAndPanel.
     const { ring: p, panel: at } = fitRingAndPanel(
       anchor.x, anchor.y, this.buttons.length, this.panelSize.w,
       Math.max(1, this.panelSize.h), CFG, area)
@@ -460,6 +496,12 @@ export class TowerRing {
       if (!at) continue
       b.plate.parts.forEach((o) => (o as Phaser.GameObjects.Image).setPosition(at.x, at.y))
       b.glyph.setPosition(at.x, at.y)
+      // The badge overlaps the plate's corner rather than sitting inside it,
+      // so it never eats into the picture it is annotating.
+      if (b.lock) {
+        const off = CFG.buttonSize / 2 - CFG.lockBadgeSize / 4
+        b.lock.setPosition(at.x + off, at.y + off)
+      }
       b.price.setPosition(at.x, at.y + CFG.buttonSize / 2 + CFG.priceGap)
       b.hit.setPosition(at.x, at.y)
       void drop
@@ -468,8 +510,10 @@ export class TowerRing {
     if (this.selected !== null && this.panelSize.h > 0) {
       this.panelLayer.setPosition(at.x, at.y)
       // Overlapping the ring's own buttons is allowed and common on a small
-      // screen. Covering the pad the panel is ABOUT is not, and if the ring
-      // could not be moved far enough to prevent it the player is told.
+      // screen. Covering the pad the panel is ABOUT is not — and across all
+      // 7,560 placements it never happens, because a side that would cover the
+      // anchor is disqualified outright. This stays as the tripwire for a
+      // screen shape nobody has measured yet.
       if (at.coversAnchor) {
         this.reportOnce('The tower menu and its description cannot both fit on this screen.')
       }

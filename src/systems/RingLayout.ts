@@ -36,6 +36,11 @@ export interface RingConfig {
   /** How far the ring may stretch sideways. Past about this it stops reading
    *  as a ring around the tower and starts reading as a row above it. */
   maxAspect: number
+  /** At or below this many options the ring is a tight ARC against the anchor
+   *  rather than an ellipse around it. See ringPlacement. */
+  arcMaxOptions: number
+  /** How wide that arc fans, in degrees. */
+  arcSpreadDeg: number
 }
 
 export interface RingButton {
@@ -98,7 +103,7 @@ export function overlap(a: Rect, b: Rect): boolean {
 }
 
 /**
- * Whether two square plates of side `s` centred at these points overlap.
+ * Whether two buttons centred at these points overlap.
  *
  * Axis-aligned, because that is what the plates are and what the hit areas
  * are. This is the check the first version of this file got wrong: it spaced
@@ -107,9 +112,25 @@ export function overlap(a: Rect, b: Rect): boolean {
  * 60 degrees have a 33px horizontal gap and a 56px vertical one, and a 58px
  * plate overlaps its neighbour in both. The exhaustive placement test found it
  * on the six-tower ring.
+ *
+ * TWO CORRECTIONS, both found by the tight arc. It used to take one side and
+ * subtract half a pixel of slack, and both halves of that were wrong.
+ *
+ * The slack was the wrong sign. `s - 0.5` calls two 50px plates 49.8px apart
+ * separated, and they overlap by 0.2px. That went unnoticed while every ring
+ * was an ellipse, where neighbours are far apart on at least one axis, and
+ * failed 840 of the 7,560 placements the moment three buttons sat on nearly
+ * the same line. It is a whole pixel of margin now, outwards.
+ *
+ * And the box is the FOOTPRINT: `w` is the plate, `h` is the plate plus the
+ * price badge hanging under it. Separating the plates alone lets a badge tuck
+ * under a neighbour's picture, which is legible on an ellipse and a mess on an
+ * arc.
  */
-function platesClash(ax: number, ay: number, bx: number, by: number, s: number): boolean {
-  return Math.abs(ax - bx) < s - 0.5 && Math.abs(ay - by) < s - 0.5
+function platesClash(
+  ax: number, ay: number, bx: number, by: number, w: number, h: number,
+): boolean {
+  return Math.abs(ax - bx) < w + 1 && Math.abs(ay - by) < h + 1
 }
 
 /**
@@ -147,7 +168,38 @@ export function ringPlacement(
   const rxMax = Math.max(1, (area.width - cfg.buttonSize) / 2)
   const aspect = Math.max(1, Math.min(cfg.maxAspect, rxMax / Math.max(1, ryMax)))
 
+  // A TIGHT ARC FOR TWO OR THREE, and a ring only above that.
+  //
+  // Fitting an ellipse to two options puts them at exactly top and bottom and
+  // then grows the radius until the plates separate — a 50x194 vertical
+  // column with 124px of nothing between two buttons about the same pad. It
+  // is a line, not a ring, and the loadout hands out two towers, so this is
+  // the normal case rather than an edge one.
+  //
+  // Below the threshold the buttons fan across a narrow arc directly against
+  // the anchor: they run LEFT TO RIGHT, so the first option the caller passes
+  // is always the leftmost, the way it is always the topmost in a ring.
+  //
+  // Above or below the anchor, chosen from the room there actually is. The
+  // arc hugs the anchor closely enough that a fixed "always above" would be
+  // clamped back down on top of the pad whenever the pad is near the top of
+  // the area — and the ring covering the thing it is about is the one failure
+  // this file exists to prevent.
+  const arc = count <= cfg.arcMaxOptions
+  const spread = (cfg.arcSpreadDeg * Math.PI) / 180
+  const roomAbove = anchorY - area.y
+  const roomBelow = (area.y + area.height) - anchorY
+  const arcUp = roomAbove >= roomBelow
   const at = (i: number, rx: number, ry: number, cx: number, cy: number): [number, number] => {
+    if (arc) {
+      const centre = arcUp ? -Math.PI / 2 : Math.PI / 2
+      // One option sits straight above (or below); more fan out around that.
+      const t = count === 1 ? 0 : i / (count - 1) - 0.5
+      // Left to right either way, so the order on screen does not flip when
+      // the arc does.
+      const a = centre + (arcUp ? t : -t) * spread
+      return [cx + Math.cos(a) * rx, cy + Math.sin(a) * ry]
+    }
     // First button at the top, the rest clockwise, so the option the caller
     // passes first is always in the same place. A menu whose buttons move
     // between uses is a menu that has to be re-read every time.
@@ -159,7 +211,7 @@ export function ringPlacement(
       const [ax, ay] = at(i, rx, ry, 0, 0)
       for (let j = i + 1; j < count; j++) {
         const [bx, by] = at(j, rx, ry, 0, 0)
-        if (platesClash(ax, ay, bx, by, cfg.buttonSize)) return true
+        if (platesClash(ax, ay, bx, by, cfg.buttonSize, footH)) return true
       }
     }
     return false
@@ -176,7 +228,10 @@ export function ringPlacement(
   // It exists so a ring does not hug the tower it is about; a phone with a
   // notch leaves 189px of usable height, which is less than the floor plus a
   // price badge, and a tighter ring there is better than a broken one.
-  let ry = Math.min(cfg.minRadius, ryMax)
+  // An arc starts TIGHT and grows only as far as separating the plates needs.
+  // The ring's radius floor exists so a full ring does not hug the thing it is
+  // about; an arc is supposed to hug it.
+  let ry = Math.min(arc ? Math.max(1, cfg.buttonSize * 0.5) : cfg.minRadius, ryMax)
   let rx = Math.min(rxMax, ry * aspect)
   let tooTight = clashes(rx, ry)
   while (tooTight) {
@@ -279,6 +334,9 @@ export function panelPlacement(
   panelH: number,
   area: Rect,
   cfg: RingConfig,
+  /** The buttons themselves, when the caller has them. Given these, a side
+   *  that hides fewer plates beats a side with more room — see below. */
+  buttons?: RingButton[],
 ): PanelPlacement {
   const gap = cfg.panelGap
   const areaR = area.x + area.width
@@ -313,18 +371,63 @@ export function panelPlacement(
   // lane above and below it visible, which is what the player is deciding
   // about. Above and below are the fallback for a tall, narrow screen.
   const order: PanelSide[] = ['right', 'left', 'below', 'above']
-  let side = order.find((sd) => room[sd] >= need[sd]) ?? null
-
-  if (side === null) {
-    // Nothing fits cleanly. Take the side that keeps the panel off the ANCHOR,
-    // preferring the one with the most slack — the pad has to stay visible
-    // even when the panel has to sit over its own buttons.
-    const ranked = [...order].sort((a, b) => (room[b] - need[b]) - (room[a] - need[a]))
-    side = ranked.find((sd) => {
-      const at2 = at(sd)
-      return !rectHasPoint(at2.x, at2.y, panelW, panelH, anchorX, anchorY)
-    }) ?? ranked[0]!
+  const clear = (sd: PanelSide): boolean => {
+    const p = at(sd)
+    return !rectHasPoint(p.x, p.y, panelW, panelH, anchorX, anchorY)
   }
+
+  /**
+   * How many BUTTON PLATES this side would put the panel on top of.
+   *
+   * A hidden plate is a button that takes two taps instead of one — cancel
+   * back to the ring, then press it — so it is a real cost, and on the
+   * smallest notched screen it is unavoidable: a six-option ring is 324x214
+   * and the strip it shares with a 226-wide panel is 472x171.
+   *
+   * MEASURED, and the honest number is a small one. Ranking by this rather
+   * than by room alone moves 42 of the 7,560 placements out of "three plates
+   * hidden" and leaves the worst case where it was, at four — because on the
+   * screens where it bites, all four sides clamp to nearly the same rectangle.
+   * It is kept because it is free and strictly better, not because it solves
+   * the problem. What would solve it is a narrower panel on a small screen,
+   * and that is a change to what the panel says, not to where it goes.
+   */
+  const hidden = (sd: PanelSide): number => {
+    if (!buttons) return 0
+    const p = at(sd)
+    const box = { x: p.x, y: p.y, width: panelW, height: panelH }
+    let n = 0
+    for (const b of buttons) {
+      const plate = {
+        x: b.x - cfg.buttonSize / 2,
+        y: b.y - cfg.buttonSize / 2,
+        width: cfg.buttonSize,
+        height: cfg.buttonSize,
+      }
+      if (overlap(box, plate)) n++
+    }
+    return n
+  }
+
+  // COVERING THE ANCHOR DISQUALIFIES A SIDE OUTRIGHT, even one with room to
+  // spare. This used to take the first side that fitted and only think about
+  // the anchor once nothing fitted — so a panel with plenty of room could
+  // still be placed straight over the pad it was describing, and the fix for
+  // that was to move the ring. The panel has four places it can go and the
+  // ring has one that means anything; exhausting the panel's options first is
+  // the right order, and it is what fitRingAndPanel now relies on.
+  // Sides that keep the pad visible, best first: fewest plates hidden, then
+  // the one with the most room, then the fixed preference order. Covering the
+  // anchor drops a side out of the running entirely.
+  const ranked = [...order].sort((a, b) => (
+    (hidden(a) - hidden(b))
+    || ((room[b] - need[b]) - (room[a] - need[a]))
+    || (order.indexOf(a) - order.indexOf(b))
+  ))
+  let side = ranked.find((sd) => room[sd] >= need[sd] && clear(sd))
+    ?? ranked.find(clear)
+    ?? ranked.find((sd) => room[sd] >= need[sd])
+    ?? ranked[0]!
 
   const pos = at(side)
   const box = { x: pos.x, y: pos.y, width: panelW, height: panelH }
@@ -353,9 +456,17 @@ function rectHasPoint(
  * 226px panel. Everything fits — 309 + 14 + 226 is 549 of 736 — but only if
  * the ring gets out of the way first.
  *
- * So when the panel has nowhere to go, the RING moves. It keeps its leader
- * line back to the tower, and the panel takes the space that opens up. The
- * ring moving is much cheaper than the panel covering the thing it describes.
+ * THE PANEL MOVES FIRST, and the ring only as a last resort. This had it the
+ * other way round on the reasoning that a leader line is cheap. It is not the
+ * right trade: the ring's position IS information — it says which pad this
+ * menu belongs to — and the panel's is not. A panel is a box of text and it
+ * reads the same wherever it sits.
+ *
+ * So overlapping the ring's own buttons is accepted rather than fixed by
+ * pushing the ring aside; `panelPlacement` exhausts all four sides looking for
+ * one that keeps the pad visible; and the ring is moved only when no panel
+ * position at all can avoid covering the anchor. When that happens the ring
+ * keeps its leader line back to the tower.
  */
 export function fitRingAndPanel(
   anchorX: number,
@@ -367,9 +478,12 @@ export function fitRingAndPanel(
   area: Rect,
 ): { ring: RingPlacement; panel: PanelPlacement } {
   let ring = ringPlacement(anchorX, anchorY, count, cfg, area)
-  let panel = panelPlacement(ring.bounds, anchorX, anchorY, panelW, panelH, area, cfg)
+  let panel = panelPlacement(
+    ring.bounds, anchorX, anchorY, panelW, panelH, area, cfg, ring.buttons)
   if (ring.overflowed) return { ring, panel }
-  if (!panel.overlapsRing && !panel.coversAnchor) return { ring, panel }
+  // Overlapping the ring is NOT a reason to move the ring. Only the panel
+  // sitting on the pad it describes is.
+  if (!panel.coversAnchor) return { ring, panel }
 
   // How much room the panel needs beside the ring, and which way to push.
   const need = panelW + cfg.panelGap
@@ -378,12 +492,11 @@ export function fitRingAndPanel(
   const push = roomRight >= roomLeft ? -(need - roomRight) : (need - roomLeft)
   if (Number.isFinite(push) && push !== 0) {
     const moved = ringPlacement(anchorX + push, anchorY, count, cfg, area)
-    const retry = panelPlacement(moved.bounds, anchorX, anchorY, panelW, panelH, area, cfg)
-    // Take the move when it improves things: clear of the ring is best, clear
-    // of the anchor is the requirement.
-    const better = (!retry.overlapsRing && !retry.coversAnchor)
-      || (panel.coversAnchor && !retry.coversAnchor)
-    if (better) {
+    const retry = panelPlacement(
+      moved.bounds, anchorX, anchorY, panelW, panelH, area, cfg, moved.buttons)
+    // Take the move only if it buys the one thing that justified it. A ring
+    // shifted for a tidier-looking panel is a ring pointing at the wrong pad.
+    if (!retry.coversAnchor) {
       ring = moved
       // The ring was moved on purpose, so the leader line has to say so even
       // if the clamp itself did not need to shift anything.

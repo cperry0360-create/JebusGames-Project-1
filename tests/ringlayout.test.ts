@@ -201,8 +201,17 @@ test('the ring grows until its plates stop overlapping, at every option count', 
       // plus a price badge. What must hold is that it uses the floor wherever
       // there is room for it.
       const ryMax = (area.height - (CFG.buttonSize + CFG.priceGap + CFG.priceHeight)) / 2
-      assert.ok(p.radiusY >= Math.min(CFG.minRadius, ryMax) - 0.5,
-        `${vw}x${vh} n=${n}: radius ${p.radiusY} is under both the floor and the room available`)
+      if (n > CFG.arcMaxOptions) {
+        assert.ok(p.radiusY >= Math.min(CFG.minRadius, ryMax) - 0.5,
+          `${vw}x${vh} n=${n}: radius ${p.radiusY} is under both the floor and the room available`)
+      } else {
+        // THE ARC IS MEANT TO BE TIGHT. The floor exists so a full ring does
+        // not hug the thing it is about; two or three buttons on an arc are
+        // supposed to. What must hold instead is the opposite bound — that
+        // they stay close.
+        assert.ok(p.radiusY <= CFG.minRadius,
+          `${vw}x${vh} n=${n}: the arc grew to ${p.radiusY}, which is a ring`)
+      }
       // It stretches sideways into a wide, short strip rather than demanding a
       // circle that will not fit — but only so far, or it stops reading as a
       // ring around the tower.
@@ -245,24 +254,124 @@ test('the panel picks its side from the room available, not from a fixed rule', 
   }
 })
 
-test('the ring gets out of the way when the panel has nowhere to go', () => {
-  // Placing the ring first and the panel afterwards cannot solve this: on a
-  // notched 844x390 the strip is 736x189, a four-option ring is ~309 wide, and
-  // a ring in the middle of that leaves 199px either side for a 226px panel.
-  // Everything fits — 309 + 14 + 226 is 549 of 736 — but only if the ring
-  // moves first.
+test('the panel moves, not the ring', () => {
+  // THE INVERSION, and the reasoning behind it. This used to push the RING
+  // aside whenever the panel overlapped it, on the grounds that a leader line
+  // is cheap. It is the wrong trade: the ring's position IS information — it
+  // says which pad this menu belongs to — and the panel's is not. A panel is a
+  // box of text and it reads the same wherever it sits.
   const area = areaFor(844, 390, INSETS[1]!)
   const cx = area.x + area.width / 2
   const cy = area.y + area.height / 2
   const alone = ringPlacement(cx, cy, 4, CFG, area)
   const naive = panelPlacement(alone.bounds, cx, cy, CFG.panelWidth, 160, area, CFG)
-  assert.equal(naive.overlapsRing, true, 'this case no longer needs the ring to move')
+  assert.equal(naive.overlapsRing, true, 'this case no longer exercises the overlap')
 
   const fitted = fitRingAndPanel(cx, cy, 4, CFG.panelWidth, 160, CFG, area)
-  assert.equal(fitted.panel.overlapsRing, false, 'the ring did not move out of the way')
+  assert.equal(fitted.ring.shiftX, 0, 'the ring was pushed aside for the panel again')
+  assert.equal(fitted.ring.shiftY, 0, 'the ring was pushed aside for the panel again')
   assert.equal(fitted.panel.coversAnchor, false, 'the panel covers the pad it describes')
-  assert.notEqual(fitted.ring.shiftX, 0, 'the ring moved without recording that it had')
-  assert.ok(contains(area, fitted.ring.bounds), 'the moved ring left the screen')
+  // And overlapping the ring is the ACCEPTED outcome here, not a failure.
+  assert.equal(fitted.panel.overlapsRing, true,
+    'the case changed; this test no longer proves the panel is allowed to overlap')
+})
+
+test('the panel never covers the pad it is describing, anywhere', () => {
+  // The one thing the panel may never do. Overlapping the ring's own buttons
+  // is a smaller sin and is permitted; hiding the pad is the whole reason this
+  // is not a centred modal.
+  //
+  // It is also what makes moving the ring unnecessary: with the anchor
+  // disqualifying a side outright, all 7,560 placements find a panel position
+  // that keeps the pad visible, so the last-resort branch never fires.
+  let covered = 0
+  for (const [vw, vh] of VIEWPORTS as Array<[number, number]>) {
+    for (const insets of INSETS) {
+      const area = areaFor(vw, vh, insets)
+      const ph = tallestPanel(area)
+      for (let n = 1; n <= Object.keys(TOWERS).length; n++) {
+        for (const [px, py] of [
+          [area.x, area.y], [area.x + area.width, area.y],
+          [area.x, area.y + area.height], [area.x + area.width, area.y + area.height],
+          [area.x + area.width / 2, area.y + area.height / 2],
+        ] as Array<[number, number]>) {
+          const f = fitRingAndPanel(px, py, n, CFG.panelWidth, ph, CFG, area)
+          if (f.panel.coversAnchor) covered++
+        }
+      }
+    }
+  }
+  assert.equal(covered, 0, `${covered} placements put the panel over the pad`)
+})
+
+test('every ring button is near the pad it belongs to', () => {
+  // PROXIMITY, NOT JUST CONTAINMENT. A ring pinned to the right edge of the
+  // screen is on screen, tidy, overlapping nothing, and passes every other
+  // question this file asks — which is exactly what the build ring did at
+  // devicePixelRatio 3, sitting 401px from the pad that opened it.
+  //
+  // Containment cannot see that. Distance can. What distance CANNOT be is
+  // unconditional, and being honest about why matters: a six-option ring is
+  // 324px wide, and a pad in the corner of the usable area cannot have a 324px
+  // ring centred on it without half of it leaving the screen. The clamp then
+  // moves it, correctly, and the far button ends up 336px away. Asserting a
+  // flat bound would either fail that legitimate case or be too loose to catch
+  // the bug.
+  //
+  // So it is conditioned on the thing that actually distinguishes them. Where
+  // the ring FITS centred on its anchor, it must BE centred on its anchor —
+  // shift zero, every button within one radius. That is false for a ring
+  // clamped 401px away and true for every correct placement.
+  const BOUND = 200
+  let worst = 0
+  let worstWhere = ''
+  let checked = 0
+  for (const [vw, vh] of VIEWPORTS as Array<[number, number]>) {
+    for (const insets of INSETS) {
+      const area = areaFor(vw, vh, insets)
+      const ph = tallestPanel(area)
+      for (let n = 1; n <= Object.keys(TOWERS).length; n++) {
+        for (let fx = 0; fx <= 1; fx += 0.125) {
+          for (let fy = 0; fy <= 1; fy += 0.125) {
+            const px = area.x + area.width * fx
+            const py = area.y + area.height * fy
+            const { ring } = fitRingAndPanel(px, py, n, CFG.panelWidth, ph, CFG, area)
+
+            // Does the ring fit, centred here? Asked of the box it WOULD have
+            // had before the clamp, recovered by undoing the shift. A box
+            // centred on the anchor is the wrong question: the price badges
+            // hang below the plates, so the ring's footprint sits lower than
+            // its centre and a symmetric test is 2px out.
+            const unclamped = {
+              x: ring.bounds.x - ring.shiftX,
+              y: ring.bounds.y - ring.shiftY,
+              width: ring.bounds.width,
+              height: ring.bounds.height,
+            }
+            if (!contains(area, unclamped)) continue
+
+            checked++
+            const where = `${vw}x${vh} insets=${insets.left} n=${n} `
+              + `anchor ${Math.round(px)},${Math.round(py)}`
+            assert.ok(Math.hypot(ring.shiftX, ring.shiftY) < 0.5,
+              `${where}: the ring moved ${Math.hypot(ring.shiftX, ring.shiftY).toFixed(0)}px `
+              + 'off a pad it had room to sit on')
+            for (const b of ring.buttons) {
+              const d = Math.hypot(b.x - px, b.y - py)
+              if (d > worst) { worst = d; worstWhere = `${where} button ${b.index}` }
+              assert.ok(d <= Math.max(ring.radiusX, ring.radiusY) + 1,
+                `${where}: button ${b.index} is ${d.toFixed(0)}px out, past its own radius`)
+            }
+          }
+        }
+      }
+    }
+  }
+  assert.ok(checked > 500, `only ${checked} placements had room to be centred; the walk is too narrow`)
+  // And the absolute number, measured rather than chosen. 164px is a
+  // six-option ring stretched as far as the ellipse cap allows on a notched
+  // iPhone SE; the bug measured 401.
+  assert.ok(worst <= BOUND, `a button sits ${worst.toFixed(0)}px from its pad — ${worstWhere}`)
 })
 
 test('the usable area is the viewport minus the notch and the ability bar', () => {
