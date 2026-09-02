@@ -276,11 +276,18 @@ test('the fonts and sound cues are bundled', () => {
     assert.ok(existsSync(url(`../public/${audio.root}${file}`)),
       `cue "${id}" names ${file}, which is not in the deploy`)
   }
-  // And the four that nothing names are gone rather than shipping quietly.
-  for (const s of ['sfx-build', 'sfx-cast', 'sfx-leak', 'sfx-tax']) {
-    assert.ok(!existsSync(url(`../public/assets/audio/${s}.wav`)),
-      `${s}.wav is back in the deploy; nothing references it and tools/mksfx.py can regenerate it`)
-  }
+  // And nothing ships that no cue names. Four superseded .wav files sat in the
+  // deploy for months because the check above was a hand-written list of
+  // filenames rather than a question about the manifest. Directory contents
+  // against the manifest is the question; the list was the answer to a
+  // different one.
+  const named = new Set(
+    (Object.values(audio.cues) as any[]).map((c) => `${c.file}.${c.format ?? audio.format ?? 'ogg'}`),
+  )
+  const orphans = readdirSync(url(`../public/${audio.root}`))
+    .filter((f) => /\.(wav|ogg|mp3)$/.test(f) && !named.has(f))
+  assert.deepEqual(orphans, [],
+    `unreferenced audio in the deploy: ${orphans.join(', ')} — every player downloads these`)
   assert.ok(existsSync(url('../public/assets/kenney/License.txt')), 'the art pack license must ship with the art')
 })
 

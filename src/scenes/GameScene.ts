@@ -203,6 +203,10 @@ export class GameScene extends Phaser.Scene {
   /** Whether the goblin has already said his line this run. One per RUN, not
    *  per wave and not per enemy. */
   private greeted = false
+  /** Whether the Politician has said his. Once per run, on the boss becoming
+   *  visible. Wave 13 spawns one boss, but the flag is what makes that a
+   *  property rather than an assumption about the wave table. */
+  private politicianSpoke = false
   /** Which spot keeps the full DO NOT BUILD HERE sign. The rest get the quiet
    *  marker; see createPads. Public so a harness run can check there is
    *  exactly one and that it is the one nearest the entrance. */
@@ -384,6 +388,7 @@ export class GameScene extends Phaser.Scene {
     // The rare drop does not survive a run, and is never drafted into one.
     this.status.rareAbility = null
     this.greeted = false
+    this.politicianSpoke = false
     this.status.bossName = ''
     this.status.bossHealth = 0
     this.status.bossMax = 0
@@ -2368,13 +2373,38 @@ this.armReadyCountdown()
         // would spend the line on an enemy that has not emerged yet, and one
         // that dies short of the mouth would take the only greeting of the run
         // with it.
+        //
+        // Two lines can want the same hook, so they are CHAINED rather than
+        // assigned: a run whose first enemy to emerge is also the boss would
+        // otherwise lose whichever was written second.
+        const onEmerge: Array<() => void> = []
         if (!this.greeted) {
-          enemy.onEmerge = () => {
+          onEmerge.push(() => {
             if (this.greeted) return
             this.greeted = true
             play(this, 'goblin-spawn')
-          }
+          })
         }
+        // The Politician's entrance. Once per run, and on him BECOMING
+        // VISIBLE rather than on the wave starting: the spawn happens off the
+        // plate behind the arch's stonework, several seconds before there is
+        // anything on screen to be talking about.
+        //
+        // Nothing stops it once it starts. It runs 7.3 seconds, which is
+        // longer than he may survive, and a line cut off mid-sentence because
+        // the player killed him quickly is worse than one that outlives him —
+        // so it is fired and left alone. Phaser mixes rather than steals
+        // voices, and audio.test.ts holds the property that nothing in the
+        // game calls stopAll.
+        if (def.tier === 'boss' && !this.politicianSpoke) {
+          onEmerge.push(() => {
+            if (this.politicianSpoke) return
+            this.politicianSpoke = true
+            play(this, 'politician')
+            logEvent('voice', 'politician line on boss emerge')
+          })
+        }
+        if (onEmerge.length > 0) enemy.onEmerge = () => { for (const fn of onEmerge) fn() }
         logEvent('spawn', `${id} hp=${def.maxHealth}`)
         this.enemies.push(enemy)
         if (def.tier === 'boss') this.announceBoss(enemy)

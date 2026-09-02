@@ -2640,7 +2640,7 @@ async function run() {
     note('viewport ' + VP.w + 'x' + VP.h)
     note('voice bus ' + BUS + ', everything else ducks to ' + DUCK +
       ' while a line is sounding, master volume ' + VOL)
-    for (const k of ['goblin-spawn', 'haymaker-voice', 'dadmode-voice']) {
+    for (const k of ['goblin-spawn', 'haymaker-voice', 'dadmode-voice', 'politician']) {
       note('  ' + k.padEnd(15) + ' loaded=' + game.cache.audio.exists(k) +
         '  gain ' + AJ.cues[k].gain + '  ' + AJ.cues[k].durationMs + 'ms' +
         '  expect volume ' + (AJ.cues[k].gain * BUS * VOL).toFixed(3))
@@ -2733,6 +2733,81 @@ async function run() {
       (got('dadmode-voice').length === 1 ? 'played once and left alone' : '*** RETRIGGERED ***'))
     note('RESULT ' + (hv && dv && plain === 0 && got('dadmode-voice').length === 1
       ? 'both lines fire on their moment, mixed as measured, and everything else steps back'
+      : '*** see above ***'))
+    return
+  }
+
+  if (scenario === 'politician') {
+    // THE POLITICIAN'S LINE, on its own run: the `voices` scenario ends in a
+    // wave of its own and cannot then be steered to wave 13.
+    //
+    // Three separate questions, and the first is the one the requirement is
+    // actually about — WHEN. The boss spawns off the plate behind the arch,
+    // invisible, several seconds before there is anything on screen to be
+    // talking about, so the line has to wait for him to emerge.
+    const AJ = (await import('./js/data/audio.json', { with: { type: 'json' } })).default
+    const A = await import('./js/systems/Audio.js')
+    const BUS = AJ.buses.voice, VOL = A.getVolume()
+    note('viewport ' + VP.w + 'x' + VP.h)
+    note('politician: loaded=' + game.cache.audio.exists('politician') +
+      '  gain ' + AJ.cues.politician.gain + '  ' + AJ.cues.politician.durationMs + 'ms' +
+      '  expect volume ' + (AJ.cues.politician.gain * BUS * VOL).toFixed(3))
+
+    const heard = []
+    const realPlay = game.sound.play.bind(game.sound)
+    game.sound.play = (key, cfg) => {
+      heard.push({ key, vol: cfg && cfg.volume, t: performance.now() })
+      return realPlay(key, cfg)
+    }
+    const got = (k) => heard.filter((h) => h.key === k)
+
+    g.status.wave = 12
+    const tWave = performance.now()
+    g.startWave()
+    await until(() => g.enemies.some((e) => e.def.tier === 'boss'), 60000)
+    const boss = g.enemies.find((e) => e.def.tier === 'boss')
+    const tSpawn = performance.now()
+    if (!boss) { note('*** THE BOSS NEVER SPAWNED ***'); return }
+    note('boss spawned at x=' + Math.round(boss.x) + ' alpha ' + boss.art.alpha.toFixed(2) +
+      ', ' + Math.round(tSpawn - tWave) + 'ms after the wave started')
+    // Invisible at the spawn. If the line has already gone, it went on the
+    // wave rather than on him.
+    const spokeAtSpawn = got('politician').length
+    note('  line played by the spawn: ' + spokeAtSpawn +
+      (spokeAtSpawn === 0 ? '  correct — he is not visible yet' : '  *** TOO EARLY ***'))
+
+    await until(() => got('politician').length > 0, 60000)
+    const pv = got('politician')[0]
+    note('  line played ' + got('politician').length + ' time(s)' +
+      (pv ? ' at volume ' + pv.vol.toFixed(3) + ', ' +
+        Math.round(pv.t - tSpawn) + 'ms after the spawn' : '  *** SILENT ***') +
+      '  boss now at x=' + Math.round(boss.x) + ' alpha ' + boss.art.alpha.toFixed(2))
+    let ok = false
+    if (pv) {
+      const want = AJ.cues.politician.gain * BUS * VOL
+      ok = Math.abs(pv.vol - want) < 0.001 && spokeAtSpawn === 0
+      note('   expected ' + want.toFixed(3) + ' — ' +
+        (Math.abs(pv.vol - want) < 0.001 ? 'matches' : '*** MIXED WRONG ***'))
+    }
+    await shot('politician-' + VP.w + 'x' + VP.h)
+
+    // And it survives him. A 7.3s line and a boss that can die in two is the
+    // case the requirement is actually about.
+    const playing = () => game.sound.sounds.filter((sn) => sn.key === 'politician' && sn.isPlaying)
+    const before = playing().length
+    g.damageEnemy(boss, 999999, true)
+    await sleep(1200)
+    const after = playing().length
+    note('  boss killed mid-line: ' + after + ' of ' + before + ' still playing' +
+      (before > 0 && after === before ? '  correct — it plays out' : '  *** CUT OFF ***'))
+    if (!(before > 0 && after === before)) ok = false
+
+    // Never twice, however long the run goes on.
+    await sleep(2500)
+    note('  played exactly once: ' + (got('politician').length === 1))
+    if (got('politician').length !== 1) ok = false
+    note('RESULT ' + (ok
+      ? 'the line fires when he becomes visible, at the measured level, once, and plays out'
       : '*** see above ***'))
     return
   }

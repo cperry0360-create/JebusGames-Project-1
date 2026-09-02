@@ -257,6 +257,15 @@
       "bus": "voice",
       "durationMs": 2200,
       "_note": "Elijah. 2.2s at -2.5 dBFS peak, -17.3 dBFS over its loudest half. The longest cue in the game by a second, and it plays over the transformation sting and through the invulnerability window without being cut."
+    },
+    "politician": {
+      "file": "sfx_politician",
+      "gain": 0.857,
+      "maxVoices": 1,
+      "format": "wav",
+      "bus": "voice",
+      "durationMs": 7300,
+      "_note": "Elijah. 7.30s at -1.7 dBFS peak, -16.3 dBFS over its loudest half. The Politician's entrance in wave 13, once per run, fired when he EMERGES from the arch rather than when the wave starts — spawning happens off the plate behind the stonework, where there is nothing to hear it about. Three times longer than any other cue in the game, so its durationMs matters more than most: it is what holds the duck down and what stops a second copy claiming the cap."
     }
   },
   "music": {

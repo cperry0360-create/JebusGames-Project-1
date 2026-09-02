@@ -187,8 +187,13 @@ test('the goblin says his line once per run, at the arch, not at the spawn', () 
 
   // Hung off the emergence, which is the tick the fade-in starts — not the
   // constructor, which runs off the plate behind the stonework.
-  assert.match(game, /enemy\.onEmerge = \(\) => \{/,
+  assert.match(game, /enemy\.onEmerge = \(\) => \{ for \(const fn of onEmerge\) fn\(\) \}/,
     'the line is not hung off the arch emergence')
+  // CHAINED, not assigned. Two lines want this hook — the goblin's greeting
+  // and the Politician's entrance — and a run whose first enemy to emerge is
+  // also the boss would lose whichever was written second.
+  assert.match(game, /const onEmerge: Array<\(\) => void> = \[\]/,
+    'the emergence hooks are assigned rather than chained, so one can clobber the other')
   assert.doesNotMatch(game, /play\(this, 'goblin-spawn'\)[\s\S]{0,40}new Enemy/,
     'the line plays at the spawn, before there is anything to see')
   assert.match(enemy, /onEmerge: \(\(\) => void\) \| null/, 'Enemy has no emergence hook')
@@ -209,15 +214,76 @@ test('the goblin says his line once per run, at the arch, not at the spawn', () 
   // short of the mouth must not take the run's only greeting with it.
   const hook = game.slice(game.indexOf('if (!this.greeted) {'))
   const body = hook.slice(0, hook.indexOf('\n        }') + 1)
-  assert.match(body, /onEmerge = \(\) => \{[\s\S]*this\.greeted = true/,
+  assert.match(body, /onEmerge\.push\(\(\) => \{[\s\S]*this\.greeted = true/,
     'the flag is claimed at the spawn rather than at the arch')
+})
+
+test('the Politician speaks when he appears, once, and is never cut off', () => {
+  const game = src('scenes/GameScene.ts')
+
+  // On becoming VISIBLE, not on the wave starting. The spawn happens off the
+  // plate behind the arch, several seconds before there is anything on screen
+  // to be talking about.
+  const hook = game.slice(game.indexOf("if (def.tier === 'boss' && !this.politicianSpoke) {"))
+  const body = hook.slice(0, hook.indexOf('\n        }') + 1)
+  assert.ok(body.length > 0, 'nothing fires the Politician line on the boss emerging')
+  assert.match(body, /onEmerge\.push\(\(\) => \{[\s\S]*play\(this, 'politician'\)/,
+    'the line is not hung off the emergence')
+  assert.match(body, /this\.politicianSpoke = true/, 'the line is not claimed once')
+
+  // Once per RUN, and reset so a second run gets it again.
+  assert.match(game, /private politicianSpoke = false/, 'nothing remembers the line was said')
+  assert.match(game, /\n\s*this\.politicianSpoke = false\n/,
+    'the flag is never reset, so run two is silent')
+
+  // It is 7.3 seconds long, which is longer than the boss may survive. Nothing
+  // stops it: it is fired and left alone, and the "nothing calls stopAll" test
+  // above is what holds that. A line cut off mid-sentence because the player
+  // killed him quickly is worse than one that outlives him.
+  const cue = (audio.cues as any).politician
+  assert.ok(cue, 'the cue is not in the manifest')
+  assert.equal(cue.bus, 'voice', 'the line is not on the voice bus with the other three')
+  assert.equal(cue.maxVoices, 1, 'the line can talk over itself')
+  assert.equal(cue.durationMs, 7300, 'the declared duration does not match the 7.30s recording')
+  assert.doesNotMatch(game, /politician[\s\S]{0,200}?\.stop\(\)/,
+    'something stops the line, which would cut him off mid-sentence')
+
+  // The DAD MODE arrangement is deliberate and unchanged: the line goes first
+  // and the sting follows it, because the duck only reaches what STARTS during
+  // a line. Anything that reordered those two would quietly undo it.
+  const ls = game.slice(game.indexOf('private announceLastStand()'))
+  const lsBody = ls.slice(0, ls.indexOf('\n  }'))
+  assert.ok(lsBody.indexOf("play(this, 'dadmode-voice')") < lsBody.indexOf("play(this, 'last-stand'"),
+    'the DAD MODE sting now precedes the line, so it no longer steps back for it')
 })
 
 test('a voice line is balanced as a group, and long enough to need its own hold', () => {
   const lines = Object.entries(audio.cues).filter(([, d]: [string, any]) => d.bus === 'voice')
-  assert.equal(lines.length, 3, 'expected three recorded lines on the voice bus')
+  assert.equal(lines.length, 4, 'expected four recorded lines on the voice bus')
   const mgr = src('systems/Audio.ts')
   const hold = Number(/const VOICE_MS = (\d+)/.exec(mgr)?.[1])
+
+  // THE POINT OF THE BUS, asserted rather than described. Each line's gain is
+  // set from the RMS of its own loudest half so that all four come out of the
+  // mixer at the same level; the measured input is recorded in each cue's
+  // note, so the arithmetic can be checked here without a decoder.
+  //
+  //   goblin-spawn   -14.8 dBFS in    haymaker-voice  -15.8
+  //   dadmode-voice  -17.3            politician      -16.3
+  //
+  // This is what "a fourth line can be added without re-tuning the first
+  // three" means, and the count above alone would not have caught a fourth
+  // line arriving at its raw level.
+  const bus = audio.buses.voice
+  const outputs = (lines as [string, any][]).map(([name, cue]) => {
+    const measured = /(-?\d+\.\d+) dBFS over its loudest half/.exec(cue._note ?? '')
+    assert.ok(measured, `"${name}" does not record the level it was measured at`)
+    return { name, db: Number(measured[1]) + 20 * Math.log10(cue.gain * bus) }
+  })
+  const spread = Math.max(...outputs.map((o) => o.db)) - Math.min(...outputs.map((o) => o.db))
+  assert.ok(spread < 0.2,
+    `the lines come out ${spread.toFixed(2)} dB apart: ` +
+    outputs.map((o) => `${o.name} ${o.db.toFixed(1)}`).join(', '))
 
   for (const [name, cue] of lines as [string, any][]) {
     // Their own level relative to the effects, so a fourth line can be added
