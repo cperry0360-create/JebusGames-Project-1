@@ -299,6 +299,23 @@ test('every file in the manifest is bound to something that draws it', () => {
     'these manifest keys are named by no role and no data file, so nothing can ever draw them')
 })
 
+test('the image size reader actually reads sizes, in both containers', () => {
+  // The containment check above passes trivially if the reader returns
+  // something enormous, so the reader itself needs pinning. These four are
+  // known: two WebP (one 4K plate, one backdrop) and two PNG.
+  for (const [path, w, h] of [
+    ['maps/map_level1.webp', 3840, 2160],
+    ['ui/loadout_bg.webp', 1920, 1080],
+    ['props/pad_flagstone.png', 358, 274],
+    ['props/pad_donotbuild.png', 320, 290],
+  ] as Array<[string, number, number]>) {
+    const file = url(`../public/${art.assetRoot}${path}`)
+    assert.ok(existsSync(file), `${path} is missing`)
+    assert.deepEqual(imageSize(readFileSync(file), path), [w, h],
+      `the size reader misread ${path}`)
+  }
+})
+
 test('every recorded content box fits inside the file it describes', () => {
   // The test that would have caught a whole cast rendering at half size.
   //
@@ -320,7 +337,7 @@ test('every recorded content box fits inside the file it describes', () => {
     if (!path) continue
     const file = url(`../public/${art.assetRoot}${path}`)
     if (!existsSync(file)) continue
-    const [w, h] = pngSize(readFileSync(file))
+    const [w, h] = imageSize(readFileSync(file), path)
     const sheet = cfg.sheet
     // A sheet's frames are laid out across one file, so the box belongs to a
     // frame and not to the whole strip.
@@ -334,8 +351,43 @@ test('every recorded content box fits inside the file it describes', () => {
   assert.ok(checked > 20, `only ${checked} content boxes were checked`)
 })
 
-/** Width and height out of a PNG's IHDR, which is always the first chunk. */
-function pngSize(buf: Buffer): [number, number] {
-  assert.equal(buf.readUInt32BE(0), 0x89504e47, 'not a PNG')
-  return [buf.readUInt32BE(16), buf.readUInt32BE(20)]
+/**
+ * Width and height of a manifest image, PNG or WebP.
+ *
+ * This read a PNG's IHDR and asserted the signature, which is exactly right
+ * until an asset changes format — the map plate and both full-screen backdrops
+ * are WebP now, and the assertion fired on a file that was perfectly valid.
+ * A size reader that only understands one container silently stops covering
+ * whatever moves to another, so it understands both.
+ */
+function imageSize(buf: Buffer, path: string): [number, number] {
+  if (buf.readUInt32BE(0) === 0x89504e47) {
+    // PNG: IHDR is always the first chunk, width and height at 16 and 20.
+    return [buf.readUInt32BE(16), buf.readUInt32BE(20)]
+  }
+  assert.equal(buf.toString('ascii', 0, 4), 'RIFF', `${path} is neither PNG nor WebP`)
+  assert.equal(buf.toString('ascii', 8, 12), 'WEBP', `${path} is a RIFF but not a WebP`)
+  // Walk the chunks rather than assuming the first one carries the size: an
+  // encoder is free to put ICC or EXIF ahead of the image data.
+  let at = 12
+  while (at + 8 <= buf.length) {
+    const tag = buf.toString('ascii', at, at + 4)
+    const size = buf.readUInt32LE(at + 4)
+    const body = at + 8
+    if (tag === 'VP8X') {
+      // Extended: canvas size as two 24-bit little-endian values, minus one.
+      return [buf.readUIntLE(body + 4, 3) + 1, buf.readUIntLE(body + 7, 3) + 1]
+    }
+    if (tag === 'VP8 ') {
+      // Lossy: a 3-byte frame tag, a 3-byte start code, then 14-bit w and h.
+      return [buf.readUInt16LE(body + 6) & 0x3fff, buf.readUInt16LE(body + 8) & 0x3fff]
+    }
+    if (tag === 'VP8L') {
+      // Lossless: 1-byte signature, then 14 bits of w-1 and 14 bits of h-1.
+      const bits = buf.readUInt32LE(body + 1)
+      return [(bits & 0x3fff) + 1, ((bits >> 14) & 0x3fff) + 1]
+    }
+    at = body + size + (size % 2)
+  }
+  throw new Error(`${path} is a WebP with no image chunk`)
 }
