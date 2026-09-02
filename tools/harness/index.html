@@ -3114,6 +3114,135 @@ async function run() {
     return
   }
 
+  if (scenario === 'settings') {
+    // THE SETTINGS DIALOG, by position. A synthetic press on a control 200px
+    // below the display "works" exactly as happily as one a thumb could reach,
+    // so what is checked here is where things ARE.
+    const D = (await import('./js/data/display.json', { with: { type: 'json' } })).default
+    const A = await import('./js/systems/Audio.js')
+    const hud = scene('Hud')
+    const dpr = window.devicePixelRatio || 1
+    note('viewport ' + VP.w + 'x' + VP.h + '  dpr ' + dpr)
+
+    const inView = (r) => r.x >= -0.5 && r.y >= -0.5
+      && r.x + r.width <= VP.w + 0.5 && r.y + r.height <= VP.h + 0.5
+    let bad = 0
+
+    // THE GEAR: one corner control where there were four.
+    const gear = hud.children.list.find((o) => o.name === 'hud:settings')
+    const oldControls = hud.children.list.filter((o) =>
+      o.name === 'hud:mute' || o.name === 'hud:pause').length
+    note('gear present: ' + !!gear + '   old corner controls left: ' + oldControls)
+    if (!gear) { note('*** NO GEAR ***'); return }
+
+    for (const zName of ['min', 'max']) {
+      const z = (zName === 'min' ? D.camera.minZoom : D.camera.maxZoom) * dpr
+      g.rig.setTargetZoom(z)
+      await until(() => Math.abs(g.cameras.main.zoom - z) < 0.01, 6000)
+      const gb = gear.getBounds()
+      note('at ' + zName + ' zoom: gear at ' + Math.round(gb.x) + ',' + Math.round(gb.y) +
+        ' ' + Math.round(gb.width) + 'x' + Math.round(gb.height) +
+        (inView(gb) ? '  on screen' : '  *** OFF SCREEN ***'))
+      if (!inView(gb)) bad++
+
+      // Open it by PRESSING the gear, not by calling the method.
+      await click(gb.centerX, gb.centerY)
+      await sleep(320)
+      const paused = !game.scene.isActive('Game') || game.scene.isPaused('Game')
+      const panel = hud.settings
+      note('  opened by tapping the gear: ' + !!panel + '   Game paused: ' + paused)
+      if (!panel) { bad++; continue }
+      if (!paused) { note('  *** THE GAME IS STILL RUNNING ***'); bad++ }
+
+      // Every control, by position.
+      const named = []
+      for (const o of panel.hits) {
+        const r = o.getBounds()
+        named.push({ id: o.name || '?', r })
+        if (!inView(r)) { bad++; note('      *** ' + (o.name || '?') + ' IS OFF SCREEN ***') }
+      }
+      note('  ' + named.length + ' controls: ' + named.map((n) =>
+        n.id + ' ' + Math.round(n.r.x) + ',' + Math.round(n.r.y) + ' ' +
+        Math.round(n.r.width) + 'x' + Math.round(n.r.height)).join('  |  '))
+      const offscreen = named.filter((n) => !inView(n.r)).length
+      note('  ' + (named.length - offscreen) + ' of ' + named.length + ' reachable' +
+        (offscreen === 0 ? '  all on screen' : '  *** ' + offscreen + ' OFF SCREEN ***'))
+      // No two controls may share a pixel, or one of them can never be pressed.
+      let clashes = 0
+      for (let i = 0; i < named.length; i++) {
+        for (let j = i + 1; j < named.length; j++) {
+          const a = named[i].r, b = named[j].r
+          if (a.x < b.right && b.x < a.right && a.y < b.bottom && b.y < a.bottom) {
+            clashes++
+            note('      *** ' + named[i].id + ' overlaps ' + named[j].id + ' ***')
+          }
+        }
+      }
+      if (clashes) bad += clashes
+
+      // THE MAP MUST NOT RESPOND. A tap in the middle of the board while the
+      // panel is up must not build, select or rally.
+      const heroBefore = [g.hero.x, g.hero.y]
+      const towersBefore = g.towers.length
+      await click(VP.w * 0.18, VP.h * 0.62)
+      await sleep(220)
+      const moved = Math.hypot(g.hero.x - heroBefore[0], g.hero.y - heroBefore[1]) > 1
+      note('  tapped the board behind the panel: hero moved ' + moved +
+        ', towers ' + towersBefore + ' -> ' + g.towers.length +
+        (moved || g.towers.length !== towersBefore ? '  *** THE MAP IS LIVE ***' : '  inert'))
+      if (moved || g.towers.length !== towersBefore) bad++
+
+      // DRAG A SLIDER, and check the value follows the pointer rather than
+      // only that a handler fired.
+      const music = named.find((n) => n.id === 'settings:music')
+      if (music) {
+        const y = music.r.centerY
+        // THE VALUE MUST FOLLOW THE POINTER, and be MONOTONIC across the row.
+        // Comparing against "did it change" is not enough: the value can
+        // already be where the press would put it, which is exactly how the
+        // second pass of this probe reported a working slider as broken.
+        const tapTo = async (f) => {
+          await click(music.r.x + music.r.width * f, y)
+          await sleep(120)
+          return A.getVolume('music')
+        }
+        const lo = await tapTo(0.45)
+        const hi = await tapTo(0.85)
+        note('  tapped MUSIC at 45% then 85% of the row: ' +
+          lo.toFixed(2) + ' -> ' + hi.toFixed(2) +
+          (hi > lo ? '  follows the pointer' : '  *** DOES NOT FOLLOW THE POINTER ***'))
+        if (!(hi > lo)) bad++
+        // And a drag, which is a different Phaser path from a press.
+        const beforeDrag = A.getVolume('music')
+        mouse('mousedown', music.r.x + music.r.width * 0.85, y)
+        await move(music.r.x + music.r.width * 0.60, y)
+        await move(music.r.x + music.r.width * 0.40, y)
+        mouse('mouseup', music.r.x + music.r.width * 0.40, y)
+        await sleep(160)
+        const after = A.getVolume('music')
+        note('  dragged MUSIC left from 85% to 40%: ' + beforeDrag.toFixed(2) + ' -> ' +
+          after.toFixed(2) + (after < beforeDrag ? '  the drag moved it'
+            : '  *** THE DRAG DID NOTHING ***'))
+        if (!(after < beforeDrag)) bad++
+      }
+      if (zName === 'min') await shot('settings-' + VP.w + 'x' + VP.h)
+
+      // CONTINUE closes it and the game runs again.
+      const cont = named.find((n) => n.id === 'settings:continue')
+      await click(cont.r.centerX, cont.r.centerY)
+      await sleep(320)
+      const stillPaused = game.scene.isPaused('Game')
+      note('  CONTINUE: panel ' + (hud.settings ? 'STILL OPEN ***' : 'closed') +
+        '   Game paused ' + stillPaused + (stillPaused ? '  *** STRANDED ***' : ''))
+      if (hud.settings || stillPaused) bad++
+      await sleep(120)
+    }
+    note('RESULT ' + (bad === 0
+      ? 'the gear opens it, every control is on screen and pressable, and the board is inert'
+      : '*** ' + bad + ' problem(s) above ***'))
+    return
+  }
+
   if (scenario === 'looptrack') {
     // The level 1 track does not loop seamlessly and fades out at the end, so
     // it repeats with a gap and fades back in rather than cutting. Watched at

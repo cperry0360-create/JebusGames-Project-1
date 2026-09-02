@@ -62,7 +62,7 @@ export interface LayoutConfig {
   rowGap: number
   rowHeight: number
   iconHeight: number
-  /** The mute and pause buttons in the bottom corners. */
+  /** The settings gear in the bottom-right corner. */
   cornerButton: number
   /** Widest the start-wave button may be; it takes less when the counters and
    *  the insets leave less. */
@@ -80,8 +80,16 @@ export interface HudLayout {
    *  health. On the LEFT deliberately — see the note where it is built. */
   heroRow: Rect
   abilities: Rect
-  mute: Rect
-  pause: Rect
+  /**
+   * The settings gear, bottom-right. ONE corner button, where there used to be
+   * two: a mute toggle with a stepped volume readout in the bottom-left and a
+   * pause button in the bottom-right. Four controls' worth of chrome on a
+   * phone screen, for settings that are opened once and then left alone.
+   *
+   * The gear opens a dialog that pauses the game and holds all of it — three
+   * sliders and the three ways out of a run.
+   */
+  settings: Rect
   /**
    * How much the counter row and the ability row had to shrink to fit.
    *
@@ -155,20 +163,18 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
     width: Math.max(60, rowW - heroW - gap), height: cfg.rowHeight,
   }
 
-  // Bottom row: the two corner buttons hold the ends, the abilities the middle.
+  // Bottom row: one corner button on the right, the abilities to the left of
+  // it. There were two corner buttons; see `settings`.
   const btn = cfg.cornerButton
-  const mute: Rect = {
-    x: left, y: bottom - btn, width: btn, height: btn,
-  }
-  const pause: Rect = {
+  const settings: Rect = {
     x: right - btn, y: bottom - btn, width: btn, height: btn,
   }
-  // Centred between the two corner buttons, and shrunk if it does not fit
-  // between them. Centring on the screen alone put the outermost icon on top
-  // of mute on a narrow phone with a full hand.
+  // Centred in what is left, and shrunk if it does not fit. Centring on the
+  // screen alone put the outermost icon on top of a corner button on a narrow
+  // phone with a full hand, and that is still true with one of them.
   const abilityGap = 12
-  const lo = mute.x + mute.width + abilityGap
-  const hi = pause.x - abilityGap
+  const lo = left
+  const hi = settings.x - abilityGap
   const room = Math.max(0, hi - lo)
   const abilitiesW = Math.min(input.abilitiesWidth, room)
   const abilityScale = input.abilitiesWidth > 0 ? abilitiesW / input.abilitiesWidth : 1
@@ -188,7 +194,7 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
   }
 
   return {
-    counters, startButton, messageRow, heroRow, abilities, mute, pause, panelArea,
+    counters, startButton, messageRow, heroRow, abilities, settings, panelArea,
     counterScale, abilityScale,
   }
 }
@@ -233,5 +239,5 @@ export function hudTakesPress(layout: HudLayout, x: number, y: number): boolean 
   const inside = (r: Rect): boolean =>
     x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height
   return inside(layout.abilities) || inside(layout.startButton)
-    || inside(layout.mute) || inside(layout.pause)
+    || inside(layout.settings)
 }

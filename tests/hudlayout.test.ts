@@ -129,24 +129,26 @@ test('the HUD is pinned to the corners it is supposed to be pinned to', () => {
   const [, width, height] = VIEWPORTS[1]!
   const l = hudLayout({ width, height, insets: NO_INSETS, ...WIDEST }, CFG)
   // Kingdom Rush: pills top-left, one button top-right, actives along the
-  // bottom, the two small controls in the bottom corners.
+  // bottom, one small control in the bottom-right corner. There used to be two
+  // corner controls; the settings gear replaced both.
   assert.ok(l.counters.x < width / 3, 'the counters are not in the top-left')
   assert.ok(l.counters.y < height / 4, 'the counters are not at the top')
   assert.ok(l.startButton.x + l.startButton.width > width * 0.7,
     'the start button is not in the top-right')
-  assert.ok(l.mute.x < width / 4 && l.mute.y > height * 0.7, 'mute is not bottom-left')
-  assert.ok(l.pause.x > width * 0.7 && l.pause.y > height * 0.7, 'pause is not bottom-right')
+  assert.ok(l.settings.x > width * 0.7 && l.settings.y > height * 0.7,
+    'the settings gear is not bottom-right')
+  assert.equal((l as Record<string, unknown>).mute, undefined, 'the mute control is back')
+  assert.equal((l as Record<string, unknown>).pause, undefined, 'the pause button is back')
   const mid = l.abilities.x + l.abilities.width / 2
   assert.ok(Math.abs(mid - width / 2) < 40, 'the abilities are not along the bottom centre')
 })
 
-test('the abilities give way to the corner buttons rather than sit on them', () => {
+test('the abilities give way to the corner button rather than sit on it', () => {
   // A wide hand on a narrow phone: centring alone puts the outermost icon on
-  // top of mute.
+  // top of the gear.
   const l = hudLayout(
     { width: 568, height: 320, insets: NOTCH, countersWidth: 350, abilitiesWidth: 420 }, CFG)
-  assert.ok(!overlaps(l.abilities, l.mute), 'the ability row covers the mute button')
-  assert.ok(!overlaps(l.abilities, l.pause), 'the ability row covers the pause button')
+  assert.ok(!overlaps(l.abilities, l.settings), 'the ability row covers the settings gear')
 })
 
 test('the map is full-bleed: nothing is reserved from the board', () => {
@@ -230,8 +232,7 @@ test('a press on the HUD is not also a press on the board', () => {
     for (const [label, rect] of [
       ['ability bar', L.abilities],
       ['start button', L.startButton],
-      ['mute', L.mute],
-      ['pause', L.pause],
+      ['settings gear', L.settings],
     ] as const) {
       const [cx, cy] = centre(rect)
       assert.ok(hudTakesPress(L, cx, cy),

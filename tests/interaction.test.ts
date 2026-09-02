@@ -504,32 +504,39 @@ test('reopening the menu does not pile up live objects', () => {
  */
 test('a paused game can always be un-paused', () => {
   const hud = src('scenes/HudScene.ts')
-  const openPause = hud.slice(hud.indexOf('private openPause()'), hud.indexOf('private showPanel('))
+  const open = hud.slice(hud.indexOf('openSettings(): void {'), hud.indexOf('private closeSettings('))
+  assert.ok(open.length > 0, 'nothing opens the settings dialog')
 
-  // 1. The dialog that pauses the world cannot be waved away. Every other
+  // 1. The panel that pauses the world cannot be waved away. Every other
   //    dialog may be, because the game runs on underneath it; this one IS the
-  //    way the game runs on.
-  assert.match(openPause, /dismissable: false/,
-    'the pause dialog is dismissable again; tapping the backdrop strands the game')
+  //    way the game runs on. CONTINUE is the way out.
+  const panel = src('ui/SettingsPanel.ts')
+  assert.match(panel, /this\.blocker\.on\('pointerdown', \(\) => \{ \/\* swallowed \*\/ \}\)/,
+    'tapping beside the settings panel does something, and it sits over a paused world')
 
   // 2. And the flag can never lock the player out on its own. A `paused` flag
   //    with no panel behind it is a broken state, not a reason to do nothing.
-  assert.ok(!/if \(this\.paused\) return/.test(openPause),
-    'openPause early-returns on the flag alone, so a stranded flag is permanent')
-  assert.match(openPause, /if \(this\.paused && this\.panel\) return/,
+  assert.ok(!/if \(this\.paused\) return/.test(open),
+    'openSettings early-returns on the flag alone, so a stranded flag is permanent')
+  assert.match(open, /if \(this\.paused && this\.settings\) return/,
     'the re-entry guard no longer requires a panel to actually be up')
 
-  // The quit confirmation is reached FROM the pause dialog, so the world is
+  // The quit confirmation is reached FROM the settings panel, so the world is
   // paused behind it and the same trap applies.
   const quit = hud.slice(hud.indexOf('private confirmQuit()'), hud.indexOf('private quitToTitle()'))
   assert.match(quit, /dismissable: false/,
     'the quit confirmation is dismissable, and it sits over a paused world')
 
-  // Whatever closes the pause dialog must resume: RESUME, and KEEP PLAYING.
-  assert.match(openPause, /onPick: \(\) => this\.resumeGame\(\)/,
-    'RESUME no longer resumes the game')
-  assert.match(quit, /onCancel: \(\) => this\.resumeGame\(\)/,
-    'backing out of the quit prompt no longer resumes the game')
+  // Whatever closes the panel must resume or leave: CONTINUE, RESTART, HOME —
+  // and KEEP PLAYING backs out of HOME to the panel it came from rather than
+  // straight into the run.
+  assert.match(open, /onContinue: \(\) => \{ this\.closeSettings\(\); this\.resumeGame\(\) \}/,
+    'CONTINUE no longer resumes the game')
+  assert.match(open, /onRestart: \(\) => \{ this\.closeSettings\(\); this\.restartRun\(\) \}/,
+    'RESTART no longer restarts the run')
+  assert.match(open, /onHome: \(\) => this\.confirmQuit\(\)/, 'HOME no longer asks first')
+  assert.match(quit, /onCancel: \(\) => this\.openSettings\(\)/,
+    'backing out of the quit prompt strands the paused world')
 })
 
 /**

@@ -7,8 +7,8 @@ import { COLOR, FONT_UI } from '../ui/Theme.ts'
 import { ART, fitInBox, renderFor } from '../systems/Art.ts'
 import { greyKey } from '../systems/Desaturate.ts'
 import { plateButton, type PlateButton } from '../ui/Plate.ts'
-import { AudioToggle } from '../ui/AudioToggle.ts'
 import { iconPlate } from '../ui/Plate.ts'
+import { SettingsPanel } from '../ui/SettingsPanel.ts'
 import { Dialog } from '../ui/Dialog.ts'
 import { play, resumeAudio } from '../systems/Audio.ts'
 import { hudLayout, NO_INSETS, type HudLayout, type Rect } from '../systems/HudLayout.ts'
@@ -79,6 +79,8 @@ export class HudScene extends Phaser.Scene {
   private startBtn!: PlateButton
   private panel?: Dialog
   private paused = false
+  /** Public for the harness, which presses its way through it. */
+  settings?: SettingsPanel
   slots: SlotView[] = []
   private slotsBuilt = false
   /** Last frame's DAD MODE state, so the arrival of a new option can be
@@ -166,9 +168,7 @@ export class HudScene extends Phaser.Scene {
     }).setOrigin(1, 0.5)
 
     // Bottom corners and centre.
-    new AudioToggle(this, L.mute.x + L.mute.width / 2, L.mute.y + L.mute.height / 2,
-      L.mute.width - 8)
-    this.buildPauseButton(L.pause.x + L.pause.width / 2, L.pause.y + L.pause.height / 2)
+    this.buildSettingsButton(L.settings)
   }
 
   /**
@@ -276,54 +276,64 @@ export class HudScene extends Phaser.Scene {
    * Pause lives here rather than in GameScene, because it pauses GameScene:
    * a panel drawn by a paused scene cannot be tweened, pressed or closed.
    */
-  private buildPauseButton(x: number, y: number): void {
-    const plate = iconPlate(this, x, y, 40, 40)
+  /**
+   * THE ONE CORNER CONTROL. There were four: a mute toggle, a minus, a plus
+   * and a percentage in the bottom-left, and a pause button in the
+   * bottom-right — chrome sitting on the board for a whole run, for settings a
+   * player opens once and leaves alone.
+   *
+   * The gear is drawn rather than loaded: there is no gear in any of the packs
+   * and a letter would be worse, which is the same reason the old speaker was
+   * drawn.
+   */
+  private buildSettingsButton(box: Rect): void {
+    const x = box.x + box.width / 2
+    const y = box.y + box.height / 2
+    const plate = iconPlate(this, x, y, box.width, box.height)
     const g = this.add.graphics()
+    const r = box.width * 0.26
     g.fillStyle(0xf6ecd9, 1)
-    g.fillRect(x - 7, y - 8, 5, 16)
-    g.fillRect(x + 2, y - 8, 5, 16)
-    const hit = this.add.rectangle(x, y, 44, 44, 0xffffff, 0.001)
+    // Eight teeth around a ring, then a hole punched through the middle with
+    // the plate's own colour rather than an erase — Graphics has no cut-out.
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2
+      g.fillRect(x + Math.cos(a) * r - 2.5, y + Math.sin(a) * r - 2.5, 5, 5)
+    }
+    g.fillCircle(x, y, r)
+    g.fillStyle(0x1b222c, 1).fillCircle(x, y, r * 0.42)
+    const hit = this.add.rectangle(x, y, box.width + 4, box.height + 4, 0xffffff, 0.001)
       .setInteractive({ useHandCursor: true })
+    hit.name = 'hud:settings'
     hit.on('pointerover', () => plate.setActive(true))
     hit.on('pointerout', () => plate.setActive(false))
-    hit.on('pointerdown', () => this.openPause())
+    hit.on('pointerdown', () => this.openSettings())
   }
 
   /**
-   * The pause dialog.
+   * The settings dialog, which pauses the game.
    *
-   * The guard here is `this.paused && this.panel`, not `this.paused`, and the
-   * difference is the whole bug. The dim backdrop of a Dialog closes it on a
-   * tap unless it is told otherwise — deliberately, so a panel over a live
-   * battlefield is never a trap. But `close()` is not `onCancel`: it takes the
-   * dialog away without running the handler, so tapping beside the PAUSED
-   * panel left `paused` true and GameScene paused with nothing on screen, and
-   * the old `if (this.paused) return` then refused to reopen the one control
-   * that could undo it. A frozen board and a dead pause button.
-   *
-   * Two independent fixes, because either alone would leave the trap set for
-   * the next dialog that pauses something: this panel is not dismissable at
-   * all, AND a `paused` flag with no panel behind it is now treated as the
-   * thing that is wrong rather than as a reason to do nothing.
+   * The guard is `this.paused && this.settings`, not `this.paused`, and the
+   * difference is a bug that already happened once with the pause dialog: a
+   * `paused` flag with no panel behind it is the thing that is wrong, not a
+   * reason to refuse to reopen the one control that can undo it. A frozen
+   * board and a dead settings button.
    */
-  private openPause(): void {
-    if (this.paused && this.panel) return
+  openSettings(): void {
+    if (this.paused && this.settings) return
     this.paused = true
     play(this, 'open')
     this.scene.pause('Game')
-    this.showPanel({
-      title: 'PAUSED',
-      subtitle: 'The wave is stopped. Nothing moves until you resume.',
-      confirm: { label: 'RESUME', onPick: () => this.resumeGame() },
-      extra: { label: 'RESTART', onPick: () => this.restartRun() },
-      cancelLabel: 'QUIT',
-      onCancel: () => this.confirmQuit(),
-      // A paused world is left only on purpose. Every other dialog may be
-      // waved away because the game carries on underneath it; this one IS the
-      // way the game carries on.
-      dismissable: false,
-      dim: 0.55,
+    this.settings?.close()
+    this.settings = new SettingsPanel(this, 90000, {
+      onHome: () => this.confirmQuit(),
+      onRestart: () => { this.closeSettings(); this.restartRun() },
+      onContinue: () => { this.closeSettings(); this.resumeGame() },
     })
+  }
+
+  private closeSettings(): void {
+    this.settings?.close()
+    this.settings = undefined
   }
 
   /** A dialog owned by the HUD, so it keeps working while Game is paused. */
@@ -350,12 +360,16 @@ export class HudScene extends Phaser.Scene {
 
   /** Quitting throws the run away, so it asks first. */
   private confirmQuit(): void {
+    this.closeSettings()
     this.showPanel({
       title: 'QUIT TO TITLE?',
       subtitle: 'This run ends here. Towers, upgrades and peanuts are lost.',
       confirm: { label: 'QUIT', onPick: () => this.quitToTitle() },
       cancelLabel: 'KEEP PLAYING',
-      onCancel: () => this.resumeGame(),
+      // Back to the settings panel, not straight into the game: the player
+      // came here through it and pressing the way out of a confirmation should
+      // not also resume the run.
+      onCancel: () => this.openSettings(),
       // Reached from the pause dialog, so the world is paused behind it and
       // the same trap applies.
       dismissable: false,

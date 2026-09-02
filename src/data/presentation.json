@@ -447,5 +447,25 @@
     "width": 2.5,
     "sampleStep": 5,
     "_sampleStep": "World pixels between samples of the lane. The outline is built by offsetting the lane to both sides and then dropping every offset point that falls back inside the band, which is what keeps a bend from folding the outline over itself. A coarse step cuts corners the player can genuinely cast into."
+  },
+  "settings": {
+    "_note": "The settings dialog: three volume sliders and the three ways out of a run. It replaced a mute toggle with a stepped volume readout in one corner and a pause button in the other — four controls' worth of chrome on a phone screen, for settings that are opened once and left alone. Everything here is in CSS pixels and clamped to the viewport.",
+    "width": 420,
+    "minWidth": 300,
+    "rowHeight": 46,
+    "trackHeight": 10,
+    "handleRadius": 11,
+    "iconSize": 26,
+    "labelSize": 15,
+    "valueSize": 15,
+    "valueWidth": 52,
+    "buttonHeight": 46,
+    "buttonGap": 10,
+    "pad": 22,
+    "titleSize": 26,
+    "_handleRadius": "22px across. The smallest thing a thumb can reliably grab is about 44px, and the handle is not the hit area: the whole ROW takes the drag, so a press anywhere along the track moves the handle to it. The circle only has to be visible.",
+    "_width": "Clamped to the viewport, so on a 568x320 screen it is the screen minus its margins rather than 420. minWidth is where the label, the track and the percentage stop fitting on one line.",
+    "labelColumn": 154,
+    "_labelColumn": "Room reserved for a row's name, so the three tracks start in one column whatever the words are. Measured against SOUND EFFECTS, the longest, at labelSize with its letter spacing: it was 118 and the words ran under the track."
   }
 }
