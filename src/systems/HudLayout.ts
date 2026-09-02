@@ -62,8 +62,11 @@ export interface LayoutConfig {
   rowGap: number
   rowHeight: number
   iconHeight: number
-  /** The settings gear in the bottom-right corner. */
+  /** The settings gear. Square, and it sets the height of the CANCEL button
+   *  in the opposite corner too. */
   cornerButton: number
+  /** CANCEL is a word, not a glyph, so it is wider than it is tall. */
+  cancelWidth: number
   /** Widest the start-wave button may be; it takes less when the counters and
    *  the insets leave less. */
   startWidth: number
@@ -81,15 +84,33 @@ export interface HudLayout {
   heroRow: Rect
   abilities: Rect
   /**
-   * The settings gear, bottom-right. ONE corner button, where there used to be
-   * two: a mute toggle with a stepped volume readout in the bottom-left and a
-   * pause button in the bottom-right. Four controls' worth of chrome on a
-   * phone screen, for settings that are opened once and then left alone.
+   * The settings gear, at the RIGHT-HAND END OF THE TOP ROW. ONE corner
+   * button, where there used to be two: a mute toggle with a stepped volume
+   * readout in the bottom-left and a pause button in the bottom-right. Four
+   * controls' worth of chrome on a phone screen, for settings that are opened
+   * once and then left alone.
+   *
+   * It was in the bottom-right corner. The top is where a player looks for
+   * it — Kingdom Rush, the reference for this game's look, puts it top-right
+   * — and moving it there frees the bottom corner for CANCEL, which had been
+   * floating over the middle of the board.
    *
    * The gear opens a dialog that pauses the game and holds all of it — three
    * sliders and the three ways out of a run.
    */
   settings: Rect
+  /**
+   * CANCEL, bottom-right, in the corner the gear vacated.
+   *
+   * It is only on the glass while an ability or a Restructure is armed, but it
+   * is reserved from the layout ALWAYS. A button that appears into whatever
+   * space happens to be free is a button that will one day appear on top of
+   * something; the ability row gives up sixty pixels so that cannot happen.
+   *
+   * It used to be drawn at `viewW / 2` just above the ability icons, which is
+   * over the board — and the board is where the player is being asked to tap.
+   */
+  cancel: Rect
   /**
    * How much the counter row and the ability row had to shrink to fit.
    *
@@ -115,9 +136,21 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
   const top = insets.top + cfg.marginY
   const bottom = H - insets.bottom - cfg.marginY
 
+  // THE TOP ROW, RIGHT TO LEFT: the settings gear, then START WAVE, then the
+  // counters. The gear is measured out of the row before anything else is
+  // fitted, so it can never be what gives way.
+  const btn = cfg.cornerButton
+  const settings: Rect = {
+    // Vertically centred in the row: the gear is square and shorter than a
+    // counter plate, and a 40px button sitting on the 44px row's top edge
+    // reads as misaligned rather than as deliberate.
+    x: right - btn, y: top + (cfg.plateHeight - btn) / 2, width: btn, height: btn,
+  }
+  const topRight = settings.x - cfg.marginX
+
   // The counters give way first, because a slightly smaller pill is still
   // readable and an overlapping one is not.
-  const topRoom = right - left - cfg.startMinWidth - cfg.marginX
+  const topRoom = topRight - left - cfg.startMinWidth - cfg.marginX
   const countersW = Math.min(input.countersWidth, Math.max(0, topRoom))
   const counterScale = input.countersWidth > 0 ? countersW / input.countersWidth : 1
   const counters: Rect = {
@@ -128,10 +161,10 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
 
   // The start button then takes what is left, down to its own floor: at 240px
   // fixed it ran into the wave counter on a 568px screen.
-  const spare = right - (counters.x + counters.width) - cfg.marginX
+  const spare = topRight - (counters.x + counters.width) - cfg.marginX
   const startW = Math.max(cfg.startMinWidth, Math.min(cfg.startWidth, spare))
   const startButton: Rect = {
-    x: right - startW, y: top, width: startW, height: cfg.plateHeight,
+    x: topRight - startW, y: top, width: startW, height: cfg.plateHeight,
   }
 
   // Second row, split by x. Three things want it — the wave message, the boss
@@ -163,18 +196,23 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
     width: Math.max(60, rowW - heroW - gap), height: cfg.rowHeight,
   }
 
-  // Bottom row: one corner button on the right, the abilities to the left of
-  // it. There were two corner buttons; see `settings`.
-  const btn = cfg.cornerButton
-  const settings: Rect = {
-    x: right - btn, y: bottom - btn, width: btn, height: btn,
+  // Bottom row: CANCEL on the right, the abilities to the left of it. This is
+  // the corner the settings gear used to hold; the gear is in the top row now.
+  const cancel: Rect = {
+    x: right - cfg.cancelWidth, y: bottom - btn, width: cfg.cancelWidth, height: btn,
   }
-  // Centred in what is left, and shrunk if it does not fit. Centring on the
-  // screen alone put the outermost icon on top of a corner button on a narrow
-  // phone with a full hand, and that is still true with one of them.
+  // Centred on the SCREEN, with the same width given up on both sides.
+  //
+  // Centring on the screen alone put the outermost icon on top of the corner
+  // button on a narrow phone with a full hand. Taking the room off the right
+  // only — which is where the button is — fixes the overlap and moves the row
+  // 56px off centre, and a thumb row that is visibly not centred reads as a
+  // layout fault. So the reservation is mirrored: CANCEL's width is taken off
+  // both ends, the row stays centred, and `abilityScale` absorbs the loss.
   const abilityGap = 12
-  const lo = left
-  const hi = settings.x - abilityGap
+  const reserve = cfg.cancelWidth + abilityGap
+  const lo = left + reserve
+  const hi = right - reserve
   const room = Math.max(0, hi - lo)
   const abilitiesW = Math.min(input.abilitiesWidth, room)
   const abilityScale = input.abilitiesWidth > 0 ? abilitiesW / input.abilitiesWidth : 1
@@ -194,8 +232,8 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
   }
 
   return {
-    counters, startButton, messageRow, heroRow, abilities, settings, panelArea,
-    counterScale, abilityScale,
+    counters, startButton, messageRow, heroRow, abilities, settings, cancel,
+    panelArea, counterScale, abilityScale,
   }
 }
 
@@ -239,5 +277,5 @@ export function hudTakesPress(layout: HudLayout, x: number, y: number): boolean 
   const inside = (r: Rect): boolean =>
     x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height
   return inside(layout.abilities) || inside(layout.startButton)
-    || inside(layout.settings)
+    || inside(layout.settings) || inside(layout.cancel)
 }

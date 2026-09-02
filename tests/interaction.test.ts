@@ -79,7 +79,13 @@ test('every full-screen overlay is drawn by the camera that does not move', () =
   // instead of on whatever the player is looking at. The scratch ticket is the
   // worst of them — it is a drag target, so off-view it is a soft lock.
   const game = src('scenes/GameScene.ts')
-  for (const fn of ['windUp', 'showTicket', 'announceBoss', 'announce']) {
+  // `showNextBanner` rather than `announce`: announce only queues now — five
+  // things announce themselves and three of them can fire on the same frame,
+  // so there is one slot and a queue behind it — and the object that has to
+  // reach the UI camera is made where it is drawn.
+  assert.match(game, /private announce\([\s\S]{0,300}?this\.showNextBanner\(\)/,
+    'announce no longer goes through the one banner slot')
+  for (const fn of ['windUp', 'showTicket', 'announceBoss', 'showNextBanner']) {
     // Matched with or without `private`: a method made public so the harness
     // can drive it must not fall out of an invariant it is still subject to.
     const from = Math.max(game.indexOf(`private ${fn}(`), game.indexOf(`\n  ${fn}(`))
@@ -296,10 +302,15 @@ test('a downed hero comes back, and says where and when', () => {
   assert.match(hero, /this\.reviveIn = this\.def\.reviveSeconds/,
     'going down does not start a revive timer')
   assert.match(hero, /private revive\(\)/, 'nothing brings him back')
-  // Back at the entrance, not where he fell: returning into the fight that
-  // killed him would put him straight back down.
-  assert.match(hero, /this\.setPosition\(this\.homeX, this\.homeY\)/,
-    'he returns somewhere other than where he came in')
+  // WHERE HE FELL, not at the entrance. The entrance rule discarded a walk
+  // the player had already paid for — and it came with a second, unannounced
+  // cost: `rallyX/rallyY` were reset with it, so his death silently cancelled
+  // a standing order the player had not withdrawn.
+  assert.match(hero, /this\.setPosition\(this\.fellX, this\.fellY\)/,
+    'he still teleports to the entrance on a revive')
+  const revive = hero.slice(hero.indexOf('private revive()'))
+  assert.doesNotMatch(revive, /this\.rallyX = /, 'the revive still discards the standing order')
+  assert.doesNotMatch(hero, /this\.homeX/, 'the home point is back')
   assert.match(hero, /this\.health = this\.def\.maxHealth/, 'he returns hurt')
   // Last Stand is once per encounter, revive or no revive.
   const body = hero.slice(hero.indexOf('private revive(): void {'), hero.indexOf('get returnPoint'))
@@ -311,8 +322,14 @@ test('a downed hero comes back, and says where and when', () => {
   assert.match(game, /reviveLabel/, 'nothing marks the spot he returns to')
   assert.match(game, /BACK IN \$\{secs\}s/, 'the ground marker carries no countdown')
   const hud = src('scenes/HudScene.ts')
-  assert.match(hud, /BACK IN \$\{Math\.max\(0, Math\.ceil\(s\.heroReviveIn\)\)\}s/,
-    'the hero bar does not count him down')
+  // In REAL seconds, both places. reviveIn is in game seconds and gameSpeed is
+  // 1.4, so a 25 in the data is 17.9 on the player's watch — and a countdown
+  // that disagrees with a stopwatch reads as broken.
+  assert.match(hud,
+    /BACK IN \$\{Math\.max\(0, Math\.ceil\(realSeconds\(s\.heroReviveIn, 1\)\)\)\}s/,
+    'the hero bar does not count him down in real seconds')
+  assert.match(game, /realSeconds\(this\.hero\.reviveIn, 1\)/,
+    'the ground marker counts down in game seconds')
 })
 
 test('the revive timer is data, not a number typed into a scene', () => {
@@ -450,9 +467,14 @@ test('a ring button buys nothing; the panel does', () => {
   assert.match(ring, /hit\.on\('pointerup', onPick\)/, 'the confirm fires on the press')
   assert.match(ring, /option\.onConfirm\(\); this\.close\(\)/,
     'confirming does not close the menu')
-  // And the two icons that exist for exactly this step are used at last.
-  assert.match(ring, /'confirm', option\.affordable/, 'the confirm icon is unused')
-  assert.match(ring, /'cancel', true, \(\) => this\.deselect\(\)/, 'the cancel icon is unused')
+  // THE CONFIRM CARRIES A WORD, not the tick glyph it used to share with
+  // every other option. SELL's confirm and UPGRADE's confirm were pixel-
+  // identical, on the one press that actually spends or destroys.
+  assert.match(ring, /\{ word: option\.confirmLabel \}, option\.affordable/,
+    'the confirm button is back to a glyph')
+  assert.match(ring, /\{ icon: 'cancel' \}/, 'cancel lost its glyph')
+  assert.match(ring, /\{ icon: 'cancel' \}, true, \(\) => this\.deselect\(\)/,
+    'the cancel icon is unused')
   // Cancel goes back to the ring rather than closing everything: the point of
   // a description is being able to read another one.
   const deselect = ring.slice(ring.indexOf('private deselect()'))

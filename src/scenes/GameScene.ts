@@ -61,7 +61,11 @@ import { barWidth, regions, slotDefs, type BarMetrics } from '../systems/Ability
 import { safeAreaInsets } from '../systems/SafeArea.ts'
 import { onSceneResize, sceneIsLive } from '../systems/SceneEvents.ts'
 import { musicForScene } from '../systems/Music.ts'
-import { deviceScale, fitUiCamera, viewH, viewW, worldToScreen } from '../systems/Resolution.ts'
+import {
+  deviceScale, fitUiCamera, pointerToScreen, viewH, viewW, worldToScreen,
+} from '../systems/Resolution.ts'
+import { CastCursor } from '../ui/CastCursor.ts'
+import { bothUnits, realSeconds } from '../systems/GameTime.ts'
 
 /** The HUD's layout constants, shared with HudScene so both agree. */
 const LAYOUT = PRESENTATION.hud.layout
@@ -192,6 +196,7 @@ export class GameScene extends Phaser.Scene {
   private pads: Phaser.GameObjects.Image[] = []
   /** Where the arch lets go and where the gate stops them, in lane distance. */
   private gateway!: {
+    laneHalfWidth: number
     mouthDistance: number
     gateDistance: number
     stopDistance: number
@@ -218,13 +223,24 @@ export class GameScene extends Phaser.Scene {
   /** The dashed circle showing what an upgrade would make this tower's reach.
    *  Its own layer, because rangeRing is cleared and redrawn constantly. */
   private projectedRing!: Phaser.GameObjects.Graphics
+  /** The valid/invalid marker under the pointer while a summon is armed.
+   *  Public so the harness can read which state it is in. */
+  castCursor!: CastCursor
+  /** Banners waiting for the slot, and whether the slot is taken. One at a
+   *  time; see announce(). */
+  private readonly bannerQueue: Array<{ text: string; color: string }> = []
+  private bannerShowing = false
+
   /** The seconds left on the revive, drawn on the spot he comes back to.
    *  A Text rather than part of markerLayer, which can only draw shapes. */
   private reviveLabel!: Phaser.GameObjects.Text
   /** The legal drop corridor while a path-only summon is armed. Its own layer
    *  because markerLayer is cleared and redrawn every frame by the rally
    *  marker, which wiped the band the moment it was painted. */
-  private pathBand!: Phaser.GameObjects.Graphics
+  /** The wash over the stretch of lane a SELECTED TOWER covers. It used to
+   *  double as the summon-targeting band; that band is gone (see CastCursor)
+   *  and this is all it does now, so it is named for it. */
+  private laneWash!: Phaser.GameObjects.Graphics
   private hoverSpot: BuildSpot | null = null
   private heroSelected = false
   /** The selection ring and the move order. Three states, and it owns the
@@ -332,6 +348,9 @@ export class GameScene extends Phaser.Scene {
     // the painted plate as map positions; the enemy walks in lane distance.
     // Converted once here rather than per enemy per frame.
     this.gateway = {
+      // Measured, not chosen: the painted road is 38 world pixels across, and
+      // until now nothing but the band-drawing code read that number.
+      laneHalfWidth: MAP.roadWidth / 2,
       mouthDistance: distanceAtX(MAP.waypoints, MAP.entrance.emergeFromX),
       gateDistance: distanceAtX(MAP.waypoints, MAP.exit.gateX),
       stopDistance: distanceAtX(MAP.waypoints, MAP.exit.vanishX),
@@ -345,18 +364,21 @@ export class GameScene extends Phaser.Scene {
 
     this.markerLayer = this.add.graphics().setDepth(GROUND_DEPTH + 6)
     this.projectedRing = this.add.graphics().setDepth(GROUND_DEPTH + 5)
+    // A world object: it marks a place on the map, so it pans and zooms with
+    // it. Its SIZE is divided by the zoom, so it stays constant on the glass.
+    this.castCursor = new CastCursor(this, OVERLAY_DEPTH + 2)
     this.reviveLabel = this.add.text(0, 0, '', {
       fontFamily: FONT_UI, fontSize: '20px', fontStyle: 'bold', color: COLOR.ink,
       stroke: '#0d1016', strokeThickness: 5,
     }).setOrigin(0.5).setDepth(GROUND_DEPTH + 7).setVisible(false)
-    this.pathBand = this.add.graphics().setDepth(GROUND_DEPTH + 4)
+    this.laneWash = this.add.graphics().setDepth(GROUND_DEPTH + 4)
     this.rangeRing = this.add.graphics().setDepth(OVERLAY_DEPTH)
     this.targetRing = this.add.graphics().setDepth(OVERLAY_DEPTH + 1)
 
     this.hero = new Hero(this, MAP.heroStart[0], MAP.heroStart[1], heroDef)
     this.hero.on('revived', () => {
       play(this, 'build')
-      logEvent('hero', 'revived at the entrance')
+      logEvent('hero', 'revived where he fell')
       this.status.message = `${heroDef.name} is back on his feet.`
     })
     // The DAD MODE sting, on the frame the SUV appears rather than on the
@@ -417,11 +439,16 @@ this.armReadyCountdown()
     // Arming an ability or a restructure used to be escapable only with ESC or
     // a right-click, neither of which exists on a touch device: once armed, the
     // player was stuck casting. This is the way out.
-    // Above the ability row rather than on it: at a fixed `height - 96` this
-    // landed on the icons on a phone, which is where the thumb already is.
-    this.cancelBtn = plateButton(this, viewW(this) / 2,
-      this.layout.abilities.y - 30,
-      190, 44, 'CANCEL', () => this.clearSelection(), 16, 'secondary')
+    //
+    // IT LIVES IN THE HUD NOW, in the bottom-right corner the settings gear
+    // vacated, and the layout reserves that rectangle whether or not the
+    // button is showing. It used to be drawn at `viewW / 2` just above the
+    // ability icons — which is over the BOARD, and the board is exactly where
+    // the player is being asked to tap. A button floating over the play area
+    // is one the eye has to route around while aiming.
+    const cb = this.layout.cancel
+    this.cancelBtn = plateButton(this, cb.x + cb.width / 2, cb.y + cb.height / 2,
+      cb.width, cb.height, 'CANCEL', () => this.clearSelection(), 14, 'secondary')
     for (const part of this.cancelBtn.parts) {
       (part as Phaser.GameObjects.Image).setDepth?.(OVERLAY_DEPTH + 5)
     }
@@ -962,7 +989,9 @@ this.armReadyCountdown()
     // player knows both *that* he returns and *where*. PROTOTYPE-GAP 2.6.
     if (this.hero.down) {
       const p = this.hero.returnPoint
-      const secs = Math.max(0, Math.ceil(this.hero.reviveIn))
+      // realSeconds, because the number is on the player's screen and the
+      // player is counting on their own watch. reviveIn is in game seconds.
+      const secs = Math.max(0, Math.ceil(realSeconds(this.hero.reviveIn, 1)))
       // A slow pulse, so a marker on an otherwise still patch of grass reads
       // as a timer rather than as scenery.
       const beat = 0.5 + 0.5 * Math.sin(this.time.now / 260)
@@ -1059,6 +1088,14 @@ this.armReadyCountdown()
     // the gesture was a pan can only be answered at release. So the press
     // records the first and the release checks the second.
     this.input.on('pointerdown', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
+      // A FIFTH INSTANCE OF THE SAME BUG, found while adding the helper that
+      // exists to stop it. `p.x`/`p.y` are CANVAS pixels and the HUD
+      // rectangles are CSS pixels: at devicePixelRatio 3 on an 844px screen
+      // the pointer runs to 2532 while START WAVE spans 594..834, so a tap a
+      // third of the way across the board tested as a tap on the button and
+      // the map ignored it. Converted through the UI camera, which is the
+      // camera those rectangles are drawn by.
+      const ui = pointerToScreen(this, p, this.uiCam)
       this.pressTakenByUi =
         (this.ring?.active === true && this.ring.owns(over))
         || (this.ticket?.active === true && this.ticket.owns(over))
@@ -1071,7 +1108,7 @@ this.armReadyCountdown()
         // the lane.
         || this.nukeEarned?.owns(over) === true
         || this.nukeLaunch?.owns(over) === true
-        || hudTakesPress(this.layout, p.x, p.y)
+        || hudTakesPress(this.layout, ui.x, ui.y)
     })
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
       if (this.pressTakenByUi) return
@@ -1157,7 +1194,8 @@ this.armReadyCountdown()
     this.deselectTower()
     if (this.hero.down) {
       this.status.message =
-        `${this.hero.def.name} is down — back in ${Math.max(1, Math.ceil(this.hero.reviveIn))}s.`
+        `${this.hero.def.name} is down — back in ` +
+        `${Math.max(1, Math.ceil(realSeconds(this.hero.reviveIn, 1)))}s.`
       return
     }
     this.clearGhost()
@@ -1230,6 +1268,7 @@ this.armReadyCountdown()
         title: def.name,
         description: def.blurb,
         rows: this.buildRows(def),
+        confirmLabel: 'BUILD',
         onConfirm: () => this.place(id, spot),
       }
     })
@@ -1383,7 +1422,7 @@ this.armReadyCountdown()
     this.ring?.close()
     this.selected = null
     this.projectedRing.clear()
-    this.pathBand.clear()
+    this.laneWash.clear()
   }
 
   private selectTower(tower: Tower): void {
@@ -1432,15 +1471,15 @@ this.armReadyCountdown()
    * this circle.
    */
   private drawCoveredLane(tower: Tower): void {
-    this.pathBand.clear()
+    this.laneWash.clear()
     if (tower.isSupport) return
     const r = tower.range
     const step = 14
-    this.pathBand.fillStyle(0xf6ecd9, 0.14)
+    this.laneWash.fillStyle(0xf6ecd9, 0.14)
     for (let d = 0; d <= this.lane.totalLength; d += step) {
       const pt = this.lane.pointAt(d)
       if (Math.hypot(pt.x - tower.x, pt.y - tower.y) > r) continue
-      this.pathBand.fillCircle(pt.x, pt.y, 15)
+      this.laneWash.fillCircle(pt.x, pt.y, 15)
     }
   }
 
@@ -1534,6 +1573,18 @@ this.armReadyCountdown()
     const options: RingOption[] = []
     const choosing = tower.atSpecChoice && !tower.upgrading
 
+    // A FIXED FIRST SLOT AND A FIXED LAST ONE.
+    //
+    // SELL used to be pushed last onto whatever was already there, so its
+    // POSITION moved with the tower's tier: option 2 of 2 with an upgrade
+    // available, 3 of 3 at the specialisation branch, and — at max tier —
+    // 1 of 1, sitting in exactly the place UPGRADE had occupied all game. The
+    // muscle memory built over twelve waves then sold the tower.
+    //
+    // The upgrade slot is emitted ALWAYS, disabled with a reason when there is
+    // nothing left to buy, so the first slot is never SELL. The ring's own
+    // contract already says a disabled option opens and explains itself, and
+    // "Tier 3 of 3, nothing further" is worth a tap.
     if (choosing) {
       // THE BRANCH, AS TWO BUTTONS. It used to be a separate full-screen
       // dialog reached through a third icon — a menu inside a menu, for the
@@ -1549,7 +1600,8 @@ this.armReadyCountdown()
           reason: peanuts < spec.cost ? `${spec.cost - peanuts} peanuts short.` : undefined,
           title: spec.name,
           description: `Permanent: the other branch closes for good. ${specSummary(spec)}.`,
-          rows: [...rows, { label: 'Build time', value: `${spec.buildSeconds}s` }],
+          rows: [...rows, { label: 'Build time', value: `${realSeconds(spec.buildSeconds, 1)}s` }],
+          confirmLabel: 'BUILD',
           onConfirm: () => this.specialize(tower, spec.id),
         })
       }
@@ -1563,12 +1615,58 @@ this.armReadyCountdown()
         title: `${def.name} — tier ${tower.tier + 1}`,
         description: `${tier} Fires at a reduced rate while it builds.`,
         // The build time is a number with a name on it, not a clause.
-        rows: [...rows, { label: 'Build time', value: `${step.buildSeconds}s` }],
+        rows: [...rows, { label: 'Build time', value: `${realSeconds(step.buildSeconds, 1)}s` }],
+        confirmLabel: 'UPGRADE',
         onConfirm: () => this.upgradeTower(tower),
+      })
+    } else {
+      // Nothing to buy — mid-upgrade, or fully built out. The slot is still
+      // here, holding the place so SELL never inherits it.
+      options.push({
+        id: 'upgrade',
+        icon: 'upgrade',
+        price: 0,
+        affordable: false,
+        reason: tower.upgrading
+          ? 'Already building. Wait for it to finish.'
+          : 'Fully upgraded. There is nothing further to buy.',
+        title: `${def.name} — top tier`,
+        description: tier,
+        rows,
+        confirmLabel: 'UPGRADE',
+        onConfirm: () => { /* nothing to buy */ },
       })
     }
 
-    // Selling is always offered, and always affordable — it pays out.
+    // MOVE. It exists at last: the only way to relocate a tower used to be the
+    // hero's Restructure, which refused unless DAD MODE was active — so a
+    // player who never dropped to 25% health never found out a tower could be
+    // moved. Same ability, same cooldown, offered where the decision is made.
+    const moveReady = this.cooldowns.ready('restructure') && !this.hero.down
+    const freePads = this.build.freeSpots().length
+    options.push({
+      id: 'move',
+      icon: 'target',
+      sprite: this.hero.def.restructure.icon,
+      price: 0,
+      affordable: moveReady && freePads > 0,
+      reason: this.hero.down
+        ? `${this.hero.def.name} is down.`
+        : !this.cooldowns.ready('restructure')
+            ? `${this.hero.def.restructure.name} is still recharging.`
+            : freePads === 0 ? 'Every other pad is taken.' : undefined,
+      title: `Move ${def.name}`,
+      description:
+        `${this.hero.def.restructure.name}: pick a free pad. Costs no peanuts — it costs `
+        + `a ${realSeconds(this.hero.def.restructure.cooldown)}s cooldown.`,
+      rows,
+      confirmLabel: 'MOVE',
+      onConfirm: () => this.beginMove(tower),
+    })
+
+    // Selling is always offered, always affordable, and ALWAYS LAST — after
+    // an upgrade slot that is always present and a move slot that is always
+    // present, so it can never slide into the first position.
     //
     // It gets its OWN rows rather than the upgrade projection: "11.0 -> 19.8"
     // describes a purchase the player is not making, and four rows of it made
@@ -1587,6 +1685,7 @@ this.armReadyCountdown()
       title: `Sell ${def.name}`,
       description: `${tier} Frees the pad. What you paid does not come back in full.`,
       rows: sellRows,
+      confirmLabel: 'SELL',
       onConfirm: () => this.sellTower(tower),
     })
 
@@ -1634,7 +1733,8 @@ this.armReadyCountdown()
     tower.beginUpgrade()
     play(this, 'upgrade')
     this.status.message =
-      `${tower.def.name} going to tier ${tower.tier + 1}. It fires slowly for ${step.buildSeconds}s.`
+      `${tower.def.name} going to tier ${tower.tier + 1}. ` +
+      `It fires slowly for ${realSeconds(step.buildSeconds, 1)}s.`
   }
 
   private sellTower(tower: Tower): void {
@@ -1691,7 +1791,8 @@ this.armReadyCountdown()
     this.status.pendingAbility = null
     this.rangeRing.clear()
     this.targetRing.clear()
-    this.pathBand.clear()
+    this.castCursor.hide()
+    this.laneWash.clear()
     this.drawSpots()
     this.status.message = this.idleHint()
   }
@@ -1710,63 +1811,6 @@ this.armReadyCountdown()
     this.rangeRing.lineStyle(2, colour, 0.8).strokeCircle(x, y, radius)
   }
 
-  /**
-   * Outlines the stretch of lane a summon may be dropped on.
-   *
-   * Two lines along the edges of the legal strip, not a wash over the middle
-   * of it. The fill was a pale blue disc every half-radius along the whole
-   * lane, and over the new plate — painted grass, a painted dirt road, painted
-   * stones — it read as a stain across the map rather than as a boundary. The
-   * player already knows where the road is; what they need is where the
-   * permission stops.
-   *
-   * Built by offsetting the lane to both sides and then DROPPING every offset
-   * point that lands back inside the band. That cull is the whole trick: on
-   * the inside of a bend tighter than `within` the two offsets cross, and a
-   * naive offset folds the line over itself into a bow tie. A point closer to
-   * the lane than `within` is by definition not on the boundary, so it goes.
-   * The survivors come in runs, and each run is stroked on its own — joining
-   * across a gap would draw a chord straight through the legal area.
-   */
-  private drawPathBand(within: number): void {
-    this.pathBand.clear()
-    const cfg = PRESENTATION.pathBand
-    const total = this.lane.totalLength
-    const step = cfg.sampleStep
-
-    const left: { x: number; y: number }[] = []
-    const right: { x: number; y: number }[] = []
-    for (let d = 0; d <= total; d += step) {
-      // The tangent from a short chord either side, so a waypoint's corner
-      // does not give the two samples that share it opposite normals.
-      const a = this.lane.pointAt(Math.max(0, d - step))
-      const b = this.lane.pointAt(Math.min(total, d + step))
-      const len = Math.hypot(b.x - a.x, b.y - a.y) || 1
-      const nx = -(b.y - a.y) / len
-      const ny = (b.x - a.x) / len
-      const p = this.lane.pointAt(d)
-      left.push({ x: p.x + nx * within, y: p.y + ny * within })
-      right.push({ x: p.x - nx * within, y: p.y - ny * within })
-    }
-
-    this.pathBand.lineStyle(cfg.width, cfg.colour, cfg.alpha)
-    for (const side of [left, right]) {
-      let run: { x: number; y: number }[] = []
-      const flush = (): void => {
-        if (run.length > 1) this.pathBand.strokePoints(run, false)
-        run = []
-      }
-      for (const pt of side) {
-        // Half a pixel of tolerance: the offset points sit exactly `within`
-        // from the lane, and floating point puts about half of them a hair
-        // inside it.
-        if (this.lane.distanceTo(pt.x, pt.y) < within - 0.5) flush()
-        else run.push(pt)
-      }
-      flush()
-    }
-  }
-
   private updateHover(p: Phaser.Input.Pointer): void {
     const w = this.worldAt(p)
     if (this.status.mode === 'targeting' && this.status.pendingAbility) {
@@ -1780,8 +1824,13 @@ this.armReadyCountdown()
         this.targetRing.fillStyle(tint, ok ? 0.16 : 0.1).fillCircle(w.x, w.y, def.radius)
         this.targetRing.lineStyle(2, tint, 0.9).strokeCircle(w.x, w.y, def.radius)
       }
+      // And the answer itself, under the pointer. The radius circle says how
+      // big the effect is; this says whether it is allowed to happen here,
+      // which is the question a placement restriction actually raises.
+      this.castCursor.moveTo(w.x, w.y, ok, this.cameras.main.zoom)
       return
     }
+    this.castCursor.hide()
     if (this.ring?.active) return
 
     const tower = this.towerAt(w.x, w.y)
@@ -1867,12 +1916,9 @@ this.armReadyCountdown()
     this.status.pendingAbility = id
     this.setCancelVisible(true)
     const within = ABILITIES[id].pathOnlyWithin
-    if (within !== undefined) {
-      this.drawPathBand(within)
-      this.status.message = `${ABILITIES[id].name}: tap the highlighted path.`
-    } else {
-      this.status.message = `${ABILITIES[id].name}: tap where you want it.`
-    }
+    this.status.message = within !== undefined
+      ? `${ABILITIES[id].name}: drop it on the road. The cursor says where.`
+      : `${ABILITIES[id].name}: tap where you want it.`
   }
 
   /** True where this ability may be cast. Only summons are restricted. */
@@ -1898,8 +1944,9 @@ this.armReadyCountdown()
       this.status.rareAbility = null
     }
     this.cooldowns.start(id)
+    this.castCursor.hide()
     logEvent('ability-cast', `${id} at ${Math.round(x)},${Math.round(y)} enemies=${this.enemies.length}`)
-    this.pathBand.clear()
+    this.laneWash.clear()
     play(this, `cast-${id.toLowerCase()}`)
     castAbility(id, def, x, y, {
       scene: this,
@@ -2012,7 +2059,10 @@ this.armReadyCountdown()
         h.fighterSprites[i % h.fighterSprites.length],
       ))
     }
-    logEvent('summon', `${count} gnomes at ${Math.round(x)},${Math.round(y)} for ${seconds}s`)
+    // bothUnits, not realSeconds: a log line is read next to the JSON it came
+    // from, and dropping the game-seconds figure makes the two irreconcilable.
+    logEvent('summon',
+      `${count} gnomes at ${Math.round(x)},${Math.round(y)} for ${bothUnits(seconds)}`)
   }
 
   castHaymaker(): void {
@@ -2067,15 +2117,21 @@ this.armReadyCountdown()
     this.status.message = `${hm.name}!`
   }
 
+  /**
+   * Arms a move from the ability bar: pick a tower, then a free spot.
+   *
+   * NO LONGER GATED ON DAD MODE. It was, on the reasoning that a hero who can
+   * rearrange the board at will turns Restructure into a permanent editing
+   * mode rather than something earned by nearly dying. That reasoning held for
+   * the ability; what it produced was a GAME WITH NO WAY TO MOVE A TOWER. Dad
+   * Mode fires once per encounter at 25% health, so the only route to picking
+   * a tower up was to almost die first, and a player who never dropped that
+   * low never discovered the feature existed.
+   *
+   * The cost is the 22-second cooldown, which is a real one, and the ring now
+   * offers the same move on the tower itself — see `openTowerRing`.
+   */
   armRestructure(): void {
-    // DAD MODE only. It was gated on nothing but its cooldown, so a hero at
-    // full health on wave 1 could pick a tower up and put it somewhere else —
-    // which is what made it read as a permanent board-editing mode rather
-    // than as something the hero earns by nearly dying.
-    if (!this.hero.lastStandActive) {
-      this.refuse(`${this.hero.def.restructure.name} needs ${this.hero.def.lastStand.name}.`)
-      return
-    }
     if (this.hero.down) {
       this.refuse(`${this.hero.def.name} is down.`)
       return
@@ -2095,6 +2151,36 @@ this.armReadyCountdown()
     this.setCancelVisible(true)
     this.drawSpots()
     this.status.message = `${this.hero.def.restructure.name}: click a tower, then a free spot.`
+  }
+
+  /**
+   * Starts a move of ONE KNOWN TOWER, from its own ring.
+   *
+   * `armRestructure` asks "which tower?" and then "where to?", because from
+   * the ability bar it has to. The ring is already open on a tower, so the
+   * first question is answered and asking it again would be the menu losing
+   * track of what the player tapped.
+   *
+   * Public so the harness can drive it without the ring.
+   */
+  beginMove(tower: Tower): void {
+    if (this.hero.down) {
+      this.refuse(`${this.hero.def.name} is down.`)
+      return
+    }
+    if (!this.cooldowns.ready('restructure')) {
+      this.refuse(`${this.hero.def.restructure.name} is still recharging.`)
+      return
+    }
+    this.clearGhost()
+    this.ring?.close()
+    this.selected = null
+    this.status.mode = 'restructure'
+    this.restructuring = tower
+    this.showTowerRange(tower.x, tower.y, tower)
+    this.setCancelVisible(true)
+    this.drawSpots()
+    this.status.message = `Moving ${tower.def.name}. Tap a free pad.`
   }
 
   /** Drops a relocation in progress and leaves the board as it was. */
@@ -2137,7 +2223,7 @@ this.armReadyCountdown()
     const cd = this.hero.def.restructure.cooldown
     // Named, not "No charge." It costs a 22-second cooldown, and a message
     // saying otherwise is why the ability read as a free UI convenience.
-    this.status.message = `${moving.def.name} restructured. Back in ${cd}s.`
+    this.status.message = `${moving.def.name} restructured. Back in ${realSeconds(cd)}s.`
     this.restructuring = null
     this.status.mode = 'normal'
     // The CANCEL button was never taken down here, so after one successful
@@ -2322,14 +2408,48 @@ this.armReadyCountdown()
     this.scene.start('Title')
   }
 
+  /**
+   * A banner across the top of the board, ONE AT A TIME.
+   *
+   * It used to create a new text at `viewW / 2, viewH * 0.3` on every call,
+   * with no idea another might already be there. Five things announce
+   * themselves — a cleared wave, a leak, a new tower, a rare drop, Last Stand
+   * — and three of them fire on a wave boundary. `endWave` calls
+   * `grantTowerUnlocks()` and then `announce('WAVE CLEARED')` zero
+   * milliseconds apart, so the player saw "NEW TOWER: BRAMBLE" and "WAVE
+   * CLEARED" drawn through each other, one word at a time.
+   *
+   * So there is a queue and one slot. A banner holds the slot for its whole
+   * life and the next one waits. Nothing is dropped: a new tower is worth
+   * saying even a second late, and silently discarding the second message
+   * would trade one bug for a quieter one.
+   */
   private announce(text: string, color: string): void {
-    const t = this.add.text(viewW(this) / 2, viewH(this) * 0.3, text, {
-      fontFamily: FONT_UI, fontSize: '40px', fontStyle: 'bold', color,
+    this.bannerQueue.push({ text, color })
+    this.showNextBanner()
+  }
+
+  private showNextBanner(): void {
+    if (this.bannerShowing) return
+    const next = this.bannerQueue.shift()
+    if (!next) return
+    this.bannerShowing = true
+    const b = PRESENTATION.banner
+    const t = this.add.text(viewW(this) / 2, viewH(this) * b.yFraction, next.text, {
+      fontFamily: FONT_UI, fontSize: `${b.size}px`, fontStyle: 'bold', color: next.color,
       stroke: '#0d1016', strokeThickness: 7, letterSpacing: 2,
     }).setOrigin(0.5).setDepth(OVERLAY_DEPTH + 20).setScale(0.5)
     this.asScreenSpace([t])
-    this.tweens.add({ targets: t, scale: 1, duration: 240, ease: 'Back.easeOut' })
-    this.tweens.add({ targets: t, alpha: 0, delay: 1500, duration: 500, onComplete: () => t.destroy() })
+    this.tweens.add({ targets: t, scale: 1, duration: b.popMs, ease: 'Back.easeOut' })
+    this.tweens.add({
+      targets: t, alpha: 0, delay: b.holdMs, duration: b.fadeMs,
+      onComplete: () => {
+        t.destroy()
+        this.bannerShowing = false
+        // A gap, so two in a row read as two rather than as one flicker.
+        this.time.delayedCall(b.gapMs, () => this.showNextBanner())
+      },
+    })
   }
 
   // ---------------------------------------------------------------- loop
@@ -2526,20 +2646,36 @@ this.armReadyCountdown()
     play(this, 'boss', 0.95)
     this.cameras.main.shake(600, 0.007)
 
-    // The dialog plate, run the full width of the screen. Its corners scale
-    // down to fit a band this shallow, so the chrome reads without the frame
-    // swallowing the boss's name.
-    const card = platePanel(this, 0, mid - 78, W, 156)
-    card.forEach((p) => p.setDepth(TICKET_DEPTH))
-
-    const name = this.add.text(W / 2, mid - 34, boss.def.name.toUpperCase(), {
-      fontFamily: FONT_DISPLAY, fontSize: '56px', color: COLOR.fire,
+    // SIZED FROM ITS CONTENTS, not from the screen.
+    //
+    // It was `platePanel(this, 0, mid - 78, W, 156)` — exactly the full width,
+    // and 156px is 40% of a 390px phone. A card that always fills the screen
+    // is not a card, it is a takeover, and it was one for a two-word name and
+    // one line of flavour. The two texts are built first, measured, and the
+    // plate is drawn round them. The screen is still the bound: the card can
+    // reach `maxWidthFraction` of it and no further.
+    const c = PRESENTATION.bossCard
+    const name = this.add.text(0, 0, boss.def.name.toUpperCase(), {
+      fontFamily: FONT_DISPLAY, fontSize: `${c.nameSize}px`, color: COLOR.fire,
       stroke: '#0d1016', strokeThickness: 9,
     }).setOrigin(0.5, 0).setDepth(TICKET_DEPTH + 1)
-    const sub = this.add.text(W / 2, mid + 34, boss.def.flavor, {
-      fontFamily: FONT_UI, fontSize: '17px', color: COLOR.ink, ...BODY_SPACING,
-      align: 'center', wordWrap: { width: W - 80 },
+    // 17px under a 56px name was a 3.3:1 ratio: the tagline read as a caption
+    // on someone else's poster. Closer to 2:1 makes it part of the card.
+    const sub = this.add.text(0, 0, boss.def.flavor, {
+      fontFamily: FONT_UI, fontSize: `${c.taglineSize}px`, color: COLOR.ink, ...BODY_SPACING,
+      align: 'center',
+      wordWrap: { width: Math.min(c.maxTextWidth, W * c.maxWidthFraction - c.padX * 2) },
     }).setOrigin(0.5, 0).setDepth(TICKET_DEPTH + 1)
+
+    const cardW = Math.min(
+      W * c.maxWidthFraction,
+      Math.max(name.width, sub.width) + c.padX * 2,
+    )
+    const cardH = name.height + c.gap + sub.height + c.padY * 2
+    const card = platePanel(this, (W - cardW) / 2, mid - cardH / 2, cardW, cardH)
+    card.forEach((p) => p.setDepth(TICKET_DEPTH))
+    name.setPosition(W / 2, mid - cardH / 2 + c.padY)
+    sub.setPosition(W / 2, mid - cardH / 2 + c.padY + name.height + c.gap)
 
     this.tweens.add({ targets: name, scale: { from: 0.7, to: 1 }, duration: 380, ease: 'Back.easeOut' })
     // The plate is many images, so the fade targets them all as one list.
@@ -2880,7 +3016,7 @@ this.armReadyCountdown()
     if (result === 'lastStand') this.announceLastStand()
     if (result === 'down') {
       this.status.message =
-        `${this.hero.def.name} is down. Back at the entrance in ${this.hero.def.reviveSeconds}s.`
+        `${this.hero.def.name} is down. Back on the spot in ${realSeconds(this.hero.def.reviveSeconds)}s.`
       this.cameras.main.shake(240, 0.006)
     }
   }

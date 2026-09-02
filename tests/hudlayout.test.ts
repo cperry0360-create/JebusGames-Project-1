@@ -128,15 +128,22 @@ test('every element stays inside the safe area', () => {
 test('the HUD is pinned to the corners it is supposed to be pinned to', () => {
   const [, width, height] = VIEWPORTS[1]!
   const l = hudLayout({ width, height, insets: NO_INSETS, ...WIDEST }, CFG)
-  // Kingdom Rush: pills top-left, one button top-right, actives along the
-  // bottom, one small control in the bottom-right corner. There used to be two
-  // corner controls; the settings gear replaced both.
+  // Kingdom Rush: pills top-left, buttons top-right, actives along the bottom.
+  // There used to be two bottom corner controls; the settings gear replaced
+  // both, and then moved to the top row where a player looks for it. CANCEL
+  // took the corner it left, so the bottom-right is still spoken for — by the
+  // button that used to float over the middle of the board.
   assert.ok(l.counters.x < width / 3, 'the counters are not in the top-left')
   assert.ok(l.counters.y < height / 4, 'the counters are not at the top')
   assert.ok(l.startButton.x + l.startButton.width > width * 0.7,
     'the start button is not in the top-right')
-  assert.ok(l.settings.x > width * 0.7 && l.settings.y > height * 0.7,
-    'the settings gear is not bottom-right')
+  assert.ok(l.settings.x + l.settings.width > width * 0.95,
+    'the settings gear is not at the right-hand end of the top row')
+  assert.ok(l.settings.y < height / 4, 'the settings gear is not in the top row')
+  assert.ok(l.settings.x > l.startButton.x + l.startButton.width,
+    'the gear must sit outboard of START WAVE, not on it')
+  assert.ok(l.cancel.x + l.cancel.width > width * 0.95 && l.cancel.y > height * 0.7,
+    'CANCEL is not in the bottom-right corner')
   assert.equal((l as Record<string, unknown>).mute, undefined, 'the mute control is back')
   assert.equal((l as Record<string, unknown>).pause, undefined, 'the pause button is back')
   const mid = l.abilities.x + l.abilities.width / 2
@@ -145,10 +152,24 @@ test('the HUD is pinned to the corners it is supposed to be pinned to', () => {
 
 test('the abilities give way to the corner button rather than sit on it', () => {
   // A wide hand on a narrow phone: centring alone puts the outermost icon on
-  // top of the gear.
+  // top of the corner control.
   const l = hudLayout(
     { width: 568, height: 320, insets: NOTCH, countersWidth: 350, abilitiesWidth: 420 }, CFG)
-  assert.ok(!overlaps(l.abilities, l.settings), 'the ability row covers the settings gear')
+  assert.ok(!overlaps(l.abilities, l.cancel), 'the ability row covers CANCEL')
+})
+
+test('CANCEL is reserved from the layout even though it is usually hidden', () => {
+  // The whole reason it has a rectangle: a button that appears into whatever
+  // space is free will one day appear on top of something.
+  for (const [name, width, height] of VIEWPORTS) {
+    const l = hudLayout({ width, height, insets: NOTCH, ...WIDEST }, CFG)
+    assert.ok(!overlaps(l.cancel, l.abilities), `${name}: CANCEL over the abilities`)
+    assert.ok(!overlaps(l.cancel, l.settings), `${name}: CANCEL over the gear`)
+    assert.ok(l.cancel.x >= 0 && l.cancel.x + l.cancel.width <= width,
+      `${name}: CANCEL off the screen`)
+    assert.ok(l.cancel.y >= 0 && l.cancel.y + l.cancel.height <= height,
+      `${name}: CANCEL off the bottom`)
+  }
 })
 
 test('the map is full-bleed: nothing is reserved from the board', () => {
@@ -175,9 +196,14 @@ test('the HUD and the scene that draws over it share one set of rectangles', () 
   const game = src('scenes/GameScene.ts')
   assert.match(hud, /hudLayout\(/, 'the HUD does not use the layout')
   assert.match(game, /hudLayout\(/, 'the scene does not know where the HUD is')
-  // The cancel button and the build menu keep clear by asking, not by guessing.
-  assert.match(game, /this\.layout\.abilities\.y - 30/,
+  // The cancel button and the build menu keep clear by asking, not by
+  // guessing. CANCEL now has a rectangle of its own in the bottom-right
+  // corner — it used to be centred over the board, which is where the player
+  // is being asked to tap — so it asks the layout for it outright.
+  assert.match(game, /const cb = this\.layout\.cancel/,
     'the cancel button is placed by a magic number again')
+  assert.doesNotMatch(game, /plateButton\(this, viewW\(this\) \/ 2,\n\s*this\.layout\.abilities/,
+    'CANCEL is back over the middle of the board')
   // The ring asks the layout where the HUD is rather than guessing. It uses
   // the BANDS rather than panelArea: panelArea also excludes the message row
   // and the hero row, which leaves 129px on a notched 568x320 — less than one
@@ -204,7 +230,7 @@ test('the safe area is read rather than assumed to be zero', () => {
 
 test('what was right about the bands survived the revert', () => {
   const tier = presentation.towerTier as Record<string, unknown>
-  assert.ok(typeof tier.pipDropBelowBase === 'number',
+  assert.ok(typeof tier.pipBaselineOffset === 'number',
     'the tier pips floated back above the towers')
   assert.equal(tier.pipRiseAboveTop, undefined, 'the old floating pip anchor is back')
   const hud = src('scenes/HudScene.ts')
@@ -212,6 +238,13 @@ test('what was right about the bands survived the revert', () => {
   assert.ok(boss, 'the boss bar is gone')
   assert.match(boss[0], /this\.layout\.messageRow/,
     'the boss bar is unconstrained again, so it runs under the start button')
+  // And it takes a width from DATA, centred in that region. Taking the
+  // region's width outright made it 563px on an 844px screen — two thirds of
+  // the width, for one wave in thirteen — while bossBarWidth sat unread.
+  assert.match(boss[0], /Math\.min\(HUD\.bossBarWidth, region\.width\)/,
+    'the boss bar sizes itself from its container again')
+  assert.equal((presentation.hud as Record<string, unknown>).bossBarTop, undefined,
+    'bossBarTop is back, and nothing reads it')
   assert.match(boss[0], /this\.message\.setVisible\(!boss\)/,
     'the boss bar and the wave message can be up at once, in the same place')
 })

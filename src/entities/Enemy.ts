@@ -7,7 +7,10 @@ import { makeShadow, PRESENTATION, floatingDamage, deathPuff } from '../systems/
 import { emergeState, vanishAlpha, type EmergeConfig } from '../systems/Gateway.ts'
 import { applyGroundRender } from '../systems/Art.ts'
 import { facesLeft } from '../systems/Facing.ts'
+import rulesData from '../data/rules.json'
 import { onBoard } from '../systems/Liveness.ts'
+
+const RULES = rulesData
 
 export type EnemyState = 'walking' | 'fighting' | 'dead'
 
@@ -82,6 +85,20 @@ export class Enemy extends Phaser.GameObjects.Container {
   private readonly gateDistance: number
   private readonly stopDistance: number
   private readonly emergeCfg: EmergeConfig
+  /**
+   * How far to the side of the lane centreline this one walks, in world px.
+   *
+   * Every enemy used to sit EXACTLY on the centreline: `pointAt(distance)` and
+   * nothing else. A wave was therefore a single file, and two enemies at
+   * different speeds walked straight through one another with no visual
+   * separation at all. The road is 38 world pixels wide and nothing read that
+   * number except the code that draws the band.
+   *
+   * Chosen once, at spawn, and kept — a per-frame wobble would be a swerve
+   * rather than a lane. It is bounded so the enemy's own width stays on the
+   * paint, so a Buckethead gets less room to wander than a Scrapper.
+   */
+  private readonly laneOffset: number
   /** The scale the art was built at, so the emergence scale-up multiplies it
    *  rather than replacing it. */
   private readonly baseScaleY: number
@@ -95,6 +112,9 @@ export class Enemy extends Phaser.GameObjects.Container {
       gateDistance: number
       stopDistance: number
       emerge: EmergeConfig
+      /** Half the painted road's width, from map.json. Bounds the lateral
+       *  spread so nobody walks in the grass. */
+      laneHalfWidth: number
     },
   ) {
     super(scene, 0, 0)
@@ -118,6 +138,13 @@ export class Enemy extends Phaser.GameObjects.Container {
     this.stopDistance = gate.stopDistance
     this.emergeCfg = gate.emerge
     this.baseScaleY = this.art.scaleY
+    // Half the road, less half of this enemy, less a margin — then a fraction
+    // of that, so nobody walks the very edge of the paint. Negative room (an
+    // enemy wider than the road) collapses to the centreline rather than
+    // pushing it off into the grass.
+    const room = Math.max(0,
+      gate.laneHalfWidth - this.art.displayWidth / 2) * RULES.laneSpread.fraction
+    this.laneOffset = (Math.random() * 2 - 1) * room
     // Behind the arch and invisible, not at its mouth at full opacity.
     this.sinceMouth = -1
     const p = lane.pointAt(0)
@@ -367,8 +394,12 @@ export class Enemy extends Phaser.GameObjects.Container {
       // The field starts at 0, so a first engagement still lands immediately.
       this.distance += slowedSpeed(this.def.speed, this.slowFactor, this.slowed) * dt
       const p = this.lane.pointAt(this.distance)
-      this.setPosition(p.x, p.y)
-      this.face(this.lane.angleAt(this.distance))
+      const a = this.lane.angleAt(this.distance)
+      // Offset along the lane's NORMAL, so the spread follows the road round a
+      // bend instead of shearing across it. (-sin, cos) is the left-hand
+      // normal to the direction (cos, sin).
+      this.setPosition(p.x - Math.sin(a) * this.laneOffset, p.y + Math.cos(a) * this.laneOffset)
+      this.face(a)
       // The far side of the open gate's gap, not the end of the lane. The
       // enemy has been fading across the gap for the last few pixels, so by
       // here there is nothing left to see and the leak is bookkeeping.

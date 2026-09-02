@@ -65,9 +65,24 @@ test('every slider writes through to the save on the drag, not on the close', ()
   const panel = src('ui/SettingsPanel.ts')
   assert.match(panel, /setVolume\(v, channel\)/, 'moving a slider does not set the volume')
   // A player who drags the music down and then closes the tab has set the
-  // music down. setVolume writes the save on every call.
-  assert.match(src('systems/Audio.ts'), /export function setVolume\([\s\S]{0,200}?writeSave\(/,
+  // music down. Every path that changes the mix writes the save on the spot —
+  // through one function, so a new path cannot forget to.
+  const audio = src('systems/Audio.ts')
+  assert.match(audio, /export function setVolume\([\s\S]{0,200}?persistMix\(\)/,
     'setVolume no longer persists')
+  assert.match(audio, /export function nudgeAllVolumes\([\s\S]{0,400}?persistMix\(\)/,
+    'the title screen stepper no longer persists')
+  assert.match(audio, /function persistMix\(\): void \{[\s\S]{0,300}?writeSave\(/,
+    'persistMix does not write the save')
+
+  // And the title screen's single control moves ALL THREE channels. It called
+  // setVolume with no channel, whose default is sfx, so it left the music and
+  // the recorded lines alone — over a title screen that is playing music.
+  const toggle = src('ui/AudioToggle.ts')
+  assert.match(toggle, /nudgeAllVolumes\(delta\)/, 'the title stepper moves one channel again')
+  assert.doesNotMatch(toggle, /setVolume\(/, 'the title stepper is back on setVolume')
+  assert.match(audio, /export function nudgeAllVolumes[\s\S]{0,300}?\['sfx', 'music', 'voice'\]/,
+    'nudgeAllVolumes does not cover all three channels')
   // And music needs telling: its level is on a gain node, not on a cue.
   assert.match(panel, /if \(channel === 'music'\) refreshMusicVolume\(\)/,
     'the music slider does not reach the music')

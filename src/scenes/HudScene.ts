@@ -11,6 +11,7 @@ import { iconPlate } from '../ui/Plate.ts'
 import { SettingsPanel } from '../ui/SettingsPanel.ts'
 import { Dialog } from '../ui/Dialog.ts'
 import { play, resumeAudio } from '../systems/Audio.ts'
+import { realSeconds } from '../systems/GameTime.ts'
 import { hudLayout, NO_INSETS, type HudLayout, type Rect } from '../systems/HudLayout.ts'
 import { safeAreaInsets } from '../systems/SafeArea.ts'
 import { hudInteractive } from '../systems/Layers.ts'
@@ -75,6 +76,8 @@ export class HudScene extends Phaser.Scene {
   private livesField = 999
   private waveField = 999
   private bossBar!: Phaser.GameObjects.Graphics
+  /** The backing under the wave message. See where it is built. */
+  private messagePlate!: Phaser.GameObjects.Graphics
   private bossLabel!: Phaser.GameObjects.Text
   private startBtn!: PlateButton
   private panel?: Dialog
@@ -144,6 +147,15 @@ export class HudScene extends Phaser.Scene {
 
     // Under the counters: the wave message, or the boss bar while one is up.
     // Never both — they share the rectangle and take turns.
+    // A PLATE UNDER THE MESSAGE, drawn before the text so the text is on top.
+    //
+    // The line used to be stroked text and nothing else, over a full-bleed
+    // painted map — and the map's top edge is where the tavern, its signboard
+    // and the arch stonework are. A 4px stroke is not a background: over
+    // painted detail the sentence that tells the player what to do next was
+    // the least readable thing on the screen. Sized to the TEXT rather than to
+    // the row, so it is a label and not a bar parked across the top.
+    this.messagePlate = this.add.graphics()
     this.message = this.add.text(L.messageRow.x, L.messageRow.y, '', {
       fontFamily: FONT_UI, fontSize: '15px', color: COLOR.ink,
       stroke: '#0d1016', strokeThickness: 4,
@@ -545,6 +557,7 @@ export class HudScene extends Phaser.Scene {
     this.lastLives = s.lives
     this.setCounter(this.waveText, `${Math.min(s.wave + 1, s.waveCount)}/${s.waveCount}`, this.waveField)
     this.message.setText(s.message)
+    this.drawMessagePlate()
 
     this.drawBossBar(s)
     this.drawStartButton(s)
@@ -568,15 +581,25 @@ export class HudScene extends Phaser.Scene {
     const boss = Boolean(s.bossName)
     // One region, one occupant.
     this.message.setVisible(!boss)
+    this.messagePlate.setVisible(!boss)
     if (!boss) {
       this.bossLabel.setText('')
       return
     }
+    // SIZED FROM DATA, CENTRED IN THE REGION. It used to take the region's
+    // width outright, which on an 844px screen is 563px — 67% of the width,
+    // the full remaining span of the row, a slab across the top for one wave
+    // in thirteen. `bossBarWidth` and `bossBarHeight` existed in
+    // presentation.json the whole time and NOTHING READ THEM: two tuning
+    // numbers that could not tune anything. They are wired now, and the region
+    // is a bound rather than a size — the bar never outgrows the rectangle the
+    // layout guarantees is free, and on a narrow phone it is the width that
+    // gives way rather than the boss's name.
     const region = this.layout.messageRow
-    const h = region.height - 2
-    const x = region.x
-    const y = region.y
-    const w = region.width
+    const h = Math.min(HUD.bossBarHeight, region.height - 2)
+    const w = Math.min(HUD.bossBarWidth, region.width)
+    const x = region.x + (region.width - w) / 2
+    const y = region.y + (region.height - h) / 2
     const ratio = Phaser.Math.Clamp(s.bossHealth / Math.max(s.bossMax, 1), 0, 1)
 
     this.bossBar.fillStyle(0x0d1016, 0.82).fillRoundedRect(x - 3, y - 3, w + 6, h + 6, 5)
@@ -814,6 +837,30 @@ export class HudScene extends Phaser.Scene {
   }
 
   /**
+   * The plate under the wave message, sized to the words that are on it.
+   *
+   * Not to `messageRow.width`: that is the space the line MAY use, and a plate
+   * drawn to it is a permanent bar across two thirds of the screen for the
+   * sake of a six-word sentence. The row still bounds it — the text wraps to
+   * `messageRow.width` and is capped at one line — so this can never be wider
+   * than the rectangle the layout guarantees is free.
+   */
+  private drawMessagePlate(): void {
+    const bar = HUD.heroBar
+    const r = this.layout.messageRow
+    this.messagePlate.clear()
+    if (!this.message.text) return
+    const pad = 6
+    const w = Math.min(r.width, this.message.width + pad * 2)
+    const h = Math.max(r.height, this.message.height + 2)
+    const y = r.y + (r.height - h) / 2
+    this.messagePlate.fillStyle(bar.backing, bar.backingAlpha)
+    this.messagePlate.fillRoundedRect(r.x - pad, y, w + pad, h, bar.radius)
+    this.messagePlate.lineStyle(bar.edgeWidth, bar.edge, 1)
+    this.messagePlate.strokeRoundedRect(r.x - pad, y, w + pad, h, bar.radius)
+  }
+
+  /**
    * The hero's name and health, in the right region of the second row.
    *
    * Name on the bar rather than above it, for the same reason the boss's is:
@@ -830,7 +877,10 @@ export class HudScene extends Phaser.Scene {
     let state = ''
     // The countdown belongs on the bar as well as on the ground: the player
     // is watching the lane, not the patch of grass he comes back to.
-    if (s.heroDown) state = ` · BACK IN ${Math.max(0, Math.ceil(s.heroReviveIn))}s`
+    // Real seconds. `heroReviveIn` is in game seconds, which run 1.4x faster
+    // than the player's watch — a 25-game-second lockout is 17.9 of theirs,
+    // and a countdown that disagrees with a stopwatch reads as broken.
+    if (s.heroDown) state = ` · BACK IN ${Math.max(0, Math.ceil(realSeconds(s.heroReviveIn, 1)))}s`
     else if (s.lastStand) state = ' · DAD MODE'
     this.heroLabel.setText(`${s.heroName}${state}`)
     this.heroLabel.setColor(s.lastStand ? COLOR.fire : COLOR.ink)

@@ -78,6 +78,16 @@ export interface RingOption {
   title: string
   description: string
   rows: RingRow[]
+  /**
+   * The WORD on the confirm button: BUILD, UPGRADE, SELL, MOVE.
+   *
+   * It used to be a tick glyph on every option, which meant the second press
+   * — the one that actually spends or destroys — looked identical whether the
+   * player was buying an upgrade or selling the tower. The panel above it did
+   * name the tower and the refund; the button did not, and the button is what
+   * the finger is aimed at.
+   */
+  confirmLabel: string
   onConfirm: () => void
 }
 
@@ -450,14 +460,48 @@ export class TowerRing {
     const bw = (inner - 8) / 2
     const bh = CFG.confirmHeight
     const mk = (
-      cx: number, iconName: string, enabled: boolean, onPick: () => void, tag: string,
+      cx: number, face: { icon: string } | { word: string },
+      enabled: boolean, onPick: () => void, tag: string,
     ): void => {
       const plate = iconPlate(s, cx, y + bh / 2, bw, bh)
-      const key = icon(s, enabled ? iconName : 'locked')
-      const glyph = s.add.image(cx, y + bh / 2, key)
-      // The floor, but never taller than the plate it stands on.
-      fitInBox(glyph, key, Math.min(CFG.iconSize, bh - 4))
-      if (!enabled) glyph.setAlpha(0.7)
+      let front: Phaser.GameObjects.GameObject
+      if ('word' in face) {
+        // A WORD, not a bare tick.
+        //
+        // Every option's confirm used to be the same glyph, so the one press
+        // that actually spends or destroys looked identical whether the player
+        // was buying an upgrade or selling the tower out from under themselves.
+        //
+        // The tick is still there where there is room for both — it is what
+        // says "this is the commit button" at a glance, and the word says what
+        // is being committed. On the narrowest panel (150px, leaving 60px a
+        // side) the word wins outright: "UPGRADE" has to be readable or the
+        // whole change is undone.
+        const roomy = bw >= CFG.confirmGlyphMinWidth
+        const gw = roomy ? Math.min(CFG.iconSize, bh - 4) * 0.6 : 0
+        const label = s.add.text(cx + gw / 2, y + bh / 2, enabled ? face.word : 'LOCKED', {
+          fontFamily: FONT_UI, fontSize: `${uiSize(CFG.titleSize)}px`, fontStyle: 'bold',
+          color: enabled ? COLOR.ink : COLOR.dim, letterSpacing: 1,
+        }).setOrigin(0.5)
+        const over = label.width / Math.max(1, bw - 10 - gw)
+        if (over > 1) label.setFontSize(Math.max(9, uiSize(CFG.titleSize) / over))
+        if (roomy) {
+          const key = icon(s, enabled ? 'confirm' : 'locked')
+          const tick = s.add.image(cx - label.width / 2 - gw / 2 + gw / 2, y + bh / 2, key)
+          fitInBox(tick, key, gw)
+          tick.setX(cx + gw / 2 - label.width / 2 - gw / 2 - 3)
+          if (!enabled) tick.setAlpha(0.7)
+          parts.push(tick)
+        }
+        front = label
+      } else {
+        const key = icon(s, enabled ? face.icon : 'locked')
+        const glyph = s.add.image(cx, y + bh / 2, key)
+        // The floor, but never taller than the plate it stands on.
+        fitInBox(glyph, key, Math.min(CFG.iconSize, bh - 4))
+        if (!enabled) glyph.setAlpha(0.7)
+        front = glyph
+      }
       const hit = s.add.rectangle(cx, y + bh / 2, bw, bh, 0xffffff, 0.001)
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: enabled })
@@ -467,11 +511,11 @@ export class TowerRing {
       // Release, not press: this one spends, so a finger that lands on it and
       // slides off must be able to take the decision back.
       hit.on('pointerup', onPick)
-      parts.push(...plate.parts, glyph, hit)
+      parts.push(...plate.parts, front, hit)
     }
-    mk(CFG.pad + bw / 2, 'confirm', option.affordable,
+    mk(CFG.pad + bw / 2, { word: option.confirmLabel }, option.affordable,
       () => { if (option.affordable) { option.onConfirm(); this.close() } }, 'ring:confirm')
-    mk(CFG.pad + bw + 8 + bw / 2, 'cancel', true, () => this.deselect(), 'ring:cancel')
+    mk(CFG.pad + bw + 8 + bw / 2, { icon: 'cancel' }, true, () => this.deselect(), 'ring:cancel')
     y += bh
 
     return { parts, height: y + CFG.pad }

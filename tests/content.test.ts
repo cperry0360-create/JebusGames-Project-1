@@ -677,11 +677,14 @@ test('tier is visible on the board without opening a panel', () => {
   assert.match(build.slice(0, build.indexOf('\n  ', 40) + 400), /drawTier\(\)/,
     'finishing a tier never redraws the indicator')
 
-  // On the base, not floating above the tower's head. A row hung a full
-  // sprite-height above the origin sat out over the map belonging to nothing,
-  // and was close enough to the next tower's row to run into it.
-  assert.ok(typeof t.pipDropBelowBase === 'number' && t.pipDropBelowBase > 0,
-    'the pips are not anchored below the tower base')
+  // ON the base. Not floating above the tower's head — a row hung a full
+  // sprite-height above the origin sat out over the map belonging to nothing —
+  // and not clear of its foot either, which is where the correction to that
+  // put it: nine pixels down onto the grass, reading as a separate object
+  // lying near the tower. Zero straddles the base line.
+  assert.ok(typeof t.pipBaselineOffset === 'number' && Math.abs(t.pipBaselineOffset) <= 4,
+    'the pip row is not anchored to the tower base')
+  assert.equal(t.pipDropBelowBase, undefined, 'the pips are back down on the grass')
   assert.equal(t.pipRiseAboveTop, undefined,
     'the pips still float above the tower art')
   const draw = /private drawTier\(\)[\s\S]*?\n  \}/.exec(tower)![0]

@@ -125,6 +125,41 @@ export function worldToScreen(
 }
 
 /**
+ * A POINTER, in the layout's own space.
+ *
+ * `worldToScreen` was written to stop this class of bug and did not, because
+ * it takes a WORLD point and a pointer is not one. `pointer.x`/`pointer.y` are
+ * CANVAS pixels — at devicePixelRatio 3 they are three times the number every
+ * layout in this codebase is written in — and the settings slider was built
+ * AFTER `worldToScreen` existed, read `pointer.x` directly, and sat pinned at
+ * 100% on any retina screen because every press resolved past the end of the
+ * track. That is the fourth bug from this one confusion.
+ *
+ * So there are two helpers now and they cover the two directions:
+ *
+ *   - `worldToScreen(scene, wx, wy)` — a point ON THE MAP to CSS pixels.
+ *   - `pointerToScreen(scene, pointer)` — a TOUCH OR CLICK to CSS pixels.
+ *
+ * Neither takes the other's argument, which is the point: reaching for the
+ * wrong one now fails to compile rather than failing at devicePixelRatio 3 on
+ * somebody's phone.
+ *
+ * `cam` is the camera the target was drawn by; the default is the scene's
+ * main camera, which is what a HUD or a fitted menu is on.
+ */
+export function pointerToScreen(
+  scene: Phaser.Scene,
+  pointer: { x: number; y: number },
+  cam: Phaser.Cameras.Scene2D.Camera = scene.cameras.main,
+): { x: number; y: number } {
+  // The camera's own inverse transform, which already accounts for its zoom
+  // and scroll — the UI camera's zoom IS the device ratio, so this lands in
+  // CSS pixels without a second division by it.
+  const p = cam.getWorldPoint(pointer.x, pointer.y)
+  return { x: p.x, y: p.y }
+}
+
+/**
  * A UI camera that renders a CSS-pixel layout at full device resolution.
  *
  * Zoom is about the camera's centre, so centring it on the middle of the

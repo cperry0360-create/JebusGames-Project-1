@@ -1717,23 +1717,64 @@ async function run() {
     await until(() => g.enemies.length > 1, 30000)
     await sleep(600)
 
-    // THE TARGETING OVERLAY, before any cast. It is an outline along the two
-    // edges of the legal strip now, not a wash over the middle of it, and the
-    // only honest check of that is a picture.
+    // THE PLACEMENT CURSOR. There is no overlay on the map at all now — the
+    // blue outline down both edges of the lane is gone — so what is checked is
+    // that the CURSOR answers the question, on the lane and off it.
     g.armAbility('gnomes')
-    await sleep(400)
-    note('targeting overlay: mode=' + g.status.mode + ' msg="' + g.status.message + '"')
-    await shot('gnomes-00-band-' + VP.w + 'x' + VP.h)
-    // Zoomed out, so a bend is in frame: the cull that stops the outline
-    // folding over itself only shows up on one.
-    for (let i = 0; i < 24; i++) {
-      game.canvas.dispatchEvent(new WheelEvent('wheel',
-        { deltaY: 120, clientX: VP.w / 2, clientY: VP.h / 2, bubbles: true }))
+    await sleep(300)
+    note('armed: mode=' + g.status.mode + ' msg="' + g.status.message + '"')
+    note('cursor art: valid=' + (g.castCursor.stubbed.valid ? 'STUB' : 'real') +
+      '  invalid=' + (g.castCursor.stubbed.invalid ? 'STUB' : 'real'))
+    note('cursor before the pointer moves: ' + g.castCursor.state)
+
+    // Hover ON the lane. The pointer is moved through the canvas, in CSS
+    // pixels, and the cursor has to land at the world point under it.
+    const hover = async (wx, wy) => {
+      const cam = g.cameras.main
+      const dpr = window.devicePixelRatio || 1
+      const sx = ((wx - cam.worldView.x) * cam.zoom + cam.x) / dpr
+      const sy = ((wy - cam.worldView.y) * cam.zoom + cam.y) / dpr
+      move(sx, sy)
+      await sleep(140)
+      return { sx, sy }
     }
-    await sleep(1200)
-    await shot('gnomes-00b-band-wide-' + VP.w + 'x' + VP.h)
+    const onLane = g.lane.pointAt(g.lane.totalLength * 0.45)
+    await hover(onLane.x, onLane.y)
+    const validState = g.castCursor.state
+    note('on the road (lane distance ' +
+      Math.round(g.lane.distanceTo(onLane.x, onLane.y)) + '): cursor=' + validState)
+    await shot('gnomes-00-cursor-valid-' + VP.w + 'x' + VP.h)
+
+    // And well off it. A build pad is the natural off-lane point: it is where
+    // a player's finger already goes.
+    const off = g.build.spots.reduce((a, b) =>
+      (g.lane.distanceTo(a.x, a.y) > g.lane.distanceTo(b.x, b.y) ? a : b))
+    await hover(off.x, off.y)
+    const invalidState = g.castCursor.state
+    note('off the road (lane distance ' +
+      Math.round(g.lane.distanceTo(off.x, off.y)) + '): cursor=' + invalidState)
+    await shot('gnomes-00b-cursor-invalid-' + VP.w + 'x' + VP.h)
+
+    note('CURSOR ' + (validState === 'valid' && invalidState === 'invalid'
+      ? 'follows the pointer and reports both states'
+      : '*** wrong: on-lane=' + validState + ' off-lane=' + invalidState + ' ***'))
+
+    // CANCEL is in the HUD corner, not over the board. Asserted by POSITION:
+    // a handler that fires on a button drawn across the play area is still a
+    // button drawn across the play area.
+    const cbx = g.cancelBtn.hit.x, cby = g.cancelBtn.hit.y
+    note('CANCEL at ' + Math.round(cbx) + ',' + Math.round(cby) +
+      ' of ' + VP.w + 'x' + VP.h +
+      '  (layout says ' + Math.round(g.layout.cancel.x + g.layout.cancel.width / 2) +
+      ',' + Math.round(g.layout.cancel.y + g.layout.cancel.height / 2) + ')')
+    note('CANCEL ' + (cbx > VP.w * 0.6 && cby > VP.h * 0.7
+      ? 'is in the bottom-right HUD corner'
+      : '*** is still over the board ***'))
+    note('CANCEL visible while armed: ' + g.cancelVisible)
+
     g.cancelTargeting ? g.cancelTargeting() : (g.status.mode = 'normal')
     await sleep(200)
+    note('after cancel: cursor=' + g.castCursor.state + ' (hidden is correct)')
 
     // Off the path first: a gnome in a field blocks nothing, so the cast has
     // to be refused rather than wasted.

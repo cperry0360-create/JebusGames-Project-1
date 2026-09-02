@@ -287,8 +287,46 @@ export function isMuted(): boolean {
   return muted
 }
 
+/**
+ * The average of the three channels — what a single control reports.
+ *
+ * The title screen has one volume stepper and the game has three sliders, and
+ * a screen with one control has to answer "how loud is it?" with one number.
+ * When the three are equal, which is how they start, this is that number.
+ */
+export function overallVolume(): number {
+  return (volumes.sfx + volumes.music + volumes.voice) / 3
+}
+
+/**
+ * Moves ALL THREE channels by the same amount.
+ *
+ * The title screen's + and − wrote to `setVolume`'s default channel, which is
+ * `sfx` — so turning the volume down on the title screen left the music and
+ * the recorded lines exactly where they were, and the control looked broken to
+ * anyone who tried it while the soundtrack was playing. That default made
+ * sense when there was one channel; there have been three since the voice bus
+ * landed and nothing updated the one control that predated them.
+ *
+ * A delta rather than an absolute, so a player who set their own balance in
+ * the settings dialog keeps it. Each channel clamps on its own at the ends.
+ */
+export function nudgeAllVolumes(delta: number): void {
+  for (const c of ['sfx', 'music', 'voice'] as Channel[]) {
+    volumes[c] = Math.max(0, Math.min(1, Math.round((volumes[c] + delta) * 100) / 100))
+  }
+  persistMix()
+  onMixChanged?.()
+}
+
 export function setVolume(v: number, channel: Channel = 'sfx'): void {
   volumes[channel] = Math.max(0, Math.min(1, v))
+  persistMix()
+  onMixChanged?.()
+}
+
+/** The three channels and the mute flag, written together. */
+function persistMix(): void {
   writeSave({
     ...loadSave(),
     volume: volumes.sfx,
@@ -296,7 +334,6 @@ export function setVolume(v: number, channel: Channel = 'sfx'): void {
     voiceVolume: volumes.voice,
     muted,
   })
-  onMixChanged?.()
 }
 
 /**

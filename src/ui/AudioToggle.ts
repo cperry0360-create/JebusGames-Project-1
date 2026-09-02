@@ -1,12 +1,17 @@
 import Phaser from 'phaser'
-import { getVolume, isMuted, play, setVolume, toggleMuted } from '../systems/Audio.ts'
+import { isMuted, nudgeAllVolumes, overallVolume, play, toggleMuted } from '../systems/Audio.ts'
 import { iconPlate } from './Plate.ts'
 import { COLOR, FONT_UI } from './Theme.ts'
 import { viewH } from '../systems/Resolution.ts'
 
 /**
- * The settings, such as they are: mute, and a volume that steps rather than
+ * The title screen's audio control: mute, and a volume that steps rather than
  * slides.
+ *
+ * It moves all three channels together. The in-run settings dialog is where
+ * music, effects and voice are balanced against each other; this is the one
+ * knob a player reaches for before a run has started, and it should behave
+ * like one.
  *
  * A drag slider is the wrong control for a corner of a tower defense screen —
  * it is fiddly on a trackpad and impossible to hit mid-wave — so the speaker
@@ -56,7 +61,11 @@ export class AudioToggle {
         fontStyle: 'bold', stroke: '#0d1016', strokeThickness: 4,
       }).setOrigin(0.5).setInteractive({ useHandCursor: true })
       t.on('pointerdown', () => {
-        setVolume(Math.round((getVolume() + delta) * 10) / 10)
+        // ALL THREE CHANNELS. This used to call setVolume, whose default
+        // channel is `sfx`, so turning the volume down here left the music and
+        // the recorded lines untouched — with the soundtrack playing over the
+        // title, the control did almost nothing you could hear.
+        nudgeAllVolumes(delta)
         play(scene, 'click')
         this.refresh()
       })
@@ -92,7 +101,7 @@ export class AudioToggle {
     // Lit means sound is on. Muted is the plate switched off, which is what
     // an unlit button means everywhere else in the game.
     this.plate.setActive(!muted)
-    this.readout.setText(muted ? 'MUTED' : `${Math.round(getVolume() * 100)}%`)
+    this.readout.setText(muted ? 'MUTED' : `${Math.round(overallVolume() * 100)}%`)
     this.drawSpeaker(muted)
   }
 

@@ -68,13 +68,12 @@
     "marginY": 10,
     "numberSize": 22,
     "numberMargin": 9,
-    "bossBarWidth": 560,
-    "bossBarHeight": 16,
+    "bossBarWidth": 300,
+    "bossBarHeight": 14,
     "bossPhaseMarks": [
       0.6,
       0.3
     ],
-    "bossBarTop": 10,
     "layout": {
       "marginX": 10,
       "marginY": 10,
@@ -84,7 +83,8 @@
       "iconHeight": 64,
       "cornerButton": 40,
       "startWidth": 240,
-      "startMinWidth": 150
+      "startMinWidth": 150,
+      "cancelWidth": 100
     },
     "heroBar": {
       "_note": "Cory's name and health, top-left under the counters. OPAQUE, because it lives over a full-bleed painted map and there is no screen position a HUD element can occupy that the camera cannot put painted art under — measured: 0 of 82,290 screen cells at 844x390 are unreachable by painted content at some camera position. So the answer is not a safer corner, it is a proper plate. It was a 55% black wash, which let the tavern's painted signboard show through the bar and the bar show through the signboard.",
@@ -93,7 +93,9 @@
       "edge": 856086,
       "edgeWidth": 2,
       "radius": 5
-    }
+    },
+    "_bossBarWidth": "Read at last. It was 560 and unread: drawBossBar took layout.messageRow.width instead, which is 563px on an 844px screen — 67% of the width for one wave in thirteen. 300 is wide enough to read a health fraction off and narrow enough to stay a bar rather than a band. The message row still bounds it, so a narrow phone shrinks the bar rather than pushing it into the counters.",
+    "_bossBarTop": "DELETED. It said 10 and nothing read it: the bar sits in the message row, which the layout places, so a second opinion about its y could only ever disagree with the layout. It is centred in that row now."
   },
   "typography": {
     "minUiSize": 15,
@@ -110,7 +112,8 @@
     "pipEmptyColour": "#39424e",
     "scalePerTier": 0.07,
     "tintPerTier": 0.12,
-    "pipDropBelowBase": 9
+    "pipBaselineOffset": 0,
+    "_pipBaselineOffset": "Where the tier row sits relative to the tower's base, in world pixels: negative is up into the art, positive is down onto the grass. It was pipDropBelowBase: 9, which put the whole row clear of the foot and reading as a separate object on the ground. 0 straddles the base line so the row belongs to the tower."
   },
   "abilityBar": {
     "draftedPitch": 72,
@@ -438,15 +441,9 @@
     "lockBadgeSize": 20,
     "_lockBadgeSize": "The padlock corner-badge on an option the player cannot afford yet. Small, because it is the second thing the button says: the first is WHICH option this is, and that is the option's own picture, dimmed. A padlock instead of the picture was the original choice and the reasoning held for one locked option — a padlock says 'not yet' where a greyed-out picture just looks broken. It fails at two, because then both buttons are the same padlock and the player cannot tell what they are saving for, which is the common case.",
     "lockedAlpha": 0.5,
-    "lockedTint": 9082022
-  },
-  "pathBand": {
-    "_note": "The stretch of lane a summon may be dropped on, drawn as an outline along the two road edges rather than as a filled band. A fill over painted grass and a painted road reads as a stain; the edge is where the information is. Pale blue, not green: a green line on green grass is invisible exactly where it matters.",
-    "colour": 9425151,
-    "alpha": 0.85,
-    "width": 2.5,
-    "sampleStep": 5,
-    "_sampleStep": "World pixels between samples of the lane. The outline is built by offsetting the lane to both sides and then dropping every offset point that falls back inside the band, which is what keeps a bend from folding the outline over itself. A coarse step cuts corners the player can genuinely cast into."
+    "lockedTint": 9082022,
+    "confirmGlyphMinWidth": 84,
+    "_confirmGlyphMinWidth": "Below this the confirm button carries its word alone; at or above it the tick glyph goes in front of the word too. The word is the part that cannot be dropped — every option's confirm used to be the same tick, so SELL and UPGRADE committed through identical buttons."
   },
   "settings": {
     "_note": "The settings dialog: three volume sliders and the three ways out of a run. It replaced a mute toggle with a stepped volume readout in one corner and a pause button in the other — four controls' worth of chrome on a phone screen, for settings that are opened once and left alone. Everything here is in CSS pixels and clamped to the viewport.",
@@ -467,5 +464,46 @@
     "_width": "Clamped to the viewport, so on a 568x320 screen it is the screen minus its margins rather than 420. minWidth is where the label, the track and the percentage stop fitting on one line.",
     "labelColumn": 154,
     "_labelColumn": "Room reserved for a row's name, so the three tracks start in one column whatever the words are. Measured against SOUND EFFECTS, the longest, at labelSize with its letter spacing: it was 118 and the words ran under the track."
+  },
+  "castCursor": {
+    "_note": "Where a summon will land, drawn under the pointer instead of as an outline down both edges of the whole lane. The band described the RULE; the cursor answers the QUESTION, which is 'can I drop it here?'. Kingdom Rush draws nothing on the map.",
+    "validKey": "cursor-place-ok",
+    "invalidKey": "cursor-place-no",
+    "size": 34,
+    "_size": "World pixels at zoom 1. The cursor divides by the camera zoom, so this is also its size on the glass at every camera position.",
+    "stubValidColour": 9425018,
+    "stubInvalidColour": 16734780,
+    "stubAlpha": 0.8,
+    "_stub": "Tinted rectangles stand in until the two sprites arrive. Deliberately crude: a stub that looks finished is a stub that ships. The real art replaces it by dropping files in under the two keys above, with no code change."
+  },
+  "bossCard": {
+    "_note": "The card that announces a boss. Sized from its own text: it was drawn at exactly the viewport width and 156px tall, which is 40% of a 390px phone, for a two-word name and one line of flavour.",
+    "nameSize": 44,
+    "taglineSize": 21,
+    "_sizes": "44 over 21 is 2.1:1. It was 56 over 17, which is 3.3:1 — at that ratio the tagline reads as a caption rather than as part of the card.",
+    "padX": 34,
+    "padY": 20,
+    "gap": 10,
+    "maxWidthFraction": 0.82,
+    "maxTextWidth": 520,
+    "_maxWidthFraction": "The screen is the bound, not the size. A card may reach 82% of the width and no further, so it is always a card on a plate rather than a band across the screen."
+  },
+  "heroPick": {
+    "_note": "How big a tap on the hero has to be. Derived from the sprite he is currently wearing, not from a constant: it was a hardcoded radius of 30 around his FEET, which reached 40% up a 75.8px-tall man and thirty pixels down into the grass below him.",
+    "marginFraction": 0.18,
+    "_marginFraction": "Grown by this much on every side, so the box is larger than the sprite as asked. 18% of 75.8 is about 14 world pixels of forgiveness top and bottom, which is roughly a fingertip at the default zoom.",
+    "minWidth": 44,
+    "minHeight": 44,
+    "_min": "A floor in world pixels, so a small or a shrunken sprite still gets a target a finger can hit."
+  },
+  "banner": {
+    "_note": "The one-at-a-time banner across the board. There was no queue and no slot: every call made a new text at the same pixel, and endWave fires NEW TOWER and WAVE CLEARED zero milliseconds apart, so the two were drawn through each other.",
+    "yFraction": 0.3,
+    "size": 40,
+    "popMs": 240,
+    "holdMs": 1500,
+    "fadeMs": 500,
+    "gapMs": 140,
+    "_gapMs": "Between one banner leaving and the next arriving, so two in a row read as two messages rather than as one flicker."
   }
 }

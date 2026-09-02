@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { COLOR, FONT_UI } from './Theme.ts'
+import { pointerToScreen } from '../systems/Resolution.ts'
 import presentationData from '../data/presentation.json'
 
 const CFG = presentationData.settings
@@ -81,12 +82,16 @@ export class Slider {
     // that sentence has been the fix. `pointer.x` is CANVAS pixels — at
     // devicePixelRatio 3 it is three times the number the layout is written
     // in, so every press resolved past the right-hand end and the slider sat
-    // pinned at 100%. `getWorldPoint` asks the camera that actually drew this.
+    // pinned at 100%.
+    //
+    // This file was written AFTER `worldToScreen` was added to stop exactly
+    // this, and still got it wrong, because that helper takes a point on the
+    // MAP and a pointer is not one. `pointerToScreen` is the missing half of
+    // the pair; see Resolution.ts.
     //
     // Caught because the probe asserted the VALUE moved rather than that the
     // handler fired. A handler firing would have looked perfect.
-    const at = (p: Phaser.Input.Pointer): number =>
-      scene.cameras.main.getWorldPoint(p.x, p.y).x
+    const at = (p: Phaser.Input.Pointer): number => pointerToScreen(scene, p).x
     const set = (px: number): void => {
       const t = (px - this.trackX) / this.trackW
       this.value = Math.max(0, Math.min(1, t))

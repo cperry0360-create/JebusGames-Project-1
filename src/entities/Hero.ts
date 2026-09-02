@@ -25,9 +25,12 @@ const PRESENTATION = presentationData
  *   - Last Stand fires once at 25% health, and cannot re-arm inside an
  *     encounter — not even across a revive. It is the climax of a life, and a
  *     hero who could transform twice a wave would make it a rotation.
- *   - Going down takes him off the board for `reviveSeconds`, then he walks
- *     back on at full health from where he entered. `down` gates movement,
- *     attacking and further damage for the whole of that.
+ *   - Going down takes him off the board for `reviveSeconds`, then he comes
+ *     back at full health ON THE SPOT HE FELL, still holding whatever rally
+ *     order he was under. `down` gates movement, attacking and further damage
+ *     for the whole of that. He used to reappear at the map's entrance with
+ *     his orders wiped, which cost the player a walk they had already paid
+ *     for and cancelled an instruction they had not withdrawn.
  *   - He returns at full health at the next encounter too. That is why this
  *     class holds no cross-encounter state and the scene builds a fresh Hero
  *     in create(); healing is the absence of carry-over, not a heal step.
@@ -79,9 +82,16 @@ export class Hero extends Phaser.GameObjects.Container {
    *  cannot swing for a moment after pulling out of one fight and into
    *  another. */
   private arrivalDelay = 0
-  /** Where he came onto the map, and where he comes back on. */
-  private readonly homeX: number
-  private readonly homeY: number
+  /**
+   * Where he went down, which is where he comes back.
+   *
+   * This replaces `homeX/homeY`, a readonly pair set once from map.json
+   * heroStart. Those made every revive a teleport to the entrance however far
+   * up the lane the player had walked him. Seeded to his starting position so
+   * the field is meaningful before he has ever fallen.
+   */
+  private fellX: number
+  private fellY: number
   /** Idle bob, walk bounce and attack lunge. He is never perfectly still. */
   private readonly frames = new HeroFrames(PRESENTATION.heroFrames as FrameDef)
   /** The pose and frame currently on the sprite, so the texture is only swapped
@@ -107,8 +117,8 @@ export class Hero extends Phaser.GameObjects.Container {
     this.health = def.maxHealth
     this.rallyX = x
     this.rallyY = y
-    this.homeX = x
-    this.homeY = y
+    this.fellX = x
+    this.fellY = y
 
     this.shadow = makeShadow(scene, def.bodySprite)
     this.body_ = scene.add.sprite(0, 0, def.bodySprite)
@@ -178,9 +188,33 @@ export class Hero extends Phaser.GameObjects.Container {
     return Math.hypot(this.rallyX - this.x, this.rallyY - this.y) < 2
   }
 
-  /** How big a tap counts as a tap on him. */
-  get pickRadius(): number {
-    return 30
+  /**
+   * The box a tap on him has to land in, in world pixels, relative to his
+   * position — which is at his FEET, because the art is base-anchored.
+   *
+   * It was a circle of radius 30 around his feet, a hardcoded number in a .ts
+   * file. Cory renders 75.8 world pixels tall and 62.3 across, so that circle
+   * covered 40% of his height, all of it below the waist, plus thirty pixels
+   * of grass under him where he is not. His head, chest and face — the top
+   * 46px, sixty per cent of the man — could not be tapped at all.
+   *
+   * A BOX, NOT A CIRCLE: he is drawn roughly rectangular, and a circle wide
+   * enough to reach his shoulders reaches just as far out into empty grass on
+   * either side of his knees. The margin is proportional to his size rather
+   * than a constant, so the SUV — which is wider and shorter — gets a hit area
+   * that matches the SUV.
+   */
+  get pickBox(): { x: number; y: number; width: number; height: number } {
+    const m = PRESENTATION.heroPick
+    const w = this.body_.displayWidth * (1 + m.marginFraction * 2)
+    const h = this.body_.displayHeight * (1 + m.marginFraction * 2)
+    return {
+      x: this.x - w / 2,
+      // displayHeight up from the feet, then the margin split above and below.
+      y: this.y - this.body_.displayHeight - (h - this.body_.displayHeight) / 2,
+      width: Math.max(m.minWidth, w),
+      height: Math.max(m.minHeight, h),
+    }
   }
 
   /** His art is base-anchored like the towers and enemies now, so ground
@@ -190,7 +224,8 @@ export class Hero extends Phaser.GameObjects.Container {
   }
 
   hits(x: number, y: number): boolean {
-    return Math.hypot(this.x - x, this.y - y) <= this.pickRadius
+    const b = this.pickBox
+    return x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height
   }
 
   /**
@@ -509,6 +544,8 @@ export class Hero extends Phaser.GameObjects.Container {
     // would have called it.
     this.pendingHit = null
     this.frames.reset()
+    this.fellX = this.x
+    this.fellY = this.y
     this.bar.setVisible(false)
     this.shadow.setVisible(false)
     deathPuff(this.scene, this.x, this.y, 0xff8f7a)
@@ -562,9 +599,18 @@ export class Hero extends Phaser.GameObjects.Container {
     this.body_.setFlipX(this.facingRight)
     this.body_.x = this.facingRight ? -this.artOffset : this.artOffset
 
-    this.setPosition(this.homeX, this.homeY)
-    this.rallyX = this.homeX
-    this.rallyY = this.homeY
+    // WHERE HE FELL, AND STILL UNDER ORDERS.
+    //
+    // Two things used to happen here and neither was asked for. He was moved
+    // to `homeX/homeY` — a readonly pair set once from map.json heroStart — so
+    // however far up the lane the player had walked him, he came back at the
+    // entrance. And `rallyX/rallyY` were reset to the same point, which threw
+    // away the standing order without saying so: the player's last deliberate
+    // instruction was cancelled by his death.
+    //
+    // He returns where he went down. The rally point is untouched, so if he
+    // was under orders he walks back to them himself.
+    this.setPosition(this.fellX, this.fellY)
     this.setVisible(true)
     this.setAlpha(1)
     this.shadow.setVisible(true)
@@ -579,9 +625,10 @@ export class Hero extends Phaser.GameObjects.Container {
     this.emit('revived')
   }
 
-  /** Where he will come back on, so the scene can mark the spot. */
+  /** Where he will come back, so the scene can mark the spot. The spot he
+   *  fell on, not the entrance. */
   get returnPoint(): { x: number; y: number } {
-    return { x: this.homeX, y: this.homeY }
+    return { x: this.fellX, y: this.fellY }
   }
 
   private drawBar(): void {

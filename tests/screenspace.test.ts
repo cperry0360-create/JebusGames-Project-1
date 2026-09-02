@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
 
 const url = (p: string) => new URL(p, import.meta.url)
+const src = (p: string) => readFileSync(url(`../src/${p}`), 'utf8')
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
   for (const e of readdirSync(url(dir), { withFileTypes: true })) {
@@ -133,4 +134,45 @@ test('the scrim harness scenario still exists and still measures corners', () =>
   const runner = read('../tools/harness/run.sh')
   assert.ok(runner.includes('force-device-scale-factor'),
     'run.sh must be able to run at a retina device ratio; dpr 1 is where this bug hides')
+})
+
+/* ------------------------------------------------ the pointer half of the pair */
+
+test('there are two conversions, and neither takes the other argument', () => {
+  // FOUR BUGS came from confusing canvas pixels with CSS pixels, and the
+  // fourth — the settings slider pinned at 100% at devicePixelRatio 3 — was in
+  // a file written AFTER worldToScreen was added to prevent it. The helper did
+  // not apply: it takes a point on the MAP, and a pointer is not one.
+  const res = src('systems/Resolution.ts')
+  assert.match(res, /export function worldToScreen\(\s*scene: Phaser\.Scene,\s*wx: number,\s*wy: number/,
+    'worldToScreen no longer takes a world point')
+  assert.match(res, /export function pointerToScreen\(\s*scene: Phaser\.Scene,\s*pointer: \{ x: number; y: number \}/,
+    'there is no pointer-space helper')
+})
+
+test('nothing reads a raw pointer coordinate against a CSS-pixel layout', () => {
+  // The fifth instance, found while adding the helper: hudTakesPress was being
+  // handed pointer.x directly. At dpr 3 on an 844px screen the pointer runs to
+  // 2532 while START WAVE spans 594..834 in CSS pixels, so a tap a third of
+  // the way across the BOARD tested as a tap on the button — and the map
+  // ignored it.
+  const game = src('scenes/GameScene.ts')
+  assert.doesNotMatch(game, /hudTakesPress\(this\.layout, p\.x, p\.y\)/,
+    'the HUD press test is back on raw canvas pixels')
+  assert.match(game, /const ui = pointerToScreen\(this, p, this\.uiCam\)/,
+    'the press is not converted through the camera that drew the HUD')
+  assert.match(game, /hudTakesPress\(this\.layout, ui\.x, ui\.y\)/)
+
+  // And the slider, which is where this was first caught.
+  const slider = src('ui/Slider.ts')
+  assert.match(slider, /pointerToScreen\(scene, p\)\.x/, 'the slider is back on a raw pointer')
+  assert.doesNotMatch(slider, /\bp\.x\b(?!.*pointerToScreen)/,
+    'the slider reads a raw pointer coordinate somewhere')
+})
+
+test('CANCEL is part of what the HUD claims from the board', () => {
+  // It moved into the bottom-right corner. A control the map does not know
+  // about is a control the map will take taps through.
+  assert.match(src('systems/HudLayout.ts'), /inside\(layout\.settings\) \|\| inside\(layout\.cancel\)/,
+    'the HUD does not claim presses on CANCEL')
 })

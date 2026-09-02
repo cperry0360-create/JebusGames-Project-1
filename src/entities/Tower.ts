@@ -146,12 +146,23 @@ export class Tower extends Phaser.GameObjects.Container {
   private drawTier(): void {
     const t = PRESENTATION.towerTier
     const total = maxTier(this.def)
-    // On the base, not above the head. Floating a row of pips a tower's full
-    // height above its origin put them out over the map, unattached to
-    // anything the player could see them belonging to, and close enough to the
-    // next tower's row to collide with it. Down here they sit inside the
-    // tower's own footprint and cannot reach a neighbour.
-    const top = t.pipDropBelowBase
+    // ON the base, not below it.
+    //
+    // They were above the tower's head once, floating out over the map
+    // unattached to anything and close enough to the next tower's row to
+    // collide with it. Moving them down fixed that and introduced the
+    // opposite: `pipDropBelowBase` put the row nine world pixels UNDER the
+    // foot, on the grass, which reads as a separate thing lying on the ground
+    // near the tower rather than as part of it.
+    //
+    // Measured before changing: the drop was 9 world pixels, not the ~50 the
+    // report estimated — every tower's art fills its texture and anchorY is
+    // 1.0, so the container origin IS the visible base. The direction of the
+    // fix is the same either way.
+    //
+    // Zero is the base line: the row straddles the tower's foot, half on the
+    // art and half on its shadow, which is what makes it read as attached.
+    const top = t.pipBaselineOffset
     const span = (total - 1) * t.pipGap
     this.pips.clear()
     for (let i = 0; i < total; i++) {

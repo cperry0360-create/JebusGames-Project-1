@@ -183,9 +183,16 @@ test('the HUD hides Restructure rather than removing it', () => {
   assert.match(hud, /strokeCircle\(r\.cx, r\.cy, r\.boxH \/ 2 - e\.inset\)/,
     'the reserved slot is not drawn as an empty socket')
 
+  // THE DAD MODE GATE IS GONE, deliberately. It made the reasoning right and
+  // the game wrong: Dad Mode fires once per encounter at 25% health, so the
+  // only route to moving a tower was to nearly die first, and a player who
+  // never dropped that low never learned towers could move at all. The cost is
+  // the cooldown, which is real, and the tower's own ring offers the same move.
   const game = readFileSync(new URL('../src/scenes/GameScene.ts', import.meta.url), 'utf8')
-  assert.match(game, /if \(!this\.hero\.lastStandActive\) \{[\s\S]{0,200}refuse/,
-    'armRestructure is not gated on DAD MODE')
+  assert.doesNotMatch(game, /if \(!this\.hero\.lastStandActive\) \{[\s\S]{0,200}refuse/,
+    'the DAD MODE gate on armRestructure is back')
+  assert.match(game, /armRestructure\(\): void \{[\s\S]{0,300}?cooldowns\.ready\('restructure'\)/,
+    'the cooldown is the only thing left holding it back, and it went too')
   assert.match(game, /cancelRestructure\(\)/,
     'a relocation in progress is not cancelled when DAD MODE ends')
 })

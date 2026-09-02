@@ -55,5 +55,9 @@
       "narrow": "Barely standing.",
       "lost": "The doors are open."
     }
+  },
+  "laneSpread": {
+    "fraction": 0.72,
+    "_note": "How much of the room between an enemy's own edge and the edge of the painted road it may wander into, chosen once at spawn. 0 puts every enemy back on the centreline, which is where they all were: a wave was a single file and two enemies at different speeds walked straight through each other. 0.72 keeps everyone clear of the paint's edge. It is in rules rather than presentation because it is not only a look — a splash radius now covers a band rather than a line."
   }
 }
