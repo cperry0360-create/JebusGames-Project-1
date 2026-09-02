@@ -4671,13 +4671,19 @@ async function run() {
   }
 
   if (scenario === 'ledger') {
-    // THE LEDGER CARD, MEASURED. Every tower, every tier, both branches, and
-    // every string checked against the container it is drawn in.
+    // THE LEDGER CARD, MEASURED: every tower, both tiers, both branches, and
+    // every string checked against the card it is drawn on.
     //
     // "Nothing wraps" is the contract the whole card rests on — its height is
     // arithmetic precisely because no string can add a line — so this asserts
-    // it by MEASUREMENT. A test that only checked the schema limits would pass
-    // on a card whose 18-character phrase is 19 pixels too wide for its column.
+    // it by MEASUREMENT. A schema check alone would pass an 18-character
+    // phrase that is nineteen pixels too wide for its column.
+    //
+    // Batched on purpose. The first version placed a tower, upgraded it, read
+    // both branches and sold it before starting the next, and never got past
+    // the fifth tower in ten minutes. Every tower is placed first and every
+    // upgrade runs at once, so there is ONE build wait in the whole run
+    // instead of six in series.
     const P = (await import('./js/data/presentation.json', { with: { type: 'json' } })).default
     const T = (await import('./js/data/towers.json', { with: { type: 'json' } })).default
     const L = P.ring.ledger
@@ -4692,12 +4698,12 @@ async function run() {
     const heights = new Set()
     let cards = 0
 
-    // Every text on the card, against the card's own width. A Text object
-    // reports its drawn width, so this catches a phrase that fits the schema
-    // and not the column.
+    // Every text on the card, against the card's own rectangle. A Text object
+    // reports its DRAWN size, so this catches both a string too wide for its
+    // column and one that wrapped to a second line.
     const measure = (label) => {
       const pl = g.ring && g.ring.panelLayer
-      if (!pl) { problems.push(label + ': no card'); return }
+      if (!pl) { problems.push(label + ': no card'); return null }
       const w = g.ring.panelSize.w, h = g.ring.panelSize.h
       heights.add(h)
       cards++
@@ -4705,141 +4711,145 @@ async function run() {
       for (const o of pl.list) {
         if (o.type !== 'Text' || !o.text) continue
         lines++
-        // WRAPPING, detected rather than assumed: a wrapped Text is taller
-        // than one line of its own font.
-        const oneLine = o.height <= Number(String(o.style.fontSize).replace('px','')) * 1.6
-        if (!oneLine) problems.push(label + ': "' + o.text + '" wrapped (' + Math.round(o.height) + 'px)')
+        const px = Number(String(o.style.fontSize).replace('px', ''))
+        if (o.height > px * 1.6) {
+          problems.push(label + ': "' + o.text + '" WRAPPED (' + Math.round(o.height) + 'px)')
+        }
         const b = o.getBounds()
         const left = b.x - pl.x, right = b.x + b.width - pl.x
         if (left < -0.5 || right > w + 0.5) {
-          problems.push(label + ': "' + o.text + '" spills the card (' +
-            Math.round(left) + '..' + Math.round(right) + ' of ' + Math.round(w) + ')')
+          problems.push(label + ': "' + o.text + '" SPILLS ' + Math.round(left) + '..' +
+            Math.round(right) + ' of ' + Math.round(w))
         }
         const top = b.y - pl.y, bot = b.y + b.height - pl.y
         if (top < -0.5 || bot > h + 0.5) {
-          problems.push(label + ': "' + o.text + '" spills vertically (' +
-            Math.round(top) + '..' + Math.round(bot) + ' of ' + Math.round(h) + ')')
+          problems.push(label + ': "' + o.text + '" SPILLS VERTICALLY ' + Math.round(top) +
+            '..' + Math.round(bot) + ' of ' + Math.round(h))
         }
       }
       if (lines === 0) problems.push(label + ': no text on the card')
       return { w, h, lines }
     }
-
     const texts = () => (g.ring ? g.ring.panelLayer.list.filter((o) => o.type === 'Text')
       .map((o) => o.text) : [])
+    const pad = (t, n) => (t + '                            ').slice(0, n)
 
-    // Walk every tower up through tier 2 and both branches.
+    const openAndMeasure = async (label, pick) => {
+      const i = g.ring.opts.options.findIndex((o) => o.id === pick)
+      if (i < 0) { problems.push(label + ': no option "' + pick + '"'); return }
+      g.ring.select(i)
+      await sleep(200)
+      const m = measure(label)
+      if (m) note(pad(label, 24) + ' w=' + Math.round(m.w) + ' h=' + Math.round(m.h) +
+        '  ' + JSON.stringify(texts()))
+    }
+
     const ids = Object.keys(T)
+
+    /* --- the BUILD card, and place every tower ---------------------------- */
+
+    const towers = []
     for (const id of ids) {
-      // WAIT FOR THE PAD, rather than assuming the last sale freed one on the
-      // frame it was asked for. `sellTower` destroys the tower through a tween
-      // and the pad is released with it, so a fixed sleep here reported "no
-      // card" for one tower in thirty-six and told me nothing about which.
-      await until(() => g.build.freeSpots().length > 0, 8000)
       const spot = g.build.freeSpots()[0]
-      if (!spot) { problems.push(id + ': no free pad after 8s'); break }
-      // The BUILD card first, off the pad's ring.
+      if (!spot) { problems.push(id + ': no free pad'); break }
       g.status.unlockedTowers = [id]
       g.openPadRing(spot)
       await until(() => g.ring && g.ring.opts.options.length > 0, 4000)
-      if (!g.ring) { problems.push('build ' + T[id].name + ': the pad ring did not open on spot ' + spot.index) }
-      else { g.ring.select(0); await sleep(260) }
-      const b = measure('build ' + T[id].name)
-      if (b) note('build   %s'.replace('%s', (T[id].name + '            ').slice(0, 12)) +
-        ' w=' + Math.round(b.w) + ' h=' + Math.round(b.h) + '  ' + JSON.stringify(texts()))
+      if (!g.ring) { problems.push('build ' + T[id].name + ': the pad ring did not open') }
+      else await openAndMeasure('build ' + T[id].name, id)
       g.ring && g.ring.close()
-      await sleep(120)
-
+      await sleep(80)
       g.place(id, spot)
-      await sleep(240)
-      const tower = g.towers[g.towers.length - 1]
-
-      const open = async (label, pick) => {
-        g.openTowerRing(tower)
-        await sleep(260)
-        const i = g.ring.opts.options.findIndex((o) => o.id === pick)
-        if (i < 0) { problems.push(label + ': no option ' + pick); g.ring.close(); return }
-        g.ring.select(i)
-        await sleep(260)
-        const m = measure(label)
-        if (m) note((label + '                       ').slice(0, 23) +
-          ' w=' + Math.round(m.w) + ' h=' + Math.round(m.h) + '  ' + JSON.stringify(texts()))
-        g.ring.close()
-        await sleep(120)
-      }
-
-      await open('t1 upgrade ' + T[id].name, 'upgrade')
-      await open('t1 sell ' + T[id].name, 'sell')
-      g.upgradeTower(tower)
-      await until(() => !tower.upgrading, 30000)
-      for (const spec of T[id].specializations) {
-        await open('t2 ' + spec.name, 'spec:' + spec.id)
-      }
-      await open('t2 sell ' + T[id].name, 'sell')
-      g.sellTower(tower)
-      await sleep(200)
+      await sleep(120)
+      towers.push(g.towers[g.towers.length - 1])
     }
 
-    // THE FLOOR, FORCED.
-    //
-    // The walk above never reached it: `panelWidthFor` takes the room beside
+    /* --- tier 1: the upgrade card and the sell card ----------------------- */
+
+    for (const t of towers) {
+      g.openTowerRing(t)
+      await until(() => g.ring && g.ring.opts.options.length > 0, 4000)
+      await openAndMeasure('t1 upgrade ' + t.def.name, 'upgrade')
+      await openAndMeasure('t1 sell ' + t.def.name, 'sell')
+      await openAndMeasure('t1 move ' + t.def.name, 'move')
+      g.ring.close()
+      await sleep(80)
+    }
+
+    /* --- ONE build wait for all six -------------------------------------- */
+
+    for (const t of towers) g.upgradeTower(t)
+    await until(() => towers.every((t) => !t.upgrading), 40000)
+    note('all ' + towers.length + ' towers at tier ' + (towers[0] ? towers[0].tier : '?'))
+
+    /* --- tier 2: both branches and the sell card -------------------------- */
+
+    for (const t of towers) {
+      g.openTowerRing(t)
+      await until(() => g.ring && g.ring.opts.options.length > 0, 4000)
+      for (const spec of t.def.specializations) {
+        await openAndMeasure('t2 ' + spec.name, 'spec:' + spec.id)
+      }
+      await openAndMeasure('t2 sell ' + t.def.name, 'sell')
+      g.ring.close()
+      await sleep(80)
+    }
+
+    /* --- THE FLOOR, FORCED ------------------------------------------------ */
+
+    // The walk above never reaches it: `panelWidthFor` takes the room beside
     // the ring's ACTUAL position, and on this map even a 568x320 screen leaves
-    // 223px on one side, so every card measured came out 223-226 wide. The
+    // 223px on one side, so every card measured comes out 223-226 wide. The
     // narrow branch is real code on a path this board does not produce, and
     // "we never saw it break" is not the same as "it works". So the card is
-    // composed directly at `panelMinWidth` and measured there.
+    // composed directly at `panelMinWidth` and every string measured there.
     const floorW = P.ring.panelMinWidth
-    g.openTowerRing(g.towers[0] || null)
-    await sleep(200)
-    if (!g.ring) {
-      // No tower left standing after the walk; build one to have an option.
-      await until(() => g.build.freeSpots().length > 0, 8000)
-      const sp = g.build.freeSpots()[0]
-      g.status.unlockedTowers = [ids[0]]
-      g.place(ids[0], sp)
-      await sleep(300)
-      g.openTowerRing(g.towers[g.towers.length - 1])
-      await sleep(300)
-    }
-    if (g.ring && g.ring.opts.options.length) {
-      const opt = g.ring.opts.options[0]
-      const built = g.ring.composeCard(opt, floorW)
-      const labels = built.parts.filter((o) => o.type === 'Text').map((o) => o.text)
-      let spill = 0, wrapped = 0
-      for (const o of built.parts) {
-        if (o.type !== 'Text') continue
-        const b = o.getBounds()
-        if (b.x < -0.5 || b.x + b.width > floorW + 0.5) {
-          spill++
-          note('   FLOOR SPILL "' + o.text + '" ' + Math.round(b.x) + '..' +
-            Math.round(b.x + b.width) + ' of ' + floorW)
+    let floorOk = false
+    if (towers.length) {
+      g.openTowerRing(towers[0])
+      await until(() => g.ring && g.ring.opts.options.length > 0, 4000)
+      for (const opt of g.ring.opts.options) {
+        const built = g.ring.composeCard(opt, floorW)
+        let spill = 0, wrapped = 0
+        for (const o of built.parts) {
+          if (o.type !== 'Text') continue
+          const b = o.getBounds()
+          if (b.x < -0.5 || b.x + b.width > floorW + 0.5) {
+            spill++
+            note('   FLOOR SPILL "' + o.text + '" ' + Math.round(b.x) + '..' +
+              Math.round(b.x + b.width) + ' of ' + floorW)
+          }
+          if (o.height > Number(String(o.style.fontSize).replace('px', '')) * 1.6) {
+            wrapped++
+            note('   FLOOR WRAP "' + o.text + '"')
+          }
         }
-        if (o.height > Number(String(o.style.fontSize).replace('px','')) * 1.6) {
-          wrapped++
-          note('   FLOOR WRAP "' + o.text + '"')
-        }
+        const labels = built.parts.filter((o) => o.type === 'Text').map((o) => o.text)
+        const nums = labels.filter((t) => ['dps', 'range', 'rate', 'boost'].includes(t))
+        const support = towers[0].isSupport
+        const wanted = support ? ['boost'] : ['dps', 'range']
+        const ok = spill === 0 && wrapped === 0 && !nums.includes('rate')
+          && wanted.every((n) => nums.includes(n))
+        note('   floor ' + pad(opt.id, 14) + ' h=' + built.height +
+          ' numbers=' + JSON.stringify(nums) + ' ' + JSON.stringify(labels))
+        if (!ok) problems.push('the ' + floorW + 'px card for "' + opt.id + '" is wrong')
+        floorOk = ok
+        built.parts.forEach((o) => o.destroy())
       }
-      const stats = labels.filter((t) => ['dps','range','rate','boost'].includes(t))
-      note('at the ' + floorW + 'px floor: h=' + built.height +
-        '  numbers=' + JSON.stringify(stats) + '  ' + JSON.stringify(labels))
-      note('FLOOR ' + (spill === 0 && wrapped === 0 && !stats.includes('rate') &&
-        stats.includes('dps') && stats.includes('range')
-        ? 'drops rate, keeps dps and range, nothing wraps or spills'
-        : '*** wrong: spill=' + spill + ' wrap=' + wrapped +
-          ' numbers=' + JSON.stringify(stats) + ' ***'))
-      if (spill || wrapped) problems.push('the ' + floorW + 'px floor card does not fit')
-      built.parts.forEach((o) => o.destroy())
+      note('at the ' + floorW + 'px floor: ' + (floorOk
+        ? 'rate is dropped, dps and range survive, nothing wraps or spills'
+        : '*** wrong — see above ***'))
       g.ring.close()
     } else {
-      problems.push('could not open a ring to compose a floor card from')
+      problems.push('no tower to compose a floor card from')
     }
 
     note('cards measured: ' + cards)
     note('card heights seen: ' + JSON.stringify([...heights]) +
       (heights.size === 1 ? '  — one height, as designed' : '  *** the height varies ***'))
-    note('RESULT ' + (problems.length === 0 && heights.size === 1
+    note('RESULT ' + (problems.length === 0 && heights.size === 1 && floorOk
       ? 'every string fits its card at ' + VP.w + 'x' + VP.h + ' dpr ' + dpr +
-        ', and every card is the same height'
+        ', every card is ' + [...heights][0] + 'px, and the floor drops rate'
       : '*** ' + problems.length + ' problem(s) ***'))
     for (const p of problems.slice(0, 30)) note('   ' + p)
     return
