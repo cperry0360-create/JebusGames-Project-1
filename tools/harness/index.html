@@ -2857,6 +2857,53 @@ async function run() {
     return
   }
 
+  if (scenario === 'spot5') {
+    // Why the ring will not stay open on one pad at maximum zoom, on the
+    // smallest screen. Reported by the `ring` scenario as "0 pressable".
+    const D = (await import('./js/data/display.json', { with: { type: 'json' } })).default
+    const P = (await import('./js/data/presentation.json', { with: { type: 'json' } })).default
+    const RL = await import('./js/systems/RingLayout.js')
+    const dpr = window.devicePixelRatio || 1
+    g.status.peanuts = 99999
+    const z = D.camera.maxZoom * dpr
+    g.rig.setTargetZoom(z)
+    await until(() => Math.abs(g.cameras.main.zoom - z) < 0.01, 6000)
+    const area = () => RL.usableArea(VP.w, VP.h, {top:0,right:0,bottom:0,left:0}, {
+      countersBottom: g.layout.counters.y + g.layout.counters.height,
+      abilitiesTop: g.layout.abilities.y,
+    }, P.ring.areaMargin)
+    note('viewport ' + VP.w + 'x' + VP.h + ' dpr ' + dpr +
+      '  zoom ' + (g.cameras.main.zoom / dpr).toFixed(2) + '  area ' + JSON.stringify(area()))
+    // NO settle: the ring is opened while the rig is still easing, which is
+    // what the `ring` scenario does and what a player does when they tap a pad
+    // that is not yet centred.
+    const SETTLE = arg === 'settled'
+    for (const sp of g.build.freeSpots()) {
+      await lookAt(sp.x, sp.y)
+      if (SETTLE) await sleep(300)
+      g.openPadRing(sp)
+      const anchors = []
+      for (let i = 0; i < 30; i++) {
+        const a = g.padAnchor(sp)
+        anchors.push({ open: !!g.ring, a })
+        await new Promise((r) => requestAnimationFrame(r))
+      }
+      const first = anchors[0], last = anchors[anchors.length - 1]
+      const A = area()
+      const outside = (p) => !p || p.x < A.x - 1 || p.x > A.x + A.width + 1
+        || p.y < A.y - 1 || p.y > A.y + A.height + 1
+      note('spot ' + sp.index + ' world ' + Math.round(sp.x) + ',' + Math.round(sp.y) +
+        '  ring open ' + first.open + ' -> ' + last.open +
+        '  anchor ' + (first.a ? Math.round(first.a.x) + ',' + Math.round(first.a.y) : 'null') +
+        ' -> ' + (last.a ? Math.round(last.a.x) + ',' + Math.round(last.a.y) : 'null') +
+        (outside(last.a) ? '   *** ANCHOR OUTSIDE THE USABLE AREA ***' : '') +
+        '   msg "' + g.status.message + '"')
+      g.ring?.close()
+      await sleep(80)
+    }
+    return
+  }
+
   if (scenario === 'looptrack') {
     // The level 1 track does not loop seamlessly and fades out at the end, so
     // it repeats with a gap and fades back in rather than cutting. Watched at
@@ -3963,6 +4010,14 @@ async function run() {
           Math.round(pb.width) + 'x' + Math.round(pb.height) + '  drew ' + drawn +
           'px from y ' + Math.round(lo) + ' to ' + Math.round(hi))
       }
+      if (boxes.length === 0) {
+        note('      NO PRESSABLE REGIONS: ring=' + (g.ring ? 'open' : 'GONE') +
+          '  buttons=' + (g.ring ? g.ring.buttons?.length : '-') +
+          '  placement=' + (g.ring && g.ring.bounds ? 'set' : 'null') +
+          '  unlocked=' + JSON.stringify(g.status.unlockedTowers) +
+          '  mode=' + g.status.mode + '  modalOpen=' + g.modalOpen +
+          '  msg="' + g.status.message + '"')
+      }
       note('  ' + label.padEnd(26) + boxes.length + ' pressable, ' +
         (off.length === 0 ? 'all on screen' : '*** ' + off.length + ' OFF SCREEN ***') +
         (rb ? '  ring ' + Math.round(rb.width) + 'x' + Math.round(rb.height)
@@ -3989,6 +4044,28 @@ async function run() {
     let worst = { off: 0, clashes: 0 }
     const record = (r) => { worst.off += r.off; worst.clashes += r.clashes }
 
+    /**
+     * Waits for the ring to STOP MOVING before its buttons are aimed at.
+     *
+     * The rig eases the camera, the ring is repositioned over its pad every
+     * frame, and at maximum zoom a frame of easing moves it tens of pixels. A
+     * press aimed at a rectangle read one frame earlier then lands beside the
+     * button, on the map, and closes the menu — which is what "0 pressable"
+     * meant on spot 5 at max zoom, twice in a row. That is the probe aiming at
+     * a moving target, not the ring being unreachable, and a real thumb has
+     * the same problem only if it is faster than the camera.
+     */
+    const settle = async () => {
+      let last = ''
+      for (let i = 0; i < 40; i++) {
+        const b = g.ring?.bounds
+        const now = b ? `${Math.round(b.x)},${Math.round(b.y)}` : 'none'
+        if (now === last) return
+        last = now
+        await new Promise((r) => requestAnimationFrame(r))
+      }
+    }
+
     // EVERY PAD, at min and max zoom, with and without a description open.
     for (const zName of ['min', 'max']) {
       const z = (zName === 'min' ? D.camera.minZoom : D.camera.maxZoom) * dpr
@@ -3999,12 +4076,17 @@ async function run() {
         await lookAt(sp.x, sp.y)
         g.openPadRing(sp)
         await sleep(160)
+        await settle()
         record(check('spot ' + sp.index + ' ring'))
         // Open each option's description in turn: the panel is a different
         // size for every tower, so one of them is not a sample.
         const opts = g.ring ? g.ring.hitBoxes.filter((b) => b.id !== 'ring:confirm' && b.id !== 'ring:cancel') : []
         for (const o of opts) {
-          const b = o.rect
+          await settle()
+          // Re-read the rectangle after settling: the one captured in `opts`
+          // is from before the wait.
+          const live = g.ring?.hitBoxes.find((x) => x.id === o.id)
+          const b = (live ?? o).rect
           await click(b.x + b.width / 2, b.y + b.height / 2)
           await sleep(120)
           record(check('  panel for ' + o.id))

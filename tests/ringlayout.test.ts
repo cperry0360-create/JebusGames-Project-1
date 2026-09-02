@@ -374,6 +374,86 @@ test('every ring button is near the pad it belongs to', () => {
   assert.ok(worst <= BOUND, `a button sits ${worst.toFixed(0)}px from its pad — ${worstWhere}`)
 })
 
+test('the panel narrows rather than sitting on the ring, and never below its floor', () => {
+  // A panel on top of a ring button costs a tap every time — cancel back to
+  // the ring, then press it — and the screen where that bites is the smallest
+  // one, which is the one a kid is most likely holding. So the panel takes the
+  // widest width that fits BESIDE the ring, down to a floor.
+  //
+  // This is TowerRing.panelWidthFor, mirrored here because the component
+  // itself needs Phaser. Measured over 540 placements per viewport:
+  //
+  //   844x390   fixed 226   worst 2 hidden, any hidden in  15 / 540
+  //             adaptive    worst 0 hidden, any hidden in   0 / 540
+  //   568x320   fixed 226   worst 4 hidden, any hidden in 225 / 540
+  //             adaptive    worst 2 hidden, any hidden in 120 / 540
+  //
+  // Not zero on the smallest notched screen, and it cannot be: a six-option
+  // ring is 324x214 in a 472x171 strip, so there is no room beside it at any
+  // width. Narrowing further does not help either — measured at 120px the
+  // worst case is still two — which is why the floor is where the text stops
+  // being readable rather than where the geometry stops complaining.
+  const widthFor = (ring: Rect, area: Rect): number => {
+    const room = Math.max(
+      (area.x + area.width) - (ring.x + ring.width) - CFG.panelGap,
+      ring.x - area.x - CFG.panelGap,
+    )
+    return Math.max(CFG.panelMinWidth, Math.min(CFG.panelWidth, Math.floor(room)))
+  }
+  const component = readFileSync(url('../src/ui/TowerRing.ts'), 'utf8')
+  assert.match(component, /Math\.max\(\s*\n?\s*CFG\.panelMinWidth, Math\.min\(CFG\.panelWidth, Math\.floor\(room\)\)\)/,
+    'the component no longer clamps its panel width the way this test models')
+  assert.ok(CFG.panelMinWidth < CFG.panelWidth,
+    'the floor is not below the full width, so the panel can never narrow')
+  // Wide enough for a stat row's label and its value not to meet in the middle.
+  assert.ok(CFG.panelMinWidth >= 140,
+    `a ${CFG.panelMinWidth}px panel cannot hold a labelled stat row`)
+
+  let worstFixed = 0
+  let worstAdaptive = 0
+  let hiddenAdaptive = 0
+  let total = 0
+  let fullWidth = 0
+  for (const [vw, vh] of VIEWPORTS as Array<[number, number]>) {
+    for (const insets of INSETS) {
+      const area = areaFor(vw, vh, insets)
+      const ph = tallestPanel(area)
+      for (let n = 1; n <= Object.keys(TOWERS).length; n++) {
+        for (let fx = 0; fx <= 1; fx += 0.125) {
+          for (let fy = 0; fy <= 1; fy += 0.25) {
+            const px = area.x + area.width * fx
+            const py = area.y + area.height * fy
+            const bounds = ringPlacement(px, py, n, CFG, area).bounds
+            const W = widthFor(bounds, area)
+            if (W === CFG.panelWidth) fullWidth++
+            total++
+            const hidden = (pw: number): number => {
+              const { ring, panel } = fitRingAndPanel(px, py, n, pw, ph, CFG, area)
+              const box = { x: panel.x, y: panel.y, width: pw, height: ph }
+              return ring.buttons.filter((b) => overlap(box, {
+                x: b.x - CFG.buttonSize / 2, y: b.y - CFG.buttonSize / 2,
+                width: CFG.buttonSize, height: CFG.buttonSize,
+              })).length
+            }
+            const a = hidden(W)
+            worstFixed = Math.max(worstFixed, hidden(CFG.panelWidth))
+            worstAdaptive = Math.max(worstAdaptive, a)
+            if (a > 0) hiddenAdaptive++
+          }
+        }
+      }
+    }
+  }
+  assert.ok(worstAdaptive < worstFixed,
+    `narrowing bought nothing: worst ${worstAdaptive} against ${worstFixed} at the full width`)
+  assert.ok(worstAdaptive <= 2, `${worstAdaptive} buttons can still be hidden`)
+  // And it does NOT narrow when there is no reason to. A panel that shrank on
+  // every screen would be paying the smallest phone's price everywhere.
+  assert.ok(fullWidth / total > 0.5,
+    `only ${fullWidth} of ${total} placements keep the full-width panel`)
+  void hiddenAdaptive
+})
+
 test('the usable area is the viewport minus the notch and the ability bar', () => {
   // Both, not either. A ring inside the safe area but over the ability bar is
   // a ring whose buttons fight the abilities for the same tap; a ring clear of

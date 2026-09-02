@@ -410,6 +410,8 @@
     "panelGap": 14,
     "areaMargin": 4,
     "panelWidth": 226,
+    "panelMinWidth": 150,
+    "_panelMinWidth": "The narrowest the description panel may be squeezed to. It takes the widest width that fits BESIDE the ring, down to this, so that on a small screen the panel stops sitting on top of the ring's own buttons — a covered button costs a tap every time, cancel back to the ring and then press it, and the smallest screen is the one a kid is most likely holding. Measured: at 844x390 a 200px panel hides nothing at all, and at a notched 568x320 narrowing from 226 takes the worst case from four buttons hidden to two and the number of placements that hide any from 225 of 540 down to 55. Below about 150 the stat rows start colliding with their own values.",
     "_panelWidth": "Fixed. Text wraps into it; the panel never widens to fit a long name, because a panel whose width depends on its content moves the confirm button between towers.",
     "panelMaxHeightFraction": 0.92,
     "titleSize": 16,

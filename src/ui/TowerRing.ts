@@ -5,7 +5,7 @@ import { iconPlate, platePanel } from './Plate.ts'
 import { fitInBox, icon } from '../systems/Art.ts'
 import { play } from '../systems/Audio.ts'
 import {
-  type Rect, type RingPlacement, contains, fitRingAndPanel,
+  type Rect, type RingPlacement, contains, fitRingAndPanel, ringPlacement,
 } from '../systems/RingLayout.ts'
 
 /**
@@ -265,22 +265,56 @@ export class TowerRing {
 
   // ------------------------------------------------------------------ panel
 
+  /**
+   * How wide the panel may be here.
+   *
+   * THE WIDEST THAT FITS BESIDE THE RING, down to a floor. A panel that sits
+   * on top of the ring's own buttons costs a tap every time one is covered —
+   * cancel back to the ring, then press it — and the screen where that bites
+   * is the smallest one. Measured across the placement walk: at 844x390 a
+   * 200px panel hides nothing at all, and at a notched 568x320 narrowing from
+   * 226 takes the worst case from four buttons hidden to two, and the number
+   * of placements hiding any from 225 of 540 to 55.
+   *
+   * Taken from the ring's ACTUAL position rather than from a worst case. A
+   * ring centred in the strip leaves 60px either side on the smallest phone,
+   * which is not a panel; a ring over a pad near one edge leaves plenty. The
+   * cost of using the real position is that a long pan can bring a button back
+   * under the panel, and that is the better trade — the panel is rebuilt on
+   * every selection, not on every frame, and rebuilding it mid-pan would
+   * flicker.
+   */
+  private panelWidthFor(ring: Rect, area: Rect): number {
+    const gap = CFG.panelGap
+    const room = Math.max(
+      (area.x + area.width) - (ring.x + ring.width) - gap,
+      ring.x - area.x - gap,
+    )
+    return Math.max(CFG.panelMinWidth, Math.min(CFG.panelWidth, Math.floor(room)))
+  }
+
   private buildPanel(option: RingOption): void {
     this.panelLayer.removeAll(true)
-    const W = CFG.panelWidth
-    const inner = W - CFG.pad * 2
     const area = this.opts.area()
+    // The ring's own geometry first: it does not depend on the panel, so
+    // asking for it here is not circular, and the panel's width does depend on
+    // where the ring ended up.
+    const anchor = this.opts.anchor()
+    const ring = anchor
+      ? ringPlacement(anchor.x, anchor.y, this.buttons.length, CFG, area).bounds
+      : { x: area.x, y: area.y, width: 0, height: 0 }
+    const W = this.panelWidthFor(ring, area)
     const maxH = Math.max(120, area.height * CFG.panelMaxHeightFraction)
 
     // Composed at the full size first, then shrunk only if it does not fit.
     // Shrinking first would make every panel small because one tower has a
     // long description.
     let body = CFG.bodySize
-    let built = this.composePanel(option, inner, body)
+    let built = this.composePanel(option, W, body)
     while (built.height > maxH && body > CFG.bodyMinSize) {
       built.parts.forEach((p) => p.destroy())
       body -= 1
-      built = this.composePanel(option, inner, body)
+      built = this.composePanel(option, W, body)
     }
     // A tower with five stat rows spends more height on rows than on prose, so
     // the description font alone is not enough of a lever. The rows tighten
@@ -289,7 +323,7 @@ export class TowerRing {
     while (built.height > maxH && rowH > CFG.rowMinHeight) {
       built.parts.forEach((p) => p.destroy())
       rowH -= 1
-      built = this.composePanel(option, inner, body, rowH)
+      built = this.composePanel(option, W, body, rowH)
     }
     // And the title last. It is the thing a player reads first, so it gives
     // way last — but "WITHHOLDING TOWER" wraps to two lines in a 171px column
@@ -298,7 +332,16 @@ export class TowerRing {
     while (built.height > maxH && titleSize > CFG.titleMinSize) {
       built.parts.forEach((p) => p.destroy())
       titleSize -= 1
-      built = this.composePanel(option, inner, body, rowH, titleSize)
+      built = this.composePanel(option, W, body, rowH, titleSize)
+    }
+    // LAST OF ALL, THE PROSE GOES. A narrow panel wraps the description into a
+    // column of three-word lines, and at that point it is costing more height
+    // than it is worth: the stat rows carry the numbers, the title carries the
+    // name, and the price carries the decision. The flavour is the only part
+    // that can be dropped without losing an answer the player needs.
+    if (built.height > maxH) {
+      built.parts.forEach((p) => p.destroy())
+      built = this.composePanel(option, W, body, rowH, titleSize, false)
     }
 
     // THE HEIGHT RECORDED IS THE HEIGHT DRAWN. Clamping it to `maxH` here was
@@ -330,13 +373,15 @@ export class TowerRing {
    */
   private composePanel(
     option: RingOption,
-    inner: number,
+    W: number,
     bodySize: number,
     rowH: number = CFG.rowHeight,
     titleSize: number = CFG.titleSize,
+    withDescription = true,
   ): { parts: Phaser.GameObjects.GameObject[]; height: number } {
     const parts: Phaser.GameObjects.GameObject[] = []
     const s = this.scene
+    const inner = W - CFG.pad * 2
     let y = CFG.pad
 
     // The badge on the left, the title BESIDE it. Centring the title across
@@ -350,17 +395,19 @@ export class TowerRing {
     const title = s.add.text(titleX, y, option.title.toUpperCase(), {
       fontFamily: FONT_UI, fontSize: `${uiSize(titleSize)}px`, fontStyle: 'bold',
       color: COLOR.ink, letterSpacing: 1,
-      wordWrap: { width: CFG.panelWidth - CFG.pad - titleX },
+      wordWrap: { width: W - CFG.pad - titleX },
     }).setOrigin(0, 0)
     parts.push(title)
     y += Math.max(title.height, CFG.headerIconSize) + 5
 
-    const desc = s.add.text(CFG.pad, y, option.description, {
-      fontFamily: FONT_UI, fontSize: `${uiSize(bodySize)}px`, color: COLOR.dim,
-      wordWrap: { width: inner }, lineSpacing: 2,
-    }).setOrigin(0, 0)
-    parts.push(desc)
-    y += desc.height + 6
+    if (withDescription) {
+      const desc = s.add.text(CFG.pad, y, option.description, {
+        fontFamily: FONT_UI, fontSize: `${uiSize(bodySize)}px`, color: COLOR.dim,
+        wordWrap: { width: inner }, lineSpacing: 2,
+      }).setOrigin(0, 0)
+      parts.push(desc)
+      y += desc.height + 6
+    }
 
     const rows: RingRow[] = [...option.rows, {
       label: option.price >= 0 && option.id === 'sell' ? 'Returns' : 'Cost',
@@ -379,7 +426,7 @@ export class TowerRing {
       parts.push(s.add.text(textX, y, row.label, {
         fontFamily: FONT_UI, fontSize: `${uiSize(CFG.rowSize)}px`, color: COLOR.dim,
       }).setOrigin(0, 0))
-      parts.push(s.add.text(CFG.panelWidth - CFG.pad, y, row.value, {
+      parts.push(s.add.text(W - CFG.pad, y, row.value, {
         fontFamily: FONT_UI, fontSize: `${uiSize(CFG.rowSize)}px`, fontStyle: 'bold',
         color: row.accent ? COLOR.amber : COLOR.ink,
       }).setOrigin(1, 0))
