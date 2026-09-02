@@ -3392,6 +3392,147 @@ async function run() {
     return
   }
 
+  if (scenario === 'regressions') {
+    // Read-only diagnosis of the reported regressions that need a renderer.
+    // Nothing here changes the game.
+    const M = (await import('./js/data/map.json', { with: { type: 'json' } })).default
+    const cam = g.cameras.main
+    const dpr = window.devicePixelRatio || 1
+    note('viewport ' + VP.w + 'x' + VP.h + '  canvas ' + game.canvas.width + 'x' + game.canvas.height +
+      '  dpr ' + dpr)
+
+    // --- 2. THE MODAL SCRIM. Which camera draws it, how big it is, and what
+    //        the canvas actually looks like once it is up.
+    const ctx = game.canvas.getContext('2d')
+    const lum = (x, y, w2, h2) => {
+      const d = ctx.getImageData(Math.max(0, x | 0), Math.max(0, y | 0),
+        Math.max(1, w2 | 0), Math.max(1, h2 | 0)).data
+      let s2 = 0, n = 0
+      for (let i = 0; i < d.length; i += 4) { s2 += (d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114); n++ }
+      return s2 / n
+    }
+    const CW = game.canvas.width, CH = game.canvas.height
+    // Look at the middle of the map first, so the scrim is measured over a
+    // busy frame rather than over whatever the camera happened to show.
+    await lookAt(640, 360)
+    const before = [lum(0,0,CW/2,CH/2), lum(CW/2,0,CW/2,CH/2), lum(0,CH/2,CW/2,CH/2), lum(CW/2,CH/2,CW/2,CH/2)]
+    g.showTicket({ label: 'JACKPOT', payout: 500 }, 30)
+    await sleep(500)
+    const t = g.ticket
+    if (!t) { note('*** the ticket did not open ***') } else {
+      const b = t.blocker
+      const bb = b.getBounds()
+      const uiOnly = (b.cameraFilter & 0) === 0
+      note('2. SCRIM: rect ' + Math.round(b.width) + 'x' + Math.round(b.height) +
+        ' at ' + Math.round(b.x) + ',' + Math.round(b.y) + ' origin ' + b.originX + ',' + b.originY +
+        '  scrollFactor ' + b.scrollFactorX)
+      note('   its bounds ' + Math.round(bb.x) + ',' + Math.round(bb.y) + ' ' +
+        Math.round(bb.width) + 'x' + Math.round(bb.height) +
+        '  viewport is 0,0 ' + VP.w + 'x' + VP.h)
+      note('   drawn by: world=' + !(b.cameraFilter & (1 << 0)) + ' (filter ' + b.cameraFilter + ')')
+      const after = [lum(0,0,CW/2,CH/2), lum(CW/2,0,CW/2,CH/2), lum(0,CH/2,CW/2,CH/2), lum(CW/2,CH/2,CW/2,CH/2)]
+      note('   quadrant luminance before ' + before.map((v) => v.toFixed(0)).join(' / ') +
+        '   after ' + after.map((v) => v.toFixed(0)).join(' / '))
+      note('   (quadrants include the bright card, so they answer nothing on their own)')
+      // THE CORNERS are what answer it: far from the card, so any change there
+      // is the scrim and only the scrim.
+      const K = 40
+      const corner = (x, y) => lum(x, y, K, K)
+      const cAfter = [corner(0,0), corner(CW-K,0), corner(0,CH-K), corner(CW-K,CH-K)]
+      note('   CORNER luminance after: ' + cAfter.map((v) => v.toFixed(0)).join(' / ') +
+        '  (TL / TR / BL / BR)')
+      const spread = Math.max(...cAfter) - Math.min(...cAfter)
+      note('   corners agree to within ' + spread.toFixed(0) +
+        (spread < 12 ? '  — the scrim reaches all four' : '  *** THE SCRIM DOES NOT REACH THEM ALL ***'))
+      // Walk a row and a column looking for the hard edges the report saw.
+      const row = Math.round(CH * 0.75), col = Math.round(CW * 0.25)
+      const edgesX = [], edgesY = []
+      let prev = lum(0, row, 4, 4)
+      for (let x = 4; x < CW - 4; x += 4) {
+        const v = lum(x, row, 4, 4)
+        if (Math.abs(v - prev) > 18) edgesX.push(x)
+        prev = v
+      }
+      prev = lum(col, 0, 4, 4)
+      for (let y = 4; y < CH - 4; y += 4) {
+        const v = lum(col, y, 4, 4)
+        if (Math.abs(v - prev) > 18) edgesY.push(y)
+        prev = v
+      }
+      note('   hard edges across row y=' + row + ': ' + JSON.stringify(edgesX.slice(0, 8)))
+      note('   hard edges down col x=' + col + ': ' + JSON.stringify(edgesY.slice(0, 8)))
+      await shot('regress-scrim-' + VP.w + 'x' + VP.h)
+      t.destroy?.()
+      await sleep(200)
+    }
+
+    // --- 6. THE HUD OVER THE MAP. Where the painted tavern sign lands on the
+    //        glass, and what the HUD puts there.
+    // Camera arithmetic gives CANVAS pixels, which are device pixels. The
+    // viewport is CSS pixels. Comparing the two is how a tower sitting in the
+    // middle of the screen reported as off it.
+    const proj = (wx, wy) => [((wx - cam.worldView.x) * cam.zoom + cam.x) / dpr,
+      ((wy - cam.worldView.y) * cam.zoom + cam.y) / dpr]
+    const signBox = [930, 103, 1007, 147]   // measured off the new plate
+    // Point the camera AT the sign: whether the HUD covers it is a question
+    // about where it lands on the glass when it is on screen at all.
+    // Not centred on the sign — the complaint is that the HUD covers it, so
+    // the camera goes where that happens: the sign up in the top right.
+    const halfW = (VP.w / (cam.zoom / dpr)) / 2
+    const halfH = (VP.h / (cam.zoom / dpr)) / 2
+    await lookAt(signBox[0] - halfW * 0.55, signBox[3] + halfH * 0.55)
+    await sleep(250)
+    const [sx0, sy0] = proj(signBox[0], signBox[1])
+    const [sx1, sy1] = proj(signBox[2], signBox[3])
+    note('6. the painted COURJAHAN\'S TAVERN sign projects to ' +
+      Math.round(sx0) + ',' + Math.round(sy0) + ' .. ' + Math.round(sx1) + ',' + Math.round(sy1))
+    const hr = g.layout.heroRow
+    note('   the HUD hero row is at ' + Math.round(hr.x) + ',' + Math.round(hr.y) + ' ' +
+      Math.round(hr.width) + 'x' + Math.round(hr.height) +
+      (sx1 > hr.x && sx0 < hr.x + hr.width && sy1 > hr.y && sy0 < hr.y + hr.height
+        ? '  *** THEY OVERLAP ***' : '  clear'))
+
+    // --- 7. WHERE A BUILT TOWER ENDS UP.
+    const sp = g.build.freeSpots()[0]
+    g.status.peanuts = 99999
+    // As a player would: look at the pad before tapping it.
+    await lookAt(sp.x, sp.y)
+    g.openPadRing(sp)
+    await sleep(200)
+    const opt = g.ring.hitBoxes[0]
+    await click(opt.rect.x + opt.rect.width / 2, opt.rect.y + opt.rect.height / 2)
+    await sleep(160)
+    const cf = g.ring.hitBoxes.find((x) => x.id === 'ring:confirm')
+    await click(cf.rect.x + cf.rect.width / 2, cf.rect.y + cf.rect.height / 2)
+    await sleep(400)
+    const tw = g.towers[g.towers.length - 1]
+    note('7. asked for spot ' + sp.index + ' at world ' + Math.round(sp.x) + ',' + Math.round(sp.y) +
+      '; tower is at ' + (tw ? Math.round(tw.x) + ',' + Math.round(tw.y) : 'NOT BUILT') +
+      (tw && Math.hypot(tw.x - sp.x, tw.y - sp.y) < 2 ? '  same place' : '  *** MOVED ***'))
+    if (tw) {
+      const [tx, ty] = proj(tw.x, tw.y)
+      note('   on the glass at ' + Math.round(tx) + ',' + Math.round(ty) +
+        ' in a ' + VP.w + 'x' + VP.h + ' viewport' +
+        (tx >= 0 && ty >= 0 && tx <= VP.w && ty <= VP.h ? '  on screen' : '  *** OFF SCREEN ***'))
+    }
+    await shot('regress-tower-' + VP.w + 'x' + VP.h)
+
+    // --- 8. HOW OFTEN THE CAMERA SHAKES, over a real wave.
+    let shakes = 0
+    const realShake = cam.shake.bind(cam)
+    cam.shake = (d, i) => { shakes++; return realShake(d, i) }
+    const gateShakes = []
+    const realLeak = g.leak?.bind(g)
+    g.startWave()
+    const t0 = performance.now()
+    while (performance.now() - t0 < 45000 && g.status.phase === 'wave') await sleep(200)
+    note('8. camera.shake fired ' + shakes + ' time(s) in ' +
+      Math.round((performance.now() - t0) / 1000) + 's of wave 1')
+    note('   the gate in the new plate is OPEN, so a slam impact has nothing to slam into')
+    void gateShakes; void realLeak
+    return
+  }
+
   if (scenario === 'ring') {
     // THE RING, RENDERED. The placement is proved exhaustively in
     // tests/ringlayout.test.ts — every pad, every option count, both zoom
