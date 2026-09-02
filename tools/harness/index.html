@@ -4731,13 +4731,19 @@ async function run() {
     // Walk every tower up through tier 2 and both branches.
     const ids = Object.keys(T)
     for (const id of ids) {
+      // WAIT FOR THE PAD, rather than assuming the last sale freed one on the
+      // frame it was asked for. `sellTower` destroys the tower through a tween
+      // and the pad is released with it, so a fixed sleep here reported "no
+      // card" for one tower in thirty-six and told me nothing about which.
+      await until(() => g.build.freeSpots().length > 0, 8000)
       const spot = g.build.freeSpots()[0]
-      if (!spot) { problems.push(id + ': no free pad'); break }
+      if (!spot) { problems.push(id + ': no free pad after 8s'); break }
       // The BUILD card first, off the pad's ring.
       g.status.unlockedTowers = [id]
       g.openPadRing(spot)
-      await sleep(260)
-      if (g.ring) { g.ring.select(0); await sleep(260) }
+      await until(() => g.ring && g.ring.opts.options.length > 0, 4000)
+      if (!g.ring) { problems.push('build ' + T[id].name + ': the pad ring did not open on spot ' + spot.index) }
+      else { g.ring.select(0); await sleep(260) }
       const b = measure('build ' + T[id].name)
       if (b) note('build   %s'.replace('%s', (T[id].name + '            ').slice(0, 12)) +
         ' w=' + Math.round(b.w) + ' h=' + Math.round(b.h) + '  ' + JSON.stringify(texts()))
