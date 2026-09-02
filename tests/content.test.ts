@@ -623,10 +623,17 @@ test('the tier-3 fork is two separate options, not two rows sharing a line', () 
   assert.match(fork, /for \(const spec of def\.specializations\)/,
     'the fork does not offer one option per specialization')
   assert.match(fork, /id: `spec:\$\{spec\.id\}`/, 'the two options are not told apart by id')
-  // Each carries its own price and its own build time, and its own icon: two
+  // Each carries its own price, its own trait phrase and its own icon: two
   // buttons wearing the same picture are a coin toss rather than a choice.
+  //
+  // BUILD TIME IS NO LONGER ON THE CARD. The ledger has four rows and none of
+  // them is a table of secondary numbers; the build seconds are in towers.json
+  // and the tower visibly goes soft while it builds, which is the same
+  // information delivered by the thing itself.
   assert.match(fork, /price: spec\.cost/, 'the options do not price themselves')
-  assert.match(fork, /spec\.buildSeconds/, 'the options do not say how long they take')
+  assert.match(fork, /trait: spec\.trait/, 'the branches do not say what they do')
+  assert.match(fork, /stats: withSpec\(spec\)/,
+    'the branches do not show what they would make of the numbers')
   assert.match(fork, /icon: specIcon\(spec\)/, 'both branches would wear the same icon')
   const up = readFileSync(url('../src/systems/Upgrades.ts'), 'utf8')
   assert.match(up, /export function specIcon/, 'nothing picks an icon per branch')

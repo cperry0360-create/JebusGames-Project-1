@@ -140,9 +140,21 @@ export interface BannerDef {
 
 export interface TowerDef {
   name: string
+  /**
+   * The one phrase the ledger card shows, at most `LIMITS.trait` characters
+   * and never wrapping.
+   *
+   * Derived from what the tower's DATA does — a splash radius, a slow factor,
+   * an armour rule — rather than written as flavour. `reports/` carries the
+   * derivation for all eighteen. A tower with no special mechanic gets a
+   * phrase naming its role.
+   */
+  trait: string
   archetype: string
-  /** One line on what it does, for the ring's description panel. The panel
-   *  answers "should I buy this?" and the numbers alone never have. */
+  /** One line on what it does, for the LOADOUT screen. The ledger card shows
+   *  no prose at all: three numbers and the trait phrase answer "should I buy
+   *  this?" faster than a sentence, and a paragraph was what made the panel's
+   *  height unpredictable. */
   blurb: string
   sprite: string
   /** The projectile. Absent on a support tower, which never fires: the Tax
@@ -177,6 +189,8 @@ export interface TowerDef {
 export interface TowerSpec extends TowerTier {
   id: string
   name: string
+  /** The branch's own trait phrase; see `TowerDef.trait`. */
+  trait: string
   /**
    * What this specialization *does*, as distinct from what it multiplies.
    * A tier-3 choice that only scaled numbers was not a choice, so each of

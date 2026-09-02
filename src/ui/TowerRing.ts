@@ -1,12 +1,28 @@
 import Phaser from 'phaser'
 import presentationData from '../data/presentation.json'
 import { COLOR, FONT_UI, uiSize } from './Theme.ts'
-import { iconPlate, platePanel } from './Plate.ts'
+import { iconPlate } from './Plate.ts'
 import { fitInBox, icon } from '../systems/Art.ts'
 import { play } from '../systems/Audio.ts'
 import {
   type Rect, type RingPlacement, contains, fitRingAndPanel, ringPlacement,
 } from '../systems/RingLayout.ts'
+import { type CardStat, buttonLabel, statsThatFit } from '../systems/TowerCard.ts'
+
+/**
+ * Shrinks a one-line label until it fits, down to a floor.
+ *
+ * NOT a ladder. The old panel had four of those, each recomposing the whole
+ * card at a smaller size to make a paragraph fit; this measures one text once
+ * and scales it. Every string on the ledger is schema-limited, so it fires
+ * only on the narrowest card, and one line is the contract the card is built
+ * on: wrapping would change the card's height, and the height is fixed.
+ */
+function shrinkToFit(t: Phaser.GameObjects.Text, width: number, floor: number): void {
+  if (t.width <= width || width <= 0) return
+  const size = Number(String(t.style.fontSize).replace('px', '')) || floor
+  t.setFontSize(Math.max(floor, Math.floor(size * (width / t.width))))
+}
 
 /**
  * THE tower menu. One component for both halves of it.
@@ -41,14 +57,6 @@ import {
 
 const CFG = presentationData.ring
 
-export interface RingRow {
-  label: string
-  value: string
-  /** A name from art.json's ui.icons. */
-  icon?: string
-  accent?: boolean
-}
-
 export interface RingOption {
   id: string
   /** A name from art.json's ui.icons — what the button shows. */
@@ -76,8 +84,10 @@ export interface RingOption {
   /** Why it cannot be bought, when it cannot. */
   reason?: string
   title: string
-  description: string
-  rows: RingRow[]
+  /** The one phrase, from towers.json. At most 18 characters, never wrapped. */
+  trait: string
+  /** Two or three numbers. The third goes first when the card is narrow. */
+  stats: CardStat[]
   /**
    * The WORD on the confirm button: BUILD, UPGRADE, SELL, MOVE.
    *
@@ -303,6 +313,25 @@ export class TowerRing {
     return Math.max(CFG.panelMinWidth, Math.min(CFG.panelWidth, Math.floor(room)))
   }
 
+  /**
+   * THE LEDGER. One card, four rows, a height that is arithmetic.
+   *
+   *   1. a 30x30 tower icon and the name beside it
+   *   2. two or three numbers in equal columns, hairline rules between
+   *   3. one trait phrase, above a hairline
+   *   4. a wide primary button and a square cancel beside it
+   *
+   * WHAT IS GONE, AND WHY THE LADDER WENT WITH IT. The card carried a
+   * paragraph of prose, and to make the paragraph fit there were four levers:
+   * shrink the body font, then the row height, then the title, then give up
+   * and drop the prose. Every one of them existed to protect a sentence that
+   * answered nothing the numbers did not, and between them they made the
+   * panel's height depend on how long a tower's description happened to be.
+   *
+   * With no prose there is nothing to search for. `cardHeight()` returns the
+   * height, the same for every tower, and the only thing that varies with the
+   * width is whether the third number fits.
+   */
   private buildPanel(option: RingOption): void {
     this.panelLayer.removeAll(true)
     const area = this.opts.area()
@@ -314,211 +343,220 @@ export class TowerRing {
       ? ringPlacement(anchor.x, anchor.y, this.buttons.length, CFG, area).bounds
       : { x: area.x, y: area.y, width: 0, height: 0 }
     const W = this.panelWidthFor(ring, area)
-    const maxH = Math.max(120, area.height * CFG.panelMaxHeightFraction)
 
-    // Composed at the full size first, then shrunk only if it does not fit.
-    // Shrinking first would make every panel small because one tower has a
-    // long description.
-    let body = CFG.bodySize
-    let built = this.composePanel(option, W, body)
-    while (built.height > maxH && body > CFG.bodyMinSize) {
-      built.parts.forEach((p) => p.destroy())
-      body -= 1
-      built = this.composePanel(option, W, body)
-    }
-    // A tower with five stat rows spends more height on rows than on prose, so
-    // the description font alone is not enough of a lever. The rows tighten
-    // with it, to their own floor.
-    let rowH = CFG.rowHeight
-    while (built.height > maxH && rowH > CFG.rowMinHeight) {
-      built.parts.forEach((p) => p.destroy())
-      rowH -= 1
-      built = this.composePanel(option, W, body, rowH)
-    }
-    // And the title last. It is the thing a player reads first, so it gives
-    // way last — but "WITHHOLDING TOWER" wraps to two lines in a 171px column
-    // and two lines of title is 40px of a 238px budget.
-    let titleSize = CFG.titleSize
-    while (built.height > maxH && titleSize > CFG.titleMinSize) {
-      built.parts.forEach((p) => p.destroy())
-      titleSize -= 1
-      built = this.composePanel(option, W, body, rowH, titleSize)
-    }
-    // LAST OF ALL, THE PROSE GOES. A narrow panel wraps the description into a
-    // column of three-word lines, and at that point it is costing more height
-    // than it is worth: the stat rows carry the numbers, the title carries the
-    // name, and the price carries the decision. The flavour is the only part
-    // that can be dropped without losing an answer the player needs.
-    if (built.height > maxH) {
-      built.parts.forEach((p) => p.destroy())
-      built = this.composePanel(option, W, body, rowH, titleSize, false)
-    }
-
-    // THE HEIGHT RECORDED IS THE HEIGHT DRAWN. Clamping it to `maxH` here was
-    // a lie the placement believed: the panel was composed at its full height
-    // and then told the geometry it was 15px shorter, so the clamp put it 15px
-    // too low and the confirm and cancel buttons hung off the bottom of the
-    // screen. The browser run caught it; the arithmetic could not, because the
-    // arithmetic was given the wrong number.
+    const built = this.composeCard(option, W)
     this.panelSize = { w: W, h: built.height }
 
-    // Still too tall for the space at the smallest body size. TELL THE PLAYER
-    // rather than clipping: a panel with its bottom cut off looks like a
-    // rendering fault, and the thing it hides is usually the price.
+    // It cannot fail to fit any more — the height is fixed — but a viewport
+    // shorter than one card is still worth saying out loud rather than
+    // clipping, because the thing clipped would be the button.
     if (built.height > area.height) {
       this.reportOnce(
-        `${option.title}: the description will not fit in ${area.height | 0}px`
-        + ' even at the smallest size.')
+        `${option.title}: the card is ${built.height | 0}px and there are only `
+        + `${area.height | 0}px to put it in.`)
     }
-    this.panelLayer.add(platePanel(this.scene, 0, 0, W, this.panelSize.h, 0.17))
+    this.ledgerSlab(W, built.height)
     this.panelLayer.add(built.parts)
     this.panelLayer.setAlpha(0)
     this.scene.tweens.add({ targets: this.panelLayer, alpha: 1, duration: 100 })
   }
 
   /**
-   * Lays the panel's contents out at a given body size and reports how tall
-   * they came to. Built off-container so a rejected size can be thrown away
-   * without ever being drawn.
+   * The slab: a plain dark rounded rectangle, a hairline inside it, a soft
+   * shadow under it. No bevel, no metal, no rivets, no corner plates, no
+   * gradient, no glow.
+   *
+   * Drawn rather than nine-sliced from `ui.panel`, which is the bevelled plate
+   * this replaces. The shadow is three rounded rectangles at falling alpha
+   * rather than a blur, because a Graphics object cannot blur and three passes
+   * read as soft at this size.
    */
-  private composePanel(
-    option: RingOption,
-    W: number,
-    bodySize: number,
-    rowH: number = CFG.rowHeight,
-    titleSize: number = CFG.titleSize,
-    withDescription = true,
+  private ledgerSlab(w: number, h: number): void {
+    const L = CFG.ledger
+    const g = this.scene.add.graphics()
+    for (let i = L.shadowSteps; i >= 1; i--) {
+      const spread = (i / L.shadowSteps) * L.shadowSpread
+      g.fillStyle(0x000000, L.shadowAlpha / L.shadowSteps)
+      g.fillRoundedRect(
+        -spread, -spread + L.shadowDrop, w + spread * 2, h + spread * 2, L.radius + spread)
+    }
+    g.fillStyle(L.slab, L.slabAlpha)
+    g.fillRoundedRect(0, 0, w, h, L.radius)
+    // INSIDE the edge, not on it: a stroke centred on the boundary is half
+    // outside the slab and reads as a light halo against the map.
+    g.lineStyle(1, 0xffffff, L.hairlineAlpha)
+    g.strokeRoundedRect(0.5, 0.5, w - 1, h - 1, L.radius - 0.5)
+    this.panelLayer.add(g)
+  }
+
+  /** A hairline. One place, so every rule on the card is the same rule. */
+  private hairline(x: number, y: number, w: number, h: number): Phaser.GameObjects.Graphics {
+    const g = this.scene.add.graphics()
+    g.fillStyle(0xffffff, CFG.ledger.ruleAlpha)
+    g.fillRect(x, y, Math.max(1, w), Math.max(1, h))
+    return g
+  }
+
+  /**
+   * The card's height, in advance and without drawing anything.
+   *
+   * Every term is a constant. That is the whole point of the redesign: the old
+   * panel could only find its height by composing itself, measuring, throwing
+   * the result away and composing again at a smaller size.
+   */
+  private cardHeight(): number {
+    const L = CFG.ledger
+    return L.pad + L.headerHeight + L.gap + L.statHeight + L.gap
+      + L.traitHeight + L.gap + L.buttonHeight + L.pad
+  }
+
+  private composeCard(
+    option: RingOption, W: number,
   ): { parts: Phaser.GameObjects.GameObject[]; height: number } {
     const parts: Phaser.GameObjects.GameObject[] = []
     const s = this.scene
-    const inner = W - CFG.pad * 2
-    let y = CFG.pad
+    const L = CFG.ledger
+    const inner = W - L.pad * 2
+    let y = L.pad
 
-    // The badge on the left, the title BESIDE it. Centring the title across
-    // the whole panel width put "SELL WITHHOLDING TOWER" straight under the
-    // badge and lost its first letter.
-    const badge = this.makeGlyph(option, CFG.headerIconSize)
-    badge.setPosition(CFG.pad + CFG.headerIconSize / 2, y + CFG.headerIconSize / 2)
+    /* 1. header ---------------------------------------------------------- */
+
+    const badge = this.makeGlyph(option, L.iconSize)
+    badge.setPosition(L.pad + L.iconSize / 2, y + L.headerHeight / 2)
     parts.push(badge)
+    const nameX = L.pad + L.iconSize + L.iconGap
+    const name = s.add.text(nameX, y + L.headerHeight / 2, option.title, {
+      fontFamily: FONT_UI, fontSize: `${uiSize(L.nameSize)}px`, fontStyle: 'bold',
+      color: COLOR.amber, letterSpacing: 0.5,
+    }).setOrigin(0, 0.5)
+    // Shrink rather than wrap. Every name is inside the 12-character schema
+    // limit, so this only ever fires on the narrowest card, and one line is
+    // the contract the whole card is built on.
+    shrinkToFit(name, W - L.pad - nameX, L.nameMinSize)
+    parts.push(name)
+    y += L.headerHeight + L.gap
 
-    const titleX = CFG.pad + CFG.headerIconSize + 7
-    const title = s.add.text(titleX, y, option.title.toUpperCase(), {
-      fontFamily: FONT_UI, fontSize: `${uiSize(titleSize)}px`, fontStyle: 'bold',
-      color: COLOR.ink, letterSpacing: 1,
-      wordWrap: { width: W - CFG.pad - titleX },
-    }).setOrigin(0, 0)
-    parts.push(title)
-    y += Math.max(title.height, CFG.headerIconSize) + 5
+    /* 2. the numbers ----------------------------------------------------- */
 
-    if (withDescription) {
-      const desc = s.add.text(CFG.pad, y, option.description, {
-        fontFamily: FONT_UI, fontSize: `${uiSize(bodySize)}px`, color: COLOR.dim,
-        wordWrap: { width: inner }, lineSpacing: 2,
-      }).setOrigin(0, 0)
-      parts.push(desc)
-      y += desc.height + 6
-    }
-
-    const rows: RingRow[] = [...option.rows, {
-      label: option.price >= 0 && option.id === 'sell' ? 'Returns' : 'Cost',
-      value: `${option.price}p`,
-      accent: true,
-    }]
-    for (const row of rows) {
-      let textX = CFG.pad
-      if (row.icon) {
-        const key = icon(s, row.icon)
-        const glyph = s.add.image(CFG.pad + rowH / 2, y + rowH / 2 - 1, key)
-        fitInBox(glyph, key, rowH - 2)
-        parts.push(glyph)
-        textX = CFG.pad + rowH + 5
-      }
-      parts.push(s.add.text(textX, y, row.label, {
-        fontFamily: FONT_UI, fontSize: `${uiSize(CFG.rowSize)}px`, color: COLOR.dim,
-      }).setOrigin(0, 0))
-      parts.push(s.add.text(W - CFG.pad, y, row.value, {
-        fontFamily: FONT_UI, fontSize: `${uiSize(CFG.rowSize)}px`, fontStyle: 'bold',
-        color: row.accent ? COLOR.amber : COLOR.ink,
-      }).setOrigin(1, 0))
-      y += rowH
-    }
-
-    if (!option.affordable && option.reason) {
-      const why = s.add.text(CFG.pad, y + 3, option.reason, {
-        fontFamily: FONT_UI, fontSize: `${uiSize(bodySize)}px`, color: COLOR.danger,
-        wordWrap: { width: inner },
-      }).setOrigin(0, 0)
-      parts.push(why)
-      y += why.height + 3
-    }
-
-    // THE SECOND, EXPLICIT PRESS. Two buttons, side by side: confirm carries
-    // the price, cancel goes back to the ring. This is the whole reason a ring
-    // button does not buy anything — a menu where the first tap spends peanuts
-    // is a menu you cannot browse.
-    y += 7
-    const bw = (inner - 8) / 2
-    const bh = CFG.confirmHeight
-    const mk = (
-      cx: number, face: { icon: string } | { word: string },
-      enabled: boolean, onPick: () => void, tag: string,
-    ): void => {
-      const plate = iconPlate(s, cx, y + bh / 2, bw, bh)
-      let front: Phaser.GameObjects.GameObject
-      if ('word' in face) {
-        // A WORD, not a bare tick.
-        //
-        // Every option's confirm used to be the same glyph, so the one press
-        // that actually spends or destroys looked identical whether the player
-        // was buying an upgrade or selling the tower out from under themselves.
-        //
-        // The tick is still there where there is room for both — it is what
-        // says "this is the commit button" at a glance, and the word says what
-        // is being committed. On the narrowest panel (150px, leaving 60px a
-        // side) the word wins outright: "UPGRADE" has to be readable or the
-        // whole change is undone.
-        const roomy = bw >= CFG.confirmGlyphMinWidth
-        const gw = roomy ? Math.min(CFG.iconSize, bh - 4) * 0.6 : 0
-        const label = s.add.text(cx + gw / 2, y + bh / 2, enabled ? face.word : 'LOCKED', {
-          fontFamily: FONT_UI, fontSize: `${uiSize(CFG.titleSize)}px`, fontStyle: 'bold',
-          color: enabled ? COLOR.ink : COLOR.dim, letterSpacing: 1,
-        }).setOrigin(0.5)
-        const over = label.width / Math.max(1, bw - 10 - gw)
-        if (over > 1) label.setFontSize(Math.max(9, uiSize(CFG.titleSize) / over))
-        if (roomy) {
-          const key = icon(s, enabled ? 'confirm' : 'locked')
-          const tick = s.add.image(cx - label.width / 2 - gw / 2 + gw / 2, y + bh / 2, key)
-          fitInBox(tick, key, gw)
-          tick.setX(cx + gw / 2 - label.width / 2 - gw / 2 - 3)
-          if (!enabled) tick.setAlpha(0.7)
-          parts.push(tick)
-        }
-        front = label
+    const stats = statsThatFit(option.stats, inner, L.minStatWidth)
+    const colW = inner / Math.max(1, stats.length)
+    for (const [i, stat] of stats.entries()) {
+      const cx = L.pad + colW * i + colW / 2
+      // The value, and — on an upgrade — what it becomes. Two texts rather
+      // than one string, because they are different colours and the point is
+      // that the eye separates them.
+      const vy = y + L.statValueY
+      if (stat.next) {
+        const from = s.add.text(0, vy, stat.value, {
+          fontFamily: FONT_UI, fontSize: `${uiSize(L.statChangedSize)}px`, color: COLOR.dim,
+        }).setOrigin(0, 0.5)
+        const arrow = s.add.text(0, vy, ' ', {
+          fontFamily: FONT_UI, fontSize: `${uiSize(L.statChangedSize)}px`, color: COLOR.dim,
+        }).setOrigin(0, 0.5)
+        const to = s.add.text(0, vy, stat.next, {
+          fontFamily: FONT_UI, fontSize: `${uiSize(L.statChangedSize)}px`, fontStyle: 'bold',
+          color: COLOR.good,
+        }).setOrigin(0, 0.5)
+        const total = from.width + arrow.width + to.width
+        let x = cx - total / 2
+        from.setX(x); x += from.width
+        arrow.setX(x); x += arrow.width
+        to.setX(x)
+        parts.push(from, arrow, to)
       } else {
-        const key = icon(s, enabled ? face.icon : 'locked')
-        const glyph = s.add.image(cx, y + bh / 2, key)
-        // The floor, but never taller than the plate it stands on.
-        fitInBox(glyph, key, Math.min(CFG.iconSize, bh - 4))
-        if (!enabled) glyph.setAlpha(0.7)
-        front = glyph
+        parts.push(s.add.text(cx, vy, stat.value, {
+          fontFamily: FONT_UI, fontSize: `${uiSize(L.statValueSize)}px`, fontStyle: 'bold',
+          color: COLOR.ink,
+        }).setOrigin(0.5))
       }
-      const hit = s.add.rectangle(cx, y + bh / 2, bw, bh, 0xffffff, 0.001)
-        .setOrigin(0.5)
-        .setInteractive({ useHandCursor: enabled })
-      hit.name = tag
-      hit.on('pointerover', () => plate.setActive(true))
-      hit.on('pointerout', () => plate.setActive(false))
-      // Release, not press: this one spends, so a finger that lands on it and
-      // slides off must be able to take the decision back.
-      hit.on('pointerup', onPick)
-      parts.push(...plate.parts, front, hit)
+      parts.push(s.add.text(cx, y + L.statLabelY, stat.label, {
+        fontFamily: FONT_UI, fontSize: `${uiSize(L.statLabelSize)}px`, color: COLOR.dim,
+        letterSpacing: 0.5,
+      }).setOrigin(0.5))
+      // A hairline BETWEEN columns, so the last one has no rule after it.
+      if (i > 0) {
+        parts.push(this.hairline(
+          L.pad + colW * i, y + L.ruleInset, 1, L.statHeight - L.ruleInset * 2))
+      }
     }
-    mk(CFG.pad + bw / 2, { word: option.confirmLabel }, option.affordable,
-      () => { if (option.affordable) { option.onConfirm(); this.close() } }, 'ring:confirm')
-    mk(CFG.pad + bw + 8 + bw / 2, { icon: 'cancel' }, true, () => this.deselect(), 'ring:cancel')
-    y += bh
+    y += L.statHeight + L.gap
 
-    return { parts, height: y + CFG.pad }
+    /* 3. the trait phrase, or the reason it cannot be bought -------------- */
+
+    // ONE LINE, ALWAYS. Every trait is inside the 18-character schema limit
+    // and cannot wrap. A REASON is not schema-checked — it is composed by the
+    // scene from a shortfall — so it is shrunk to fit, and it takes the trait's
+    // slot rather than adding a row: the card's shape does not change because
+    // the player cannot afford something.
+    const blocked = !option.affordable && option.reason
+    const trait = s.add.text(L.pad, y + L.traitHeight / 2, blocked ? option.reason! : option.trait, {
+      fontFamily: FONT_UI, fontSize: `${uiSize(L.traitSize)}px`,
+      color: blocked ? COLOR.danger : COLOR.good,
+    }).setOrigin(0, 0.5)
+    shrinkToFit(trait, inner, L.traitMinSize)
+    parts.push(trait)
+    y += L.traitHeight
+    parts.push(this.hairline(L.pad, y, inner, 1))
+    y += L.gap
+
+    /* 4. the actions ----------------------------------------------------- */
+
+    const bh = L.buttonHeight
+    const cancelW = bh
+    const primaryW = inner - cancelW - L.buttonGap
+
+    // THE VERB AND THE PRICE ARE ONE CONTROL. There is no cost row any more:
+    // "Build 80p" and "Sell +45p" are what the button says, which also settles
+    // the older confusion where SELL's confirm and UPGRADE's confirm were the
+    // same tick glyph.
+    const green = this.scene.add.graphics()
+    const tint = option.affordable ? L.primary : L.primaryOff
+    green.fillStyle(tint, 1)
+    green.fillRoundedRect(L.pad, y, primaryW, bh, L.buttonRadius)
+    // A darker bottom edge rather than a bevel: one band, no highlight.
+    green.fillStyle(option.affordable ? L.primaryEdge : L.primaryOffEdge, 1)
+    green.fillRoundedRect(L.pad, y + bh - L.buttonEdge, primaryW, L.buttonEdge, L.buttonRadius)
+    green.fillRect(L.pad, y + bh - L.buttonEdge, primaryW, 1)
+    parts.push(green)
+
+    const label = s.add.text(L.pad + primaryW / 2, y + (bh - L.buttonEdge) / 2,
+      buttonLabel(option.confirmLabel, option.price, option.id === 'sell'), {
+        fontFamily: FONT_UI, fontSize: `${uiSize(L.buttonSize)}px`, fontStyle: 'bold',
+        color: option.affordable ? L.primaryText : COLOR.dim, letterSpacing: 0.5,
+      }).setOrigin(0.5)
+    shrinkToFit(label, primaryW - 10, L.buttonMinSize)
+    parts.push(label)
+
+    const buy = s.add.rectangle(L.pad + primaryW / 2, y + bh / 2, primaryW, bh, 0xffffff, 0.001)
+      .setOrigin(0.5).setInteractive({ useHandCursor: option.affordable })
+    buy.name = 'ring:confirm'
+    // Release, not press: this one spends, so a finger that lands on it and
+    // slides off must be able to take the decision back.
+    buy.on('pointerup', () => {
+      if (option.affordable) { option.onConfirm(); this.close() }
+    })
+    parts.push(buy)
+
+    // The cancel is a WASH, not a red plate: it undoes nothing and destroys
+    // nothing, and a danger colour on it made backing out look like an action.
+    const cx = L.pad + primaryW + L.buttonGap
+    const wash = this.scene.add.graphics()
+    wash.fillStyle(0xffffff, L.cancelAlpha)
+    wash.fillRoundedRect(cx, y, cancelW, bh, L.buttonRadius)
+    wash.lineStyle(1, 0xffffff, L.hairlineAlpha)
+    wash.strokeRoundedRect(cx + 0.5, y + 0.5, cancelW - 1, bh - 1, L.buttonRadius - 0.5)
+    parts.push(wash)
+    const key = icon(s, 'cancel')
+    const glyph = s.add.image(cx + cancelW / 2, y + bh / 2, key)
+    fitInBox(glyph, key, bh - L.cancelInset * 2)
+    parts.push(glyph)
+    const back = s.add.rectangle(cx + cancelW / 2, y + bh / 2, cancelW, bh, 0xffffff, 0.001)
+      .setOrigin(0.5).setInteractive({ useHandCursor: true })
+    back.name = 'ring:cancel'
+    back.on('pointerup', () => this.deselect())
+    parts.push(back)
+
+    return { parts, height: this.cardHeight() }
   }
 
   /** Back to the ring with nothing spent. */

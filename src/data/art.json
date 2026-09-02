@@ -83,7 +83,6 @@
     "icon-upgrade": "ui/icon_upgrade.png",
     "icon-sell": "ui/icon_sell.png",
     "icon-target": "ui/icon_target.png",
-    "icon-confirm": "ui/icon_confirm.png",
     "icon-cancel": "ui/icon_cancel.png",
     "icon-locked": "ui/icon_locked.png",
     "icon-damage": "ui/icon_damage.png",
@@ -484,12 +483,6 @@
       "contentWidth": 256,
       "contentHeight": 256
     },
-    "icon-confirm": {
-      "anchorX": 0.5,
-      "anchorY": 0.5,
-      "contentWidth": 256,
-      "contentHeight": 256
-    },
     "icon-cancel": {
       "anchorX": 0.5,
       "anchorY": 0.5,
@@ -604,7 +597,6 @@
       "upgrade": "icon-upgrade",
       "sell": "icon-sell",
       "target": "icon-target",
-      "confirm": "icon-confirm",
       "cancel": "icon-cancel",
       "locked": "icon-locked",
       "damage": "icon-damage",
@@ -685,7 +677,6 @@
     "icon-upgrade",
     "icon-sell",
     "icon-target",
-    "icon-confirm",
     "icon-cancel",
     "icon-locked",
     "icon-damage",

@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import type { ScratchOutcome } from '../systems/Scratch.ts'
 import { NukeEarnedOverlay, NukeLaunchOverlay } from '../ui/NukeOverlays.ts'
 import type {
-  AbilityDef, DraftDef, EnemyDef, HeroDef, MapDef, RulesDef, TowerDef, WavesDef,
+  AbilityDef, DraftDef, EnemyDef, HeroDef, MapDef, RulesDef, TowerDef, TowerSpec, WavesDef,
 } from '../types.ts'
 import displayData from '../data/display.json'
 import mapData from '../data/map.json'
@@ -44,10 +44,11 @@ import { platePanel, plateButton, type PlateButton } from '../ui/Plate.ts'
 import { SignBribe } from '../ui/SignBribe.ts'
 import { CameraRig } from '../systems/CameraRig.ts'
 import { Dialog, type DialogOptions } from '../ui/Dialog.ts'
-import { TowerRing, type RingOption, type RingRow } from '../ui/TowerRing.ts'
+import { TowerRing, type RingOption } from '../ui/TowerRing.ts'
+import { type CardStat, statsFor, withChanges } from '../systems/TowerCard.ts'
 import { usableArea } from '../systems/RingLayout.ts'
 import {
-  maxTier, nextStep, sellValue, specIcon, specSummary, statAt,
+  BASE_TIER, nextStep, sellValue, specById, specIcon, statAt,
 } from '../systems/Upgrades.ts'
 import { canAffordAny, openingPurse } from '../systems/Economy.ts'
 import { addBannerPoints, hasClearedARun, recordRunCleared } from '../systems/Save.ts'
@@ -1266,9 +1267,10 @@ this.armReadyCountdown()
         affordable: this.status.peanuts >= def.cost,
         reason: short > 0 ? `${short} peanuts short.` : undefined,
         title: def.name,
-        description: def.blurb,
-        rows: this.buildRows(def),
-        confirmLabel: 'BUILD',
+        trait: def.trait,
+        // Tier 1 with no branch: what it will be the moment it is built.
+        stats: statsFor(def, BASE_TIER, null),
+        confirmLabel: 'Build',
         onConfirm: () => this.place(id, spot),
       }
     })
@@ -1283,32 +1285,6 @@ this.armReadyCountdown()
     })
     this.drawSpots()
     this.status.message = 'Pick a tower to read about it, then confirm.'
-  }
-
-  /** What a tower would do if built, before there is one to measure. */
-  private buildRows(def: TowerDef): RingRow[] {
-    if (def.supportRadius > 0) {
-      return [
-        { icon: 'damage', label: 'Nearby damage', value: `+${Math.round(def.supportDamageBonus * 100)}%` },
-        { icon: 'range', label: 'Radius', value: String(Math.round(def.supportRadius)) },
-      ]
-    }
-    const rows: RingRow[] = [
-      { icon: 'damage', label: 'Damage', value: def.damage.toFixed(1) },
-      { icon: 'range', label: 'Range', value: String(Math.round(def.range)) },
-      { icon: 'firerate', label: 'Rate', value: `${(1 / def.fireInterval).toFixed(2)}/s` },
-    ]
-    if (def.splashRadius > 0) {
-      rows.push({ icon: 'range', label: 'Splash', value: String(Math.round(def.splashRadius)) })
-    }
-    if (def.ignoresArmor || def.armorPierce > 0) {
-      rows.push({
-        icon: 'armor',
-        label: def.ignoresArmor ? 'Armour' : 'Cuts armour',
-        value: def.ignoresArmor ? 'Ignored' : String(Math.round(def.armorPierce)),
-      })
-    }
-    return rows
   }
 
   /** The pad or tower's position, on the glass, right now. */
@@ -1510,65 +1486,23 @@ this.armReadyCountdown()
     const step = nextStep(def, tower.tier)
     const refund = sellValue(def, tower.tier + (tower.upgrading ? 1 : 0),
       RULES.towerUpgrades.sellRefund, tower.spec)
-    const support = tower.isSupport
     const peanuts = this.status.peanuts
 
-    const n = (v: number, digits = 0): string => v.toFixed(digits)
-    // What the next tier would make each stat, so the panel answers "is this
-    // worth it?" rather than only "what is it now?". Null at the top, and at
-    // the specialization branch, where there are two answers rather than one.
+    // THE THREE NUMBERS, AS THEY ARE AND AS THE PURCHASE WOULD LEAVE THEM.
+    //
+    // This was five rows of "19.8 → 27.7" with an icon each, plus a cost row
+    // and a paragraph. The card shows three numbers; each one that a pending
+    // purchase would change carries its new value beside it in the accent
+    // colour, and each one that would not renders plain. `withChanges` decides
+    // which is which by comparing the two stat sets, matched by label.
     const nextTier = tower.upgrading || step === null ? null : tower.tier + 1
-    const after = (key: Parameters<typeof statAt>[2]): number | null =>
-      nextTier === null ? null : statAt(def, nextTier, key, tower.spec)
-    /** "19.8 → 27.7" when the number moves, plain when it does not. */
-    const shift = (now: number, next: number | null, digits = 0): string => {
-      const a = n(now, digits)
-      if (next === null || Math.abs(next - now) < 0.05) return a
-      return `${a} → ${n(next, digits)}`
-    }
-
-    const rows: RingRow[] = []
-    if (support) {
-      const nextBonus = after('supportDamageBonus')
-      rows.push({
-        icon: 'damage',
-        label: 'Nearby damage',
-        value: nextBonus === null
-          ? `+${Math.round(tower.supportDamageBonus * 100)}%`
-          : `+${Math.round(tower.supportDamageBonus * 100)}% → +${Math.round(nextBonus * 100)}%`,
-      })
-      rows.push({ icon: 'range', label: 'Radius', value: shift(tower.supportRadius, after('supportRadius')) })
-    } else {
-      rows.push({ icon: 'damage', label: 'Damage', value: shift(tower.damage, after('damage'), 1) })
-      rows.push({ icon: 'range', label: 'Range', value: shift(tower.range, after('range')) })
-      const nextInterval = after('fireInterval')
-      rows.push({
-        icon: 'firerate',
-        label: 'Rate',
-        value: nextInterval === null
-          ? `${n(1 / tower.fireInterval, 2)}/s`
-          : `${n(1 / tower.fireInterval, 2)}/s → ${n(1 / nextInterval, 2)}/s`,
-      })
-      if (tower.splashRadius > 0) {
-        rows.push({ icon: 'range', label: 'Splash', value: shift(tower.splashRadius, after('splashRadius')) })
-      }
-      // Only when it does any. A row reading "0" tells the player nothing
-      // except that there is a row.
-      if (tower.armorPierce > 0 || tower.def.ignoresArmor) {
-        rows.push({
-          icon: 'armor',
-          label: tower.def.ignoresArmor ? 'Armour' : 'Cuts armour',
-          value: tower.def.ignoresArmor ? 'Ignored' : shift(tower.armorPierce, after('armorPierce')),
-        })
-      }
-    }
-    if (tower.upgrading) {
-      rows.push({ label: 'Upgrading', value: `${Math.round(tower.buildProgress * 100)}%`, accent: true })
-    }
-
-    const bonus = tower.supportBonus > 0
-      ? `  ·  +${Math.round(tower.supportBonus * 100)}% lit` : ''
-    const tier = `Tier ${tower.tier} of ${maxTier(def)}${bonus}.`
+    const now = statsFor(def, tower.tier, specById(def, tower.spec))
+    const upgraded = nextTier === null
+      ? now
+      : withChanges(now, statsFor(def, nextTier, specById(def, tower.spec)))
+    /** What each branch would make of it, for the two spec options. */
+    const withSpec = (spec: TowerSpec): CardStat[] =>
+      withChanges(now, statsFor(def, tower.tier, spec))
 
     const options: RingOption[] = []
     const choosing = tower.atSpecChoice && !tower.upgrading
@@ -1599,9 +1533,9 @@ this.armReadyCountdown()
           affordable: peanuts >= spec.cost,
           reason: peanuts < spec.cost ? `${spec.cost - peanuts} peanuts short.` : undefined,
           title: spec.name,
-          description: `Permanent: the other branch closes for good. ${specSummary(spec)}.`,
-          rows: [...rows, { label: 'Build time', value: `${realSeconds(spec.buildSeconds, 1)}s` }],
-          confirmLabel: 'BUILD',
+          trait: spec.trait,
+          stats: withSpec(spec),
+          confirmLabel: 'Build',
           onConfirm: () => this.specialize(tower, spec.id),
         })
       }
@@ -1612,11 +1546,10 @@ this.armReadyCountdown()
         price: step.cost,
         affordable: peanuts >= step.cost,
         reason: peanuts < step.cost ? `${step.cost - peanuts} peanuts short.` : undefined,
-        title: `${def.name} — tier ${tower.tier + 1}`,
-        description: `${tier} Fires at a reduced rate while it builds.`,
-        // The build time is a number with a name on it, not a clause.
-        rows: [...rows, { label: 'Build time', value: `${realSeconds(step.buildSeconds, 1)}s` }],
-        confirmLabel: 'UPGRADE',
+        title: def.name,
+        trait: def.trait,
+        stats: upgraded,
+        confirmLabel: 'Upgrade',
         onConfirm: () => this.upgradeTower(tower),
       })
     } else {
@@ -1630,10 +1563,10 @@ this.armReadyCountdown()
         reason: tower.upgrading
           ? 'Already building. Wait for it to finish.'
           : 'Fully upgraded. There is nothing further to buy.',
-        title: `${def.name} — top tier`,
-        description: tier,
-        rows,
-        confirmLabel: 'UPGRADE',
+        title: def.name,
+        trait: def.trait,
+        stats: now,
+        confirmLabel: 'Upgrade',
         onConfirm: () => { /* nothing to buy */ },
       })
     }
@@ -1655,12 +1588,10 @@ this.armReadyCountdown()
         : !this.cooldowns.ready('restructure')
             ? `${this.hero.def.restructure.name} is still recharging.`
             : freePads === 0 ? 'Every other pad is taken.' : undefined,
-      title: `Move ${def.name}`,
-      description:
-        `${this.hero.def.restructure.name}: pick a free pad. Costs no peanuts — it costs `
-        + `a ${realSeconds(this.hero.def.restructure.cooldown)}s cooldown.`,
-      rows,
-      confirmLabel: 'MOVE',
+      title: def.name,
+      trait: def.trait,
+      stats: now,
+      confirmLabel: 'Move',
       onConfirm: () => this.beginMove(tower),
     })
 
@@ -1668,24 +1599,18 @@ this.armReadyCountdown()
     // an upgrade slot that is always present and a move slot that is always
     // present, so it can never slide into the first position.
     //
-    // It gets its OWN rows rather than the upgrade projection: "11.0 -> 19.8"
-    // describes a purchase the player is not making, and four rows of it made
-    // the sell panel taller than the screen on the reference phone.
-    const sellRows: RingRow[] = support
-      ? [{ icon: 'damage', label: 'Nearby damage', value: `+${Math.round(tower.supportDamageBonus * 100)}%` }]
-      : [
-        { icon: 'damage', label: 'Damage', value: n(tower.damage, 1) },
-        { icon: 'range', label: 'Range', value: n(tower.range) },
-      ]
+    // Its numbers are what the tower IS, never the upgrade projection: a
+    // marked-up "17 -> 31" describes a purchase the player is not making, on
+    // the one button that destroys the thing being described.
     options.push({
       id: 'sell',
       icon: 'sell',
       price: refund,
       affordable: true,
-      title: `Sell ${def.name}`,
-      description: `${tier} Frees the pad. What you paid does not come back in full.`,
-      rows: sellRows,
-      confirmLabel: 'SELL',
+      title: def.name,
+      trait: def.trait,
+      stats: now,
+      confirmLabel: 'Sell',
       onConfirm: () => this.sellTower(tower),
     })
 

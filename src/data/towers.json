@@ -1,6 +1,7 @@
 {
   "withholding": {
     "name": "Slingshot",
+    "trait": "Pierces armour",
     "archetype": "single-target",
     "sprite": "turret-ledger",
     "shot": "shot-small",
@@ -30,6 +31,7 @@
       {
         "id": "garnishment",
         "name": "Hailstorm",
+        "trait": "Ignores armour",
         "cost": 320,
         "buildSeconds": 9.0,
         "damage": 1.9,
@@ -39,6 +41,7 @@
       {
         "id": "payroll",
         "name": "Repeater",
+        "trait": "Chains to 1 more",
         "cost": 320,
         "buildSeconds": 9.0,
         "fireInterval": 0.55,
@@ -51,6 +54,7 @@
   },
   "writeoff": {
     "name": "Grinder",
+    "trait": "Ignores armour",
     "archetype": "single-target",
     "sprite": "turret-writeoff",
     "shot": "shot-heavy",
@@ -79,6 +83,7 @@
       {
         "id": "totalloss",
         "name": "Bonesaw",
+        "trait": "Executes under 18%",
         "cost": 600,
         "buildSeconds": 9.0,
         "damage": 2.2,
@@ -88,6 +93,7 @@
       {
         "id": "carryforward",
         "name": "Rasp",
+        "trait": "Ramps up to +110%",
         "cost": 600,
         "buildSeconds": 9.0,
         "fireInterval": 0.6,
@@ -100,6 +106,7 @@
   },
   "rounding": {
     "name": "Mortar",
+    "trait": "Splash damage",
     "archetype": "aoe",
     "sprite": "turret-rounding",
     "shot": "projectile-rocket",
@@ -129,6 +136,7 @@
       {
         "id": "bankers",
         "name": "Thunderhead",
+        "trait": "Splash also slows",
         "cost": 500,
         "buildSeconds": 9.0,
         "splashRadius": 1.6,
@@ -138,6 +146,7 @@
       {
         "id": "materiality",
         "name": "Siege",
+        "trait": "Extra vs armour",
         "cost": 500,
         "buildSeconds": 9.0,
         "damage": 2.3,
@@ -149,6 +158,7 @@
   },
   "escalation": {
     "name": "Longshot",
+    "trait": "Long-range splash",
     "archetype": "aoe",
     "sprite": "turret-escalation",
     "shot": "projectile-rocket-big",
@@ -178,6 +188,7 @@
       {
         "id": "compound",
         "name": "Marksman",
+        "trait": "Ramps up to +160%",
         "cost": 880,
         "buildSeconds": 9.0,
         "damage": 2.1,
@@ -188,6 +199,7 @@
       {
         "id": "penalty",
         "name": "Deadeye",
+        "trait": "Chains to 2 more",
         "cost": 880,
         "buildSeconds": 9.0,
         "splashRadius": 1.55,
@@ -200,6 +212,7 @@
   },
   "extension": {
     "name": "Bramble",
+    "trait": "Slows by 45%",
     "archetype": "control",
     "sprite": "turret-extension",
     "shot": "shot-ring",
@@ -230,6 +243,7 @@
       {
         "id": "deferral",
         "name": "Thicket",
+        "trait": "Chains the slow",
         "cost": 400,
         "buildSeconds": 9.0,
         "slowSeconds": 2.0,
@@ -240,6 +254,7 @@
       {
         "id": "amendment",
         "name": "Deadfall",
+        "trait": "Stuns on hit",
         "cost": 400,
         "buildSeconds": 9.0,
         "damage": 2.6,
@@ -251,6 +266,7 @@
   },
   "shelter": {
     "name": "Beacon",
+    "trait": "Buffs nearby guns",
     "archetype": "support",
     "sprite": "turret-shelter",
     "cost": 140,
@@ -277,6 +293,7 @@
       {
         "id": "offshore",
         "name": "Signal Fire",
+        "trait": "Grants +20% range",
         "cost": 560,
         "buildSeconds": 9.0,
         "supportRadius": 1.5,
@@ -285,6 +302,7 @@
       {
         "id": "loophole",
         "name": "Bonfire",
+        "trait": "Grants +5 pierce",
         "cost": 560,
         "buildSeconds": 9.0,
         "supportDamageBonus": 1.9,

@@ -462,19 +462,21 @@ test('a ring button buys nothing; the panel does', () => {
     'a ring button can commit the purchase directly')
   assert.match(buildRing, /hit\.on\('pointerdown', \(\) => this\.select\(i\)\)/,
     'a ring button does something other than open its description')
-  // The confirm is on the panel, and it is a release rather than a press: a
+  // The confirm is on the card, and it is a release rather than a press: a
   // finger that lands on it and slides off has to be able to take it back.
-  assert.match(ring, /hit\.on\('pointerup', onPick\)/, 'the confirm fires on the press')
+  assert.match(ring, /buy\.on\('pointerup', \(\) => \{/, 'the confirm fires on the press')
+  assert.match(ring, /back\.on\('pointerup', \(\) => this\.deselect\(\)\)/,
+    'cancel fires on the press')
   assert.match(ring, /option\.onConfirm\(\); this\.close\(\)/,
     'confirming does not close the menu')
-  // THE CONFIRM CARRIES A WORD, not the tick glyph it used to share with
-  // every other option. SELL's confirm and UPGRADE's confirm were pixel-
-  // identical, on the one press that actually spends or destroys.
-  assert.match(ring, /\{ word: option\.confirmLabel \}, option\.affordable/,
-    'the confirm button is back to a glyph')
-  assert.match(ring, /\{ icon: 'cancel' \}/, 'cancel lost its glyph')
-  assert.match(ring, /\{ icon: 'cancel' \}, true, \(\) => this\.deselect\(\)/,
-    'the cancel icon is unused')
+  // THE CONFIRM CARRIES THE VERB AND THE PRICE, as one control. It used to be
+  // a tick glyph shared by every option, so SELL's confirm and UPGRADE's were
+  // pixel-identical on the one press that spends or destroys — and the price
+  // sat in a row of its own further up the card.
+  assert.match(ring, /buttonLabel\(option\.confirmLabel, option\.price, option\.id === 'sell'\)/,
+    'the confirm button does not carry the verb and the price together')
+  assert.match(ring, /icon\(s, 'cancel'\)/, 'cancel lost its glyph')
+
   // Cancel goes back to the ring rather than closing everything: the point of
   // a description is being able to read another one.
   const deselect = ring.slice(ring.indexOf('private deselect()'))
@@ -625,9 +627,13 @@ test('every ring button is an icon at 40px with the price beneath, never a word'
 
   // The build half uses icons too. It was a text grid using none of the ten.
   const game = src('scenes/GameScene.ts')
-  const build = game.slice(game.indexOf('openPadRing(spot: BuildSpot)'), game.indexOf('private buildRows('))
+  const build = game.slice(game.indexOf('openPadRing(spot: BuildSpot)'),
+    game.indexOf("/** The pad or tower's position, on the glass, right now. */"))
   assert.match(build, /sprite: def\.sprite/,
     'the build options do not carry a picture of the tower')
+  // No worded label on the RING BUTTON. The card behind it carries words —
+  // the name, the trait phrase, and the verb and price on the button — but the
+  // ring itself is pictures and prices.
   assert.doesNotMatch(build, /label:/, 'the build options still carry worded labels')
 })
 
@@ -658,16 +664,22 @@ test('every icon resolves through one place, so none can miss its fallback', () 
   const ring = src('ui/TowerRing.ts')
   const icons = read('art').ui.icons as Record<string, string>
   // All ten are declared, and every name the ring asks for is one of them.
-  assert.ok(Object.keys(icons).length >= 10, `only ${Object.keys(icons).length} icons declared`)
+  // NINE, not ten. `confirm` is retired: the ledger's primary button is a
+  // green slab carrying the verb and the price, and a tick on it would be the
+  // thing the redesign removed — a mark that says "commit" without saying to
+  // what. Its manifest entry went with it rather than being left declared and
+  // undrawn, which is how an unused asset survives a swap.
+  assert.ok(Object.keys(icons).length >= 9, `only ${Object.keys(icons).length} icons declared`)
+  assert.equal(icons.confirm, undefined, 'the retired confirm icon is back in the manifest')
   for (const name of ['upgrade', 'sell', 'target', 'locked', 'damage', 'range', 'firerate',
-    'armor', 'confirm', 'cancel']) {
+    'armor', 'cancel']) {
     assert.ok(icons[name], `${name} is used but not in the manifest`)
   }
   // ALL TEN ARE PLACED NOW. confirm and cancel were cut for a confirm step
   // that did not exist; the ring's second press is that step.
   const used = new Set<string>()
   for (const f of ['ui/TowerRing.ts', 'scenes/GameScene.ts', 'systems/Upgrades.ts']) {
-    for (const m of src(f).matchAll(/'(upgrade|sell|target|locked|damage|range|firerate|armor|confirm|cancel)'/g)) {
+    for (const m of src(f).matchAll(/'(upgrade|sell|target|locked|damage|range|firerate|armor|cancel)'/g)) {
       used.add(m[1] as string)
     }
   }
