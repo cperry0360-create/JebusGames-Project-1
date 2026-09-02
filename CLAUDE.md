@@ -90,6 +90,23 @@ Use `sh tools/tsdiff.sh <known-green-commit>` instead. It typechecks the
 working tree and a commit CI already accepted, and reports only the
 difference. Two real errors reached CI before this existed.
 
+## Reports
+
+**Every report ends with a markdown file, always.** A finding that lives only
+in chat scrollback cannot be shared, cannot be re-read next week, and is gone
+the moment the window closes.
+
+- One file per report, in `reports/`, named `YYYY-MM-DD-topic.md`.
+- Chat gets the summary; the file gets the whole thing — the numbers, the
+  method, how to reproduce it, and what was NOT checked.
+- Topic documents that are living records rather than dated reports keep their
+  place at the repository root: `AUDIT.md`, `RENDER-QUALITY.md`, `NAMING.md`,
+  `TOWER-MENU.md`, `SOAK-REPORT.md`, `ATTRIBUTIONS.md`. Update those in place
+  and link them from the dated report rather than restating them.
+- Keep report images out of the repository unless they carry something the
+  numbers cannot. Harness screenshots are reproducible: give the command
+  instead. `tools/harness/shots/` is gitignored on purpose.
+
 ## Conventions
 
 - Prefer small, readable modules over clever abstractions
