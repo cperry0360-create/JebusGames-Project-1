@@ -1747,12 +1747,12 @@ async function run() {
 
     // And well off it. A build pad is the natural off-lane point: it is where
     // a player's finger already goes.
-    const off = g.build.spots.reduce((a, b) =>
+    const farPad = g.build.spots.reduce((a, b) =>
       (g.lane.distanceTo(a.x, a.y) > g.lane.distanceTo(b.x, b.y) ? a : b))
-    await hover(off.x, off.y)
+    await hover(farPad.x, farPad.y)
     const invalidState = g.castCursor.state
     note('off the road (lane distance ' +
-      Math.round(g.lane.distanceTo(off.x, off.y)) + '): cursor=' + invalidState)
+      Math.round(g.lane.distanceTo(farPad.x, farPad.y)) + '): cursor=' + invalidState)
     await shot('gnomes-00b-cursor-invalid-' + VP.w + 'x' + VP.h)
 
     note('CURSOR ' + (validState === 'valid' && invalidState === 'invalid'
@@ -1772,9 +1772,17 @@ async function run() {
       : '*** is still over the board ***'))
     note('CANCEL visible while armed: ' + g.cancelVisible)
 
-    g.cancelTargeting ? g.cancelTargeting() : (g.status.mode = 'normal')
-    await sleep(200)
-    note('after cancel: cursor=' + g.castCursor.state + ' (hidden is correct)')
+    // PRESS THE BUTTON, rather than poking status.mode. Setting the mode by
+    // hand is not the path a player takes and does not exercise the teardown:
+    // the first version of this probe did exactly that, read the cursor still
+    // showing, and reported a bug that was its own.
+    click(cbx, cby)
+    await sleep(300)
+    note('after pressing CANCEL: mode=' + g.status.mode +
+      ' cursor=' + g.castCursor.state + ' cancelVisible=' + g.cancelVisible)
+    note('CANCEL ' + (g.status.mode === 'normal' && g.castCursor.state === 'hidden'
+      ? 'disarms the ability and takes the cursor with it'
+      : '*** did not disarm: mode=' + g.status.mode + ' cursor=' + g.castCursor.state + ' ***'))
 
     // Off the path first: a gnome in a field blocks nothing, so the cast has
     // to be refused rather than wasted.
@@ -4659,6 +4667,80 @@ async function run() {
       note('  ring bounds ' + Math.round(b.width) + 'x' + Math.round(b.height) +
         (b.width <= 60 ? '  — a vertical line, not a ring' : ''))
     }
+    return
+  }
+
+  if (scenario === 'towerring') {
+    // THE TOWER'S OWN RING: what it offers, in what ORDER, and what the second
+    // press says.
+    //
+    // The complaint was that SELL and UPGRADE were confusable. Two causes:
+    // SELL was pushed last onto whatever was already there, so at max tier it
+    // was option 1 of 1 — exactly where UPGRADE had been all game — and the
+    // confirm button was the same tick glyph either way. So this checks the
+    // ORDER at every tier the tower passes through, not just that the options
+    // exist.
+    g.status.peanuts = 999999
+    await sleep(400)
+    const spot = g.build.freeSpots()[0]
+    const id = g.status.unlockedTowers[0]
+    g.place(id, spot)
+    await sleep(300)
+    const tower = g.towers[0]
+    note('tower ' + tower.def.name + ' on spot ' + spot.index)
+
+    const openAndRead = async (label) => {
+      g.openTowerRing(tower)
+      await sleep(350)
+      const list = g.ring.opts.options
+      const opts = list.map((o) => o.id)
+      const labels = list.map((o) => o.confirmLabel)
+      note(label + ': [' + opts.join(', ') + ']  confirms [' + labels.join(', ') + ']')
+      return { opts, labels }
+    }
+
+    const seen = []
+    seen.push(await openAndRead('tier 1'))
+    // Straight up the tiers without the ring, so the ring is read fresh each
+    // time rather than being driven by the presses under test.
+    g.ring.close(); await sleep(120)
+    g.upgradeTower(tower)
+    await until(() => !tower.upgrading, 30000)
+    seen.push(await openAndRead('tier 2'))
+    g.ring.close(); await sleep(120)
+    if (tower.atSpecChoice) {
+      seen.push(await openAndRead('spec branch'))
+      g.ring.close(); await sleep(120)
+      g.specialize(tower, tower.def.specializations[0].id)
+      await until(() => !tower.upgrading, 30000)
+      seen.push(await openAndRead('maxed'))
+    }
+
+    // THE INVARIANT: the first slot is never SELL, at any tier.
+    const firstIsSell = seen.filter((s) => s.opts[0] === 'sell')
+    note('tiers where SELL was the FIRST option: ' + firstIsSell.length +
+      (firstIsSell.length ? '  *** this is the bug ***' : '  — none'))
+    const sellLast = seen.every((s) => s.opts[s.opts.length - 1] === 'sell')
+    note('SELL is last at every tier: ' + sellLast)
+    const hasMove = seen.every((s) => s.opts.includes('move'))
+    note('MOVE offered at every tier: ' + hasMove)
+    note('confirm words: ' + JSON.stringify(seen.map((s) => s.labels)))
+
+    // And MOVE actually moves it, without DAD MODE.
+    note('hero lastStandActive: ' + g.hero.lastStandActive + ' (the old gate)')
+    const before = tower.spot
+    g.beginMove(tower)
+    await sleep(200)
+    note('after MOVE: mode=' + g.status.mode + ' cancelVisible=' + g.cancelVisible)
+    const target = g.build.freeSpots()[0]
+    g.doRestructure(target.x, target.y)
+    await sleep(300)
+    note('spot ' + before + ' -> ' + tower.spot + '  (wanted ' + target.index + ')')
+
+    note('RESULT ' + (!firstIsSell.length && sellLast && hasMove && tower.spot === target.index
+      ? 'SELL never takes the first slot, MOVE is offered ungated, and it moves the tower'
+      : '*** wrong: firstIsSell=' + firstIsSell.length + ' sellLast=' + sellLast +
+        ' hasMove=' + hasMove + ' moved=' + (tower.spot === target.index) + ' ***'))
     return
   }
 
