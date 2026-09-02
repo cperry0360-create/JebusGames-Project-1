@@ -77,6 +77,39 @@ test('the hero bar is on the left, clear of the painted tavern sign', () => {
   }
 })
 
+test('the hero bar carries its own plate, because no corner is safe', () => {
+  // MEASURED, not assumed, and the measurement says the corner cannot be the
+  // whole answer. The map is full-bleed and the camera is free, so at maximum
+  // zoom it can put any painted feature under any pixel: sweeping every camera
+  // position the clamp allows, at every zoom in the band, against the painted
+  // content found by classifying the plate itself, ZERO of 82,290 screen cells
+  // at 844x390 are never reached. There is no safe corner to move to.
+  //
+  // What the move does buy, over 768 camera positions:
+  //
+  //   position                  on the painted signboard   on any painted art
+  //   old, top-right 587,60     110 / 768   (14%)          395 / 768  (51%)
+  //   now, top-left   10,60       6 / 768   (0.8%)         380 / 768  (49%)
+  //   best alternative clear
+  //   of the rest of the HUD      2 / 768                  405 / 768  (worse)
+  //
+  // So the left is within noise of the best position available, and the
+  // remainder is not a placement problem. It is what the HUD's own rules
+  // already say: elements sit over map art, and each one carries its own
+  // plate. The hero bar was a 55% black wash and did not.
+  const hud = src('scenes/HudScene.ts')
+  const bar = (presentation.hud as Record<string, any>).heroBar
+  assert.ok(bar, 'the hero bar has no plate settings')
+  assert.equal(bar.backingAlpha, 1, `a ${bar.backingAlpha} backing lets the map through the bar`)
+  assert.ok(bar.edgeWidth >= 1, 'the bar has no edge, so it has no outline against busy art')
+  assert.match(hud, /this\.heroBar\.fillStyle\(bar\.backing, bar\.backingAlpha\)/,
+    'the hero bar no longer draws its backing from the plate settings')
+  assert.match(hud, /this\.heroBar\.strokeRoundedRect\(x, y, w, h, bar\.radius\)/,
+    'the hero bar draws no edge')
+  assert.doesNotMatch(hud, /heroBar\.fillStyle\(0x000000, 0\.55\)/,
+    'the translucent wash is back')
+})
+
 test('every element stays inside the safe area', () => {
   for (const [name, width, height] of VIEWPORTS) {
     const layout = hudLayout({ width, height, insets: NOTCH, ...WIDEST }, CFG)

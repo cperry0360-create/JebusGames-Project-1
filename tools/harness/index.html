@@ -2843,6 +2843,20 @@ async function run() {
     return
   }
 
+  if (scenario === 'plate') {
+    // Hands the painted map plate back as a 1280x720 PNG — the map's own
+    // coordinate space — so it can be measured offline. The plate is a WebP
+    // now and nothing outside a browser here can decode one.
+    const tex = game.textures.get('map-level1').getSourceImage()
+    const c = document.createElement('canvas')
+    c.width = 1280; c.height = 720
+    const ctx = c.getContext('2d')
+    ctx.drawImage(tex, 0, 0, 1280, 720)
+    note('plate source ' + tex.width + 'x' + tex.height + ' -> 1280x720')
+    await post('/shot/plate1280', c.toDataURL('image/png'))
+    return
+  }
+
   if (scenario === 'looptrack') {
     // The level 1 track does not loop seamlessly and fades out at the end, so
     // it repeats with a gap and fades back in rather than cutting. Watched at

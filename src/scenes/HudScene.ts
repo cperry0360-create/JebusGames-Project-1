@@ -824,8 +824,18 @@ export class HudScene extends Phaser.Scene {
     this.heroLabel.setOrigin(1, 0.5)
 
     const ratio = Phaser.Math.Clamp(s.heroHealth / Math.max(s.heroMax, 1), 0, 1)
+    const bar = HUD.heroBar
     this.heroBar.clear()
-    this.heroBar.fillStyle(0x000000, 0.55).fillRoundedRect(x, y, w, h, 5)
+    // OPAQUE, AND EDGED. It was a 55% black wash, which is the thing the
+    // report was actually about: the painted tavern signboard showed through
+    // the bar and the bar showed through the signboard, and neither was
+    // readable. Moving it helps and cannot solve it — measured, there is no
+    // screen position the camera cannot put painted art under — so the bar
+    // carries its own plate now, the way every other piece of HUD does.
+    this.heroBar.fillStyle(bar.backing, bar.backingAlpha)
+    this.heroBar.fillRoundedRect(x, y, w, h, bar.radius)
+    this.heroBar.lineStyle(bar.edgeWidth, bar.edge, 1)
+    this.heroBar.strokeRoundedRect(x, y, w, h, bar.radius)
     this.heroBar.fillStyle(s.heroDown ? 0x5a5a5a : s.lastStand ? 0xff5a3c : 0x4fa3e3, 1)
     this.heroBar.fillRoundedRect(x + 2, y + 2, Math.max(0, (w - 4) * ratio), h - 4, 4)
     // The 25% mark, so the Last Stand threshold is legible before it fires.

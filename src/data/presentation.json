@@ -85,6 +85,14 @@
       "cornerButton": 40,
       "startWidth": 240,
       "startMinWidth": 150
+    },
+    "heroBar": {
+      "_note": "Cory's name and health, top-left under the counters. OPAQUE, because it lives over a full-bleed painted map and there is no screen position a HUD element can occupy that the camera cannot put painted art under — measured: 0 of 82,290 screen cells at 844x390 are unreachable by painted content at some camera position. So the answer is not a safer corner, it is a proper plate. It was a 55% black wash, which let the tavern's painted signboard show through the bar and the bar show through the signboard.",
+      "backing": 1185824,
+      "backingAlpha": 1.0,
+      "edge": 856086,
+      "edgeWidth": 2,
+      "radius": 5
     }
   },
   "typography": {
