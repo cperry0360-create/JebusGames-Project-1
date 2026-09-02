@@ -7,6 +7,7 @@ import { makeShadow, PRESENTATION, floatingDamage, deathPuff } from '../systems/
 import { emergeState, vanishAlpha, type EmergeConfig } from '../systems/Gateway.ts'
 import { applyGroundRender } from '../systems/Art.ts'
 import { facesLeft } from '../systems/Facing.ts'
+import { onBoard } from '../systems/Liveness.ts'
 
 export type EnemyState = 'walking' | 'fighting' | 'dead'
 
@@ -184,8 +185,16 @@ export class Enemy extends Phaser.GameObjects.Container {
     this.shadow.setAlpha(a * PRESENTATION.shadow.alpha)
   }
 
+  /**
+   * Still on the board, which is NOT the same as "not dead".
+   *
+   * A leaked enemy is destroyed by `GameScene.leak()` with its `status` still
+   * `'walking'`, so `status !== 'dead'` reported it alive for the rest of the
+   * run and a swing committed before it left crashed on its nulled `scene`.
+   * `onBoard` is the one definition; see `systems/Liveness.ts`.
+   */
   get alive(): boolean {
-    return this.status !== 'dead'
+    return onBoard(this)
   }
 
   get slowed(): boolean {
@@ -309,7 +318,7 @@ export class Enemy extends Phaser.GameObjects.Container {
 
   /** Returns true once the enemy has walked off the far end of the lane. */
   tick(dt: number, onAttackBlocker: (damage: number) => void): boolean {
-    if (this.status === 'dead') return false
+    if (!this.alive) return false
 
     if (this.slowRemaining > 0) {
       this.slowRemaining -= dt
@@ -415,7 +424,10 @@ export class Enemy extends Phaser.GameObjects.Container {
 
   /** Returns true if this hit killed it. */
   hurt(damage: number, ignoresArmor: boolean, showNumber = true, pierce = 0): boolean {
-    if (this.status === 'dead') return false
+    // The LAST of the three guards on the damage path, and the one that used
+    // to ask only about `status`. A leaked enemy reached it destroyed but not
+    // dead and `floatingDamage(this.scene, …)` threw on a nulled scene.
+    if (!this.alive) return false
     const dealt = damageAfterArmor(damage, this.effectiveArmor, ignoresArmor, pierce)
     this.health -= dealt
     if (showNumber) floatingDamage(this.scene, this.x, this.centreY, dealt, dealt >= 60)
@@ -428,7 +440,9 @@ export class Enemy extends Phaser.GameObjects.Container {
   }
 
   die(): void {
-    if (this.status === 'dead') return
+    // Idempotence AND existence. `alive` covers both: dying twice is a no-op,
+    // and an enemy that left the board is not killed retrospectively.
+    if (!this.alive) return
     this.status = 'dead'
     this.bar.setVisible(false)
     this.shadow.setVisible(false)

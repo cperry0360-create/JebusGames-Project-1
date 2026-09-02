@@ -317,7 +317,7 @@ export class Hero extends Phaser.GameObjects.Container {
     }
     // Anything no longer under the vehicle can be hit again next time.
     for (const e of [...this.rammed]) {
-      if (!e.active || !e.alive || Math.hypot(e.x - this.x, e.y - this.y) > this.halfFootprint * 1.25) {
+      if (!e.alive || Math.hypot(e.x - this.x, e.y - this.y) > this.halfFootprint * 1.25) {
         this.rammed.delete(e)
       }
     }
@@ -496,6 +496,19 @@ export class Hero extends Phaser.GameObjects.Container {
     this.lastStandActive = false
     this.invulnerableFor = 0
     this.blocking = 0
+    // THE SWING DIES WITH HIM.
+    //
+    // `pendingHit` is a closure holding the enemies a committed swing chose,
+    // and `frames` holds the clip that will eventually deliver its impact
+    // frame. Neither used to be cleared here, and `tick()` early-returns while
+    // he is down — so a swing committed a frame before he died sat untouched
+    // for the whole 25-second revive, and fired the moment he came back, on
+    // enemies that had leaked and been destroyed in between. That is the
+    // wave-5 crash. Clearing the closure removes the stale references;
+    // resetting the clip means `revive()` cannot produce the impact frame that
+    // would have called it.
+    this.pendingHit = null
+    this.frames.reset()
     this.bar.setVisible(false)
     this.shadow.setVisible(false)
     deathPuff(this.scene, this.x, this.y, 0xff8f7a)
@@ -520,6 +533,14 @@ export class Hero extends Phaser.GameObjects.Container {
   private revive(): void {
     this.reviveIn = 0
     this.down = false
+    // Belt and braces with `goDown`. He cannot deliver a swing he committed
+    // before he died: the closure is gone and the clip starts from idle. Done
+    // in both places deliberately — `goDown` is where the references stop
+    // being safe to hold, and this is where the impact frame could be
+    // produced, and a future change to either must not be able to reopen the
+    // window on its own.
+    this.pendingHit = null
+    this.frames.reset()
     this.health = this.def.maxHealth
     this.lastStandActive = false
     this.transforming = false

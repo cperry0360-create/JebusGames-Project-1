@@ -43,7 +43,7 @@ export class Projectile extends Phaser.GameObjects.Sprite {
   tick(dt: number): boolean {
     if (this.spent) return true
 
-    if (!this.target.active || !this.target.alive) {
+    if (!this.target.alive) {
       this.finish()
       return true
     }

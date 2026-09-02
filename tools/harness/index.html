@@ -3465,18 +3465,19 @@ async function run() {
   }
 
   if (scenario === 'crashw5') {
-    // REPRODUCING THE WAVE 5 CRASH: "undefined is not an object evaluating
-    // 'G.add'", reached through applyPose -> pendingHit -> damageEnemy -> hurt.
+    // THE WAVE 5 CRASH: "undefined is not an object evaluating 'G.add'",
+    // reached through applyPose -> pendingHit -> damageEnemy -> hurt.
     //
-    // The hypothesis, forced rather than waited for:
-    //   1. the hero commits a swing, capturing its victims in `pendingHit`
-    //   2. he is killed before the impact frame arrives, so tick() early-
-    //      returns and pendingHit is left set, holding those enemies
-    //   3. while he is down the wave walks past unblocked and leak() calls
-    //      enemy.destroy() on one of them — its status stays 'walking', so
-    //      nothing that asks "is it alive?" can tell
-    //   4. he revives, applyPose runs, the stale swing lands on a destroyed
-    //      object, and floatingDamage reads `undefined.add`
+    // Two holes had to line up, and this drives both:
+    //   A. liveness meant "not dead", and leak() destroys an enemy whose
+    //      status is still 'walking' — so a destroyed object reported alive
+    //   B. goDown() left `pendingHit` and the frame clock untouched, so a
+    //      swing committed before he died fired when he came back, holding
+    //      references to enemies destroyed in between
+    //
+    // It ran green against the fix on the first pass, which proves nothing on
+    // its own, so each part asserts the OLD rule would have failed as well as
+    // that the new one holds.
     const errors = []
     addEventListener('error', (e) => errors.push(e.message))
     const hero = g.hero
@@ -3484,44 +3485,83 @@ async function run() {
     g.startWave()
     await until(() => g.enemies.some((e) => e.alive && e.art.alpha > 0.9), 60000)
 
-    // Put him on the lane in front of the leader so he engages.
+    /* ---- A. a leaked enemy is destroyed while its status says 'walking' --- */
+
+    const doomed = g.enemies.find((e) => e.alive)
+    const wasStatus = doomed.status
+    doomed.distance = g.lane.totalLength
+    await sleep(400)
+    const oldRule = doomed.status !== 'dead'
+    note('A. leaked ' + doomed.def.name + ': status=' + doomed.status +
+      ' (was ' + wasStatus + ')  active=' + doomed.active +
+      '  scene=' + (doomed.scene ? 'set' : 'GONE'))
+    note('   old rule (status !== dead) says alive: ' + oldRule +
+      (oldRule ? '  *** which is the hole ***' : '  (it never left walking?)'))
+    note('   Enemy.alive now says: ' + doomed.alive +
+      (doomed.alive ? '  *** STILL BROKEN ***' : '  — closed'))
+
+    // And the damage path must survive being pointed at it. This is the exact
+    // call that used to reach floatingDamage(undefined.add, ...).
+    const beforeA = errors.length
+    try { g.damageEnemy(doomed, 40, false) } catch (e) { errors.push('threw: ' + e.message) }
+    await sleep(120)
+    note('   damaging the destroyed enemy raised ' + (errors.length - beforeA) + ' error(s)')
+
+    /* ---- B. the hero actually DOWN with a swing committed ---------------- */
+
     const lead = () => g.enemies.filter((e) => e.alive)
-      .reduce((a, b) => (a.distance > b.distance ? a : b), g.enemies[0])
+      .reduce((a, b) => (a && a.distance > b.distance ? a : b), null)
     const L = lead()
+    if (!L) { note('*** the wave emptied before part B ***'); return }
     g.orderHero(L.x, L.y)
     const swung = await until(() => hero.pendingHit !== null, 40000)
-    note('1. hero committed a swing: pendingHit set = ' + swung)
+    note('B1. hero committed a swing: pendingHit set = ' + swung)
     if (!swung) { note('*** could not get him to swing ***'); return }
-
-    // The victim the swing is committed to, before anything happens to it.
     const victim = g.enemies.find((e) => e.alive)
-    note('   victim ' + victim.def.name + ' status=' + victim.status +
-      ' alive=' + victim.alive + ' scene=' + (victim.scene ? 'set' : 'GONE'))
+    note('    victim ' + (victim ? victim.def.name : 'none') +
+      ' scene=' + (victim && victim.scene ? 'set' : 'GONE'))
 
-    // 2. Kill him on the same frame, before the impact lands.
-    g.damageHero(hero.def.maxHealth * 9)
-    note('2. hero down=' + hero.down + '   pendingHit still set = ' + (hero.pendingHit !== null) +
-      (hero.pendingHit !== null ? '  *** THE SWING SURVIVED HIS DEATH ***' : ''))
+    // ACTUALLY PUT HIM DOWN. One huge hit does not: it drops him past the 25%
+    // threshold, which fires Last Stand and makes him invulnerable for the
+    // transformation. That is why the first version of this probe only ever
+    // read down=false. Chip him down instead, through the transformation and
+    // out the far side, exactly as a wave would.
+    const t0 = performance.now()
+    while (!hero.down && performance.now() - t0 < 25000) {
+      g.damageHero(70)
+      await sleep(90)
+    }
+    note('B2. hero down = ' + hero.down + '   (took ' +
+      Math.round(performance.now() - t0) + 'ms, through ' +
+      (hero.lastStandActive ? 'DAD MODE' : 'the transformation') + ')')
+    if (!hero.down) { note('*** could not get him down ***'); return }
+    const held = hero.pendingHit !== null
+    note('    pendingHit after goDown: ' + (held ? '*** STILL SET ***' : 'null — cleared'))
 
-    // 3. Walk the whole wave into the gate while he is down.
+    /* ---- 3. the wave walks out while he is down -------------------------- */
+
     for (const e of g.enemies) if (e.alive) e.distance = g.lane.totalLength
-    await sleep(400)
-    note('3. after the escapes: victim status=' + victim.status +
-      ' alive=' + victim.alive + ' active=' + victim.active +
-      ' scene=' + (victim.scene ? 'set' : 'GONE') +
-      '   escapedThisWave=' + g.escapedThisWave + ' lives=' + g.status.lives)
-    note('   a destroyed enemy still reports alive: ' +
-      (victim.alive && !victim.scene ? 'YES — this is the hole' : 'no'))
+    await sleep(500)
+    note('B3. escapedThisWave=' + g.escapedThisWave + ' lives=' + g.status.lives +
+      '   victim scene=' + (victim && victim.scene ? 'set' : 'GONE') +
+      ' alive=' + (victim ? victim.alive : 'n/a'))
 
-    // 4. Bring him back. The stale swing lands on the next tick.
-    hero.reviveIn = 0.01
+    /* ---- 4. he comes back; nothing stale may fire ------------------------ */
+
     const before = errors.length
-    await sleep(1500)
-    note('4. revived: down=' + hero.down + '   errors since: ' + (errors.length - before))
-    for (const e of errors.slice(before)) note('   *** ' + e + ' ***')
-    note('RESULT ' + (errors.length > before
-      ? 'REPRODUCED — ' + errors.slice(before)[0]
-      : 'not reproduced; pendingHit=' + (hero.pendingHit !== null)))
+    hero.reviveIn = 0.01
+    await until(() => !hero.down, 8000)
+    await sleep(2000)
+    note('B4. revived: down=' + hero.down + '   errors since: ' + (errors.length - before))
+    for (const e of errors.slice(before)) note('    *** ' + e + ' ***')
+
+    const clean = errors.length === 0 && !doomed.alive && !held
+    note('RESULT ' + (clean
+      ? 'CLOSED — a leaked enemy reports gone, the swing did not survive his ' +
+        'death, and the revive raised no errors'
+      : '*** OPEN — ' + (errors.length ? errors[0] : '') +
+        (doomed.alive ? ' destroyed enemy still alive;' : '') +
+        (held ? ' pendingHit survived goDown;' : '') + ' ***'))
     return
   }
 

@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { ySort } from '../systems/DepthSort.ts'
+import { onBoard } from '../systems/Liveness.ts'
 import { makeShadow, PRESENTATION, deathPuff, floatingDamage } from '../systems/Presentation.ts'
 import { applyGroundRender } from '../systems/Art.ts'
 import { facesLeft } from '../systems/Facing.ts'
@@ -60,7 +61,12 @@ export class Fighter extends Phaser.GameObjects.Container {
   }
 
   get alive(): boolean {
-    return this.active && this.health > 0 && this.life > 0
+    // Same one definition as the enemies use, handed the two fields a Fighter
+    // has. It carries no `status` of its own — a summoned fighter expires, it
+    // does not die — so it is passed explicitly rather than as `this`, which
+    // would match `BoardObject` only by accident.
+    return onBoard({ active: this.active, scene: this.scene })
+      && this.health > 0 && this.life > 0
   }
 
   hurt(amount: number): void {

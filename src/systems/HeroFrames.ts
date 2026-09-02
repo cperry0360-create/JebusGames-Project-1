@@ -63,6 +63,24 @@ export class HeroFrames {
     this.impactDone = false
   }
 
+  /**
+   * Back to a standing idle, abandoning any swing in progress.
+   *
+   * The one caller is the hero going down and coming back. A swing owns the
+   * sprite until it finishes and is never interrupted — which is right while
+   * he is on his feet, and wrong across a death: the clip would otherwise sit
+   * frozen mid-attack for the whole revive and deliver its impact frame the
+   * instant he returned, firing damage he committed to before he died. This is
+   * the deliberate exception, and it is a method rather than an inline poke at
+   * the fields so the "never interrupted" rule stays true everywhere else.
+   */
+  reset(): void {
+    this.pose = 'idle'
+    this.elapsed = 0
+    this.index = 0
+    this.impactDone = false
+  }
+
   get attacking(): boolean {
     return this.pose === 'attack'
   }

@@ -493,9 +493,23 @@ this.armReadyCountdown()
       // and the second of those would be a serious bug worth chasing, so the
       // two must not look alike. Zoom is floored at cover zoom by `clampZoom`
       // and cannot reach 0 in play; a test asserts that.
+      //
+      // THREE NUMBERS, NOT ONE. The camera's `zoom` is DEVICE pixels per world
+      // unit; the ceiling in display.json is 2.37 CSS pixels per world unit,
+      // multiplied by the device ratio where the rig is built. A crash report
+      // that printed only the raw number read as "zoom 4.825 against a 2.37
+      // ceiling", which looked like a camera bug and was a units mismatch: on
+      // a dpr-3 device 4.825 is a design zoom of 1.608, below the 1.72
+      // default. Print the ratio and the design-space value beside it so that
+      // reading is not available to anyone again.
       zoom: this.cameras?.main
         ? Number(this.cameras.main.zoom.toFixed(3))
         : 'unavailable (camera torn down)',
+      dpr: deviceScale(),
+      zoomDesign: this.cameras?.main
+        ? Number((this.cameras.main.zoom / deviceScale()).toFixed(3))
+        : 'unavailable (camera torn down)',
+      zoomCeilingDesign: displayData.camera.maxZoom,
       escapedThisWave: this.escapedThisWave,
     }))
     setRunActive(true)
@@ -2597,7 +2611,9 @@ this.armReadyCountdown()
   private tickEnemies(dt: number): void {
     const survivors: Enemy[] = []
     for (const e of this.enemies) {
-      if (!e.alive || !e.active) continue
+      // `alive` now means "not dead AND still on the board", so the extra
+      // `active` check this line used to carry is folded into it.
+      if (!e.alive) continue
       if (e.tick(dt, (dmg) => this.damageBlocker(e, dmg))) {
         this.leak(e)
         continue
