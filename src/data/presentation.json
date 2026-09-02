@@ -26,7 +26,8 @@
     "lastStandHoldMs": 220
   },
   "facing": {
-    "deadZone": 0.15
+    "deadZone": 0.26,
+    "_deadZone": "How much sideways drift counts as noise before a unit turns round. Raised from 0.15 when the map was re-traced: the old lane never really went west and its steepest leg drifted 3px over 92, or 0.03 of its length. The new road genuinely bends back on itself, and its steepest leg drifts 14.5px west while dropping 69.6 — 0.20. At 0.15 that flipped an enemy round to walk down the hill backwards and then flipped it back."
   },
   "healthBar": {
     "heightPx": 4,

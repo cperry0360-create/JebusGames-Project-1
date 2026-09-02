@@ -1,148 +1,197 @@
 {
   "plate": "level1",
-  "roadWidth": 61.2,
-  "note": "Waypoints and build spots are canvas pixels, traced from the painted plate by tools/trace_map.py. The plate is 16:9 and fills the canvas, so canvas pixels are the map's own coordinate space.",
+  "roadWidth": 38.0,
+  "note": "Re-measured against the 3840x2160 plate on 2026-09-02. Every coordinate here was traced off the painting rather than adjusted from the old numbers: the lane by following the road from the arch to the gate, the arch and gate by their stonework and woodwork, the sign by the board the innkeeper is painted holding. The previous values described the 1672x941 plate, which was a DIFFERENT PICTURE — the lane left the painted road at 11 of 33 sampled columns, by up to 120px.",
   "heroStart": [
-    640,
-    300
+    521.7,
+    524.2
   ],
   "spotRadius": 34,
   "waypoints": [
     [
-      -60.0,
-      404.2
+      -57.3,
+      353.2
     ],
     [
-      131.7,
-      401.1
+      78.0,
+      389.0
     ],
     [
-      174.5,
+      138.4,
+      405.0
+    ],
+    [
+      173.7,
+      401.2
+    ],
+    [
+      213.8,
       379.7
     ],
     [
-      202.1,
-      349.1
+      240.1,
+      384.5
     ],
     [
-      229.7,
-      260.3
+      257.7,
+      340.7
     ],
     [
-      275.6,
-      223.5
+      252.2,
+      312.7
     ],
     [
-      312.3,
-      211.3
+      275.8,
+      254.0
     ],
     [
-      373.6,
-      217.4
+      276.5,
+      226.8
     ],
     [
-      410.3,
-      248.0
+      296.8,
+      210.6
     ],
     [
-      416.5,
-      263.3
+      323.0,
+      201.1
     ],
     [
-      413.4,
-      355.2
+      431.7,
+      220.1
     ],
     [
-      428.7,
-      392.0
+      459.6,
+      217.3
     ],
     [
-      490.0,
-      441.0
+      467.8,
+      274.6
     ],
     [
-      566.5,
-      468.5
+      453.3,
+      344.2
     ],
     [
-      643.1,
-      474.6
+      456.0,
+      371.5
     ],
     [
-      704.3,
-      459.3
+      471.4,
+      403.8
     ],
     [
-      762.5,
-      413.4
+      521.7,
+      454.2
     ],
     [
-      793.1,
-      339.9
+      596.8,
+      484.6
     ],
     [
-      820.7,
-      312.3
+      667.1,
+      500.4
     ],
     [
-      915.6,
-      269.5
+      677.9,
+      513.9
     ],
     [
-      943.2,
-      272.5
+      731.0,
+      507.3
     ],
     [
-      976.8,
-      290.9
+      744.8,
+      483.8
     ],
     [
-      1053.4,
-      352.2
+      753.6,
+      480.3
     ],
     [
-      1120.8,
-      385.8
+      807.4,
+      479.9
     ],
     [
-      1340.0,
-      401.1
+      827.5,
+      446.6
+    ],
+    [
+      831.8,
+      418.8
+    ],
+    [
+      871.5,
+      328.6
+    ],
+    [
+      953.7,
+      287.3
+    ],
+    [
+      989.2,
+      282.2
+    ],
+    [
+      1042.1,
+      296.1
+    ],
+    [
+      1100.0,
+      338.0
+    ],
+    [
+      1128.1,
+      373.1
+    ],
+    [
+      1150.6,
+      389.1
+    ],
+    [
+      1219.9,
+      407.2
+    ],
+    [
+      1333.1,
+      437.0
     ]
   ],
   "buildSpots": [
     [
-      162.3,
-      456.3
+      213.0,
+      449.2
     ],
     [
-      199.0,
-      202.1
+      328.5,
+      311.9
     ],
     [
-      535.9,
-      324.6
+      426.8,
+      155.1
     ],
     [
-      597.1,
-      560.4
+      396.1,
+      411.3
     ],
     [
-      796.2,
-      517.5
+      742.5,
+      414.8
     ],
     [
-      949.3,
-      382.8
+      979.8,
+      351.6
     ],
     [
-      1077.9,
-      441.0
+      1180.0,
+      464.0
     ]
   ],
   "sign": {
-    "x": 841.5,
-    "y": 187.5,
-    "boardWidth": 64
+    "x": 925.0,
+    "y": 183.0,
+    "boardWidth": 36.0,
+    "_note": "The centre of the blank board the innkeeper is painted holding, at world x 907-943, y 163-203. The sprite is the gameplay object — it carries the tap target and the bribe swap to sign_courjahan — so it goes ONTO the board rather than standing alone in grass 65px to its left, which is where the old plate put it."
   },
   "scatterExclude": [
     {
@@ -241,29 +290,30 @@
     ]
   },
   "entrance": {
-    "_note": "Measured off the painted plate: stone spans world x 0-32 (near pier), the passage is open from 33 to 83, and the far pier runs 84-128. An enemy is clear of the arch past x=128.",
-    "emergeFromX": 0.0,
-    "clearOfArchX": 128.0,
+    "_note": "Measured off the new plate: the left pier is world x 26-50, the passage is open from 50 to 98, and the right pier runs 98-116. An enemy is clear of the arch past x=130. The old values said 0-34, 33-83 and 84-128 and described a different arch.",
+    "emergeFromX": 50.0,
+    "clearOfArchX": 130.0,
     "fadeMs": 400,
     "startScale": 0.9,
     "occluders": [
       {
-        "x": 0.0,
+        "x": 26.0,
         "y": 286.0,
-        "w": 34.0,
-        "h": 140.0
+        "w": 26.0,
+        "h": 112.0
       },
       {
-        "x": 83.0,
+        "x": 98.0,
         "y": 286.0,
-        "w": 47.0,
-        "h": 140.0
+        "w": 20.0,
+        "h": 112.0
       }
     ]
   },
   "exit": {
-    "_note": "The gate is closed and painted into the plate, so enemies stop AT it. Face measured at world x 1191.",
-    "gateX": 1191.0,
+    "_note": "THE GATE IS OPEN in this plate. Its two leaves stand apart with a dark gap between them at world x 1235-1248, so the lane runs through it. gateX is that gap, not a closed face.",
+    "gateX": 1240.0,
     "puffOffsetY": -6.0
-  }
+  },
+  "_roadWidth": "Measured, not chosen. The painted road runs 36 across at the median and 46 at the ninth decile; 38 sits just above the median, so the lane stays inside the paint along almost all of it. It was 61.2, which described the old plate and is wider than the new road is anywhere."
 }
