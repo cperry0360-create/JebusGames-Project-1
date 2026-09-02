@@ -3533,6 +3533,89 @@ async function run() {
     return
   }
 
+  if (scenario === 'proximity') {
+    // IS THE RING NEAR THE THING THE PLAYER TAPPED?
+    //
+    // The 7,560-placement test asserts containment and non-overlap and never
+    // asked this, so it cannot catch a ring that is on screen, tidy, and 780px
+    // from its pad. Distance to the anchor is the missing assertion, and this
+    // measures it for both flows at both device ratios.
+    const dpr = window.devicePixelRatio || 1
+    const cam = g.cameras.main
+    g.status.peanuts = 99999
+    await sleep(400)
+    note('viewport ' + VP.w + 'x' + VP.h + '  canvas ' + game.canvas.width + 'x' +
+      game.canvas.height + '  dpr ' + dpr)
+
+    // The anchor as the scene computes it, and the same point in CSS pixels.
+    const anchorOf = (wx, wy) => ({
+      asComputed: {
+        x: (wx - cam.worldView.x) * cam.zoom + cam.x,
+        y: (wy - cam.worldView.y) * cam.zoom + cam.y,
+      },
+      inCss: {
+        x: ((wx - cam.worldView.x) * cam.zoom + cam.x) / dpr,
+        y: ((wy - cam.worldView.y) * cam.zoom + cam.y) / dpr,
+      },
+    })
+
+    const report = (label, wx, wy) => {
+      const a = anchorOf(wx, wy)
+      const boxes = g.ring ? g.ring.hitBoxes.filter((b) => !b.id.startsWith('ring:')) : []
+      if (boxes.length === 0) { note('  ' + label + ': no ring'); return 0 }
+      const d = boxes.map((b) => Math.hypot(
+        b.rect.x + b.rect.width / 2 - a.inCss.x, b.rect.y + b.rect.height / 2 - a.inCss.y))
+      const worst = Math.max(...d)
+      note('  ' + label.padEnd(22) +
+        ' anchor as computed ' + Math.round(a.asComputed.x) + ',' + Math.round(a.asComputed.y) +
+        '  in CSS ' + Math.round(a.inCss.x) + ',' + Math.round(a.inCss.y))
+      note('      buttons at ' + boxes.map((b) =>
+        Math.round(b.rect.x + b.rect.width / 2) + ',' + Math.round(b.rect.y + b.rect.height / 2)).join('  ') +
+        '   worst distance from the pad: ' + Math.round(worst) + 'px' +
+        (worst <= 140 ? '  near it' : '  *** NOWHERE NEAR IT ***'))
+      return worst
+    }
+
+    // --- BUILD, on a pad brought to the centre of the screen.
+    const sp = g.build.freeSpots()[2]
+    await lookAt(sp.x, sp.y)
+    await sleep(200)
+    g.openPadRing(sp)
+    await sleep(250)
+    const buildWorst = report('build ring', sp.x, sp.y)
+    await shot('prox-build-' + VP.w + 'x' + VP.h)
+    g.ring?.close(); await sleep(150)
+
+    // --- UPGRADE, on a tower in the same place, so the only thing that
+    //     differs between the two measurements is which flow opened the ring.
+    g.openPadRing(sp)
+    await sleep(200)
+    const first = g.ring.hitBoxes[0]
+    await click(first.rect.x + first.rect.width / 2, first.rect.y + first.rect.height / 2)
+    await sleep(150)
+    const cf = g.ring.hitBoxes.find((b) => b.id === 'ring:confirm')
+    await click(cf.rect.x + cf.rect.width / 2, cf.rect.y + cf.rect.height / 2)
+    await sleep(400)
+    const tw = g.towers[g.towers.length - 1]
+    if (tw) {
+      await lookAt(tw.x, tw.y)
+      await sleep(200)
+      g.openTowerRing(tw)
+      await sleep(250)
+      const upWorst = report('upgrade ring', tw.x, tw.y)
+      await shot('prox-upgrade-' + VP.w + 'x' + VP.h)
+      note('  the two flows differ by ' + Math.round(Math.abs(buildWorst - upWorst)) + 'px')
+    }
+
+    // --- HOW MANY BUTTONS, and what shape do they make?
+    if (g.ring) {
+      const b = g.ring.bounds
+      note('  ring bounds ' + Math.round(b.width) + 'x' + Math.round(b.height) +
+        (b.width <= 60 ? '  — a vertical line, not a ring' : ''))
+    }
+    return
+  }
+
   if (scenario === 'ring') {
     // THE RING, RENDERED. The placement is proved exhaustively in
     // tests/ringlayout.test.ts — every pad, every option count, both zoom
