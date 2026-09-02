@@ -1383,7 +1383,7 @@ this.armReadyCountdown()
     // place?" is the other half of "should I upgrade it?", and a circle over
     // grass does not answer it on its own.
     this.drawCoveredLane(tower)
-    const bonus = tower.supportBonus > 0 ? `  ·  +${Math.round(tower.supportBonus * 100)}% sheltered` : ''
+    const bonus = tower.supportBonus > 0 ? `  ·  +${Math.round(tower.supportBonus * 100)}% lit` : ''
     this.status.message = `${tower.def.name}, tier ${tower.tier}${bonus}`
     this.openTowerRing(tower)
   }
@@ -1514,7 +1514,7 @@ this.armReadyCountdown()
     }
 
     const bonus = tower.supportBonus > 0
-      ? `  ·  +${Math.round(tower.supportBonus * 100)}% sheltered` : ''
+      ? `  ·  +${Math.round(tower.supportBonus * 100)}% lit` : ''
     const tier = `Tier ${tower.tier} of ${maxTier(def)}${bonus}.`
 
     const options: RingOption[] = []
@@ -2267,10 +2267,10 @@ this.armReadyCountdown()
     }
     const earned = bannerPointsFor(outcome, RULES.banner)
     const total = addBannerPoints(earned)
-    this.status.message = won ? 'Filed on time.' : 'Overrun.'
+    this.status.message = won ? 'The line held.' : 'Overrun.'
 
     this.openDialog({
-      title: won ? 'THE LINE HELD' : 'THE LINE BROKE',
+      title: won ? 'HELD THE LINE' : 'OVERRUN',
       subtitle: verdictFor(outcome, RULES.banner),
       headline: { value: `+${earned}`, label: 'BANNER POINTS EARNED' },
       rows: [

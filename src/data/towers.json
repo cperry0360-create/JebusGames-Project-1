@@ -1,6 +1,6 @@
 {
   "withholding": {
-    "name": "Withholding Tower",
+    "name": "Slingshot",
     "archetype": "single-target",
     "sprite": "turret-ledger",
     "shot": "shot-small",
@@ -29,7 +29,7 @@
     "specializations": [
       {
         "id": "garnishment",
-        "name": "Garnishment",
+        "name": "Hailstorm",
         "cost": 320,
         "buildSeconds": 9.0,
         "damage": 1.9,
@@ -38,7 +38,7 @@
       },
       {
         "id": "payroll",
-        "name": "Payroll",
+        "name": "Repeater",
         "cost": 320,
         "buildSeconds": 9.0,
         "fireInterval": 0.55,
@@ -47,10 +47,10 @@
         "chainFalloff": 0.6
       }
     ],
-    "blurb": "Takes a little off everything that walks past. Dull, and it funds the rest."
+    "blurb": "Quick, cheap and always shooting. It will not finish anything, and it never stops."
   },
   "writeoff": {
-    "name": "Write-Off",
+    "name": "Grinder",
     "archetype": "single-target",
     "sprite": "turret-writeoff",
     "shot": "shot-heavy",
@@ -78,7 +78,7 @@
     "specializations": [
       {
         "id": "totalloss",
-        "name": "Total Loss",
+        "name": "Bonesaw",
         "cost": 600,
         "buildSeconds": 9.0,
         "damage": 2.2,
@@ -87,7 +87,7 @@
       },
       {
         "id": "carryforward",
-        "name": "Carryforward",
+        "name": "Rasp",
         "cost": 600,
         "buildSeconds": 9.0,
         "fireInterval": 0.6,
@@ -96,10 +96,10 @@
         "rampMax": 1.1
       }
     ],
-    "blurb": "Slow, heavy, single shots. Picks the biggest thing in range and removes it."
+    "blurb": "Slow, heavy, single shots. Picks the biggest thing in range and takes it apart."
   },
   "rounding": {
-    "name": "Rounding Error",
+    "name": "Mortar",
     "archetype": "aoe",
     "sprite": "turret-rounding",
     "shot": "projectile-rocket",
@@ -128,7 +128,7 @@
     "specializations": [
       {
         "id": "bankers",
-        "name": "Bankers",
+        "name": "Thunderhead",
         "cost": 500,
         "buildSeconds": 9.0,
         "splashRadius": 1.6,
@@ -137,7 +137,7 @@
       },
       {
         "id": "materiality",
-        "name": "Materiality",
+        "name": "Siege",
         "cost": 500,
         "buildSeconds": 9.0,
         "damage": 2.3,
@@ -145,10 +145,10 @@
         "bonusVsArmored": 1.9
       }
     ],
-    "blurb": "Rounds a whole cluster down at once. Small numbers, applied to everyone near."
+    "blurb": "Lobs one shell into a crowd. Small numbers, applied to everyone standing near."
   },
   "escalation": {
-    "name": "Escalation Clause",
+    "name": "Longshot",
     "archetype": "aoe",
     "sprite": "turret-escalation",
     "shot": "projectile-rocket-big",
@@ -177,7 +177,7 @@
     "specializations": [
       {
         "id": "compound",
-        "name": "Compound",
+        "name": "Marksman",
         "cost": 880,
         "buildSeconds": 9.0,
         "damage": 2.1,
@@ -187,7 +187,7 @@
       },
       {
         "id": "penalty",
-        "name": "Penalty",
+        "name": "Deadeye",
         "cost": 880,
         "buildSeconds": 9.0,
         "splashRadius": 1.55,
@@ -196,10 +196,10 @@
         "chainFalloff": 0.5
       }
     ],
-    "blurb": "Hits harder the longer it runs. Starts modest and stops being modest."
+    "blurb": "Reaches further than anything else, and hits harder the longer it keeps firing."
   },
   "extension": {
-    "name": "Filing Extension",
+    "name": "Bramble",
     "archetype": "control",
     "sprite": "turret-extension",
     "shot": "shot-ring",
@@ -229,7 +229,7 @@
     "specializations": [
       {
         "id": "deferral",
-        "name": "Deferral",
+        "name": "Thicket",
         "cost": 400,
         "buildSeconds": 9.0,
         "slowSeconds": 2.0,
@@ -239,7 +239,7 @@
       },
       {
         "id": "amendment",
-        "name": "Amendment",
+        "name": "Deadfall",
         "cost": 400,
         "buildSeconds": 9.0,
         "damage": 2.6,
@@ -247,10 +247,10 @@
         "stunSeconds": 0.6
       }
     ],
-    "blurb": "Gives everything in range more time to think, which it spends not moving."
+    "blurb": "Snags everything in range and holds it there. It barely hurts; it barely has to."
   },
   "shelter": {
-    "name": "Tax Shelter",
+    "name": "Beacon",
     "archetype": "support",
     "sprite": "turret-shelter",
     "cost": 140,
@@ -276,7 +276,7 @@
     "specializations": [
       {
         "id": "offshore",
-        "name": "Offshore",
+        "name": "Signal Fire",
         "cost": 560,
         "buildSeconds": 9.0,
         "supportRadius": 1.5,
@@ -284,7 +284,7 @@
       },
       {
         "id": "loophole",
-        "name": "Loophole",
+        "name": "Bonfire",
         "cost": 560,
         "buildSeconds": 9.0,
         "supportDamageBonus": 1.9,

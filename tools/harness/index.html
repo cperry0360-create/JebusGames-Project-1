@@ -557,41 +557,62 @@ async function run() {
   }
 
   if (scenario === 'spec') {
-    // The tier-3 fork, on the smallest screens the game claims to support.
-    g.status.peanuts = 9999
-    const cam0 = g.cameras.main
-    const spot = SPOTS.findIndex((p) => cam0.worldView.contains(p[0], p[1]))
-    const [px, py] = toScreen(SPOTS[spot][0], SPOTS[spot][1])
-    await click(px, py)
-    await sleep(350)
-    const hit = g.menu.hitAreas?.[0]
-    const b = hit.getBounds()
-    await move(b.centerX, b.centerY)
-    mouse('mousedown', b.centerX, b.centerY)
-    await sleep(300)
-    mouse('mouseup', b.centerX, b.centerY)
-    await sleep(500)
-    note('built: towers=' + g.towers.length + ' at spot ' + spot)
-    const t = g.towers[0]
-    // Straight to the choice: the panel is what is under test, not the ten
-    // minutes of play that reach it.
-    t.tier = 2
-    t.buildLeft = 0
-    note('tier=' + t.tier + ' atSpecChoice=' + t.atSpecChoice + ' tower=' + t.def.name)
-    g.openSpecChoice(t)
-    await sleep(700)
-    await shot('spec-01-choice')
-    dialogCheck('spec')
-
-    // The worst case the data holds: Escalation's Compound runs to 47
-    // characters and is the line most likely to wrap into its neighbour.
+    // THE TIER-3 FORK, on the smallest screen the game claims to support, and
+    // through the ring rather than the deleted BuildMenu this used to drive.
+    //
+    // It is where the longest names in the game live — Thunderhead, Signal
+    // Fire, Marksman — so it is where a rename shows up as a clipped word.
     const TOWERS = (await import('./js/data/towers.json', { with: { type: 'json' } })).default
-    g.dialog.close()
-    await sleep(400)
-    g.openSpecChoice({ def: TOWERS.escalation })
-    await sleep(700)
-    await shot('spec-02-longest')
-    dialogCheck('spec-longest')
+    g.status.peanuts = 999999
+    let bad = 0
+    for (const [id, def] of Object.entries(TOWERS)) {
+      if (id.startsWith('_')) continue
+      const spot = g.build.freeSpots()[0]
+      if (!spot) { note('no free pad left'); break }
+      await lookAt(spot.x, spot.y)
+      g.place(id, spot)
+      const t = g.towers[g.towers.length - 1]
+      // Straight to the choice: the panel is what is under test, not the ten
+      // minutes of play that reach it.
+      t.tier = 2
+      t.buildLeft = 0
+      g.openTowerRing(t)
+      await sleep(400)
+      const opts = g.ring ? g.ring.hitBoxes.filter((h) => !h.id.startsWith('ring:')) : []
+      note(def.name + ': tier ' + t.tier + ', ring offers ' +
+        JSON.stringify(opts.map((o) => o.id)))
+      for (const o of opts) {
+        await click(o.rect.x + o.rect.width / 2, o.rect.y + o.rect.height / 2)
+        await sleep(220)
+        const pb = g.ring && g.ring.panelBounds
+        if (!pb) { note('   ' + o.id + ': NO PANEL'); bad++; continue }
+        // Every piece of text inside the panel, against the panel's own box. A
+        // name too long for its column does not throw; it just runs off.
+        const over = []
+        const walkT = (obj) => {
+          if (obj.list) { for (const c of obj.list) walkT(c); return }
+          if (obj.text === undefined || !String(obj.text).trim()) return
+          const r = obj.getBounds()
+          if (r.x < pb.x - 1 || r.right > pb.x + pb.width + 1) {
+            over.push(String(obj.text).slice(0, 24) + ' ' + Math.round(r.width) + 'px')
+          }
+        }
+        walkT(g.ring.panelLayer)
+        note('   ' + o.id.padEnd(14) + ' panel ' + Math.round(pb.width) + 'x' +
+          Math.round(pb.height) +
+          (over.length === 0 ? '   every word inside it'
+            : '   *** RUNS OUT: ' + over.join(' | ') + ' ***'))
+        if (over.length) bad++
+      }
+      if (id === 'escalation') await shot('spec-01-choice-' + VP.w + 'x' + VP.h)
+      g.ring?.close()
+      await sleep(120)
+      g.sellTower(t)
+      await sleep(120)
+    }
+    note('RESULT ' + (bad === 0
+      ? 'every tier-3 name fits the panel it is drawn in'
+      : '*** ' + bad + ' panel(s) with text running out ***'))
     return
   }
 

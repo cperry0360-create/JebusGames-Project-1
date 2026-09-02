@@ -1,7 +1,7 @@
 {
   "lateFiler": {
-    "name": "Late Filer",
-    "flavor": "Shambling, penalised, and still technically compliant.",
+    "name": "Bruiser",
+    "flavor": "Slow, wide and hard to move. Walks through what it can.",
     "role": "basic",
     "tier": "basic",
     "sprite": "enemy-filer",
@@ -15,8 +15,8 @@
     "blockable": true
   },
   "shredder": {
-    "name": "Shredder",
-    "flavor": "Fast, loud, and legally required to destroy the evidence.",
+    "name": "Scrapper",
+    "flavor": "Quick, thin and in a hurry. Gone before you have aimed.",
     "role": "fast",
     "tier": "basic",
     "sprite": "enemy-shredder",
@@ -30,8 +30,8 @@
     "blockable": true
   },
   "finalNotice": {
-    "name": "Final Notice",
-    "flavor": "Bold red lettering. Structurally reinforced. Deeply unreasonable.",
+    "name": "Buckethead",
+    "flavor": "Plated head to foot. Whatever you hit it with, hit it harder.",
     "role": "armored",
     "tier": "elite",
     "sprite": "enemy-notice",

@@ -1,7 +1,7 @@
 {
   "waves": [
     {
-      "name": "Paperwork",
+      "name": "First Light",
       "spawns": [
         {
           "enemy": "lateFiler",
@@ -12,7 +12,7 @@
       ]
     },
     {
-      "name": "More Paperwork",
+      "name": "Scouts",
       "spawns": [
         {
           "enemy": "lateFiler",
@@ -23,7 +23,7 @@
       ]
     },
     {
-      "name": "Deadline",
+      "name": "The Rabble",
       "spawns": [
         {
           "enemy": "lateFiler",
@@ -40,7 +40,7 @@
       ]
     },
     {
-      "name": "Certified Mail",
+      "name": "Tin and Bone",
       "spawns": [
         {
           "enemy": "lateFiler",
@@ -57,7 +57,7 @@
       ]
     },
     {
-      "name": "Audit Season",
+      "name": "Pressure",
       "spawns": [
         {
           "enemy": "shredder",
@@ -74,7 +74,7 @@
       ]
     },
     {
-      "name": "Registered Post",
+      "name": "The Long Push",
       "spawns": [
         {
           "enemy": "finalNotice",
@@ -91,7 +91,7 @@
       ]
     },
     {
-      "name": "Quarterly Filing",
+      "name": "Breaking Ground",
       "spawns": [
         {
           "enemy": "lateFiler",
@@ -114,7 +114,7 @@
       ]
     },
     {
-      "name": "Collections",
+      "name": "Hardened",
       "spawns": [
         {
           "enemy": "lateFiler",
@@ -137,7 +137,7 @@
       ]
     },
     {
-      "name": "Second Notice",
+      "name": "The Swarm",
       "spawns": [
         {
           "enemy": "finalNotice",
@@ -160,7 +160,7 @@
       ]
     },
     {
-      "name": "Penalty Interest",
+      "name": "No Quarter",
       "spawns": [
         {
           "enemy": "shredder",
@@ -183,7 +183,7 @@
       ]
     },
     {
-      "name": "Levy",
+      "name": "The Gathering",
       "spawns": [
         {
           "enemy": "finalNotice",
@@ -206,7 +206,7 @@
       ]
     },
     {
-      "name": "Final Assessment",
+      "name": "Last Light",
       "spawns": [
         {
           "enemy": "finalNotice",

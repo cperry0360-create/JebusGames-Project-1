@@ -50,10 +50,10 @@
     "perLifeRemaining": 1,
     "cleanLivesFraction": 0.5,
     "verdicts": {
-      "flawless": "Not one of them got through. Immaculate records.",
-      "clean": "A few slipped past. Nothing an amendment will not cover.",
-      "narrow": "Filed under duress, and filed.",
-      "lost": "They reached the filing cabinet."
+      "flawless": "Not a scratch. Nothing reached the gate.",
+      "clean": "A few got through. The line held.",
+      "narrow": "Barely standing.",
+      "lost": "The doors are open."
     }
   }
 }
