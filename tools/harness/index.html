@@ -331,15 +331,21 @@ async function build(spotIndex, towerIndex = 0) {
   }
   const [x, y] = toScreen(wx, wy)
   await click(x, y)
-  if (!g.menu?.isOpen) { note(`build@${spotIndex}: menu did not open`); return false }
-  const hit = g.menu.hitAreas?.[towerIndex]
-  if (!hit) { note(`build@${spotIndex}: no option ${towerIndex}`); return false }
-  const b = hit.getBounds()
-  await move(b.centerX, b.centerY)
-  mouse('mousedown', b.centerX, b.centerY)
-  await sleep(300)
-  mouse('mouseup', b.centerX, b.centerY)
+  // THE RING, not the deleted BuildMenu. This helper still drove `g.menu` long
+  // after BuildMenu was removed, so every scenario that built a tower through
+  // it had been throwing rather than testing.
+  if (!g.ring) { note(`build@${spotIndex}: the ring did not open`); return false }
+  const opts = g.ring.hitBoxes.filter((h) => !h.id.startsWith('ring:'))
+  const pick = opts[towerIndex]
+  if (!pick) { note(`build@${spotIndex}: no option ${towerIndex} of ${opts.length}`); return false }
+  await click(pick.rect.x + pick.rect.width / 2, pick.rect.y + pick.rect.height / 2)
+  await sleep(180)
+  // The ring buys on a second, explicit press: the first opened a description.
+  const confirm = g.ring?.hitBoxes.find((h) => h.id === 'ring:confirm')
+  if (!confirm) { note(`build@${spotIndex}: no confirm button`); return false }
+  await click(confirm.rect.x + confirm.rect.width / 2, confirm.rect.y + confirm.rect.height / 2)
   await sleep(260)
+  g.ring?.close()
   return g.towers.length > before
 }
 
@@ -3261,6 +3267,200 @@ async function run() {
     note('RESULT ' + (bad === 0
       ? 'the gear opens it, every control is on screen and pressable, and the board is inert'
       : '*** ' + bad + ' problem(s) above ***'))
+    return
+  }
+
+  if (scenario === 'full13') {
+    // A WHOLE RUN, WATCHED. Nothing has been played end to end since the map
+    // was re-traced, and every other scenario is targeted at one thing.
+    //
+    // The point is not "did it throw". It is to look at what a player would
+    // see: where things are, whether anything is on top of anything else,
+    // whether the board keeps up, and whether every wave actually resolves.
+    const MAPD = (await import('./js/data/map.json', { with: { type: 'json' } })).default
+    const RL = await import('./js/systems/RingLayout.js')
+    const P = (await import('./js/data/presentation.json', { with: { type: 'json' } })).default
+    const dpr = window.devicePixelRatio || 1
+    note('viewport ' + VP.w + 'x' + VP.h + '  dpr ' + dpr + '  game speed ' + GAME_SPEED + 'x')
+
+    const problems = []
+    const seen = new Set()
+    const flag = (key, text) => {
+      if (seen.has(key)) return
+      seen.add(key)
+      problems.push(text)
+      note('  !! ' + text)
+    }
+    addEventListener('error', (e) => flag('err:' + e.message, 'page error: ' + e.message))
+
+    // FRAME RATE, on its own rAF loop. Counting inside the driver's own
+    // polling loop measures the driver, not the game — the first run of this
+    // reported "100% long frames" because the loop sleeps 220ms between
+    // checks, which says nothing about how the game is drawing.
+    let frames = 0
+    let slow = 0
+    let worstFrame = 0
+    let ticking = true
+    ;(function tick(last) {
+      if (!ticking) return
+      requestAnimationFrame((now) => {
+        if (last) {
+          const dt = now - last
+          frames++
+          if (dt > 120) slow++
+          if (dt > worstFrame) worstFrame = dt
+        }
+        tick(now)
+      })
+    })(0)
+
+    // Everything else watched on the driver's own loop, which is often enough
+    // for a position or an overlap.
+    const watch = () => {
+
+      for (const e of g.enemies) {
+        if (!e.alive) continue
+        if (!Number.isFinite(e.x) || !Number.isFinite(e.y)) flag('nan', 'an enemy has a NaN position')
+        // Off the painted plate entirely, past where the lane can put it.
+        if (e.x < -80 || e.x > 1340 || e.y < -60 || e.y > 780) {
+          flag('offplate', 'an enemy walked off the plate at ' +
+            Math.round(e.x) + ',' + Math.round(e.y))
+        }
+        const a = e.art ? e.art.alpha : 1
+        // Part-transparent between the arch and the gate gap is a fade in the
+        // open road.
+        if (a > 0.02 && a < 0.98 && e.x > MAPD.entrance.clearOfArchX + 1
+          && e.x < MAPD.exit.gateX - 1) {
+          flag('fade', 'an enemy is ' + a.toFixed(2) + ' opaque in open road at x=' + Math.round(e.x))
+        }
+      }
+      for (const t of g.towers) {
+        if (t.x < 0 || t.x > 1280 || t.y < 0 || t.y > 720) {
+          flag('tower', 'a tower is off the map at ' + Math.round(t.x) + ',' + Math.round(t.y))
+        }
+      }
+      if (g.hero && (!Number.isFinite(g.hero.x) || !Number.isFinite(g.hero.y))) {
+        flag('heronan', 'the hero has a NaN position')
+      }
+      // The HUD against itself, live rather than from the layout arithmetic.
+      const L = hud.layout
+      const boxes = [['counters', L.counters], ['start', L.startButton],
+        ['hero row', L.heroRow], ['message', L.messageRow],
+        ['abilities', L.abilities], ['settings', L.settings]]
+      for (let i = 0; i < boxes.length; i++) {
+        for (let j = i + 1; j < boxes.length; j++) {
+          const a = boxes[i][1], b = boxes[j][1]
+          if (a.x < b.x + b.width && b.x < a.x + a.width
+            && a.y < b.y + b.height && b.y < a.y + a.height) {
+            flag('hud:' + boxes[i][0] + boxes[j][0],
+              'the ' + boxes[i][0] + ' overlaps the ' + boxes[j][0])
+          }
+        }
+      }
+      for (const r of boxes) {
+        const b = r[1]
+        if (b.x < -0.5 || b.y < -0.5 || b.x + b.width > VP.w + 0.5 || b.y + b.height > VP.h + 0.5) {
+          flag('off:' + r[0], 'the ' + r[0] + ' is off screen')
+        }
+      }
+    }
+
+    const hud = scene('Hud')
+    const spend = async () => {
+      for (let i = 0; i < SPOTS.length; i++) {
+        if (!g.build.isFree(i)) continue
+        const cheapest = Math.min(...g.status.unlockedTowers.map((id) => g.towerDefs[id].cost))
+        if (g.status.peanuts < cheapest) break
+        if (!(await build(i, 0))) break
+      }
+      for (const t of g.towers) {
+        if (t.upgrading || t.isMaxed) continue
+        const step = t.atSpecChoice ? t.def.specializations[0] : t.def.tiers[t.tier - 1]
+        if (!step || g.status.peanuts < step.cost) continue
+        g.status.peanuts -= step.cost
+        t.beginUpgrade(t.atSpecChoice ? step.id : null)
+      }
+    }
+    const useAbilities = () => {
+      if (g.enemies.length === 0) return
+      const lead = g.enemies.reduce((a, b) => (a.distance > b.distance ? a : b))
+      for (const id of g.status.abilities) {
+        if (!g.cooldowns.ready(id)) continue
+        g.fireAbility(id, lead.x, lead.y)
+      }
+    }
+
+    const WAVES = (await import('./js/data/waves.json', { with: { type: 'json' } })).default.waves
+    const rows = []
+    let lastLives = g.status.lives
+    let lastEarned = g.status.peanutsEarned
+    let shotWave = -1
+    let guard = 0
+    const t0 = performance.now()
+
+    while (g.status.phase !== 'won' && g.status.phase !== 'lost' && guard++ < 6000) {
+      watch()
+      if (g.status.phase === 'ready') {
+        const w = g.status.wave
+        if (w > 0) {
+          rows.push({ w, name: WAVES[w - 1] ? WAVES[w - 1].name : '?',
+            lost: lastLives - g.status.lives,
+            earned: g.status.peanutsEarned - lastEarned,
+            purse: g.status.peanuts, towers: g.towers.length, lives: g.status.lives })
+          lastLives = g.status.lives
+          lastEarned = g.status.peanutsEarned
+        }
+        await spend()
+        await key('Space')
+        await sleep(200)
+        continue
+      }
+      // One picture per wave, taken mid-wave rather than between them. The
+      // threshold is ONE enemy, not three: the boss wave puts a single figure
+      // on the board, so a higher bar silently skipped the only wave anybody
+      // would want a picture of.
+      if (g.status.wave !== shotWave && g.enemies.length >= 1) {
+        shotWave = g.status.wave
+        await shot('run-w' + String(shotWave).padStart(2, '0') + '-' + VP.w + 'x' + VP.h)
+      }
+      useAbilities()
+      if (g.enemies.length > 0 && !g.hero.down) {
+        const lead = g.enemies.reduce((a, b) => (a.distance > b.distance ? a : b))
+        const pt = g.lane.pointAt(Math.min(lead.distance + 90, g.lane.totalLength - 40))
+        if (Math.hypot(g.hero.rally.x - pt.x, g.hero.rally.y - pt.y) > 60) {
+          g.hero.setRally(pt.x, pt.y)
+        }
+      }
+      await sleep(220)
+    }
+    watch()
+    rows.push({ w: g.status.wave, name: WAVES[g.status.wave - 1] ? WAVES[g.status.wave - 1].name : '?',
+      lost: lastLives - g.status.lives, earned: g.status.peanutsEarned - lastEarned,
+      purse: g.status.peanuts, towers: g.towers.length, lives: g.status.lives })
+
+    const secs = (performance.now() - t0) / 1000
+    note('finished in ' + secs.toFixed(0) + 's of real time, phase=' + g.status.phase +
+      '  guard=' + guard)
+    note('wave  name              lost  earned  purse  towers  lives')
+    for (const r of rows) {
+      note('  ' + String(r.w).padStart(2) + '  ' + String(r.name).padEnd(17) +
+        String(r.lost).padStart(4) + String(r.earned).padStart(8) +
+        String(r.purse).padStart(7) + String(r.towers).padStart(8) +
+        String(r.lives).padStart(7))
+    }
+    ticking = false
+    note('drew ' + frames + ' frames in ' + secs.toFixed(0) + 's — ' +
+      (frames / secs).toFixed(1) + ' fps, ' + slow + ' over 120ms (' +
+      (100 * slow / Math.max(1, frames)).toFixed(0) + '%), worst ' +
+      worstFrame.toFixed(0) + 'ms')
+    note('every wave reached: ' + (rows.length >= 13 ? 'yes, ' + rows.length + ' recorded'
+      : '*** ONLY ' + rows.length + ' ***'))
+    note('missing art: ' + JSON.stringify(g.missingArt ?? scene('Boot')?.missingArt ?? 'none reported'))
+    await sleep(700)
+    await shot('run-end-' + VP.w + 'x' + VP.h)
+    note('RESULT ' + (problems.length === 0
+      ? 'a full run, ' + g.status.phase + ', with nothing out of place'
+      : '*** ' + problems.length + ' problem(s): ' + problems.join(' | ') + ' ***'))
     return
   }
 
