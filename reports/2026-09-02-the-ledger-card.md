@@ -41,7 +41,7 @@ which was chosen and why.
 
 **1. No base-tower phrase carries a number that tier 2 changes.** A phrase is
 per tower and per branch, not per tier, so anything tier 2 multiplies had to
-stay out of it. Slingshot's pierce goes 5 → 8 and Beacon's bonus 0.30 → 0.47,
+stay out of it. Slingshot's pierce goes 5 → 8 and Beacon's bonus +30% → +47%,
 which is why neither phrase names its figure. `slowFactor` is the exception
 that could have: no tier and no branch multiplies it, so "Slows by 45%" is true
 everywhere Bramble exists.
@@ -141,7 +141,7 @@ from, and it cannot.
 | Mortar | 8 / 132 / 0.9 | 16 / 143 / 1 | **Thunderhead** 22 / 143 / 1 | **Siege** 38 / 143 / 1 |
 | Longshot | 11 / 215 / 0.4 | 22 / 232 / 0.5 | **Marksman** 52 / 232 / 0.5 | **Deadeye** 22 / 279 / 0.5 |
 | Bramble | 9 / 142 / 1.1 | 18 / 153 / 1.2 | **Thicket** 18 / 176 / 1.2 | **Deadfall** 46 / 153 / 1.2 |
-| Beacon | +30% / 215 | +46% / 237 | **Signal Fire** +46% / 355 | **Bonfire** +88% / 213 |
+| Beacon | +30% / 215 | +47% / 237 | **Signal Fire** +47% / 355 | **Bonfire** +88% / 213 |
 
 (dps / range / rate; Beacon is boost / range.)
 

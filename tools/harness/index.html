@@ -4780,6 +4780,60 @@ async function run() {
       await sleep(200)
     }
 
+    // THE FLOOR, FORCED.
+    //
+    // The walk above never reached it: `panelWidthFor` takes the room beside
+    // the ring's ACTUAL position, and on this map even a 568x320 screen leaves
+    // 223px on one side, so every card measured came out 223-226 wide. The
+    // narrow branch is real code on a path this board does not produce, and
+    // "we never saw it break" is not the same as "it works". So the card is
+    // composed directly at `panelMinWidth` and measured there.
+    const floorW = P.ring.panelMinWidth
+    g.openTowerRing(g.towers[0] || null)
+    await sleep(200)
+    if (!g.ring) {
+      // No tower left standing after the walk; build one to have an option.
+      await until(() => g.build.freeSpots().length > 0, 8000)
+      const sp = g.build.freeSpots()[0]
+      g.status.unlockedTowers = [ids[0]]
+      g.place(ids[0], sp)
+      await sleep(300)
+      g.openTowerRing(g.towers[g.towers.length - 1])
+      await sleep(300)
+    }
+    if (g.ring && g.ring.opts.options.length) {
+      const opt = g.ring.opts.options[0]
+      const built = g.ring.composeCard(opt, floorW)
+      const labels = built.parts.filter((o) => o.type === 'Text').map((o) => o.text)
+      let spill = 0, wrapped = 0
+      for (const o of built.parts) {
+        if (o.type !== 'Text') continue
+        const b = o.getBounds()
+        if (b.x < -0.5 || b.x + b.width > floorW + 0.5) {
+          spill++
+          note('   FLOOR SPILL "' + o.text + '" ' + Math.round(b.x) + '..' +
+            Math.round(b.x + b.width) + ' of ' + floorW)
+        }
+        if (o.height > Number(String(o.style.fontSize).replace('px','')) * 1.6) {
+          wrapped++
+          note('   FLOOR WRAP "' + o.text + '"')
+        }
+      }
+      const stats = labels.filter((t) => ['dps','range','rate','boost'].includes(t))
+      note('at the ' + floorW + 'px floor: h=' + built.height +
+        '  numbers=' + JSON.stringify(stats) + '  ' + JSON.stringify(labels))
+      note('FLOOR ' + (spill === 0 && wrapped === 0 && !stats.includes('rate') &&
+        stats.includes('dps') && stats.includes('range')
+        ? 'drops rate, keeps dps and range, nothing wraps or spills'
+        : '*** wrong: spill=' + spill + ' wrap=' + wrapped +
+          ' numbers=' + JSON.stringify(stats) + ' ***'))
+      if (spill || wrapped) problems.push('the ' + floorW + 'px floor card does not fit')
+      built.parts.forEach((o) => o.destroy())
+      g.ring.close()
+    } else {
+      problems.push('could not open a ring to compose a floor card from')
+    }
+
     note('cards measured: ' + cards)
     note('card heights seen: ' + JSON.stringify([...heights]) +
       (heights.size === 1 ? '  — one height, as designed' : '  *** the height varies ***'))
