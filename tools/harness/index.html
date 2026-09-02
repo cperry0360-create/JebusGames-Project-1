@@ -3464,6 +3464,67 @@ async function run() {
     return
   }
 
+  if (scenario === 'crashw5') {
+    // REPRODUCING THE WAVE 5 CRASH: "undefined is not an object evaluating
+    // 'G.add'", reached through applyPose -> pendingHit -> damageEnemy -> hurt.
+    //
+    // The hypothesis, forced rather than waited for:
+    //   1. the hero commits a swing, capturing its victims in `pendingHit`
+    //   2. he is killed before the impact frame arrives, so tick() early-
+    //      returns and pendingHit is left set, holding those enemies
+    //   3. while he is down the wave walks past unblocked and leak() calls
+    //      enemy.destroy() on one of them — its status stays 'walking', so
+    //      nothing that asks "is it alive?" can tell
+    //   4. he revives, applyPose runs, the stale swing lands on a destroyed
+    //      object, and floatingDamage reads `undefined.add`
+    const errors = []
+    addEventListener('error', (e) => errors.push(e.message))
+    const hero = g.hero
+    g.status.wave = 4
+    g.startWave()
+    await until(() => g.enemies.some((e) => e.alive && e.art.alpha > 0.9), 60000)
+
+    // Put him on the lane in front of the leader so he engages.
+    const lead = () => g.enemies.filter((e) => e.alive)
+      .reduce((a, b) => (a.distance > b.distance ? a : b), g.enemies[0])
+    const L = lead()
+    g.orderHero(L.x, L.y)
+    const swung = await until(() => hero.pendingHit !== null, 40000)
+    note('1. hero committed a swing: pendingHit set = ' + swung)
+    if (!swung) { note('*** could not get him to swing ***'); return }
+
+    // The victim the swing is committed to, before anything happens to it.
+    const victim = g.enemies.find((e) => e.alive)
+    note('   victim ' + victim.def.name + ' status=' + victim.status +
+      ' alive=' + victim.alive + ' scene=' + (victim.scene ? 'set' : 'GONE'))
+
+    // 2. Kill him on the same frame, before the impact lands.
+    g.damageHero(hero.def.maxHealth * 9)
+    note('2. hero down=' + hero.down + '   pendingHit still set = ' + (hero.pendingHit !== null) +
+      (hero.pendingHit !== null ? '  *** THE SWING SURVIVED HIS DEATH ***' : ''))
+
+    // 3. Walk the whole wave into the gate while he is down.
+    for (const e of g.enemies) if (e.alive) e.distance = g.lane.totalLength
+    await sleep(400)
+    note('3. after the escapes: victim status=' + victim.status +
+      ' alive=' + victim.alive + ' active=' + victim.active +
+      ' scene=' + (victim.scene ? 'set' : 'GONE') +
+      '   escapedThisWave=' + g.escapedThisWave + ' lives=' + g.status.lives)
+    note('   a destroyed enemy still reports alive: ' +
+      (victim.alive && !victim.scene ? 'YES — this is the hole' : 'no'))
+
+    // 4. Bring him back. The stale swing lands on the next tick.
+    hero.reviveIn = 0.01
+    const before = errors.length
+    await sleep(1500)
+    note('4. revived: down=' + hero.down + '   errors since: ' + (errors.length - before))
+    for (const e of errors.slice(before)) note('   *** ' + e + ' ***')
+    note('RESULT ' + (errors.length > before
+      ? 'REPRODUCED — ' + errors.slice(before)[0]
+      : 'not reproduced; pendingHit=' + (hero.pendingHit !== null)))
+    return
+  }
+
   if (scenario === 'looptrack') {
     // The level 1 track does not loop seamlessly and fades out at the end, so
     // it repeats with a gap and fades back in rather than cutting. Watched at
