@@ -71,8 +71,9 @@ test('the damage fires on the impact frame, not when the swing starts', () => {
   assert.notEqual(firedAt, -1, 'the swing never landed')
   assert.equal(frameAtFire, DEF.impactFrame - 1, 'the hit fired on the wrong frame')
   assert.ok(firedAt > 0, 'the hit fired on the first tick, before the axe moved')
-  // Roughly two frame-times in, at 12fps that is about 167ms.
-  const expected = (DEF.impactFrame - 1) / DEF.fps
+  // Roughly two ATTACK frame-times in, at 12fps that is about 167ms. The walk
+  // runs at half that rate and must not drag the swing out with it.
+  const expected = (DEF.impactFrame - 1) / DEF.attackFps
   assert.ok(Math.abs(firedAt - expected) < 0.02,
     `landed at ${(firedAt * 1000).toFixed(0)}ms, expected about ${(expected * 1000).toFixed(0)}ms`)
 })
@@ -153,4 +154,22 @@ test('a missing frame falls back to the idle rather than blanking the hero', () 
     assert.ok(ART.optional.includes(k), `${k} is not optional, so a miss would fail loudly`)
     assert.ok(ART.files[k], `${k} is not in the manifest`)
   }
+})
+
+test('the walk cycle matches the ground the hero actually covers', () => {
+  // The slide, as arithmetic. A 4-frame cycle is two steps, so the stride is
+  // (speed / (fps / frames)) / 2 world pixels, and a human stride is about
+  // 0.4-0.45 of body height. At the shipped 12fps Cory took 0.22 body-height
+  // steps while covering 104 px/s, which is exactly what sliding looks like.
+  const cory = read('heroes').cory
+  const bodyHeight = ART.render['hero-cory'].displayHeight
+  const cycleSeconds = DEF.walkFrames / DEF.walkFps
+  const stride = (cory.moveSpeed * cycleSeconds) / 2
+  const ratio = stride / bodyHeight
+  assert.ok(ratio > 0.36 && ratio < 0.52,
+    `a ${stride.toFixed(1)}px step on a ${bodyHeight}px body is ${ratio.toFixed(2)} ` +
+    'body-heights; a human stride is 0.40-0.45')
+  // And the attack keeps its own, faster rate.
+  assert.ok(DEF.attackFps > DEF.walkFps,
+    'the attack runs no faster than the walk, so the swing telegraph got longer')
 })

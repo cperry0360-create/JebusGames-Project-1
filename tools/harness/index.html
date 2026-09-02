@@ -1689,6 +1689,24 @@ async function run() {
     await until(() => g.enemies.length > 1, 30000)
     await sleep(600)
 
+    // THE TARGETING OVERLAY, before any cast. It is an outline along the two
+    // edges of the legal strip now, not a wash over the middle of it, and the
+    // only honest check of that is a picture.
+    g.armAbility('gnomes')
+    await sleep(400)
+    note('targeting overlay: mode=' + g.status.mode + ' msg="' + g.status.message + '"')
+    await shot('gnomes-00-band-' + VP.w + 'x' + VP.h)
+    // Zoomed out, so a bend is in frame: the cull that stops the outline
+    // folding over itself only shows up on one.
+    for (let i = 0; i < 24; i++) {
+      game.canvas.dispatchEvent(new WheelEvent('wheel',
+        { deltaY: 120, clientX: VP.w / 2, clientY: VP.h / 2, bubbles: true }))
+    }
+    await sleep(1200)
+    await shot('gnomes-00b-band-wide-' + VP.w + 'x' + VP.h)
+    g.cancelTargeting ? g.cancelTargeting() : (g.status.mode = 'normal')
+    await sleep(200)
+
     // Off the path first: a gnome in a field blocks nothing, so the cast has
     // to be refused rather than wasted.
     const off = [g.build.spots[0].x, g.build.spots[0].y]
@@ -2971,31 +2989,46 @@ async function run() {
     return
   }
 
-  if (scenario === 'tavern') {
-    // The glow and smoke coordinates were estimated off the painted plate, so
-    // they have to be looked at rather than trusted.
-    const cam = g.cameras.main
+  if (scenario === 'moes') {
+    // The tavern, after the re-trace and after the ambience was deleted.
+    // Three things at once, because they are all in the same corner of the
+    // plate: Moe's sign sprite must be ON the painted board the innkeeper is
+    // holding, nothing may be glowing or smoking over the painted art, and the
+    // HUD's hero row must be clear of the painted signboard.
     const M = (await import('./js/data/map.json', { with: { type: 'json' } })).default
-    const lights = M.ambient.lights
-    const cx = lights.reduce((a, l) => a + l.x, 0) / lights.length
-    const cy = lights.reduce((a, l) => a + l.y, 0) / lights.length
-    cam.centerOn(cx, cy - 20)
-    note('lights ' + lights.length + ' centred on ' + Math.round(cx) + ',' + Math.round(cy))
-    note('chimney ' + JSON.stringify(M.ambient.chimneys))
-    await sleep(400)
-    await shot('tavern-01-' + VP.w + 'x' + VP.h)
-    await sleep(2200)
-    await shot('tavern-02-smoke-' + VP.w + 'x' + VP.h)
-    // Alphas must be moving, and not in unison.
-    const glows = g.children.list.filter((o) => o.type === 'Image' && o.blendMode === 1)
-    note('additive glows on the board: ' + glows.length)
-    const a1 = glows.map((o) => o.alpha.toFixed(3))
-    await sleep(500)
-    const a2 = glows.map((o) => o.alpha.toFixed(3))
-    note('alphas moved: ' + (a1.join() !== a2.join() ? 'yes' : 'NO *** static ***'))
-    note('all in unison: ' + (new Set(a2).size <= 1 ? 'YES *** they should differ ***' : 'no, ' + new Set(a2).size + ' distinct'))
-    note('alpha range now ' + Math.min(...glows.map((o) => o.alpha)).toFixed(2) +
-      '..' + Math.max(...glows.map((o) => o.alpha)).toFixed(2))
+    const hud = scene('Hud')
+    note('viewport ' + VP.w + 'x' + VP.h + '  dpr ' + (window.devicePixelRatio || 1))
+    note('map.sign ' + JSON.stringify(M.sign.x) + ',' + M.sign.y +
+      ' boardWidth ' + M.sign.boardWidth + ' (painted board is world x 907-943, ~36 across)')
+    note('map.ambient present: ' + (M.ambient !== undefined))
+
+    // Nothing additive and nothing emitting. Both were the tavern overlay.
+    const additive = g.children.list.filter((o) => o.blendMode === 1)
+    const emitters = g.children.list.filter((o) => o.type === 'ParticleEmitter')
+    note('additive glows: ' + additive.length + '   particle emitters: ' + emitters.length)
+
+    await lookAt(M.sign.x, M.sign.y + 40)
+    await sleep(600)
+    // The sprite inside the wrapper: SignBribe is not a GameObject, so it has
+    // no x of its own and reading one gives NaN.
+    const sp = g.sign.sprite
+    const b = sp.getBounds()
+    note('sign sprite at world ' + Math.round(sp.x) + ',' + Math.round(sp.y) +
+      '  bounds ' + [b.x, b.y, b.width, b.height].map(Math.round).join(',') +
+      '  (the painted board is world 907,163 .. 943,203)')
+    await shot('moes-sign-' + VP.w + 'x' + VP.h)
+
+    // And the HUD over it, at the zoom where the whole board is on screen.
+    for (let i = 0; i < 30; i++) {
+      game.canvas.dispatchEvent(new WheelEvent('wheel',
+        { deltaY: 120, clientX: VP.w / 2, clientY: VP.h / 2, bubbles: true }))
+    }
+    await sleep(1400)
+    g.rig.targetCenterY = 0
+    await sleep(1000)
+    const L = hud.layout
+    note('heroRow ' + JSON.stringify(L.heroRow) + '  messageRow ' + JSON.stringify(L.messageRow))
+    await shot('moes-hud-' + VP.w + 'x' + VP.h)
     return
   }
 
@@ -3253,15 +3286,18 @@ async function run() {
 
   if (scenario === 'gateway') {
     // REQUIREMENT 11, watched frame by frame rather than judged from a still.
-    // Nothing may appear or disappear in open ground: an enemy that is visible
-    // at all must be at or past the arch mouth, and an enemy that leaves must
-    // leave at the gate rather than anywhere else.
+    // Nothing may appear or disappear in OPEN GROUND. There are two places
+    // where a fade is not only allowed but required — inside the arch on the
+    // way in, and inside the open gate's gap on the way out — and everywhere
+    // between them an enemy is either fully there or not there at all.
     const MAPD = (await import('./js/data/map.json', { with: { type: 'json' } })).default
     const mouthX = MAPD.entrance.emergeFromX
     const clearX = MAPD.entrance.clearOfArchX
     const gateX = MAPD.exit.gateX
+    const vanishX = MAPD.exit.vanishX
     note('viewport ' + VP.w + 'x' + VP.h)
-    note('arch mouth x=' + mouthX + '  clear of arch x=' + clearX + '  gate face x=' + gateX)
+    note('arch mouth x=' + mouthX + '  clear of arch x=' + clearX +
+      '  gate gap x=' + gateX + '..' + vanishX)
 
     // Deliberately no towers. With a board that can kill, wave one dies on the
     // way and the gate is never reached — the first run of this scenario
@@ -3294,9 +3330,10 @@ async function run() {
           visibleBeforeArch++
           if (!worstEarly || e.x < worstEarly.x) worstEarly = { x: e.x, alpha: a }
         }
-        // (b) nothing part-transparent once past the arch: no fade in open
-        //     ground, and no fade-out at the exit either.
-        if (a < 0.98 && e.x > clearX + 1) {
+        // (b) nothing part-transparent between the arch and the gate gap.
+        //     The fade at each end is the point; a fade anywhere between them
+        //     is an enemy dissolving in the middle of the road.
+        if (a < 0.98 && e.x > clearX + 1 && e.x < gateX - 1) {
           fadedInOpen++
           if (!worstFade || a < worstFade.alpha) worstFade = { x: e.x, alpha: a }
         }
@@ -3338,17 +3375,22 @@ async function run() {
     const atGate = departures.filter((d) => d.x >= gateX - 12)
     const killed = departures.filter((d) => d.x < gateX - 12)
     note('  left at the gate: ' + atGate.length + '   killed on the way: ' + killed.length)
-    const fadedOut = departures.filter((d) => d.x >= gateX - 12 && d.alpha < 0.98)
-    note('  arrived at the gate part-transparent: ' + fadedOut.length + ' (must be 0)')
+    // The gate stands OPEN in this plate, so an enemy that gets out has to be
+    // gone by the time it clears the far leaf rather than standing at a face
+    // it cannot pass. The old assertion here was the exact opposite — arriving
+    // at full opacity — and it was right about a gate that was painted shut.
+    const stillSolid = departures.filter((d) => d.x >= gateX - 12 && d.alpha > 0.25)
+    note('  still visible on the way out: ' + stillSolid.length + ' (must be 0)')
     for (const d of atGate.slice(0, 4)) {
-      note('    gate arrival at x=' + d.x.toFixed(0) + ' alpha ' + d.alpha.toFixed(2))
+      note('    gate departure at x=' + d.x.toFixed(0) + ' alpha ' + d.alpha.toFixed(2))
     }
 
     const occ = g.archOccluders || []
     note('  arch occluders drawn: ' + occ.length +
       (occ.length ? ' at depth ' + occ.map((o) => o.depth.toFixed(0)).join(', ') : ''))
     await shot('gateway-' + VP.w + 'x' + VP.h)
-    const ok = visibleBeforeArch === 0 && fadedInOpen === 0 && fadedOut.length === 0 && occ.length === 2
+    const ok = visibleBeforeArch === 0 && fadedInOpen === 0 && stillSolid.length === 0 &&
+      atGate.length > 0 && occ.length === 2
     note('RESULT ' + (ok
       ? 'nothing appears or disappears in open ground'
       : '*** SOMETHING APPEARS OR DISAPPEARS IN OPEN GROUND ***'))

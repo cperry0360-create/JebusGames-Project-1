@@ -93,7 +93,7 @@ test('the scatter skips props whose art did not load', () => {
   // Fourteen ordinary manifest entries, so one going missing must drop that
   // prop rather than putting a placeholder box on the grass.
   const game = src('scenes/GameScene.ts')
-  const fn = game.slice(game.indexOf('private createScatter()'), game.indexOf('private createAmbient()'))
+  const fn = game.slice(game.indexOf('private createScatter()'), game.indexOf('private createPads()'))
   assert.match(fn, /\.filter\(\(k\) => this\.textures\.exists\(k\.key\)\)/,
     'the scatter draws props without checking their art loaded')
   assert.match(fn, /if \(kinds\.length === 0\) return/,

@@ -13,8 +13,11 @@
 export type HeroPose = 'idle' | 'walk' | 'attack'
 
 export interface FrameDef {
-  /** Frames per second for both clips. */
-  fps: number
+  /** Frames per second for the walk cycle. Separate from the attack's, because
+   *  the walk's rate is set by how far the hero actually travels per step and
+   *  the attack's by when the swing has to land. */
+  walkFps: number
+  attackFps: number
   /** 1-based. The frame on which an attack deals its damage. */
   impactFrame: number
   /** How many frames each clip holds. */
@@ -72,12 +75,13 @@ export class HeroFrames {
    * so the hit lands when the axe does.
    */
   advance(dt: number, walking: boolean): FrameState {
-    const step = 1 / Math.max(1, this.def.fps)
+    const attackStep = 1 / Math.max(1, this.def.attackFps)
+    const walkStep = 1 / Math.max(1, this.def.walkFps)
     let impact = false
 
     if (this.pose === 'attack') {
       this.elapsed += dt
-      const frame = Math.floor(this.elapsed / step)
+      const frame = Math.floor(this.elapsed / attackStep)
       // The impact frame is 1-based in the data because that is how the files
       // are numbered; the index here is 0-based.
       if (!this.impactDone && frame >= this.def.impactFrame - 1) {
@@ -102,7 +106,7 @@ export class HeroFrames {
         this.elapsed = 0
       }
       this.elapsed += dt
-      this.index = Math.floor(this.elapsed / step) % this.def.walkFrames
+      this.index = Math.floor(this.elapsed / walkStep) % this.def.walkFrames
       return { pose: 'walk', index: this.index, impact }
     }
 

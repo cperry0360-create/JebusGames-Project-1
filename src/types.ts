@@ -47,17 +47,13 @@ export interface MapDef {
      *  passage between them is deliberately not listed. */
     occluders: Array<{ x: number; y: number; w: number; h: number }>
   }
-  /** The closed gate enemies hit. They stop AT it; they do not pass through. */
-  exit: { gateX: number; puffOffsetY: number }
+  /** The open gate enemies walk out through. `gateX` is the near edge of the
+   *  dark gap between its two leaves, where the fade starts, and `vanishX` the
+   *  far edge, where there is nothing left. */
+  exit: { gateX: number; vanishX: number }
   /** Parts of the painted plate that already have furniture on them, so the
    *  scatter layer does not drop a rock on the tavern roof. */
   scatterExclude?: Array<{ x: number; y: number; w: number; h: number }>
-  /** The map's own light sources and chimneys, for the ambient overlay. Per
-   *  map rather than in code, so a second map carries its own. */
-  ambient?: {
-    lights: Array<{ x: number; y: number; radius: number; kind: string }>
-    chimneys: Array<{ x: number; y: number }>
-  }
 }
 
 export interface ServerNukeDef {

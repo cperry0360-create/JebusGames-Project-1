@@ -228,7 +228,7 @@ test('the four rare props are hard-capped, not merely unlikely', () => {
 
 test('the scatter is drawn beneath everything and takes no input', () => {
   const g = src('scenes/GameScene.ts')
-  const fn = g.slice(g.indexOf('private createScatter()'), g.indexOf('private createAmbient()'))
+  const fn = g.slice(g.indexOf('private createScatter()'), g.indexOf('private createPads()'))
   assert.match(fn, /setDepth\(GROUND_DEPTH \+ 1\)/, 'the scatter is not on the ground layer')
   assert.ok(!/setInteractive/.test(fn), 'a decoration prop takes pointer input')
   // Delivered at 2x, so it renders at half its native pixels.
@@ -312,27 +312,22 @@ test('exactly one build spot keeps the sign, and it is the one nearest the entra
   assert.ok(MAP.spotRadius >= 30, `a ${MAP.spotRadius}px tap target is too small for a thumb`)
 })
 
-test('the ambient overlay is data, decoration, and cleans up after itself', () => {
-  const a = src('systems/Ambient.ts')
-  assert.ok(!/setInteractive/.test(a), 'the tavern ambience takes pointer input')
-  // Both SHUTDOWN and DESTROY, per the listener rules.
-  assert.match(a, /onSceneEvent\(scene, scene\.events as never, 'shutdown', release\)/,
-    'the emitter is not released on shutdown')
-  assert.match(a, /onSceneEvent\(scene, scene\.events as never, 'destroy', release\)/,
-    'the emitter is not released on destroy')
-  assert.match(a, /for \(const em of emitters\) em\.stop\(\)/, 'the emitter is never stopped')
-
-  // Coordinates are per-map data, not code.
-  assert.ok(MAP.ambient.lights.length >= 5, 'the tavern has no lit windows recorded')
-  assert.ok(MAP.ambient.chimneys.length >= 1, 'the tavern has no chimney recorded')
-  for (const l of MAP.ambient.lights) {
-    assert.ok(l.x > 0 && l.x < DISPLAY.width && l.y > 0 && l.y < DISPLAY.height,
-      `a light at ${l.x},${l.y} is off the map`)
-  }
-  // Candlelight, not a strobe.
-  assert.ok(P.ambient.minAlpha >= 0.7 && P.ambient.maxAlpha <= 1,
-    'the flicker range is wider than candlelight')
-  assert.ok(P.ambient.smoke.lifespanMs >= 2000, 'the smoke is too brisk to read as lazy')
+test('the tavern is painted, not lit at runtime', () => {
+  // Seven additive glows and a chimney emitter, placed against the OLD plate.
+  // The new one paints lit windows, hanging lanterns and a smoking chimney
+  // into the art, so the overlay was doing a job that is already done — and
+  // doing it in the wrong places: two glows landed on the painted signboard
+  // and one on the innkeeper. Deleted rather than re-placed.
+  //
+  // It also flickered, which made it the one animated thing on an otherwise
+  // still map: the scrim probe's corner samples drifted 12% between two
+  // frames because a light happened to be near a corner.
+  const g = src('scenes/GameScene.ts')
+  assert.ok(!/createAmbient|installAmbient/.test(g), 'the tavern ambience is back in GameScene')
+  assert.equal(MAP.ambient, undefined, 'map.json still carries ambient coordinates')
+  assert.equal(P.ambient, undefined, 'presentation.json still carries an ambient style')
+  assert.ok(!existsSync(new URL('../src/systems/Ambient.ts', import.meta.url)),
+    'src/systems/Ambient.ts still exists')
 })
 
 test('the scatter rng is its own, so a different draft does not move the rocks', () => {

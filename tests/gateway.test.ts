@@ -1,12 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { distanceAtX, emergeState, gateShake } from '../src/systems/Gateway.ts'
+import { distanceAtX, emergeState, vanishAlpha } from '../src/systems/Gateway.ts'
 
 const url = (p: string) => new URL(p, import.meta.url)
 const read = (n: string) => JSON.parse(readFileSync(url(`../src/data/${n}.json`), 'utf8'))
 const src = (p: string) => readFileSync(url(`../src/${p}`), 'utf8')
-const MAP = read('map'), ENEMIES = read('enemies'), P = read('presentation')
+const MAP = read('map'), ENEMIES = read('enemies')
 const CFG = { fadeMs: MAP.entrance.fadeMs, startScale: MAP.entrance.startScale }
 
 test('an enemy behind the arch is absent, not merely faint', () => {
@@ -51,7 +51,7 @@ test('every enemy finishes emerging before it clears the arch', () => {
 })
 
 test('the gate is where the lane meets the painted gate, not the end of the lane', () => {
-  const stop = distanceAtX(MAP.waypoints, MAP.exit.gateX)
+  const stop = distanceAtX(MAP.waypoints, MAP.exit.vanishX)
   const total = MAP.waypoints.reduce((acc: number, p: number[], i: number) => (
     i === 0 ? 0 : acc + Math.hypot(p[0] - MAP.waypoints[i - 1][0], p[1] - MAP.waypoints[i - 1][1])
   ), 0)
@@ -59,52 +59,76 @@ test('the gate is where the lane meets the painted gate, not the end of the lane
     'the stop distance is the end of the lane, so enemies walk off the plate again')
   // And the gate is on the plate, unlike the lane's last waypoint.
   assert.ok(MAP.exit.gateX > 1100 && MAP.exit.gateX < 1280,
-    `the gate face is at x=${MAP.exit.gateX}, which is not on the map`)
+    `the gate gap starts at x=${MAP.exit.gateX}, which is not on the map`)
   assert.equal(distanceAtX(MAP.waypoints, MAP.entrance.emergeFromX) > 0, true,
     'the arch mouth is at distance 0, so there is nothing behind the arch to walk out of')
 })
 
-test('a crowd arriving together neither rumbles nor doubles up', () => {
-  const g = P.gateImpact
-  // Inside the gap, nothing fires however many land.
-  assert.equal(gateShake(1000, 900, 1, g).play, false, 'a second impact shakes immediately')
-  assert.equal(gateShake(1000, 900, 8, g).play, false, 'a crowd overrides the gap')
-  // Past it, one does.
-  const one = gateShake(2000, 1000, 1, g)
-  assert.equal(one.play, true)
-  assert.equal(one.intensity, g.baseIntensity)
-  // A group hits harder, but only up to the cap.
-  assert.ok(gateShake(2000, 1000, 3, g).intensity > one.intensity, 'a group is no heavier than one')
-  for (const burst of [4, 13, 200]) {
-    assert.ok(gateShake(2000, 1000, burst, g).intensity <= g.maxIntensity,
-      `${burst} at once exceeds the cap`)
-  }
-  assert.ok(g.maxIntensity <= 0.03, `a ${g.maxIntensity} shake is more than the screen can take`)
+test('an enemy fades out inside the gate gap, and nowhere else', () => {
+  // The gate is OPEN in this plate: two leaves standing apart with a dark gap
+  // between them at world x 1235-1248. There is nothing to walk into, so the
+  // enemy is swallowed by the gap rather than stopped by a face.
+  const from = distanceAtX(MAP.waypoints, MAP.exit.gateX)
+  const to = distanceAtX(MAP.waypoints, MAP.exit.vanishX)
+  assert.ok(to > from, 'the gap has no width, so the fade has nowhere to happen')
+
+  // Full opacity right up to the near edge. A fade that starts early is an
+  // enemy going translucent in open road, which is the thing the entrance
+  // fade exists to avoid at the other end.
+  assert.equal(vanishAlpha(from - 200, from, to), 1)
+  assert.equal(vanishAlpha(from, from, to), 1)
+  const half = vanishAlpha((from + to) / 2, from, to)
+  assert.ok(half > 0.45 && half < 0.55, `half way through the gap it is ${half}`)
+  assert.equal(vanishAlpha(to, from, to), 0, 'something is left at the far leaf')
+  assert.equal(vanishAlpha(to + 500, from, to), 0, 'the alpha goes negative past the gap')
 })
 
-test('nothing fades at the exit, and the impact is not a disappearance', () => {
+test('the fade fits inside the gap for every enemy, whatever its speed', () => {
+  // Measured in DISTANCE, not time, and this is why. The gap is about fifteen
+  // world pixels; the roster spans a wide speed range. A timed fade would let
+  // the fastest walk out the far side still visible while the slowest
+  // dissolved before reaching the gap at all.
+  const from = distanceAtX(MAP.waypoints, MAP.exit.gateX)
+  const to = distanceAtX(MAP.waypoints, MAP.exit.vanishX)
+  const gap = to - from
+  assert.ok(gap >= 8 && gap <= 40, `a ${gap.toFixed(1)}px fade is not the painted gap`)
+  for (const [id, def] of Object.entries(ENEMIES) as [string, any][]) {
+    // One frame at 30fps, the worst case a slow device gives. Any faster than
+    // this and the enemy skips the whole fade in a single step.
+    const perFrame = def.speed / 30
+    assert.ok(perFrame < gap,
+      `${id} crosses the whole gap in one frame (${perFrame.toFixed(1)}px of ${gap.toFixed(1)})`)
+  }
+})
+
+test('the enemy fades out through the gate, and nothing slams', () => {
   const enemy = src('entities/Enemy.ts')
   const game = src('scenes/GameScene.ts')
-  // The walk ends at the gate, not at the lane's end.
+  // The walk ends at the far edge of the gap, not at the lane's end.
   assert.match(enemy, /if \(this\.distance >= this\.stopDistance\) return true/,
     'the enemy still walks to the end of the lane and off the plate')
   assert.doesNotMatch(enemy, /this\.distance >= this\.lane\.totalLength/,
     'the old walk-off-the-end condition is back')
-  // The emergence only ever runs at the entrance: there is no matching
-  // fade-out, because the gate is solid.
+  // Two fades now, one at each end, and they must not overlap: the exit fade
+  // is gated on being past the gap's near edge.
   assert.equal((enemy.match(/emergeState\(/g) ?? []).length, 1,
-    'the emergence is applied in more than one place; the exit must not fade')
+    'the entrance emergence is applied in more than one place')
+  assert.match(enemy, /if \(this\.distance <= this\.gateDistance\) return/,
+    'the exit fade is not gated on reaching the gate, so it runs over the whole lane')
 
   const leak = /private leak\(enemy: Enemy\)[\s\S]*?\n  \}/.exec(game)
-  assert.ok(leak, 'the gate impact handler is gone')
-  assert.match(leak[0], /deathPuff\(this/, 'no dust at the gate, so the enemy visibly dissolves')
-  assert.match(leak[0], /play\(this, 'hit-c'/, 'no impact sound')
+  assert.ok(leak, 'the leak handler is gone')
+  // THE SLAM IS GONE. All three parts of it described a collision with a gate
+  // that is painted shut, and this plate's gate stands open.
+  assert.doesNotMatch(leak[0], /deathPuff\(/, 'dust is thrown up at an open gate')
+  assert.doesNotMatch(leak[0], /play\(this, 'hit-c'/, 'the impact sound is back')
+  assert.doesNotMatch(game, /gateShake/, 'the gate shake is back')
+  assert.doesNotMatch(game, /gateImpact/, 'the gate impact config is back')
+  // The counter still moves, and still sounds different on the last life.
   assert.match(leak[0], /this\.status\.lives -= enemy\.def\.livesCost/,
-    'the life is not lost on the impact frame')
-  assert.match(leak[0], /gateShake\(/, 'the shake is unstaggered and uncapped again')
-  // Destroyed in the same handler as the puff, so there is no frame of a
-  // half-there enemy standing at a solid gate.
-  assert.match(leak[0], /enemy\.destroy\(\)/, 'the enemy is not removed on impact')
+    'the life is not lost when the enemy gets out')
+  assert.match(leak[0], /'last-life' : 'life-lost'/, 'the life-lost sting went with the slam')
+  assert.match(leak[0], /enemy\.destroy\(\)/, 'the enemy is not removed once it is through')
 })
 
 test('the archway is put back in front, from the plate itself', () => {

@@ -36,6 +36,47 @@ test('no two HUD elements overlap, at any viewport, notch or not', () => {
   }
 })
 
+test('the hero bar is on the left, clear of the painted tavern sign', () => {
+  // The map plate paints COURJAHAN'S TAVERN and its signboard into the map's
+  // top-right corner, at world (930..1007, 103..147). At the minimum zoom the
+  // whole board is on screen, so the map's top-right corner is the screen's
+  // top-right corner and there is no camera position that moves the sign out
+  // from under a HUD element parked there. The hero's health bar was parked
+  // there for the whole run.
+  //
+  // Measured, so this is a fact about the game and not about the wording of a
+  // requirement: the sign's projection at minimum zoom on the reference phone.
+  const SIGN = { x: 930, y: 103, w: 77, h: 44 }
+  const MIN_ZOOM = 0.776
+  const WORLD = { width: 1280, height: 720 }
+
+  for (const [name, width, height] of VIEWPORTS) {
+    const layout = hudLayout({ width, height, insets: NO_INSETS, ...WIDEST }, CFG)
+    assert.ok(layout.heroRow.x < layout.messageRow.x,
+      `${name}: the hero bar is not on the left of the second row`)
+
+    // Every camera position the clamp allows at minimum zoom, which is where
+    // the sign's screen position is most constrained.
+    const halfW = width / (2 * MIN_ZOOM)
+    const halfH = height / (2 * MIN_ZOOM)
+    const cxs = halfW * 2 >= WORLD.width ? [WORLD.width / 2] : [halfW, WORLD.width - halfW]
+    const cys = halfH * 2 >= WORLD.height ? [WORLD.height / 2] : [halfH, WORLD.height - halfH]
+    for (const cx of cxs) {
+      for (const cy of cys) {
+        const r = {
+          x: (SIGN.x - (cx - width / (2 * MIN_ZOOM))) * MIN_ZOOM,
+          y: (SIGN.y - (cy - height / (2 * MIN_ZOOM))) * MIN_ZOOM,
+          width: SIGN.w * MIN_ZOOM,
+          height: SIGN.h * MIN_ZOOM,
+        }
+        assert.ok(!overlaps(r, layout.heroRow),
+          `${name}: the hero bar is on the painted tavern sign again ` +
+          `(sign at ${Math.round(r.x)},${Math.round(r.y)})`)
+      }
+    }
+  }
+})
+
 test('every element stays inside the safe area', () => {
   for (const [name, width, height] of VIEWPORTS) {
     const layout = hudLayout({ width, height, insets: NOTCH, ...WIDEST }, CFG)

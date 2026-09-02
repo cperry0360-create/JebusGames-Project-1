@@ -1,13 +1,12 @@
 // Arriving and leaving: the two ends of the lane.
 //
 // Enemies used to appear at the map's left edge already at full opacity, which
-// put them on top of the archway's stonework rather than behind it, and they
-// walked into the closed gate at the right and thinned away to nothing. Both
+// put them on top of the archway's stonework rather than behind it. Both ends
 // read as sprites being switched on and off rather than as anything entering
 // or leaving a place.
 //
-// Phaser-free on purpose. What an emerging enemy looks like, and whether a
-// gate impact is allowed to shake the screen, are both arithmetic — and
+// Phaser-free on purpose. What an emerging enemy looks like, and how much of
+// one is left as it walks out through the gate, are both arithmetic — and
 // arithmetic that decides what the player sees should be checkable without a
 // canvas.
 
@@ -37,55 +36,32 @@ export function emergeState(msSinceMouth: number, cfg: EmergeConfig): EmergeStat
   return { alpha: t, scale: cfg.startScale + (1 - cfg.startScale) * t }
 }
 
-export interface GateShakeConfig {
-  /** No second shake inside this window. A wave arriving together would
-   *  otherwise hold the camera in continuous motion. */
-  minGapMs: number
-  /** One arrival. */
-  baseIntensity: number
-  /** Each impact folded into the same shake adds this much... */
-  perExtra: number
-  /** ...up to here, however many arrive. */
-  maxIntensity: number
-  durationMs: number
-}
-
-export interface GateShake {
-  play: boolean
-  intensity: number
-}
-
 /**
- * Whether this gate impact shakes the screen, and how hard.
+ * How visible an enemy is on its way OUT, through the gate.
  *
- * Two separate limits, because they guard different failures. The gap stops a
- * stream of arrivals turning into one long rumble with no individual impacts
- * legible in it. The cap stops a wave that arrives together hitting with the
- * force of the whole wave at once — the last wave lands thirteen enemies, and
- * thirteen times a single shake is a screen the player cannot read.
+ * The gate in this plate is OPEN — two leaves standing apart with a dark gap
+ * between them — so there is nothing to hit. It used to be painted shut, and
+ * an arrival threw up two dust puffs, played a heavy hit and shook the camera.
+ * All three were describing a collision with a gate that is not there.
  *
- * `burst` is how many impacts have landed since the last shake was allowed,
- * this one included, so a group that arrives together still reads as heavier
- * than one straggler.
+ * Measured against DISTANCE rather than elapsed time, unlike the way in. On
+ * the way in every enemy starts from a standstill behind the arch and the fade
+ * is about the reveal, so time is the honest unit. On the way out the gap is
+ * about thirteen world pixels wide and the fade has to finish inside it: a
+ * timed fade would let a Scrapper walk clean out the far side at full opacity
+ * while a Buckethead dissolved before reaching the gap at all.
  */
-export function gateShake(
-  nowMs: number,
-  lastShakeMs: number,
-  burst: number,
-  cfg: GateShakeConfig,
-): GateShake {
-  if (nowMs - lastShakeMs < cfg.minGapMs) return { play: false, intensity: 0 }
-  const extra = Math.max(0, burst - 1) * cfg.perExtra
-  return {
-    play: true,
-    intensity: Math.min(cfg.maxIntensity, cfg.baseIntensity + extra),
-  }
+export function vanishAlpha(distance: number, fromDistance: number, toDistance: number): number {
+  if (distance <= fromDistance) return 1
+  const span = toDistance - fromDistance
+  if (span <= 0) return 0
+  return Math.max(0, 1 - (distance - fromDistance) / span)
 }
 
 /**
  * The distance along the lane at which the lane first reaches `targetX`.
  *
- * The arch mouth and the gate face are measured off the painted plate as map
+ * The arch mouth and the gate gap are measured off the painted plate as map
  * positions, because that is what they are; the enemy walks in lane distance.
  * This is the conversion, done once at scene start rather than per frame.
  *

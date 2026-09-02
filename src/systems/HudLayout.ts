@@ -73,10 +73,11 @@ export interface LayoutConfig {
 export interface HudLayout {
   counters: Rect
   startButton: Rect
-  /** Under the counters: the wave message, or the boss bar while one is up.
-   *  They are mutually exclusive, so they share one rectangle. */
+  /** The right of the second row: the wave message, or the boss bar while one
+   *  is up. They are mutually exclusive, so they share one rectangle. */
   messageRow: Rect
-  /** Under the start button: the hero's name and health. */
+  /** The left of the second row, under the counters: the hero's name and
+   *  health. On the LEFT deliberately — see the note where it is built. */
   heroRow: Rect
   abilities: Rect
   mute: Rect
@@ -128,15 +129,30 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
   // Second row, split by x. Three things want it — the wave message, the boss
   // bar and the hero's health — and splitting by position rather than by
   // priority is what makes "they never collide" a property of the layout.
+  //
+  // THE HERO BAR IS ON THE LEFT, and it used to be on the right. The new map
+  // plate paints COURJAHAN'S TAVERN and its signboard into the map's top-right
+  // corner, and at the minimum zoom the whole board is on screen — so the
+  // map's top-right corner IS the screen's top-right corner, and the hero's
+  // health bar sat on the painted sign for the entire run. Measured at
+  // 844x390: the sign lands at screen x 572..722, the old hero row at 587..834.
+  //
+  // The left is where it stops being a collision at every zoom below maximum,
+  // and it groups the hero's health with the counters, which are also his.
+  // The message row inherits the right-hand end and can still reach the sign;
+  // that is a line of stroked text, and the boss bar that shares the rectangle
+  // carries its own plate and is only up for one wave in thirteen. A solid
+  // plate parked there for the whole run is the thing worth moving.
   const rowY = top + Math.max(counters.height, startButton.height) + cfg.rowGap
   const rowW = right - left
   const heroW = Math.max(96, Math.round(rowW * 0.3))
   const gap = 14
-  const messageRow: Rect = {
-    x: left, y: rowY, width: Math.max(60, rowW - heroW - gap), height: cfg.rowHeight,
-  }
   const heroRow: Rect = {
-    x: right - heroW, y: rowY, width: heroW, height: cfg.rowHeight,
+    x: left, y: rowY, width: heroW, height: cfg.rowHeight,
+  }
+  const messageRow: Rect = {
+    x: left + heroW + gap, y: rowY,
+    width: Math.max(60, rowW - heroW - gap), height: cfg.rowHeight,
   }
 
   // Bottom row: the two corner buttons hold the ends, the abilities the middle.

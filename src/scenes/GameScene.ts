@@ -20,10 +20,9 @@ import type { BuildSpot } from '../systems/BuildSystem.ts'
 import { WaveSpawner } from '../systems/WaveSpawner.ts'
 import { withinRadius, pickNearest } from '../systems/Targeting.ts'
 import { GROUND_DEPTH } from '../systems/DepthSort.ts'
-import { distanceAtX, gateShake, type EmergeConfig } from '../systems/Gateway.ts'
+import { distanceAtX, type EmergeConfig } from '../systems/Gateway.ts'
 import { makeRng } from '../systems/Draft.ts'
 import { scatter, type ScatterKind, type Rect } from '../systems/Scatter.ts'
-import { installAmbient, type AmbientDef, type AmbientStyle } from '../systems/Ambient.ts'
 import { dashArcs, HeroMarkers, type MarkersDef } from '../systems/HeroMarkers.ts'
 import { ART, applyRender, fitContentHeight, fitContentWidth } from '../systems/Art.ts'
 import { EFFECT_MS, playEffect, sizeForRadius } from '../systems/Effects.ts'
@@ -31,7 +30,7 @@ import { Cooldowns } from '../systems/Cooldowns.ts'
 import { unlockedTowerCount } from '../systems/Draft.ts'
 import { runState, setRunState } from '../systems/RunState.ts'
 import { castAbility } from '../systems/AbilityRunner.ts'
-import { deathPuff, PRESENTATION, floatingDamage, hitPause } from '../systems/Presentation.ts'
+import { PRESENTATION, floatingDamage, hitPause } from '../systems/Presentation.ts'
 import { play, playRotating, resetVoices } from '../systems/Audio.ts'
 import { Enemy } from '../entities/Enemy.ts'
 import type { Blocker } from '../entities/Enemy.ts'
@@ -192,14 +191,15 @@ export class GameScene extends Phaser.Scene {
   /** One marker per build spot, created once and then shown or hidden. */
   private pads: Phaser.GameObjects.Image[] = []
   /** Where the arch lets go and where the gate stops them, in lane distance. */
-  private gateway!: { mouthDistance: number; stopDistance: number; emerge: EmergeConfig }
+  private gateway!: {
+    mouthDistance: number
+    gateDistance: number
+    stopDistance: number
+    emerge: EmergeConfig
+  }
   /** Cropped out of the map plate at scene start; see createArchOccluders. */
   /** Public for the harness, which counts them and reads their depth. */
   archOccluders: Phaser.GameObjects.Image[] = []
-  /** Gate-impact shake bookkeeping, so a wave arriving together does not hold
-   *  the camera in continuous motion. */
-  private lastGateShake = -99999
-  private gateBurst = 0
   /** Whether the goblin has already said his line this run. One per RUN, not
    *  per wave and not per enemy. */
   private greeted = false
@@ -324,12 +324,13 @@ export class GameScene extends Phaser.Scene {
     })
 
     this.lane = new Path(MAP.waypoints)
-    // The arch mouth and the gate face are measured off the painted plate as
-    // map positions; the enemy walks in lane distance. Converted once here
-    // rather than per enemy per frame.
+    // The arch mouth and the two edges of the open gate's gap are measured off
+    // the painted plate as map positions; the enemy walks in lane distance.
+    // Converted once here rather than per enemy per frame.
     this.gateway = {
       mouthDistance: distanceAtX(MAP.waypoints, MAP.entrance.emergeFromX),
-      stopDistance: distanceAtX(MAP.waypoints, MAP.exit.gateX),
+      gateDistance: distanceAtX(MAP.waypoints, MAP.exit.gateX),
+      stopDistance: distanceAtX(MAP.waypoints, MAP.exit.vanishX),
       emerge: { fadeMs: MAP.entrance.fadeMs, startScale: MAP.entrance.startScale },
     }
     this.build = new BuildSystem(MAP.buildSpots, MAP.spotRadius)
@@ -505,7 +506,6 @@ this.armReadyCountdown()
     const plate = this.add.image(0, 0, ART.map[MAP.plate]).setOrigin(0, 0).setDepth(GROUND_DEPTH)
     this.createScatter()
     this.createArchOccluders()
-    this.createAmbient()
     plate.setDisplaySize(displayData.width, displayData.height)
   }
 
@@ -814,14 +814,6 @@ this.armReadyCountdown()
       img.setOrigin(0.5, 0.9)
     }
     this.scatterCount = placements.length
-  }
-
-  /** Warm flicker over the tavern's windows and lanterns, and smoke from its
-   *  chimney. Decoration only; see Ambient.ts for the lifetime rules. */
-  private createAmbient(): void {
-    const def = MAP.ambient as AmbientDef | undefined
-    if (!def || (def.lights.length === 0 && def.chimneys.length === 0)) return
-    installAmbient(this, def, PRESENTATION.ambient as AmbientStyle, GROUND_DEPTH + 2)
   }
 
   private createPads(): void {
@@ -1693,21 +1685,59 @@ this.armReadyCountdown()
   }
 
   /**
-   * Paints the stretch of lane a summon may be dropped on.
+   * Outlines the stretch of lane a summon may be dropped on.
    *
-   * Walked as overlapping discs along the path rather than stroked as a thick
-   * line: the lane bends, and a stroked polyline leaves notches on the outside
-   * of every corner exactly where the player wants to drop a blocker.
+   * Two lines along the edges of the legal strip, not a wash over the middle
+   * of it. The fill was a pale blue disc every half-radius along the whole
+   * lane, and over the new plate — painted grass, a painted dirt road, painted
+   * stones — it read as a stain across the map rather than as a boundary. The
+   * player already knows where the road is; what they need is where the
+   * permission stops.
+   *
+   * Built by offsetting the lane to both sides and then DROPPING every offset
+   * point that lands back inside the band. That cull is the whole trick: on
+   * the inside of a bend tighter than `within` the two offsets cross, and a
+   * naive offset folds the line over itself into a bow tie. A point closer to
+   * the lane than `within` is by definition not on the boundary, so it goes.
+   * The survivors come in runs, and each run is stroked on its own — joining
+   * across a gap would draw a chord straight through the legal area.
    */
   private drawPathBand(within: number): void {
     this.pathBand.clear()
-    const step = within * 0.5
-    // Pale blue, not green: the band is drawn over grass and a dirt lane, and
-    // a green tint on green grass is invisible exactly where it matters.
-    this.pathBand.fillStyle(0x8fd0ff, 0.22)
-    for (let d = 0; d <= this.lane.totalLength; d += step) {
-      const pt = this.lane.pointAt(d)
-      this.pathBand.fillCircle(pt.x, pt.y, within)
+    const cfg = PRESENTATION.pathBand
+    const total = this.lane.totalLength
+    const step = cfg.sampleStep
+
+    const left: { x: number; y: number }[] = []
+    const right: { x: number; y: number }[] = []
+    for (let d = 0; d <= total; d += step) {
+      // The tangent from a short chord either side, so a waypoint's corner
+      // does not give the two samples that share it opposite normals.
+      const a = this.lane.pointAt(Math.max(0, d - step))
+      const b = this.lane.pointAt(Math.min(total, d + step))
+      const len = Math.hypot(b.x - a.x, b.y - a.y) || 1
+      const nx = -(b.y - a.y) / len
+      const ny = (b.x - a.x) / len
+      const p = this.lane.pointAt(d)
+      left.push({ x: p.x + nx * within, y: p.y + ny * within })
+      right.push({ x: p.x - nx * within, y: p.y - ny * within })
+    }
+
+    this.pathBand.lineStyle(cfg.width, cfg.colour, cfg.alpha)
+    for (const side of [left, right]) {
+      let run: { x: number; y: number }[] = []
+      const flush = (): void => {
+        if (run.length > 1) this.pathBand.strokePoints(run, false)
+        run = []
+      }
+      for (const pt of side) {
+        // Half a pixel of tolerance: the offset points sit exactly `within`
+        // from the lane, and floating point puts about half of them a hair
+        // inside it.
+        if (this.lane.distanceTo(pt.x, pt.y) < within - 0.5) flush()
+        else run.push(pt)
+      }
+      flush()
     }
   }
 
@@ -2825,12 +2855,18 @@ this.armReadyCountdown()
   }
 
   /**
-   * An enemy reaching the gate.
+   * An enemy getting out through the gate.
    *
-   * It does not escape and it does not dissolve: the gate is closed and
-   * painted shut, so it arrives at full opacity and full size and hits it. The
-   * puff goes up on the same frame and the sprite comes down inside it, so
-   * there is never a frame of a half-faded enemy standing at a solid gate.
+   * The gate is OPEN in this plate — two leaves standing apart with a dark gap
+   * between them — so nothing is hit and nothing slams. The enemy has been
+   * fading across that gap for the last fifteen world pixels and is gone by
+   * the time this runs, which makes the leak bookkeeping rather than an event
+   * to stage.
+   *
+   * The slam went with it: a heavy hit sound, two dust puffs at the enemy's
+   * feet and a camera shake, all describing a collision with a gate that is
+   * painted shut. This one is not. The life-lost sting stays, because that is
+   * the counter changing, not the impact.
    */
   private leak(enemy: Enemy): void {
     // Counted, not just charged for: an escape is what stops a wave being a
@@ -2839,29 +2875,9 @@ this.armReadyCountdown()
     logEvent('escape', `${enemy.def.name} -${enemy.def.livesCost} lives`)
     this.status.lives -= enemy.def.livesCost
 
-    // Two puffs at the foot of the gate, offset from each other so it reads
-    // as a cloud thrown up by an impact rather than as one tidy ring. The
-    // enemy is destroyed on the same frame, so the puff is already covering
-    // the spot before there is any chance of seeing it thin away.
-    const gx = enemy.x
-    const gy = enemy.y + MAP.exit.puffOffsetY
-    deathPuff(this, gx, gy)
-    deathPuff(this, gx - 9, gy + 4)
     floatingDamage(this, enemy.x, enemy.centreY, enemy.def.livesCost, true)
     enemy.destroy()
 
-    // A heavy hit and the life-lost sting together, so the two land as one
-    // event rather than as a thump followed by a counter changing.
-    play(this, 'hit-c', 1)
-
-    const g = PRESENTATION.gateImpact
-    this.gateBurst++
-    const shake = gateShake(this.time.now, this.lastGateShake, this.gateBurst, g)
-    if (shake.play) {
-      this.lastGateShake = this.time.now
-      this.gateBurst = 0
-      this.cameras.main.shake(g.durationMs, shake.intensity)
-    }
     // The last one gets its own sound, so the player hears the difference
     // without having to read the counter.
     play(this, this.status.lives <= 0 ? 'last-life' : 'life-lost')

@@ -237,58 +237,6 @@
       "h": 153.8
     }
   ],
-  "ambient": {
-    "lights": [
-      {
-        "x": 951.6,
-        "y": 136.2,
-        "radius": 26,
-        "kind": "window"
-      },
-      {
-        "x": 987.6,
-        "y": 137.7,
-        "radius": 24,
-        "kind": "window"
-      },
-      {
-        "x": 1050.3,
-        "y": 162.2,
-        "radius": 26,
-        "kind": "window"
-      },
-      {
-        "x": 1100.1,
-        "y": 158.4,
-        "radius": 24,
-        "kind": "window"
-      },
-      {
-        "x": 1131.5,
-        "y": 160.7,
-        "radius": 22,
-        "kind": "window"
-      },
-      {
-        "x": 928.6,
-        "y": 183.6,
-        "radius": 20,
-        "kind": "lantern"
-      },
-      {
-        "x": 995.2,
-        "y": 150.0,
-        "radius": 18,
-        "kind": "lantern"
-      }
-    ],
-    "chimneys": [
-      {
-        "x": 1093.2,
-        "y": 23.0
-      }
-    ]
-  },
   "entrance": {
     "_note": "Measured off the new plate: the left pier is world x 26-50, the passage is open from 50 to 98, and the right pier runs 98-116. An enemy is clear of the arch past x=130. The old values said 0-34, 33-83 and 84-128 and described a different arch.",
     "emergeFromX": 50.0,
@@ -311,9 +259,9 @@
     ]
   },
   "exit": {
-    "_note": "THE GATE IS OPEN in this plate. Its two leaves stand apart with a dark gap between them at world x 1235-1248, so the lane runs through it. gateX is that gap, not a closed face.",
-    "gateX": 1240.0,
-    "puffOffsetY": -6.0
+    "_note": "THE GATE IS OPEN in this plate. Its two leaves stand apart with a dark gap between them at world x 1235-1248, so the lane runs through it and there is nothing to walk into. An enemy fades out across that gap and is gone by the time it clears the far leaf. There is no impact: the slam, the camera shake and the two dust puffs all described a gate that is painted shut, and this one is not.",
+    "gateX": 1235.0,
+    "vanishX": 1250.0
   },
   "_roadWidth": "Measured, not chosen. The painted road runs 36 across at the median and 46 at the ninth decile; 38 sits just above the median, so the lane stays inside the paint along almost all of it. It was 61.2, which described the old plate and is wider than the new road is anywhere."
 }
