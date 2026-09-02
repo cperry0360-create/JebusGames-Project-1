@@ -542,5 +542,51 @@
     "fadeMs": 500,
     "gapMs": 140,
     "_gapMs": "Between one banner leaving and the next arriving, so two in a row read as two messages rather than as one flicker."
+  },
+  "drawer": {
+    "_note": "The opt-in control drawer, behind the save flag `controlDrawer`. A tab docked to the right edge that expands a panel of tiles. First slice: the six active units only — no passives, no consumables, no upgrade screen.",
+    "tabWidth": 34,
+    "tabHeight": 88,
+    "widths": [
+      {
+        "minViewW": 700,
+        "width": 152
+      },
+      {
+        "minViewW": 0,
+        "width": 118
+      }
+    ],
+    "_widths": "Panel width by viewport width, widest first; the last entry must be minViewW 0 so there is always an answer. 152 at 844x390 and 118 at 568x320 as specified — a rule with a shape, not two constants, so a third breakpoint needs no code.",
+    "pad": 8,
+    "columns": 2,
+    "tileHeight": 62,
+    "tileGap": 6,
+    "tileRadius": 9,
+    "iconFraction": 0.62,
+    "_iconFraction": "How much of a tile's height the artwork takes. The rest is the price.",
+    "priceSize": 13,
+    "lockSize": 20,
+    "lockFill": 14272936,
+    "_lockFill": "A light bone padlock over the dimmed art. It used to be drawn in COLOR.panelEdge — 0x3d4a59, the old bevelled-plate blue — on a 0x4a3a2a tile, which rendered every frame and was invisible in every screenshot.",
+    "lockEdge": 1182985,
+    "dimAlpha": 0.38,
+    "_dimAlpha": "A tile the player cannot afford. Dimmed, not hidden: what you are saving for is information.",
+    "slab": 2826521,
+    "tileFill": 4864554,
+    "tileFillSelected": 7297594,
+    "outline": 1182985,
+    "outlineWidth": 3,
+    "_outline": "Thick and dark, matching the painted board. Flat colour, chunky rounded forms — no bevel, no metal, no neon edge, no gradient, no translucent hairline. The reference is the in-game side drawer, not a web panel.",
+    "tabFill": 12745274,
+    "selectedEdge": 16765503,
+    "dragSlop": 6,
+    "_dragSlop": "How far a finger may travel before a press becomes a drag rather than a pick. Below this the tap selects on release; above it the grid scrolls and nothing is selected.",
+    "scrollbarWidth": 3,
+    "scrollbarFill": 14272936,
+    "_scrollbar": "Shown only when the grid actually scrolls. Without it, at 568x320, two of the six towers are off the bottom of a panel that looks complete.",
+    "nodePulseMs": 760,
+    "nodePulseScale": 0.22,
+    "_nodePulse": "How a build node says it will take the selected tower. A scale beat rather than a colour flash: the pads are already tinted three ways and a fourth tint would be a colour nobody can name."
   }
 }

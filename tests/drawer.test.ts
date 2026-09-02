@@ -1,0 +1,422 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import {
+  type DrawerConfig, drawerLayout, drawerWidth, inRect, scrollToShow, tileVisible,
+} from '../src/systems/DrawerLayout.ts'
+import { hudLayout, NO_INSETS, type Rect } from '../src/systems/HudLayout.ts'
+import { DEFAULT_SAVE } from '../src/systems/Save.ts'
+
+const url = (p: string) => new URL(p, import.meta.url)
+const read = (n: string) => JSON.parse(readFileSync(url(`../src/data/${n}.json`), 'utf8'))
+const src = (p: string) => readFileSync(url(`../src/${p}`), 'utf8')
+
+const P = read('presentation')
+const CFG = P.drawer as DrawerConfig
+const LAYOUT = P.hud.layout
+const TOWERS = Object.keys(read('towers'))
+const WIDEST = { countersWidth: 333, abilitiesWidth: 322 }
+const VIEWPORTS: Array<[string, number, number]> = [
+  ['844x390', 844, 390],
+  ['568x320', 568, 320],
+  ['1280x720', 1280, 720],
+  ['390x844', 390, 844],
+]
+
+const area = (w: number, h: number): Rect =>
+  hudLayout({ width: w, height: h, insets: NO_INSETS, ...WIDEST }, LAYOUT).panelArea
+const overlaps = (a: Rect, b: Rect): boolean =>
+  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
+
+/* --------------------------------------------------------------- the flag */
+
+test('the drawer is OFF by default', () => {
+  // It is opt-in scaffolding. A player who never opens settings gets the ring.
+  assert.equal(DEFAULT_SAVE.controlDrawer, false)
+})
+
+test('a save written before the flag existed reads as off', () => {
+  const save = src('systems/Save.ts')
+  assert.match(save, /controlDrawer: parsed\.controlDrawer === true/,
+    'an absent flag must read false, not undefined-as-truthy')
+})
+
+test('the flag is read at the point of use, not cached at boot', () => {
+  // The whole point of a runtime flag is comparing the two minutes apart on
+  // the same board. A value captured in create() cannot do that.
+  const save = src('systems/Save.ts')
+  assert.match(save, /export function controlDrawerOn\(\): boolean \{\s*return loadSave\(\)\.controlDrawer/)
+})
+
+/* ------------------------------------------------------- sizes from data */
+
+test('the panel width comes from the data, at the sizes asked for', () => {
+  assert.equal(drawerWidth(844, CFG), 152)
+  assert.equal(drawerWidth(568, CFG), 118)
+  // A rule with a shape, not two constants: anything wide takes the wide one.
+  assert.equal(drawerWidth(1280, CFG), 152)
+  assert.equal(drawerWidth(320, CFG), 118)
+})
+
+test('the breakpoint list always has an answer', () => {
+  const last = CFG.widths[CFG.widths.length - 1]!
+  assert.equal(last.minViewW, 0, 'the last breakpoint must catch every viewport')
+  for (let i = 1; i < CFG.widths.length; i++) {
+    assert.ok(CFG.widths[i - 1]!.minViewW > CFG.widths[i]!.minViewW,
+      'breakpoints must be widest first')
+  }
+})
+
+test('the tab is the size asked for and nothing in code decides it', () => {
+  assert.equal(CFG.tabWidth, 34)
+  assert.equal(CFG.tabHeight, 88)
+  assert.equal(CFG.tileHeight, 62)
+  assert.equal(CFG.columns, 2)
+  const drawer = src('ui/ControlDrawer.ts')
+  // Not preceded or followed by a digit or a point, so `w * 0.88` — a
+  // fraction of a size that DOES come from the data — is not a dimension.
+  assert.doesNotMatch(drawer, /(?<![\d.])(34|88|152|118|62)(?![\d.])/,
+    'a drawer dimension is hardcoded in the component')
+})
+
+/* ------------------------------------------------ clear of the HUD, always */
+
+test('the tab never covers the ability strip, the wave chip or the gear', () => {
+  for (const [name, w, h] of VIEWPORTS) {
+    const hud = hudLayout({ width: w, height: h, insets: NO_INSETS, ...WIDEST }, LAYOUT)
+    const { tab } = drawerLayout(w, hud.panelArea, TOWERS.length, 0, CFG)
+    for (const [k, r] of Object.entries({
+      counters: hud.counters, startButton: hud.startButton, settings: hud.settings,
+      abilities: hud.abilities, cancel: hud.cancel, heroRow: hud.heroRow,
+    })) {
+      assert.ok(!overlaps(tab, r), `${name}: the tab overlaps ${k}`)
+    }
+    assert.ok(tab.x >= 0 && tab.x + tab.width <= w, `${name}: the tab is off screen`)
+    assert.ok(tab.y >= 0 && tab.y + tab.height <= h, `${name}: the tab is off the bottom`)
+  }
+})
+
+test('the expanded panel never covers the ability strip or the wave chip', () => {
+  for (const [name, w, h] of VIEWPORTS) {
+    const hud = hudLayout({ width: w, height: h, insets: NO_INSETS, ...WIDEST }, LAYOUT)
+    const { panel } = drawerLayout(w, hud.panelArea, TOWERS.length, 0, CFG)
+    for (const [k, r] of Object.entries({
+      counters: hud.counters, startButton: hud.startButton, settings: hud.settings,
+      abilities: hud.abilities, cancel: hud.cancel, heroRow: hud.heroRow,
+      messageRow: hud.messageRow,
+    })) {
+      assert.ok(!overlaps(panel, r), `${name}: the panel overlaps ${k}`)
+    }
+    assert.ok(panel.x + panel.width <= w + 0.5, `${name}: the panel runs off the right`)
+    assert.ok(panel.y >= 0 && panel.y + panel.height <= h, `${name}: the panel is off screen`)
+  }
+})
+
+test('the tab sits at the same right edge as the panel while it is closed', () => {
+  for (const [, w, h] of VIEWPORTS) {
+    const { tab, panel } = drawerLayout(w, area(w, h), TOWERS.length, 0, CFG)
+    assert.equal(Math.round(tab.x + tab.width), Math.round(panel.x + panel.width),
+      'the tab must read as the panel’s handle, not float beside it')
+  }
+})
+
+test('the tab never sits over a tile, at any viewport', () => {
+  /*
+   * A TILE UNDER THE TAB IS A TILE THAT CANNOT BE PICKED. `press` tests the
+   * tab first — it has to, two rectangles cannot share a point and both be
+   * right — so a tap on that tile closes the drawer instead of choosing a
+   * tower. At 568x320 the tab covered the whole right-hand column's first two
+   * rows and Writeoff was unbuyable; at 844x390 the same overlap was a
+   * five-pixel sliver the tile's centre happened to miss, which is why it
+   * needed the narrow viewport to show up at all.
+   */
+  for (const [name, w, h] of VIEWPORTS) {
+    const l = drawerLayout(w, area(w, h), TOWERS.length, 0, CFG, true)
+    for (const [i, t] of l.tiles.entries()) {
+      assert.ok(!overlaps(l.tab, t), `${name}: the tab covers tile ${i}`)
+    }
+    // And it is outside the panel entirely, not merely off the tiles: the gap
+    // between tiles is not a place a handle may hide.
+    assert.ok(!overlaps(l.tab, l.panel), `${name}: the open tab overlaps the panel`)
+    assert.equal(Math.round(l.tab.x + l.tab.width), Math.round(l.panel.x),
+      `${name}: the open tab is not against the panel's outside edge`)
+  }
+})
+
+test('the open tab is still on screen at every viewport', () => {
+  // Moving the tab outward is only correct while there is an outward to move
+  // to. A drawer wider than the free space would push its own handle off the
+  // left of the HUD area.
+  for (const [name, w, h] of VIEWPORTS) {
+    const a = area(w, h)
+    const l = drawerLayout(w, a, TOWERS.length, 0, CFG, true)
+    assert.ok(l.tab.x >= a.x, `${name}: the open tab is left of the usable area`)
+    assert.ok(l.tab.x >= 0, `${name}: the open tab is off the left of the screen`)
+  }
+})
+
+/* ------------------------------------------------------------- the grid */
+
+test('every tile is inside the grid horizontally, at every viewport', () => {
+  for (const [name, w, h] of VIEWPORTS) {
+    const l = drawerLayout(w, area(w, h), TOWERS.length, 0, CFG)
+    for (const [i, t] of l.tiles.entries()) {
+      assert.ok(t.x >= l.grid.x - 0.5, `${name}: tile ${i} starts left of the grid`)
+      assert.ok(t.x + t.width <= l.grid.x + l.grid.width + 0.5,
+        `${name}: tile ${i} runs past the grid`)
+      assert.ok(t.width > 0 && t.height > 0, `${name}: tile ${i} has no area`)
+    }
+  }
+})
+
+test('six towers make three rows of two', () => {
+  const l = drawerLayout(844, area(844, 390), 6, 0, CFG)
+  assert.equal(l.tiles.length, 6)
+  // Two columns: tiles 0 and 1 share a row, 0 and 2 do not.
+  assert.equal(l.tiles[0]!.y, l.tiles[1]!.y)
+  assert.notEqual(l.tiles[0]!.y, l.tiles[2]!.y)
+  assert.ok(l.tiles[1]!.x > l.tiles[0]!.x)
+})
+
+test('the narrow viewport is the one that scrolls, and it does', () => {
+  // Measured, not assumed: 198px of tiles in a 132px grid at 568x320, and
+  // 198 in 202 at 844x390. The scroll path is only reachable on the phone,
+  // which is exactly the screen it matters on.
+  const wide = drawerLayout(844, area(844, 390), 6, 0, CFG)
+  const narrow = drawerLayout(568, area(568, 320), 6, 0, CFG)
+  assert.equal(wide.maxScroll, 0, 'the wide drawer should not need to scroll')
+  assert.ok(narrow.maxScroll > 0, 'the narrow drawer must scroll or a tile is unreachable')
+})
+
+test('scrolling moves the tiles and nothing else', () => {
+  const at0 = drawerLayout(568, area(568, 320), 6, 0, CFG)
+  const at30 = drawerLayout(568, area(568, 320), 6, 30, CFG)
+  assert.deepEqual(at30.grid, at0.grid, 'the grid viewport must not move with the content')
+  assert.deepEqual(at30.panel, at0.panel, 'the panel must not move with the content')
+  assert.equal(at30.tiles[0]!.y, at0.tiles[0]!.y - 30)
+})
+
+test('scroll is clamped at both ends', () => {
+  const a = area(568, 320)
+  const under = drawerLayout(568, a, 6, -500, CFG)
+  const over = drawerLayout(568, a, 6, 9999, CFG)
+  const top = drawerLayout(568, a, 6, 0, CFG)
+  const bottom = drawerLayout(568, a, 6, top.maxScroll, CFG)
+  assert.deepEqual(under.tiles[0], top.tiles[0], 'scrolling up past the top must stop')
+  assert.deepEqual(over.tiles[0], bottom.tiles[0], 'scrolling down past the end must stop')
+})
+
+test('EVERY tile is reachable by scrolling, at every viewport', () => {
+  // The claim the slice rests on. A grid that scrolls is a grid where a tile
+  // can be permanently off screen, and six is enough for that to happen.
+  for (const [name, w, h] of VIEWPORTS) {
+    const a = area(w, h)
+    for (let i = 0; i < TOWERS.length; i++) {
+      const base = drawerLayout(w, a, TOWERS.length, 0, CFG)
+      const to = scrollToShow(i, 0, CFG, base.grid, TOWERS.length)
+      const l = drawerLayout(w, a, TOWERS.length, to, CFG)
+      assert.ok(tileVisible(l.tiles[i]!, l.grid, 0.99),
+        `${name}: tile ${i} cannot be brought fully into view (scroll ${to})`)
+    }
+  }
+})
+
+test('scrollToShow does not move a tile that is already visible', () => {
+  const a = area(844, 390)
+  const l = drawerLayout(844, a, 6, 0, CFG)
+  assert.equal(scrollToShow(0, 0, CFG, l.grid, 6), 0)
+})
+
+test('a tile scrolled fully out of view is not counted as reachable', () => {
+  // The control for the test above: tileVisible has to be capable of false.
+  const l = drawerLayout(568, area(568, 320), 6, 0, CFG)
+  const gone = { ...l.tiles[0]!, y: l.grid.y - 1000 }
+  assert.equal(tileVisible(gone, l.grid), false)
+})
+
+/* ------------------------------------------------------------ hit testing */
+
+test('a point in a tile is in that tile and no other', () => {
+  const l = drawerLayout(844, area(844, 390), 6, 0, CFG)
+  for (const [i, t] of l.tiles.entries()) {
+    const cx = t.x + t.width / 2
+    const cy = t.y + t.height / 2
+    const hits = l.tiles.filter((o) => inRect(o, cx, cy))
+    assert.equal(hits.length, 1, `tile ${i}'s centre lands in ${hits.length} tiles`)
+    assert.ok(inRect(t, cx, cy))
+  }
+})
+
+test('tiles do not overlap each other', () => {
+  for (const [name, w, h] of VIEWPORTS) {
+    const l = drawerLayout(w, area(w, h), TOWERS.length, 0, CFG)
+    for (let i = 0; i < l.tiles.length; i++) {
+      for (let j = i + 1; j < l.tiles.length; j++) {
+        assert.ok(!overlaps(l.tiles[i]!, l.tiles[j]!), `${name}: tiles ${i} and ${j} overlap`)
+      }
+    }
+  }
+})
+
+/* ---------------------------------------------------- the placement flow */
+
+test('the drawer path never opens the build ring on an empty node', () => {
+  // "While the drawer flag is ON, tapping an EMPTY node does nothing."
+  const game = src('scenes/GameScene.ts')
+  assert.match(game, /if \(this\.drawerOn\(\)\) \{[\s\S]{0,600}?openPadRing/,
+    'the empty-node branch does not check the flag')
+  assert.match(game, /placeFromDrawer/, 'there is no drawer placement path')
+})
+
+test('placement from the drawer asks for no confirmation', () => {
+  // Deliberate: a confirm on every build is friction on the most common
+  // action in the game. If mis-taps prove costly the answer is an undo
+  // window, not a dialog.
+  const game = src('scenes/GameScene.ts')
+  // The METHOD BODY, bounded by its own closing brace. Slicing to the next
+  // `private place(` reached ten thousand characters into the ring's own
+  // construction and reported its confirm button as this path's — a test
+  // failing on code it was never looking at.
+  const at = game.indexOf('private placeFromDrawer(')
+  const fn = game.slice(at, game.indexOf('\n  }', at))
+  // The CODE, not the prose: the method's own comment explains why there is
+  // no confirmation, and a regex over the whole body matched that comment.
+  const code = fn.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n')
+  assert.doesNotMatch(code, /new Dialog|showPanel|openRing|confirmLabel/,
+    'a confirmation step crept into the placement path')
+  assert.match(code, /this\.place\(id, spot\)/, 'placement does not actually place')
+})
+
+test('the drawer reads pointers through the pointer-space helper', () => {
+  // Five bugs have come from comparing canvas pixels with a CSS-pixel layout.
+  // Every tap target in this slice is a pointer against a laid-out box.
+  const drawer = src('ui/ControlDrawer.ts')
+  // Through the camera that DRAWS the drawer, which is handed in. This
+  // assertion used to name `scene.cameras.main` and so enshrined the bug: the
+  // main camera on GameScene is the WORLD camera, and converting through it
+  // gives a point on the map for a rectangle laid out in CSS pixels.
+  assert.match(drawer, /pointerToScreen\(this\.scene, p, this\.opts\.camera\(\)\)/,
+    'the drawer converts the pointer through the wrong camera')
+  assert.doesNotMatch(drawer, /pointerToScreen\([^)]*cameras\.main/,
+    'the drawer is back on the world camera')
+  assert.match(src('scenes/GameScene.ts'), /camera: \(\) => this\.uiCam/,
+    'the scene does not hand the drawer its UI camera')
+  // Code only. The comment above that call names `p.x` to explain what it is
+  // NOT doing, and a regex over the file matched the explanation.
+  const code = drawer.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n')
+  assert.doesNotMatch(code, /\bp\.x\b|\bp\.y\b|pointer\.x|pointer\.y/,
+    'a raw pointer coordinate is read somewhere in the drawer')
+})
+
+/* ------------------------------------------ the press the drawer already ate */
+
+test('the board asks who took the press, not who is under it now', () => {
+  /*
+   * THE DRAWER ACTS ON A PRESS BEFORE THE SCENE ASKS ABOUT IT.
+   *
+   * A game object's own pointerdown runs before the scene-level one, and
+   * picking a tile collapses the panel — so `owns()` asked afterwards answers
+   * about a panel that is no longer out, returns false, and the board scores
+   * a tap on a tile as a tap on bare ground. The bare-ground branch cancels
+   * the pick. The drawer selected a tower and unselected it within the same
+   * tap, and the probe reported "the scene did not learn the pick" for four
+   * runs while the pointer maths was innocent throughout.
+   */
+  const game = src('scenes/GameScene.ts').split('\n')
+    .filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n')
+  assert.match(game, /this\.drawer\.claimsPress\(ui\.x, ui\.y\)/,
+    'the scene does not ask the drawer whether it took the press')
+  assert.doesNotMatch(game, /this\.drawer\.owns\(/,
+    'the scene is back on owns(), which answers about the panel it just closed')
+})
+
+test('the drawer records the press before anything it does can move', () => {
+  const drawer = src('ui/ControlDrawer.ts')
+  const body = drawer.slice(drawer.indexOf('private press('))
+  const fn = body.slice(0, body.indexOf('\n  }'))
+  const took = fn.indexOf('this.tookPress = this.owns(')
+  assert.ok(took > 0, 'press does not record that it took the press')
+  assert.ok(took < fn.indexOf('this.toggle()'),
+    'the record is written after the toggle that moves the rectangles')
+  // The other mover is `select`, which collapses the panel. It lives in
+  // `release` now, and the record still has to be written before the gesture
+  // that ends there begins.
+  const rat = drawer.indexOf('private release(')
+  assert.ok(rat > drawer.indexOf('private press('), 'release comes before press')
+})
+
+test('claiming a press consumes the record, so it cannot outlive one press', () => {
+  // A flag set on pointerdown and cleared on pointerup leaks whenever the
+  // pointerup never arrives — a finger dragged off the canvas, a lost pointer
+  // capture. Reading it is what clears it.
+  const drawer = src('ui/ControlDrawer.ts')
+  const at = drawer.indexOf('claimsPress(')
+  const fn = drawer.slice(at, drawer.indexOf('\n  }', at))
+  assert.match(fn, /const took = this\.tookPress/)
+  assert.match(fn, /this\.tookPress = false/)
+})
+
+/* ------------------------------------------------------- the grid scrolls */
+
+test('the grid is scrolled by a drag, not only by the harness', () => {
+  /*
+   * `scrollToTile` is a lever the probe has and a player does not. Reaching
+   * every tile with it and calling the grid reachable is precisely the
+   * mistake the old build menu made: at 568x320 the content is 202 tall in a
+   * 132-tall grid, so two of the six towers were off the bottom of a panel
+   * that looked complete, with no gesture that could bring them up.
+   */
+  const drawer = src('ui/ControlDrawer.ts')
+  assert.match(drawer, /this\.hit\.on\('pointermove'/, 'nothing listens for a drag')
+  assert.match(drawer, /this\.scrollBy\(-step\)/,
+    'the grid does not move against the finger')
+  assert.match(drawer, /dragSlop/, 'a press and a drag are not told apart')
+})
+
+test('a drag that starts on a tile does not also buy it', () => {
+  // The pick happens on RELEASE and only when the finger never travelled.
+  const drawer = src('ui/ControlDrawer.ts')
+  const at = drawer.indexOf('private release(')
+  assert.ok(at > 0, 'there is no release handler, so the pick is still on press')
+  const fn = drawer.slice(at, drawer.indexOf('\n  }', at))
+  assert.match(fn, /if \(!this\.enabled \|\| !this\.open \|\| scrolled \|\| on === null\) return/,
+    'release does not refuse a gesture that scrolled')
+  assert.match(fn, /this\.select\(/, 'release never picks anything')
+  // And press must NOT select: that is what release is for.
+  const pat = drawer.indexOf('private press(')
+  const press = drawer.slice(pat, drawer.indexOf('\n  }', pat))
+  assert.doesNotMatch(press, /this\.select\(/, 'press still selects, so a drag buys')
+})
+
+test('the scroll indicator appears only when the grid actually scrolls', () => {
+  // At 844x390 all six tiles fit, and a bar hinting at content that is not
+  // there is worse than no bar.
+  for (const [name, w, h] of VIEWPORTS) {
+    const l = drawerLayout(w, area(w, h), TOWERS.length, 0, CFG, true)
+    const fits = l.contentHeight <= l.grid.height
+    assert.equal(l.maxScroll === 0, fits, `${name}: maxScroll disagrees with the content`)
+  }
+  const drawer = src('ui/ControlDrawer.ts')
+  const at = drawer.indexOf('private scrollbar(')
+  const fn = drawer.slice(at, drawer.indexOf('\n  }', at))
+  assert.match(fn, /if \(max <= 0\) return/, 'the bar is drawn when there is nothing to scroll')
+})
+
+test('the drawer takes every colour it draws from the data', () => {
+  /*
+   * The padlock was drawn in `COLOR.panelEdge` — 0x3d4a59, from the bevelled
+   * plate palette this drawer explicitly does not use — on a 0x4a3a2a tile.
+   * It rendered every frame at both ratios and was invisible in every
+   * screenshot, which is the failure mode a colour constant borrowed from
+   * another vocabulary always has.
+   */
+  const drawer = src('ui/ControlDrawer.ts')
+  const code = drawer.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n')
+  for (const call of code.match(/(fillStyle|lineStyle)\([^)]*\)/g) ?? []) {
+    assert.doesNotMatch(call, /COLOR\./, `a Graphics colour comes from the theme: ${call}`)
+  }
+  const D = read('presentation').drawer
+  for (const k of ['lockFill', 'lockEdge', 'scrollbarFill', 'scrollbarWidth', 'dragSlop']) {
+    assert.equal(typeof D[k], 'number', `presentation.json has no drawer.${k}`)
+  }
+})

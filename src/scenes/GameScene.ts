@@ -51,7 +51,9 @@ import {
   BASE_TIER, nextStep, sellValue, specById, specIcon, statAt,
 } from '../systems/Upgrades.ts'
 import { canAffordAny, openingPurse } from '../systems/Economy.ts'
-import { addBannerPoints, hasClearedARun, recordRunCleared } from '../systems/Save.ts'
+import {
+  addBannerPoints, controlDrawerOn, hasClearedARun, recordRunCleared,
+} from '../systems/Save.ts'
 import { bannerPointsFor, verdictFor, type RunOutcome } from '../systems/Banner.ts'
 import { waveOutcome } from '../systems/Wave.ts'
 import { logEvent, provideState } from '../systems/Diagnostics.ts'
@@ -66,6 +68,7 @@ import {
   deviceScale, fitUiCamera, pointerToScreen, viewH, viewW, worldToScreen,
 } from '../systems/Resolution.ts'
 import { CastCursor } from '../ui/CastCursor.ts'
+import { ControlDrawer, type DrawerTile } from '../ui/ControlDrawer.ts'
 import { bothUnits, realSeconds } from '../systems/GameTime.ts'
 
 /** The HUD's layout constants, shared with HudScene so both agree. */
@@ -221,12 +224,28 @@ export class GameScene extends Phaser.Scene {
    *  knob is `scatter.rules.attempts`, and this is what it produced. */
   scatterCount = 0
   private markerLayer!: Phaser.GameObjects.Graphics
+  /** The pulsing ring on every node that will take the drawer's pick. Its own
+   *  layer because the pads' scale and tint are both already spoken for. */
+  private eligibleLayer!: Phaser.GameObjects.Graphics
   /** The dashed circle showing what an upgrade would make this tower's reach.
    *  Its own layer, because rangeRing is cleared and redrawn constantly. */
   private projectedRing!: Phaser.GameObjects.Graphics
   /** The valid/invalid marker under the pointer while a summon is armed.
    *  Public so the harness can read which state it is in. */
   castCursor!: CastCursor
+  /**
+   * The opt-in control drawer, behind the `controlDrawer` save flag.
+   *
+   * Built every run whether the flag is on or not, and switched by
+   * `setEnabled`. A drawer that is off draws nothing and hits nothing, and
+   * building it either way is what lets the flag be flipped in the settings
+   * dialog and take effect on the same board seconds later.
+   *
+   * Public for the harness, which drives the whole placement flow.
+   */
+  drawer!: ControlDrawer
+  /** The tower the drawer has selected, waiting for a node. */
+  drawerPick: string | null = null
   /** Banners waiting for the slot, and whether the slot is taken. One at a
    *  time; see announce(). */
   private readonly bannerQueue: Array<{ text: string; color: string }> = []
@@ -364,10 +383,35 @@ export class GameScene extends Phaser.Scene {
     this.buildSign()
 
     this.markerLayer = this.add.graphics().setDepth(GROUND_DEPTH + 6)
+    // Above the pads and below everything that stands on them, so the mark
+    // reads as being ON the node rather than over the board.
+    this.eligibleLayer = this.add.graphics().setDepth(GROUND_DEPTH + 6)
     this.projectedRing = this.add.graphics().setDepth(GROUND_DEPTH + 5)
     // A world object: it marks a place on the map, so it pans and zooms with
     // it. Its SIZE is divided by the zoom, so it stays constant on the glass.
     this.castCursor = new CastCursor(this, OVERLAY_DEPTH + 2)
+
+    // THE DRAWER, behind its flag. `panelArea` is the space the HUD already
+    // guarantees is clear of the counters, START WAVE, the gear, the ability
+    // strip and CANCEL, so the drawer cannot cover any of them by
+    // construction rather than by a check somebody remembers to run.
+    this.drawer = new ControlDrawer(this, OVERLAY_DEPTH + 3, {
+      area: () => this.layout.panelArea,
+      viewW: () => viewW(this),
+      // The camera that DRAWS it. Not `cameras.main`, which is the world.
+      camera: () => this.uiCam,
+      tiles: () => this.drawerTiles(),
+      onSelect: (id) => {
+        this.drawerPick = id
+        this.drawSpots()
+      },
+    })
+    // SCREEN SPACE, like every other piece of chrome GameScene draws. Without
+    // this the drawer's rectangles are in CSS pixels and the world camera is
+    // hit-testing them in WORLD coordinates — the tab draws where it should
+    // and takes no presses, which is exactly what the probe found.
+    this.asScreenSpace(this.drawer.objects)
+    this.drawer.setEnabled(controlDrawerOn())
     this.reviveLabel = this.add.text(0, 0, '', {
       fontFamily: FONT_UI, fontSize: '20px', fontStyle: 'bold', color: COLOR.ink,
       stroke: '#0d1016', strokeThickness: 5,
@@ -972,6 +1016,43 @@ this.armReadyCountdown()
       if (!free) continue
       const hot = this.hoverSpot?.index === spot.index
       img.setTint(tint(hot ? cfg.hoverTint : placing ? cfg.placingTint : cfg.restTint))
+
+      // EVERY NODE THAT CAN TAKE THE PICK PULSES; the rest stay plain.
+      //
+      // A scale beat rather than a fourth tint. The pads already carry three
+      // tints — rest, hover, placing — and a fourth colour would be one
+      // nobody can name against the painted grass. Size is unambiguous at a
+      // glance and survives the map's palette.
+    }
+    this.drawEligibleNodes()
+  }
+
+  /**
+   * A pulsing ring around every node that will take the drawer's pick.
+   *
+   * NOT a scale or a tint on the pad itself, and both for the same reason:
+   * they are taken. The pads already carry an ambient scale tween — every one
+   * of them, always, staggered — and three tints for rest, hover and placing.
+   * Writing either from here would mean two things fighting over one
+   * property, which is the bug the tint/scale split was drawn to prevent.
+   *
+   * So eligibility is its OWN mark, on the marker layer, and "plain" is
+   * simply the absence of it.
+   */
+  private drawEligibleNodes(): void {
+    this.eligibleLayer.clear()
+    if (!this.drawerPick) return
+    const d = PRESENTATION.drawer
+    // One rhythm for all of them: a set beats together, six phases is noise.
+    const t = (this.time.now % d.nodePulseMs) / d.nodePulseMs
+    const beat = 0.5 + 0.5 * Math.sin(t * Math.PI * 2)
+    for (const spot of this.build.spots) {
+      if (!this.nodeTakesPick(spot)) continue
+      const r = MAP.spotRadius * (1 + d.nodePulseScale * beat)
+      this.eligibleLayer.fillStyle(0xffd23f, 0.10 + beat * 0.10)
+      this.eligibleLayer.fillEllipse(spot.x, spot.y, r * 2, r * 2 * PAD_SQUASH)
+      this.eligibleLayer.lineStyle(3, 0xffd23f, 0.65 + beat * 0.35)
+      this.eligibleLayer.strokeEllipse(spot.x, spot.y, r * 2, r * 2 * PAD_SQUASH)
     }
   }
 
@@ -1098,6 +1179,12 @@ this.armReadyCountdown()
       // camera those rectangles are drawn by.
       const ui = pointerToScreen(this, p, this.uiCam)
       this.pressTakenByUi =
+        // The drawer is drawn by GameScene but positioned in CSS pixels like
+        // the HUD, so it is asked in the same space rather than through the
+        // hit list. `claimsPress` rather than `owns`, because the drawer has
+        // ALREADY handled this press by the time we get here and may have
+        // collapsed the panel the tap landed in.
+        this.drawer.claimsPress(ui.x, ui.y) ||
         (this.ring?.active === true && this.ring.owns(over))
         || (this.ticket?.active === true && this.ticket.owns(over))
         || this.dialog?.owns(over) === true
@@ -1162,6 +1249,14 @@ this.armReadyCountdown()
     // pad moves the menu there rather than being spent dismissing it.
     const spot = this.build.spotAt(w.x, w.y)
     if (spot && this.build.isFree(spot.index)) {
+      if (this.drawerOn()) {
+        // THE INVERTED FLOW. With the drawer on, an empty node is not a menu
+        // any more — it is a destination. Tapping one with nothing picked
+        // does NOTHING on purpose: the drawer is where a build starts, and a
+        // node that opened a second menu would be two ways to do one thing.
+        if (this.drawerPick) this.placeFromDrawer(spot)
+        return
+      }
       this.openPadRing(spot)
       return
     }
@@ -1179,6 +1274,15 @@ this.armReadyCountdown()
 
     if (this.hero.hits(w.x, w.y)) {
       this.selectHero()
+      return
+    }
+
+    // Bare ground with a tile picked: that is the cancel. The other cancel is
+    // tapping the same tile again, which the drawer owns.
+    if (this.drawerPick) {
+      this.drawer.select(null)
+      this.drawerPick = null
+      this.drawSpots()
       return
     }
 
@@ -1285,6 +1389,77 @@ this.armReadyCountdown()
     })
     this.drawSpots()
     this.status.message = 'Pick a tower to read about it, then confirm.'
+  }
+
+  /**
+   * What the drawer shows: the run's active units, in draft order.
+   *
+   * THE SIX TOWERS AND NOTHING ELSE in this slice. A tower the run has not
+   * unlocked yet is present but LOCKED rather than absent — a grid that grows
+   * as the run goes on gives the player nothing to plan around, and the third
+   * and fourth types arrive on a schedule they can already see.
+   */
+  private drawerTiles(): DrawerTile[] {
+    const run = runState()
+    const order = [...this.status.unlockedTowers,
+      ...run.reserveTowers.filter((id) => !this.status.unlockedTowers.includes(id))]
+    return order.map((id) => ({
+      id,
+      sprite: TOWERS[id]!.sprite,
+      price: TOWERS[id]!.cost,
+      affordable: this.status.peanuts >= TOWERS[id]!.cost,
+      locked: !this.status.unlockedTowers.includes(id),
+    }))
+  }
+
+  /**
+   * Re-reads the drawer flag and switches control scheme on the spot.
+   *
+   * Called by the settings dialog the moment the toggle is flipped, so the
+   * two can be compared on the same board with the same peanuts rather than
+   * across a restart — which is the only reason for a runtime flag at all.
+   * Anything the outgoing scheme had open is dropped, because a ring left
+   * hanging over a board that no longer uses rings is a ghost.
+   */
+  applyControlScheme(): void {
+    this.clearSelection()
+    this.drawerPick = null
+    this.drawer.select(null)
+    this.drawer.setEnabled(controlDrawerOn())
+    this.drawSpots()
+  }
+
+  /** True while the drawer replaces the build ring. Read at the point of use
+   *  so the settings toggle applies without restarting the run. */
+  drawerOn(): boolean {
+    return this.drawer?.enabled === true
+  }
+
+  /**
+   * Places the drawer's selected tower on a node, with NO confirmation step.
+   *
+   * Deliberate. A confirm on every build is friction on the most common
+   * action in the game, and the ring's second press already exists for the
+   * decisions that cannot be undone. If playtesting shows mis-taps are
+   * costly, the answer is an undo window, not a dialog.
+   */
+  private placeFromDrawer(spot: BuildSpot): void {
+    const id = this.drawerPick
+    if (!id) return
+    if (!this.build.isFree(spot.index)) return
+    if (this.status.peanuts < TOWERS[id]!.cost) return
+    this.place(id, spot)
+    this.drawer.select(null)
+    this.drawerPick = null
+    this.drawSpots()
+  }
+
+  /** True when this node would take the drawer's current pick: free, and
+   *  affordable. These are the nodes that pulse. */
+  private nodeTakesPick(spot: BuildSpot): boolean {
+    const id = this.drawerPick
+    if (!id) return false
+    return this.build.isFree(spot.index) && this.status.peanuts >= TOWERS[id]!.cost
   }
 
   /** The pad or tower's position, on the glass, right now. */
@@ -2394,6 +2569,10 @@ this.armReadyCountdown()
 
     // Anything created since the last split has to be given to a camera.
     if (this.children.list.length !== this.splitAt) this.syncCameras()
+
+    // The node pulse is a per-frame thing and only while something is picked,
+    // so the pads are not redrawn for the other ninety-nine per cent of a run.
+    if (this.drawerPick) this.drawSpots()
 
     // A backgrounded tab hands back a huge delta; cap it so nothing teleports.
     const real = Math.min(delta / 1000, 0.05)

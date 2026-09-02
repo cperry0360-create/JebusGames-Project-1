@@ -340,6 +340,10 @@ export class HudScene extends Phaser.Scene {
       onHome: () => this.confirmQuit(),
       onRestart: () => { this.closeSettings(); this.restartRun() },
       onContinue: () => { this.closeSettings(); this.resumeGame() },
+      // Applied to the running scene, not stored for the next one. The flag
+      // exists so the two control schemes can be compared on the same board
+      // seconds apart, and a change that needs a restart is not that.
+      onFlagChanged: () => this.world.applyControlScheme(),
     })
   }
 

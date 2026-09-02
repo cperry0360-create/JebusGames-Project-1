@@ -3268,6 +3268,29 @@ async function run() {
         (moved || g.towers.length !== towersBefore ? '  *** THE MAP IS LIVE ***' : '  inert'))
       if (moved || g.towers.length !== towersBefore) bad++
 
+      // THE DRAWER FLAG. Pressing the row must flip the save AND switch the
+      // control scheme on the spot — that is the whole reason it is a runtime
+      // flag and not a build-time one.
+      const flagRow = named.find((n) => n.id === 'settings:drawer')
+      if (!flagRow) { note('  *** no drawer row in the settings panel ***'); bad++ } else {
+        const SAVE2 = await import('./js/systems/Save.js')
+        const was = SAVE2.controlDrawerOn()
+        await click(flagRow.r.centerX, flagRow.r.centerY)
+        await sleep(220)
+        const now = SAVE2.controlDrawerOn()
+        note('  pressed the drawer row: flag ' + was + ' -> ' + now +
+          '   drawer live = ' + g.drawer.enabled +
+          (now !== was && g.drawer.enabled === now ? '  applied at runtime'
+            : '  *** THE FLAG DID NOT APPLY ***'))
+        if (now === was || g.drawer.enabled !== now) bad++
+        // And back, so the rest of the probe runs with the ring as default.
+        await click(flagRow.r.centerX, flagRow.r.centerY)
+        await sleep(220)
+        note('  pressed it again: flag ' + SAVE2.controlDrawerOn() +
+          '   drawer live = ' + g.drawer.enabled)
+        if (SAVE2.controlDrawerOn() !== was || g.drawer.enabled !== was) bad++
+      }
+
       // DRAG A SLIDER, and check the value follows the pointer rather than
       // only that a handler fired.
       const music = named.find((n) => n.id === 'settings:music')
@@ -4667,6 +4690,411 @@ async function run() {
       note('  ring bounds ' + Math.round(b.width) + 'x' + Math.round(b.height) +
         (b.width <= 60 ? '  — a vertical line, not a ring' : ''))
     }
+    return
+  }
+
+  if (scenario === 'drawer') {
+    // THE CONTROL DRAWER, DRIVEN END TO END AND MEASURED BY POSITION.
+    //
+    // Every claim here is a rectangle or a peanut count, never "the handler
+    // fired". A synthetic press dispatched on the canvas hit-tests a point
+    // below the display exactly as happily as one in the middle of it — which
+    // is how the old build menu passed a reachability check while being
+    // unusable — so a tile is reachable when its RECTANGLE is on screen and
+    // pressing its CENTRE changes the selection.
+    const P = (await import('./js/data/presentation.json', { with: { type: 'json' } })).default
+    const T = (await import('./js/data/towers.json', { with: { type: 'json' } })).default
+    const SAVE = await import('./js/systems/Save.js')
+    const D = P.drawer
+    const dpr = window.devicePixelRatio || 1
+    const problems = []
+    const push = (m) => { problems.push(m); note('   *** ' + m) }
+
+    note('viewport ' + VP.w + 'x' + VP.h + '  dpr ' + dpr)
+
+    // THE FLAG. Off by default, and turning it on must take effect without a
+    // restart — that is the whole reason it is a runtime flag.
+    note('flag default: ' + SAVE.controlDrawerOn() + ' (false is correct)')
+    if (SAVE.controlDrawerOn()) push('the drawer flag defaults ON')
+    if (g.drawer.enabled) push('the drawer is live with the flag off')
+    SAVE.setControlDrawer(true)
+    g.applyControlScheme()
+    await sleep(200)
+    note('after the toggle: drawer enabled = ' + g.drawer.enabled)
+    if (!g.drawer.enabled) { push('the flag did not apply at runtime'); return }
+
+    g.status.peanuts = 400
+    g.drawer.refresh()
+    await sleep(150)
+
+    const L = () => g.drawer.layout || null
+    const hud = g.layout
+    const rects = { counters: hud.counters, startButton: hud.startButton,
+      settings: hud.settings, abilities: hud.abilities, cancel: hud.cancel,
+      heroRow: hud.heroRow, messageRow: hud.messageRow }
+    const hits = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width
+      && a.y < b.y + b.height && b.y < a.y + a.height
+    const onScreen = (r) => r.x >= -0.5 && r.y >= -0.5
+      && r.x + r.width <= VP.w + 0.5 && r.y + r.height <= VP.h + 0.5
+    const tileFully = (r) => {
+      const gr = g.drawer.layout.grid
+      return r.y >= gr.y - 0.5 && r.y + r.height <= gr.y + gr.height + 0.5
+    }
+
+    /* --- the tab ------------------------------------------------------- */
+
+    const tab = g.drawer.layout.tab
+    note('tab ' + Math.round(tab.x) + ',' + Math.round(tab.y) + ' ' +
+      Math.round(tab.width) + 'x' + Math.round(tab.height))
+    if (!onScreen(tab)) push('the tab is not fully on screen')
+    for (const [k, r] of Object.entries(rects)) {
+      if (hits(tab, r)) push('the tab overlaps ' + k)
+    }
+
+    // WHY, if it does not open. Three separate things can swallow this and
+    // guessing between them costs a run each.
+    {
+      const cx = tab.x + tab.width / 2, cy = tab.y + tab.height / 2
+      const dprN = window.devicePixelRatio || 1
+      const fake = { x: cx * dprN, y: cy * dprN, worldX: 0, worldY: 0 }
+      note('   diag: owns(' + Math.round(cx) + ',' + Math.round(cy) + ') = ' +
+        g.drawer.owns(cx, cy) +
+        '   hit at ' + Math.round(g.drawer.hitBox.x) + ',' + Math.round(g.drawer.hitBox.y) +
+        ' ' + Math.round(g.drawer.hitBox.width) + 'x' + Math.round(g.drawer.hitBox.height) +
+        '   visible=' + g.drawer.layer.visible)
+      const over = g.input.hitTestPointer(
+        Object.assign(Object.create(g.input.activePointer), fake))
+      note('   diag: hitTest names = ' + JSON.stringify(over.map((o) => o.name || o.type)))
+    }
+    // Reachable means a press on its centre opens the panel.
+    await click(tab.x + tab.width / 2, tab.y + tab.height / 2)
+    await sleep(220)
+    note('tab pressed: panel open = ' + g.drawer.open)
+    if (!g.drawer.open) push('pressing the tab did not open the panel')
+
+    /* --- the panel ----------------------------------------------------- */
+
+    const panel = g.drawer.layout.panel
+    note('panel ' + Math.round(panel.x) + ',' + Math.round(panel.y) + ' ' +
+      Math.round(panel.width) + 'x' + Math.round(panel.height) +
+      '   grid ' + Math.round(g.drawer.layout.grid.width) + 'x' +
+      Math.round(g.drawer.layout.grid.height) +
+      '   maxScroll ' + Math.round(g.drawer.layout.maxScroll))
+    if (!onScreen(panel)) push('the panel is not fully on screen')
+    for (const [k, r] of Object.entries(rects)) {
+      if (hits(panel, r)) push('the expanded panel overlaps ' + k)
+    }
+
+    /* --- every tile, including after scrolling -------------------------- */
+
+    // THE TAB MUST NOT SIT OVER THE GRID. It is tested before the tiles, so an
+    // overlap is not a cosmetic fault: it is a tile that closes the drawer.
+    for (const [i, r] of g.drawer.tileRects.entries()) {
+      if (hits(g.drawer.layout.tab, r)) {
+        push('the tab overlaps tile ' + i + ' — that tile cannot be picked')
+      }
+    }
+
+    const n = g.drawer.tileRects.length
+    note('tiles: ' + n + '   tile size ' +
+      Math.round(g.drawer.tileRects[0].width * 10) / 10 + 'x' +
+      Math.round(g.drawer.tileRects[0].height))
+    if (n !== Object.keys(T).length) push('the drawer shows ' + n + ' of ' + Object.keys(T).length + ' towers')
+
+    // WHAT THE HANDLER ACTUALLY SEES, with `arg=diag`.
+    //
+    // Off by default because it fires on every press, and kept because it is
+    // what found the bug the first four runs could not: the tab opened and
+    // every tile missed, which looked like a sixth pointer-space fault and was
+    // not. The trace showed `select(withholding)`, `collapse()`, and THEN the
+    // scene's own pointerdown deciding the tap was bare ground — because the
+    // drawer had already closed the panel it asked about. An object's
+    // pointerdown runs before the scene's, and this is the only way to see it.
+    if (arg === 'diag') {
+      const RES0 = await import('./js/systems/Resolution.js')
+      const t0 = g.drawer.toggle.bind(g.drawer)
+      g.drawer.toggle = () => { note('   diag: toggle() open ' + g.drawer.open + ' -> ' + !g.drawer.open); t0() }
+      const c0 = g.drawer.collapse.bind(g.drawer)
+      g.drawer.collapse = () => { note('   diag: collapse() open=' + g.drawer.open); c0() }
+      const s0 = g.drawer.select.bind(g.drawer)
+      g.drawer.select = (id) => { note('   diag: select(' + id + ') from ' + g.drawer.selected); s0(id) }
+      g.input.on('pointerdown', (p) => {
+        const ui = RES0.pointerToScreen(g, p, g.uiCam)
+        note('   diag: pointer ' + Math.round(p.x) + ',' + Math.round(p.y) +
+          ' -> ui ' + Math.round(ui.x) + ',' + Math.round(ui.y) +
+          '   open=' + g.drawer.open + ' enabled=' + g.drawer.enabled)
+      })
+    }
+
+    let reached = 0
+    for (let i = 0; i < n; i++) {
+      g.drawer.scrollToTile(i)
+      await sleep(90)
+      const r = g.drawer.tileRects[i]
+      const grid = g.drawer.layout.grid
+      const fully = r.y >= grid.y - 0.5 && r.y + r.height <= grid.y + grid.height + 0.5
+      if (!fully) { push('tile ' + i + ' cannot be scrolled into view'); continue }
+      if (!onScreen(r)) { push('tile ' + i + ' is off screen at scroll ' + Math.round(g.drawer.scroll)); continue }
+      // PRESS IT. Reachable is a press that lands, not a rectangle that fits.
+      const before = g.drawer.selected
+      const tcx = r.x + r.width / 2, tcy = r.y + r.height / 2
+      await click(tcx, tcy)
+      await sleep(140)
+      const picked = g.drawer.selected
+      if (picked === before) {
+        // WHY. A press that changes nothing is either routed elsewhere or
+        // resolved against the wrong rectangle, and guessing costs a run.
+        const dprN = window.devicePixelRatio || 1
+        const over = g.input.hitTestPointer(Object.assign(
+          Object.create(g.input.activePointer),
+          { x: tcx * dprN, y: tcy * dprN, worldX: 0, worldY: 0 }))
+        note('   diag: tile ' + i + ' centre ' + Math.round(tcx) + ',' + Math.round(tcy) +
+          '   rect ' + Math.round(r.x) + ',' + Math.round(r.y) + ' ' +
+          Math.round(r.width) + 'x' + Math.round(r.height) +
+          '   owns=' + g.drawer.owns(tcx, tcy) +
+          '   hitTest = ' + JSON.stringify(over.map((o) => o.name || o.type)))
+      }
+      const tile = g.drawerTiles()[i]
+      if (tile.locked) {
+        if (picked !== before) push('tile ' + i + ' is locked and still selected')
+        reached++
+        continue
+      }
+      if (picked !== tile.id) {
+        push('pressing tile ' + i + ' (' + tile.id + ') selected ' + picked)
+        continue
+      }
+      reached++
+      // Selecting collapses the drawer so the board is visible. Re-open for
+      // the next tile.
+      if (g.drawer.open) push('the drawer did not collapse after a pick')
+      g.drawer.select(null)
+      g.drawer.open = true
+      g.drawer.refresh()
+      await sleep(90)
+    }
+    note('tiles reached and pressed: ' + reached + ' of ' + n)
+
+    /* --- the grid scrolls BY DRAGGING, which is the only way a player has -- */
+
+    // `scrollToTile` is the harness's lever, not the player's. Reaching every
+    // tile with it and calling the grid reachable is exactly the mistake the
+    // old build menu made. At 568x320 the content is 202 tall in a 132 grid,
+    // so two of the six towers are only reachable by dragging.
+    g.drawer.select(null)
+    g.drawer.open = true
+    g.drawer.scroll = 0
+    g.drawer.refresh()
+    await sleep(120)
+    if (g.drawer.layout.maxScroll > 0) {
+      const gr = g.drawer.layout.grid
+      const cx = gr.x + gr.width / 2
+      const from = gr.y + gr.height - 12
+      const to = gr.y + 12
+      mouse('mousemove', cx, from); await sleep(40)
+      mouse('mousedown', cx, from); await sleep(40)
+      for (let k = 1; k <= 8; k++) {
+        mouse('mousemove', cx, from + (to - from) * (k / 8)); await sleep(30)
+      }
+      mouse('mouseup', cx, to); await sleep(160)
+      note('dragged the grid: scroll 0 -> ' + Math.round(g.drawer.scroll) +
+        ' of ' + Math.round(g.drawer.layout.maxScroll))
+      if (g.drawer.scroll <= 0) push('dragging the grid did not scroll it')
+      // A DRAG MUST NOT ALSO BUY. It starts on a tile every time.
+      if (g.drawer.selected) push('the drag also picked ' + g.drawer.selected)
+      if (!g.drawer.open) push('the drag closed the drawer')
+      // And the last tile is now reachable by a press, having been dragged to.
+      const last = g.drawer.tileRects[n - 1]
+      if (!tileFully(last)) push('the last tile is still not in view after dragging')
+      else {
+        await click(last.x + last.width / 2, last.y + last.height / 2)
+        await sleep(160)
+        const want = g.drawerTiles()[n - 1]
+        const got = g.drawer.selected
+        note('after dragging, tile ' + (n - 1) + ' (' + want.id + ') pressed: ' +
+          (want.locked ? 'locked, selection ' + got : 'selected ' + got))
+        if (!want.locked && got !== want.id) push('the dragged-to tile did not select')
+      }
+      g.drawer.select(null)
+      g.drawer.open = true
+      g.drawer.scroll = 0
+      g.drawer.refresh()
+      await sleep(120)
+    } else {
+      note('the grid does not scroll at this viewport (maxScroll 0)')
+    }
+
+    /* --- the inverted placement flow ------------------------------------ */
+
+    g.drawer.open = true
+    g.drawer.scroll = 0
+    g.drawer.refresh()
+    await sleep(120)
+    const affordable = g.drawerTiles().findIndex((t) => !t.locked && t.affordable)
+    if (affordable < 0) { push('nothing is affordable at 400 peanuts'); return }
+    g.drawer.scrollToTile(affordable)
+    await sleep(90)
+    const tileR = g.drawer.tileRects[affordable]
+    const pickId = g.drawerTiles()[affordable].id
+    await click(tileR.x + tileR.width / 2, tileR.y + tileR.height / 2)
+    await sleep(200)
+    note('picked ' + pickId + '   drawer collapsed = ' + !g.drawer.open +
+      '   scene pick = ' + g.drawerPick)
+    if (g.drawer.open) push('the drawer stayed open after a pick')
+    if (g.drawerPick !== pickId) push('the scene did not learn the pick')
+
+    // Which nodes pulse. Eligible = free and affordable.
+    const cost = T[pickId].cost
+    const free = g.build.freeSpots()
+    const eligible = free.filter(() => g.status.peanuts >= cost)
+    note('nodes: ' + free.length + ' free, ' + eligible.length + ' eligible at ' +
+      g.status.peanuts + ' peanuts (cost ' + cost + ')')
+
+    // TAP A PULSING NODE, through the canvas, at the node's own screen point.
+    const RES = await import('./js/systems/Resolution.js')
+    // AN ELIGIBLE NODE THAT IS ON SCREEN. `eligible[0]` was node 0, which the
+    // camera has off the left edge at -110 — tapping it is tapping nothing,
+    // and a probe that reports "placed nothing" for that reason is reporting
+    // its own aim.
+    //
+    // At 844x390 the camera shows a fraction of a 1280x720 board and NONE of
+    // the seven free nodes falls inside the viewport at the default framing.
+    // That is the player's situation too: you pan to the node you want. So the
+    // probe pans, exactly as `build()` does for the ring, and then measures.
+    const inView = (at) => at.x > 20 && at.y > 20 && at.x < VP.w - 20 && at.y < VP.h - 20
+    const seen = () => eligible
+      .map((sp) => ({ sp, at: RES.worldToScreen(g, sp.x, sp.y) })).filter(({ at }) => inView(at))
+    let visible = seen()
+    note('eligible nodes on screen before panning: ' + visible.length + ' of ' + eligible.length)
+    if (!visible.length && eligible.length) {
+      await lookAt(eligible[0].x, eligible[0].y)
+      await sleep(150)
+      visible = seen()
+      note('after panning to node ' + eligible[0].index + ': ' + visible.length +
+        ' of ' + eligible.length + ' on screen')
+    }
+    // THE PICK MUST SURVIVE THE PAN. A camera move that quietly clears the
+    // selection would make the whole flow untappable on a phone.
+    if (g.drawerPick !== pickId) push('panning the board lost the pick')
+    if (!visible.length) { push('no eligible node is on screen to tap'); return }
+    const target = visible[0].sp
+    const at = visible[0].at
+    const peanutsBefore = g.status.peanuts
+    const towersBefore = g.towers.length
+    await click(at.x, at.y)
+    await sleep(300)
+    const placed = g.towers[g.towers.length - 1]
+    note('tapped node ' + target.index + ' at ' + Math.round(at.x) + ',' + Math.round(at.y))
+    note('  towers ' + towersBefore + ' -> ' + g.towers.length +
+      '   peanuts ' + peanutsBefore + ' -> ' + g.status.peanuts +
+      ' (expected ' + (peanutsBefore - cost) + ')')
+    if (g.towers.length !== towersBefore + 1) push('the tap on a pulsing node placed nothing')
+    else {
+      if (placed.spot !== target.index) {
+        push('placed on node ' + placed.spot + ', tapped node ' + target.index)
+      }
+      if (placed.id !== pickId) push('placed ' + placed.id + ', picked ' + pickId)
+      if (g.status.peanuts !== peanutsBefore - cost) {
+        push('deducted ' + (peanutsBefore - g.status.peanuts) + ', cost is ' + cost)
+      }
+    }
+    if (g.drawerPick !== null) push('the pick survived placement')
+
+    /* --- an empty node with nothing picked does nothing ------------------ */
+
+    const freeSeen = () => g.build.freeSpots()
+      .map((sp) => ({ sp, at: RES.worldToScreen(g, sp.x, sp.y) })).filter(({ at }) => inView(at))
+    let idleOnScreen = freeSeen()
+    if (!idleOnScreen.length) {
+      // 568x320 shows one node at a time. Pan, exactly as a player would.
+      const any = g.build.freeSpots()[0]
+      if (any) { await lookAt(any.x, any.y); await sleep(150); idleOnScreen = freeSeen() }
+    }
+    if (!idleOnScreen.length) { push('no free node on screen for the idle-tap check'); return }
+    const idleAt = idleOnScreen[0].at
+    const before2 = g.towers.length
+    await click(idleAt.x, idleAt.y)
+    await sleep(200)
+    note('empty node with no pick: ring active = ' + (g.ring ? g.ring.active : false) +
+      '   towers ' + before2 + ' -> ' + g.towers.length)
+    if (g.ring && g.ring.active) push('an empty node opened the build ring with the drawer on')
+    if (g.towers.length !== before2) push('an empty node placed something with nothing picked')
+
+    /* --- cancel, both ways ---------------------------------------------- */
+
+    g.drawer.open = true
+    g.drawer.refresh()
+    await sleep(120)
+    const t2 = g.drawer.tileRects[affordable]
+    await click(t2.x + t2.width / 2, t2.y + t2.height / 2)
+    await sleep(160)
+    const pickedAgain = g.drawerPick
+    g.drawer.open = true
+    g.drawer.refresh()
+    await sleep(120)
+    const t3 = g.drawer.tileRects[affordable]
+    await click(t3.x + t3.width / 2, t3.y + t3.height / 2)
+    await sleep(160)
+    note('cancel by re-tapping the tile: ' + pickedAgain + ' -> ' + g.drawerPick)
+    if (g.drawerPick !== null) push('re-tapping the selected tile did not cancel')
+
+    g.drawer.open = true
+    g.drawer.refresh()
+    await sleep(100)
+    const t4 = g.drawer.tileRects[affordable]
+    await click(t4.x + t4.width / 2, t4.y + t4.height / 2)
+    await sleep(160)
+    // BARE GROUND THAT IS ACTUALLY ON SCREEN. A fixed world point put the tap
+    // at ui 514,-372 — above the canvas entirely — and the check passed for
+    // the wrong reason. Take a screen point, prove nothing is under it, tap
+    // that.
+    const bare = { x: Math.round(VP.w * 0.3), y: Math.round(VP.h * 0.55) }
+    const bw = g.cameras.main.getWorldPoint(bare.x * dpr, bare.y * dpr)
+    if (g.build.spotAt(bw.x, bw.y) || g.hero.hits(bw.x, bw.y) || g.towerAt(bw.x, bw.y)) {
+      push('the bare-ground point is not bare')
+    }
+    const before3 = g.towers.length
+    await click(bare.x, bare.y)
+    await sleep(200)
+    note('cancel by tapping bare ground: pick = ' + g.drawerPick +
+      '   towers ' + before3 + ' -> ' + g.towers.length)
+    if (g.drawerPick !== null) push('tapping bare ground did not cancel')
+    if (g.towers.length !== before3) push('bare ground placed a tower')
+
+    // MEASURED WHILE THE DRAWER IS STILL LIVE. Read after the flag goes off,
+    // `tileRects` is empty and the measurement throws — which is what the
+    // first run of this probe did.
+    g.drawer.open = true
+    g.drawer.refresh()
+    await sleep(120)
+    await shot('drawer-' + VP.w + 'x' + VP.h + '-dpr' + dpr)
+    note('MEASURED tab ' + Math.round(tab.width) + 'x' + Math.round(tab.height) +
+      ' at ' + Math.round(tab.x) + ',' + Math.round(tab.y) + ' closed, ' +
+      Math.round(g.drawer.layout.tab.x) + ',' + Math.round(g.drawer.layout.tab.y) + ' open' +
+      '  panel ' + Math.round(panel.width) + 'x' + Math.round(panel.height) +
+      '  tile ' + Math.round(g.drawer.tileRects[0].width * 10) / 10 + 'x' +
+      Math.round(g.drawer.tileRects[0].height) +
+      '  grid ' + Math.round(g.drawer.layout.grid.width) + 'x' +
+      Math.round(g.drawer.layout.grid.height) +
+      '  maxScroll ' + Math.round(g.drawer.layout.maxScroll))
+
+    /* --- and the flag back off ------------------------------------------ */
+
+    SAVE.setControlDrawer(false)
+    g.applyControlScheme()
+    await sleep(200)
+    note('flag off again: drawer enabled = ' + g.drawer.enabled)
+    if (g.drawer.enabled) push('the drawer stayed live with the flag off')
+    const backAt = idleOnScreen[0].at
+    await click(backAt.x, backAt.y)
+    await sleep(250)
+    note('with the flag off, an empty node opens the ring: ' + (g.ring ? g.ring.active : false))
+    if (!g.ring || !g.ring.active) push('the build ring did not come back with the flag off')
+    g.ring && g.ring.close()
+
+    note('RESULT ' + (problems.length === 0
+      ? 'the whole flow works at ' + VP.w + 'x' + VP.h + ' dpr ' + dpr
+      : '*** ' + problems.length + ' problem(s) ***'))
     return
   }
 

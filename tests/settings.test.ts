@@ -149,3 +149,29 @@ test('the gear is reachable and does not sit on anything else', () => {
     }
   }
 })
+
+test('every control in the panel is inside the panel layer', () => {
+  /*
+   * THE MODAL BLOCKER SITS AT `depth - 1` AND THE LAYER AT `depth`.
+   *
+   * A control left out of the layer keeps the default depth of 0, which is
+   * under the blocker, so the blocker swallows every press on it. The drawer
+   * flag row shipped that way for one run: drawn, listed in `hits`, measured
+   * as on screen and reachable, and completely dead — the one control that
+   * turns the new control scheme on was the one control that did nothing.
+   *
+   * Being in `hits` is what the probe enumerates, so `hits` is exactly the
+   * list that must not be trusted on its own.
+   */
+  const src = readFileSync(new URL('../src/ui/SettingsPanel.ts', import.meta.url), 'utf8')
+  const pushed = [...src.matchAll(/this\.hits\.push\(([\w.]+)\)/g)].map((m) => m[1] as string)
+  assert.ok(pushed.length >= 3, `only found ${pushed.length} controls`)
+  for (const name of pushed) {
+    // Either the object itself goes into the layer, or it is the `hit` of a
+    // group whose `parts` do.
+    const group = /^(\w+)\.hit$/.exec(name)
+    const wanted = group ? `this.layer.add(${group[1]}.parts)` : `this.layer.add(${name})`
+    assert.ok(src.includes(wanted),
+      `${name} is pushed into hits but never added to the layer (looked for ${wanted})`)
+  }
+})

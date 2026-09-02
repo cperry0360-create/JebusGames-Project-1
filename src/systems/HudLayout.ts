@@ -223,12 +223,24 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
     height: cfg.iconHeight * abilityScale,
   }
 
+  // WHERE CHROME MAY GO, bounded by BOTH bottom-row controls.
+  //
+  // It used to stop above `abilities` alone, which is right on a wide screen
+  // where the 64px ability icons are the tallest thing down there — and wrong
+  // on a narrow one, where `abilityScale` shrinks them below CANCEL's 40px
+  // and CANCEL becomes the lower bound. Measured at 390x844: the icons scale
+  // to 30px, so `abilities.y` sits 10px BELOW `cancel.y` and the area ran
+  // straight over the button.
+  //
+  // Nothing had noticed because nothing used the full height of the area
+  // until the control drawer, which fills it top to bottom.
   const panelTop = rowY + cfg.rowHeight + 8
+  const panelBottom = Math.min(abilities.y, cancel.y)
   const panelArea: Rect = {
     x: insets.left + 6,
     y: panelTop,
     width: W - insets.left - insets.right - 12,
-    height: Math.max(60, abilities.y - 8 - panelTop),
+    height: Math.max(60, panelBottom - 8 - panelTop),
   }
 
   return {

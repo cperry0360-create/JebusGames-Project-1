@@ -54,11 +54,25 @@ export interface SaveData {
    * nothing attached.
    */
   lastReport: string
+  /**
+   * FEATURE FLAG: the new control drawer instead of the build ring.
+   *
+   * Off by default, and TEMPORARY SCAFFOLDING. It exists so the two can be
+   * compared on the same device minutes apart rather than argued about from
+   * memory, and when the comparison is settled one of the two paths is
+   * deleted and this field goes with it.
+   *
+   * It lives in the save beside the volume channels because it is the same
+   * kind of thing — a preference the player set, which should survive a
+   * reload — and because a build-time flag cannot be compared minutes apart.
+   */
+  controlDrawer: boolean
 }
 
 export const DEFAULT_SAVE: SaveData = {
   volume: 0.7, musicVolume: 1, voiceVolume: 1,
   muted: false, runsCleared: 0, bannerPoints: 0, lastReport: '',
+  controlDrawer: false,
 }
 
 /** localStorage is small and shared; a report is truncated rather than
@@ -94,6 +108,9 @@ export function loadSave(): SaveData {
       lastReport: typeof parsed.lastReport === 'string'
         ? parsed.lastReport.slice(0, MAX_REPORT_CHARS)
         : '',
+      // `=== true` rather than a truthy check: a save written before the flag
+      // existed has `undefined` here, and the default is OFF.
+      controlDrawer: parsed.controlDrawer === true,
     }
   } catch {
     // Unreadable, unparseable or unavailable: start fresh rather than fail.
@@ -149,4 +166,22 @@ export function storedReport(): string {
 export function clearStoredReport(): void {
   const save = loadSave()
   writeSave({ ...save, lastReport: '' })
+}
+
+/* ------------------------------------------------------------ the flag */
+
+/**
+ * Whether the new control drawer replaces the build ring, right now.
+ *
+ * Read at the moment it is needed rather than cached, so toggling it in the
+ * settings dialog takes effect without restarting the run — which is the
+ * whole point of a runtime flag: the two can be compared on the same device
+ * minutes apart, on the same board, with the same peanuts.
+ */
+export function controlDrawerOn(): boolean {
+  return loadSave().controlDrawer
+}
+
+export function setControlDrawer(on: boolean): void {
+  writeSave({ ...loadSave(), controlDrawer: on })
 }
