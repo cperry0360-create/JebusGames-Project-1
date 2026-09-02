@@ -73,14 +73,21 @@ export class NukeEarnedOverlay {
     const W = viewW(scene)
     const H = viewH(scene)
 
+    // NO setScrollFactor(0). Screen space here is the UI camera's business,
+    // and the UI camera is not at the origin: at devicePixelRatio 3 its
+    // scrollX is -844, so an object that ignores camera scroll is drawn a
+    // whole canvas up and to the left. Measured at dpr 3: this panel was
+    // entirely off screen and the player got a dark, dead board with the
+    // once-per-run ability behind it. `asScreenSpace` is the whole mechanism —
+    // it puts the object on the UI camera's list and off the world camera's —
+    // and it wants ordinary scroll factors.
     this.blocker = scene.add
-      .rectangle(W / 2, H / 2, W * 3, H * 3, 0x000000, EARNED.dim)
+      .rectangle(W / 2, H / 2, W * 1.5, H * 1.5, 0x000000, EARNED.dim)
       .setDepth(LAYER.modalDim)
-      .setScrollFactor(0)
       .setInteractive()
     this.blocker.on('pointerdown', () => this.skip())
 
-    this.layer = scene.add.container(0, 0).setDepth(LAYER.modal).setScrollFactor(0)
+    this.layer = scene.add.container(0, 0).setDepth(LAYER.modal)
     this.builtW = W
     this.builtH = H
 
@@ -186,7 +193,6 @@ export class NukeEarnedOverlay {
       depth: LAYER.modal - 1,
       durationMs: EFFECT_MS.blastMs * 1.4,
     })
-    blast.setScrollFactor(0)
     this.onEffect?.(blast)
 
     s.cameras.main.shake(EARNED.shakeMs, EARNED.shakeIntensity)
@@ -267,17 +273,24 @@ export class NukeLaunchOverlay {
     const W = viewW(scene)
     const H = viewH(scene)
 
+    // NO setScrollFactor(0). Screen space here is the UI camera's business,
+    // and the UI camera is not at the origin: at devicePixelRatio 3 its
+    // scrollX is -844, so an object that ignores camera scroll is drawn a
+    // whole canvas up and to the left. Measured at dpr 3: this panel was
+    // entirely off screen and the player got a dark, dead board with the
+    // once-per-run ability behind it. `asScreenSpace` is the whole mechanism —
+    // it puts the object on the UI camera's list and off the world camera's —
+    // and it wants ordinary scroll factors.
     this.blocker = scene.add
-      .rectangle(W / 2, H / 2, W * 3, H * 3, 0x000000, LAUNCH.dim)
+      .rectangle(W / 2, H / 2, W * 1.5, H * 1.5, 0x000000, LAUNCH.dim)
       .setDepth(LAYER.modalDim)
-      .setScrollFactor(0)
       .setInteractive()
     // Deliberately does nothing. Tapping outside the two controls must not
     // launch and must not cancel: a modal that closes on a stray tap is how a
     // once-per-run ability gets thrown away.
     this.blocker.on('pointerdown', () => {})
 
-    this.layer = scene.add.container(0, 0).setDepth(LAYER.modal).setScrollFactor(0)
+    this.layer = scene.add.container(0, 0).setDepth(LAYER.modal)
     this.builtW = W
     this.builtH = H
 

@@ -153,14 +153,23 @@ test('both nuke panels are screen space, and nothing draws them on the map', () 
   assert.match(ov, /return \[this\.blocker, this\.layer\]/, 'the split is given something else')
   assert.equal((ov.match(/this\.layer\.add\(\[/g) ?? []).length, 2,
     'a panel does not put its content in the layer, so the split misses it')
-  // Pinned, so panning cannot move them. Counted on the two things the split
-  // is actually given rather than on every call in the file — the earned
-  // panel's blast effect pins itself too, and a bare count made this assert
-  // a number rather than a property.
-  assert.equal((ov.match(/this\.layer = scene\.add\.container\(0, 0\)[^\n]*setScrollFactor\(0\)/g) ?? []).length, 2,
-    'a panel layer scrolls with the map')
-  assert.equal((ov.match(/\.setScrollFactor\(0\)\n\s*if \(opts|blocker[\s\S]{0,200}?setScrollFactor\(0\)/g) ?? []).length >= 2, true,
-    'a blocker scrolls with the map')
+  // Pinned, and pinned by the camera split ALONE.
+  //
+  // This used to require `setScrollFactor(0)` on both layers and both
+  // blockers, on the reasoning that a pinned thing must ignore camera scroll.
+  // It must not: `asScreenSpace` takes these objects off the world camera
+  // entirely, so panning cannot move them whatever their scroll factor, while
+  // the UI camera they ARE drawn by has a scroll of its own — -844, -390 at
+  // devicePixelRatio 3 on an 844x390 viewport. An object that ignores it is
+  // drawn a whole canvas up and to the left. Measured at dpr 3: the launch
+  // panel was entirely off screen, leaving a dark board with the once-per-run
+  // ability behind it. See tests/scrim.test.ts and the harness scenario.
+  assert.equal((ov.match(/this\.layer = scene\.add\.container\(0, 0\)/g) ?? []).length, 2,
+    'a panel layer is not built at the origin the UI camera measures from')
+  // The leading dot matters: the file's comment names the call it must not
+  // make, and a pattern that matched prose would fail on the explanation.
+  assert.doesNotMatch(ov, /\.setScrollFactor\(0\)/,
+    'setScrollFactor(0) mis-draws on the UI camera at dpr > 1')
 
   // The launch button's hit area is derived from the button it draws, so the
   // two cannot drift apart.

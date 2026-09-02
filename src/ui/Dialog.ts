@@ -116,8 +116,16 @@ export class Dialog {
     // one. A panel that only its own button can close is a trap over a live
     // battlefield: the wave keeps coming while the player hunts for the way
     // out. The tap is still consumed, so dismissing never also acts on the map.
+    //
+    // Centred on the viewport centre, NOT on (0, 0). Centring on the corner and
+    // relying on being oversize covers the whole screen only at
+    // devicePixelRatio 1: the UI camera's zoom is the device ratio, so at 3 the
+    // rect's right edge lands at half the canvas and the dim stops there. Same
+    // fault, same fix as ScratchCard's. Measured by corner luminance, which is
+    // what tests/scrim.test.ts and the harness scenario "scrim" now assert.
     this.blocker = scene.add
-      .rectangle(0, 0, viewW(scene) * 2, viewH(scene) * 2, 0x000000, opts.dim ?? 0.45)
+      .rectangle(viewW(scene) / 2, viewH(scene) / 2,
+        viewW(scene) * 1.5, viewH(scene) * 1.5, 0x000000, opts.dim ?? 0.45)
       .setOrigin(0.5)
       .setInteractive()
     if (opts.dismissable !== false) this.blocker.on('pointerdown', () => this.close())

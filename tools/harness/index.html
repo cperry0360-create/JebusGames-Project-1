@@ -1993,6 +1993,141 @@ async function run() {
     return
   }
 
+  if (scenario === 'scrim') {
+    // Does the modal dim actually cover the SCREEN, at this device ratio?
+    //
+    // The bug it exists for: a blocker centred on (0, 0) and made oversize
+    // reaches the far corner only when the UI camera's zoom is 1. At
+    // devicePixelRatio 3 the zoom is 3, the rect's right edge lands at half
+    // the canvas, and the dim covers the top-left quadrant. Reading the
+    // rectangle's own bounds cannot see this — they are correct — so the only
+    // honest probe is the pixels at the four corners.
+    //
+    // Ratio, not raw value. after/before is the same number at every corner
+    // for a scrim that covers the screen, whatever the map paints underneath,
+    // whereas raw luminances only agreed in the earlier measurement because
+    // this map's four corners happen to be similar.
+    const g = scene('Game'), hud = scene('Hud')
+    const dpr = window.devicePixelRatio || 1
+    note('viewport ' + VP.w + 'x' + VP.h + '  devicePixelRatio ' + dpr)
+
+    const probe = document.createElement('canvas')
+    const corners = () => {
+      const c = game.canvas
+      probe.width = c.width; probe.height = c.height
+      const ctx = probe.getContext('2d')
+      ctx.drawImage(c, 0, 0)
+      const W = c.width, H = c.height
+      const at = (x, y) => {
+        const d = ctx.getImageData(x, y, 1, 1).data
+        // Rec. 601 luma, which is what the earlier corner measurement used.
+        return 0.299 * d[0] + 0.587 * d[1] + 0.114 * d[2]
+      }
+      return [at(2, 2), at(W - 3, 2), at(2, H - 3), at(W - 3, H - 3)]
+    }
+    const fmt = (a) => a.map((v) => v.toFixed(0)).join(' / ')
+
+    // No wave is started: a moving enemy near a corner would change the pixel
+    // between the two samples. The HUD is hidden throughout because every
+    // modal hides it, and a counter in the corner would otherwise be read as
+    // scrim.
+    const hudWasVisible = hud.cameras.main.visible
+    hud.cameras.main.visible = false
+    await sleep(220)
+    note('bare map corners (TL/TR/BL/BR): ' + fmt(corners()))
+
+    let failures = 0
+    const measure = async (label, open, close, expectedDim, probeObj, litDelay) => {
+      // The baseline is taken immediately before and immediately after, and
+      // averaged. The map is not static — the tavern lights flicker — and one
+      // baseline taken at the top of the scenario put a 6% error on whichever
+      // corner a flicker happened to be near, which is the same size as the
+      // fault being looked for.
+      hud.cameras.main.visible = false
+      await sleep(120)
+      const before = corners()
+      open()
+      // The earned overlay flashes the camera white at 420ms and shakes it, so
+      // it is sampled before that: the question is whether the DIM reaches the
+      // corners, and a white flash is not an answer to it.
+      await sleep(litDelay || 420)
+      hud.cameras.main.visible = false
+      const lit = corners()
+      // The rectangle's own geometry beside the pixels, because "the bounds
+      // are right and the screen is still bright" is the whole shape of this
+      // bug and a pass/fail line alone would not say which half moved.
+      const b = probeObj && probeObj()
+      if (b) {
+        const r = b.getBounds()
+        const uc = g.uiCam || g.cameras.cameras.find((c) => c !== g.cameras.main)
+        note('      blocker bounds ' + [r.x, r.y, r.width, r.height].map(Math.round).join(',') +
+          ' scrollFactor ' + b.scrollFactorX +
+          ' | uiCam ' + (uc ? 'zoom ' + uc.zoom.toFixed(2) + ' view ' +
+            [uc.worldView.x, uc.worldView.y, uc.worldView.width, uc.worldView.height]
+              .map(Math.round).join(',') : 'none') +
+          ' | filter ' + b.cameraFilter)
+      }
+      await shot('scrim-' + label)
+      close()
+      await sleep(300)
+      hud.cameras.main.visible = false
+      await sleep(120)
+      const after = corners()
+      const base = before.map((v, i) => (v + after[i]) / 2)
+      const drift = before.map((v, i) => Math.abs(v - after[i]))
+      const ratio = lit.map((v, i) => v / Math.max(base[i], 1))
+      const spread = Math.max(...ratio) - Math.min(...ratio)
+      const mean = ratio.reduce((a, b) => a + b, 0) / 4
+      // The map is not still: the tavern lights flicker, and a corner near one
+      // can move 12% between the two baselines. Averaging halves that, so the
+      // residual uncertainty on a corner's ratio is half its drift over its
+      // value. Carried explicitly rather than absorbed into a fat tolerance —
+      // the fault this looks for measured 0.364, an order of magnitude above
+      // any slack the flicker can buy.
+      const slack = Math.max(...drift.map((d, i) => (d / 2) / Math.max(base[i], 1)))
+      // Covered means two things, and a scrim can fail either: every corner
+      // dimmed by the SAME fraction, and that fraction actually being a dim.
+      const even = spread <= 0.06 + slack
+      const dark = mean <= 1 - expectedDim * 0.6
+      if (!even || !dark) failures++
+      note('  ' + label + ': corners ' + fmt(lit) +
+        '  raw spread ' + (Math.max(...lit) - Math.min(...lit)).toFixed(0) +
+        '\n      kept ' + ratio.map((r) => r.toFixed(3)).join(' / ') +
+        '  spread ' + spread.toFixed(3) +
+        (even ? '  EVEN' : '  *** UNEVEN — the scrim does not reach every corner ***') +
+        (dark ? '' : '  *** NOT DIMMED (expected alpha ' + expectedDim + ') ***') +
+        '\n      baseline drift ' + fmt(drift) + '  slack ' + slack.toFixed(3))
+    }
+
+    const NUKE = await import('./js/ui/NukeOverlays.js')
+
+    await measure('scratchcard', () => g.showTicket({ label: '', payout: 70, weight: 1 }, 9000),
+      () => g.ticket && g.ticket.destroy(), 0.35, () => g.ticket && g.ticket.blocker)
+
+    await measure('dialog', () => g.openDialog({
+      title: 'SCRIM PROBE', rows: [{ label: 'corner', value: 'luminance' }], cancelLabel: 'CLOSE',
+    }), () => g.dialog && g.dialog.close(), 0.45, () => g.dialog && g.dialog.blocker)
+
+    let earned = null
+    await measure('nuke-earned', () => {
+      earned = new NUKE.NukeEarnedOverlay(g, 'ability-servernuke',
+        { x: VP.w / 2, y: VP.h - 40, height: 40 }, () => {})
+      earned.onEffect = (o) => g.asScreenSpace([o])
+      g.asScreenSpace(earned.objects)
+    }, () => { if (earned && earned.active) earned.close() }, 0.78,
+      () => earned && earned.blocker, 240)
+
+    await measure('nuke-launch', () => g.openNukeLaunch(),
+      () => { if (g.nukeLaunch) { g.nukeLaunch.close(); g.nukeLaunch = null } }, 0.72,
+      () => g.nukeLaunch && g.nukeLaunch.blocker)
+
+    hud.cameras.main.visible = hudWasVisible
+    note('RESULT ' + (failures === 0
+      ? 'every scrim covered all four corners evenly at dpr ' + dpr
+      : failures + ' scrim(s) FAILED at dpr ' + dpr))
+    return
+  }
+
   if (scenario === 'stunlock') {
     // What Filing Extension's two tier-3 specializations actually do to an
     // enemy, measured rather than reasoned about. The report says "Deferral

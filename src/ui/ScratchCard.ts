@@ -134,13 +134,24 @@ export class ScratchCard {
     this.nibArt = scene.make.graphics({ x: 0, y: 0 }, false)
     this.nibArt.fillStyle(0xffffff, 1).fillCircle(this.nib, this.nib, this.nib)
 
-    // Oversized deliberately: the world camera can be panned and zoomed, and a
-    // blocker sized to the viewport leaves a gap at the edges once it is.
+    // FULL SCREEN AT EVERY DEVICE RATIO, and that needs the centre to be the
+    // screen's centre rather than its corner.
+    //
+    // This was `rectangle(0, 0, viewW * 3, viewH * 3)`: centred on the
+    // top-left corner and relying on being three times oversize to reach the
+    // far one. At devicePixelRatio 1 it did. At 3 the UI camera's zoom is 3,
+    // and the rect's right edge landed at exactly half the canvas — it dimmed
+    // the top-left quadrant and left the rest of the screen alone. Measured by
+    // sampling the four screen corners: at dpr 1 they agreed within 4, at dpr
+    // 3 they were 44 apart.
+    //
+    // Centred on the viewport centre it is the same arithmetic every other
+    // piece of HUD relies on, and the margin is only insurance.
     this.blocker = scene.add
-      .rectangle(0, 0, viewW(scene) * 3, viewH(scene) * 3, 0x000000, 0.35)
+      .rectangle(viewW(scene) / 2, viewH(scene) / 2,
+        viewW(scene) * 1.5, viewH(scene) * 1.5, 0x000000, 0.35)
       .setOrigin(0.5)
       .setDepth(LAYER.modalDim)
-      .setScrollFactor(0)
       .setInteractive()
     this.blocker.on('pointerdown', () => { /* swallowed */ })
 
