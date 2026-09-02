@@ -6,6 +6,18 @@ QS=""; [ -n "$VP" ] && QS="&vp=$VP"
 # Optional scenario argument, e.g. run.sh stunlock 60 "" deferral
 [ -n "$ARG" ] && QS="$QS&arg=$ARG"
 rm -f "$H/shots/report.json"
+# THE PROFILE GOES EVERY TIME.
+#
+# Chromium was handed a persistent --user-data-dir and served index.html out
+# of its own HTTP cache, so a scenario edited and re-staged ran as it was an
+# hour ago. That is the worst kind of harness bug: the run succeeds, prints
+# plausible numbers, and describes code that is not on disk. It cost two
+# rounds here — a rewritten scenario that "never executed", and a fingerprint
+# change that appeared not to have landed.
+#
+# `both.sh` already did this between its two ratios, which is why the fault
+# only ever showed on a single run.
+rm -rf "$H/profile"
 python3 "$H/server.py" wait "$WAIT" &
 SRV=$!
 sleep 1

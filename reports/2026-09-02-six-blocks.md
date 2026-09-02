@@ -322,13 +322,60 @@ through.
 
 ### The suite
 
-RUNNING — see the addendum below.
+**86 scenarios, each run at dpr 1 and dpr 3 at 844x390, `both.sh` diffing the
+fingerprint. 85 identical. One flagged, and the flag was the emitter.**
 
 ---
 
 ## Addendum: `both.sh` across every scenario at dpr 1 and dpr 3
 
-PENDING.
+Run at 844x390, every scenario in `tools/harness/index.html`, both ratios.
+
+```
+85 of 86: screen space is identical at dpr 1 and dpr 3
+ 1 of 86: leak — flagged, and it was the fingerprint, not the game
+```
+
+### The one flag, and why it is not a bug in the game
+
+```
+--- fp-1.txt
++++ fp-3.txt
+ FP viewport = 844x390
+-FP viewW/viewH = 1400.00,708.00
++FP viewW/viewH = 466.67,236.00
+ FP ERROR = Cannot read properties of undefined (reading 'setZoom')
+```
+
+`leak` is the scenario that runs the lane dry and ends on the results dialog,
+by which point GameScene's cameras are torn down. `scene('Game')` still returns
+the scene object, so the fingerprint asked it for `cameras.main.setZoom` and
+threw — but only AFTER printing a `viewW/viewH` line taken off a scene with no
+camera, which falls back to the raw window. 1400x708 is the harness window;
+466.67x236 is that window divided by 3.
+
+So both ratios failed identically and the only line that differed was one that
+should never have been printed. The emitter now checks for a LIVE camera, says
+which it found, and refuses to report a viewport off a torn-down scene:
+
+```
+FP game scene = live | torn down | absent
+```
+
+It also had two stale keys — `mute` and `pause` — left over from the HUD
+controls the settings gear replaced, so it was silently reporting nothing for
+two of the seven rectangles. Those are `settings` and `cancel` now.
+
+### What this pass is worth
+
+Five bugs have come from confusing canvas pixels with CSS pixels, and the fifth
+was found by this instruction rather than by a player. What the suite proves is
+narrower than "no such bug remains": it proves that for every scenario the
+harness can drive, five fixed world points, the UI camera's view and every HUD
+rectangle land on the same CSS pixel at both ratios. It says nothing about a
+code path no scenario reaches, and it cannot — which is the argument for
+`pointerToScreen` existing at all, so the next such path fails to compile
+instead of failing on a phone.
 
 ---
 
