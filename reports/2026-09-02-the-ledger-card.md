@@ -217,10 +217,111 @@ width of every string against the card it is on.
 
 ## Measurement
 
-PENDING — the four-way ledger pass and the dpr suite addendum land here.
+Every tower placed, driven to tier 2, and both branches opened, at **both
+viewports and both device ratios** — and every string measured against the card
+it is drawn on, because a schema limit is necessary and not sufficient: an
+18-character phrase can still be nineteen pixels too wide for its column.
+
+```
+RESULT every string fits its card at 844x390 dpr 1, every card is 179px, and the floor drops rate
+RESULT every string fits its card at 844x390 dpr 3, every card is 179px, and the floor drops rate
+RESULT every string fits its card at 568x320 dpr 1, every card is 179px, and the floor drops rate
+RESULT every string fits its card at 568x320 dpr 3, every card is 179px, and the floor drops rate
+```
+
+**168 cards. 42 per combination — six build cards, six upgrade, six sell and
+six move at tier 1, twelve branch cards and six sell at tier 2. Every one 179px
+tall.**
+
+```
+    36 cards at w=223 h=179
+   132 cards at w=226 h=179
+```
+
+The card takes the room beside the ring's actual position, so the width varies
+by three pixels with where the ring opened. The height does not vary at all,
+which is the whole claim.
+
+### What each state looks like
+
+```
+build   Slingshot   ["Slingshot","17","dps","150","range","1.5","rate","Pierces armour","Build 80p"]
+t1 upgrade          ["Slingshot","17","→","34","dps","150","→","162","range","1.5","→","1.7","rate",…,"Upgrade 112p"]
+t1 sell             ["Slingshot","17","dps","150","range","1.5","rate","Pierces armour","Sell +48p"]
+t1 move             ["Slingshot","17","dps","150","range","1.5","rate","Pierces armour","Move"]
+t2 Repeater         ["Repeater","34","→","71","dps","162","range","1.7","→","3.1","rate","Chains to 1 more","Build 320p"]
+t2 Deadeye          ["Deadeye","22","dps","232","→","279","range","0.5","rate","Chains to 2 more","Build 880p"]
+build   Beacon      ["Beacon","+30%","boost","215","range","Buffs nearby guns","Build 140p"]
+t2 Bonfire          ["Bonfire","+47%","→","+88%","boost","237","→","213","range","Grants +5 pierce","Build 560p"]
+```
+
+Two things worth reading off that:
+
+- **Deadeye changes range and nothing else**, so range carries both values and
+  dps and rate render plain. That is the upgrade state doing its job: what the
+  880 peanuts buy is legible without a sentence.
+- **Bonfire's radius goes DOWN**, 237 → 213, while its boost nearly doubles.
+  The card shows the trade rather than describing it.
+
+### The 150px floor, forced
+
+The walk never reaches it. `panelWidthFor` takes the room beside the ring's
+actual position, and on this map even a 568x320 screen leaves 223px on one
+side — so every card measured came out 223 or 226 wide and the narrow branch
+never ran. It is real code on a path this board does not produce, and "we never
+saw it break" is not the same as "it works", so the card is composed directly
+at `panelMinWidth` and every string measured there:
+
+```
+floor spec:garnishme  h=179  numbers=["dps","range"]  ["Hailstorm","34","→","64","dps","162","range","Ignores armour","Build 320p"]
+floor spec:payroll    h=179  numbers=["dps","range"]  ["Repeater","34","→","71","dps","162","range","Chains to 1 more","Build 320p"]
+floor move            h=179  numbers=["dps","range"]  ["Slingshot","34","dps","162","range","Pierces armour","Move"]
+floor sell            h=179  numbers=["dps","range"]  ["Slingshot","34","dps","162","range","Sell +115p"]
+```
+
+`rate` goes, `dps` and `range` stay, the name and the trait line and the button
+all survive intact, and nothing wraps or spills. The height is unchanged at
+179px, because dropping a column changes no row.
+
+### What this does NOT cover
+
+- The floor is exercised by composition, not by a ring that actually opened at
+  150px, because this map never produces one. A different map with pads closer
+  to the screen edge would; the arithmetic is the same either way.
+- Colour, contrast and how the slab reads over the painted map are not
+  measured here. Those are screenshots and a judgement, not a number.
+- The probe drives `openTowerRing` and `openPadRing` directly rather than
+  tapping the ring buttons. Reachability of those buttons is `tools/harness`
+  scenario `ring`, which the dpr suite covers separately.
+
+### The harness bugs this pass turned up
+
+Two, both of the kind that make a measurement worthless without announcing
+themselves:
+
+1. **Chromium was serving `index.html` out of its own HTTP cache.** `run.sh`
+   handed it a persistent `--user-data-dir`, so a re-staged scenario ran as it
+   had been an hour earlier — succeeding, printing plausible numbers, and
+   describing code not on disk. `both.sh` cleared the profile between its two
+   ratios, which is why this only ever bit single runs. `run.sh` clears it every
+   time now.
+
+2. **The probe itself was too slow to finish.** The first version placed a
+   tower, upgraded it, read both branches and sold it before starting the next,
+   and never got past the fifth tower — not at a 300-second budget and not at
+   600. Every tower is placed first and all six upgrades run at once, so there
+   is one build wait in the whole run; the same 42 cards now measure in about a
+   minute. It reached the MOVE card for the first time as a result.
 
 ---
 
 ## Not touched
 
 The ability icons at the bottom of the screen, as instructed.
+
+## Still open
+
+`public/assets/ui/icon_confirm.png` is now unreferenced — the green button
+carries the verb and the price, so the tick has no place, and its manifest
+entry is gone rather than left declared and undrawn. The file is still in the
+deploy; deleting it is an asset change and this pass did not touch assets.
