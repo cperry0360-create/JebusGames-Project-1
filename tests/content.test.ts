@@ -486,7 +486,7 @@ test('the retired tower-base placeholder is gone from the manifest', () => {
 
   // The branches that read it have to go too, or the next person wires a new
   // placeholder into a hole that was supposed to be closed.
-  for (const f of ['entities/Tower.ts', 'ui/TowerIcon.ts', 'types.ts']) {
+  for (const f of ['entities/Tower.ts', 'types.ts']) {
     assert.doesNotMatch(readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8'),
       /towerBase/, `${f} still reads ui.towerBase`)
   }
@@ -588,18 +588,29 @@ test('a specialization explains itself in mechanics, not in jokes', () => {
   }
 })
 
-test('the tier-3 fork is two cards, not two rows sharing a line', () => {
+test('the tier-3 fork is two separate options, not two rows sharing a line', () => {
   // The bug: both specializations were label/value rows, so a stat string long
   // enough to reach back across its own label ran straight through the other
   // option's name. Deferral's stats sat on top of Amendment's.
+  //
+  // They are two RING BUTTONS now, each with its own description panel, which
+  // makes overlap impossible rather than merely unlikely — only one is ever
+  // drawn at a time. The separate full-screen fork dialog is gone with them:
+  // a menu inside a menu, for the one decision in the game that cannot be
+  // undone.
   const scene = readFileSync(url('../src/scenes/GameScene.ts'), 'utf8')
-  const fork = scene.slice(scene.indexOf('openSpecChoice(tower: Tower)'),
-    scene.indexOf('specialize(tower: Tower, specId'))
-  assert.ok(fork.includes('choices:'), 'the fork is not built from choice cards')
-  assert.ok(!/rows:/.test(fork), 'the fork still renders its options as shared rows')
-  // Each card has to carry its own price and its own build time: a single
-  // shared cost row is what let the two options be told apart by nothing.
-  assert.ok(/cost:/.test(fork) && /takes:/.test(fork), 'the cards do not price themselves')
+  assert.ok(!/openSpecChoice/.test(scene), 'the old fork dialog is still reachable')
+  const fork = scene.slice(scene.indexOf('if (choosing) {'), scene.indexOf("id: 'sell',"))
+  assert.match(fork, /for \(const spec of def\.specializations\)/,
+    'the fork does not offer one option per specialization')
+  assert.match(fork, /id: `spec:\$\{spec\.id\}`/, 'the two options are not told apart by id')
+  // Each carries its own price and its own build time, and its own icon: two
+  // buttons wearing the same picture are a coin toss rather than a choice.
+  assert.match(fork, /price: spec\.cost/, 'the options do not price themselves')
+  assert.match(fork, /spec\.buildSeconds/, 'the options do not say how long they take')
+  assert.match(fork, /icon: specIcon\(spec\)/, 'both branches would wear the same icon')
+  const up = readFileSync(url('../src/systems/Upgrades.ts'), 'utf8')
+  assert.match(up, /export function specIcon/, 'nothing picks an icon per branch')
 })
 
 test('a specialization lists its effects one per line', () => {

@@ -46,7 +46,8 @@
         "chainTargets": 1,
         "chainFalloff": 0.6
       }
-    ]
+    ],
+    "blurb": "Takes a little off everything that walks past. Dull, and it funds the rest."
   },
   "writeoff": {
     "name": "Write-Off",
@@ -94,7 +95,8 @@
         "rampPerShot": 0.14,
         "rampMax": 1.1
       }
-    ]
+    ],
+    "blurb": "Slow, heavy, single shots. Picks the biggest thing in range and removes it."
   },
   "rounding": {
     "name": "Rounding Error",
@@ -142,7 +144,8 @@
         "splashRadius": 0.85,
         "bonusVsArmored": 1.9
       }
-    ]
+    ],
+    "blurb": "Rounds a whole cluster down at once. Small numbers, applied to everyone near."
   },
   "escalation": {
     "name": "Escalation Clause",
@@ -192,7 +195,8 @@
         "chainTargets": 2,
         "chainFalloff": 0.5
       }
-    ]
+    ],
+    "blurb": "Hits harder the longer it runs. Starts modest and stops being modest."
   },
   "extension": {
     "name": "Filing Extension",
@@ -242,7 +246,8 @@
         "armorPierce": 2.0,
         "stunSeconds": 0.6
       }
-    ]
+    ],
+    "blurb": "Gives everything in range more time to think, which it spends not moving."
   },
   "shelter": {
     "name": "Tax Shelter",
@@ -286,6 +291,7 @@
         "supportRadius": 0.9,
         "grantsPierce": 5
       }
-    ]
+    ],
+    "blurb": "Fires at nothing. Everything it covers hits harder, which beats a sixth gun."
   }
 }

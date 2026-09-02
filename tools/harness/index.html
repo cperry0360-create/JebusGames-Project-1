@@ -3340,7 +3340,7 @@ async function run() {
     await build(3, 0)
     await sleep(400)
     const t = g.towers[0]
-    g.openTowerPanel ? g.openTowerPanel(t) : g.selectTower(t)
+    g.openTowerRing ? g.openTowerRing(t) : g.selectTower(t)
     await until(() => !!g.panel, 5000)
     await sleep(500)
     note('viewport ' + VP.w + 'x' + VP.h + '  dpr ' + (window.devicePixelRatio || 1))
@@ -3392,175 +3392,152 @@ async function run() {
     return
   }
 
-  if (scenario === 'menustate') {
-    // IS TOWER SELECTION PLAYABLE? Read-only: nothing here changes the game,
-    // it only tries to use it the way a thumb would.
+  if (scenario === 'ring') {
+    // THE RING, RENDERED. The placement is proved exhaustively in
+    // tests/ringlayout.test.ts — every pad, every option count, both zoom
+    // ends, both viewports, notched and not. What a browser adds is the part
+    // arithmetic cannot see: that the buttons are really where the geometry
+    // says, that the icons drew, and that a real press buys a real tower.
     //
-    // Overflow measured in pixels is not the same question as "can you buy a
-    // tower". A panel hanging off the bottom is only unplayable if the thing
-    // you have to press is the part that is off. So this presses.
+    // Reach is decided by POSITION, never by whether a handler fired. A
+    // synthetic press dispatched on the canvas hit-tests a point 194px below
+    // the display exactly as happily as one in the middle of it, which is how
+    // the old build menu passed a reachability check while being unusable.
+    const P = (await import('./js/data/presentation.json', { with: { type: 'json' } })).default
+    const D = (await import('./js/data/display.json', { with: { type: 'json' } })).default
+    const RL = await import('./js/systems/RingLayout.js')
+    const dpr = window.devicePixelRatio || 1
     g.status.peanuts = 99999
     await sleep(400)
-    note('viewport ' + VP.w + 'x' + VP.h)
-    note('components in play: BuildMenu=' + (g.menu ? g.menu.constructor.name : 'none') +
-      '  TowerPanel=' + (g.panel ? g.panel.constructor.name : 'not open yet'))
+    note('viewport ' + VP.w + 'x' + VP.h + '  dpr ' + dpr)
+    note('button ' + P.ring.buttonSize + 'px carrying a ' + P.ring.iconSize + 'px icon, panel '
+      + P.ring.panelWidth + 'px wide')
 
-    // --- BUILD ON AN EMPTY PAD, at every spot.
-    let usable = 0, blocked = []
-    for (const sp of g.build.freeSpots()) {
-      g.menu.close(); await sleep(60)
-      g.openBuildMenu(sp)
-      await until(() => g.menu && g.menu.isOpen, 3000)
-      await sleep(120)
-      // The buttons, not the panel: a hit area below the viewport cannot be
-      // pressed however visible the plate above it is.
-      const hits = []
-      const findHits = (o) => {
-        if (o.list) { o.list.forEach(findHits); return }
-        if (o.input && o.input.enabled && o.getBounds) {
+    const area = () => RL.usableArea(VP.w, VP.h, {top: 0, right: 0, bottom: 0, left: 0}, {
+      countersBottom: g.layout.counters.y + g.layout.counters.height,
+      abilitiesTop: g.layout.abilities.y,
+    }, P.ring.areaMargin)
+    const inside = (r, a) => r.x >= a.x - 0.5 && r.y >= a.y - 0.5
+      && r.x + r.width <= a.x + a.width + 0.5 && r.y + r.height <= a.y + a.height + 0.5
+
+    const check = (label) => {
+      const a = area()
+      const boxes = g.ring ? g.ring.hitBoxes : []
+      const off = boxes.filter((b) => !inside(b.rect, a))
+      const rb = g.ring ? g.ring.bounds : null
+      // The panel's RECORDED height against what it actually drew. A component
+      // that reports one height and draws another places itself correctly and
+      // still hangs off the screen — which is exactly the bug that got here.
+      const pb = g.ring ? g.ring.panelBounds : null
+      if (pb) {
+        let lo = 1e9, hi = -1e9
+        for (const o of g.ring.panelLayer.list) {
+          if (!o.getBounds) continue
           const b = o.getBounds()
-          if (b.width > 0 && b.height > 0) hits.push(b)
+          if (b.height <= 0) continue
+          lo = Math.min(lo, b.y); hi = Math.max(hi, b.bottom)
+        }
+        const drawn = Math.round(hi - lo)
+        note('      panel box ' + Math.round(pb.x) + ',' + Math.round(pb.y) + ' ' +
+          Math.round(pb.width) + 'x' + Math.round(pb.height) + '  drew ' + drawn +
+          'px from y ' + Math.round(lo) + ' to ' + Math.round(hi))
+      }
+      note('  ' + label.padEnd(26) + boxes.length + ' pressable, ' +
+        (off.length === 0 ? 'all on screen' : '*** ' + off.length + ' OFF SCREEN ***') +
+        (rb ? '  ring ' + Math.round(rb.width) + 'x' + Math.round(rb.height)
+          + ' at ' + Math.round(rb.x) + ',' + Math.round(rb.y) : ''))
+      for (const b of off) {
+        note('      ' + b.id + ' at ' + Math.round(b.rect.x) + ',' + Math.round(b.rect.y) +
+          ' ' + Math.round(b.rect.width) + 'x' + Math.round(b.rect.height) +
+          ' against ' + Math.round(a.x) + ',' + Math.round(a.y) + ' ' +
+          Math.round(a.width) + 'x' + Math.round(a.height))
+      }
+      // No two pressable regions may overlap: one of them could never be hit.
+      let clashes = 0
+      for (let i = 0; i < boxes.length; i++) {
+        for (let j = i + 1; j < boxes.length; j++) {
+          const A = boxes[i].rect, B = boxes[j].rect
+          if (A.x < B.x + B.width && B.x < A.x + A.width
+            && A.y < B.y + B.height && B.y < A.y + A.height) clashes++
         }
       }
-      ;(g.menu.objects || []).forEach(findHits)
-      const off = hits.filter((b) => b.bottom > VP.h || b.right > VP.w || b.x < 0 || b.y < 0)
-      const reachable = hits.length - off.length
-      note('  spot ' + sp.index + ': ' + hits.length + ' pressable region(s), ' +
-        reachable + ' fully on screen' +
-        (off.length ? '  *** ' + off.length + ' off the edge ***' : ''))
-      for (const b of off) {
-        note('      one sits at y ' + Math.round(b.y) + '..' + Math.round(b.bottom) +
-          ' against a ' + VP.h + 'px viewport')
+      if (clashes > 0) note('      *** ' + clashes + ' PAIRS OF HIT AREAS OVERLAP ***')
+      return { off: off.length, clashes, n: boxes.length }
+    }
+
+    let worst = { off: 0, clashes: 0 }
+    const record = (r) => { worst.off += r.off; worst.clashes += r.clashes }
+
+    // EVERY PAD, at min and max zoom, with and without a description open.
+    for (const zName of ['min', 'max']) {
+      const z = (zName === 'min' ? D.camera.minZoom : D.camera.maxZoom) * dpr
+      g.rig.setTargetZoom(z)
+      await until(() => Math.abs(g.cameras.main.zoom - z) < 0.01, 5000)
+      note('at ' + zName + ' zoom ' + (g.cameras.main.zoom / dpr).toFixed(2) + ':')
+      for (const sp of g.build.freeSpots()) {
+        await lookAt(sp.x, sp.y)
+        g.openPadRing(sp)
+        await sleep(160)
+        record(check('spot ' + sp.index + ' ring'))
+        // Open each option's description in turn: the panel is a different
+        // size for every tower, so one of them is not a sample.
+        const opts = g.ring ? g.ring.hitBoxes.filter((b) => b.id !== 'ring:confirm' && b.id !== 'ring:cancel') : []
+        for (const o of opts) {
+          const b = o.rect
+          await click(b.x + b.width / 2, b.y + b.height / 2)
+          await sleep(120)
+          record(check('  panel for ' + o.id))
+        }
+        if (sp.index === 0 && zName === 'min') await shot('ring-pad-' + VP.w + 'x' + VP.h)
+        g.ring?.close()
+        await sleep(80)
       }
-      if (off.length === 0 && hits.length > 0) usable++
-      else { blocked.push(sp.index); await shot('menustate-open' + sp.index + '-' + VP.w + 'x' + VP.h) }
     }
-    note('  BUILD: ' + usable + ' of ' + g.build.freeSpots().length +
-      ' pads have every button on screen; blocked at spots ' + JSON.stringify(blocked))
-    g.menu.close(); await sleep(80)
 
-    // --- Does a real tap-and-hold actually buy one, at a pad that measured OK?
-    const okSpot = g.build.freeSpots().find((sp) => !blocked.includes(sp.index))
-    if (okSpot) {
-      const before = g.towers.length
-      await build(okSpot.index, 0)
-      note('  a real press at spot ' + okSpot.index + ': towers ' + before + ' -> ' + g.towers.length +
+    // A REAL PURCHASE, through the two presses the design requires.
+    g.rig.setTargetZoom(D.camera.defaultZoom * dpr)
+    await until(() => Math.abs(g.cameras.main.zoom - D.camera.defaultZoom * dpr) < 0.02, 5000)
+    const sp = g.build.freeSpots()[0]
+    await lookAt(sp.x, sp.y)
+    g.openPadRing(sp)
+    await sleep(200)
+    const before = g.towers.length
+    const first = g.ring.hitBoxes[0]
+    await click(first.rect.x + first.rect.width / 2, first.rect.y + first.rect.height / 2)
+    await sleep(200)
+    note('after one press on a ring button: towers ' + before + ' -> ' + g.towers.length +
+      (g.towers.length === before ? '  correct — it opened a description, it did not buy'
+        : '  *** IT BOUGHT SOMETHING ON THE FIRST TAP ***'))
+    const confirm = g.ring.hitBoxes.find((b) => b.id === 'ring:confirm')
+    note('  the confirm button is ' + (confirm ? 'there' : '*** MISSING ***'))
+    if (confirm) {
+      await click(confirm.rect.x + confirm.rect.width / 2, confirm.rect.y + confirm.rect.height / 2)
+      await sleep(300)
+      note('  after confirming: towers ' + before + ' -> ' + g.towers.length +
         (g.towers.length > before ? '  BUILT' : '  *** NOTHING HAPPENED ***'))
-    }
-    // --- And at a blocked one, to say whether the overflow is fatal or ugly.
-    // A SYNTHETIC PRESS PROVES NOTHING ABOUT REACH, and reading it as if it
-    // did is a mistake this probe made once. `mouse()` dispatches the event on
-    // game.canvas directly, so Phaser hit-tests a point 194px below the bottom
-    // of the screen exactly as happily as one in the middle of it — every
-    // blocked spot reported "built anyway" while its buttons were off the
-    // display. A thumb cannot make that event; the OS has nothing there to
-    // hit. So the press is recorded as WIRING evidence only, and the geometry
-    // above is what answers whether a person can play.
-    for (const idx of blocked) {
-      const before = g.towers.length
-      await build(idx, 0)
-      note('  synthetic press at spot ' + idx + ' (wiring only, reach is decided above): towers '
-        + before + ' -> ' + g.towers.length +
-        (g.towers.length > before ? '  the handler works' : '  *** the handler is broken too ***'))
-      await shot('menustate-blocked' + idx + '-' + VP.w + 'x' + VP.h)
+      await shot('ring-built-' + VP.w + 'x' + VP.h)
     }
 
-    // --- SELECT AN EXISTING TOWER: the other half of "tower selection".
+    // AND THE OTHER HALF: the same component on a built tower.
     if (g.towers.length > 0) {
       const t = g.towers[0]
       await lookAt(t.x, t.y)
-      g.openTowerPanel(t)
-      await sleep(250)
-      let aX = 1e9, aY = 1e9, bX = -1e9, bY = -1e9
-      const hits = []
-      const w2 = (o) => {
-        if (o.list) { o.list.forEach(w2); return }
-        if (!o.getBounds) return
-        const b = o.getBounds()
-        if (b.width <= 0 || b.height <= 0) return
-        aX = Math.min(aX, b.x); aY = Math.min(aY, b.y)
-        bX = Math.max(bX, b.right); bY = Math.max(bY, b.bottom)
-        if (o.input && o.input.enabled) hits.push(b)
+      g.openTowerRing(t)
+      await sleep(200)
+      record(check('built tower ring'))
+      const opts = g.ring ? g.ring.hitBoxes.filter((b) => !b.id.startsWith('ring:')) : []
+      note('  options offered: ' + JSON.stringify(opts.map((o) => o.id)))
+      for (const o of opts) {
+        await click(o.rect.x + o.rect.width / 2, o.rect.y + o.rect.height / 2)
+        await sleep(140)
+        record(check('  panel for ' + o.id))
       }
-      ;(g.panel && g.panel.objects ? g.panel.objects : []).forEach(w2)
-      const off = hits.filter((b) => b.bottom > VP.h || b.right > VP.w || b.x < 0 || b.y < 0)
-      note('  UPGRADE PANEL: ' + Math.round(bX - aX) + 'x' + Math.round(bY - aY) +
-        ' at ' + Math.round(aX) + ',' + Math.round(aY) +
-        '  overflow R' + Math.round(Math.max(0, bX - VP.w)) +
-        ' L' + Math.round(Math.max(0, -aX)) +
-        ' B' + Math.round(Math.max(0, bY - VP.h)) +
-        ' T' + Math.round(Math.max(0, -aY)))
-      note('  ' + hits.length + ' pressable region(s), ' + off.length + ' off the edge')
-      await shot('menustate-upgrade-' + VP.w + 'x' + VP.h)
+      await shot('ring-tower-' + VP.w + 'x' + VP.h)
     }
-    return
-  }
 
-  if (scenario === 'buildmenu') {
-    // The BUILD-ON-EMPTY-PAD flow, which is a different component from the
-    // upgrade panel. Measures the panel against the viewport.
-    g.status.peanuts = 99999
-    await sleep(400)
-    note('viewport ' + VP.w + 'x' + VP.h)
-    // EVERY pad, not the first: the menu is anchored to the tile you tapped,
-    // so which one overflows depends on where it is. Testing one spot is how
-    // "it runs off the right edge" and "it runs off the bottom" can both be
-    // true and both be missed.
-    let worstAll = { spot: -1, r: 0, l: 0, b: 0, t: 0 }
-    for (const sp of g.build.freeSpots()) {
-      g.menu.close()
-      await sleep(60)
-      g.openBuildMenu(sp)
-      await until(() => g.menu && g.menu.isOpen, 3000)
-      await sleep(120)
-      let aX = 1e9, aY = 1e9, bX = -1e9, bY = -1e9
-      const w2 = (o) => {
-        if (o.list) { o.list.forEach(w2); return }
-        if (!o.getBounds) return
-        const b = o.getBounds()
-        if (b.width <= 0 || b.height <= 0) return
-        aX = Math.min(aX, b.x); aY = Math.min(aY, b.y)
-        bX = Math.max(bX, b.right); bY = Math.max(bY, b.bottom)
-      }
-      ;(g.menu.objects || []).forEach(w2)
-      const r = Math.max(0, bX - VP.w), l = Math.max(0, -aX)
-      const bo = Math.max(0, bY - VP.h), t = Math.max(0, -aY)
-      note('  spot ' + sp.index + ' at world ' + Math.round(sp.x) + ',' + Math.round(sp.y) +
-        ' -> panel ' + Math.round(bX - aX) + 'x' + Math.round(bY - aY) +
-        '  off R' + Math.round(r) + ' L' + Math.round(l) + ' B' + Math.round(bo) + ' T' + Math.round(t))
-      if (r + l + bo + t > worstAll.r + worstAll.l + worstAll.b + worstAll.t) {
-        worstAll = { spot: sp.index, r, l, b: bo, t }
-      }
-    }
-    note('  WORST: spot ' + worstAll.spot + '  right ' + Math.round(worstAll.r) +
-      '  left ' + Math.round(worstAll.l) + '  bottom ' + Math.round(worstAll.b) +
-      '  top ' + Math.round(worstAll.t))
-    const spot = g.build.freeSpots()[0]
-    const objs = g.menu.objects || []
-    let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9
-    const walk = (o) => {
-      if (o.list) { o.list.forEach(walk); return }
-      if (!o.getBounds) return
-      const b = o.getBounds()
-      if (b.width <= 0 || b.height <= 0) return
-      minX = Math.min(minX, b.x); minY = Math.min(minY, b.y)
-      maxX = Math.max(maxX, b.right); maxY = Math.max(maxY, b.bottom)
-    }
-    objs.forEach(walk)
-    note('  options offered: ' + (g.menu.options ? g.menu.options.length : '?'))
-    note('  panel bounds x ' + Math.round(minX) + '..' + Math.round(maxX) +
-      '  y ' + Math.round(minY) + '..' + Math.round(maxY))
-    note('  panel size ' + Math.round(maxX - minX) + 'x' + Math.round(maxY - minY) +
-      ' in a ' + VP.w + 'x' + VP.h + ' viewport')
-    const offR = maxX - VP.w, offL = -minX, offB = maxY - VP.h, offT = -minY
-    note('  overflow  right ' + Math.round(Math.max(0, offR)) +
-      '  left ' + Math.round(Math.max(0, offL)) +
-      '  bottom ' + Math.round(Math.max(0, offB)) +
-      '  top ' + Math.round(Math.max(0, offT)))
-    await shot('buildmenu-' + VP.w + 'x' + VP.h)
-    note('RESULT ' + (offR <= 1 && offL <= 1 && offB <= 1 && offT <= 1
-      ? 'the build menu fits the viewport'
-      : '*** THE BUILD MENU RUNS OFF THE SCREEN ***'))
+    note('RESULT ' + (worst.off === 0 && worst.clashes === 0
+      ? 'every button of every ring was on screen, and none overlapped another'
+      : '*** ' + worst.off + ' off-screen buttons, ' + worst.clashes + ' overlapping pairs ***'))
     return
   }
 

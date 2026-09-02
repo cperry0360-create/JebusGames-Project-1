@@ -101,6 +101,22 @@ export function sellValue(
  * multipliers instead, so the panel describes the mechanic rather than joking
  * about it, and it cannot drift out of date when the numbers are retuned.
  */
+/**
+ * Which of the ten UI icons stands for a specialization.
+ *
+ * The branch is two ring buttons now, and two buttons wearing the same picture
+ * are a coin toss rather than a choice — so the icon is chosen from what the
+ * branch actually DOES, not from a list. Armour first because ignoring armour
+ * changes what a tower can kill rather than how fast; then chaining, which
+ * changes how many; then the two ordinary levers.
+ */
+export function specIcon(spec: TowerSpec): string {
+  if (spec.ignoresArmor || (spec.armorPierce ?? 1) > 1.01) return 'armor'
+  if (spec.chainTargets || spec.executeBelowPercent) return 'target'
+  if ((spec.fireInterval ?? 1) < 0.99) return 'firerate'
+  return 'damage'
+}
+
 export function specSummary(spec: TowerSpec): string {
   return specPoints(spec).join(' \u00b7 ')
 }

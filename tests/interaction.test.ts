@@ -115,13 +115,18 @@ test('a dialog can always be dismissed by tapping away from it', () => {
     'tapping outside a dialog should dismiss it')
 })
 
-test('a build menu pick does not also act on the map underneath', () => {
-  const menu = src('ui/BuildMenu.ts')
-  assert.doesNotMatch(menu, /this\.hitAreas = \[\]\s*\n\s*onPreview/,
-    'BuildMenu.close should keep its hit areas so ownsAny catches the closing tap')
+test('a ring pick does not also act on the map underneath', () => {
+  // Phaser hit-tests before it dispatches, so a button's own handler can have
+  // closed the menu by the time the scene's handler runs. Whether the press
+  // belonged to the UI has to be answered at PRESS time, off the hit list —
+  // never by asking "is the menu still open", which is false by then.
   const game = src('scenes/GameScene.ts')
-  assert.doesNotMatch(game, /this\.menu\.isOpen && this\.menu\.ownsAny/,
-    'the menu guard should ask the hit list, not whether the menu is still open')
+  assert.match(game, /this\.ring\?\.active === true && this\.ring\.owns\(over\)/,
+    'the ring guard does not ask the hit list at press time')
+  const ring = src('ui/TowerRing.ts')
+  // Both layers, or a press on the description panel falls through to the map.
+  assert.match(ring, /this\.ringLayer\.list\?\.includes\(o\) \|\| this\.panelLayer\.list\?\.includes\(o\)/,
+    'owns() checks only one of the two layers')
 })
 
 test('a dialog swallows the tap that closes it', () => {
@@ -375,51 +380,110 @@ test('breaking off a fight costs something, from JSON', () => {
     'the arrival delay is never applied')
 })
 
-test('the tower panel does not cover the ring it is asking about', () => {
+test('the ring never covers the tower it is asking about, and never leaves the screen', () => {
   // PROTOTYPE-GAP item 11, and the clearest UX regression against the
   // prototype: the panel asking "should I upgrade this?" was a centred modal
   // over a dimmed screen, hiding the range circle that answers it.
-  const panel = src('ui/TowerPanel.ts')
-  // No blocker, no dim, no centring. Checked against code rather than prose:
-  // the full-screen rectangle is what a modal is made of.
-  assert.ok(!/scene\.add\s*\.?\s*rectangle\(/.test(panel),
-    'the panel builds a full-screen rectangle, which is what swallows the board')
-  assert.ok(!/scale\.width \* 2/.test(panel), 'the panel still covers the screen')
-  assert.ok(!/opts\.dim/.test(panel), 'the panel still dims the board behind it')
-  assert.match(panel, /moveTo\(anchor: PanelAnchor, area: Rect\)/,
-    'the panel is not anchored to anything')
-  // Below, then above, then beside — and always inside the free area.
-  assert.match(panel, /anchor\.base \+ GAP \+ this\.height <= areaBottom/, 'it never tries below')
-  assert.match(panel, /anchor\.top - GAP - this\.height >= area\.y/, 'it never flips above')
-  assert.match(panel, /Phaser\.Math\.Clamp\(top, area\.y/, 'it is not clamped to the board')
+  //
+  // The geometry that guarantees it is proved exhaustively in
+  // ringlayout.test.ts — every pad, every tower, both zoom ends, both
+  // viewports. What is checked here is that the component is wired to that
+  // geometry rather than doing its own arithmetic at the call site, which is
+  // how the old build menu ended up with a clamping story that only worked
+  // above the pad and put its buy buttons 194px below the screen at spot 3.
+  const ring = src('ui/TowerRing.ts')
+  assert.doesNotMatch(ring, /opts\.dim/, 'the ring dims the board behind it')
+  // Both placed together by the tested geometry, not by arithmetic at the call
+  // site: they constrain each other, and a ring in the middle of a narrow
+  // strip has to move aside before the panel has anywhere to go.
+  assert.match(ring, /fitRingAndPanel\(\s*\n\s*anchor\.x, anchor\.y, this\.buttons\.length/,
+    'the ring and panel are placed separately, or by hand')
 
   const game = src('scenes/GameScene.ts')
-  assert.match(game, /new TowerPanel\(/, 'the tower still opens a modal dialog')
+  assert.match(game, /new TowerRing\(/, 'the tower still opens something else')
   // The two rings, and the lane the tower covers.
   assert.match(game, /private drawSelectedRange/, 'nothing draws the projected range')
   assert.match(game, /private dashedCircle/, 'the projected ring is not styled differently')
   assert.match(game, /private drawCoveredLane/, 'the covered stretch of path is not shown')
-  // It follows the tower as the board pans under it.
-  assert.match(game, /this\.positionPanel\(this\.selected\)/,
-    'the panel does not follow its tower when the camera moves')
-  // And it is not a modal, so the HUD does not dim and panning stays live.
-  const modal = game.slice(game.indexOf('get modalOpen()'), game.indexOf('get modalOpen()') + 160)
-  assert.ok(!/panel/.test(modal), 'the anchored panel counts as a modal')
+  // It follows the tower as the board pans under it, and closes when the
+  // tower stops existing rather than hanging over an empty pad.
+  assert.match(game, /this\.ring\?\.reposition\(\)/,
+    'the ring does not follow its tower when the camera moves')
+  assert.match(game, /if \(!this\.towers\.includes\(tower\)\) return null/,
+    'a sold tower would keep its ring open')
+  assert.match(ring, /if \(!anchor\) \{ this\.close\(\); return \}/,
+    'the ring survives its anchor disappearing')
 })
 
-test('reopening the build menu replaces its hit areas rather than piling them up', () => {
-  // open() only ever pushed. The array grew by one entry per cell every time
-  // a pad was tapped, held every destroyed rectangle alive for the life of
-  // the run, and left hitAreas[0] pointing at a cell from the first menu ever
-  // opened — which is a live object leak and a lie about what the array is.
-  const menu = src('ui/BuildMenu.ts')
-  const open = menu.slice(menu.indexOf('  open('), menu.indexOf('  close('))
-  assert.match(open, /this\.hitAreas = \[\]/,
-    'the hit areas are never reset, so they accumulate across every open')
-  // And it must happen after close(), not before: close is what destroys the
-  // rectangles the old list refers to.
-  assert.ok(open.indexOf('this.close(') < open.indexOf('this.hitAreas = []'),
-    'the list is cleared before the menu it belongs to is closed')
+test('the area the ring is allowed into excludes the HUD and the notch', () => {
+  // Two different things get subtracted and both have bitten this game. The
+  // safe-area insets, because a notch has coordinates but is not screen; and
+  // the HUD's panel area, because a ring over the ability bar is a ring whose
+  // buttons fight the abilities for the same tap.
+  const game = src('scenes/GameScene.ts')
+  const layoutSrcForRing = src('systems/RingLayout.ts')
+  const area = game.slice(game.indexOf('area: () => usableArea('), game.indexOf('onPreview,'))
+  assert.match(area, /safeAreaInsets\(\)/, 'the ring may open under a notch')
+  assert.match(area, /abilitiesTop: this\.layout\.abilities\.y/,
+    'the ring may open over the ability bar')
+  // The counters are NOT protected, deliberately: doing so costs 48px, which
+  // on a 568x320 screen is the difference between the panel fitting and the
+  // game reporting that it does not.
+  assert.match(layoutSrcForRing, /const y = insets\.top \+ margin/,
+    'the ring area subtracts a band the requirement does not protect')
+  assert.match(layoutSrcForRing, /Math\.min\(viewH - insets\.bottom, bands\.abilitiesTop\) - margin/,
+    'the usable area takes only one of the two bottom constraints')
+})
+
+test('a ring button buys nothing; the panel does', () => {
+  // The whole reason the ring exists in this shape: a menu whose first tap
+  // spends peanuts is a menu you cannot browse. Tapping an option opens its
+  // description; a second, explicit press on that panel commits.
+  const ring = src('ui/TowerRing.ts')
+  const buildRing = ring.slice(ring.indexOf('private buildRing()'), ring.indexOf('private makeGlyph'))
+  assert.doesNotMatch(buildRing, /onConfirm/,
+    'a ring button can commit the purchase directly')
+  assert.match(buildRing, /hit\.on\('pointerdown', \(\) => this\.select\(i\)\)/,
+    'a ring button does something other than open its description')
+  // The confirm is on the panel, and it is a release rather than a press: a
+  // finger that lands on it and slides off has to be able to take it back.
+  assert.match(ring, /hit\.on\('pointerup', onPick\)/, 'the confirm fires on the press')
+  assert.match(ring, /option\.onConfirm\(\); this\.close\(\)/,
+    'confirming does not close the menu')
+  // And the two icons that exist for exactly this step are used at last.
+  assert.match(ring, /'confirm', option\.affordable/, 'the confirm icon is unused')
+  assert.match(ring, /'cancel', true, \(\) => this\.deselect\(\)/, 'the cancel icon is unused')
+  // Cancel goes back to the ring rather than closing everything: the point of
+  // a description is being able to read another one.
+  const deselect = ring.slice(ring.indexOf('private deselect()'))
+  assert.doesNotMatch(deselect.slice(0, deselect.indexOf('\n  }')), /this\.close\(\)/,
+    'cancelling closes the whole menu instead of returning to the ring')
+})
+
+test('reopening the menu does not pile up live objects', () => {
+  // BuildMenu.open() only ever pushed to its hit-area list. The array grew by
+  // one entry per cell every time a pad was tapped, held every destroyed
+  // rectangle alive for the life of the run, and left hitAreas[0] pointing at
+  // a cell from the first menu ever opened.
+  //
+  // The ring cannot repeat that: it has no list that outlives an open. Its
+  // buttons are built in the constructor, live in a container, and go when the
+  // container is destroyed — so a new menu is a new object rather than an
+  // append to an old one.
+  const ring = src('ui/TowerRing.ts')
+  assert.match(ring, /private readonly buttons: ButtonParts\[\] = \[\]/,
+    'the button list is not per-instance')
+  assert.doesNotMatch(ring, /buttons\.length = 0/,
+    'the button list is being reset in place, which means it outlives an open')
+  assert.match(ring, /onComplete: \(\) => ring\.destroy\(true\)/,
+    'the ring container is not destroyed, so its children leak')
+  assert.match(ring, /this\.panelLayer\.destroy\(true\)/, 'the panel layer leaks')
+  // And the scene replaces rather than stacks.
+  const game = src('scenes/GameScene.ts')
+  const open = game.slice(game.indexOf('private openRing('))
+  const body = open.slice(0, open.indexOf('\n  }\n'))
+  assert.ok(body.indexOf('this.ring?.close()') < body.indexOf('this.ring = new TowerRing'),
+    'a second open would leave the first ring alive')
 })
 
 /**
@@ -475,57 +539,99 @@ test('a paused game can always be un-paused', () => {
  * price beneath the plate rather than on it. The harness `icons` scenario
  * measures the rendered result; these lock the rules that produce it.
  */
-test('the upgrade ring is icons at 40px with the price beneath', () => {
-  const panel = src('ui/TowerPanel.ts')
-  const game = src('scenes/GameScene.ts')
+test('every ring button is an icon at 40px with the price beneath, never a word', () => {
+  const ring = src('ui/TowerRing.ts')
+  const cfg = (read('presentation') as any).ring
 
   // The floor, and the reason for it. Below 40 a 256px source is minified past
-  // 6x and the outlines break up.
-  const px = /const BTN_ICON = (\d+)/.exec(panel)
-  assert.ok(px && Number(px[1]) >= 40, `button icons are ${px?.[1]}px; 40 is the floor`)
+  // 6x and the painted outlines break up.
+  assert.ok(cfg.iconSize >= 40, `ring icons are ${cfg.iconSize}px; 40 is the floor`)
+  // The plate has to be bigger than the icon it carries, or the icon is the
+  // button and there is nothing to aim at around it.
+  assert.ok(cfg.buttonSize > cfg.iconSize,
+    `a ${cfg.buttonSize}px plate cannot carry a ${cfg.iconSize}px icon`)
 
-  // The options carry an icon and a price. A label field would let a word back
-  // onto a 38px plate.
-  assert.match(panel, /confirm\?: \{ icon: string; price: number/,
-    'the confirm button still takes a text label')
-  assert.match(panel, /extra\?: \{ icon: string; price: number/,
-    'the sell button still takes a text label')
-  assert.match(panel, /plateButton\(scene, bx, btnY, bw, BTN_H, '',/,
-    'a label is being passed to the button plate')
-  assert.doesNotMatch(game, /label: `UPGRADE|label: `SELL|label: `SPECIALIZE/,
-    'the caller still passes worded labels to the tower panel')
+  // No text on a button, on either half of the menu. A word on a 58px plate is
+  // a truncated word, which is how the old build menu came to be a text grid.
+  const buildRing = ring.slice(ring.indexOf('private buildRing()'), ring.indexOf('private makeGlyph'))
+  const texts = [...buildRing.matchAll(/scene\.add\.text\(/g)]
+  assert.equal(texts.length, 1,
+    `a ring button draws ${texts.length} pieces of text; the price badge is the only one allowed`)
+  assert.match(buildRing, /String\(option\.price\)/, 'the one text is not the price')
 
-  // Beneath, not on. The price sits below the plate's bottom edge.
-  assert.match(panel, /btnY \+ BTN_H \/ 2 \+ PRICE_GAP/,
+  // Beneath, not on: the badge sits below the plate's bottom edge.
+  assert.match(ring, /at\.y \+ CFG\.buttonSize \/ 2 \+ CFG\.priceGap/,
     'the price is not positioned below the plate')
-  assert.match(panel, /this\.height = btnY \+ BTN_H \/ 2 \+ PRICE_GAP \+ PRICE_H \+ PAD/,
-    'the panel reserves no room under the buttons, so the price would be clipped')
+  // And the geometry reserves room for it, or the badge would be the part that
+  // hangs off the screen.
+  const layout = src('systems/RingLayout.ts')
+  assert.match(layout, /const footH = cfg\.buttonSize \+ cfg\.priceGap \+ cfg\.priceHeight/,
+    'the button footprint ignores its price badge')
 
   // The plate is added BEFORE the icon, or it covers it. This shipped wrong
   // once: the measurements said a 40px icon was correctly placed and the
   // screen showed two empty coloured bars.
-  const plateAt = panel.indexOf('parts.push(...btn.parts)')
-  const glyphAt = panel.indexOf('parts.push(glyph)')
-  assert.ok(plateAt > 0 && glyphAt > plateAt,
-    'the icon is added before the button plate, so the plate draws over it')
+  const add = ring.indexOf('this.ringLayer.add([...plate.parts, glyph, price, hit])')
+  assert.ok(add > 0, 'the ring no longer adds its parts in one place')
 
   // Unaffordable reads as locked rather than as a greyed-out picture of the
   // thing the player wanted.
-  assert.match(panel, /b\.enabled === false \? 'locked' : b\.icon/,
-    'a disabled button does not show the padlock')
+  assert.match(ring, /if \(!option\.affordable\) \{\s*\n\s*const key = icon\(this\.scene, 'locked'\)/,
+    'a disabled option does not show the padlock')
+
+  // The build half uses icons too. It was a text grid using none of the ten.
+  const game = src('scenes/GameScene.ts')
+  const build = game.slice(game.indexOf('openPadRing(spot: BuildSpot)'), game.indexOf('private buildRows('))
+  assert.match(build, /sprite: def\.sprite/,
+    'the build options do not carry a picture of the tower')
+  assert.doesNotMatch(build, /label:/, 'the build options still carry worded labels')
+})
+
+test('a disabled option does not swallow taps, and still explains itself', () => {
+  // Two halves of one rule, and they pull in opposite directions. The hit area
+  // must be exactly the plate — a button that takes presses outside its own
+  // picture steals them from the map behind it, and two of those side by side
+  // leave a dead strip that looks like a bug. But the tap that DOES land on a
+  // locked option has to do something, or the player never learns what they
+  // are saving for: it opens the description, with the shortfall on it, and
+  // only the confirm button is switched off.
+  const ring = src('ui/TowerRing.ts')
+  const hit = ring.slice(ring.indexOf('const hit = this.scene.add'), ring.indexOf("hit.on('pointerover'"))
+  assert.match(hit, /\.rectangle\(0, 0, CFG\.buttonSize, CFG\.buttonSize/,
+    'the hit area is not the plate: it takes taps outside the button')
+  assert.doesNotMatch(hit, /CFG\.buttonSize \+|footH|priceHeight/,
+    'the hit area is padded beyond the visible plate')
+  // Not gated on affordability: a locked option opens like any other.
+  assert.doesNotMatch(ring, /if \(!option\.affordable\) return/,
+    'a locked option refuses its own tap, so it teaches the player nothing')
+  assert.match(ring, /if \(option\.affordable\) \{ option\.onConfirm\(\)/,
+    'a locked option can still be confirmed')
+  assert.match(ring, /option\.reason/, 'nothing says why an option is locked')
 })
 
 test('every icon resolves through one place, so none can miss its fallback', () => {
   const artSrc = src('systems/Art.ts')
-  const panel = src('ui/TowerPanel.ts')
+  const ring = src('ui/TowerRing.ts')
   const icons = read('art').ui.icons as Record<string, string>
-  // All ten are declared, and every name the panel asks for is one of them.
+  // All ten are declared, and every name the ring asks for is one of them.
   assert.ok(Object.keys(icons).length >= 10, `only ${Object.keys(icons).length} icons declared`)
-  for (const name of ['upgrade', 'sell', 'target', 'locked', 'damage', 'range', 'firerate', 'armor']) {
+  for (const name of ['upgrade', 'sell', 'target', 'locked', 'damage', 'range', 'firerate',
+    'armor', 'confirm', 'cancel']) {
     assert.ok(icons[name], `${name} is used but not in the manifest`)
   }
+  // ALL TEN ARE PLACED NOW. confirm and cancel were cut for a confirm step
+  // that did not exist; the ring's second press is that step.
+  const used = new Set<string>()
+  for (const f of ['ui/TowerRing.ts', 'scenes/GameScene.ts', 'systems/Upgrades.ts']) {
+    for (const m of src(f).matchAll(/'(upgrade|sell|target|locked|damage|range|firerate|armor|confirm|cancel)'/g)) {
+      used.add(m[1] as string)
+    }
+  }
+  const unplaced = Object.keys(icons).filter((k) => !used.has(k))
+  assert.deepEqual(unplaced, [], 'these icons are in the manifest but drawn nowhere')
+
   // The resolver checks existence; a caller cannot get a key any other way.
   assert.match(artSrc, /if \(key && scene\.textures\.exists\(key\)\) return key/,
     'the resolver does not check the texture actually loaded')
-  assert.doesNotMatch(panel, /ART\.icons\[/, 'the panel indexes the icon map directly')
+  assert.doesNotMatch(ring, /ART\.icons\[/, 'the ring indexes the icon map directly')
 })

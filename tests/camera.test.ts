@@ -438,8 +438,14 @@ test('the interface does not zoom with the board', () => {
   // which is what puts it on the fixed camera.
   assert.match(game, /asScreenSpace\(this\.cancelBtn\.parts\)/,
     'the cancel button is a world object and would grow with the zoom')
-  assert.match(game, /asScreenSpace\(this\.menu\.objects\)/,
-    'the build menu is a world object and would grow with the zoom')
+  assert.match(game, /asScreenSpace\(this\.ring\.objects\)/,
+    'the tower ring is a world object and would grow with the zoom')
+  // And the ring's own sizes are CSS pixels, never multiplied by camera zoom.
+  // A ring drawn in world space would shrink to a smudge at min zoom and
+  // cover the board at max, which is the whole reason it is HUD chrome.
+  const ring = readFileSync(new URL('../src/ui/TowerRing.ts', import.meta.url), 'utf8')
+  assert.doesNotMatch(ring, /cam\.zoom|cameras\.main\.zoom/,
+    'the ring scales itself by the camera zoom')
 })
 
 /**

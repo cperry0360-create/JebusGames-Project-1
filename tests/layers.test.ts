@@ -104,7 +104,7 @@ test('no overlay hardcodes a depth outside the table', () => {
   // Every magic depth in the game was a decision made at a call site with no
   // view of the others. Anything above the world band now has to come from
   // LAYER, so the order is decided in one place.
-  const files = ['scenes/GameScene.ts', 'ui/BuildMenu.ts', 'ui/ScratchCard.ts', 'ui/Dialog.ts']
+  const files = ['scenes/GameScene.ts', 'ui/TowerRing.ts', 'ui/ScratchCard.ts', 'ui/Dialog.ts']
   for (const f of files) {
     const body = src(f)
     for (const m of body.matchAll(/setDepth\(\s*(\d{4,})\s*\)/g)) {

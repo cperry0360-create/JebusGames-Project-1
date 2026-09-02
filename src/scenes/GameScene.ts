@@ -39,15 +39,17 @@ import { Tower } from '../entities/Tower.ts'
 import { Hero } from '../entities/Hero.ts'
 import { Fighter } from '../entities/Fighter.ts'
 import { Projectile } from '../entities/Projectile.ts'
-import { BuildMenu } from '../ui/BuildMenu.ts'
 import { ScratchCard } from '../ui/ScratchCard.ts'
 import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { platePanel, plateButton, type PlateButton } from '../ui/Plate.ts'
 import { SignBribe } from '../ui/SignBribe.ts'
 import { CameraRig } from '../systems/CameraRig.ts'
-import { Dialog, type DialogChoice, type DialogOptions } from '../ui/Dialog.ts'
-import { TowerPanel, type PanelRow } from '../ui/TowerPanel.ts'
-import { maxTier, nextStep, sellValue, specPoints, statAt } from '../systems/Upgrades.ts'
+import { Dialog, type DialogOptions } from '../ui/Dialog.ts'
+import { TowerRing, type RingOption, type RingRow } from '../ui/TowerRing.ts'
+import { usableArea } from '../systems/RingLayout.ts'
+import {
+  maxTier, nextStep, sellValue, specIcon, specSummary, statAt,
+} from '../systems/Upgrades.ts'
 import { canAffordAny, openingPurse } from '../systems/Economy.ts'
 import { addBannerPoints, hasClearedARun, recordRunCleared } from '../systems/Save.ts'
 import { bannerPointsFor, verdictFor, type RunOutcome } from '../systems/Banner.ts'
@@ -155,7 +157,8 @@ export class GameScene extends Phaser.Scene {
   private dialog?: Dialog
   /** The tower panel. Non-modal and anchored beside its tower, so the range
    *  ring it is asking about stays visible behind it. */
-  private panel?: TowerPanel
+  /** THE tower menu: the ring, for a pad and for a built tower alike. */
+  private ring?: TowerRing
   /** True while the upgrade button is hovered or held, which brightens the
    *  projected range ring. */
   private previewingUpgrade = false
@@ -180,7 +183,6 @@ export class GameScene extends Phaser.Scene {
   private splitAt = -1
   private spawner!: WaveSpawner
   private hero!: Hero
-  private menu!: BuildMenu
 
   private enemies: Enemy[] = []
   private towers: Tower[] = []
@@ -438,7 +440,6 @@ this.armReadyCountdown()
       momentumMinSpeed: displayData.camera.momentumMinSpeed,
     })
 
-    this.menu = new BuildMenu(this, [])
     this.refreshMenuOptions()
     this.setupInput()
     this.createPads()
@@ -711,7 +712,7 @@ this.armReadyCountdown()
   }
 
   private get placing(): boolean {
-    return this.menu.isOpen || this.status.mode === 'restructure'
+    return this.ring?.active === true || this.status.mode === 'restructure'
   }
 
   /**
@@ -1023,7 +1024,6 @@ this.armReadyCountdown()
   }
 
   private refreshMenuOptions(): void {
-    this.menu.setOptions(this.status.unlockedTowers.map((id) => ({ id, def: TOWERS[id] })))
   }
 
   private setupInput(): void {
@@ -1037,10 +1037,9 @@ this.armReadyCountdown()
     // records the first and the release checks the second.
     this.input.on('pointerdown', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
       this.pressTakenByUi =
-        this.menu.ownsAny(over)
+        (this.ring?.active === true && this.ring.owns(over))
         || (this.ticket?.active === true && this.ticket.owns(over))
         || this.dialog?.owns(over) === true
-        || this.panel?.owns(over) === true
         // The HUD is a different scene, so none of its objects are ever in
         // `over` and the checks above cannot see them. Without this a tap on
         // the ability bar also lands on the board: arming one ability and then
@@ -1102,11 +1101,11 @@ this.armReadyCountdown()
     // pad moves the menu there rather than being spent dismissing it.
     const spot = this.build.spotAt(w.x, w.y)
     if (spot && this.build.isFree(spot.index)) {
-      this.openBuildMenu(spot)
+      this.openPadRing(spot)
       return
     }
 
-    if (this.menu.isOpen) {
+    if (this.ring?.active) {
       this.clearSelection()
       return
     }
@@ -1139,7 +1138,7 @@ this.armReadyCountdown()
       return
     }
     this.clearGhost()
-    this.menu.close()
+    this.ring?.close()
     this.selected = null
     this.heroSelected = true
     // Just the foot ring. The attack-range circle that used to come up with
@@ -1186,32 +1185,121 @@ this.armReadyCountdown()
     return best
   }
 
-  /** Public for the harness, which measures the panel against the viewport. */
-  openBuildMenu(spot: BuildSpot): void {
+  /**
+   * The ring on an empty pad: what can be built here, and for how much.
+   *
+   * Public for the harness, which measures every button against the viewport.
+   */
+  openPadRing(spot: BuildSpot): void {
     this.deselectTower()
-    // The pad is a world position; the menu is screen-space chrome.
-    const cam = this.cameras.main
-    const sx = (spot.x - cam.worldView.x) * cam.zoom
-    const sy = (spot.y - cam.worldView.y) * cam.zoom
-    this.menu.open(
-      sx, sy, this.status.peanuts,
-      (id) => this.place(id, spot),
-      (id) => {
-        if (id) {
-          this.showTowerRange(spot.x, spot.y, TOWERS[id])
-          this.showGhost(id, spot)
-        } else {
-          this.rangeRing.clear()
-          this.clearGhost()
-        }
-      },
-      // Not a reserved strip — the map draws through all of it. Just the part
-      // of the screen where a panel does not cover a counter or the abilities.
-      { top: this.layout.panelArea.y, height: this.layout.panelArea.height },
-    )
-    this.asScreenSpace(this.menu.objects)
+    const options: RingOption[] = this.status.unlockedTowers.map((id) => {
+      const def = TOWERS[id]
+      const short = def.cost - this.status.peanuts
+      return {
+        id,
+        // The tower itself, not an action icon: "which one is this?" is the
+        // question a build button has to answer, and six hammers do not.
+        icon: 'upgrade',
+        sprite: def.sprite,
+        price: def.cost,
+        affordable: this.status.peanuts >= def.cost,
+        reason: short > 0 ? `${short} peanuts short.` : undefined,
+        title: def.name,
+        description: def.blurb,
+        rows: this.buildRows(def),
+        onConfirm: () => this.place(id, spot),
+      }
+    })
+    this.openRing(options, () => this.padAnchor(spot), (id) => {
+      if (id) {
+        this.showTowerRange(spot.x, spot.y, TOWERS[id])
+        this.showGhost(id, spot)
+      } else {
+        this.rangeRing.clear()
+        this.clearGhost()
+      }
+    })
     this.drawSpots()
-    this.status.message = 'Pick a tower, or click away to cancel.'
+    this.status.message = 'Pick a tower to read about it, then confirm.'
+  }
+
+  /** What a tower would do if built, before there is one to measure. */
+  private buildRows(def: TowerDef): RingRow[] {
+    if (def.supportRadius > 0) {
+      return [
+        { icon: 'damage', label: 'Nearby damage', value: `+${Math.round(def.supportDamageBonus * 100)}%` },
+        { icon: 'range', label: 'Radius', value: String(Math.round(def.supportRadius)) },
+      ]
+    }
+    const rows: RingRow[] = [
+      { icon: 'damage', label: 'Damage', value: def.damage.toFixed(1) },
+      { icon: 'range', label: 'Range', value: String(Math.round(def.range)) },
+      { icon: 'firerate', label: 'Rate', value: `${(1 / def.fireInterval).toFixed(2)}/s` },
+    ]
+    if (def.splashRadius > 0) {
+      rows.push({ icon: 'range', label: 'Splash', value: String(Math.round(def.splashRadius)) })
+    }
+    if (def.ignoresArmor || def.armorPierce > 0) {
+      rows.push({
+        icon: 'armor',
+        label: def.ignoresArmor ? 'Armour' : 'Cuts armour',
+        value: def.ignoresArmor ? 'Ignored' : String(Math.round(def.armorPierce)),
+      })
+    }
+    return rows
+  }
+
+  /** The pad or tower's position, on the glass, right now. */
+  private padAnchor(spot: BuildSpot): { x: number; y: number } | null {
+    if (!this.build.isFree(spot.index)) return null
+    const cam = this.cameras.main
+    return {
+      x: (spot.x - cam.worldView.x) * cam.zoom + cam.x,
+      y: (spot.y - cam.worldView.y) * cam.zoom + cam.y,
+    }
+  }
+
+  /**
+   * Opens the one menu, wherever it is opened from.
+   *
+   * Both callers go through here so the camera split, the problem reporting
+   * and the close bookkeeping cannot drift apart between them — which is how
+   * two components ended up with two different clamping stories in the first
+   * place.
+   */
+  private openRing(
+    options: RingOption[],
+    anchor: () => { x: number; y: number } | null,
+    onPreview: (id: string | null) => void,
+  ): void {
+    this.ring?.close()
+    if (options.length === 0) return
+    this.ring = new TowerRing(this, TICKET_DEPTH, {
+      options,
+      anchor,
+      // The part of the screen where chrome does not cover a counter, the
+      // start button or the ability bar. Inset by the safe area too: a notch
+      // has coordinates but is not screen.
+      area: () => usableArea(viewW(this), viewH(this), safeAreaInsets(), {
+        countersBottom: this.layout.counters.y + this.layout.counters.height,
+        abilitiesTop: this.layout.abilities.y,
+      }, PRESENTATION.ring.areaMargin),
+      onPreview,
+      onProblem: (why) => {
+        // Never swallowed. A menu that cannot fit is a fault the player is
+        // living with, so it says so on the message line and in the console
+        // rather than quietly drawing a clipped panel.
+        console.error(`[ring] ${why}`)
+        this.status.message = why
+      },
+      onClose: () => {
+        this.ring = undefined
+        this.rangeRing.clear()
+        this.clearGhost()
+        this.drawSpots()
+      },
+    })
+    this.asScreenSpace(this.ring.objects)
   }
 
   /**
@@ -1261,7 +1349,7 @@ this.armReadyCountdown()
     this.refreshSupport()
     play(this, 'build')
     this.clearGhost()
-    this.menu.close()
+    this.ring?.close()
     this.rangeRing.clear()
     this.drawSpots()
     logEvent('tower-built', `${id} spot=${spot.index} cost=${def.cost}`)
@@ -1270,7 +1358,7 @@ this.armReadyCountdown()
 
   /** Drops the current tower selection and everything drawn for it. */
   private deselectTower(): void {
-    this.panel?.close()
+    this.ring?.close()
     this.selected = null
     this.projectedRing.clear()
     this.pathBand.clear()
@@ -1278,7 +1366,7 @@ this.armReadyCountdown()
 
   private selectTower(tower: Tower): void {
     this.clearGhost()
-    this.menu.close()
+    this.ring?.close()
     this.drawSpots()
     this.selected = tower
     this.previewingUpgrade = false
@@ -1289,7 +1377,7 @@ this.armReadyCountdown()
     this.drawCoveredLane(tower)
     const bonus = tower.supportBonus > 0 ? `  ·  +${Math.round(tower.supportBonus * 100)}% sheltered` : ''
     this.status.message = `${tower.def.name}, tier ${tower.tier}${bonus}`
-    this.openTowerPanel(tower)
+    this.openTowerRing(tower)
   }
 
   /**
@@ -1348,16 +1436,21 @@ this.armReadyCountdown()
   }
 
   /**
-   * What a built tower is for. Tapping one used to print a sentence and do
-   * nothing, which left the player with peanuts and no way to spend them.
+   * The ring on a built tower: upgrade it, branch it, or sell it.
+   *
+   * Tapping a tower used to print a sentence and do nothing, which left the
+   * player with peanuts and no way to spend them. It is the same component the
+   * pad opens now, with different options in it.
+   *
+   * Public for the harness, which measures every button against the viewport.
    */
-  /** Public for the harness, which measures the icons and the price badges. */
-  openTowerPanel(tower: Tower): void {
+  openTowerRing(tower: Tower): void {
     const def = tower.def
     const step = nextStep(def, tower.tier)
     const refund = sellValue(def, tower.tier + (tower.upgrading ? 1 : 0),
       RULES.towerUpgrades.sellRefund, tower.spec)
     const support = tower.isSupport
+    const peanuts = this.status.peanuts
 
     const n = (v: number, digits = 0): string => v.toFixed(digits)
     // What the next tier would make each stat, so the panel answers "is this
@@ -1373,11 +1466,7 @@ this.armReadyCountdown()
       return `${a} → ${n(next, digits)}`
     }
 
-    // Only what answers "should I upgrade this?". The panel is anchored beside
-    // the tower on a phone screen 390px tall, so every row it does not need is
-    // a row that would push it over the board it is supposed to be beside.
-    // The tier goes in the subtitle, and the two prices go on their buttons.
-    const rows: PanelRow[] = []
+    const rows: RingRow[] = []
     if (support) {
       const nextBonus = after('supportDamageBonus')
       rows.push({
@@ -1412,119 +1501,92 @@ this.armReadyCountdown()
         })
       }
     }
-
     if (tower.upgrading) {
       rows.push({ label: 'Upgrading', value: `${Math.round(tower.buildProgress * 100)}%`, accent: true })
-    } else if (step) {
-      rows.push({ label: 'Build time', value: `${step.buildSeconds}s at reduced rate` })
     }
 
     const bonus = tower.supportBonus > 0
       ? `  ·  +${Math.round(tower.supportBonus * 100)}% sheltered` : ''
-    const subtitle = `TIER ${tower.tier} OF ${maxTier(def)}${bonus}`
+    const tier = `Tier ${tower.tier} of ${maxTier(def)}${bonus}.`
 
-    // The upgrade button is the confirm slot; selling is its own button, so
-    // neither can be hit by aiming for the other.
-    const specPrice = def.specializations[0]?.cost ?? 0
+    const options: RingOption[] = []
     const choosing = tower.atSpecChoice && !tower.upgrading
-    const affordable = choosing
-      ? this.status.peanuts >= specPrice
-      : step !== null && this.status.peanuts >= step.cost
 
-    // Non-modal, and beside the tower rather than over it. There is no CLOSE
-    // button: a tap anywhere off the panel closes it, which is one fewer
-    // thing to aim at on a phone.
-    this.panel?.close()
-    this.panel = new TowerPanel(this, TICKET_DEPTH, {
-      title: def.name.toUpperCase(),
-      subtitle,
-      rows,
-      confirm: (choosing || (step !== null && !tower.upgrading))
-        ? {
-          // Icon only, with the price under the button. The cost still has to
-          // be next to the thing it buys — a number buried in a row above is a
-          // number the player goes looking for before they can decide — but it
-          // does not have to be ON the plate to be next to it.
-          //
-          // Two different actions, two different icons: a straight tier
-          // upgrade, and the branch choice that closes one path for good.
-          icon: choosing ? 'target' : 'upgrade',
-          price: choosing ? specPrice : (step?.cost ?? 0),
-          enabled: affordable,
-          onPick: () => (choosing ? this.openSpecChoice(tower) : this.upgradeTower(tower)),
-        }
-        : undefined,
-      extra: {
-        icon: 'sell',
-        price: refund,
-        onPick: () => this.sellTower(tower),
-      },
-      onPreview: (on) => {
-        this.previewingUpgrade = on
-        if (this.selected) this.drawSelectedRange(this.selected)
-      },
-      onClose: () => {
-        this.panel = undefined
-        this.previewingUpgrade = false
-      },
+    if (choosing) {
+      // THE BRANCH, AS TWO BUTTONS. It used to be a separate full-screen
+      // dialog reached through a third icon — a menu inside a menu, for the
+      // one decision in the game that cannot be undone. Two ring options put
+      // both futures side by side, each with its own description panel, and
+      // each still needing the second explicit press.
+      for (const spec of def.specializations) {
+        options.push({
+          id: `spec:${spec.id}`,
+          icon: specIcon(spec),
+          price: spec.cost,
+          affordable: peanuts >= spec.cost,
+          reason: peanuts < spec.cost ? `${spec.cost - peanuts} peanuts short.` : undefined,
+          title: spec.name,
+          description: `Permanent: the other branch closes for good. ${specSummary(spec)}.`,
+          rows: [...rows, { label: 'Build time', value: `${spec.buildSeconds}s` }],
+          onConfirm: () => this.specialize(tower, spec.id),
+        })
+      }
+    } else if (step !== null && !tower.upgrading) {
+      options.push({
+        id: 'upgrade',
+        icon: 'upgrade',
+        price: step.cost,
+        affordable: peanuts >= step.cost,
+        reason: peanuts < step.cost ? `${step.cost - peanuts} peanuts short.` : undefined,
+        title: `${def.name} — tier ${tower.tier + 1}`,
+        description: `${tier} Fires at a reduced rate while it builds.`,
+        // The build time is a number with a name on it, not a clause.
+        rows: [...rows, { label: 'Build time', value: `${step.buildSeconds}s` }],
+        onConfirm: () => this.upgradeTower(tower),
+      })
+    }
+
+    // Selling is always offered, and always affordable — it pays out.
+    //
+    // It gets its OWN rows rather than the upgrade projection: "11.0 -> 19.8"
+    // describes a purchase the player is not making, and four rows of it made
+    // the sell panel taller than the screen on the reference phone.
+    const sellRows: RingRow[] = support
+      ? [{ icon: 'damage', label: 'Nearby damage', value: `+${Math.round(tower.supportDamageBonus * 100)}%` }]
+      : [
+        { icon: 'damage', label: 'Damage', value: n(tower.damage, 1) },
+        { icon: 'range', label: 'Range', value: n(tower.range) },
+      ]
+    options.push({
+      id: 'sell',
+      icon: 'sell',
+      price: refund,
+      affordable: true,
+      title: `Sell ${def.name}`,
+      description: `${tier} Frees the pad. What you paid does not come back in full.`,
+      rows: sellRows,
+      onConfirm: () => this.sellTower(tower),
     })
-    this.asScreenSpace(this.panel.objects)
-    this.positionPanel(tower)
+
+    this.openRing(options, () => this.towerAnchor(tower), (id) => {
+      this.previewingUpgrade = id !== null && id !== 'sell'
+      if (this.selected) this.drawSelectedRange(this.selected)
+    })
   }
 
-  /**
-   * Keeps the panel beside its tower.
-   *
-   * Called on open and every frame after, because the world camera pans and
-   * zooms underneath it — a panel anchored once would drift off its tower the
-   * moment the player moved the board.
-   */
-  private positionPanel(tower: Tower): void {
-    if (!this.panel?.active) return
+  /** The tower's position on the glass, or null once it is gone. */
+  private towerAnchor(tower: Tower): { x: number; y: number } | null {
+    // A sold tower is gone from the list, and its ring must close rather
+    // than hang over an empty pad.
+    if (!this.towers.includes(tower)) return null
     const cam = this.cameras.main
-    const base = (tower.y - cam.worldView.y) * cam.zoom + cam.y
-    this.panel.moveTo({
+    return {
       x: (tower.x - cam.worldView.x) * cam.zoom + cam.x,
-      base,
-      top: base - tower.artHeight * cam.zoom,
-      halfWidth: (tower.artWidth / 2) * cam.zoom,
-    }, this.layout.panelArea)
+      y: (tower.y - cam.worldView.y) * cam.zoom + cam.y,
+    }
   }
 
-  /**
-   * Tier 3. Two specializations, mutually exclusive and permanent for this
-   * tower, so they get their own panel explaining what each one does rather
-   * than two cryptic buttons crowded onto the stats panel.
-   */
-  private openSpecChoice(tower: Tower): void {
-    const def = tower.def
-    const [a, b] = def.specializations
-    if (!a || !b) return
-    const afford = (c: number): boolean => this.status.peanuts >= c
-
-    // Each option is its own card: the two used to be label/value rows, and a
-    // stat line long enough to reach back across its own label ran straight
-    // through the other option's name.
-    const card = (spec: typeof a): DialogChoice => ({
-      name: spec.name,
-      lines: specPoints(spec),
-      cost: `${spec.cost} peanuts`,
-      takes: `${spec.buildSeconds}s to build`,
-      enabled: afford(spec.cost),
-      onPick: () => this.specialize(tower, spec.id),
-    })
-
-    this.openDialog({
-      title: `${def.name.toUpperCase()} — TIER 3`,
-      subtitle: 'One or the other, for the life of this tower. There is no going back.',
-      choices: [card(a), card(b)],
-      cancelLabel: 'NOT YET',
-      dim: 0.4,
-      width: 660,
-    })
-  }
-
-  /** Public so a harness run can drive the choice without the dialog. */
+  /** Public so a harness run can drive the branch without the ring. */
   specialize(tower: Tower, specId: string): void {
     const spec = tower.def.specializations.find((x) => x.id === specId)
     if (!spec || tower.upgrading || !tower.atSpecChoice) return
@@ -1599,8 +1661,8 @@ this.armReadyCountdown()
   private clearSelection(): void {
     this.setCancelVisible(false)
     this.clearGhost()
-    this.menu.close()
-    this.panel?.close()
+    this.ring?.close()
+    this.ring?.close()
     this.selected = null
     this.projectedRing.clear()
     this.restructuring = null
@@ -1664,7 +1726,7 @@ this.armReadyCountdown()
       }
       return
     }
-    if (this.menu.isOpen) return
+    if (this.ring?.active) return
 
     const tower = this.towerAt(w.x, w.y)
     if (tower) {
@@ -1744,7 +1806,7 @@ this.armReadyCountdown()
       return
     }
     this.clearGhost()
-    this.menu.close()
+    this.ring?.close()
     this.status.mode = 'targeting'
     this.status.pendingAbility = id
     this.setCancelVisible(true)
@@ -1971,7 +2033,7 @@ this.armReadyCountdown()
       return
     }
     this.clearGhost()
-    this.menu.close()
+    this.ring?.close()
     this.status.mode = 'restructure'
     this.restructuring = null
     this.setCancelVisible(true)
@@ -2305,7 +2367,7 @@ this.armReadyCountdown()
       // Redrawn every frame with the panel: the tower can finish an upgrade
       // while its own panel is open, and the ring has to say so.
       this.drawSelectedRange(this.selected)
-      this.positionPanel(this.selected)
+      this.ring?.reposition()
     }
 
     // The move order ends when he gets there, not when it is given. The ring

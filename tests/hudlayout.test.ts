@@ -102,8 +102,14 @@ test('the HUD and the scene that draws over it share one set of rectangles', () 
   // The cancel button and the build menu keep clear by asking, not by guessing.
   assert.match(game, /this\.layout\.abilities\.y - 30/,
     'the cancel button is placed by a magic number again')
-  assert.match(game, /this\.layout\.panelArea/,
-    'the build menu is no longer told where it may open')
+  // The ring asks the layout where the HUD is rather than guessing. It uses
+  // the BANDS rather than panelArea: panelArea also excludes the message row
+  // and the hero row, which leaves 129px on a notched 568x320 — less than one
+  // button plus its price badge, so the menu could not open there at all.
+  assert.match(game, /countersBottom: this\.layout\.counters\.y \+ this\.layout\.counters\.height/,
+    'the ring is no longer told where the counters end')
+  assert.match(game, /abilitiesTop: this\.layout\.abilities\.y/,
+    'the ring is no longer told where the ability bar starts')
 })
 
 test('the safe area is read rather than assumed to be zero', () => {

@@ -145,6 +145,9 @@ export interface BannerDef {
 export interface TowerDef {
   name: string
   archetype: string
+  /** One line on what it does, for the ring's description panel. The panel
+   *  answers "should I buy this?" and the numbers alone never have. */
+  blurb: string
   sprite: string
   /** The projectile. Absent on a support tower, which never fires: the Tax
    *  Shelter named one for years and no player ever saw it. */

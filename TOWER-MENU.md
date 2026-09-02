@@ -1,4 +1,13 @@
-# The tower menu: why there is no ring
+# The tower menu: the ring
+
+> **Superseded.** This file recorded why the ring did not exist. It does now —
+> `src/ui/TowerRing.ts`, with its geometry in `src/systems/RingLayout.ts` — and
+> `BuildMenu`, `TowerPanel` and `TowerIcon` are deleted. What follows is kept
+> as the record of how a specification went missing for four rounds of work,
+> because that is worth not repeating. The current state is in
+> `reports/2026-09-02-the-ring.md`.
+
+---
 
 Diagnosis only. **No layout or gameplay behaviour was changed.** The one thing
 committed alongside this is a harness scenario that measures the build menu
