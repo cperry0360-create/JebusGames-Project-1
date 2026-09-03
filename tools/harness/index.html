@@ -5502,6 +5502,95 @@ async function run() {
     return
   }
 
+  if (scenario === 'bailey') {
+    // BAILEY, DRIVEN. She appears at most once every 60-150 seconds, so
+    // waiting for her is not a test — forcePeek runs the same code path on
+    // demand and the schedule itself is proved in tests/bailey.test.ts.
+    //
+    // prop_bailey_peek.png is NOT in the repository. Her art is an optional
+    // hook, so without it she correctly never appears and there is nothing to
+    // look at; ?arg=stub paints a stand-in texture of the right aspect so the
+    // masking, the rise and the depth can still be checked. The stand-in is a
+    // harness object and never reaches the game.
+    const MAPD = (await import('./js/data/map.json', { with: { type: 'json' } })).default
+    const P = (await import('./js/data/presentation.json', { with: { type: 'json' } })).default
+    const A = (await import('./js/data/art.json', { with: { type: 'json' } })).default
+    const B = P.bailey
+    const problems = []
+    const push = (m) => { problems.push(m); note('   *** ' + m) }
+
+    const key = A.prop.baileyPeek
+    note('art key ' + key + ' -> ' + A.files[key] +
+      '   optional: ' + (A.optional || []).includes(key) +
+      '   texture present: ' + g.textures.exists(key))
+    note('bailey armed: ' + g.bailey.armed +
+      (g.textures.exists(key) ? '' : '  (correct: the file is not in the repo)'))
+    note('spots: ' + JSON.stringify(MAPD.baileySpots.spots))
+    note('appearance ' + B.riseMs + '+' + B.holdMs + '+' + B.dropMs + 'ms, gap ' +
+      B.minGapMs + '..' + B.maxGapMs + 'ms, height ' + B.worldHeight +
+      ' world px, ' + (B.peakVisible * 100) + '% clears the canopy')
+
+    if (arg === 'stub' && !g.textures.exists(key)) {
+      // 594x606, the aspect the brief names, in a colour nothing on the map is.
+      const c = document.createElement('canvas')
+      c.width = 594; c.height = 606
+      const cx = c.getContext('2d')
+      cx.fillStyle = '#ff00ff'; cx.fillRect(0, 0, 594, 606)
+      cx.fillStyle = '#00ffff'; cx.fillRect(0, 0, 594, 40)
+      g.textures.addCanvas(key, c)
+      note('stand-in texture added; rebuilding her')
+      const { Bailey } = await import('./js/entities/Bailey.js')
+      const DS = await import('./js/systems/DepthSort.js')
+      g.bailey.destroy()
+      g.bailey = new Bailey(g, key, MAPD.baileySpots.spots, B, B.worldHeight,
+        DS.GROUND_DEPTH + 1)
+    }
+    if (!g.bailey.armed) {
+      note('nothing further to measure without the art')
+      note(problems.length ? 'PROBLEMS: ' + problems.length : 'no problems found')
+      return
+    }
+
+    // Walk one full appearance at each spot and record what is on screen.
+    const cam = g.cameras.main
+    for (let spot = 0; spot < MAPD.baileySpots.spots.length; spot++) {
+      const s = MAPD.baileySpots.spots[spot]
+      cam.setZoom(Math.min(cam.zoom * 3, P ? 7.11 : 7.11))
+      cam.centerOn(s.x, s.canopyY - B.worldHeight * 0.3)
+      g.bailey.forcePeek(g.time.now, spot)
+      await sleep(B.riseMs + B.holdMs * 0.5)
+      const d = g.bailey.debug
+      const shown = s.canopyY - d.y
+      note('spot ' + spot + ' at ' + s.x + ',' + s.canopyY +
+        '  visible ' + d.visible + '  top y ' + d.y.toFixed(1) +
+        '  clearing the canopy by ' + shown.toFixed(1) + ' world px' +
+        '  (' + (100 * shown / B.worldHeight).toFixed(0) + '% of her)')
+      if (d.spot !== spot) push('forcePeek(' + spot + ') put her at ' + d.spot)
+      if (!d.visible) push('spot ' + spot + ': she is not visible at the top of the rise')
+      if (Math.abs(shown - B.peakVisible * B.worldHeight) > 2) {
+        push('spot ' + spot + ': ' + shown.toFixed(1) + ' world px clear the canopy, ' +
+          'and peakVisible asks for ' + (B.peakVisible * B.worldHeight).toFixed(1))
+      }
+      await shot('bailey-spot' + spot)
+      await sleep(B.holdMs * 0.5 + B.dropMs + 120)
+      const after = g.bailey.debug
+      if (after.visible) push('spot ' + spot + ': she never went back down')
+    }
+
+    // She must not appear during a wave.
+    g.bailey.forcePeek(g.time.now, 0)
+    await sleep(80)
+    g.status.phase = 'wave'
+    await sleep(B.riseMs + B.holdMs + B.dropMs + 300)
+    note('with the phase set to "wave", visible: ' + g.bailey.debug.visible +
+      (g.bailey.debug.visible ? '  *** she is up during a wave ***' : '  OK'))
+    if (g.bailey.debug.visible) push('she is on screen during a wave')
+
+    note(problems.length ? 'PROBLEMS: ' + problems.length : 'no problems found')
+    for (const m of problems) note('  - ' + m)
+    return
+  }
+
   if (scenario === 'notch') {
     // THE SAFE-AREA INSET, PER EDGE, against the actual viewport.
     //

@@ -496,5 +496,26 @@
       "h": 48
     }
   ],
-  "_heroStart": "Open grass, 150px from the road's edge and 112px from the nearest pad. The trace put him at 42% along the lane, which on this painting is on the road itself."
+  "_heroStart": "Open grass, 150px from the road's edge and 112px from the nearest pad. The trace put him at 42% along the lane, which on this painting is on the road itself.",
+  "baileySpots": {
+    "_note": "Gaps in the conifers at the top left she can come up through. `canopyY` is the world y of the foliage she peeks over: nothing of her draws below it, so the rise is her moving up through a line that stays put, and what clears it is the top of her head. READ OFF THE PLATE, NOT VERIFIED AGAINST THE SPRITE \u2014 prop_bailey_peek.png is not in the repository yet, so these are the front edge of the painted foliage per column and will want one pass once the art lands. Kept apart by more than her own width so two consecutive appearances never overlap.",
+    "spots": [
+      {
+        "x": 34,
+        "canopyY": 190
+      },
+      {
+        "x": 68,
+        "canopyY": 180
+      },
+      {
+        "x": 100,
+        "canopyY": 186
+      },
+      {
+        "x": 130,
+        "canopyY": 178
+      }
+    ]
+  }
 }

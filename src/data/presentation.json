@@ -622,5 +622,17 @@
   "safeArea": {
     "housingAtAngle90": "left",
     "_housingAtAngle90": "Which horizontal edge the sensor housing lands on at screen.orientation.angle 90, which is landscape-primary. That is iOS landscapeLeft \u2014 home indicator on the right, device top edge on the left \u2014 so the housing is on the left, and 270 is the mirror of it. THIS IS THE ONE VALUE HERE NOT VERIFIED ON HARDWARE: it comes from the orientation conventions, not from a notched phone. Both branches are tested and both viewports are asserted; if the inset ever shows up on the wrong edge, flip this string and change nothing else."
+  },
+  "bailey": {
+    "minGapMs": 60000,
+    "maxGapMs": 150000,
+    "_gap": "Re-rolled inside this band after every appearance, so she is never on a schedule anyone can learn. The floor is the \"at most once a minute\" rule; the ceiling is far enough out that two in a row rarely feel related.",
+    "riseMs": 400,
+    "holdMs": 1200,
+    "dropMs": 400,
+    "peakVisible": 0.5,
+    "_peakVisible": "How much of her clears the canopy at the top of the rise. Half: the head and the ears, and nothing that would read as a dog standing on top of a tree.",
+    "worldHeight": 67,
+    "_worldHeight": "Her height in WORLD pixels. Asked for as \"about 44px tall at 844x390\", and the opening zoom at that viewport is 0.6594 screen pixels per world unit, so 44 / 0.6594 = 67. Stored in world units rather than screen ones so she scales with every other viewport for free and does not resize when the player pinches."
   }
 }

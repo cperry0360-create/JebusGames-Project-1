@@ -28,7 +28,13 @@ export const ART = {
    *  resolves to the visible stand-in instead of an empty texture key. */
   icons: (art.ui as { icons?: Record<string, string> }).icons ?? {},
   /** Props painted onto the map rather than owned by an entity. */
-  prop: art.prop as { signDefault: string; signBribed: string; signTavern: string; buildPad: string; buildPadQuiet?: string },
+  prop: art.prop as {
+    signDefault: string; signBribed: string; signTavern: string
+    buildPad: string; buildPadQuiet?: string
+    /** Optional art: absent until the file lands, and she simply never
+     *  appears until then. */
+    baileyPeek?: string
+  },
   scatter: (art as { scatter?: Record<string, string> }).scatter ?? {},
   optional: (art as { optional?: string[] }).optional ?? [],
   fx: art.fx,
