@@ -209,6 +209,10 @@
     "cardPadBottom": 15,
     "buttonMargin": 16,
     "buttonGap": 26,
+  "_buttonGap": "Between the two buttons. It was in this file and unread: the row was laid out from two hardcoded offsets and the gap they happened to leave was 10.",
+  "buttonPadX": 34,
+  "_buttonPadX": "Inside a button, either side of its label. Both buttons take the width the WIDER label needs, so the row is symmetrical.",
+  "buttonMinWidth": 200,
     "rowShares": {
       "hero": 0.27,
       "towers": 0.39,

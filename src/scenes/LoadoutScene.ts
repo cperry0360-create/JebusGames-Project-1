@@ -7,8 +7,9 @@ import abilitiesData from '../data/abilities.json'
 import draftData from '../data/draft.json'
 import { draftAbilities, draftOpeningTowers, makeRng, reserveTowers } from '../systems/Draft.ts'
 import { runState, setRunState } from '../systems/RunState.ts'
-import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
-import { panelInset, plateButton, platePanel } from '../ui/Plate.ts'
+import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI, uiSize } from '../ui/Theme.ts'
+import { panelInset, plateButton, platePanel, type PlateButton } from '../ui/Plate.ts'
+import { buttonRow } from '../systems/ButtonRow.ts'
 import { fitInBox } from '../systems/Art.ts'
 import { fitCameraToDesign } from '../ui/FitCamera.ts'
 import { abilityLine, towerLine, towerStats } from '../systems/AbilityText.ts'
@@ -161,6 +162,9 @@ export class LoadoutScene extends Phaser.Scene {
   /** How wide the panels may be, decided by the illustration behind them.
    *  Public so a harness run can check the layout against it. */
   contentWidth = LO.maxContentWidth
+  /** The row, for the harness: a centring bug is a position, and a position
+   *  has to be read off the real objects. */
+  buttonsForProbe: PlateButton[] = []
   /** Where the illustration is clear, in design coordinates. */
   safeBand = { left: 0, right: W }
 
@@ -299,18 +303,64 @@ export class LoadoutScene extends Phaser.Scene {
     return h
   }
 
-  /** The two buttons, at a y the cards cannot argue with. */
+  /**
+   * The centre everything on this screen aligns to.
+   *
+   * The card column is kept symmetrical about the middle — `drawBackdrop`
+   * takes whichever side of the painted safe band runs out first — so this is
+   * the middle today. It is a named thing rather than a `W / 2` repeated at
+   * each call site so that if the column is ever inset asymmetrically, the
+   * cards and the buttons move together instead of drifting apart.
+   */
+  get contentCentre(): number {
+    return W / 2
+  }
+
+  /** A label's natural rendered width, measured rather than assumed. */
+  private labelWidth(text: string, size: number): number {
+    const probe = this.add.text(0, 0, text, {
+      fontFamily: FONT_UI, fontSize: `${uiSize(size)}px`, fontStyle: 'bold', letterSpacing: 1,
+    })
+    const w = probe.width
+    probe.destroy()
+    return w
+  }
+
+  /**
+   * The two buttons, at a y the cards cannot argue with, CENTRED AS A GROUP.
+   *
+   * They used to sit at two hardcoded offsets from the middle — one 300 wide
+   * at centre+90, one 240 wide at centre-190 — so the row spanned centre-310
+   * to centre+240 and its own centre fell 35 units left of every card above
+   * it. Two independent offsets cannot stay centred once the widths differ.
+   *
+   * Both take the width the wider label needs, so the row is symmetrical and
+   * BEGIN THE RUN is not visually smaller than the reroll beside it. See
+   * `buttonRow` for what happens when that pair will not fit the column.
+   */
   private buildButtons(by: number): void {
-    const begin = plateButton(this, W / 2 + 90, by, 300, LO.buttonHeight, 'BEGIN THE RUN', () => {
-      this.scene.start('Game')
-      this.scene.launch('Hud')
-    }, 24)
+    const beginLabel = 'BEGIN THE RUN'
     const left = this.rerollsLeft
-    const reroll = plateButton(this, W / 2 - 190, by, 240, LO.buttonHeight,
-      `${LO.copy.rerollLabel} (${left} left)`, () => this.reroll(), 22)
+    const rerollLabel = `${LO.copy.rerollLabel} (${left} left)`
+    const row = buttonRow({
+      centreX: this.contentCentre,
+      labelWidths: [this.labelWidth(rerollLabel, 22), this.labelWidth(beginLabel, 24)],
+      padX: LO.buttonPadX,
+      gap: LO.buttonGap,
+      minWidth: LO.buttonMinWidth,
+      maxTotal: this.contentWidth,
+    })
+    const reroll = plateButton(this, row.centres[0]!, by, row.width, LO.buttonHeight,
+      rerollLabel, () => this.reroll(), 22)
+    const begin = plateButton(this, row.centres[1]!, by, row.width, LO.buttonHeight,
+      beginLabel, () => {
+        this.scene.start('Game')
+        this.scene.launch('Hud')
+      }, 24)
     // Spent, it stays on the screen greyed rather than disappearing: a button
     // that vanishes takes the knowledge that the option existed with it.
     if (left <= 0) reroll.setEnabled(false)
+    this.buttonsForProbe = [reroll, begin]
     this.layer.add([...reroll.parts, ...begin.parts])
   }
 

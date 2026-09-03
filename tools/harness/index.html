@@ -6423,6 +6423,56 @@ async function run() {
     note('viewport ' + VP.w + 'x' + VP.h + ' zoom ' + cam.zoom.toFixed(3) +
       ' content width ' + Math.round(sc.contentWidth))
 
+    /* --- THE BUTTON ROW AGAINST THE CARD COLUMN ------------------------- */
+    //
+    // Reported off centre. Measured here in BOTH spaces on purpose: this is
+    // the fifth layout-arithmetic fault, and the way to tell an arithmetic
+    // error from a space error is that a space error changes with the device
+    // ratio and an arithmetic one does not.
+    {
+      const dpr = window.devicePixelRatio || 1
+      const bounds = (parts) => {
+        let lo = 1e9, hi = -1e9
+        for (const o of parts) {
+          if (!o.getBounds) continue
+          const b = o.getBounds()
+          if (b.width <= 0) continue
+          lo = Math.min(lo, b.x); hi = Math.max(hi, b.x + b.width)
+        }
+        return { lo, hi, w: hi - lo, mid: (lo + hi) / 2 }
+      }
+      const btns = sc.buttonsForProbe || []
+      if (!btns.length) note('   *** the scene exposes no buttons to measure ***')
+      else {
+        const each = btns.map((b) => ({ label: b.text.text, ...bounds(b.parts) }))
+        for (const e of each) {
+          note('  button "' + e.label + '"  design x ' + e.lo.toFixed(1) + '..' +
+            e.hi.toFixed(1) + '  width ' + e.w.toFixed(1))
+        }
+        const row = { lo: Math.min(...each.map((e) => e.lo)),
+                      hi: Math.max(...each.map((e) => e.hi)) }
+        row.mid = (row.lo + row.hi) / 2
+        const colMid = sc.contentCentre !== undefined ? sc.contentCentre : 1280 / 2
+        const dDesign = row.mid - colMid
+        // The same difference on the glass, which is what a person sees.
+        const toCss = (v) => v * cam.zoom / dpr
+        note('  row ' + row.lo.toFixed(1) + '..' + row.hi.toFixed(1) +
+          '  centre ' + row.mid.toFixed(1) + '   card column centre ' + colMid.toFixed(1))
+        note('  OFFSET ' + dDesign.toFixed(2) + ' design px = ' +
+          toCss(dDesign).toFixed(2) + ' CSS px = ' +
+          (toCss(dDesign) * dpr).toFixed(2) + ' device px   (dpr ' + dpr + ')')
+        if (Math.abs(dDesign) > 1) {
+          note('   *** the button row is not centred on the card column ***')
+        }
+        // And the two buttons should be the same width.
+        const widths = each.map((e) => Math.round(e.w))
+        if (new Set(widths).size !== 1) {
+          note('   *** the buttons are ' + widths.join(' and ') +
+            ' wide; the row is asymmetric ***')
+        }
+      }
+    }
+
     // Everything with a size, flattened.
     const all = []
     const walk = (list) => { for (const o of list) { all.push(o); if (o.list) walk(o.list) } }
