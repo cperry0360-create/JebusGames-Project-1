@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
+  tabLabelFits,
   type DrawerConfig, drawerLayout, drawerWidth, inRect, scrollToShow, tileVisible,
 } from '../src/systems/DrawerLayout.ts'
 import { cornerRadii } from '../src/ui/EdgeDock.ts'
@@ -201,7 +202,9 @@ test('the handle wears the drawer’s own material, not a plate of its own', () 
     'the closed handle is not the drawer’s slab, docked')
   assert.match(drawer, /CFG\.chevron/, 'the chevron is still drawn in the outline colour')
   const code = drawer.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n')
-  assert.doesNotMatch(code, /CFG\.tabFill/, 'the orange plate fill is back')
+  // Anchored: `tabFillActive` and `tabFillIdle` are the TAB BAR's colours,
+  // which are a different thing from the handle's old orange plate.
+  assert.doesNotMatch(code, /CFG\.tabFill\b/, 'the orange plate fill is back')
 })
 
 test('CANCEL is docked by the same rule', () => {
@@ -275,30 +278,70 @@ test('six towers make three rows of two', () => {
 
 test('how far each viewport has to scroll, measured', () => {
   /*
-   * MEASURED, AND ONE OF THESE MOVED. 198px of tiles is the content at every
+   * MEASURED, AND IT HAS MOVED TWICE. 198px of tiles is the content at every
    * size; what varies is the grid it is seen through.
    *
-   * At 844x390 the grid was 202 and nothing scrolled. Moving CANCEL out of the
-   * bottom-right corner and into the HUD band cost `panelArea` eighteen pixels
-   * — the button is 40 tall and the row it joined is 22 — so the grid is 184
-   * and the last row is fourteen pixels short of fitting. That is a real cost
-   * of taking chrome off the board, and it is written down here rather than
-   * discovered later: the drag and the scroll indicator both exist, and every
-   * tile is still reachable (see the test below), but the wide screen scrolls
-   * now where it used to fit.
+   * First: moving CANCEL out of the bottom-right corner into the HUD band
+   * cost `panelArea` eighteen pixels, so the 844x390 grid went from 202 to
+   * 184 and the last row fell fourteen pixels short of fitting.
    *
-   * The levers, in order of least damage: `drawer.pad`, `drawer.tileGap`,
-   * `drawer.widths`. None of them is worth spending until 62px tiles have
-   * been judged on a real thumb.
+   * Second, and much larger: the panel now stacks four sections rather than
+   * one. A header for the peanut count, a TOWERS/ACTIVE/PASSIVE bar, the
+   * grid, and a pinned detail strip. The chrome costs 96px at 844x390 and
+   * 75px at 568x320, and every one of those pixels comes out of the grid.
+   *
+   *   844x390   inner 184 -> grid 76   content 198   maxScroll 122
+   *   568x320   inner 114 -> grid 36   content 198   maxScroll 162
+   *
+   * THE NARROW CASE IS THE ONE TO LOOK AT. A 62px tile does not fit in a 36px
+   * grid at all, so at 568x320 no tile can ever be shown whole — and 36 is
+   * only 58% of a tile, against the 50% the pick path requires, so the margin
+   * there is eight pixels. See the
+   * reachability test below, which now asserts the weaker thing that is true
+   * rather than the stronger thing that is not.
+   *
+   * The levers, in order of least damage:
+   *   1. let the drawer run below `panelArea`'s bottom at this width. The
+   *      ability strip is centred and does not reach the drawer's x range at
+   *      568, so the collision the bound exists to prevent is not there.
+   *   2. a `tileHeight` per breakpoint, which undoes the 62px thumb target
+   *      deliberately chosen for this grid.
+   *   3. drop the detail strip's reserved height when nothing is selected,
+   *      which re-flows the grid under the finger at the moment a tile has
+   *      just been tapped.
+   * None is taken here: the brief said placement does not change, and which
+   * of the three is right is a judgement about a real thumb.
    */
   const wide = drawerLayout(844, area(844, 390), 6, 0, CFG)
   const narrow = drawerLayout(568, area(568, 320), 6, 0, CFG)
   const desk = drawerLayout(1280, area(1280, 720), 6, 0, CFG)
-  assert.equal(Math.round(wide.maxScroll), 14, '844x390 no longer scrolls by 14')
-  assert.equal(Math.round(narrow.maxScroll), 84, '568x320 no longer scrolls by 84')
+  assert.equal(Math.round(wide.grid.height), 76, '844x390 grid height moved')
+  assert.equal(Math.round(narrow.grid.height), 36, '568x320 grid height moved')
+  assert.equal(Math.round(wide.maxScroll), 122, '844x390 no longer scrolls by 122')
+  assert.equal(Math.round(narrow.maxScroll), 162, '568x320 no longer scrolls by 162')
+  // THE MARGIN, pinned. A grid under half a tile makes every tile untappable,
+  // and the narrow screen is eight pixels above that line.
+  assert.ok(narrow.grid.height > CFG.tileHeight * 0.5,
+    `568x320's grid is ${narrow.grid.height}px against a ${CFG.tileHeight}px tile; ` +
+    'under half and nothing in the drawer can be tapped')
   assert.equal(desk.maxScroll, 0, 'a 720-tall screen should never need to scroll')
   assert.ok(narrow.maxScroll > wide.maxScroll,
     'the narrow screen must be the worse case, or the widths are the wrong way round')
+})
+
+test('the panel chrome takes exactly what the breakpoint says, and no more', () => {
+  // The arithmetic above, as an assertion, so a height nudged in the data
+  // cannot quietly eat the grid.
+  for (const [name, w, h] of VIEWPORTS) {
+    const l = drawerLayout(w, area(w, h), 6, 0, CFG)
+    const step = l.step
+    const inner = l.panel.height - CFG.pad * 2
+    const chrome = step.headerHeight + step.tabBarHeight + step.detailHeight
+      + step.sectionGap * 3
+    assert.ok(Math.abs(inner - chrome - l.grid.height) < 0.001,
+      `${name}: inner ${inner} minus chrome ${chrome} is not the grid's ${l.grid.height}`)
+    assert.ok(l.grid.height > 0, `${name}: the chrome has eaten the whole grid`)
+  }
 })
 
 test('scrolling moves the tiles and nothing else', () => {
@@ -320,18 +363,54 @@ test('scroll is clamped at both ends', () => {
 })
 
 test('EVERY tile is reachable by scrolling, at every viewport', () => {
-  // The claim the slice rests on. A grid that scrolls is a grid where a tile
-  // can be permanently off screen, and six is enough for that to happen.
+  /*
+   * The claim the slice rests on. A grid that scrolls is a grid where a tile
+   * can be permanently off screen, and six is enough for that to happen.
+   *
+   * THE GUARANTEE IS NOW TWO GUARANTEES, and the split is a real cost rather
+   * than a relaxed assertion. Where the grid is at least a tile tall, every
+   * tile can still be brought FULLY into view. Where it is not — 568x320,
+   * whose grid is 39px against a 62px tile once the header, the tab bar and
+   * the detail strip have taken their share — nothing can bring a whole tile
+   * into view, because there is nowhere to put it. What must still hold there
+   * is that scrolling brings every tile to the most the grid can show, and
+   * that this clears the half a tile the pick path requires.
+   */
   for (const [name, w, h] of VIEWPORTS) {
     const a = area(w, h)
+    const base = drawerLayout(w, a, TOWERS.length, 0, CFG)
+    const fits = base.grid.height >= CFG.tileHeight
     for (let i = 0; i < TOWERS.length; i++) {
-      const base = drawerLayout(w, a, TOWERS.length, 0, CFG)
       const to = scrollToShow(i, 0, CFG, base.grid, TOWERS.length)
       const l = drawerLayout(w, a, TOWERS.length, to, CFG)
-      assert.ok(tileVisible(l.tiles[i]!, l.grid, 0.99),
-        `${name}: tile ${i} cannot be brought fully into view (scroll ${to})`)
+      if (fits) {
+        assert.ok(tileVisible(l.tiles[i]!, l.grid, 0.99),
+          `${name}: tile ${i} cannot be brought fully into view (scroll ${to})`)
+      } else {
+        const shown = l.grid.height / CFG.tileHeight
+        assert.ok(tileVisible(l.tiles[i]!, l.grid, shown - 0.001),
+          `${name}: tile ${i} is not brought to the most the ${l.grid.height}px ` +
+          `grid can show (scroll ${to})`)
+        assert.ok(tileVisible(l.tiles[i]!, l.grid, 0.5),
+          `${name}: tile ${i} cannot be tapped even at its best scroll`)
+      }
     }
   }
+})
+
+test('which viewports can show a whole tile, recorded', () => {
+  // Stated rather than left implicit in the branch above, so that a change
+  // which quietly moves a viewport from one case to the other fails here.
+  const canShowWhole: Record<string, boolean> = {}
+  for (const [name, w, h] of VIEWPORTS) {
+    canShowWhole[name] = drawerLayout(w, area(w, h), 6, 0, CFG).grid.height >= CFG.tileHeight
+  }
+  assert.deepEqual(canShowWhole, {
+    '844x390': true,
+    '568x320': false,
+    '1280x720': true,
+    '390x844': true,
+  }, 'a viewport has crossed the line between showing a whole tile and not')
 })
 
 test('scrollToShow does not move a tile that is already visible', () => {
@@ -532,4 +611,109 @@ test('the drawer takes every colour it draws from the data', () => {
   for (const k of ['lockFill', 'lockEdge', 'scrollbarFill', 'scrollbarWidth', 'dragSlop']) {
     assert.equal(typeof D[k], 'number', `presentation.json has no drawer.${k}`)
   }
+})
+
+/* ------------------------------------------------- the three new sections */
+
+test('the panel stacks header, tabs, grid and strip in that order', () => {
+  for (const [name, w, h] of VIEWPORTS) {
+    const l = drawerLayout(w, area(w, h), 6, 0, CFG)
+    const order = [l.header, l.tabBar, l.grid, l.detail]
+    for (let i = 1; i < order.length; i++) {
+      assert.ok(order[i]!.y >= order[i - 1]!.y + order[i - 1]!.height - 0.001,
+        `${name}: section ${i} starts above the one before it`)
+    }
+    // The strip is PINNED: its bottom is the panel's inner bottom, whatever
+    // the grid does above it.
+    assert.ok(Math.abs((l.detail.y + l.detail.height) - (l.panel.y + l.panel.height - CFG.pad)) < 0.001,
+      `${name}: the strip is not pinned to the bottom of the panel`)
+    // Everything inside the panel's inner width, and nothing hanging out.
+    for (const r of [l.header, l.tabBar, l.grid, l.detail, ...l.tabs]) {
+      assert.ok(r.x >= l.panel.x + CFG.pad - 0.001, `${name}: a section starts left of the panel`)
+      assert.ok(r.x + r.width <= l.panel.x + l.panel.width - CFG.pad + 0.001,
+        `${name}: a section runs past the panel`)
+    }
+  }
+})
+
+test('three tabs, evenly across the inner width', () => {
+  for (const [name, w, h] of VIEWPORTS) {
+    const l = drawerLayout(w, area(w, h), 6, 0, CFG)
+    assert.equal(l.tabs.length, CFG.tabLabels.length, `${name}: wrong number of tabs`)
+    assert.equal(l.tabs.length, 3, 'TOWERS, ACTIVE and PASSIVE')
+    const widths = new Set(l.tabs.map((t) => Math.round(t.width * 100)))
+    assert.equal(widths.size, 1, `${name}: the tabs are not the same width`)
+    const total = l.tabs.reduce((a, t) => a + t.width, 0) + l.step.tabGap * 2
+    assert.ok(Math.abs(total - l.tabBar.width) < 0.001,
+      `${name}: the tabs plus their gaps are not the bar's width`)
+    for (let i = 1; i < l.tabs.length; i++) {
+      const gap = l.tabs[i]!.x - (l.tabs[i - 1]!.x + l.tabs[i - 1]!.width)
+      assert.ok(Math.abs(gap - l.step.tabGap) < 0.001, `${name}: uneven tab gap`)
+    }
+  }
+})
+
+test('the strip is an icon on the left and a text column on the right', () => {
+  for (const [name, w, h] of VIEWPORTS) {
+    const l = drawerLayout(w, area(w, h), 6, 0, CFG)
+    assert.equal(l.detailIcon.width, l.step.detailIcon, `${name}: the icon is not its step's size`)
+    assert.equal(l.detailIcon.width, l.detailIcon.height, `${name}: the icon is not square`)
+    assert.ok(l.detailIcon.height <= l.detail.height, `${name}: the icon is taller than the strip`)
+    assert.ok(l.detailText.x >= l.detailIcon.x + l.detailIcon.width,
+      `${name}: the text column overlaps the icon`)
+    // PADDED ON BOTH SIDES. It ran flush into the strip's outline on the right
+    // for one build, because the column was given everything to the edge.
+    assert.ok(l.detailText.x + l.detailText.width < l.detail.x + l.detail.width - 1,
+      `${name}: the text column runs into the strip's right edge`)
+    assert.ok(l.detailText.width > 40, `${name}: a ${l.detailText.width}px column holds nothing`)
+  }
+})
+
+test('a label that does not fit becomes a glyph, and the rule is the rule', () => {
+  // The measurement is Phaser's; the DECISION is this, and it is testable.
+  assert.equal(tabLabelFits(20, 44), true)
+  assert.equal(tabLabelFits(32, 44), true, 'exactly filling the padded width still fits')
+  assert.equal(tabLabelFits(33, 44), false)
+  assert.equal(tabLabelFits(71, 32.7), false, 'the real 568x320 case')
+  // AND THE REAL ANSWER, which is that none of them fit: `uiSize` clamps every
+  // screen-space size up to typography.minUiSize, so a tab label renders at
+  // 15px however small a number the data asks for, and "TOWERS" at 15px bold
+  // is 71px against a widest-case 44px tab. The glyph fallback the brief
+  // specified for the narrow screen therefore runs on both.
+  const P2 = read('presentation')
+  assert.equal(P2.typography.minUiSize, 15,
+    'the type floor moved; re-measure whether the tab labels fit now')
+  assert.ok(P2.drawer.tabLabelSize <= P2.typography.minUiSize,
+    'the requested tab label size is above the floor, so it is no longer clamped')
+})
+
+test('every tower has a trait short enough for the strip', () => {
+  // 18 characters, and it never wraps because there is no second line.
+  const towers = read('towers') as Record<string, { trait: string }>
+  for (const [id, def] of Object.entries(towers)) {
+    assert.ok(def.trait.length > 0, `${id} has no trait phrase`)
+    assert.ok(def.trait.length <= 18,
+      `${id}'s trait "${def.trait}" is ${def.trait.length} characters; the strip allows 18`)
+  }
+})
+
+test('the tab bar and the strip take their own presses', () => {
+  // A tap on PASSIVE must not fall through and start a scroll of the grid.
+  const drawer = src('ui/ControlDrawer.ts')
+  assert.match(drawer, /inRect\(this\.layout\.tabBar, x, y\)\)\s*return/,
+    'the tab bar does not consume its own presses')
+  assert.match(drawer, /inRect\(this\.layout\.detail, x, y\)\)\s*return/,
+    'the pinned strip does not consume its own presses')
+  assert.match(drawer, /if \(!inRect\(this\.layout\.grid, x, y\)\) return/,
+    'a drag can still start outside the grid, which is the only thing that scrolls')
+})
+
+test('tiles carry artwork and a price, and still no name', () => {
+  // The strip is what carries the name now. A name on a 66px tile does not
+  // survive 568x320, which is why it was never there.
+  const drawer = src('ui/ControlDrawer.ts')
+  const draw = drawer.slice(drawer.indexOf('private drawTile'))
+    .slice(0, drawer.slice(drawer.indexOf('private drawTile')).indexOf('\n  destroy('))
+  assert.match(draw, /String\(tile\.price\)/, 'the price is gone from the tile')
+  assert.doesNotMatch(draw, /tile\.name|detail\.name/, 'a name has appeared on the tile')
 })

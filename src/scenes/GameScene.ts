@@ -72,7 +72,7 @@ import {
   deviceScale, fitUiCamera, pointerToScreen, viewH, viewW, worldToScreen,
 } from '../systems/Resolution.ts'
 import { CastCursor } from '../ui/CastCursor.ts'
-import { ControlDrawer, type DrawerTile } from '../ui/ControlDrawer.ts'
+import { ControlDrawer, type DrawerDetail, type DrawerTile } from '../ui/ControlDrawer.ts'
 import { bothUnits, realSeconds } from '../systems/GameTime.ts'
 
 /** The HUD's layout constants, shared with HudScene so both agree. */
@@ -417,6 +417,8 @@ export class GameScene extends Phaser.Scene {
       // screen. `panelArea` insets by six for chrome that floats inside it.
       dockRight: () => viewW(this) - safeAreaInsets().right,
       tiles: () => this.drawerTiles(),
+      peanuts: () => this.status.peanuts,
+      detailFor: (id) => this.drawerDetail(id),
       onSelect: (id) => {
         this.drawerPick = id
         // A pick is a cancellable state like an armed ability, so it lights
@@ -1533,6 +1535,28 @@ this.armReadyCountdown()
       affordable: this.status.peanuts >= TOWERS[id]!.cost,
       locked: !this.status.unlockedTowers.includes(id),
     }))
+  }
+
+  /**
+   * What the drawer's pinned strip says about a tower.
+   *
+   * The numbers come from `statsFor`, which is what the ledger card uses, so
+   * the strip and the card cannot disagree about a tower's dps. It also
+   * carries the support-tower case: Beacon has no rate, and reports a boost
+   * and a radius instead of three slots saying zero.
+   *
+   * BASE_TIER and no specialization: nothing is built yet, so what the strip
+   * describes is what the tile would buy.
+   */
+  private drawerDetail(id: string): DrawerDetail | null {
+    const def = TOWERS[id]
+    if (!def) return null
+    return {
+      name: def.name,
+      sprite: def.sprite,
+      stats: statsFor(def, BASE_TIER, null),
+      trait: def.trait,
+    }
   }
 
   /**

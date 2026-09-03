@@ -554,14 +554,26 @@
     "widths": [
       {
         "minViewW": 700,
-        "width": 152
+        "width": 152,
+        "headerHeight": 20,
+        "tabBarHeight": 20,
+        "detailHeight": 56,
+        "detailIcon": 34,
+        "sectionGap": 4,
+        "tabGap": 2
       },
       {
         "minViewW": 0,
-        "width": 118
+        "width": 118,
+        "headerHeight": 16,
+        "tabBarHeight": 16,
+        "detailHeight": 40,
+        "detailIcon": 26,
+        "sectionGap": 2,
+        "tabGap": 2
       }
     ],
-    "_widths": "Panel width by viewport width, widest first; the last entry must be minViewW 0 so there is always an answer. 152 at 844x390 and 118 at 568x320 as specified \u2014 a rule with a shape, not two constants, so a third breakpoint needs no code.",
+    "_widths": "ONE BREAKPOINT CARRIES THE WHOLE BUDGET, not just the width. The panel is 200px tall at 844x390 and only 130 at 568x320 \u2014 the HUD rows above and the ability strip below decide that, not this file \u2014 so a header, a tab bar and a detail strip at one set of heights leave 18px of grid on the narrow screen, which is less than half a tile and therefore no tappable tile at all. The narrow row is the same layout with every piece of chrome cut to what it actually needs. Widest first; the last must be minViewW 0 so there is always an answer.",
     "pad": 8,
     "columns": 2,
     "tileHeight": 62,
@@ -582,8 +594,6 @@
     "outline": 1182985,
     "outlineWidth": 3,
     "_outline": "Thick and dark, matching the painted board. Flat colour, chunky rounded forms \u2014 no bevel, no metal, no neon edge, no gradient, no translucent hairline. The reference is the in-game side drawer, not a web panel.",
-    "tabFill": 12745274,
-    "_tabFill": "DEAD as of the docking change: the handle takes the panel's own `slab` now. Kept only so the old value is on the record, and a candidate for deletion.",
     "chevron": 14272424,
     "selectedEdge": 16765503,
     "dragSlop": 6,
@@ -617,7 +627,27 @@
     "nodeRingUnderWidth": [
       5.0,
       7.5
-    ]
+    ],
+    "tabLabels": [
+      "TOWERS",
+      "ACTIVE",
+      "PASSIVE"
+    ],
+    "_tabLabels": "Only the first is populated. ACTIVE and PASSIVE render as disabled tabs so that filling them later is data rather than a layout change, which is the whole reason the bar exists now. A label that will not fit is replaced by a drawn glyph rather than truncated: \"TOWE...\" is worse than a picture.",
+    "tabLabelSize": 10,
+    "tabFillActive": 7297594,
+    "tabFillIdle": 3813154,
+    "tabLabelActive": 16182489,
+    "tabLabelIdle": 9273194,
+    "headerSize": 13,
+    "headerIcon": 15,
+    "detailNameSize": 15,
+    "detailStatSize": 15,
+    "detailTraitSize": 15,
+    "detailLabelColor": 10128244,
+    "_detail": "The strip is PINNED at the bottom and reserves its height whether or not anything is selected. Collapsing it when empty would re-flow the grid under the finger at the exact moment a tile has just been tapped, which is how mis-taps are made. Empty means blank, not absent.",
+    "_tabLabelSize": "Requested, not rendered. `uiSize` clamps every screen-space size up to typography.minUiSize, which is 15, so a tab label draws at 15 however small a number is put here. That clamp is the reason the words do not fit: \"TOWERS\" at 15px bold is 71px wide and the widest tab this drawer has is 44. The brief expected \"about 43px is enough for a short word at small caps\"; it is not, against this project\u2019s own legibility floor, so the glyph fallback the brief specified for the narrow screen is what runs on both. Lowering this number changes nothing; lowering minUiSize would trade the drawer\u2019s tabs against every other piece of small UI in the game.",
+    "_detailSizes": "ALL THREE ARE THE FLOOR, and they have to be. typography.minUiSize is 15 and `uiSize` clamps every screen-space size up to it, so \"small labels\" under the numbers is not a thing this strip can have: three captions at 15px need about 100px and the text column is 92 at 844x390 and 68 at 568x320. What the strip carries is therefore the name, the three numbers in a fixed order, and the trait where there is room for it \u2014 see reports/ for the arithmetic and the three ways out."
   },
   "safeArea": {
     "housingAtAngle90": "left",

@@ -5,8 +5,10 @@ import { fitInBox } from '../systems/Art.ts'
 import { pointerToScreen } from '../systems/Resolution.ts'
 import { dockedSlab } from './EdgeDock.ts'
 import {
-  type DrawerConfig, type DrawerLayout, drawerLayout, inRect, scrollToShow, tileVisible,
+  type DrawerConfig, type DrawerLayout, drawerLayout, inRect, scrollToShow,
+  tabLabelFits, tileVisible,
 } from '../systems/DrawerLayout.ts'
+import { ART } from '../systems/Art.ts'
 import type { Rect } from '../systems/HudLayout.ts'
 
 const CFG = presentationData.drawer as unknown as DrawerConfig & {
@@ -25,9 +27,34 @@ const CFG = presentationData.drawer as unknown as DrawerConfig & {
   tileFillSelected: number
   outline: number
   outlineWidth: number
-  tabFill: number
   chevron: number
   selectedEdge: number
+  tabLabelSize: number
+  tabFillActive: number
+  tabFillIdle: number
+  tabLabelActive: number
+  tabLabelIdle: number
+  headerSize: number
+  headerIcon: number
+  detailNameSize: number
+  detailStatSize: number
+  detailTraitSize: number
+  detailLabelColor: number
+}
+
+/** How long a trait phrase may be. Longer than this and it would wrap, and a
+ *  strip this short has no second line to wrap onto. */
+const TRAIT_MAX = 18
+
+/** What the pinned strip says about one tower. Supplied by the scene, so the
+ *  drawer never reads tower data and the strip and the ledger card cannot
+ *  disagree about what a tower's dps is. */
+export interface DrawerDetail {
+  name: string
+  sprite: string
+  /** Two or three of them: a support tower has no rate. */
+  stats: Array<{ label: string; value: string }>
+  trait: string
 }
 
 /**
@@ -81,6 +108,12 @@ export interface ControlDrawerOptions {
    */
   camera: () => Phaser.Cameras.Scene2D.Camera
   tiles: () => DrawerTile[]
+  /** The wallet, for the header. The player is spending the whole time this is
+   *  open, so the number belongs where the prices are. */
+  peanuts: () => number
+  /** What the selected tile is, for the pinned strip. Null when nothing is
+   *  selected, which draws an empty strip rather than removing it. */
+  detailFor: (id: string) => DrawerDetail | null
   /** A tile was picked, or unpicked. The scene turns this into pulsing nodes. */
   onSelect: (id: string | null) => void
 }
@@ -96,14 +129,37 @@ export class ControlDrawer {
   /** The scroll hint, on its own layer ABOVE the grid. Drawn on `panelG` it
    *  was underneath the tiles, which cover the grid's right edge entirely. */
   private readonly scrollG: Phaser.GameObjects.Graphics
+  /** The header, the tab bar and the detail strip: everything in the panel
+   *  that is NOT the scrolling grid, and so is not under the grid's mask. */
+  private readonly chromeG: Phaser.GameObjects.Graphics
+  private readonly chromeLayer: Phaser.GameObjects.Container
   private readonly hit: Phaser.GameObjects.Rectangle
   /** Public so the harness can measure every rectangle rather than infer it
    *  from a screenshot. */
   layout: DrawerLayout
-  private tiles: DrawerTile[] = []
+  /** Public so the harness can name a tile without re-deriving the list the
+   *  drawer is actually showing. */
+  tiles: DrawerTile[] = []
   /** Where the tap targets are, in CSS pixels, for the scene and the probe.
    *  ONE list: the picture and the target come from the same rectangles. */
   tileRects: Rect[] = []
+
+  /**
+   * What the drawer decided about each tab label, for the probe.
+   *
+   * Exposed rather than re-derived. The first version of the probe measured
+   * the labels itself, in `KenneyFuture` — which is the DISPLAY face and not
+   * what this draws in — and reported that "TOWERS" needs 54px when the face
+   * it actually renders in needs rather less. A probe that re-derives a
+   * decision is a probe that can disagree with the thing it is checking.
+   */
+  get tabLabelReport(): Array<{ label: string; width: number; tabWidth: number; fits: boolean }> {
+    return (CFG.tabLabels ?? []).map((label, i) => {
+      const tabWidth = this.layout.tabs[i]?.width ?? 0
+      const width = this.labelWidth(label)
+      return { label, width, tabWidth, fits: tabLabelFits(width, tabWidth) }
+    })
+  }
 
   /** The hit rectangle's current box, for the probe: a target that is drawn
    *  correctly and hit-tested elsewhere is the failure worth naming. */
@@ -118,6 +174,12 @@ export class ControlDrawer {
   enabled = false
   /** Set by `press`, consumed by `claimsPress`. See `claimsPress`. */
   private tookPress = false
+  /** Which tab is showing. Only TOWERS is populated, so this is 0 and stays
+   *  0 until the other two groups exist — but the bar, the hit-testing and
+   *  the layout are all indexed by it already. */
+  activeTab = 0
+  /** Rendered label widths, measured once. See `labelWidth`. */
+  private readonly labelWidths = new Map<string, number>()
   /** Where the finger went down, and where it was last seen, in CSS pixels.
    *  Null when no press is in flight. */
   private dragFrom: number | null = null
@@ -137,6 +199,8 @@ export class ControlDrawer {
     this.gridLayer = scene.add.container(0, 0)
     this.maskG = scene.add.graphics().setVisible(false)
     this.scrollG = scene.add.graphics()
+    this.chromeG = scene.add.graphics()
+    this.chromeLayer = scene.add.container(0, 0)
     this.tabG = scene.add.graphics()
     // ONE interactive rectangle over the whole drawer, and the tap is resolved
     // against the laid-out boxes inside it. Six interactive tiles plus a tab
@@ -152,7 +216,8 @@ export class ControlDrawer {
     // A finger that leaves the drawer mid-drag ends the gesture rather than
     // picking whatever it started on when it comes back.
     this.hit.on('pointerout', () => { this.dragFrom = null; this.downOn = null })
-    this.layer.add([this.panelG, this.gridLayer, this.scrollG, this.tabG, this.hit])
+    this.layer.add([this.panelG, this.gridLayer, this.scrollG,
+      this.chromeG, this.chromeLayer, this.tabG, this.hit])
     this.gridLayer.setMask(this.maskG.createGeometryMask())
     this.layout = drawerLayout(opts.viewW(), opts.area(), 0, 0, CFG, false, opts.dockRight())
     this.refresh()
@@ -270,6 +335,19 @@ export class ControlDrawer {
     this.tookPress = this.owns(x, y)
     if (inRect(this.layout.tab, x, y)) { this.toggle(); return }
     if (!this.open) return
+
+    // The tab bar takes its own presses and starts no drag. Only TOWERS is
+    // populated, so every tab is either already active or disabled and none
+    // of them does anything yet — but the press has to STOP here rather than
+    // fall through to the grid, or a tap on PASSIVE would begin a scroll.
+    if (inRect(this.layout.tabBar, x, y)) return
+    // Same for the pinned strip: it is a readout, not a control.
+    if (inRect(this.layout.detail, x, y)) return
+    if (inRect(this.layout.header, x, y)) return
+
+    // A drag only ever starts inside the grid, which is the only thing that
+    // scrolls.
+    if (!inRect(this.layout.grid, x, y)) return
     this.dragFrom = y
     this.dragLast = y
     this.dragged = false
@@ -334,6 +412,8 @@ export class ControlDrawer {
     this.panelG.clear()
     this.scrollG.clear()
     this.tabG.clear()
+    this.chromeG.clear()
+    this.chromeLayer.removeAll(true)
     this.gridLayer.removeAll(true)
     this.maskG.clear()
 
@@ -374,6 +454,9 @@ export class ControlDrawer {
       this.maskG.fillRect(grid.x, grid.y, grid.width, grid.height)
       for (const [i, tile] of this.tiles.entries()) this.drawTile(tile, this.layout.tiles[i]!)
       this.scrollbar(grid)
+      this.drawHeader()
+      this.drawTabs()
+      this.drawDetail()
     }
 
     // The tab last, so it sits over the panel's edge and reads as its handle.
@@ -394,6 +477,247 @@ export class ControlDrawer {
       })
     }
     this.chevron(tab)
+  }
+
+  /* ------------------------------------------------ the three new sections */
+
+  /**
+   * The wallet, in the drawer's own header.
+   *
+   * The player is spending the entire time this panel is open and every tile
+   * carries a price, so the number they are spending belongs beside them
+   * rather than only in the corner counter their thumb is covering.
+   */
+  private drawHeader(): void {
+    const s = this.scene
+    const r = this.layout.header
+    const icon = ART.generated.peanutIcon
+    let x = r.x
+    if (s.textures.exists(icon)) {
+      const img = s.add.image(r.x + CFG.headerIcon / 2, r.y + r.height / 2, icon)
+      img.setDisplaySize(CFG.headerIcon, CFG.headerIcon)
+      this.chromeLayer.add(img)
+      x += CFG.headerIcon + 4
+    }
+    const t = s.add.text(x, r.y + r.height / 2, String(this.opts.peanuts()), {
+      fontFamily: FONT_UI, fontSize: `${uiSize(CFG.headerSize)}px`, fontStyle: 'bold',
+      color: COLOR.amber, stroke: '#120d09', strokeThickness: 3,
+    }).setOrigin(0, 0.5)
+    this.chromeLayer.add(t)
+  }
+
+  /**
+   * TOWERS / ACTIVE / PASSIVE.
+   *
+   * ONLY THE FIRST IS POPULATED, and the other two are built now anyway. The
+   * point of the bar arriving before its contents is that filling it later is
+   * data rather than a layout change — the panel's heights, the grid's
+   * remaining room and the scroll that falls out of it are all decided here
+   * and settled now, rather than being re-derived when the other two groups
+   * turn up.
+   *
+   * A label that will not fit becomes a glyph rather than "TOWE...". Which
+   * happens is a measurement, not a guess: the label is measured against the
+   * tab it has to sit in.
+   */
+  private drawTabs(): void {
+    const s = this.scene
+    const labels = CFG.tabLabels ?? []
+    for (const [i, r] of this.layout.tabs.entries()) {
+      const label = labels[i] ?? ''
+      const active = i === this.activeTab
+      this.chromeG.fillStyle(active ? CFG.tabFillActive : CFG.tabFillIdle, 1)
+      this.chromeG.fillRoundedRect(r.x, r.y, r.width, r.height, 5)
+      this.chromeG.lineStyle(2, CFG.outline, 1)
+      this.chromeG.strokeRoundedRect(r.x, r.y, r.width, r.height, 5)
+
+      const colour = active ? CFG.tabLabelActive : CFG.tabLabelIdle
+      if (tabLabelFits(this.labelWidth(label), r.width)) {
+        const t = s.add.text(r.x + r.width / 2, r.y + r.height / 2, label, {
+          fontFamily: FONT_UI, fontSize: `${uiSize(CFG.tabLabelSize)}px`,
+          fontStyle: 'bold', letterSpacing: 1,
+          color: `#${colour.toString(16).padStart(6, '0')}`,
+        }).setOrigin(0.5)
+        this.chromeLayer.add(t)
+      } else {
+        this.tabGlyph(i, r, colour)
+      }
+    }
+  }
+
+  /**
+   * A tab's icon, for when its word will not fit.
+   *
+   * Drawn rather than an asset, for the same reason the chevron and the
+   * padlock are: there is no icon for "passive" in any pack, and three
+   * primitives in the drawer's own thick-outline vocabulary read better than
+   * three borrowed glyphs that do not match each other.
+   */
+  private tabGlyph(i: number, r: Rect, colour: number): void {
+    const g = this.scene.add.graphics()
+    const cx = r.x + r.width / 2
+    const cy = r.y + r.height / 2
+    const k = Math.min(r.width, r.height) * 0.34
+    g.fillStyle(colour, 1)
+    g.lineStyle(2, colour, 1)
+    if (i === 0) {
+      // A turret: a squat body with a barrel on top.
+      g.fillRoundedRect(cx - k, cy - k * 0.1, k * 2, k * 1.1, 2)
+      g.fillRoundedRect(cx - k * 0.3, cy - k, k * 0.6, k * 0.9, 2)
+    } else if (i === 1) {
+      // A bolt: active things go off.
+      g.beginPath()
+      g.moveTo(cx + k * 0.2, cy - k)
+      g.lineTo(cx - k * 0.6, cy + k * 0.15)
+      g.lineTo(cx, cy + k * 0.15)
+      g.lineTo(cx - k * 0.2, cy + k)
+      g.lineTo(cx + k * 0.6, cy - k * 0.15)
+      g.lineTo(cx, cy - k * 0.15)
+      g.closePath()
+      g.fillPath()
+    } else {
+      // A shield: passive things sit there.
+      g.beginPath()
+      g.moveTo(cx - k * 0.8, cy - k * 0.8)
+      g.lineTo(cx + k * 0.8, cy - k * 0.8)
+      g.lineTo(cx + k * 0.8, cy)
+      g.lineTo(cx, cy + k)
+      g.lineTo(cx - k * 0.8, cy)
+      g.closePath()
+      g.fillPath()
+    }
+    this.chromeLayer.add(g)
+  }
+
+  /**
+   * The pinned strip: what the selected tower is.
+   *
+   * It REPLACES the floating panel for the build case. With the drawer on,
+   * nothing in the build flow is positioned against a pad any more — the
+   * picture, the price, the name, the numbers and the trait are all in one
+   * rectangle that is always in the same place, so there is no placement to
+   * get wrong and no placement measurement to keep.
+   *
+   * The price is NOT repeated here: it is already on the tile, and the tile
+   * is what the eye came from.
+   *
+   * Empty when nothing is selected, and still there. Collapsing it would
+   * re-flow the grid under the finger at the exact moment a tile has just
+   * been tapped.
+   */
+  private drawDetail(): void {
+    const s = this.scene
+    const r = this.layout.detail
+    this.chromeG.fillStyle(CFG.tileFill, 1)
+    this.chromeG.fillRoundedRect(r.x, r.y, r.width, r.height, CFG.tileRadius)
+    this.chromeG.lineStyle(2, CFG.outline, 1)
+    this.chromeG.strokeRoundedRect(r.x, r.y, r.width, r.height, CFG.tileRadius)
+
+    const detail = this.selected ? this.opts.detailFor(this.selected) : null
+    if (!detail) return
+
+    const box = this.layout.detailIcon
+    if (s.textures.exists(detail.sprite)) {
+      const art = s.add.image(box.x + box.width / 2, box.y + box.height / 2, detail.sprite)
+      fitInBox(art, detail.sprite, box.width)
+      this.chromeLayer.add(art)
+    }
+
+    const col = this.layout.detailText
+
+    /*
+     * THE ROWS ARE 15px BECAUSE EVERYTHING IS.
+     *
+     * `uiSize` clamps to typography.minUiSize, which is 15, so there is no
+     * such thing as a "small label" in screen-space UI here — a caption is
+     * the same height as the number it captions. Three captions at 15px need
+     * about 100px and this column is 92 at 844x390 and 68 at 568x320, so the
+     * labels the brief asked for cannot be drawn at all without going under a
+     * floor that exists for reading a phone at arm's length.
+     *
+     * So the strip carries what fits, in a FIXED ORDER — dps, range, rate,
+     * which is the order `statsFor` returns and the order the ledger card
+     * shows them in — and the trait only where there is a third row for it.
+     */
+    const line = uiSize(CFG.detailNameSize) + 2
+    const rows = Math.max(1, Math.floor(col.height / line))
+    const grey = `#${CFG.detailLabelColor.toString(16).padStart(6, '0')}`
+
+    const put = (row: number, text: string, colour: string, size: number) => {
+      const t = s.add.text(col.x, col.y + line * row + line / 2, text, {
+        fontFamily: FONT_UI, fontSize: `${uiSize(size)}px`, fontStyle: 'bold', color: colour,
+      }).setOrigin(0, 0.5)
+      this.squeeze(t, col.width)
+      this.chromeLayer.add(t)
+      return t
+    }
+
+    put(0, detail.name, COLOR.ink, CFG.detailNameSize)
+    // The numbers, in `statsFor`'s order. A support tower returns two rather
+    // than three, so the count comes from the data.
+    put(1, detail.stats.map((v) => v.value).join('  '), COLOR.amber, CFG.detailStatSize)
+    if (rows >= 3) {
+      // NEVER WRAPS. Clamped rather than wrapped: there is no fourth row.
+      const trait = detail.trait.length > TRAIT_MAX
+        ? detail.trait.slice(0, TRAIT_MAX)
+        : detail.trait
+      put(2, trait, grey, CFG.detailTraitSize)
+    }
+  }
+
+  /**
+   * Squeezes a line horizontally to fit, WITHOUT going under the type floor.
+   *
+   * Phaser can scale the glyphs on one axis, which keeps the height — and so
+   * the legibility floor — while narrowing the line. Reducing the font size
+   * instead would walk straight under `minUiSize`, which is the one thing the
+   * typography rules do not allow.
+   */
+  private squeeze(t: Phaser.GameObjects.Text, width: number): void {
+    if (t.width <= width || t.width === 0) return
+    // 0.6 is the floor, and the trait line is what sets it: eighteen
+    // characters at the 15px type floor is about 135px against an 80px
+    // column, which is 0.59. Below that the letters close up into each other,
+    // so anything still too wide past this is cut rather than crushed.
+    const k = width / t.width
+    t.setScale(Math.max(0.6, k), 1)
+    if (k >= 0.6) return
+    let text = t.text
+    while (text.length > 1 && t.displayWidth > width) {
+      text = text.slice(0, -1)
+      t.setText(text)
+    }
+  }
+
+  /**
+   * How wide a tab label renders, measured once and remembered.
+   *
+   * Measured rather than counted: whether "TOWERS" fits a 44px tab at 10px
+   * bold is a question about the font, and the answer decides label-or-glyph.
+   * Cached because `refresh` runs on every frame of a scroll drag and three
+   * throwaway Text objects per frame is not free.
+   */
+  private labelWidth(label: string): number {
+    const hit = this.labelWidths.get(label)
+    if (hit !== undefined) return hit
+    const probe = this.scene.add.text(0, 0, label, {
+      fontFamily: FONT_UI, fontSize: `${uiSize(CFG.tabLabelSize)}px`,
+      fontStyle: 'bold', letterSpacing: 1,
+    })
+    // NOT divided by the device ratio, and it was for one run.
+    //
+    // `uiSize` looks like the scaling helper and is not: it CLAMPS a size to
+    // the legibility floor and does nothing else, so a Text made through it
+    // measures in the same CSS pixels every rectangle here is written in. The
+    // division made the width three times too small on a retina screen and
+    // one times too small everywhere else, which is why the fix showed up as
+    // the two ratios disagreeing — 71.0 at dpr 1 against 23.7 at dpr 3 — and
+    // that disagreement is the signature of exactly the bug it was meant to
+    // be fixing.
+    const w = probe.width
+    probe.destroy()
+    this.labelWidths.set(label, w)
+    return w
   }
 
   /**

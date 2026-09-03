@@ -14,28 +14,71 @@ import type { Rect } from './HudLayout.ts'
  * settled, one of them is deleted.
  */
 
+/** Everything one breakpoint decides. Not just the width: see `widths`. */
+export interface DrawerStep {
+  minViewW: number
+  width: number
+  /** The currency readout's row. */
+  headerHeight: number
+  /** TOWERS / ACTIVE / PASSIVE. */
+  tabBarHeight: number
+  /** The pinned strip, which reserves its height whether or not it has
+   *  anything in it. */
+  detailHeight: number
+  /** The strip's icon, square, on its left. */
+  detailIcon: number
+  /** Between the panel's stacked sections. */
+  sectionGap: number
+  /** Between the three tabs. */
+  tabGap: number
+}
+
 export interface DrawerConfig {
   tabWidth: number
   tabHeight: number
   /**
-   * Panel width by viewport width, WIDEST FIRST.
+   * The panel's whole budget by viewport width, WIDEST FIRST.
    *
    * A list rather than two numbers, because "152 at 844 and 118 at 568" is a
    * rule with a shape — narrower screens get a narrower drawer — and a rule
    * with a shape should be expressible without editing code. The first entry
    * whose `minViewW` the viewport meets wins; the last should be 0 so there
    * is always an answer.
+   *
+   * IT CARRIES THE HEIGHTS TOO, and it has to. The panel is 200px tall at
+   * 844x390 and 130 at 568x320 — the HUD rows above and the ability strip
+   * below decide that, not this file — so one set of chrome heights leaves
+   * 18px of grid on the narrow screen, which is less than half a tile and so
+   * no tappable tile at all.
    */
-  widths: Array<{ minViewW: number; width: number }>
+  widths: DrawerStep[]
   pad: number
   columns: number
   tileHeight: number
   tileGap: number
+  tabLabels: string[]
 }
 
 export interface DrawerLayout {
   /** The always-visible tab, docked to the right edge. */
   tab: Rect
+  /** The currency readout's row, at the top of the panel's inner area. */
+  header: Rect
+  /** The whole TOWERS / ACTIVE / PASSIVE bar. */
+  tabBar: Rect
+  /** One rectangle per tab, left to right, in the order of `cfg.tabLabels`. */
+  tabs: Rect[]
+  /** The pinned strip at the bottom. Present whether or not it has content:
+   *  a strip that collapses when empty re-flows the grid under the finger at
+   *  the moment a tile has just been tapped. */
+  detail: Rect
+  /** The strip's icon box, square, on its left. */
+  detailIcon: Rect
+  /** The strip's text column, to the right of the icon. */
+  detailText: Rect
+  /** The step this layout was built from, so a caller can size text against
+   *  the same numbers rather than looking them up again. */
+  step: DrawerStep
   /** The panel the tab expands. Zero width while collapsed is NOT modelled
    *  here — the panel's rectangle is where it would be, and the caller shows
    *  or hides it. */
@@ -56,10 +99,26 @@ export interface DrawerLayout {
   maxScroll: number
 }
 
-/** The panel width for this viewport, from the data's breakpoint list. */
+/** The whole budget for this viewport, from the data's breakpoint list. */
+export function drawerStep(viewW: number, cfg: DrawerConfig): DrawerStep {
+  for (const step of cfg.widths) if (viewW >= step.minViewW) return step
+  return cfg.widths[cfg.widths.length - 1]!
+}
+
+/** The panel width for this viewport. */
 export function drawerWidth(viewW: number, cfg: DrawerConfig): number {
-  for (const step of cfg.widths) if (viewW >= step.minViewW) return step.width
-  return cfg.widths[cfg.widths.length - 1]?.width ?? 0
+  return drawerStep(viewW, cfg).width
+}
+
+/**
+ * Whether a label fits its tab, given the width the font actually measured.
+ *
+ * Split out and Phaser-free so the RULE is testable even though the
+ * measurement is not: a label that will not fit is replaced by a drawn glyph
+ * rather than truncated, because "TOWE..." is worse than a picture.
+ */
+export function tabLabelFits(labelWidth: number, tabWidth: number, padding = 6): boolean {
+  return labelWidth <= tabWidth - padding * 2
 }
 
 /**
@@ -115,11 +174,76 @@ export function drawerLayout(
     height: cfg.tabHeight,
   }
 
+  /*
+   * THE PANEL IS FOUR STACKED SECTIONS, and only one of them scrolls.
+   *
+   *   header   the peanut count, because the player is spending the whole
+   *            time this is open and the number belongs where the prices are
+   *   tabBar   TOWERS / ACTIVE / PASSIVE, so each group gets the full height
+   *            rather than a third of it when the other two are filled
+   *   grid     the tiles, and the only thing that scrolls
+   *   detail   what the selected tower is, pinned to the bottom
+   *
+   * The grid takes what is left, which on the narrow screen is not much and
+   * is why every height here comes from the breakpoint rather than a constant.
+   */
+  const step = drawerStep(viewW, cfg)
+  const innerX = panel.x + cfg.pad
+  const innerW = panel.width - cfg.pad * 2
+  let y = panel.y + cfg.pad
+
+  const header: Rect = { x: innerX, y, width: innerW, height: step.headerHeight }
+  y += step.headerHeight + step.sectionGap
+
+  const tabBar: Rect = { x: innerX, y, width: innerW, height: step.tabBarHeight }
+  const n = Math.max(1, cfg.tabLabels.length)
+  const tabW = (innerW - step.tabGap * (n - 1)) / n
+  const tabs: Rect[] = []
+  for (let i = 0; i < n; i++) {
+    tabs.push({
+      x: innerX + i * (tabW + step.tabGap), y: tabBar.y,
+      width: tabW, height: tabBar.height,
+    })
+  }
+  y += step.tabBarHeight + step.sectionGap
+
+  const detail: Rect = {
+    x: innerX,
+    y: panel.y + panel.height - cfg.pad - step.detailHeight,
+    width: innerW,
+    height: step.detailHeight,
+  }
+  // A SMALL FIXED HORIZONTAL PAD, and the icon centred vertically.
+  //
+  // It used to pad horizontally by half the leftover height, which on the
+  // wide strip is eleven pixels a side — and then gave the text column
+  // everything to the strip's right edge, with no pad at all on that side.
+  // The trait ran flush into the outline. Five each side leaves the text 87px
+  // instead of 80, which is the difference between an eighteen-character
+  // trait condensing to 0.62 and being cut.
+  const padX = 5
+  const detailIcon: Rect = {
+    x: detail.x + padX,
+    y: detail.y + (detail.height - step.detailIcon) / 2,
+    width: step.detailIcon,
+    height: step.detailIcon,
+  }
+  const textX = detailIcon.x + detailIcon.width + padX
+  const detailText: Rect = {
+    x: textX,
+    y: detail.y + 2,
+    width: Math.max(1, detail.x + detail.width - padX - textX),
+    height: detail.height - 4,
+  }
+
   const grid: Rect = {
-    x: panel.x + cfg.pad,
-    y: panel.y + cfg.pad,
-    width: panel.width - cfg.pad * 2,
-    height: panel.height - cfg.pad * 2,
+    x: innerX,
+    y,
+    width: innerW,
+    // Never negative, and never so small that a tile could not clear
+    // `tileVisible`'s half — the caller reports it either way, and a grid of
+    // zero is a drawer with nothing tappable in it.
+    height: Math.max(0, detail.y - step.sectionGap - y),
   }
 
   const cols = Math.max(1, cfg.columns)
@@ -143,7 +267,10 @@ export function drawerLayout(
     })
   }
 
-  return { tab, panel, grid, tiles, contentHeight, maxScroll }
+  return {
+    tab, panel, header, tabBar, tabs, detail, detailIcon, detailText,
+    grid, tiles, contentHeight, maxScroll, step,
+  }
 }
 
 /**

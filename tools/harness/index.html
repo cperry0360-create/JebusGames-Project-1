@@ -5591,6 +5591,115 @@ async function run() {
     return
   }
 
+  if (scenario === 'drawerchrome') {
+    // THE THREE NEW SECTIONS, measured off the live layout.
+    //
+    // Every number the brief asked for: the tab bar's per-tab width and
+    // whether the labels fit, the tile size, the strip's height, and what is
+    // left for the grid. The last one is the one that matters — CANCEL
+    // already cost 18px of panel and made the wide grid scroll by 14, and
+    // three more sections cost a great deal more than that.
+    const P = (await import('./js/data/presentation.json', { with: { type: 'json' } })).default
+    const DL = await import('./js/systems/DrawerLayout.js')
+    const SAVE = await import('./js/systems/Save.js')
+    const dpr = window.devicePixelRatio || 1
+    const problems = []
+    const push = (m) => { problems.push(m); note('   *** ' + m) }
+
+    SAVE.setControlDrawer(true)
+    g.applyControlScheme()
+    await sleep(250)
+    g.status.peanuts = 400
+    g.drawer.setOpen(true)
+    await sleep(250)
+    g.drawer.refresh()
+    await sleep(150)
+
+    const L = g.drawer.layout
+    const step = L.step
+    note('viewport ' + VP.w + 'x' + VP.h + '  dpr ' + dpr)
+    note('panel ' + L.panel.width + ' x ' + L.panel.height +
+      '   inner ' + (L.panel.width - P.drawer.pad * 2) + ' x ' +
+      (L.panel.height - P.drawer.pad * 2))
+
+    // 1. THE TAB BAR
+    const labels = P.drawer.tabLabels
+    note('tab bar h' + L.tabBar.height + ', ' + L.tabs.length + ' tabs at ' +
+      L.tabs[0].width.toFixed(1) + 'px each (gap ' + step.tabGap + ')')
+    // READ FROM THE DRAWER, not measured again here. The first version of this
+    // measured the labels itself in KenneyFuture — the DISPLAY face, which is
+    // not what the drawer renders tab labels in — and reported a width the
+    // drawer never saw.
+    for (const [i, t] of g.drawer.tabLabelReport.entries()) {
+      note('   ' + t.label.padEnd(8) + ' label ' + t.width.toFixed(1) + 'px in a ' +
+        t.tabWidth.toFixed(1) + 'px tab -> ' + (t.fits ? 'LABEL' : 'GLYPH') +
+        (i === 0 ? '   (the only populated tab)' : '   (disabled)'))
+    }
+    void labels
+
+    // 2. THE HEADER
+    note('header h' + L.header.height + ' carrying the peanut count (' +
+      g.status.peanuts + ')')
+
+    // 3. THE DETAIL STRIP
+    note('detail strip ' + L.detail.width.toFixed(1) + ' x ' + L.detail.height +
+      '   icon ' + L.detailIcon.width + '   text column ' +
+      L.detailText.width.toFixed(1))
+    if (L.detail.y + L.detail.height > L.panel.y + L.panel.height - P.drawer.pad + 0.01) {
+      push('the strip runs past the bottom of the panel')
+    }
+
+    // 4. WHAT IS LEFT
+    const tile = L.tiles[0]
+    note('grid ' + L.grid.width.toFixed(1) + ' x ' + L.grid.height.toFixed(1) +
+      '   tile ' + tile.width.toFixed(1) + ' x ' + tile.height +
+      '   content ' + L.contentHeight + '   maxScroll ' + L.maxScroll.toFixed(1))
+    const whole = L.grid.height >= tile.height
+    note('a whole tile ' + (whole ? 'FITS' : 'DOES NOT FIT') + ' the grid (' +
+      (100 * Math.min(1, L.grid.height / tile.height)).toFixed(0) + '% of one tile visible)')
+    if (L.grid.height < tile.height * 0.5) {
+      push('the grid is under half a tile, so nothing in it can be tapped')
+    }
+
+    // Nothing may overlap anything else.
+    const named = { header: L.header, tabBar: L.tabBar, grid: L.grid, detail: L.detail }
+    const hits = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width &&
+      a.y < b.y + b.height && b.y < a.y + a.height
+    for (const [an, a] of Object.entries(named)) {
+      for (const [bn, b] of Object.entries(named)) {
+        if (an >= bn) continue
+        if (hits(a, b)) push(an + ' overlaps ' + bn)
+      }
+    }
+
+    // Every tile still reachable, and tappable at its best scroll.
+    for (let i = 0; i < g.drawer.tileRects.length; i++) {
+      g.drawer.scroll = 0
+      g.drawer.scrollToTile(i)
+      const r = g.drawer.tileRects[i]
+      if (!DL.tileVisible(r, g.drawer.layout.grid, 0.5)) {
+        push('tile ' + i + ' cannot be tapped even at its best scroll')
+      }
+    }
+    g.drawer.scroll = 0
+    g.drawer.refresh()
+    await sleep(120)
+    await shot('drawerchrome-' + VP.w + 'x' + VP.h + '-dpr' + dpr + '-empty')
+
+    // The strip with something in it.
+    // Pick the first tile that is not locked: a locked one cannot be selected
+    // through the real path either, so selecting it here would be the probe
+    // testing something the player cannot do.
+    const pick = g.drawer.tiles.find((t) => !t.locked)
+    if (pick) { g.drawer.select(pick.id); await sleep(220) }
+    note('selected: ' + g.drawer.selected)
+    await shot('drawerchrome-' + VP.w + 'x' + VP.h + '-dpr' + dpr + '-selected')
+
+    note(problems.length ? 'PROBLEMS: ' + problems.length : 'no problems found')
+    for (const m of problems) note('  - ' + m)
+    return
+  }
+
   if (scenario === 'notch') {
     // THE SAFE-AREA INSET, PER EDGE, against the actual viewport.
     //
