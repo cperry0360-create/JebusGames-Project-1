@@ -6,7 +6,8 @@ place, still no drag-to-build.
 
 | | commit | CI |
 |---|---|---|
-| Tab bar, currency header, detail strip | `PENDING` | pending |
+| Tab bar, currency header, detail strip | `55c91e0` | see below |
+| Bailey's art, uploaded by Cory | `44fd18f` | — |
 
 ---
 
@@ -179,3 +180,51 @@ drawer's own decision through `tabLabelReport` rather than re-deriving it.
   because at this type floor it cannot be drawn.
 - **ACTIVE and PASSIVE with anything in them.** They are disabled tabs; the
   point of building the bar now is that filling them is data.
+
+---
+
+## Bailey, verified against the real art
+
+`prop_bailey_peek.png` landed as `44fd18f` while this was in flight, so the
+thing the last report left open is closed. She was built and tested against a
+stand-in, and the real sprite needed no code change — the optional hook did
+what it was for.
+
+Re-run with the real texture:
+
+```
+art key prop-bailey-peek -> props/prop_bailey_peek.png  optional: true  texture present: true
+bailey armed: true
+spot 0 at 34,190   visible true   clearing the canopy by 33.5 world px (50% of her)
+spot 1 at 68,180   visible true   clearing the canopy by 33.5 world px (50% of her)
+spot 2 at 100,186  visible true   clearing the canopy by 33.5 world px (50% of her)
+spot 3 at 130,178  visible true   clearing the canopy by 33.5 world px (50% of her)
+with the phase set to "wave", visible: false
+```
+
+Her head and ears clear the tree line and the rest of her is masked away, which
+is the effect the brief asked for and the reason she is masked rather than
+depth-sorted. The four canopy lines were read off the plate before there was a
+sprite to check them against; against the real one they hold, and no adjustment
+pass is needed.
+
+**One difference from the brief worth recording:** the file is **643x872**, not
+the 594x606 stated. Nothing depends on the stated size — she is placed by world
+height with the aspect preserved, so she renders 49 x 67 world px — but the
+number in the brief and the number on disk are not the same, and a future
+re-export should be measured rather than assumed.
+
+## Where this leaves the repository
+
+- **Waiting on a judgement:** which of the three levers to pull for the 568x320
+  grid. My recommendation is letting the drawer run below `panelArea`'s bottom
+  at that width, since the ability strip does not actually reach it there.
+- **Waiting on a decision:** whether the tab bar should have words. It cannot
+  at `minUiSize` 15; the glyphs are the fallback the brief itself specified.
+- **Still open from before:** the sign text alignment, from the withdrawn
+  message — the one item there that no later brief covered.
+- Longer-standing, unchanged: the 18 trait phrases await approval; towers are
+  0.91x the lane against a ~1.2x intent; balance is not re-tuned for the v2
+  lane; `icon_confirm.png` and `assets/nodes` are unreferenced; `checks` is not
+  a required status on PRs; `hud_peanut_icon.png` is still unwired, which would
+  let `PeanutIcon.ts` be deleted; the held sign overlay is 2.07x rule 7's size.
