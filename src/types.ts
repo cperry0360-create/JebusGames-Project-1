@@ -79,9 +79,6 @@ export interface MapDef {
    *  dark gap between its two leaves, where the fade starts, and `vanishX` the
    *  far edge, where there is nothing left. */
   exit: { gateX: number; vanishX: number }
-  /** Parts of the painted plate that already have furniture on them, so the
-   *  scatter layer does not drop a rock on the tavern roof. */
-  scatterExclude?: Array<{ x: number; y: number; w: number; h: number }>
 }
 
 export interface ServerNukeDef {

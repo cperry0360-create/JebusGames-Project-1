@@ -35,7 +35,6 @@ export const ART = {
      *  appears until then. */
     baileyPeek?: string
   },
-  scatter: (art as { scatter?: Record<string, string> }).scatter ?? {},
   optional: (art as { optional?: string[] }).optional ?? [],
   fx: art.fx,
   decor: art.decor,

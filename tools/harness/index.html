@@ -2597,7 +2597,9 @@ async function run() {
   }
 
   if (scenario === 'fps') {
-    // Framerate with the scatter, the tavern ambience and a full wave.
+    // Framerate on a full wave. The generated scatter and the tavern ambience
+    // this used to weigh are both deleted; the map's decoration is painted
+    // into the plate now, so the A/B below is the ground layer against nothing.
     g.status.peanuts = 99999
     await build(3, 0)
     await build(1, 1)
@@ -2620,9 +2622,8 @@ async function run() {
         p95.toFixed(1) + 'ms, ' + frames.length + ' frames')
     }
     note('viewport ' + VP.w + 'x' + VP.h)
-    note('scatter props on the board: ' + g.scatterCount)
     note('enemies alive: ' + g.enemies.length + '  towers: ' + g.towers.length)
-    await sample('with scatter + ambience')
+    await sample('full board')
 
     // The same board with the decoration hidden, so the cost is measured
     // rather than asserted.
@@ -3989,7 +3990,6 @@ async function run() {
     note('nearest spot to the entrance is ' + d[0][0] + ' at ' + Math.round(d[0][1]) +
       'px; the sign is on ' + g.signSpotIndex +
       (d[0][0] === g.signSpotIndex ? '  correct' : '  *** WRONG SPOT ***'))
-    note('scatter props on the board: ' + g.scatterCount)
     await shot('signs-' + VP.w + 'x' + VP.h)
     return
   }
@@ -4279,7 +4279,7 @@ async function run() {
       '  (NEAREST=' + (gl ? gl.NEAREST : '?') + ', LINEAR=' + (gl ? gl.LINEAR : '?') +
       ', LINEAR_MIPMAP_LINEAR=' + (gl ? gl.LINEAR_MIPMAP_LINEAR : '?') + ')')
     const sample = ['hero-cory', 'turret-ledger', 'enemy-filer', 'map-level1',
-      'scatter-rock-large', 'ui-plate-wide']
+      'prop-bailey-peek', 'ui-plate-wide']
     for (const k of sample) {
       if (!game.textures.exists(k)) { note('  ' + k + ': NOT LOADED'); continue }
       const src = game.textures.get(k).source[0]

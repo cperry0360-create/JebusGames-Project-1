@@ -23,7 +23,6 @@ import { GROUND_DEPTH } from '../systems/DepthSort.ts'
 import { boardBounds, coverZoom, openingView } from '../systems/CameraMath.ts'
 import { distanceAtX, type EmergeConfig } from '../systems/Gateway.ts'
 import { makeRng } from '../systems/Draft.ts'
-import { scatter, type ScatterKind, type Rect } from '../systems/Scatter.ts'
 import { dashArcs, HeroMarkers, type MarkersDef } from '../systems/HeroMarkers.ts'
 import { ART, applyRender, fitContentHeight, fitContentWidth } from '../systems/Art.ts'
 import { EFFECT_MS, playEffect, sizeForRadius } from '../systems/Effects.ts'
@@ -231,9 +230,6 @@ export class GameScene extends Phaser.Scene {
    *  marker; see createPads. Public so a harness run can check there is
    *  exactly one and that it is the one nearest the entrance. */
   signSpotIndex = 0
-  /** How many decoration props were placed. Read by the harness; the density
-   *  knob is `scatter.rules.attempts`, and this is what it produced. */
-  scatterCount = 0
   private markerLayer!: Phaser.GameObjects.Graphics
   /** The pulsing ring on every node that will take the drawer's pick. Its own
    *  layer because the pads' scale and tint are both already spoken for. */
@@ -667,7 +663,6 @@ this.armReadyCountdown()
    */
   private drawPlate(): void {
     const plate = this.add.image(0, 0, ART.map[MAP.plate]).setOrigin(0, 0).setDepth(GROUND_DEPTH)
-    this.createScatter()
     this.createArchOccluders()
     plate.setDisplaySize(displayData.width, displayData.height)
   }
@@ -1000,35 +995,6 @@ this.armReadyCountdown()
     // this stretch of road is above it, so it is in front of all of them.
     piece.setDepth(near.depth)
     this.archOccluders.push(piece)
-  }
-
-  private createScatter(): void {
-    const cfg = PRESENTATION.scatter
-    const kinds = (cfg.kinds as ScatterKind[]).filter((k) => this.textures.exists(k.key))
-    if (kinds.length === 0) return
-    const placements = scatter({
-      worldWidth: displayData.width,
-      worldHeight: displayData.height,
-      waypoints: MAP.waypoints,
-      buildSpots: MAP.buildSpots,
-      exclude: (MAP.scatterExclude ?? []) as Rect[],
-      kinds,
-      rules: cfg.rules,
-      scaleJitter: cfg.scaleJitter,
-      rotateDegrees: cfg.rotateDegrees,
-    }, cfg.seed)
-
-    for (const p of placements) {
-      const img = this.add.image(p.x, p.y, p.key).setDepth(GROUND_DEPTH + 1)
-      // The art is delivered at 2x, so it renders at half its native pixels;
-      // the jitter multiplies that rather than replacing it.
-      img.setScale(cfg.nativeScale * p.scale)
-      img.setRotation(p.rotation)
-      // Bottom-anchored, so a rock sits ON the grass rather than hovering over
-      // its own centre.
-      img.setOrigin(0.5, 0.9)
-    }
-    this.scatterCount = placements.length
   }
 
   private createPads(): void {
