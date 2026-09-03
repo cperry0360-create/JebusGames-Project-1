@@ -206,8 +206,12 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
   // CANCEL at the right-hand end of row two, under the gear. It is taller than
   // the row's text — a 22px tap target is not one — so it hangs below the
   // line, and `panelTop` clears it.
+  // FLUSH TO THE EDGE, not `right`, which carries `marginX`. CANCEL is docked
+  // chrome: it is anchored to the display's edge, so it gets no gap there and
+  // no rounded corner there either — see `EdgeDock`. The gear above it is a
+  // floating control and keeps its margin.
   const cancel: Rect = {
-    x: right - cfg.cancelWidth, y: rowY, width: cfg.cancelWidth, height: btn,
+    x: W - insets.right - cfg.cancelWidth, y: rowY, width: cfg.cancelWidth, height: btn,
   }
   const messageRow: Rect = {
     x: left + heroW + gap, y: rowY,

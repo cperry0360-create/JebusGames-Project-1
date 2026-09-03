@@ -4215,6 +4215,9 @@ async function run() {
     }
     await look(90, 400, 'gateway-arch', 2600)
 
+    const GW = await import('./js/systems/Gateway.js')
+    const gateDist = GW.distanceAtX ? GW.distanceAtX(MAPD.waypoints, gateX) : null
+    note('gate begins at lane distance ' + (gateDist === null ? '?' : gateDist.toFixed(1)))
     const seen = new Map()
     let visibleBeforeArch = 0, worstEarly = null
     let fadedInOpen = 0, worstFade = null
@@ -4230,10 +4233,21 @@ async function run() {
           visibleBeforeArch++
           if (!worstEarly || e.x < worstEarly.x) worstEarly = { x: e.x, alpha: a }
         }
-        // (b) nothing part-transparent between the arch and the gate gap.
+        // (b) nothing part-transparent between the arch and the gate.
         //     The fade at each end is the point; a fade anywhere between them
         //     is an enemy dissolving in the middle of the road.
-        if (a < 0.98 && e.x > clearX + 1 && e.x < gateX - 1) {
+        //
+        //     BOUNDED BY LANE DISTANCE, NOT BY X. The fade is driven by how far
+        //     along the lane an enemy is, and since the second map plate every
+        //     enemy also carries a lateral offset of up to half an 80px road —
+        //     so at the gate's distance its x can be forty pixels either side
+        //     of the gate's own x. Comparing the two flagged an enemy at x=1204
+        //     with alpha 0.92 as "dissolving in open ground" when it was one
+        //     step into a fade that starts at 1205.
+        const past = e.distance !== undefined && gateDist !== null
+          ? e.distance < gateDist - 1
+          : e.x < gateX - 1
+        if (a < 0.98 && e.x > clearX + 1 && past) {
           fadedInOpen++
           if (!worstFade || a < worstFade.alpha) worstFade = { x: e.x, alpha: a }
         }
@@ -4771,6 +4785,122 @@ async function run() {
     return
   }
 
+  if (scenario === 'lane') {
+    // THE RE-TRACED MAP, DRIVEN. Every coordinate in map.json came out of a
+    // mask of the painting, and a mask can be right about colour and wrong
+    // about the game — so this runs a real wave and checks the two things the
+    // trace is FOR: that the lane stays on the painted road, and that every
+    // pad is on grass beside it rather than in it.
+    //
+    // The last map swap produced nine reports and seven were stale
+    // coordinates. This is where those get caught.
+    const MAPD = (await import('./js/data/map.json', { with: { type: 'json' } })).default
+    const dpr = window.devicePixelRatio || 1
+    const problems = []
+    const push = (m) => { problems.push(m); note('   *** ' + m) }
+    note('viewport ' + VP.w + 'x' + VP.h + '  dpr ' + dpr)
+    note('roadWidth ' + MAPD.roadWidth + '  waypoints ' + MAPD.waypoints.length +
+      '  pads ' + MAPD.buildSpots.length)
+
+    // THE ROAD MASK, REBUILT IN THE BROWSER from the plate the game loaded.
+    // Not a copy of the tracer's numbers — the same question asked of the
+    // texture actually in memory, which is the one the player sees.
+    const tex = g.textures.get('map-level1').getSourceImage()
+    const MW = 640, MH = Math.round(MW * tex.height / tex.width)
+    const c = document.createElement('canvas')
+    c.width = MW; c.height = MH
+    const cx = c.getContext('2d', { willReadFrequently: true })
+    cx.drawImage(tex, 0, 0, MW, MH)
+    const data = cx.getImageData(0, 0, MW, MH).data
+    const perX = 1280 / MW, perY = 720 / MH
+    const isRoad = (wx, wy) => {
+      const mx = Math.max(0, Math.min(MW - 1, Math.round(wx / perX)))
+      const my = Math.max(0, Math.min(MH - 1, Math.round(wy / perY)))
+      const i = (my * MW + mx) * 4
+      const r = data[i], gg = data[i + 1], b = data[i + 2]
+      return r - gg >= 40 && b >= 28 && (r + gg + b) / 3 > 100
+    }
+    // A little tolerance: the road's painted edge is a soft, tufted line, and
+    // one mask pixel is two world pixels.
+    const nearRoad = (wx, wy, slack) => {
+      for (let dy = -slack; dy <= slack; dy += 2) {
+        for (let dx = -slack; dx <= slack; dx += 2) {
+          if (isRoad(wx + dx, wy + dy)) return true
+        }
+      }
+      return false
+    }
+
+    // --- the pads: on grass, clear of the lane
+    let padsOnRoad = 0
+    for (const [i, sp] of g.build.spots.entries()) {
+      const on = isRoad(sp.x, sp.y)
+      const rim = [[MAPD.spotRadius, 0], [-MAPD.spotRadius, 0],
+        [0, MAPD.spotRadius], [0, -MAPD.spotRadius]]
+        .filter(([dx, dy]) => isRoad(sp.x + dx, sp.y + dy)).length
+      if (on || rim) {
+        padsOnRoad++
+        push('pad ' + i + ' at ' + Math.round(sp.x) + ',' + Math.round(sp.y) +
+          (on ? ' is ON the road' : ' overlaps the road on ' + rim + ' side(s)'))
+      }
+    }
+    note('pads clear of the road: ' + (g.build.spots.length - padsOnRoad) +
+      ' of ' + g.build.spots.length)
+
+    // --- every pad reachable: pan to it and press its centre
+    let reached = 0
+    for (const [i, sp] of g.build.spots.entries()) {
+      await lookAt(sp.x, sp.y)
+      await sleep(120)
+      const at = (await import('./js/systems/Resolution.js')).worldToScreen(g, sp.x, sp.y)
+      if (at.x < 0 || at.y < 0 || at.x > VP.w || at.y > VP.h) {
+        push('pad ' + i + ' cannot be brought on screen'); continue
+      }
+      const before = g.ring && g.ring.active
+      await click(at.x, at.y)
+      await sleep(200)
+      if (!g.ring || !g.ring.active) push('pad ' + i + ' did not open the build ring')
+      else reached++
+      g.ring && g.ring.close()
+      await sleep(80)
+      void before
+    }
+    note('pads reachable: ' + reached + ' of ' + g.build.spots.length)
+
+    // --- a full wave, sampled: nobody walks on the grass
+    g.status.peanuts = 0            // no towers, so nothing dies early
+    g.startWave()
+    await sleep(400)
+    note('after startWave: phase=' + g.status.phase + ' enemies=' + g.enemies.length)
+    let samples = 0, off = 0, worst = null
+    let seenAlive = 0
+    for (let i = 0; i < 400; i++) {
+      await sleep(50)
+      seenAlive = Math.max(seenAlive, g.enemies.filter((e) => e.alive).length)
+      for (const e of g.enemies) {
+        if (!e.alive || !e.art || e.art.alpha < 0.5) continue
+        if (e.x < MAPD.entrance.clearOfArchX || e.x > MAPD.exit.gateX) continue
+        samples++
+        if (nearRoad(e.x, e.y, 6)) continue
+        off++
+        const d = Math.round(e.x) + ',' + Math.round(e.y)
+        if (!worst) worst = d
+      }
+    }
+    note('most enemies alive at once: ' + seenAlive + '   phase now ' + g.status.phase)
+    note('lane samples: ' + samples + '   off the painted road: ' + off +
+      (worst ? '   first at ' + worst : ''))
+    if (samples < 200) push('only ' + samples + ' samples; the wave never really ran')
+    if (off > 0) push(off + ' of ' + samples + ' samples had an enemy off the painted road')
+
+    await shot('lane-' + VP.w + 'x' + VP.h + '-dpr' + dpr)
+    note('RESULT ' + (problems.length === 0
+      ? 'the lane stays on the road and every pad is reachable and clear of it, at '
+        + VP.w + 'x' + VP.h + ' dpr ' + dpr
+      : '*** ' + problems.length + ' problem(s) ***'))
+    return
+  }
+
   if (scenario === 'arch') {
     // THE ARCH, MEASURED IN PIXELS RATHER THAN LOOKED AT.
     //
@@ -4843,8 +4973,9 @@ async function run() {
 
     const nearPts = MAPD.entrance.arch.near.outline
     // The far pier, as the control. Read off the same plate dump the outline
-    // came from: the painted column is x 88-118, y 300-390.
-    const farPts = [[90, 302], [116, 302], [116, 388], [90, 388]]
+    // came from. RE-MEASURED for the second plate: the far column is x 95-138,
+    // y 235-375 on this painting, where it was x 88-118, y 300-390 on the first.
+    const farPts = [[98, 240], [136, 240], [136, 372], [98, 372]]
     const targets = [
       { name: 'near pier', pts: nearPts, mustNotChange: true },
       { name: 'far pier (control)', pts: farPts, mustNotChange: false },

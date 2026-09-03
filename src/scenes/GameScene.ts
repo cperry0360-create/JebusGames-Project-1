@@ -41,6 +41,7 @@ import { Projectile } from '../entities/Projectile.ts'
 import { ScratchCard } from '../ui/ScratchCard.ts'
 import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { platePanel, plateButton, type PlateButton } from '../ui/Plate.ts'
+import { dockedSlab } from '../ui/EdgeDock.ts'
 import { SignBribe } from '../ui/SignBribe.ts'
 import { CameraRig } from '../systems/CameraRig.ts'
 import { Dialog, type DialogOptions } from '../ui/Dialog.ts'
@@ -161,6 +162,9 @@ export class GameScene extends Phaser.Scene {
   private build!: BuildSystem
   private sign!: SignBribe
   private cancelBtn!: PlateButton
+  /** The docked slab CANCEL is drawn on. Its own object, because the painted
+   *  button plate cannot have a square corner. */
+  private cancelSlab!: Phaser.GameObjects.Graphics
   private dialog?: Dialog
   /** The tower panel. Non-modal and anchored beside its tower, so the range
    *  ring it is asking about stays visible behind it. */
@@ -403,6 +407,9 @@ export class GameScene extends Phaser.Scene {
       viewW: () => viewW(this),
       // The camera that DRAWS it. Not `cameras.main`, which is the world.
       camera: () => this.uiCam,
+      // The display's edge, not the usable area's: a drawer docks to the
+      // screen. `panelArea` insets by six for chrome that floats inside it.
+      dockRight: () => viewW(this) - safeAreaInsets().right,
       tiles: () => this.drawerTiles(),
       onSelect: (id) => {
         this.drawerPick = id
@@ -499,13 +506,27 @@ this.armReadyCountdown()
     // ability icons — which is over the BOARD, and the board is exactly where
     // the player is being asked to tap. A button floating over the play area
     // is one the eye has to route around while aiming.
+    // DRAWN, NOT PLATED. The painted button plate has four rounded corners
+    // baked into it, and CANCEL is docked to the display's right edge now — an
+    // edge with nothing behind it takes no rounded corner and no outline. So
+    // it is the same slab the drawer's handle uses, by the same rule, and the
+    // two pieces of edge-docked chrome finally look like they belong to one
+    // game. See `EdgeDock`.
     const cb = this.layout.cancel
+    this.cancelSlab = this.add.graphics().setDepth(OVERLAY_DEPTH + 5)
+    const D = PRESENTATION.drawer
+    dockedSlab(this.cancelSlab, cb, 'right', {
+      fill: D.slab, outline: D.outline, outlineWidth: D.outlineWidth, radius: D.tileRadius,
+    })
     this.cancelBtn = plateButton(this, cb.x + cb.width / 2, cb.y + cb.height / 2,
       cb.width, cb.height, 'CANCEL', () => this.clearSelection(), 14, 'secondary')
+    // The plate art goes; the label and the hit rectangle stay.
     for (const part of this.cancelBtn.parts) {
-      (part as Phaser.GameObjects.Image).setDepth?.(OVERLAY_DEPTH + 5)
+      const img = part as Phaser.GameObjects.Image
+      if (img.setTexture) img.setVisible(false)
+      img.setDepth?.(OVERLAY_DEPTH + 6)
     }
-    this.asScreenSpace(this.cancelBtn.parts)
+    this.asScreenSpace([this.cancelSlab, ...this.cancelBtn.parts])
     this.refreshCancel()
 
     // The camera goes on last, so bounds are set against a world that is
@@ -1961,8 +1982,11 @@ this.armReadyCountdown()
 
   private setCancelVisible(on: boolean): void {
     this.cancelVisible = on
+    this.cancelSlab.setVisible(on)
     for (const part of this.cancelBtn.parts) {
-      (part as Phaser.GameObjects.Image).setVisible?.(on)
+      const img = part as Phaser.GameObjects.Image
+      // The plate images stay hidden either way: the slab is the button now.
+      img.setVisible?.(on && !img.setTexture)
     }
     this.cancelBtn.hit.input!.enabled = on
   }

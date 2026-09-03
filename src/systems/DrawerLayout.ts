@@ -75,10 +75,22 @@ export function drawerLayout(
   scroll: number,
   cfg: DrawerConfig,
   open = false,
+  /**
+   * The screen edge to dock against, in CSS pixels: the viewport's width less
+   * any right-hand safe-area inset, and NOT `area.x + area.width`.
+   *
+   * `panelArea` carries a six-pixel cosmetic inset on each side, which is
+   * right for a panel that floats inside it and wrong for a drawer, whose
+   * whole claim is that it is attached to the edge. The handle sat six pixels
+   * short of the display and read as a button parked near the edge rather than
+   * as the drawer's own edge. Defaulted to the area's edge so an omitted
+   * argument is the old behaviour rather than a silent zero.
+   */
+  dockRight = area.x + area.width,
 ): DrawerLayout {
   const panelW = drawerWidth(viewW, cfg)
   const panel: Rect = {
-    x: area.x + area.width - panelW,
+    x: dockRight - panelW,
     y: area.y,
     width: panelW,
     height: area.height,
@@ -97,7 +109,7 @@ export function drawerLayout(
    * of fault that ships.
    */
   const tab: Rect = {
-    x: open ? panel.x - cfg.tabWidth : area.x + area.width - cfg.tabWidth,
+    x: open ? panel.x - cfg.tabWidth : dockRight - cfg.tabWidth,
     y: area.y + (area.height - cfg.tabHeight) / 2,
     width: cfg.tabWidth,
     height: cfg.tabHeight,

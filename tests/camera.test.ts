@@ -436,7 +436,10 @@ test('the interface does not zoom with the board', () => {
     'the UI camera is being zoomed')
   // Anything the player presses inside GameScene is registered as screen space,
   // which is what puts it on the fixed camera.
-  assert.match(game, /asScreenSpace\(this\.cancelBtn\.parts\)/,
+  // The slab AND the label: CANCEL is drawn on an edge-docked graphics slab
+  // now rather than on the painted button plate, because the plate's rounded
+  // corners cannot be squared off against the display's edge.
+  assert.match(game, /asScreenSpace\(\[this\.cancelSlab, \.\.\.this\.cancelBtn\.parts\]\)/,
     'the cancel button is a world object and would grow with the zoom')
   assert.match(game, /asScreenSpace\(this\.ring\.objects\)/,
     'the tower ring is a world object and would grow with the zoom')

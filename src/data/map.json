@@ -1,298 +1,479 @@
 {
   "plate": "level1",
-  "roadWidth": 38.0,
-  "note": "Re-measured against the 3840x2160 plate on 2026-09-02. Every coordinate here was traced off the painting rather than adjusted from the old numbers: the lane by following the road from the arch to the gate, the arch and gate by their stonework and woodwork, the sign by the board the innkeeper is painted holding. The previous values described the 1672x941 plate, which was a DIFFERENT PICTURE \u2014 the lane left the painted road at 11 of 33 sampled columns, by up to 120px.",
+  "roadWidth": 80.0,
+  "_roadWidth": "MEASURED off the plate, not assumed: the median clearance from the lane's centre to the nearest non-road pixel, doubled. The previous plate's road was 38 canvas px and this one is more than twice that, which is why every lateral figure derived from it had to move. The widest point is 120 and the median is the honest number, because the lane has to fit the narrowest stretch.",
+  "note": "EVERY NUMBER HERE IS TRACED FROM map_level1_v2, and nothing is carried forward from the first plate. That painting had a different road on a different path at a different width, with the arch, the gate and the tavern all somewhere else. Regenerate with `python3 tools/trace_map.py --plate <png>` after any re-export; the source PNG lives in the commit that added it, because a 10.9MB PNG in public/ is 10.9MB of deploy.",
   "heroStart": [
-    521.7,
-    524.2
+    642.0,
+    244.0
   ],
   "spotRadius": 34,
   "waypoints": [
     [
-      -57.3,
-      353.2
+      -60.0,
+      402.0
     ],
     [
-      78.0,
-      389.0
+      166.0,
+      406.0
     ],
     [
-      138.4,
-      405.0
+      206.0,
+      382.0
     ],
     [
-      173.7,
-      401.2
+      224.0,
+      364.0
     ],
     [
-      213.8,
-      379.7
+      232.0,
+      350.0
     ],
     [
-      240.1,
-      384.5
+      232.0,
+      336.0
     ],
     [
-      257.7,
-      340.7
+      242.0,
+      324.0
     ],
     [
-      252.2,
-      312.7
+      246.0,
+      256.0
     ],
     [
-      275.8,
-      254.0
+      254.0,
+      244.0
     ],
     [
-      276.5,
-      226.8
+      256.0,
+      226.0
     ],
     [
-      296.8,
-      210.6
+      286.0,
+      192.0
     ],
     [
-      323.0,
-      201.1
+      306.0,
+      178.0
     ],
     [
-      431.7,
-      220.1
+      366.0,
+      172.0
     ],
     [
-      459.6,
-      217.3
+      384.0,
+      176.0
     ],
     [
-      467.8,
-      274.6
+      412.0,
+      194.0
     ],
     [
-      453.3,
-      344.2
+      440.0,
+      226.0
+    ],
+    [
+      448.0,
+      244.0
+    ],
+    [
+      448.0,
+      298.0
+    ],
+    [
+      434.0,
+      348.0
+    ],
+    [
+      434.0,
+      404.0
+    ],
+    [
+      442.0,
+      412.0
+    ],
+    [
+      442.0,
+      422.0
     ],
     [
       456.0,
-      371.5
+      444.0
     ],
     [
-      471.4,
-      403.8
+      512.0,
+      496.0
     ],
     [
-      521.7,
-      454.2
+      564.0,
+      518.0
     ],
     [
-      596.8,
-      484.6
+      586.0,
+      522.0
     ],
     [
-      667.1,
-      500.4
+      664.0,
+      520.0
     ],
     [
-      677.9,
-      513.9
+      700.0,
+      508.0
     ],
     [
-      731.0,
-      507.3
+      730.0,
+      490.0
     ],
     [
-      744.8,
-      483.8
+      776.0,
+      440.0
     ],
     [
-      753.6,
-      480.3
+      782.0,
+      396.0
     ],
     [
-      807.4,
-      479.9
+      794.0,
+      368.0
     ],
     [
-      827.5,
-      446.6
+      832.0,
+      330.0
     ],
     [
-      831.8,
-      418.8
+      858.0,
+      316.0
     ],
     [
-      871.5,
-      328.6
+      914.0,
+      314.0
     ],
     [
-      953.7,
-      287.3
+      978.0,
+      324.0
     ],
     [
-      989.2,
-      282.2
+      1010.0,
+      356.0
     ],
     [
-      1042.1,
-      296.1
+      1040.0,
+      400.0
     ],
     [
-      1100.0,
-      338.0
+      1080.0,
+      440.0
     ],
     [
-      1128.1,
-      373.1
+      1138.0,
+      470.0
     ],
     [
-      1150.6,
-      389.1
+      1200.0,
+      468.0
     ],
     [
-      1219.9,
-      407.2
+      1226.0,
+      454.0
     ],
     [
-      1333.1,
-      437.0
+      1340.0,
+      454.0
     ]
   ],
   "buildSpots": [
     [
-      213.0,
-      449.2
+      252.0,
+      480.0
     ],
     [
-      328.5,
-      311.9
+      348.0,
+      266.0
     ],
     [
-      426.8,
-      155.1
+      564.0,
+      324.0
     ],
     [
-      396.1,
-      411.3
+      578.0,
+      612.0
     ],
     [
-      742.5,
-      414.8
+      868.0,
+      502.0
     ],
     [
-      979.8,
-      351.6
+      836.0,
+      232.0
     ],
     [
-      1180.0,
-      464.0
+      1048.0,
+      550.0
     ]
   ],
-  "sign": {
-    "x": 925.0,
-    "y": 183.0,
-    "boardWidth": 36.0,
-    "_note": "The centre of the blank board the innkeeper is painted holding, at world x 907-943, y 163-203. The sprite is the gameplay object \u2014 it carries the tap target and the bribe swap to sign_courjahan \u2014 so it goes ONTO the board rather than standing alone in grass 65px to its left, which is where the old plate put it."
-  },
-  "scatterExclude": [
-    {
-      "x": 0.0,
-      "y": 0.0,
-      "w": 1280.0,
-      "h": 91.8
+  "signs": {
+    "_note": "BOTH BOARDS ARE BLANK IN THIS PLATE AND STAY BLANK. The text is an overlay supplied separately, so what is recorded here is the quad to put it in: four corners as fractions of the 3840x2160 art, clockwise from top-left, plus the top edge's angle.",
+    "tavern": {
+      "quad": [
+        [
+          0.71617,
+          0.14931
+        ],
+        [
+          0.77578,
+          0.15861
+        ],
+        [
+          0.77211,
+          0.23264
+        ],
+        [
+          0.72008,
+          0.21639
+        ]
+      ],
+      "rotationDeg": 5.02,
+      "_note": "The board hanging from the tavern's beam. Read off a 6x gridded crop and verified by drawing it back onto the art, because three automatic fits each failed differently: a min-area rectangle tilted 18 degrees to swallow a sheared shape, a hull reduced to four vertices put its corners on the middles of the chamfered edges, and a parallelogram fit from the dominant edge directions was dragged to 17 degrees by the mounting rings and corner ornaments."
     },
-    {
-      "x": 0.0,
-      "y": 612.1,
-      "w": 1280.0,
-      "h": 107.9
-    },
-    {
-      "x": 0.0,
-      "y": 0.0,
-      "w": 145.5,
-      "h": 720.0
-    },
-    {
-      "x": 1194.3,
-      "y": 0.0,
-      "w": 85.7,
-      "h": 720.0
-    },
-    {
-      "x": 880.4,
-      "y": 0.0,
-      "w": 313.9,
-      "h": 275.5
-    },
-    {
-      "x": 796.2,
-      "y": 145.4,
-      "w": 133.9,
-      "h": 118.6
-    },
-    {
-      "x": 0.0,
-      "y": 566.2,
-      "w": 535.9,
-      "h": 153.8
+    "held": {
+      "quad": [
+        [
+          0.67923,
+          0.2625
+        ],
+        [
+          0.71224,
+          0.25426
+        ],
+        [
+          0.71673,
+          0.29953
+        ],
+        [
+          0.68372,
+          0.30778
+        ]
+      ],
+      "rotationDeg": -8.0,
+      "_note": "The board the innkeeper holds. Fitted automatically and verified the same way."
     }
-  ],
+  },
+  "sign": {
+    "x": 893.4,
+    "y": 202.4,
+    "boardWidth": 42.0,
+    "_note": "The centre and width of the held board, derived from `signs.held.quad`. This is the gameplay object \u2014 it carries the tap target and the bribe swap \u2014 and it goes onto the board the innkeeper is painted holding."
+  },
+  "innkeeper": {
+    "x": 947.0,
+    "y": 268.0,
+    "_note": "The dwarf beside the tavern door, at his feet."
+  },
   "entrance": {
-    "_note": "Measured off the plate: the near pier is world x 15-50, the passage is open from 50 to 95, and the far pier runs 88-118. An enemy is clear of the arch past x=130.",
-    "emergeFromX": 50.0,
-    "clearOfArchX": 130.0,
+    "_note": "The stone arch at the left. The road emerges from under it heading right and down.",
+    "emergeFromX": 60.0,
+    "clearOfArchX": 150.0,
     "fadeMs": 400,
     "startScale": 0.9,
     "arch": {
-      "_note": "THE ARCH'S DEPTH, SPLIT BY WHICH SIDE OF THE ROAD EACH PART STANDS ON.\n\nThe road runs left to right and descends as it goes, so the gateway's two piers are not side by side across it: the NEAR pier (x 15-50) is planted below the road's near edge, and the FAR pier (x 88-118) and the span stand above its far edge. Measured off the plate with the lane drawn on it: at x=30 the road runs y 357-396 and the near pier's base is y 410; at x=104 the road runs y 375-411 and the far pier's base is y 388.\n\nSo the far pier and the span are BEHIND everything on the road and need no occluder at all \u2014 the map plate already draws them at the bottom of the depth order. They used to be lifted out of the plate into a 20x112 RECTANGLE at x 98-118, which cut the painted column in half down its length: the stones left of x=98 stayed at plate depth and the stones right of it jumped to 398, so an enemy walking out drew over one half of the pier and under the other. That is the split the player saw.\n\nOnly the near pier is lifted, and it is cut to its painted OUTLINE rather than to a box, because a box around it contains road and grass \u2014 and a copy of the road drawn in front of an enemy standing on it is a worse artefact than the one being fixed.\n\nTHE OUTLINE IS MEASURED AGAINST ONE PLATE. It traces the stone in the art `map.level1` currently resolves to. A new plate \u2014 public/assets/map/map_level1_v2.png is sitting in the repository unreferenced as of 2026-09-03 \u2014 moves the stone and invalidates every number here. Re-measure with `sh run.sh archplate 40 844x390 left`, which draws the outline and the lane over the plate at 14x with a 5px grid, and re-run `sh run.sh arch` for the pixel diff.",
       "near": {
         "outline": [
           [
-            15,
-            356
+            10,
+            322
           ],
           [
-            34,
-            355
-          ],
-          [
-            49,
-            357
+            48,
+            322
           ],
           [
             50,
-            372
+            360
           ],
           [
-            50,
-            392
+            48,
+            404
           ],
           [
-            47,
-            409
-          ],
-          [
-            30,
+            38,
             413
           ],
           [
-            15,
-            405
+            20,
+            413
           ],
           [
-            13,
-            374
+            8,
+            404
+          ],
+          [
+            5,
+            358
           ]
         ],
-        "depth": 413,
-        "_depth": "The near pier's base, which is what a y-sort would give it. Every enemy on the road at this stretch is above it \u2014 the road's near edge at x=30 is y=396 and the lateral spread reaches y=401 \u2014 so the pier is in front of all of them and they emerge from behind real stone."
-      }
+        "depth": 448.1,
+        "_depth": "Above every enemy that can stand at the arch: the lane's lowest point between x 0 and 60 plus half the road's width, plus a margin. Taking the pier's painted base instead worked on the old plate only because that road was 38 px wide; at 80 the near half of the lane reaches below the stone."
+      },
+      "_note": "Only the NEAR pier is lifted out of the plate, and it is cut to its painted outline rather than to a box, because it is drawn in front of units and a box around it contains road. The far pier and the span stand above the road's far edge, so the plate already draws them behind everything."
     }
   },
   "exit": {
-    "_note": "THE GATE IS OPEN in this plate. Its two leaves stand apart with a dark gap between them at world x 1235-1248, so the lane runs through it and there is nothing to walk into. An enemy fades out across that gap and is gone by the time it clears the far leaf. There is no impact: the slam, the camera shake and the two dust puffs all described a gate that is painted shut, and this one is not.",
-    "gateX": 1235.0,
-    "vanishX": 1250.0
+    "_note": "THE GATE IS SHUT IN THIS PLATE, and it has no wall attached, which reads oddly; that is a known art issue being handled separately and this traces it as it stands. There is no painted gap to fade through as there was on the old plate, so the fade runs over the last 33px of lane, ending where the road does. Distance, not time: the roster spans a wide speed range and a timed fade would let the fastest walk out still visible while the slowest dissolved before arriving.",
+    "gateX": 1205.0,
+    "vanishX": 1235.0
   },
-  "_roadWidth": "Measured, not chosen. The painted road runs 36 across at the median and 46 at the ninth decile; 38 sits just above the median, so the lane stays inside the paint along almost all of it. It was 61.2, which described the old plate and is wider than the new road is anywhere."
+  "scatterExclude": [
+    {
+      "x": 1200,
+      "y": 0,
+      "w": 48,
+      "h": 48
+    },
+    {
+      "x": 144,
+      "y": 48,
+      "w": 48,
+      "h": 48
+    },
+    {
+      "x": 768,
+      "y": 48,
+      "w": 48,
+      "h": 48
+    },
+    {
+      "x": 960,
+      "y": 48,
+      "w": 240,
+      "h": 48
+    },
+    {
+      "x": 144,
+      "y": 96,
+      "w": 48,
+      "h": 48
+    },
+    {
+      "x": 912,
+      "y": 96,
+      "w": 336,
+      "h": 48
+    },
+    {
+      "x": 912,
+      "y": 144,
+      "w": 336,
+      "h": 48
+    },
+    {
+      "x": 48,
+      "y": 192,
+      "w": 48,
+      "h": 48
+    },
+    {
+      "x": 864,
+      "y": 192,
+      "w": 384,
+      "h": 48
+    },
+    {
+      "x": 912,
+      "y": 240,
+      "w": 48,
+      "h": 48
+    },
+    {
+      "x": 1056,
+      "y": 240,
+      "w": 192,
+      "h": 48
+    },
+    {
+      "x": 0,
+      "y": 288,
+      "w": 144,
+      "h": 48
+    },
+    {
+      "x": 0,
+      "y": 336,
+      "w": 144,
+      "h": 48
+    },
+    {
+      "x": 1152,
+      "y": 336,
+      "w": 96,
+      "h": 48
+    },
+    {
+      "x": 1152,
+      "y": 384,
+      "w": 96,
+      "h": 48
+    },
+    {
+      "x": 48,
+      "y": 480,
+      "w": 48,
+      "h": 48
+    },
+    {
+      "x": 144,
+      "y": 528,
+      "w": 48,
+      "h": 48
+    },
+    {
+      "x": 1200,
+      "y": 528,
+      "w": 48,
+      "h": 48
+    },
+    {
+      "x": 0,
+      "y": 576,
+      "w": 336,
+      "h": 48
+    },
+    {
+      "x": 1104,
+      "y": 576,
+      "w": 96,
+      "h": 48
+    },
+    {
+      "x": 48,
+      "y": 624,
+      "w": 432,
+      "h": 48
+    },
+    {
+      "x": 912,
+      "y": 624,
+      "w": 48,
+      "h": 48
+    },
+    {
+      "x": 96,
+      "y": 672,
+      "w": 48,
+      "h": 48
+    },
+    {
+      "x": 192,
+      "y": 672,
+      "w": 288,
+      "h": 48
+    },
+    {
+      "x": 912,
+      "y": 672,
+      "w": 48,
+      "h": 48
+    }
+  ],
+  "_heroStart": "Open grass, 150px from the road's edge and 112px from the nearest pad. The trace put him at 42% along the lane, which on this painting is on the road itself."
 }

@@ -11,10 +11,23 @@ It also writes an overlay PNG of the result drawn over the real plate, because
 the only way to be sure a traced route follows the painted road is to look at
 it.
 
-    python3 tools/trace_map.py [--overlay /tmp/overlay.png]
+    python3 tools/trace_map.py --plate <a PNG> [--overlay /tmp/overlay.png]
 
 Nothing at runtime depends on this script. It is the record of where the
 numbers in map.json came from, and how to redo them when the art changes.
+
+IT NEEDS A PNG, and the game ships a WebP. The source PNG for each plate is in
+git history at the commit that added it — `git show <sha>:<path> > /tmp/p.png`
+— because a 10.9MB PNG in `public/` is 10.9MB of deploy whether or not anything
+references it.
+
+TWICE NOW THE ART HAS CHANGED UNDER IT. The colour bands and the distances were
+both tuned to the first plate: the bands to its particular dirt and grass, and
+the distances to *its resolution*, in mask pixels, with a comment saying one of
+them was about 3.06 canvas pixels. The second plate is 3840x2160 rather than
+1672x941, so every one of those distances would have meant something different.
+They are in CANVAS pixels now and converted at the point of use, which is the
+only unit that survives a re-export.
 """
 
 import argparse
@@ -29,13 +42,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import png  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PLATE = os.path.join(ROOT, 'public/assets/maps/map_level1.png')
+PLATE = os.path.join(ROOT, 'public/assets/maps/map_level1_v2.png')
 
-# The plate is 1672x941 and fills a 1280x720 canvas, so canvas pixels are the
-# map's coordinate space. Everything below works at quarter resolution for
-# speed and scales back up at the end.
+# The plate fills a 1280x720 canvas whatever its own size, so canvas pixels are
+# the map's coordinate space. The mask works at reduced resolution for speed.
 CANVAS_W, CANVAS_H = 1280, 720
-K = 4
+# Mask columns. A fixed count rather than a fixed divisor, so a re-export at a
+# different size does not silently change what every distance below means: one
+# mask pixel is CANVAS_W / MASK_W canvas pixels, always.
+MASK_W = 640
 
 ROAD, GRASS, BLOCK = 1, 2, 0
 COLOUR = {ROAD: (230, 190, 90), GRASS: (90, 150, 50), BLOCK: (30, 30, 40)}
@@ -43,29 +58,89 @@ COLOUR = {ROAD: (230, 190, 90), GRASS: (90, 150, 50), BLOCK: (30, 30, 40)}
 
 # --------------------------------------------------------------- classify
 
-def classify(w, h, px):
-    """Road, grass or blocked for every pixel of a quarter-scale copy.
+def classify(w, h, px, k):
+    """Road, grass or blocked for every pixel of a reduced-scale copy.
 
-    The blue channel separates the two surfaces cleanly on this plate: the dirt
-    road sits at B 50-96 and the grass at B 7-24. Trees, the tavern, the pond
-    and the walls all fall outside both bands and count as blocked, which is
-    what keeps towers out of them.
+    RE-DERIVED FOR THE SECOND PLATE, from a histogram of the art rather than
+    from the old thresholds. Two clusters carry 64% of it: grass at r-g -40..-1
+    with b under 32, and the dirt road at r-g 60..79 with b 32..95. Trees, the
+    tavern, the pond, the rocks and the arch all fall outside both bands and
+    count as blocked, which is what keeps towers out of them.
+
+    The first plate's bands were `r-g > 20 and b > 35 and lum > 95` for road
+    and `-30 <= r-g <= 15 and b < 35 and lum > 80` for grass. They do not
+    transfer: this road is a much warmer sand (r-g about 65 against about 30)
+    and this grass is far darker in places (lum 18 in shadow against a floor of
+    80), so the old grass rule would have called half the field blocked.
     """
-    sw, sh = w // K, h // K
+    sw, sh = w // k, h // k
     kind = bytearray(sw * sh)
     for y in range(sh):
-        sy = y * K
+        sy = y * k
         for x in range(sw):
-            i = (sy * w + x * K) * 4
+            i = (sy * w + x * k) * 4
             r, g, b = px[i], px[i + 1], px[i + 2]
             lum = (r + g + b) // 3
-            if r - g > 20 and b > 35 and lum > 95:
+            if r - g >= 40 and b >= 28 and lum > 100:
                 kind[y * sw + x] = ROAD
-            elif -30 <= r - g <= 15 and b < 35 and lum > 80:
+            elif r - g <= -8 and b < 34:
                 kind[y * sw + x] = GRASS
             else:
                 kind[y * sw + x] = BLOCK
     return sw, sh, kind
+
+
+def despeckle(sw, sh, kind, max_area):
+    """Swallow small blobs into whatever surrounds them.
+
+    THE PAINTING HAS TEXTURE AND THE CLASSIFIER SEES IT. The road is scattered
+    with painted pebbles and the grass with tufts, and both are dark enough to
+    fall outside either band — so a mask of this plate is a road full of holes
+    and a field full of dots.
+
+    That is not cosmetic. Two of the measurements below are distances to the
+    nearest pixel of another kind: the road's half-width is the clearance from
+    the nearest NON-road pixel, and a pad's clearance is the distance to the
+    nearest blocked one. A pebble in the middle of the road makes the road
+    measure 32 canvas pixels wide when it is nearer 100, and a tuft in the
+    middle of the field makes open grass look like a thicket. Measured on the
+    second plate: 655 candidate pad positions before this pass, 20,690 after.
+
+    Anything smaller than `max_area` is texture, not scenery. A tree, the
+    tavern, the pond and the arch are all far larger.
+    """
+    seen = bytearray(sw * sh)
+    filled = 0
+    for start in range(sw * sh):
+        if seen[start]:
+            continue
+        here = kind[start]
+        comp, q = [], deque([start])
+        seen[start] = 1
+        border = {}
+        while q:
+            p = q.popleft()
+            comp.append(p)
+            x, y = p % sw, p // sw
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = x + dx, y + dy
+                if not (0 <= nx < sw and 0 <= ny < sh):
+                    continue
+                n = ny * sw + nx
+                if kind[n] == here:
+                    if not seen[n]:
+                        seen[n] = 1
+                        q.append(n)
+                else:
+                    border[kind[n]] = border.get(kind[n], 0) + 1
+        if len(comp) > max_area or not border:
+            continue
+        # Whatever it is mostly surrounded by is what it really is.
+        into = max(border.items(), key=lambda kv: kv[1])[0]
+        for p in comp:
+            kind[p] = into
+        filled += len(comp)
+    return filled
 
 
 def largest_road_component(sw, sh, kind):
@@ -191,6 +266,37 @@ def trace(sw, sh, comp):
     return [(p % sw, p // sw) for p in line], widest
 
 
+def clearance_along(sw, sh, comp, line):
+    """How far each traced point is from the nearest non-road pixel.
+
+    The route runs down the middle, so this is the road's half-width at every
+    step of the walk. Reported as a median rather than a maximum because a
+    maximum is one bend and the lane has to fit the narrowest stretch.
+    """
+    clear = {}
+    q = deque()
+    for p in comp:
+        x, y = p % sw, p // sw
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, ny = x + dx, y + dy
+            if not (0 <= nx < sw and 0 <= ny < sh) or (ny * sw + nx) not in comp:
+                clear[p] = 0
+                q.append(p)
+                break
+    seen = set(q)
+    while q:
+        p = q.popleft()
+        x, y = p % sw, p // sw
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, ny = x + dx, y + dy
+            n = ny * sw + nx
+            if 0 <= nx < sw and 0 <= ny < sh and n in comp and n not in seen:
+                seen.add(n)
+                clear[n] = clear[p] + 1
+                q.append(n)
+    return [clear.get(y * sw + x, 0) for x, y in line]
+
+
 def simplify(pts, eps):
     """Douglas-Peucker: a traced pixel run turned into a handful of waypoints."""
     if len(pts) < 3:
@@ -212,8 +318,13 @@ def simplify(pts, eps):
 
 # ------------------------------------------------------------------ spots
 
-# Mask-pixel distances. One mask pixel is about 3.06 canvas pixels.
-NEAR, FAR, CLEAR_OF_SCENERY = 15, 33, 13
+# CANVAS-pixel distances, converted to mask pixels where they are used.
+#
+# They were mask-pixel constants with a note that one mask pixel was "about
+# 3.06 canvas pixels" — true of the first plate and of nothing else. At the
+# second plate's resolution the same numbers would have meant a pad 20 canvas
+# pixels off the road instead of 46, which is a pad in the verge.
+NEAR_CANVAS, FAR_CANVAS, CLEAR_OF_SCENERY_CANVAS = 46, 101, 40
 # A tower stands about 115px tall from its pad and the HUD bar owns the top
 # 78px of the canvas, so a pad any higher than this puts a tower's roof behind
 # the HUD. Canvas pixels; converted to mask rows where it is used.
@@ -224,7 +335,7 @@ MIN_CANVAS_Y = 200
 # pixels (about 3.06 canvas px each), set so no two spots can cover the same
 # bend — a much smaller value let two of the seven sit 78px apart, which is
 # two spots spending one decision.
-TARGET_SPOTS, MIN_SEPARATION = 7, 46
+TARGET_SPOTS, MIN_SEPARATION_CANVAS = 7, 141
 
 
 def pick_spots(sw, sh, kind, line, dist_road, dist_block):
@@ -236,15 +347,20 @@ def pick_spots(sw, sh, kind, line, dist_road, dist_block):
     stops them bunching near the arch; alternating the preferred side keeps
     both verges in play.
     """
+    per_mask = CANVAS_W / sw          # canvas pixels in one mask pixel
+    near = NEAR_CANVAS / per_mask
+    far = FAR_CANVAS / per_mask
+    clear_of = CLEAR_OF_SCENERY_CANVAS / per_mask
+    separation = MIN_SEPARATION_CANVAS / per_mask
     min_row = MIN_CANVAS_Y / (CANVAS_H / sh)
     cand = [i for i, v in enumerate(kind)
-            if v == GRASS and NEAR <= dist_road[i] <= FAR and dist_block[i] >= CLEAR_OF_SCENERY
+            if v == GRASS and near <= dist_road[i] <= far and dist_block[i] >= clear_of
             and (i // sw) >= min_row]
 
     chosen = []
 
     def far_enough(x, y):
-        return all((x - cx) ** 2 + (y - cy) ** 2 >= MIN_SEPARATION ** 2 for cx, cy in chosen)
+        return all((x - cx) ** 2 + (y - cy) ** 2 >= separation ** 2 for cx, cy in chosen)
 
     def at(t):
         return line[min(len(line) - 1, int(t * (len(line) - 1)))]
@@ -258,14 +374,14 @@ def pick_spots(sw, sh, kind, line, dist_road, dist_block):
         want = 1 if si % 2 == 0 else -1
 
         best, best_score = None, None
-        for radius in (40, 55, 70):
+        for radius in (120 / per_mask, 165 / per_mask, 210 / per_mask):
             for i in cand:
                 x, y = i % sw, i // sw
                 d2 = (x - px_) ** 2 + (y - py_) ** 2
                 if d2 > radius * radius or not far_enough(x, y):
                     continue
                 side = 1 if (tx * (y - py_) - ty * (x - px_)) > 0 else -1
-                score = (dist_block[i] * 2 + min(dist_road[i], 26)
+                score = (dist_block[i] * 2 + min(dist_road[i], 80 / per_mask)
                          - math.sqrt(d2) * 0.5 + (14 if side == want else 0))
                 if best_score is None or score > best_score:
                     best, best_score = (x, y), score
@@ -325,9 +441,17 @@ def main():
     args = ap.parse_args()
 
     w, h, px = png.read(args.plate)
-    print(f'plate {w}x{h}')
+    k = max(1, round(w / MASK_W))
+    print(f'plate {w}x{h}  mask divisor {k} -> {w // k}x{h // k}'
+          f'  ({CANVAS_W / (w // k):.2f} canvas px per mask px)')
 
-    sw, sh, kind = classify(w, h, px)
+    sw, sh, kind = classify(w, h, px, k)
+    # Texture, not scenery: see despeckle. 240 mask pixels is about 960 canvas
+    # px of area, which is a fifth of the smallest rock and larger than any
+    # pebble or tuft on this plate.
+    swallowed = despeckle(sw, sh, kind, 240)
+    print(f'  despeckled {swallowed} texture pixels '
+          f'({swallowed * 100 / (sw * sh):.1f}% of the mask)')
     total = sw * sh
     for name, v in (('road', ROAD), ('grass', GRASS), ('blocked', BLOCK)):
         c = kind.count(v)
@@ -337,7 +461,7 @@ def main():
     print(f'  main road component: {len(comp)} of {kind.count(ROAD)} road pixels')
 
     line, widest = trace(sw, sh, comp)
-    print(f'  traced {len(line)} steps; road is about {widest * 2 * K} plate px wide')
+    print(f'  traced {len(line)} steps')
 
     dist_road = bfs_from(sw, sh, kind, lambda v: v == ROAD)
     dist_block = bfs_from(sw, sh, kind, lambda v: v == BLOCK)
@@ -345,8 +469,8 @@ def main():
     print(f'  {cand} candidate grass pixels -> {len(spots)} spots')
 
     way = simplify(line, 1.6)
-    scale = CANVAS_W / (sw * K)
-    to_canvas = lambda p: [round(p[0] * K * scale, 1), round(p[1] * K * scale, 1)]
+    scale = CANVAS_W / (sw * k)
+    to_canvas = lambda p: [round(p[0] * k * scale, 1), round(p[1] * k * scale, 1)]
 
     waypoints = [to_canvas(p) for p in way]
     # Enemies walk on through the arch and off through the gate.
@@ -355,8 +479,17 @@ def main():
     build_spots = [to_canvas(p) for p in spots]
     print(f'  {len(waypoints)} waypoints after simplify')
 
-    road_width = round(widest * 2 * K * scale, 1)
-    print(f'  road is {road_width} canvas px wide')
+    # MEASURED, not assumed. `widest` is the largest clearance any road pixel
+    # has from the nearest non-road pixel, which is the road's half-width at
+    # its widest point. The lane's own width is what the narrowest stretch
+    # allows, so the median clearance along the traced line is the honest
+    # number for spreading enemies across it — the widest point is a bend.
+    along = sorted(clearance_along(sw, sh, comp, line))
+    median_half = along[len(along) // 2]
+    road_width = round(median_half * 2 * k * scale, 1)
+    print(f'  road half-width: widest {widest * k * scale:.1f} canvas px, '
+          f'median along the lane {median_half * k * scale:.1f}')
+    print(f'  roadWidth (median, both sides) = {road_width} canvas px')
     print(json.dumps({'roadWidth': road_width, 'waypoints': waypoints,
                       'buildSpots': build_spots}, indent=1))
 

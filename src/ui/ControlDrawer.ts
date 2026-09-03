@@ -3,6 +3,7 @@ import presentationData from '../data/presentation.json'
 import { COLOR, FONT_UI, uiSize } from './Theme.ts'
 import { fitInBox } from '../systems/Art.ts'
 import { pointerToScreen } from '../systems/Resolution.ts'
+import { dockedSlab } from './EdgeDock.ts'
 import {
   type DrawerConfig, type DrawerLayout, drawerLayout, inRect, scrollToShow, tileVisible,
 } from '../systems/DrawerLayout.ts'
@@ -25,6 +26,7 @@ const CFG = presentationData.drawer as unknown as DrawerConfig & {
   outline: number
   outlineWidth: number
   tabFill: number
+  chevron: number
   selectedEdge: number
 }
 
@@ -63,6 +65,9 @@ export interface ControlDrawerOptions {
    *  other piece of chrome. Re-read on every layout so a rotate lands. */
   area: () => Rect
   viewW: () => number
+  /** The screen edge to dock against: viewport width less the right inset.
+   *  Not the usable area's edge — see `drawerLayout`'s `dockRight`. */
+  dockRight: () => number
   /**
    * The camera that DRAWS the drawer, for converting a pointer into the
    * space its rectangles are written in.
@@ -149,7 +154,7 @@ export class ControlDrawer {
     this.hit.on('pointerout', () => { this.dragFrom = null; this.downOn = null })
     this.layer.add([this.panelG, this.gridLayer, this.scrollG, this.tabG, this.hit])
     this.gridLayer.setMask(this.maskG.createGeometryMask())
-    this.layout = drawerLayout(opts.viewW(), opts.area(), 0, 0, CFG)
+    this.layout = drawerLayout(opts.viewW(), opts.area(), 0, 0, CFG, false, opts.dockRight())
     this.refresh()
   }
 
@@ -323,7 +328,7 @@ export class ControlDrawer {
   refresh(): void {
     this.tiles = this.enabled ? this.opts.tiles() : []
     this.layout = drawerLayout(this.opts.viewW(), this.opts.area(), this.tiles.length,
-      this.scroll, CFG, this.open)
+      this.scroll, CFG, this.open, this.opts.dockRight())
     this.tileRects = this.layout.tiles
 
     this.panelG.clear()
@@ -358,7 +363,13 @@ export class ControlDrawer {
     this.hit.input!.hitArea.setTo(0, 0, box.w, box.h)
 
     if (this.open) {
-      this.slab(this.panelG, panel, CFG.slab)
+      // Docked, like the handle: the panel's right side IS the screen's right
+      // side, and a rounded corner or an outline there describes a shape with
+      // something behind it.
+      dockedSlab(this.panelG, panel, 'right', {
+        fill: CFG.slab, outline: CFG.outline,
+        outlineWidth: CFG.outlineWidth, radius: CFG.tileRadius,
+      })
       this.maskG.fillStyle(0xffffff, 1)
       this.maskG.fillRect(grid.x, grid.y, grid.width, grid.height)
       for (const [i, tile] of this.tiles.entries()) this.drawTile(tile, this.layout.tiles[i]!)
@@ -366,7 +377,22 @@ export class ControlDrawer {
     }
 
     // The tab last, so it sits over the panel's edge and reads as its handle.
-    this.slab(this.tabG, tab, CFG.tabFill)
+    //
+    // THE PANEL'S OWN MATERIAL, and docked. It was a flat orange rounded
+    // rectangle with a black chevron — a different fill from the drawer, all
+    // four corners rounded, and six pixels short of the display — so it read
+    // as a separate button parked near the edge instead of as the drawer's
+    // edge. Same slab, same outline, rounded on the left only, and hard
+    // against the screen while it is closed.
+    if (this.open) {
+      // Out with the panel, so both its vertical edges are real edges.
+      this.slab(this.tabG, tab, CFG.slab)
+    } else {
+      dockedSlab(this.tabG, tab, 'right', {
+        fill: CFG.slab, outline: CFG.outline,
+        outlineWidth: CFG.outlineWidth, radius: CFG.tileRadius,
+      })
+    }
     this.chevron(tab)
   }
 
@@ -404,7 +430,9 @@ export class ControlDrawer {
     const cy = tab.y + tab.height / 2
     const s = 7
     const dir = this.open ? 1 : -1
-    this.tabG.lineStyle(CFG.outlineWidth, CFG.outline, 1)
+    // Light, because the handle is the drawer's dark slab now rather than an
+    // orange plate. A near-black chevron on it was invisible.
+    this.tabG.lineStyle(CFG.outlineWidth, CFG.chevron, 1)
     this.tabG.beginPath()
     this.tabG.moveTo(cx - s * dir, cy - s)
     this.tabG.lineTo(cx + s * dir, cy)

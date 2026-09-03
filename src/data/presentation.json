@@ -26,7 +26,7 @@
     "lastStandHoldMs": 220
   },
   "facing": {
-    "deadZone": 0.26,
+    "deadZone": 0.34,
     "_deadZone": "How much sideways drift counts as noise before a unit turns round. Raised from 0.15 when the map was re-traced: the old lane never really went west and its steepest leg drifted 3px over 92, or 0.03 of its length. The new road genuinely bends back on itself, and its steepest leg drifts 14.5px west while dropping 69.6 — 0.20. At 0.15 that flipped an enemy round to walk down the hill backwards and then flipped it back."
   },
   "healthBar": {
@@ -262,7 +262,7 @@
     "rotateDegrees": 6,
     "rules": {
       "attempts": 600,
-      "minGapPx": 130,
+      "minGapPx": 210,
       "pathClearancePx": 96,
       "buildSpotClearPx": 64,
       "endClearPx": 96,
@@ -579,6 +579,8 @@
     "outlineWidth": 3,
     "_outline": "Thick and dark, matching the painted board. Flat colour, chunky rounded forms — no bevel, no metal, no neon edge, no gradient, no translucent hairline. The reference is the in-game side drawer, not a web panel.",
     "tabFill": 12745274,
+    "_tabFill": "DEAD as of the docking change: the handle takes the panel's own `slab` now. Kept only so the old value is on the record, and a candidate for deletion.",
+    "chevron": 14272424,
     "selectedEdge": 16765503,
     "dragSlop": 6,
     "_dragSlop": "How far a finger may travel before a press becomes a drag rather than a pick. Below this the tap selects on release; above it the grid scrolls and nothing is selected.",

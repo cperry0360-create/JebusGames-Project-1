@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import {
   type DrawerConfig, drawerLayout, drawerWidth, inRect, scrollToShow, tileVisible,
 } from '../src/systems/DrawerLayout.ts'
+import { cornerRadii } from '../src/ui/EdgeDock.ts'
 import { hudLayout, NO_INSETS, type Rect } from '../src/systems/HudLayout.ts'
 import { DEFAULT_SAVE } from '../src/systems/Save.ts'
 
@@ -118,10 +119,68 @@ test('the expanded panel never covers the ability strip or the wave chip', () =>
 
 test('the tab sits at the same right edge as the panel while it is closed', () => {
   for (const [, w, h] of VIEWPORTS) {
-    const { tab, panel } = drawerLayout(w, area(w, h), TOWERS.length, 0, CFG)
+    const { tab, panel } = drawerLayout(w, area(w, h), TOWERS.length, 0, CFG, false, w)
     assert.equal(Math.round(tab.x + tab.width), Math.round(panel.x + panel.width),
       'the tab must read as the panel’s handle, not float beside it')
   }
+})
+
+test('the handle is FLUSH with the screen edge, exactly, at every viewport', () => {
+  /*
+   * IT FLOATED SIX PIXELS SHORT, and the six were worth chasing before
+   * changing anything: an off-by-a-few in this codebase has meant a
+   * canvas-versus-CSS-pixel error six times, and that class of bug scales with
+   * the device ratio. This one did not — measured 6px at devicePixelRatio 1
+   * and 6px at 3, at both viewports — so it was arithmetic in the right space
+   * against the wrong rectangle. `panelArea` insets six pixels on each side
+   * for chrome that floats inside it, and a drawer is not that: its whole
+   * claim is to be attached to the edge.
+   *
+   * Exactly equal, not within a pixel. A gap is either zero or it is visible.
+   */
+  for (const [name, w, h] of VIEWPORTS) {
+    for (const open of [false, true]) {
+      const l = drawerLayout(w, area(w, h), TOWERS.length, 0, CFG, open, w)
+      const edge = open ? l.panel : l.tab
+      assert.equal(edge.x + edge.width, w,
+        `${name}${open ? ' open' : ' closed'}: the drawer stops ` +
+        `${(w - (edge.x + edge.width)).toFixed(1)}px short of the screen`)
+    }
+  }
+})
+
+test('a docked edge has square corners and no outline along it', () => {
+  // There is nothing behind the display's edge, so a rounded corner and a
+  // stroke there both describe a shape floating in front of something.
+  const r = cornerRadii('right', 9)
+  assert.deepEqual(r, { tl: 9, tr: 0, bl: 9, br: 0 }, 'the docked corners are not square')
+  assert.deepEqual(cornerRadii('left', 9), { tl: 0, tr: 9, bl: 0, br: 9 })
+  const dock = src('ui/EdgeDock.ts')
+  assert.doesNotMatch(dock, /strokeRoundedRect|strokeRect/,
+    'the outline is a stroked rectangle, so it runs down the docked edge too')
+  assert.match(dock, /strokePath\(\)/, 'the outline is not an open path')
+})
+
+test('the handle wears the drawer’s own material, not a plate of its own', () => {
+  // It was a flat orange rounded rectangle with a black chevron and no
+  // relationship to the panel it opens.
+  const drawer = src('ui/ControlDrawer.ts')
+  assert.match(drawer, /dockedSlab\(this\.tabG, tab, 'right', \{\s*\n?\s*fill: CFG\.slab/,
+    'the closed handle is not the drawer’s slab, docked')
+  assert.match(drawer, /CFG\.chevron/, 'the chevron is still drawn in the outline colour')
+  const code = drawer.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n')
+  assert.doesNotMatch(code, /CFG\.tabFill/, 'the orange plate fill is back')
+})
+
+test('CANCEL is docked by the same rule', () => {
+  for (const [name, w, h] of VIEWPORTS) {
+    const l = hudLayout({ width: w, height: h, insets: NO_INSETS, ...WIDEST }, LAYOUT)
+    assert.equal(l.cancel.x + l.cancel.width, w,
+      `${name}: CANCEL stops ${(w - (l.cancel.x + l.cancel.width)).toFixed(1)}px short`)
+  }
+  const game = src('scenes/GameScene.ts')
+  assert.match(game, /dockedSlab\(this\.cancelSlab, cb, 'right'/,
+    'CANCEL is still drawn on the painted plate, which has four rounded corners')
 })
 
 test('the tab never sits over a tile, at any viewport', () => {
