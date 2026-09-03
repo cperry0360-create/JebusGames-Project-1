@@ -170,6 +170,29 @@ reaches *below* the stone, so the depth is now the lane's lowest point across
 the pier's span plus half the road's width — **448** against a painted base of
 about 413.
 
+### And the outline was wrong in a way the diff could not catch
+
+The first outline for this plate was traced by eye off a 12x crop. The pixel
+diff passed it at 0.00% — and would have passed an outline half the size just as
+cleanly, because that diff only proves nothing draws **over** the pier, and a
+smaller outline simply covers less.
+
+Drawing it back onto the art is the other half of the check, and it showed the
+outline enclosed **15.7% grass and banner pole** down its left side while
+clipping stone on the right. Refitted by thresholding desaturated stone in a box
+around the pier, taking the largest blob and thinning its convex hull to ten
+points:
+
+```
+inside the outline: 97.0% stone, 3.0% grass   (was 84.3% / 15.7%)
+near pier: 0 of 91,724 stone pixels changed (0.00%)
+far pier:  35,016 of 133,476 changed (26.2%)  <- the control
+```
+
+Both checks are needed and both are recorded in `map.json`. One says nothing is
+drawn over the stone; the other says the outline is actually on the stone.
+Either alone is satisfiable by a wrong answer.
+
 ## Docking
 
 **The gap was not a pointer-space error, and that was worth establishing
