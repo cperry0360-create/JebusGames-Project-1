@@ -90,19 +90,45 @@ test('she is on screen for well under two seconds', () => {
   assert.ok(ms >= 1500 && ms <= 2600, `an appearance lasts ${ms}ms`)
 })
 
-test('only the top half of her clears the canopy', () => {
-  // Any more and she reads as a dog sitting on top of a tree.
+test('her eyes clear the canopy and her collar does not', () => {
   /*
-   * MEASURED OFF HER ART, not chosen. On the 872px source the eyes span 40-54%
-   * of the height, the nose 60-66% and the collar starts at 69%. The line has
-   * to fall below the eyes and above the collar: any less and she is two ears,
-   * any more and she is a whole dog sitting on a bush.
+   * MEASURED OFF HER ART, not chosen. `peakVisible` is the fraction of her,
+   * from the top down, that clears the foliage line, so every landmark here is
+   * a row of the 643x872 source:
    *
-   * Wrong in both directions before this — 0.5 cut the eyes in half and read
-   * as a severed sprite, 0.33 put them under the line entirely.
+   *     eye band       349..470     lower rim of the right eye at 470
+   *     nose leather   505..585     the muzzle
+   *     COLLAR         569..716     teal, and the top of it is 569
+   *
+   * THE COLLAR NUMBER WAS WRONG AND IS THE REASON THIS COMMENT IS LONG. It
+   * said 601, which is 32px of slack, and the bound built on it allowed 0.689
+   * — a value that shows collar. Re-measured by masking the collar's teal,
+   * which is the one colour on her that appears nowhere else: it starts at
+   * 569, so the ceiling is 0.653 and not 0.689.
+   *
+   * THE EYES ARE THE PROPERTY. Without them she is two ears, and the brief
+   * that asked for "the eyes at or just below the line" was withdrawn for
+   * exactly that reason. The floor is 8px below the eye's lower rim rather
+   * than level with it, because level with it is a one-pixel margin and reads
+   * as a clipped eye.
+   *
+   * Wrong in both directions before now: 0.5 cut the eyes in half and read as
+   * a severed sprite, 0.33 put them under the line entirely.
+   *
+   * The bounds are the landmarks rather than the value, so an arithmetic raise
+   * cannot quietly land back inside the eye band — "30-40% more than 0.33"
+   * computes to 0.44, which is a half-cut eye and fails here instead of
+   * shipping. 0.60 is the midpoint of the surviving band, which is why it is
+   * not a tuning knob anyone needs to touch.
    */
-  assert.ok(CFG.peakVisible > 0.55, `${CFG.peakVisible} leaves her eyes under the foliage`)
-  assert.ok(CFG.peakVisible < 0.69, `${CFG.peakVisible} shows her collar and chest`)
+  const EYES_CLEAR = 479 / 872   // 470 + 8px of margin
+  const COLLAR_TOP = 569 / 872
+  assert.ok(CFG.peakVisible > EYES_CLEAR,
+    `${CFG.peakVisible} puts the foliage line at ${(CFG.peakVisible * 872).toFixed(0)}px ` +
+    'of her 872px art; her eyes are not clear of it until 479')
+  assert.ok(CFG.peakVisible < COLLAR_TOP,
+    `${CFG.peakVisible} reaches ${(CFG.peakVisible * 872).toFixed(0)}px, past her collar ` +
+    'at 569; she reads as a dog sitting on a bush')
 })
 
 test('the peek spots are on the plate, in the top left, and far apart', () => {

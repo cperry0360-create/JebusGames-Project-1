@@ -5560,10 +5560,25 @@ async function run() {
       // against the old design zoom, and it fights the only thing that makes
       // her read: she has to be narrow enough for a painted clump to hide, and
       // the widest clump on this plate outside the HUD band is about 50 world
-      // px. That caps her height, and a third of it is what shows.
+      // px. That caps her height, and peakVisible decides how much of it shows.
+      //
+      // WHAT SHOWS IS PRINTED, NOT DESCRIBED. This used to say "the ears and
+      // the top of the head" in the same breath as the live percentage, and it
+      // went on saying it after the percentage went from 33 to 60 — so the
+      // output described a state the build had left, and that stale sentence
+      // is what a later reading of this went on to quote back. The landmarks
+      // are named instead, measured off the 872px source: eye band 349-470,
+      // nose leather 505-585, collar 569 and down. Same rows as the bounds in
+      // tests/bailey.test.ts, so the two cannot drift apart.
+      const pv = 100 * B.peakVisible
+      const reads = pv < 40 ? 'EYES UNDER THE LINE: two ears'
+        : pv < 55 ? 'EYES CUT IN HALF: a severed sprite'
+        : pv < 65 ? 'eyes clear, foliage across the muzzle'
+        : 'COLLAR SHOWING: a dog sitting on a bush'
       note('   visible ' + shownWorld.toFixed(1) + ' world px = ' +
-        shownCss.toFixed(1) + ' CSS px  (' + (100 * B.peakVisible).toFixed(0) +
-        '% of her, the ears and the top of the head)')
+        shownCss.toFixed(1) + ' CSS px = ' +
+        (shownWorld * cam.zoom).toFixed(0) + ' px in this capture  (' +
+        pv.toFixed(0) + '% of her -> ' + reads + ')')
       note('   full sprite ' + (img ? img.displayWidth.toFixed(1) : '?') + ' x ' +
         (img ? img.displayHeight.toFixed(1) : '?') + ' world px; ' +
         (100 * B.peakVisible).toFixed(0) + '% of her clears the line')
