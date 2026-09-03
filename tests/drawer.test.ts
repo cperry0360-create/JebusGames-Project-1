@@ -5,7 +5,9 @@ import {
   type DrawerConfig, drawerLayout, drawerWidth, inRect, scrollToShow, tileVisible,
 } from '../src/systems/DrawerLayout.ts'
 import { cornerRadii } from '../src/ui/EdgeDock.ts'
-import { hudLayout, NO_INSETS, type Rect } from '../src/systems/HudLayout.ts'
+import {
+  hudLayout, NO_INSETS, resolveInsets, type Insets, type Rect,
+} from '../src/systems/HudLayout.ts'
 import { DEFAULT_SAVE } from '../src/systems/Save.ts'
 
 const url = (p: string) => new URL(p, import.meta.url)
@@ -145,6 +147,36 @@ test('the handle is FLUSH with the screen edge, exactly, at every viewport', () 
       assert.equal(edge.x + edge.width, w,
         `${name}${open ? ' open' : ' closed'}: the drawer stops ` +
         `${(w - (edge.x + edge.width)).toFixed(1)}px short of the screen`)
+    }
+  }
+})
+
+test('the handle docks to the SCREEN on the edge with no notch behind it', () => {
+  /*
+   * THE TEST ABOVE PASSED WHILE THE HANDLE FLOATED 64px IN, and this is why:
+   * it chose its own `dockRight` — the viewport width — and then asserted the
+   * panel reached it. That proves `drawerLayout` and nothing about the value
+   * GameScene actually hands it, which is
+   *
+   *     dockRight: () => viewW(this) - safeAreaInsets().right
+   *
+   * A notched phone in landscape reports the housing inset on BOTH horizontal
+   * edges, so `right` came back as 64 on an edge with live map behind it. The
+   * assertion could not see that because the inset never entered it.
+   *
+   * So this one runs the real formula against a resolved inset pair.
+   */
+  const dockRight = (viewW: number, insets: Insets) => viewW - insets.right
+  const raw = { top: 0, right: 64, bottom: 0, left: 64 }
+  for (const [name, w, h] of VIEWPORTS) {
+    for (const [side, gap] of [['left', 0], ['right', 64]] as const) {
+      const insets = resolveInsets(raw, side)
+      const l = drawerLayout(w, area(w, h), TOWERS.length, 0, CFG, false,
+        dockRight(w, insets))
+      const short = w - (l.tab.x + l.tab.width)
+      assert.equal(short, gap,
+        `${name}, housing on the ${side}: the handle stops ${short}px short of ` +
+        `the screen and it should stop ${gap}`)
     }
   }
 })

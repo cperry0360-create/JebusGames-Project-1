@@ -5,6 +5,11 @@ S="$1"; WAIT="${2:-120}"; VP="${3:-}"; ARG="${4:-}"
 QS=""; [ -n "$VP" ] && QS="&vp=$VP"
 # Optional scenario argument, e.g. run.sh stunlock 60 "" deferral
 [ -n "$ARG" ] && QS="$QS&arg=$ARG"
+# INSETS=t,r,b,l fakes a notch, e.g. INSETS=0,0,0,64 for one on the left.
+[ -n "$INSETS" ] && QS="$QS&insets=$INSETS"
+# ANGLE=90|270 fakes a landscape turn; HOUSING=left|right asserts the edge.
+[ -n "$ANGLE" ] && QS="$QS&angle=$ANGLE"
+[ -n "$HOUSING" ] && QS="$QS&housing=$HOUSING"
 rm -f "$H/shots/report.json"
 # THE PROFILE GOES EVERY TIME.
 #

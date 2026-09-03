@@ -43,6 +43,54 @@ export interface Insets {
 
 export const NO_INSETS: Insets = { top: 0, right: 0, bottom: 0, left: 0 }
 
+/**
+ * Which horizontal edge the sensor housing is on, from the screen's rotation.
+ *
+ * The natural orientation of a phone is portrait with the housing along the
+ * top edge. `screen.orientation.angle` is how far the content is rotated from
+ * that, so a quarter turn puts the top edge on one side or the other:
+ *
+ *   90  -> the side `atAngle90` names, which presentation.json sets to left:
+ *          landscape-primary is iOS `landscapeLeft`, home indicator on the
+ *          right, so the device's top edge is on the left.
+ *   270 -> the mirror of it.
+ *
+ * `null` for anything else — portrait, an unrotated tablet, or a browser with
+ * no Screen Orientation API. Null means we do not know, and not knowing means
+ * we keep both insets, which is what shipped before this and is merely
+ * over-cautious rather than wrong.
+ */
+export function housingSide(
+  angle: number | null,
+  atAngle90: 'left' | 'right',
+): 'left' | 'right' | null {
+  if (angle === null || !Number.isFinite(angle)) return null
+  const a = ((angle % 360) + 360) % 360
+  if (a === 90) return atAngle90
+  if (a === 270) return atAngle90 === 'left' ? 'right' : 'left'
+  return null
+}
+
+/**
+ * Resolves a symmetric horizontal report onto the edge that actually has
+ * hardware behind it.
+ *
+ * Only a SYMMETRIC pair is touched. When the platform reports the two edges
+ * differently it already knows something we do not, and it is trusted whole.
+ *
+ * The freed edge goes to ZERO rather than to some smaller corner allowance.
+ * The rounded display corner is real, but it is a corner and this is a whole
+ * edge, and the HUD already carries a 10px margin of its own that covers it. A
+ * non-zero value here would leave the drawer handle short of the screen by
+ * that much, which is the bug rather than a smaller version of the fix.
+ */
+export function resolveInsets(raw: Insets, side: 'left' | 'right' | null): Insets {
+  const symmetric = raw.left > 0 && raw.left === raw.right
+  if (!symmetric || side === null) return { ...raw }
+  return side === 'left' ? { ...raw, right: 0 } : { ...raw, left: 0 }
+}
+
+
 export interface LayoutInput {
   width: number
   height: number

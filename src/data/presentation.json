@@ -27,7 +27,7 @@
   },
   "facing": {
     "deadZone": 0.34,
-    "_deadZone": "How much sideways drift counts as noise before a unit turns round. Raised from 0.15 when the map was re-traced: the old lane never really went west and its steepest leg drifted 3px over 92, or 0.03 of its length. The new road genuinely bends back on itself, and its steepest leg drifts 14.5px west while dropping 69.6 — 0.20. At 0.15 that flipped an enemy round to walk down the hill backwards and then flipped it back."
+    "_deadZone": "How much sideways drift counts as noise before a unit turns round. Raised from 0.15 when the map was re-traced: the old lane never really went west and its steepest leg drifted 3px over 92, or 0.03 of its length. The new road genuinely bends back on itself, and its steepest leg drifts 14.5px west while dropping 69.6 \u2014 0.20. At 0.15 that flipped an enemy round to walk down the hill backwards and then flipped it back."
   },
   "healthBar": {
     "heightPx": 4,
@@ -87,14 +87,14 @@
       "cancelWidth": 100
     },
     "heroBar": {
-      "_note": "Cory's name and health, top-left under the counters. OPAQUE, because it lives over a full-bleed painted map and there is no screen position a HUD element can occupy that the camera cannot put painted art under — measured: 0 of 82,290 screen cells at 844x390 are unreachable by painted content at some camera position. So the answer is not a safer corner, it is a proper plate. It was a 55% black wash, which let the tavern's painted signboard show through the bar and the bar show through the signboard.",
+      "_note": "Cory's name and health, top-left under the counters. OPAQUE, because it lives over a full-bleed painted map and there is no screen position a HUD element can occupy that the camera cannot put painted art under \u2014 measured: 0 of 82,290 screen cells at 844x390 are unreachable by painted content at some camera position. So the answer is not a safer corner, it is a proper plate. It was a 55% black wash, which let the tavern's painted signboard show through the bar and the bar show through the signboard.",
       "backing": 1185824,
       "backingAlpha": 1.0,
       "edge": 856086,
       "edgeWidth": 2,
       "radius": 5
     },
-    "_bossBarWidth": "Read at last. It was 560 and unread: drawBossBar took layout.messageRow.width instead, which is 563px on an 844px screen — 67% of the width for one wave in thirteen. 300 is wide enough to read a health fraction off and narrow enough to stay a bar rather than a band. The message row still bounds it, so a narrow phone shrinks the bar rather than pushing it into the counters.",
+    "_bossBarWidth": "Read at last. It was 560 and unread: drawBossBar took layout.messageRow.width instead, which is 563px on an 844px screen \u2014 67% of the width for one wave in thirteen. 300 is wide enough to read a health fraction off and narrow enough to stay a bar rather than a band. The message row still bounds it, so a narrow phone shrinks the bar rather than pushing it into the counters.",
     "_bossBarTop": "DELETED. It said 10 and nothing read it: the bar sits in the message row, which the layout places, so a second opinion about its y could only ever disagree with the layout. It is centred in that row now."
   },
   "typography": {
@@ -149,7 +149,7 @@
       "color": 16770728
     },
     "quietScreenWidth": 90,
-    "_quietScreenWidth": "The flagstone in SCREEN pixels across, at the default camera zoom — the unit it was asked for in, and the only one that means anything for a thing you look at. The world width falls out of it (90 / defaultZoom), so changing the zoom band does not silently resize the pad. It also lands where the art was cut for: at 90 screen px the slab is about 40 world px tall, and CLAUDE.md rule 7 wants 40 x 2.37 x 3 = 284 source pixels against the 272 delivered."
+    "_quietScreenWidth": "The flagstone in SCREEN pixels across, at the default camera zoom \u2014 the unit it was asked for in, and the only one that means anything for a thing you look at. The world width falls out of it (90 / defaultZoom), so changing the zoom band does not silently resize the pad. It also lands where the art was cut for: at 90 screen px the slab is about 40 world px tall, and CLAUDE.md rule 7 wants 40 x 2.37 x 3 = 284 source pixels against the 272 delivered."
   },
   "restructure": {
     "liftPixels": 46,
@@ -209,10 +209,10 @@
     "cardPadBottom": 15,
     "buttonMargin": 16,
     "buttonGap": 26,
-  "_buttonGap": "Between the two buttons. It was in this file and unread: the row was laid out from two hardcoded offsets and the gap they happened to leave was 10.",
-  "buttonPadX": 34,
-  "_buttonPadX": "Inside a button, either side of its label. Both buttons take the width the WIDER label needs, so the row is symmetrical.",
-  "buttonMinWidth": 200,
+    "_buttonGap": "Between the two buttons. It was in this file and unread: the row was laid out from two hardcoded offsets and the gap they happened to leave was 10.",
+    "buttonPadX": 34,
+    "_buttonPadX": "Inside a button, either side of its label. Both buttons take the width the WIDER label needs, so the row is symmetrical.",
+    "buttonMinWidth": 200,
     "rowShares": {
       "hero": 0.27,
       "towers": 0.39,
@@ -396,7 +396,7 @@
   "heroFrames": {
     "_note": "The hero clips. impactFrame is 1-based to match the filenames, and the damage fires on it rather than when the swing starts.",
     "walkFps": 6,
-    "_walkFps": "Arithmetic, not taste. Cory moves at 104 world px/s and renders 78.8 world px tall. A 4-frame cycle is two steps, so at 12fps that is 3 cycles a second and 17.3px per step — 0.22 body-heights, against a human stride of 0.4-0.45. His feet were taking steps half the length his speed demanded, which is what sliding is. At 6fps it is 34.7px per step, 0.44 body-heights.",
+    "_walkFps": "Arithmetic, not taste. Cory moves at 104 world px/s and renders 78.8 world px tall. A 4-frame cycle is two steps, so at 12fps that is 3 cycles a second and 17.3px per step \u2014 0.22 body-heights, against a human stride of 0.4-0.45. His feet were taking steps half the length his speed demanded, which is what sliding is. At 6fps it is 34.7px per step, 0.44 body-heights.",
     "attackFps": 12,
     "_attackFps": "Kept at 12, and separate from the walk for a reason: impactFrame is the third frame, so one shared rate would have moved the swing's landing from 167ms to 333ms. Halving the walk to fix a slide must not double the attack telegraph.",
     "impactFrame": 3,
@@ -404,11 +404,11 @@
     "attackFrames": 4
   },
   "ring": {
-    "_note": "The one tower menu: a radial ring of icon buttons around the pad or tower, and a description panel beside it. Every number is in CSS pixels and stays that size at every camera zoom — the ring is HUD chrome positioned by projecting a world point, not a world object.",
+    "_note": "The one tower menu: a radial ring of icon buttons around the pad or tower, and a description panel beside it. Every number is in CSS pixels and stays that size at every camera zoom \u2014 the ring is HUD chrome positioned by projecting a world point, not a world object.",
     "buttonSize": 50,
     "_buttonSize": "The plate. iconSize is the floor, not this: 40px of icon needs a plate bigger than 40 to sit on, and 50 leaves a 5px border. It is not larger because a notched 568x320 leaves a 171px strip between the counters and the ability bar, and six options need 2*50 plus the price badge inside it. The exhaustive placement test pinned that number down.",
     "iconSize": 40,
-    "_iconSize": "Never below 40. Under it the 256px source is minified past 6x and the painted outlines break up — the same failure the whole cast had before rule 7 was restated in physical pixels.",
+    "_iconSize": "Never below 40. Under it the 256px source is minified past 6x and the painted outlines break up \u2014 the same failure the whole cast had before rule 7 was restated in physical pixels.",
     "buttonGap": 10,
     "priceGap": 3,
     "priceHeight": 17,
@@ -418,29 +418,29 @@
     "areaMargin": 4,
     "panelWidth": 226,
     "panelMinWidth": 150,
-    "_panelMinWidth": "The narrowest the description panel may be squeezed to. It takes the widest width that fits BESIDE the ring, down to this, so that on a small screen the panel stops sitting on top of the ring's own buttons — a covered button costs a tap every time, cancel back to the ring and then press it, and the smallest screen is the one a kid is most likely holding. Measured: at 844x390 a 200px panel hides nothing at all, and at a notched 568x320 narrowing from 226 takes the worst case from four buttons hidden to two and the number of placements that hide any from 225 of 540 down to 55. Below about 150 the stat rows start colliding with their own values.",
+    "_panelMinWidth": "The narrowest the description panel may be squeezed to. It takes the widest width that fits BESIDE the ring, down to this, so that on a small screen the panel stops sitting on top of the ring's own buttons \u2014 a covered button costs a tap every time, cancel back to the ring and then press it, and the smallest screen is the one a kid is most likely holding. Measured: at 844x390 a 200px panel hides nothing at all, and at a notched 568x320 narrowing from 226 takes the worst case from four buttons hidden to two and the number of placements that hide any from 225 of 540 down to 55. Below about 150 the stat rows start colliding with their own values.",
     "_panelWidth": "Fixed. Text wraps into it; the panel never widens to fit a long name, because a panel whose width depends on its content moves the confirm button between towers.",
     "panelMaxHeightFraction": 0.92,
     "titleSize": 16,
     "_bodyMinSize": "The floor the description shrinks to. Below this it is not small text, it is a grey smear on a phone. If the content still does not fit at this size the panel SAYS SO rather than clipping.",
     "pad": 11,
     "maxAspect": 2.2,
-    "_maxAspect": "The HUD leaves a wide, short strip — 824x210 on the reference phone — and a circle big enough to keep six plates apart is 242px in both directions. The ring stretches sideways into the room that is actually there, up to this, and no further: past it the ring stops reading as a ring and starts reading as a row.",
+    "_maxAspect": "The HUD leaves a wide, short strip \u2014 824x210 on the reference phone \u2014 and a circle big enough to keep six plates apart is 242px in both directions. The ring stretches sideways into the room that is actually there, up to this, and no further: past it the ring stops reading as a ring and starts reading as a row.",
     "_rowMinHeight": "Stat rows tighten with the description when a panel is too tall. A support tower spends more height on rows than on prose, so shrinking only the prose is not enough of a lever.",
     "_headerIconSize": "The picture at the top of the description panel, so the player can see which ring button they are reading about. Smaller than iconSize deliberately: that 40px floor is for buttons a thumb has to hit, and this one is not pressed. The 14px it gives back is the difference between the panel fitting a notched phone and reporting that it does not.",
-    "_confirmHeight": "Tall enough to actually carry a 40px icon. It was 38, which is shorter than the icon standing on it — the floor is a floor, and a plate that cannot hold it is the plate that has to grow.",
-    "_titleMinSize": "The title gives way last, because it is what a player reads first — but two lines of 16px title is 40px of a 238px budget on the smallest phone.",
+    "_confirmHeight": "Tall enough to actually carry a 40px icon. It was 38, which is shorter than the icon standing on it \u2014 the floor is a floor, and a plate that cannot hold it is the plate that has to grow.",
+    "_titleMinSize": "The title gives way last, because it is what a player reads first \u2014 but two lines of 16px title is 40px of a 238px budget on the smallest phone.",
     "arcMaxOptions": 3,
-    "_arcMaxOptions": "At or below this many options the ring is not a ring: the buttons go on a tight arc directly against the pad instead. Fitting an ellipse to two options puts them at top and bottom and then grows the radius until the plates separate, which is a 50x194 vertical column — a line, not a ring, and 124px of empty space between two buttons about the same pad. The loadout hands out two towers, so this is the NORMAL case rather than an edge one.",
+    "_arcMaxOptions": "At or below this many options the ring is not a ring: the buttons go on a tight arc directly against the pad instead. Fitting an ellipse to two options puts them at top and bottom and then grows the radius until the plates separate, which is a 50x194 vertical column \u2014 a line, not a ring, and 124px of empty space between two buttons about the same pad. The loadout hands out two towers, so this is the NORMAL case rather than an edge one.",
     "arcSpreadDeg": 118,
     "_arcSpreadDeg": "How wide the tight arc fans. Wide enough that two 50px plates separate at a radius that still hugs the anchor, narrow enough that the group reads as one thing sitting above the pad rather than as buttons scattered around it.",
     "lockBadgeSize": 20,
-    "_lockBadgeSize": "The padlock corner-badge on an option the player cannot afford yet. Small, because it is the second thing the button says: the first is WHICH option this is, and that is the option's own picture, dimmed. A padlock instead of the picture was the original choice and the reasoning held for one locked option — a padlock says 'not yet' where a greyed-out picture just looks broken. It fails at two, because then both buttons are the same padlock and the player cannot tell what they are saving for, which is the common case.",
+    "_lockBadgeSize": "The padlock corner-badge on an option the player cannot afford yet. Small, because it is the second thing the button says: the first is WHICH option this is, and that is the option's own picture, dimmed. A padlock instead of the picture was the original choice and the reasoning held for one locked option \u2014 a padlock says 'not yet' where a greyed-out picture just looks broken. It fails at two, because then both buttons are the same padlock and the player cannot tell what they are saving for, which is the common case.",
     "lockedAlpha": 0.5,
     "lockedTint": 9082022,
-    "_confirmGlyphMinWidth": "Below this the confirm button carries its word alone; at or above it the tick glyph goes in front of the word too. The word is the part that cannot be dropped — every option's confirm used to be the same tick, so SELL and UPGRADE committed through identical buttons.",
+    "_confirmGlyphMinWidth": "Below this the confirm button carries its word alone; at or above it the tick glyph goes in front of the word too. The word is the part that cannot be dropped \u2014 every option's confirm used to be the same tick, so SELL and UPGRADE committed through identical buttons.",
     "ledger": {
-      "_note": "The one card. Four rows, a fixed height, no prose. It replaces a bevelled nine-slice plate carrying a title, a paragraph, five stat rows and a cost row — plus a four-step ladder (body size, row height, title size, then drop the prose) that existed only to make the paragraph fit and made the card's height depend on how long a sentence was.",
+      "_note": "The one card. Four rows, a fixed height, no prose. It replaces a bevelled nine-slice plate carrying a title, a paragraph, five stat rows and a cost row \u2014 plus a four-step ladder (body size, row height, title size, then drop the prose) that existed only to make the paragraph fit and made the card's height depend on how long a sentence was.",
       "pad": 12,
       "gap": 9,
       "headerHeight": 30,
@@ -487,7 +487,7 @@
     }
   },
   "settings": {
-    "_note": "The settings dialog: three volume sliders and the three ways out of a run. It replaced a mute toggle with a stepped volume readout in one corner and a pause button in the other — four controls' worth of chrome on a phone screen, for settings that are opened once and left alone. Everything here is in CSS pixels and clamped to the viewport.",
+    "_note": "The settings dialog: three volume sliders and the three ways out of a run. It replaced a mute toggle with a stepped volume readout in one corner and a pause button in the other \u2014 four controls' worth of chrome on a phone screen, for settings that are opened once and left alone. Everything here is in CSS pixels and clamped to the viewport.",
     "width": 420,
     "minWidth": 300,
     "rowHeight": 46,
@@ -521,7 +521,7 @@
     "_note": "The card that announces a boss. Sized from its own text: it was drawn at exactly the viewport width and 156px tall, which is 40% of a 390px phone, for a two-word name and one line of flavour.",
     "nameSize": 44,
     "taglineSize": 21,
-    "_sizes": "44 over 21 is 2.1:1. It was 56 over 17, which is 3.3:1 — at that ratio the tagline reads as a caption rather than as part of the card.",
+    "_sizes": "44 over 21 is 2.1:1. It was 56 over 17, which is 3.3:1 \u2014 at that ratio the tagline reads as a caption rather than as part of the card.",
     "padX": 34,
     "padY": 20,
     "gap": 10,
@@ -548,7 +548,7 @@
     "_gapMs": "Between one banner leaving and the next arriving, so two in a row read as two messages rather than as one flicker."
   },
   "drawer": {
-    "_note": "The opt-in control drawer, behind the save flag `controlDrawer`. A tab docked to the right edge that expands a panel of tiles. First slice: the six active units only — no passives, no consumables, no upgrade screen.",
+    "_note": "The opt-in control drawer, behind the save flag `controlDrawer`. A tab docked to the right edge that expands a panel of tiles. First slice: the six active units only \u2014 no passives, no consumables, no upgrade screen.",
     "tabWidth": 34,
     "tabHeight": 88,
     "widths": [
@@ -561,7 +561,7 @@
         "width": 118
       }
     ],
-    "_widths": "Panel width by viewport width, widest first; the last entry must be minViewW 0 so there is always an answer. 152 at 844x390 and 118 at 568x320 as specified — a rule with a shape, not two constants, so a third breakpoint needs no code.",
+    "_widths": "Panel width by viewport width, widest first; the last entry must be minViewW 0 so there is always an answer. 152 at 844x390 and 118 at 568x320 as specified \u2014 a rule with a shape, not two constants, so a third breakpoint needs no code.",
     "pad": 8,
     "columns": 2,
     "tileHeight": 62,
@@ -572,7 +572,7 @@
     "priceSize": 13,
     "lockSize": 20,
     "lockFill": 14272936,
-    "_lockFill": "A light bone padlock over the dimmed art. It used to be drawn in COLOR.panelEdge — 0x3d4a59, the old bevelled-plate blue — on a 0x4a3a2a tile, which rendered every frame and was invisible in every screenshot.",
+    "_lockFill": "A light bone padlock over the dimmed art. It used to be drawn in COLOR.panelEdge \u2014 0x3d4a59, the old bevelled-plate blue \u2014 on a 0x4a3a2a tile, which rendered every frame and was invisible in every screenshot.",
     "lockEdge": 1182985,
     "dimAlpha": 0.38,
     "_dimAlpha": "A tile the player cannot afford. Dimmed, not hidden: what you are saving for is information.",
@@ -581,7 +581,7 @@
     "tileFillSelected": 7297594,
     "outline": 1182985,
     "outlineWidth": 3,
-    "_outline": "Thick and dark, matching the painted board. Flat colour, chunky rounded forms — no bevel, no metal, no neon edge, no gradient, no translucent hairline. The reference is the in-game side drawer, not a web panel.",
+    "_outline": "Thick and dark, matching the painted board. Flat colour, chunky rounded forms \u2014 no bevel, no metal, no neon edge, no gradient, no translucent hairline. The reference is the in-game side drawer, not a web panel.",
     "tabFill": 12745274,
     "_tabFill": "DEAD as of the docking change: the handle takes the panel's own `slab` now. Kept only so the old value is on the record, and a candidate for deletion.",
     "chevron": 14272424,
@@ -595,10 +595,20 @@
     "nodePulseScale": 0.22,
     "nodeRingFill": 14263361,
     "nodeRingEdge": 12879418,
-    "nodeRingFillAlpha": [0.06, 0.14],
-    "nodeRingEdgeAlpha": [0.28, 0.55],
+    "nodeRingFillAlpha": [
+      0.06,
+      0.14
+    ],
+    "nodeRingEdgeAlpha": [
+      0.28,
+      0.55
+    ],
     "nodeRingEdgeWidth": 2,
     "_nodeRing": "A highlight PAINTED ON THE GROUND, not a decal laid over it. It was 0xffd23f at up to 0.20 fill and a full-strength 3px rim, drawn above the pad marker: a flat yellow ellipse floating over the map in a colour the painted grass does not contain. Warm ochre now, at a fraction of the contrast, squashed to the same ground plane the pads use and drawn UNDER the pad art rather than over it. The pulse carries the attention; the colour does not have to shout as well. The edge peaks at 0.55 against the old 1.0 and the fill at 0.14 against the old 0.20; if they still read as decals the lever is these four numbers, not the shape.",
     "_nodePulse": "How a build node says it will take the selected tower. A scale beat rather than a colour flash: the pads are already tinted three ways and a fourth tint would be a colour nobody can name."
+  },
+  "safeArea": {
+    "housingAtAngle90": "left",
+    "_housingAtAngle90": "Which horizontal edge the sensor housing lands on at screen.orientation.angle 90, which is landscape-primary. That is iOS landscapeLeft \u2014 home indicator on the right, device top edge on the left \u2014 so the housing is on the left, and 270 is the mirror of it. THIS IS THE ONE VALUE HERE NOT VERIFIED ON HARDWARE: it comes from the orientation conventions, not from a notched phone. Both branches are tested and both viewports are asserted; if the inset ever shows up on the wrong edge, flip this string and change nothing else."
   }
 }

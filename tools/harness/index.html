@@ -8,6 +8,7 @@
  #game{width:100vw;height:100vh;}
  #game canvas{display:block;}
 </style></head><body>
+<div id="safe-area" style="position:fixed;top:0;left:0;width:0;height:0;visibility:hidden;pointer-events:none;padding-top:env(safe-area-inset-top,0px);padding-right:env(safe-area-inset-right,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px)"></div>
 <div id="game"></div>
 <script src="phaser.min.js"></script>
 <script type="module">
@@ -34,6 +35,30 @@ const arg = q.get('arg')
 // The window is sized by --window-size, and the canvas follows it through
 // Phaser's RESIZE mode exactly as it does on a real phone. Reading it back
 // here so the log says what was actually tested.
+// ?insets=top,right,bottom,left in CSS px, e.g. insets=0,0,0,64 for a notch
+// on the LEFT in landscape. Inline padding overrides the env() values above.
+// ?angle=90|270 fakes a landscape orientation. Headless Chromium reports 0
+// whatever the window shape is, and 0 is not a landscape turn, so without this
+// the resolver has no side to pick and correctly keeps both insets — which
+// looks like the fix not working.
+const angleArg = q.get('angle')
+if (angleArg !== null) {
+  try {
+    Object.defineProperty(screen, 'orientation', {
+      configurable: true,
+      value: { angle: Number(angleArg), type: 'landscape-primary' },
+    })
+  } catch (e) { console.log('NOTE could not fake orientation: ' + e.message) }
+}
+const insetArg = q.get('insets')
+if (insetArg) {
+  const [t, r, b, l] = insetArg.split(',').map(Number)
+  const probe = document.getElementById('safe-area')
+  probe.style.paddingTop = t + 'px'
+  probe.style.paddingRight = r + 'px'
+  probe.style.paddingBottom = b + 'px'
+  probe.style.paddingLeft = l + 'px'
+}
 const vpArg = q.get('vp')
 if (vpArg) {
   const [vw, vh] = vpArg.split('x').map(Number)
@@ -5210,6 +5235,116 @@ async function run() {
       ? 'the near pier is untouched and the far pier is walked over, at '
         + VP.w + 'x' + VP.h + ' dpr ' + dpr
       : '*** ' + problems.length + ' problem(s) ***'))
+    return
+  }
+
+  if (scenario === 'notch') {
+    // THE SAFE-AREA INSET, PER EDGE, against the actual viewport.
+    //
+    // WHY THIS EXISTS. The drawer's flush-to-the-edge assertion passed while
+    // the handle was visibly floating 64px in, and the reason is that it
+    // handed drawerLayout a dockRight of its own choosing — the viewport width
+    // — and asserted the panel reached it. The layout function was never
+    // wrong. What the scene passes it is `viewW - safeAreaInsets().right`, and
+    // nothing tested THAT, because this harness page carried no #safe-area
+    // probe at all, so safeAreaInsets() returned zeros in every run ever made
+    // here. A notch cannot be found by a rig that has no notch.
+    //
+    // So: inject a one-sided notch and measure every edge-anchored thing
+    // against the SCREEN, not against the inset box.
+    const SA = await import('./js/systems/SafeArea.js')
+    const SAVE = await import('./js/systems/Save.js')
+    const raw = SA.rawSafeAreaInsets()
+    const ins = SA.safeAreaInsets()
+    const dpr = window.devicePixelRatio || 1
+    const problems = []
+    const push = (m) => { problems.push(m); note('   *** ' + m) }
+
+    note('viewport ' + VP.w + 'x' + VP.h + '  dpr ' + dpr)
+    note('screen.orientation.angle = ' + (screen.orientation ? screen.orientation.angle : 'unavailable'))
+    note('probe RAW:      top ' + raw.top + ' right ' + raw.right +
+      ' bottom ' + raw.bottom + ' left ' + raw.left)
+    note('RESOLVED:       top ' + ins.top + ' right ' + ins.right +
+      ' bottom ' + ins.bottom + ' left ' + ins.left)
+    const asked = (q.get('insets') || '0,0,0,0').split(',').map(Number)
+    note('injected:              top ' + asked[0] + ' right ' + asked[1] +
+      ' bottom ' + asked[2] + ' left ' + asked[3])
+    for (const [i, name] of [[0, 'top'], [1, 'right'], [2, 'bottom'], [3, 'left']]) {
+      if (raw[name] !== asked[i]) push('the probe read ' + name + ' as ' + raw[name] +
+        ' but ' + asked[i] + ' was injected')
+    }
+    // Which edge SHOULD carry the housing, given what was injected.
+    const expectSide = q.get('housing') || null
+    if (expectSide) {
+      const want = expectSide === 'left' ? { l: asked[3], r: 0 } : { l: 0, r: asked[1] }
+      if (ins.left !== want.l || ins.right !== want.r) {
+        push('resolved to left ' + ins.left + '/right ' + ins.right +
+          ' but the housing is on the ' + expectSide + ', so it should be left ' +
+          want.l + '/right ' + want.r)
+      } else {
+        note('resolved onto the ' + expectSide + ' edge only  OK')
+      }
+    }
+
+    SAVE.setControlDrawer(true)
+    g.applyControlScheme()
+    await sleep(250)
+    g.status.peanuts = 400
+    g.drawer.refresh()
+    await sleep(200)
+
+    const report = (label, r) => {
+      if (!r) { note(label + ': MISSING'); return }
+      const gapR = VP.w - (r.x + r.width)
+      const gapL = r.x
+      note(label.padEnd(14) + ' x ' + r.x.toFixed(1) + '..' + (r.x + r.width).toFixed(1) +
+        '   gap left ' + gapL.toFixed(1) + '  gap right ' + gapR.toFixed(1))
+      return { gapL, gapR }
+    }
+
+    // Closed: the handle. Open: the panel. Both claim the right edge.
+    for (const open of [false, true]) {
+      if (open) { g.drawer.setOpen(true); await sleep(300) }
+      const L = g.drawer.layout
+      const r = open ? L.panel : L.tab
+      const m = report(open ? 'panel (open)' : 'tab (closed)', r)
+      // THE ASSERTION THAT MATTERS: against VP.w, the SCREEN, not the inset
+      // box. The old one handed drawerLayout a dockRight of the viewport width
+      // and asserted the panel reached it, which proved the layout function
+      // and nothing about what the scene passes it.
+      const allowed = ins.right
+      if (m && Math.abs(m.gapR - allowed) > 0.001) {
+        push((open ? 'the open drawer' : 'the handle') + ' stops ' + m.gapR.toFixed(1) +
+          'px short of the screen edge, and the right inset is ' + allowed)
+      }
+    }
+    g.drawer.setOpen(false)
+    await sleep(200)
+
+    const hud = g.layout
+    for (const [name, r] of Object.entries({
+      counters: hud.counters, startButton: hud.startButton, settings: hud.settings,
+      abilities: hud.abilities, messageRow: hud.messageRow,
+    })) report('hud.' + name, r)
+
+    // The right-hand chrome must respect the RIGHT inset, which on a
+    // left-notched phone is zero. Settings is the rightmost HUD chip.
+    const set = hud.settings
+    if (set) {
+      const gapR = VP.w - (set.x + set.width)
+      note('right-hand HUD gap ' + gapR.toFixed(1) + ' vs right inset ' + ins.right +
+        (Math.abs(gapR - ins.right) < 12 ? '  tracks the RIGHT inset  OK'
+          : (Math.abs(gapR - ins.left) < 12 ? '  tracks the LEFT inset  *** WRONG EDGE ***'
+            : '  tracks neither inset')))
+      if (ins.right !== ins.left && Math.abs(gapR - ins.left) < 12 &&
+          Math.abs(gapR - ins.right) >= 12) {
+        push('right-hand chrome is inset by the LEFT notch')
+      }
+    }
+    await shot('notch-' + (q.get('insets') || 'none').replace(/,/g, '_') +
+      '-a' + (angleArg === null ? 'none' : angleArg))
+    note(problems.length ? 'PROBLEMS: ' + problems.length : 'no problems found')
+    for (const m of problems) note('  - ' + m)
     return
   }
 
