@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import type { SignBoard, SignBribeDef } from '../types.ts'
 import { EFFECT_MS, playEffect } from '../systems/Effects.ts'
 import { ART } from '../systems/Art.ts'
-import { placeSign } from '../systems/SignPlacement.ts'
+import { fitAspect, placeSign } from '../systems/SignPlacement.ts'
 import { COLOR, FONT_UI } from './Theme.ts'
 
 /**
@@ -44,7 +44,11 @@ export class SignBribe {
     this.scene = scene
     this.def = def
 
-    const at = placeSign(board, worldWidth, worldHeight)
+    // FITTED INSIDE THE WOOD, not stretched to it. The panel is 1.23 and the
+    // lettering is 1.40; stretching would squash the words by 14%.
+    const probe = scene.textures.get(ART.prop.signDefault).getSourceImage()
+    const at = fitAspect(placeSign(board, worldWidth, worldHeight),
+      probe.width / probe.height)
     this.foot = at.footY
     this.sprite = scene.add.image(at.x, at.y, ART.prop.signDefault)
       .setDisplaySize(at.width, at.height)

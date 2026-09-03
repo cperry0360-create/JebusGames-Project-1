@@ -45,7 +45,7 @@ import { platePanel, plateButton, type PlateButton } from '../ui/Plate.ts'
 import { dockedSlab } from '../ui/EdgeDock.ts'
 import { SignBribe } from '../ui/SignBribe.ts'
 import { Bailey } from '../entities/Bailey.ts'
-import { placeSign } from '../systems/SignPlacement.ts'
+import { fitAspect, placeSign } from '../systems/SignPlacement.ts'
 import { CameraRig } from '../systems/CameraRig.ts'
 import { Dialog, type DialogOptions } from '../ui/Dialog.ts'
 import { TowerRing, type RingOption } from '../ui/TowerRing.ts'
@@ -163,7 +163,8 @@ export class GameScene extends Phaser.Scene {
 
   private lane!: Path
   private build!: BuildSystem
-  private sign!: SignBribe
+  /** Public so the probe can drive the bribe through the real swap. */
+  sign!: SignBribe
   /** The dog behind the trees. Does nothing, and is allowed to be absent:
    *  her art is an optional hook, and without it she never appears. */
   bailey!: Bailey
@@ -693,7 +694,9 @@ this.armReadyCountdown()
       b.worldHeight, GROUND_DEPTH + 1)
     this.events.once('shutdown', () => this.bailey.destroy())
 
-    const tavern = placeSign(MAP.signs.tavern, w, h)
+    const tavernArt = this.textures.get(ART.prop.signTavern).getSourceImage()
+    const tavern = fitAspect(placeSign(MAP.signs.tavern, w, h),
+      tavernArt.width / tavernArt.height)
     this.add.image(tavern.x, tavern.y, ART.prop.signTavern)
       .setDisplaySize(tavern.width, tavern.height)
       .setRotation(tavern.rotationRad)

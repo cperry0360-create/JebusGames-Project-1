@@ -21,14 +21,37 @@
 
 /** One board's rectangle, in fractions of the plate. */
 export interface SignBoard {
-  /** Rectangle centre, as a fraction of plate width and height. */
+  /** Centre of the PLAIN WOOD inside the frame rails, as a fraction of plate
+   *  width and height. Not the outer board: drawing at 94% of an outer board
+   *  puts the words on the rails. */
   centre: number[]
-  /** Rectangle size, as a fraction of plate width and height. */
+  /** Size of that wood panel, as a fraction of plate width and height. */
   size: number[]
   /** Clockwise-positive, in degrees. Not shared between boards. */
   rotationDeg: number
-  /** How far inside the painted frame the lettering sits. */
+  /** How far inside the wood the lettering sits. */
   inset: number
+  /** The whole painted board, rails included. Nothing draws it; it is what a
+   *  check compares the rendered lettering against. */
+  outer?: { centre: number[]; size: number[] }
+}
+
+/** The painted board itself, for a check that wants to ask how much of it the
+ *  lettering covers. Falls back to the wood panel when none is recorded. */
+export function boardRect(
+  board: SignBoard,
+  worldWidth: number,
+  worldHeight: number,
+): { x: number; y: number; width: number; height: number } {
+  const o = board.outer
+  const c = o?.centre ?? board.centre
+  const s = o?.size ?? board.size
+  return {
+    x: (c[0] ?? 0) * worldWidth,
+    y: (c[1] ?? 0) * worldHeight,
+    width: (s[0] ?? 0) * worldWidth,
+    height: (s[1] ?? 0) * worldHeight,
+  }
 }
 
 export interface SignPlacement {
@@ -63,4 +86,33 @@ export function placeSign(
   const c = Math.abs(Math.cos(rotationRad))
   const s = Math.abs(Math.sin(rotationRad))
   return { x, y, width, height, rotationRad, footY: y + (width * s + height * c) / 2 }
+}
+
+/**
+ * Fits a rectangle of a given aspect INSIDE a placement, centred, without
+ * distorting it.
+ *
+ * THE ART IS NOT THE SHAPE OF THE PANEL, and it must not be made to be. The
+ * innkeeper's wood panel is 1.23 wide-to-tall and the lettering was authored
+ * at 1.40, so stretching the canvas to the panel would squash the words
+ * vertically by 14% — and the art is correct, it is only the placement that
+ * was wrong. Letterboxing inside the panel keeps the letters the shape they
+ * were drawn and simply leaves a little more bare wood above and below.
+ */
+export function fitAspect(
+  placement: SignPlacement,
+  aspect: number,
+): SignPlacement {
+  if (!(aspect > 0)) return placement
+  const wide = placement.width / placement.height < aspect
+  const width = wide ? placement.width : placement.height * aspect
+  const height = wide ? placement.width / aspect : placement.height
+  const c = Math.abs(Math.cos(placement.rotationRad))
+  const s = Math.abs(Math.sin(placement.rotationRad))
+  return {
+    ...placement,
+    width,
+    height,
+    footY: placement.y + (width * s + height * c) / 2,
+  }
 }

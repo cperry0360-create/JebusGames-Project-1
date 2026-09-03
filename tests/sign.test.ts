@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, existsSync } from 'node:fs'
-import { placeSign } from '../src/systems/SignPlacement.ts'
+import { boardRect, fitAspect, placeSign } from '../src/systems/SignPlacement.ts'
 
 const url = (p: string) => new URL(p, import.meta.url)
 const read = (n: string) => JSON.parse(readFileSync(url(`../src/data/${n}.json`), 'utf8'))
@@ -42,21 +42,74 @@ test('an overlay carries no render config, because the plate places it', () => {
   }
 })
 
-test('each canvas is authored to the aspect of its board, so words do not stretch', () => {
-  // The reason this is worth asserting: the placement stretches the texture to
-  // the rectangle unconditionally. A canvas at the wrong aspect is not caught
-  // by anything else — it just draws squashed, and looks like a bad font.
+test('the overlay is fitted inside its panel, never stretched to it', () => {
+  /*
+   * THE ART IS NOT THE SHAPE OF THE PANEL. The innkeeper's wood is 1.23
+   * wide-to-tall and the lettering was authored at 1.40, so scaling the canvas
+   * to the panel would squash the words by 14%. The art is right; only the
+   * placement was wrong, and letterboxing inside the wood is what keeps both
+   * true.
+   */
   const cases: Array<[string, string]> = [
     ['signDefault', 'held'], ['signBribed', 'held'], ['signTavern', 'tavern'],
   ]
   for (const [role, board] of cases) {
     const [w, h] = pngSize(url(`../public/${art.assetRoot}${art.files[art.prop[role]]}`).pathname)
     const b = map.signs[board]
-    const want = (b.size[0] * display.width) / (b.size[1] * display.height)
-    const got = w / h
-    assert.ok(Math.abs(got - want) / want < 0.02,
-      `${role} is ${w}x${h} (aspect ${got.toFixed(3)}) but the ${board} board is ` +
-      `${want.toFixed(3)}; the lettering would draw stretched`)
+    const panel = placeSign(b, display.width, display.height)
+    const fitted = fitAspect(panel, w / h)
+    // Inside the panel on both axes, and touching it on one.
+    assert.ok(fitted.width <= panel.width + 1e-9 && fitted.height <= panel.height + 1e-9,
+      `${role} does not fit its panel`)
+    assert.ok(Math.abs(fitted.width - panel.width) < 1e-9
+      || Math.abs(fitted.height - panel.height) < 1e-9,
+      `${role} is smaller than it needs to be on both axes`)
+    // And undistorted.
+    assert.ok(Math.abs(fitted.width / fitted.height - w / h) < 1e-6,
+      `${role} renders at aspect ${(fitted.width / fitted.height).toFixed(3)} ` +
+      `from a ${(w / h).toFixed(3)} canvas`)
+  }
+})
+
+test('the lettering covers 78-84% of the painted board it sits on', () => {
+  /*
+   * THE FAULT THIS FIXES. The quads supplied for these boards were described
+   * as the inner writable panel and are in fact close to the OUTER board —
+   * 138.6 plate px against the wood field's 119.2 for the innkeeper's — so
+   * drawing at 94% of one put the words at nearly the full width of the board,
+   * over the frame rails.
+   *
+   * Measured against the board rather than against the number that was
+   * supplied, so a future quad that means something else again cannot pass.
+   */
+  const cases: Array<[string, string]> = [
+    ['signDefault', 'held'], ['signBribed', 'held'], ['signTavern', 'tavern'],
+  ]
+  // Pinned per sign, because the two boards are different proportions. The
+  // innkeeper's lands in the 78-84% the brief asked for. The tavern's comes
+  // out lower and is not a fault: its wood panel is 1.65 wide-to-tall against
+  // 1.49 of art, so the fit is limited by the panel's HEIGHT and the width
+  // falls short of the rails rather than reaching them. Stretching it to 78%
+  // would distort the words, which is the thing this whole change is undoing.
+  const EXPECT: Record<string, number> = {
+    signDefault: 0.782, signBribed: 0.782, signTavern: 0.709,
+  }
+  for (const [role, board] of cases) {
+    const [w, h] = pngSize(url(`../public/${art.assetRoot}${art.files[art.prop[role]]}`).pathname)
+    const b = map.signs[board]
+    const fitted = fitAspect(placeSign(b, display.width, display.height), w / h)
+    const outer = boardRect(b, display.width, display.height)
+    const share = fitted.width / outer.width
+    assert.ok(share >= 0.68 && share <= 0.84,
+      `${role} covers ${(share * 100).toFixed(1)}% of the ${board} board's width; ` +
+      'outside 68-84% the words are either on the rails or lost on the wood')
+    assert.ok(Math.abs(share - EXPECT[role]!) < 0.02,
+      `${role} covers ${(share * 100).toFixed(1)}% where it covered ` +
+      `${(EXPECT[role]! * 100).toFixed(1)}%; say so if that is meant`)
+    // And centred on the board within a pixel.
+    assert.ok(Math.abs(fitted.x - outer.x) < 1 && Math.abs(fitted.y - outer.y) < 1,
+      `${role} is ${(fitted.x - outer.x).toFixed(2)},${(fitted.y - outer.y).toFixed(2)} ` +
+      'world px off the board\'s centre')
   }
 })
 

@@ -58,38 +58,48 @@ test('the foot is the lowest point of the ROTATED rectangle, not the upright one
 test('both boards on the real map land where the plate says', () => {
   // The numbers the art was measured against, pinned so a re-trace that moves
   // a sign has to say so out loud.
+  // Moved when the rectangles were re-measured off the plate: the quads that
+  // were supplied describe the outer board rather than the wood inside it.
   const held = placeSign(map.signs.held, display.width, display.height)
-  assert.ok(Math.abs(held.x - 893.4) < 0.5, `held centre x is ${held.x.toFixed(1)}`)
-  assert.ok(Math.abs(held.y - 206.0) < 0.5, `held centre y is ${held.y.toFixed(1)}`)
+  assert.ok(Math.abs(held.x - 893.6) < 0.5, `held centre x is ${held.x.toFixed(1)}`)
+  assert.ok(Math.abs(held.y - 202.4) < 0.5, `held centre y is ${held.y.toFixed(1)}`)
 
   const tavern = placeSign(map.signs.tavern, display.width, display.height)
-  assert.ok(Math.abs(tavern.x - 954.2) < 0.5, `tavern centre x is ${tavern.x.toFixed(1)}`)
-  assert.ok(Math.abs(tavern.y - 136.4) < 0.5, `tavern centre y is ${tavern.y.toFixed(1)}`)
+  assert.ok(Math.abs(tavern.x - 953.3) < 0.5, `tavern centre x is ${tavern.x.toFixed(1)}`)
+  assert.ok(Math.abs(tavern.y - 138.9) < 0.5, `tavern centre y is ${tavern.y.toFixed(1)}`)
 
   // The tavern's board hangs from a beam well above the innkeeper, so it must
   // sort behind him rather than in front.
   assert.ok(tavern.footY < held.footY, 'the tavern board should sort behind the held one')
 })
 
-test('the recorded quad and the recorded rectangle describe the same board', () => {
-  // The quad is the measurement; centre/size/rotation is what the engine uses.
-  // Nothing keeps them in step but this, and the quad is the only record of
-  // where the rectangle came from.
+test('the recorded quad is kept as the reading it came from, not as the rect', () => {
+  /*
+   * THESE NO LONGER MATCH, DELIBERATELY.
+   *
+   * `quad` is the corner reading that was supplied for each board, described
+   * as the inner writable panel. Measured off the plate it is close to the
+   * OUTER board instead — 138.6 plate px against the wood field's 119.2 for
+   * the innkeeper's — which is why drawing at 94% of it put the lettering at
+   * nearly the full width of the board and over the rails.
+   *
+   * It is kept because it is the record of where the numbers came from. What
+   * still has to agree is the ANGLE: the quad's top edge and the rotation the
+   * engine applies are the same measurement, and if those ever part company
+   * one of them was re-read and the other was not.
+   */
+  const W = display.width, H = display.height
   for (const name of ['tavern', 'held'] as const) {
     const b = map.signs[name]
     const q = b.quad as number[][]
-    const cx = q.reduce((a, p) => a + p[0]!, 0) / 4
-    const cy = q.reduce((a, p) => a + p[1]!, 0) / 4
-    assert.ok(Math.abs(cx - b.centre[0]) < 1e-4, `${name} centre x drifted from its quad`)
-    assert.ok(Math.abs(cy - b.centre[1]) < 1e-4, `${name} centre y drifted from its quad`)
-
-    // The top edge's angle, in plate pixels — the fractions are of different
-    // dimensions, so an angle taken in fraction space would be wrong.
-    const W = display.width, H = display.height
     const dx = (q[1]![0]! - q[0]![0]!) * W
     const dy = (q[1]![1]! - q[0]![1]!) * H
     const deg = (Math.atan2(dy, dx) * 180) / Math.PI
     assert.ok(Math.abs(deg - b.rotationDeg) < 0.5,
       `${name} records ${b.rotationDeg} degrees but its quad's top edge is ${deg.toFixed(2)}`)
+    // And the quad really is the bigger rectangle, which is the finding.
+    const qw = Math.hypot(dx, dy)
+    assert.ok(qw > b.size[0] * W,
+      `${name}'s quad is no wider than its wood panel; re-check which is which`)
   }
 })

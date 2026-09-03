@@ -213,15 +213,15 @@
     ]
   ],
   "signs": {
-    "_note": "EVERY BOARD IN THIS PLATE IS PAINTED BLANK AND STAYS BLANK. The lettering is a separate overlay drawn on top, so what is recorded here is the rectangle to draw it in: `centre` and `size` as fractions of the plate, plus the angle to rotate it by. Fractions rather than pixels because a re-export at another resolution must not move a sign, and rotation in the engine rather than baked into the texture because a pre-rotated texture is resampled twice. `inset` shrinks the overlay inside the painted frame so the lettering sits on the board rather than touching its edge. The two boards tilt OPPOSITE WAYS and share no constant.",
+    "_note": "EVERY BOARD IN THIS PLATE IS PAINTED BLANK AND STAYS BLANK. The lettering is a separate overlay drawn on top, so what is recorded here is the rectangle to draw it in: `centre` and `size` are the PLAIN WOOD INSIDE THE FRAME RAILS \u2014 the writable panel \u2014 as fractions of the plate, plus the angle to rotate by. `inset` shrinks the overlay inside that so the words do not touch the rails. `outer` is the whole painted board, rails included; nothing draws it, it is there so a check can ask how much of the board the lettering covers. Fractions rather than pixels because a re-export at another resolution must not move a sign, and rotation in the engine rather than baked into the texture because a pre-rotated texture is resampled twice. MEASURED, NOT SUPPLIED. The quads these replace were described as the inner panel and are the OUTER board: 138.6 plate px against the wood field\u2019s 119.2 for the innkeeper\u2019s. Drawing at 94% of an outer board puts the words on the rails, which is what \"the lettering is at 100% of the board\" was. The two boards tilt OPPOSITE WAYS and share no constant.",
     "tavern": {
       "centre": [
-        0.7455,
-        0.1894
+        0.74479,
+        0.19287
       ],
       "size": [
-        0.0535,
-        0.0638
+        0.04992,
+        0.05375
       ],
       "rotationDeg": 10.3,
       "inset": 0.94,
@@ -243,16 +243,26 @@
           0.2136
         ]
       ],
-      "_note": "The board hanging from the tavern beam. It never changes: no swap, no state. THE QUAD THIS REPLACES WAS WRONG \u2014 it recorded a 5.02 degree tilt, and drawn back onto the plate its top edge climbed off the board and into the roof. Three automatic fits had already failed here (a min-area rectangle swallowed the shape at 18 degrees, a four-vertex hull landed on the chamfer midpoints, and a parallelogram was dragged to 17 degrees by the mounting rings), and the hand reading that replaced them took its top edge off the mounting hardware rather than the board. A fourth automatic fit, over the wood field alone, came back at 18 degrees again \u2014 this board defeats edge fitting, so the quad is a measurement off the art, verified by compositing the overlay onto the plate and looking at it."
+      "_note": "The board hanging from the tavern beam. It never changes: no swap, no state. The rectangle is the plain wood inside the rails, measured by projecting the wood mask onto the board\u2019s own rotated axes \u2014 not by edge fitting, which this board has now defeated four separate times (a min-area rectangle at 18 degrees, a hull landing on the chamfer midpoints, a parallelogram dragged to 17 by the mounting rings, and a per-column extreme fit that came back at 18 again). `quad` is the corner reading it came from and is kept as the record. The rails are about 19 plate px, measured on the two sides nothing touches: the beam crosses the top and the tavern wall meets the right.",
+      "outer": {
+        "centre": [
+          0.74479,
+          0.19287
+        ],
+        "size": [
+          0.05982,
+          0.07134
+        ]
+      }
     },
     "held": {
       "centre": [
-        0.69795,
-        0.286125
+        0.69812,
+        0.28116
       ],
       "size": [
-        0.0361,
-        0.0457
+        0.03104,
+        0.04481
       ],
       "rotationDeg": -6.65,
       "inset": 0.94,
@@ -274,7 +284,17 @@
           0.3124
         ]
       ],
-      "_note": "The board the innkeeper holds, and the only one with a state: the bribe swaps the texture and changes nothing else, so both overlays share this one rectangle and this one angle. The quad it replaces agreed to within 16 px of plate width on the corners; it read 8.0 degrees where an independent fit of the wood field reads 6.15 and this reads 6.65, and it sat 11 px high."
+      "_note": "The board the innkeeper holds, and the only one with a state: the bribe swaps the texture and changes nothing else, so both overlays share this one rectangle and this one angle. The rectangle is the plain wood inside the rails. The rails are about 12 plate px, measured on the three sides nothing touches \u2014 his hand and the post meet the bottom, so that side is mirrored rather than scanned.",
+      "outer": {
+        "centre": [
+          0.69812,
+          0.28116
+        ],
+        "size": [
+          0.03729,
+          0.05592
+        ]
+      }
     }
   },
   "innkeeper": {

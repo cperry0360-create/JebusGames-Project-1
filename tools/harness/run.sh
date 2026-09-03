@@ -10,6 +10,8 @@ QS=""; [ -n "$VP" ] && QS="&vp=$VP"
 # ANGLE=90|270 fakes a landscape turn; HOUSING=left|right asserts the edge.
 [ -n "$ANGLE" ] && QS="$QS&angle=$ANGLE"
 [ -n "$HOUSING" ] && QS="$QS&housing=$HOUSING"
+# BAILEY=0..3 forces the dog up at that spot instead of waiting 60-150s.
+[ -n "$BAILEY" ] && QS="$QS&bailey=$BAILEY"
 rm -f "$H/shots/report.json"
 # THE PROFILE GOES EVERY TIME.
 #
