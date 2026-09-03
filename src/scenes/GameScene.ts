@@ -520,12 +520,13 @@ this.armReadyCountdown()
     })
     this.cancelBtn = plateButton(this, cb.x + cb.width / 2, cb.y + cb.height / 2,
       cb.width, cb.height, 'CANCEL', () => this.clearSelection(), 14, 'secondary')
-    // The plate art goes; the label and the hit rectangle stay.
+    // The painted plate art goes for good — the slab is the button's surface
+    // now — and the label rides on top of it.
     for (const part of this.cancelBtn.parts) {
-      const img = part as Phaser.GameObjects.Image
-      if (img.setTexture) img.setVisible(false)
-      img.setDepth?.(OVERLAY_DEPTH + 6)
+      (part as Phaser.GameObjects.Image).setVisible?.(false)
+      ;(part as Phaser.GameObjects.Image).setDepth?.(OVERLAY_DEPTH + 6)
     }
+    this.cancelBtn.text.setDepth(OVERLAY_DEPTH + 6)
     this.asScreenSpace([this.cancelSlab, ...this.cancelBtn.parts])
     this.refreshCancel()
 
@@ -1983,11 +1984,13 @@ this.armReadyCountdown()
   private setCancelVisible(on: boolean): void {
     this.cancelVisible = on
     this.cancelSlab.setVisible(on)
-    for (const part of this.cancelBtn.parts) {
-      const img = part as Phaser.GameObjects.Image
-      // The plate images stay hidden either way: the slab is the button now.
-      img.setVisible?.(on && !img.setTexture)
-    }
+    // THE LABEL, NAMED. `PlateButton` exposes its text, so ask for it rather
+    // than sifting `parts` — the first version told the label from the plate
+    // images by testing whether each had a `setTexture` method, which is
+    // always true on an Image and typechecks only because there is no `phaser`
+    // to resolve locally. CI's real typings called it out as TS2774, which is
+    // exactly the hole `tools/tsdiff.sh` says it cannot cover.
+    this.cancelBtn.text.setVisible(on)
     this.cancelBtn.hit.input!.enabled = on
   }
 
