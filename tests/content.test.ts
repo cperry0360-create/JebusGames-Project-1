@@ -984,6 +984,15 @@ test('the deploy stays small enough to open on a phone', () => {
   // have said a word about it. A budget is the only thing that turns "somebody
   // will notice" into "CI notices".
   //
+  // IT CAUGHT THE SECOND ONE. `map_level1_v2.png` landed at 10.9MB on
+  // 2026-09-03 and turned main red on the commit that added it. It was
+  // re-encoded to webp q95 at 1.86MB — the same treatment, and the same trade,
+  // the first plate got. This test is the only reason either was noticed.
+  //
+  // Note the cap is on the DEPLOY, not on the boot path alone: everything
+  // under public/ is shipped whether or not the manifest points at it, so an
+  // unreferenced upload costs a phone exactly as much as a referenced one.
+  //
   // Two caps, because the two kinds of asset cost different things. An IMAGE
   // is on the boot path: the loading bar does not finish until it lands, so a
   // heavy one is time the player spends looking at a progress bar. MUSIC

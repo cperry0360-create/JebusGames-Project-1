@@ -201,15 +201,35 @@ as decals the lever is those four numbers in `presentation.json`, not the shape.
   at both viewports, `arch`, and `towerring`.
 - Regression probes green: `settings`, `ring`, `gateway`.
 
-## One thing that will invalidate the arch fix
+## The v2 plate that arrived mid-flight
 
-`public/assets/map/map_level1_v2.png` was pushed to main while this work was in
-flight (d7b42bb) and **nothing references it** — `art.json` still resolves
-`map.level1` to `maps/map_level1.webp`, so everything measured above is against
-the plate the game actually loads.
+A new map plate was pushed to main while this work was in flight (d7b42bb) as
+**`map/map_level1_v2.png`, 10.9MB**. It turned CI red on its own commit — the
+deploy-size guard, 553 of 554 — and it was red before any of this landed on top.
 
-The near pier's outline is a trace of *that* plate. Swapping to v2 moves the
-stone and invalidates every coordinate in `map.json`'s `entrance.arch`. To
+That guard exists because *this has happened before*: its own comment records a
+12.6MB PNG plate arriving and being re-encoded. So the new plate got the same
+treatment, with the repo's own browser-based encoder
+(`sh tools/reencode/run.sh public/assets/map/map_level1_v2.png`):
+
+| candidate | bytes | PSNR | worst pixel |
+|---|---|---|---|
+| **webp q95** | **1.86MB** | **44.1 dB** | 22/255 |
+| webp q90 | 1.30MB | 41.8 dB | 24 |
+| jpeg q95 | 2.40MB | 44.9 dB | 23 |
+
+q95 webp, at `maps/map_level1_v2.webp` — 1.86MB against the shipping plate's
+1.84MB, the same trade it was given. The PNG is gone from `public/`, where Vite
+would ship all 10.9MB of it whether or not anything referenced it.
+
+**It is still unreferenced.** `art.json` resolves `map.level1` to
+`maps/map_level1.webp`, so everything measured in this report is against the
+plate the game actually loads. Both plates are 3840x2160. Wiring the new one is
+a separate decision and a separate change.
+
+The near pier's outline is a trace of *that* plate. Swapping to v2 may move the
+stone, and if it does it invalidates every coordinate in `map.json`'s
+`entrance.arch`. To
 re-measure:
 
     sh run.sh archplate 40 844x390 left   # the plate at 14x, 5px grid, outline drawn
