@@ -96,9 +96,24 @@ difference. Two real errors reached CI before this existed.
 in chat scrollback cannot be shared, cannot be re-read next week, and is gone
 the moment the window closes.
 
+"Report" means ANY answer that says what was done, measured, found or decided —
+not only the ones that look like formal write-ups. A one-line "CI is green" and
+a closing "here is where this leaves things" are both reports. If it would be
+worth reading again, it goes in the file.
+
 - One file per report, in `reports/`, named `YYYY-MM-DD-topic.md`.
 - Chat gets the summary; the file gets the whole thing — the numbers, the
   method, how to reproduce it, and what was NOT checked.
+- **The file is written LAST and updated until the work is actually finished.**
+  Writing it before the final commit lands leaves the commit hashes, the CI
+  result and the open items in chat only — which is the exact failure this rule
+  exists to prevent, and it has happened. Wait for CI, then update the file,
+  then answer.
+- Every such file carries, at the top, a table of the commits it covers with
+  their CI status, and at the bottom a "where this leaves the repository"
+  section: what is in flight, what is blocked, and what is waiting on a
+  decision. Carry the still-open items forward into the next report rather than
+  letting them age out of the conversation.
 - Topic documents that are living records rather than dated reports keep their
   place at the repository root: `AUDIT.md`, `RENDER-QUALITY.md`, `NAMING.md`,
   `TOWER-MENU.md`, `SOAK-REPORT.md`, `ATTRIBUTIONS.md`. Update those in place

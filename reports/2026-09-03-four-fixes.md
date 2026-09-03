@@ -8,7 +8,11 @@ Every number below was measured by driving the game, not read off the source.
 | Safe-area inset resolved onto one edge | `b9c58a0` | green |
 | Run opens on the whole board | `4c76f48` | green |
 | Node ring visible and centred | `acb8f2e` | green |
-| Bailey behind the trees | this one | — |
+| Bailey behind the trees | `2fe7c86` | green |
+
+All four are on `main` and deployed. 606 tests pass; `tsdiff` introduces
+nothing beyond the documented `phaser`-cannot-resolve line for the one new
+Phaser file, which the harness run covers by execution instead.
 
 ---
 
@@ -260,3 +264,35 @@ no probe.
   about and stated, not one I measured against a person's hand.
 - **Whether the ring reads on a phone in daylight.** The 35–50 target came from
   the brief; what is measured here is the channel delta that target names.
+
+---
+
+## Where this leaves the repository
+
+Nothing is in flight. Two things are open and both are decisions rather than
+work:
+
+1. **`prop_bailey_peek.png` is not in the repository.** Not on `origin/main`,
+   not in `public/assets/props/`. The code is finished and the manifest hook is
+   optional, so she stays behind the trees until the file lands and nothing
+   needs changing when it does. The four `canopyY` values will want one pass
+   against the real sprite.
+2. **The sign text alignment.** It was the one item in the withdrawn message
+   that none of the four briefs covered, and it touches the lettering overlays
+   shipped in `20fcda7` earlier the same day. Not investigated, because the
+   message was withdrawn; nothing was started from it, so there was nothing to
+   revert.
+
+## Longer-standing, carried from earlier reports
+
+- The 18 trait phrases still await approval before they ship.
+- The towers are 0.91x the lane where the design intent is about 1.2x — an art
+  decision, flagged three times now.
+- Balance has not been re-tuned for the longer, wider v2 lane.
+- `public/assets/ui/icon_confirm.png` is unreferenced; `assets/nodes` is 4MB
+  unused.
+- `checks` is still not a required status on pull requests.
+- `public/assets/ui_icons/hud_peanut_icon.png` arrived as an upload and is
+  unwired; it is the purpose-drawn icon that would let `PeanutIcon.ts` — which
+  crops and flood-fills the counter plate — be deleted.
+- The held sign overlay is 2.07x the size CLAUDE.md rule 7 asks for.
