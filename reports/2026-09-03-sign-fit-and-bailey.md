@@ -5,7 +5,8 @@
 | | commit | CI |
 |---|---|---|
 | Sign overlays fitted to the measured wood panel | `e169dea` | green |
-| Bailey re-sited onto two real clumps | `PENDING` | pending |
+| Bailey re-sited onto two real clumps | `46d2b1f` | green |
+| This report's completion | — | documentation only; the loop closes here |
 
 ---
 
