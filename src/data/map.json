@@ -280,40 +280,49 @@
       "near": {
         "outline": [
           [
-            10,
-            322
+            2,
+            346
           ],
           [
-            48,
-            322
+            22,
+            328
           ],
           [
-            50,
-            360
+            44,
+            318
           ],
           [
-            48,
-            404
+            53,
+            319
           ],
           [
-            38,
-            413
+            53,
+            402
           ],
           [
-            20,
-            413
+            51,
+            406
           ],
           [
-            8,
-            404
+            40,
+            411
           ],
           [
-            5,
-            358
+            30,
+            411
+          ],
+          [
+            26,
+            405
+          ],
+          [
+            2,
+            355
           ]
         ],
         "depth": 448.1,
-        "_depth": "Above every enemy that can stand at the arch: the lane's lowest point between x 0 and 60 plus half the road's width, plus a margin. Taking the pier's painted base instead worked on the old plate only because that road was 38 px wide; at 80 the near half of the lane reaches below the stone."
+        "_depth": "Above every enemy that can stand at the arch: the lane's lowest point between x 0 and 60 plus half the road's width, plus a margin. Taking the pier's painted base instead worked on the old plate only because that road was 38 px wide; at 80 the near half of the lane reaches below the stone.",
+        "_outline": "FITTED to the painted stone, not read off a grid. The first outline for this plate was traced by eye from a 12x crop and enclosed 15.7% grass and banner pole down its left side \u2014 which the arch scenario's pixel diff could never have caught, because that diff only proves nothing draws OVER the pier and an outline half the size passes it by covering less. Re-fitted by thresholding desaturated stone in a box around the pier, taking the largest blob and thinning its convex hull to ten points. Verify with the draw-back check as well as the diff."
       },
       "_note": "Only the NEAR pier is lifted out of the plate, and it is cut to its painted outline rather than to a box, because it is drawn in front of units and a box around it contains road. The far pier and the span stand above the road's far edge, so the plate already draws them behind everything."
     }

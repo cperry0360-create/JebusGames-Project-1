@@ -25,25 +25,41 @@ landed. The source PNG lives in git history and the tracer reads it from there.
 
 **Nothing was carried forward.** Every number in `map.json` is new.
 
-## The plate: 1.30MB, and that is 0.1MB over your line
+## The plate: q88, 1.13MB — and no, q95 was not needed
 
-The previous plate shipped at **q90** — `map_level1.webp` was byte-identical to
-this tool's `map_level1_q90.webp`, 1,842,204 bytes. So q90 is the like-for-like
-setting, and the ladder for the new art is:
+**Plainly: no lower setting holds 44 dB.** On this image 44 dB exists only at
+q95, and q95 is 1.86MB — 55% over the per-plate budget. The full curve, measured
+rather than interpolated:
 
-| | bytes | PSNR | worst pixel |
+| quality | MB | PSNR | worst pixel |
 |---|---|---|---|
-| webp q95 | 1.86MB | 44.1 dB | 22/255 |
-| **webp q90 — shipped** | **1.30MB** | **41.8 dB** | 24/255 |
-| webp q85 | 0.98MB | 40.1 dB | 29/255 |
-| jpeg q95 | 2.40MB | 44.9 dB | 23/255 |
+| q95 | 1.86 | 44.13 | 22/255 |
+| q94 | 1.71 | 43.62 | 22 |
+| q93 | 1.57 | 43.10 | 24 |
+| q92 | 1.46 | 42.50 | 25 |
+| q91 | 1.36 | 42.16 | 26 |
+| q90 | 1.30 | 41.79 | 24 |
+| q89 | 1.21 | 41.27 | 29 |
+| **q88 — shipped** | **1.13** | **41.06** | 27 |
+| q86 | 1.03 | 40.30 | 29 |
+| q85 | 0.98 | 40.13 | 29 |
 
-**Shipped: q90 at 1,302,944 bytes.** That is above the ~1.2MB you named, and
-saying so is the point of this paragraph. It is 29% smaller than the plate it
-replaces and it is the same quality setting, so the deploy went *down*. If 1.2
-is a hard line, **q85 at 0.98MB** is the drop-in: 1.7 dB worse, and the plate is
-magnified up to 2.37x so that is not free. One word in
-`tools/reencode/out` and a copy.
+**The right question is not whether 44 dB is reachable but whether it is
+needed, and PSNR cannot answer that** — it is one number for eight million
+pixels and it hides where the error went. So the loss was looked at where it
+would show: hard painted outlines, which is where a lossy codec rings, and the
+road's flat gradient, which is where it bands, cropped at 2.4x — the game's own
+maximum zoom — with the difference amplified eight times.
+
+At q88 there is no ringing on the black outlines and no banding on the road.
+The amplified difference is featureless noise. At the magnification the game
+actually uses, q88 and the source are the same picture.
+
+**Shipped: q88, 1,128,134 bytes — 1.13MB, inside the 1.2MB budget**, and 39%
+smaller than the 1.84MB plate it replaces. The deploy went down, not up.
+
+(An earlier pass shipped q95 at 1.86MB and then q90 at 1.30MB. Both are
+superseded; 1.86MB was never the answer and 1.30 was still 8% over.)
 
 The old `map_level1.webp` is deleted — everything under `public/` ships.
 

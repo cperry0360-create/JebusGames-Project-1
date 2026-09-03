@@ -48,10 +48,14 @@ async function compare(blob) {
 }
 
 const results = []
-for (const [type, quality] of [
-  ['image/webp', 0.95], ['image/webp', 0.9], ['image/webp', 0.85], ['image/webp', 0.8],
-  ['image/jpeg', 0.95], ['image/jpeg', 0.9], ['image/jpeg', 0.85],
-]) {
+// The ladder, overridable: `&q=88,90,92` when a budget has to be met
+// exactly and the four coarse steps straddle it.
+const QS = (q.get('q') || '').split(',').filter(Boolean).map(Number)
+const LADDER = QS.length
+  ? QS.map((v) => ['image/webp', v / 100])
+  : [['image/webp', 0.95], ['image/webp', 0.9], ['image/webp', 0.85], ['image/webp', 0.8],
+     ['image/jpeg', 0.95], ['image/jpeg', 0.9], ['image/jpeg', 0.85]]
+for (const [type, quality] of LADDER) {
   const blob = await cv.convertToBlob({ type, quality })
   const m = await compare(blob)
   const ext = type === 'image/webp' ? 'webp' : 'jpg'
