@@ -562,6 +562,142 @@ async function run() {
     return
   }
 
+  if (scenario === 'lettering') {
+    // THE THREE LETTERING OVERLAYS, driven rather than eyeballed.
+    //
+    // Every board is painted blank into the plate and the words go on top, in
+    // a rectangle map.json records as fractions of the plate. What can go
+    // wrong is arithmetic: a fraction read against the wrong dimension, a
+    // rotation applied in degrees where radians were wanted, or the bribe
+    // resizing the sprite when it swaps the texture. All three are position
+    // checks, so all three are measured here against the data.
+    const RES = await import('./js/systems/Resolution.js')
+    const MAP = (await import('./js/data/map.json', { with: { type: 'json' } })).default
+    const DISP = (await import('./js/data/display.json', { with: { type: 'json' } })).default
+    const { placeSign } = await import('./js/systems/SignPlacement.js')
+    const RULES = (await import('./js/data/rules.json', { with: { type: 'json' } })).default
+
+    const find = (key) => g.children.list.find((o) => o.texture && o.texture.key === key)
+    const held = find('prop-sign-moes')
+    const tavern = find('prop-sign-tavern')
+
+    const check = (label, obj, board) => {
+      if (!obj) { note(label + ': MISSING from the scene'); return null }
+      const want = placeSign(MAP.signs[board], DISP.width, DISP.height)
+      const dx = obj.x - want.x, dy = obj.y - want.y
+      const dw = obj.displayWidth - want.width, dh = obj.displayHeight - want.height
+      const dr = obj.rotation - want.rotationRad
+      note(label + ': world ' + obj.x.toFixed(1) + ',' + obj.y.toFixed(1) +
+        ' size ' + obj.displayWidth.toFixed(1) + 'x' + obj.displayHeight.toFixed(1) +
+        ' rot ' + (obj.rotation * 180 / Math.PI).toFixed(2) + 'deg' +
+        ' depth ' + obj.depth.toFixed(1) +
+        ' src ' + obj.texture.source[0].width + 'x' + obj.texture.source[0].height)
+      note('  vs ' + board + ' in map.json: dx ' + dx.toFixed(3) + ' dy ' + dy.toFixed(3) +
+        ' dw ' + dw.toFixed(3) + ' dh ' + dh.toFixed(3) +
+        ' drot ' + (dr * 180 / Math.PI).toFixed(4) + 'deg' +
+        ((Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01 && Math.abs(dw) < 0.01 &&
+          Math.abs(dh) < 0.01 && Math.abs(dr) < 1e-6) ? '  OK' : '  MISMATCH'))
+      return want
+    }
+    check('held  ', held, 'held')
+    check('tavern', tavern, 'tavern')
+
+    // The one ordering rule between them: the tavern's board hangs from a beam
+    // above the innkeeper, so it must sort behind him.
+    if (held && tavern) {
+      note('depth order: tavern ' + tavern.depth.toFixed(1) + ' < held ' + held.depth.toFixed(1) +
+        (tavern.depth < held.depth ? '  OK' : '  WRONG WAY ROUND'))
+    }
+
+    // CLAUDE.md rule 7, in physical pixels.
+    //
+    // THE ZOOM IS ALREADY DEVICE-SCALED — GameScene multiplies every zoom in
+    // display.json by deviceScale() before handing it to the rig, so it is
+    // device pixels per world unit and multiplying by devicePixelRatio again
+    // triples the answer. The first version of this line did exactly that and
+    // reported the held sign at 0.95x when it is 2.07x.
+    const dpr = window.devicePixelRatio || 1
+    const zMax = DISP.camera.maxZoom * Math.min(dpr, 3)
+    const zMin = DISP.camera.minZoom * Math.min(dpr, 3)
+    note('zoom band at dpr ' + dpr + ': ' + zMin.toFixed(2) + '..' + zMax.toFixed(2) +
+      ' device px per world unit (live ' + g.cameras.main.zoom.toFixed(2) + ')')
+    for (const [label, o] of [['held', held], ['tavern', tavern]]) {
+      if (!o) continue
+      const src = o.texture.source[0].height
+      note(label + ' art budget: source ' + src + 'px, wanted ' +
+        (o.displayHeight * zMax).toFixed(0) + 'px at max zoom (' +
+        (src / (o.displayHeight * zMax)).toFixed(2) + 'x over) and ' +
+        (o.displayHeight * zMin).toFixed(0) + 'px at min zoom (' +
+        (src / (o.displayHeight * zMin)).toFixed(2) + 'x minification)')
+    }
+
+    // Frame each board on its own so the words can be read in the shot.
+    const cam = g.cameras.main
+    for (const [name, o] of [['tavern', tavern], ['held', held]]) {
+      if (!o) continue
+      cam.setZoom(cam.maxZoom || 2.37)
+      cam.centerOn(o.x, o.y)
+      await sleep(500)
+      await shot('lettering-' + name)
+    }
+
+    // THE BRIBE MUST MOVE NOTHING. Swap the texture through the real path and
+    // compare every placement field before and after.
+    if (held) {
+      const before = {
+        x: held.x, y: held.y, w: held.displayWidth, h: held.displayHeight,
+        rot: held.rotation, depth: held.depth, tex: held.texture.key,
+      }
+      g.status.peanuts = 99999
+      const at = RES.worldToScreen(g, held.x, held.y)
+      await click(at.x, at.y)
+      await sleep(300)
+      const d = g.dialog
+      note('bribe dialog open: ' + !!d)
+      if (d) {
+        // The dialog is drawn by the UI camera, not the world one, so its
+        // objects carry design-box coordinates. Aiming the world transform at
+        // them is the pointer-space mistake this repo has made five times; the
+        // UI camera's own transform is the one that applies.
+        const uiCam = g.uiCam || g.cameras.cameras.find((c) => c !== g.cameras.main)
+        const label = RULES.signBribe.confirmLabel.toUpperCase()
+        const texts = []
+        const walk = (o) => {
+          if (!o) return
+          if (o.type === 'Text' && (o.text || '').toUpperCase() === label) texts.push(o)
+          if (o.list) o.list.forEach(walk)
+        }
+        g.children.list.forEach(walk)
+        note('confirm "' + label + '" found: ' + texts.length)
+        const t = texts[0]
+        if (t && uiCam) {
+          const m = t.getWorldTransformMatrix()
+          const sx = (uiCam.x + (m.tx - uiCam.worldView.x) * uiCam.zoom) / dpr
+          const sy = (uiCam.y + (m.ty - uiCam.worldView.y) * uiCam.zoom) / dpr
+          note('confirm at design ' + m.tx.toFixed(0) + ',' + m.ty.toFixed(0) +
+            ' -> css ' + sx.toFixed(0) + ',' + sy.toFixed(0))
+          await click(sx, sy)
+        }
+      }
+      await sleep(700)
+      const after = {
+        x: held.x, y: held.y, w: held.displayWidth, h: held.displayHeight,
+        rot: held.rotation, depth: held.depth, tex: held.texture.key,
+      }
+      note('bribe: texture ' + before.tex + ' -> ' + after.tex +
+        (before.tex !== after.tex ? '  SWAPPED' : '  NOT SWAPPED'))
+      const moved = ['x', 'y', 'w', 'h', 'rot', 'depth']
+        .filter((k) => Math.abs(after[k] - before[k]) > 1e-6)
+      note('bribe moved: ' + (moved.length ? moved.map((k) =>
+        k + ' ' + before[k].toFixed(3) + '->' + after[k].toFixed(3)).join(', ')
+        : 'NOTHING — position, size, rotation and depth all unchanged'))
+      cam.centerOn(held.x, held.y)
+      await sleep(400)
+      await shot('lettering-held-bribed')
+    }
+    return
+  }
+
   if (scenario === 'spec') {
     // THE TIER-3 FORK, on the smallest screen the game claims to support, and
     // through the ring rather than the deleted BuildMenu this used to drive.

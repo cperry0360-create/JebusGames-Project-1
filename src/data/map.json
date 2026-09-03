@@ -213,57 +213,69 @@
     ]
   ],
   "signs": {
-    "_note": "BOTH BOARDS ARE BLANK IN THIS PLATE AND STAY BLANK. The text is an overlay supplied separately, so what is recorded here is the quad to put it in: four corners as fractions of the 3840x2160 art, clockwise from top-left, plus the top edge's angle.",
+    "_note": "EVERY BOARD IN THIS PLATE IS PAINTED BLANK AND STAYS BLANK. The lettering is a separate overlay drawn on top, so what is recorded here is the rectangle to draw it in: `centre` and `size` as fractions of the plate, plus the angle to rotate it by. Fractions rather than pixels because a re-export at another resolution must not move a sign, and rotation in the engine rather than baked into the texture because a pre-rotated texture is resampled twice. `inset` shrinks the overlay inside the painted frame so the lettering sits on the board rather than touching its edge. The two boards tilt OPPOSITE WAYS and share no constant.",
     "tavern": {
+      "centre": [
+        0.7455,
+        0.1894
+      ],
+      "size": [
+        0.0535,
+        0.0638
+      ],
+      "rotationDeg": 10.3,
+      "inset": 0.94,
       "quad": [
         [
-          0.71617,
-          0.14931
+          0.7195,
+          0.1498
         ],
         [
-          0.77578,
-          0.15861
+          0.7721,
+          0.1668
         ],
         [
-          0.77211,
-          0.23264
+          0.7715,
+          0.2274
         ],
         [
-          0.72008,
-          0.21639
+          0.7189,
+          0.2136
         ]
       ],
-      "rotationDeg": 5.02,
-      "_note": "The board hanging from the tavern's beam. Read off a 6x gridded crop and verified by drawing it back onto the art, because three automatic fits each failed differently: a min-area rectangle tilted 18 degrees to swallow a sheared shape, a hull reduced to four vertices put its corners on the middles of the chamfered edges, and a parallelogram fit from the dominant edge directions was dragged to 17 degrees by the mounting rings and corner ornaments."
+      "_note": "The board hanging from the tavern beam. It never changes: no swap, no state. THE QUAD THIS REPLACES WAS WRONG \u2014 it recorded a 5.02 degree tilt, and drawn back onto the plate its top edge climbed off the board and into the roof. Three automatic fits had already failed here (a min-area rectangle swallowed the shape at 18 degrees, a four-vertex hull landed on the chamfer midpoints, and a parallelogram was dragged to 17 degrees by the mounting rings), and the hand reading that replaced them took its top edge off the mounting hardware rather than the board. A fourth automatic fit, over the wood field alone, came back at 18 degrees again \u2014 this board defeats edge fitting, so the quad is a measurement off the art, verified by compositing the overlay onto the plate and looking at it."
     },
     "held": {
+      "centre": [
+        0.69795,
+        0.286125
+      ],
+      "size": [
+        0.0361,
+        0.0457
+      ],
+      "rotationDeg": -6.65,
+      "inset": 0.94,
       "quad": [
         [
-          0.67923,
-          0.2625
+          0.6794,
+          0.2667
         ],
         [
-          0.71224,
-          0.25426
+          0.7153,
+          0.2593
         ],
         [
-          0.71673,
-          0.29953
+          0.7165,
+          0.3061
         ],
         [
-          0.68372,
-          0.30778
+          0.6806,
+          0.3124
         ]
       ],
-      "rotationDeg": -8.0,
-      "_note": "The board the innkeeper holds. Fitted automatically and verified the same way."
+      "_note": "The board the innkeeper holds, and the only one with a state: the bribe swaps the texture and changes nothing else, so both overlays share this one rectangle and this one angle. The quad it replaces agreed to within 16 px of plate width on the corners; it read 8.0 degrees where an independent fit of the wood field reads 6.15 and this reads 6.65, and it sat 11 px high."
     }
-  },
-  "sign": {
-    "x": 893.4,
-    "y": 202.4,
-    "boardWidth": 42.0,
-    "_note": "The centre and width of the held board, derived from `signs.held.quad`. This is the gameplay object \u2014 it carries the tap target and the bribe swap \u2014 and it goes onto the board the innkeeper is painted holding."
   },
   "innkeeper": {
     "x": 947.0,

@@ -1,6 +1,10 @@
 // Shapes of the JSON under /src/data. Every tuneable number in the game is
 // described here and lives there, never in a .ts file.
 
+import type { SignBoard } from './systems/SignPlacement.ts'
+
+export type { SignBoard }
+
 export interface DisplayDef {
   width: number
   height: number
@@ -33,8 +37,14 @@ export interface MapDef {
    */
   waypoints: number[][]
   buildSpots: number[][]
-  /** Where the villager's blank board is, and how wide to draw a sign on it. */
-  sign: { x: number; y: number; boardWidth: number }
+  /** The blank painted boards, and the rectangle a lettering overlay is drawn
+   *  in on each. See systems/SignPlacement. */
+  signs: {
+    /** The board hanging from the tavern beam. Never changes. */
+    tavern: SignBoard
+    /** The board the innkeeper holds. The bribe swaps its texture. */
+    held: SignBoard
+  }
   /** The stone archway enemies walk out of, measured off the painted plate. */
   entrance: {
     /** Map x at the arch's mouth: where the fade starts. */
@@ -559,14 +569,6 @@ export interface SpriteRender {
    *  tall on screen, rather than that tall including its transparent margin. */
   contentWidth?: number
   contentHeight?: number
-  /** Signboards only: where the board sits inside the sprite's canvas, as
-   *  fractions. Both sign sprites are a board with a post hanging below it,
-   *  and the post is the part the villager's hand covers, so the board is what
-   *  gets placed and sized. */
-  boardLeft?: number
-  boardRight?: number
-  boardTop?: number
-  boardBottom?: number
   /**
    * Effect animations only: this file is a strip of equal cells rather than
    * one picture, so the loader has to cut it up before anything can draw it.
@@ -625,6 +627,8 @@ export interface ArtDef {
   prop: {
     signDefault: string
     signBribed: string
+    /** The tavern's lettering. Static: no state, no swap. */
+    signTavern: string
     /** The DO NOT BUILD HERE sign. Exactly one spot on the map carries it. */
     buildPad: string
     /** The painted flagstone every other free spot carries. */

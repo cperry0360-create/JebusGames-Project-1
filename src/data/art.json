@@ -57,6 +57,7 @@
     "ui-panel-dialog": "ui/panel_dialog.png",
     "prop-sign-moes": "props/sign_moes.png",
     "prop-sign-courjahan": "props/sign_courjahan.png",
+    "prop-sign-tavern": "props/sign_tavern.png",
     "prop-pad": "props/pad_donotbuild.png",
     "prop-pad-flagstone": "props/pad_flagstone.png",
     "turret-ledger-t2": "towers/tower_withholding_t2.png",
@@ -335,22 +336,6 @@
         "top": 162,
         "bottom": 159
       }
-    },
-    "prop-sign-moes": {
-      "contentWidth": 300,
-      "contentHeight": 400,
-      "boardLeft": 0.0,
-      "boardRight": 1.0,
-      "boardTop": 0.0725,
-      "boardBottom": 0.63
-    },
-    "prop-sign-courjahan": {
-      "contentWidth": 292,
-      "contentHeight": 400,
-      "boardLeft": 0.0,
-      "boardRight": 1.0,
-      "boardTop": 0.07,
-      "boardBottom": 0.6225
     },
     "ability-haymaker": {
       "anchorX": 0.5,
@@ -642,6 +627,7 @@
   "prop": {
     "signDefault": "prop-sign-moes",
     "signBribed": "prop-sign-courjahan",
+    "signTavern": "prop-sign-tavern",
     "buildPad": "prop-pad",
     "buildPadQuiet": "prop-pad-flagstone"
   },

@@ -1,45 +1,62 @@
 import Phaser from 'phaser'
-import type { SignBribeDef, SpriteRender } from '../types.ts'
+import type { SignBoard, SignBribeDef } from '../types.ts'
 import { EFFECT_MS, playEffect } from '../systems/Effects.ts'
-import { ART, renderFor } from '../systems/Art.ts'
+import { ART } from '../systems/Art.ts'
+import { placeSign } from '../systems/SignPlacement.ts'
 import { COLOR, FONT_UI } from './Theme.ts'
 
 /**
  * The sign bribe.
  *
  * The painted map already has a villager outside Courjahan's Tavern holding a
- * blank board. He is, by default, advertising for the competition. Pay him and
- * he changes his mind for the rest of the run.
+ * board. He is, by default, advertising for the competition. Pay him and he
+ * changes his mind for the rest of the run.
  *
  * It costs peanuts and buys nothing: no stats, no towers, no advantage. That
  * is the joke, and it is why the bribe is deliberately affordable rather than
  * cheap — spending it should cost you a tower you wanted.
  *
- * The board is placed by its *board*, not by its canvas. Both sprites are a
- * board with a post hanging below it, and the post is the part the villager's
- * hand covers, so the anchor is the middle of the board and the post falls
- * where it falls.
+ * THE BOARD IS PAINTED INTO THE PLATE and stays there. Both textures are
+ * lettering on a transparent canvas, drawn on top of it in the rectangle
+ * map.json records for that board, rotated to match. The sprites that carried
+ * their own board and post are gone, so nothing here fits art to a board any
+ * more: the rectangle is the board.
+ *
+ * The bribe therefore swaps the texture and does nothing else. No reposition,
+ * no rescale, no re-anchor — the two canvases share one aspect deliberately,
+ * and any per-texture sizing would make the words jump when they changed.
  */
 export class SignBribe {
   private readonly scene: Phaser.Scene
   private readonly def: SignBribeDef
   private readonly sprite: Phaser.GameObjects.Image
   private readonly hit: Phaser.GameObjects.Rectangle
+  private readonly foot: number
   private bribed = false
 
-  constructor(scene: Phaser.Scene, x: number, y: number, boardWidth: number, def: SignBribeDef) {
+  constructor(
+    scene: Phaser.Scene,
+    board: SignBoard,
+    worldWidth: number,
+    worldHeight: number,
+    def: SignBribeDef,
+  ) {
     this.scene = scene
     this.def = def
 
-    const key = ART.prop.signDefault
-    this.sprite = scene.add.image(x, y, key)
-    this.place(key, boardWidth)
+    const at = placeSign(board, worldWidth, worldHeight)
+    this.foot = at.footY
+    this.sprite = scene.add.image(at.x, at.y, ART.prop.signDefault)
+      .setDisplaySize(at.width, at.height)
+      .setRotation(at.rotationRad)
 
-    // A tap target sized to the board, not to the sprite: the sprite's canvas
-    // includes the post and a margin of nothing, and a tap on empty grass
-    // beside the villager should still be an order to the hero.
+    // A tap target on the painted BOARD rather than on the lettering, which is
+    // inset inside it — the board's frame is part of what the player is aiming
+    // at. It carries the same rotation, so the corners are where they look.
+    const full = placeSign(board, worldWidth, worldHeight, 1)
     this.hit = scene.add
-      .rectangle(x, y, this.boardW(key, boardWidth), this.boardH(key, boardWidth), 0xffffff, 0.001)
+      .rectangle(full.x, full.y, full.width, full.height, 0xffffff, 0.001)
+      .setRotation(full.rotationRad)
       .setInteractive({ useHandCursor: true })
   }
 
@@ -49,7 +66,7 @@ export class SignBribe {
   }
 
   get depthY(): number {
-    return this.sprite.y + this.sprite.displayHeight / 2
+    return this.foot
   }
 
   setDepth(depth: number): void {
@@ -80,46 +97,17 @@ export class SignBribe {
   pay(): void {
     if (this.bribed) return
     this.bribed = true
-    const key = ART.prop.signBribed
-    this.sprite.setTexture(key)
-    this.place(key, this.hit.width)
+    // The whole swap. Same rectangle, same rotation, same everything else.
+    this.sprite.setTexture(ART.prop.signBribed)
     this.celebrate()
-  }
-
-  private cfg(key: string): SpriteRender {
-    return renderFor(key)
-  }
-
-  private boardW(key: string, boardWidth: number): number {
-    void key
-    return boardWidth
-  }
-
-  private boardH(key: string, boardWidth: number): number {
-    const c = this.cfg(key)
-    const fracW = (c.boardRight ?? 1) - (c.boardLeft ?? 0)
-    const fracH = (c.boardBottom ?? 1) - (c.boardTop ?? 0)
-    const scale = boardWidth / (fracW * (c.contentWidth ?? 1))
-    return fracH * (c.contentHeight ?? 1) * scale
-  }
-
-  /** Scales the sprite so its board is `boardWidth` across, and moves its
-   *  origin to the middle of the board so it hangs from the right place. */
-  private place(key: string, boardWidth: number): void {
-    const c = this.cfg(key)
-    const left = c.boardLeft ?? 0
-    const right = c.boardRight ?? 1
-    const top = c.boardTop ?? 0
-    const bottom = c.boardBottom ?? 1
-    this.sprite.setOrigin((left + right) / 2, (top + bottom) / 2)
-    this.sprite.setScale(boardWidth / ((right - left) * this.sprite.width))
   }
 
   /** Small and quick. It is a joke, not an achievement. */
   private celebrate(): void {
     const { x, y } = this.sprite
+    const grown = this.sprite.scale * 1.18
     this.scene.tweens.add({
-      targets: this.sprite, scale: this.sprite.scale * 1.18, duration: 130,
+      targets: this.sprite, scale: grown, duration: 130,
       yoyo: true, ease: 'Back.easeOut',
     })
 

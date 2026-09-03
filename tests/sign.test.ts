@@ -1,13 +1,23 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, existsSync } from 'node:fs'
+import { placeSign } from '../src/systems/SignPlacement.ts'
 
 const url = (p: string) => new URL(p, import.meta.url)
 const read = (n: string) => JSON.parse(readFileSync(url(`../src/data/${n}.json`), 'utf8'))
 const art = read('art'), map = read('map'), rules = read('rules'), display = read('display')
 
-test('both signboards are in the manifest and on disk', () => {
-  for (const role of ['signDefault', 'signBribed'] as const) {
+const ROLES = ['signDefault', 'signBribed', 'signTavern'] as const
+
+/** Width and height of a PNG, from its IHDR. */
+function pngSize(path: string): [number, number] {
+  const b = readFileSync(path)
+  assert.equal(b.readUInt32BE(0), 0x89504e47, `${path} is not a PNG`)
+  return [b.readUInt32BE(16), b.readUInt32BE(20)]
+}
+
+test('all three lettering overlays are in the manifest and on disk', () => {
+  for (const role of ROLES) {
     const key = art.prop[role]
     assert.ok(key, `no prop role ${role}`)
     const path = art.files[key]
@@ -16,50 +26,83 @@ test('both signboards are in the manifest and on disk', () => {
   }
   assert.notEqual(art.prop.signDefault, art.prop.signBribed,
     'the bribe has to actually change the sign')
+  assert.notEqual(art.prop.signTavern, art.prop.signDefault,
+    'the tavern is a different board from the one the innkeeper holds')
 })
 
-test('each signboard carries its measured board rectangle', () => {
-  // The sprites are a board with a post below it, and the post is the part the
-  // villager's hand covers. Placing by the canvas would hang the board wrong.
-  for (const role of ['signDefault', 'signBribed'] as const) {
-    const cfg = art.render[art.prop[role]]
-    assert.ok(cfg, `no render config for ${role}`)
-    for (const f of ['boardLeft', 'boardRight', 'boardTop', 'boardBottom'] as const) {
-      assert.equal(typeof cfg[f], 'number', `${role} is missing ${f}`)
-    }
-    assert.ok(cfg.boardRight > cfg.boardLeft, `${role} has an inside-out board`)
-    assert.ok(cfg.boardBottom > cfg.boardTop, `${role} has an inside-out board`)
-    // The post hangs below the board, so the board cannot be the whole canvas.
-    assert.ok(cfg.boardBottom < 0.95, `${role} leaves no room for its post`)
+test('an overlay carries no render config, because the plate places it', () => {
+  // These used to be a board with a post, sized by a `board*` rectangle
+  // measured inside the canvas. They are lettering on a transparent canvas
+  // now, drawn into the rectangle map.json records for the painted board, so
+  // any leftover contentWidth or board fraction is a stale number that would
+  // silently resize them.
+  for (const role of ROLES) {
+    assert.equal(art.render[art.prop[role]], undefined,
+      `${role} still has a render config; the plate rectangle is what places it`)
   }
 })
 
-test('the two signs hang the same way, so the swap does not jump', () => {
-  const a = art.render[art.prop.signDefault]
-  const b = art.render[art.prop.signBribed]
-  const centre = (c: typeof a) => [(c.boardLeft + c.boardRight) / 2, (c.boardTop + c.boardBottom) / 2]
-  const [ax, ay] = centre(a)
-  const [bx, by] = centre(b)
-  assert.ok(Math.abs(ax - bx) < 0.03 && Math.abs(ay - by) < 0.03,
-    'the boards sit in different places in their canvases, so the sign would jump on swap')
+test('each canvas is authored to the aspect of its board, so words do not stretch', () => {
+  // The reason this is worth asserting: the placement stretches the texture to
+  // the rectangle unconditionally. A canvas at the wrong aspect is not caught
+  // by anything else — it just draws squashed, and looks like a bad font.
+  const cases: Array<[string, string]> = [
+    ['signDefault', 'held'], ['signBribed', 'held'], ['signTavern', 'tavern'],
+  ]
+  for (const [role, board] of cases) {
+    const [w, h] = pngSize(url(`../public/${art.assetRoot}${art.files[art.prop[role]]}`).pathname)
+    const b = map.signs[board]
+    const want = (b.size[0] * display.width) / (b.size[1] * display.height)
+    const got = w / h
+    assert.ok(Math.abs(got - want) / want < 0.02,
+      `${role} is ${w}x${h} (aspect ${got.toFixed(3)}) but the ${board} board is ` +
+      `${want.toFixed(3)}; the lettering would draw stretched`)
+  }
 })
 
-test('the sign sits on the map, near the tavern, and off the lane', () => {
-  const s = map.sign
-  assert.ok(s, 'the map does not say where the villager is')
-  assert.ok(s.x > 0 && s.x < display.width, 'the sign is off the canvas horizontally')
-  assert.ok(s.y > 0 && s.y < display.height, 'the sign is off the canvas vertically')
-  assert.ok(s.boardWidth > 20, 'a board this small could not be read or tapped')
+test('the two held textures share one canvas, so the bribe cannot jump', () => {
+  // The swap sets a texture and touches nothing else. That is only safe while
+  // both canvases are identical — a different size would rescale on the swap.
+  const a = pngSize(url(`../public/${art.assetRoot}${art.files[art.prop.signDefault]}`).pathname)
+  const b = pngSize(url(`../public/${art.assetRoot}${art.files[art.prop.signBribed]}`).pathname)
+  assert.deepEqual(a, b, 'the bribed sign has a different canvas, so the words would jump')
+})
 
-  // It must not sit on the lane, or its tap target would eat clicks meant for
-  // the enemies walking through it.
+test('the two boards tilt opposite ways and share no constant', () => {
+  // Stated as a rule because they were once both measured off one board and
+  // the second inherited the first's angle.
+  const t = map.signs.tavern.rotationDeg
+  const h = map.signs.held.rotationDeg
+  assert.ok(t > 0, 'the tavern board hangs clockwise of level')
+  assert.ok(h < 0, 'the innkeeper holds his board counter-clockwise of level')
+  assert.notEqual(t, h)
+})
+
+test('every board rectangle is on the plate and big enough to read', () => {
+  for (const name of ['tavern', 'held'] as const) {
+    const b = map.signs[name]
+    assert.ok(b, `the map does not say where the ${name} board is`)
+    assert.ok(b.inset > 0.8 && b.inset <= 1,
+      `${name} inset ${b.inset} either overflows the frame or shrinks the words to nothing`)
+    const at = placeSign(b, display.width, display.height)
+    assert.ok(at.x - at.width / 2 > 0 && at.x + at.width / 2 < display.width,
+      `the ${name} sign runs off the canvas horizontally`)
+    assert.ok(at.y - at.height / 2 > 0 && at.y + at.height / 2 < display.height,
+      `the ${name} sign runs off the canvas vertically`)
+    assert.ok(at.width > 20, `a ${name} board this small could not be read`)
+    assert.ok(at.footY > at.y, 'the foot must be below the centre, or depth sorting is wrong')
+  }
+})
+
+test('the board the innkeeper holds is off the lane and off every build pad', () => {
+  // Its tap target would otherwise eat taps meant for the enemies walking
+  // through it, or for the pad underneath it.
+  const at = placeSign(map.signs.held, display.width, display.height, 1)
   const near = map.waypoints.some((w: number[]) =>
-    Math.hypot(w[0] - s.x, w[1] - s.y) < map.roadWidth)
+    Math.hypot(w[0] - at.x, w[1] - at.y) < map.roadWidth)
   assert.ok(!near, 'the sign is sitting on the lane')
-
-  // Nor on a build pad, for the same reason.
   for (const [px, py] of map.buildSpots as number[][]) {
-    assert.ok(Math.hypot(px - s.x, py - s.y) > map.spotRadius + s.boardWidth / 2,
+    assert.ok(Math.hypot(px - at.x, py - at.y) > map.spotRadius + at.width / 2,
       `the sign overlaps the build pad at ${px},${py}`)
   }
 })

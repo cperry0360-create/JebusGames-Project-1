@@ -43,6 +43,7 @@ import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { platePanel, plateButton, type PlateButton } from '../ui/Plate.ts'
 import { dockedSlab } from '../ui/EdgeDock.ts'
 import { SignBribe } from '../ui/SignBribe.ts'
+import { placeSign } from '../systems/SignPlacement.ts'
 import { CameraRig } from '../systems/CameraRig.ts'
 import { Dialog, type DialogOptions } from '../ui/Dialog.ts'
 import { TowerRing, type RingOption } from '../ui/TowerRing.ts'
@@ -643,13 +644,26 @@ this.armReadyCountdown()
   }
 
   /**
-   * The villager's sign. It is painted into the plate as a blank board, so the
-   * sprite goes on top of it and sorts by its own foot like everything else.
+   * The signs. Every board is painted into the plate blank, and the lettering
+   * is an overlay drawn on top of it in the rectangle map.json records, rotated
+   * to match the board. They sort by their own foot like everything else.
+   *
+   * The innkeeper's is the only one with a state — the bribe swaps its texture.
+   * The tavern's hangs from a beam and never changes, so it is a plain image
+   * with nothing bound to it.
    */
   private buildSign(): void {
-    const cfg = MAP.sign
-    this.sign = new SignBribe(this, cfg.x, cfg.y, cfg.boardWidth, RULES.signBribe)
+    const w = displayData.width
+    const h = displayData.height
+
+    this.sign = new SignBribe(this, MAP.signs.held, w, h, RULES.signBribe)
     this.sign.setDepth(this.sign.depthY)
+
+    const tavern = placeSign(MAP.signs.tavern, w, h)
+    this.add.image(tavern.x, tavern.y, ART.prop.signTavern)
+      .setDisplaySize(tavern.width, tavern.height)
+      .setRotation(tavern.rotationRad)
+      .setDepth(tavern.footY)
   }
 
   /**

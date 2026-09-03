@@ -233,7 +233,8 @@ event log.
 `ability-molotov`, `ability-gnomes`, `ability-glacier`, `ability-meteor`,
 `ability-chain`, `ability-scratchticket`, `ability-servernuke`,
 `ability-haymaker`, `ability-restructure`, `prop-sign-moes`,
-`prop-sign-courjahan`, `ui-scratch-covered`, `ui-scratch-revealed`,
+`prop-sign-courjahan`, `prop-sign-tavern`, `ui-scratch-covered`,
+`ui-scratch-revealed`,
 `ui-nuke-up`, `ui-nuke-down`.
 
 **Filenames on disk** (renaming the file means editing `art.json` too):
@@ -243,8 +244,8 @@ event log.
 `enemy_brute.png`, `enemy_boss_politician.png`, `hero/hero_cory.png`,
 `hero/hero_cory_ultimate.png`, `units/gnome_trowel.png`, `gnome_rake.png`,
 `abilities/ability_*.png` (all nine), `props/sign_moes.png`,
-`props/sign_courjahan.png`. **Note the drift already in here:** the Filing
-Extension's file is `tower_filing.png` but its key is `turret-extension`, and
+`props/sign_courjahan.png`, `props/sign_tavern.png`. **Note the drift already in
+here:** the Filing Extension's file is `tower_filing.png` but its key is `turret-extension`, and
 the Withholding Tower's key is `turret-ledger`.
 
 **Class and type names in code** — `Mode = 'normal' | 'targeting' |

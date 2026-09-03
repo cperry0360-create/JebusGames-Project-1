@@ -435,26 +435,23 @@ def board_band(w, h, px):
 
 
 print('\n\nSignboards')
-sfiles, srender = {}, {}
-for name in ('sign_moes', 'sign_courjahan'):
+# NOTHING TO MEASURE ANY MORE, and that is the point of printing it.
+#
+# These used to be a board with a post hanging below it, so the canvas had to
+# be searched for where the board sat inside it and the game placed the sprite
+# by that. The overlays that replaced them are LETTERING ONLY: they are drawn
+# on top of a board painted into the map plate, in a rectangle map.json records
+# as fractions of the plate, and the canvas is authored to that rectangle's
+# aspect. There is no board in the canvas to find.
+#
+# What DOES need checking after a re-export is the aspect: the canvas has to
+# match the board's rectangle, or the words stretch. That is asserted in
+# tests/sign.test.ts against map.json, which is where the rectangle lives.
+for name in ('sign_moes', 'sign_courjahan', 'sign_tavern'):
     path = f'public/assets/props/{name}.png'
-    w, h, px = png.read(path)
-    x0, x1, y0, y1 = board_band(w, h, px)
-    key = 'prop-' + name.replace('_', '-')
-    sfiles[key] = f'props/{name}.png'
-    srender[key] = {
-        'contentWidth': w,
-        'contentHeight': h,
-        # The board's own rectangle inside the canvas, as fractions, so the
-        # game can put the board on the villager's board at any scale.
-        'boardLeft': round(x0 / w, 4),
-        'boardRight': round((x1 + 1) / w, 4),
-        'boardTop': round(y0 / h, 4),
-        'boardBottom': round((y1 + 1) / h, 4),
-    }
-    print(f'  {key}: {w}x{h}, board x{x0}-{x1} y{y0}-{y1} '
-          f'({x1 - x0 + 1}x{y1 - y0 + 1})')
-json.dump({'files': sfiles, 'render': srender}, open('/tmp/signpatch.json', 'w'), indent=2)
+    w, h, _ = png.read(path)
+    print(f'  prop-{name.replace("_", "-")}: {w}x{h}, aspect {w / h:.4f} '
+          f'(no render config: the plate rectangle places it)')
 
 
 # ----------------------------------------------------------------- gnomes
