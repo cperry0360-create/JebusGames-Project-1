@@ -59,6 +59,18 @@ const CFG = presentationData.ring
 
 export interface RingOption {
   id: string
+  /**
+   * Which of the ring's slots this option occupies, when the caller has
+   * reserved a fixed set of them. Defaults to the option's own index.
+   *
+   * The tower panel uses it to nail SELL down. Its position used to follow the
+   * option COUNT: two options at tier 1, three at the specialisation branch,
+   * and the arc's geometry is a function of how many buttons are on it — so
+   * the place a thumb learned as "upgrade" over twelve waves is a place SELL
+   * can arrive at. Three reserved slots and a fixed index each means the
+   * geometry never changes between tiers at all.
+   */
+  slot?: number
   /** A name from art.json's ui.icons — what the button shows. */
   icon: string
   /**
@@ -113,6 +125,15 @@ export interface TowerRingOptions {
   onPreview: (id: string | null) => void
   onClose: () => void
   /**
+   * How many slots to lay out, when that is more than there are options.
+   *
+   * The ring reserves the space either way, so a menu that shows two buttons
+   * at tier 1 and three at the branch puts both of them in the SAME places.
+   * Omitted, the slot count is the option count and nothing is reserved —
+   * which is what the build ring wants, where six towers are six towers.
+   */
+  slots?: number
+  /**
    * Something did not fit and the player would otherwise be looking at clipped
    * text or a menu off the screen. Told, never swallowed.
    */
@@ -160,6 +181,16 @@ export class TowerRing {
 
   get active(): boolean {
     return !this.closed
+  }
+
+  /** How many positions the geometry is laid out for. See `slots`. */
+  private get slotCount(): number {
+    return Math.max(this.buttons.length, this.opts.slots ?? 0)
+  }
+
+  /** Where option `i` sits: its reserved slot, or its own index. */
+  private slotOf(i: number): number {
+    return this.buttons[i]?.option.slot ?? i
   }
 
   /** Everything the ring owns, for the scene's camera split. All of it is
@@ -340,7 +371,7 @@ export class TowerRing {
     // where the ring ended up.
     const anchor = this.opts.anchor()
     const ring = anchor
-      ? ringPlacement(anchor.x, anchor.y, this.buttons.length, CFG, area).bounds
+      ? ringPlacement(anchor.x, anchor.y, this.slotCount, CFG, area).bounds
       : { x: area.x, y: area.y, width: 0, height: 0 }
     const W = this.panelWidthFor(ring, area)
 
@@ -612,7 +643,7 @@ export class TowerRing {
     // Both together: the ring and the panel constrain each other. The panel is
     // what moves; see fitRingAndPanel.
     const { ring: p, panel: at } = fitRingAndPanel(
-      anchor.x, anchor.y, this.buttons.length, this.panelSize.w,
+      anchor.x, anchor.y, this.slotCount, this.panelSize.w,
       Math.max(1, this.panelSize.h), CFG, area)
     this.placement = p
     if (p.overflowed) {
@@ -621,7 +652,7 @@ export class TowerRing {
 
     const drop = (CFG.priceGap + CFG.priceHeight) / 2
     for (const [i, b] of this.buttons.entries()) {
-      const at = p.buttons[i]
+      const at = p.buttons[this.slotOf(i)]
       if (!at) continue
       b.plate.parts.forEach((o) => (o as Phaser.GameObjects.Image).setPosition(at.x, at.y))
       b.glyph.setPosition(at.x, at.y)

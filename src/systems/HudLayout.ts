@@ -100,15 +100,27 @@ export interface HudLayout {
    */
   settings: Rect
   /**
-   * CANCEL, bottom-right, in the corner the gear vacated.
+   * CANCEL, at the right-hand end of the second row, directly under the gear.
    *
-   * It is only on the glass while an ability or a Restructure is armed, but it
-   * is reserved from the layout ALWAYS. A button that appears into whatever
-   * space happens to be free is a button that will one day appear on top of
-   * something; the ability row gives up sixty pixels so that cannot happen.
+   * It is only on the glass while there is something to cancel — an armed
+   * ability, a Restructure, a tile picked in the control drawer — but it is
+   * reserved from the layout ALWAYS. A button that appears into whatever space
+   * happens to be free is a button that will one day appear on top of
+   * something.
    *
-   * It used to be drawn at `viewW / 2` just above the ability icons, which is
-   * over the board — and the board is where the player is being asked to tap.
+   * IT HAS MOVED TWICE, and the second move is the one that matters. It began
+   * at `viewW / 2` just above the ability icons; that was the middle of the
+   * board, and the board is where the player is being asked to tap. It went to
+   * the bottom-right corner the gear had vacated — which is still the board,
+   * just a quieter part of it. Nothing that is not part of the game world
+   * belongs on the board at all, so it is in the HUD band now, grouped with
+   * the counters and the gear and the instruction line it answers.
+   *
+   * THE PRICE IS EIGHTEEN PIXELS OF `panelArea`. The button is 40 tall and the
+   * row it joins is 22, so the area below starts lower than it used to. That
+   * is the honest cost of the move and it is paid on every screen; the
+   * ability row gets the 224px it used to reserve for this button back in
+   * exchange.
    */
   cancel: Rect
   /**
@@ -191,28 +203,24 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
   const heroRow: Rect = {
     x: left, y: rowY, width: heroW, height: cfg.rowHeight,
   }
+  // CANCEL at the right-hand end of row two, under the gear. It is taller than
+  // the row's text — a 22px tap target is not one — so it hangs below the
+  // line, and `panelTop` clears it.
+  const cancel: Rect = {
+    x: right - cfg.cancelWidth, y: rowY, width: cfg.cancelWidth, height: btn,
+  }
   const messageRow: Rect = {
     x: left + heroW + gap, y: rowY,
-    width: Math.max(60, rowW - heroW - gap), height: cfg.rowHeight,
+    width: Math.max(60, rowW - heroW - gap - cfg.cancelWidth - gap),
+    height: cfg.rowHeight,
   }
 
-  // Bottom row: CANCEL on the right, the abilities to the left of it. This is
-  // the corner the settings gear used to hold; the gear is in the top row now.
-  const cancel: Rect = {
-    x: right - cfg.cancelWidth, y: bottom - btn, width: cfg.cancelWidth, height: btn,
-  }
-  // Centred on the SCREEN, with the same width given up on both sides.
-  //
-  // Centring on the screen alone put the outermost icon on top of the corner
-  // button on a narrow phone with a full hand. Taking the room off the right
-  // only — which is where the button is — fixes the overlap and moves the row
-  // 56px off centre, and a thumb row that is visibly not centred reads as a
-  // layout fault. So the reservation is mirrored: CANCEL's width is taken off
-  // both ends, the row stays centred, and `abilityScale` absorbs the loss.
-  const abilityGap = 12
-  const reserve = cfg.cancelWidth + abilityGap
-  const lo = left + reserve
-  const hi = right - reserve
+  // The bottom row is the ability icons and NOTHING ELSE now. CANCEL used to
+  // hold the bottom-right corner and reserved its own width off both ends of
+  // this row to keep the icons centred; with the button in the HUD band that
+  // reservation is gone and the hand gets the room back.
+  const lo = left
+  const hi = right
   const room = Math.max(0, hi - lo)
   const abilitiesW = Math.min(input.abilitiesWidth, room)
   const abilityScale = input.abilitiesWidth > 0 ? abilitiesW / input.abilitiesWidth : 1
@@ -223,19 +231,18 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
     height: cfg.iconHeight * abilityScale,
   }
 
-  // WHERE CHROME MAY GO, bounded by BOTH bottom-row controls.
+  // WHERE CHROME MAY GO: under everything in the HUD band, above the hand.
   //
-  // It used to stop above `abilities` alone, which is right on a wide screen
-  // where the 64px ability icons are the tallest thing down there — and wrong
-  // on a narrow one, where `abilityScale` shrinks them below CANCEL's 40px
-  // and CANCEL becomes the lower bound. Measured at 390x844: the icons scale
-  // to 30px, so `abilities.y` sits 10px BELOW `cancel.y` and the area ran
-  // straight over the button.
+  // The top is now bounded by CANCEL rather than by the text row, because
+  // CANCEL is 40 tall in a 22-tall row and hangs below it. That is where the
+  // eighteen pixels go.
   //
-  // Nothing had noticed because nothing used the full height of the area
-  // until the control drawer, which fills it top to bottom.
-  const panelTop = rowY + cfg.rowHeight + 8
-  const panelBottom = Math.min(abilities.y, cancel.y)
+  // The bottom used to be `min(abilities.y, cancel.y)`, because CANCEL was
+  // down there and on a narrow screen `abilityScale` shrinks the icons below
+  // its 40px so CANCEL became the lower bound. With the button gone from that
+  // corner the icons are the only thing left to clear.
+  const panelTop = Math.max(rowY + cfg.rowHeight, cancel.y + cancel.height) + 8
+  const panelBottom = abilities.y
   const panelArea: Rect = {
     x: insets.left + 6,
     y: panelTop,

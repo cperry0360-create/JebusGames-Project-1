@@ -43,9 +43,25 @@ export interface MapDef {
     clearOfArchX: number
     fadeMs: number
     startScale: number
-    /** The stone piers, cropped out of the plate and drawn in front. The
-     *  passage between them is deliberately not listed. */
-    occluders: Array<{ x: number; y: number; w: number; h: number }>
+    /**
+     * The arch's depth split.
+     *
+     * Only the NEAR pier is listed, and only as an outline. The far pier and
+     * the span stand above the road's far edge, so they are behind everything
+     * on it and the map plate already draws them there — see
+     * `createArchOccluders` for the rectangle that used to cut the far pier in
+     * half down its length.
+     */
+    arch: {
+      near: {
+        /** The painted stone's silhouette, in world units, used as a clip
+         *  path. A box around it would contain road, and this piece is drawn
+         *  in FRONT of units. */
+        outline: number[][]
+        /** The pier's painted base: what a y-sort would give it. */
+        depth: number
+      }
+    }
   }
   /** The open gate enemies walk out through. `gateX` is the near edge of the
    *  dark gap between its two leaves, where the fade starts, and `vanishX` the
@@ -652,6 +668,10 @@ export interface ArtDef {
     groundShadow: string
     buildGlow: string
     iconMissing: string
+    /** The peanut, cut out of the counter plate at boot. The pack has no
+     *  peanut icon, and the sell button used to wear a cash symbol for a
+     *  currency this game does not have. */
+    peanutIcon: string
   }
   /** Per-tier tower sprites, keyed by the tower's base sprite key. A tower
    *  with no entry keeps one sprite at every tier, which is the default and

@@ -20,7 +20,11 @@ test('art.json is the only place a sprite is named', () => {
   const offenders: string[] = []
   for (const f of sourceFiles('../src')) {
     if (f.endsWith('systems/Art.ts')) continue
-    const src = readFileSync(url(f), 'utf8')
+    // CODE ONLY. A comment that names the key a file exists to work around is
+    // the comment doing its job; `PeanutIcon.ts` is entirely about one counter
+    // plate and cannot explain itself without saying which.
+    const src = readFileSync(url(f), 'utf8').split('\n')
+      .filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n')
     for (const m of src.matchAll(/['"`]([^'"`\n]+)['"`]/g)) {
       if (keys.has(m[1])) offenders.push(`${f.replace('../', '')} mentions sprite key "${m[1]}"`)
     }
@@ -63,7 +67,13 @@ test('every role in the manifest resolves to a file that exists', () => {
   }
   for (const [role, key] of Object.entries(art.fx) as [string, string][]) roleRefs.push([`fx.${role}`, key])
   art.decor.forEach((key: string, i: number) => roleRefs.push([`decor[${i}]`, key]))
+  // A GENERATED key is a legitimate target too: it has no file because the
+  // game builds it at boot. The peanut on the sell button is cut out of the
+  // counter plate, because the pack has no peanut icon and the alternative was
+  // a cash symbol for a currency this game does not have.
+  const generated = new Set(Object.values(art.generated ?? {}) as string[])
   for (const [role, key] of roleRefs) {
+    if (generated.has(key)) continue
     assert.ok(keys.has(key), `${role} points at unknown sprite key "${key}"`)
     assert.ok(existsSync(url(`../public/${art.assetRoot}${art.files[key]}`)), `${role} -> ${key} has no file`)
   }

@@ -130,9 +130,14 @@ test('the HUD is pinned to the corners it is supposed to be pinned to', () => {
   const l = hudLayout({ width, height, insets: NO_INSETS, ...WIDEST }, CFG)
   // Kingdom Rush: pills top-left, buttons top-right, actives along the bottom.
   // There used to be two bottom corner controls; the settings gear replaced
-  // both, and then moved to the top row where a player looks for it. CANCEL
-  // took the corner it left, so the bottom-right is still spoken for — by the
-  // button that used to float over the middle of the board.
+  // both, and then moved to the top row where a player looks for it.
+  //
+  // CANCEL took the corner it left, and has since left it too. The corner was
+  // still the BOARD — quieter than the middle of it, but the board — and
+  // nothing that is not part of the game world is drawn there any more. It is
+  // in the HUD band, at the right-hand end of the second row, directly under
+  // the gear and beside the instruction line it answers. The bottom row is
+  // the hand and nothing else.
   assert.ok(l.counters.x < width / 3, 'the counters are not in the top-left')
   assert.ok(l.counters.y < height / 4, 'the counters are not at the top')
   assert.ok(l.startButton.x + l.startButton.width > width * 0.7,
@@ -142,8 +147,15 @@ test('the HUD is pinned to the corners it is supposed to be pinned to', () => {
   assert.ok(l.settings.y < height / 4, 'the settings gear is not in the top row')
   assert.ok(l.settings.x > l.startButton.x + l.startButton.width,
     'the gear must sit outboard of START WAVE, not on it')
-  assert.ok(l.cancel.x + l.cancel.width > width * 0.95 && l.cancel.y > height * 0.7,
-    'CANCEL is not in the bottom-right corner')
+  assert.ok(l.cancel.x + l.cancel.width > width * 0.95,
+    'CANCEL is not at the right-hand edge')
+  assert.ok(l.cancel.y < height / 3, 'CANCEL is not in the HUD band')
+  assert.ok(l.cancel.y >= l.settings.y + l.settings.height,
+    'CANCEL is not below the gear: it is in the top row, not the second')
+  // And it is out of the board entirely: everything below the band belongs to
+  // the world, and the ability row is the one exception the game already made.
+  assert.ok(l.cancel.y + l.cancel.height < l.panelArea.y,
+    'the panel area runs over CANCEL')
   assert.equal((l as Record<string, unknown>).mute, undefined, 'the mute control is back')
   assert.equal((l as Record<string, unknown>).pause, undefined, 'the pause button is back')
   const mid = l.abilities.x + l.abilities.width / 2

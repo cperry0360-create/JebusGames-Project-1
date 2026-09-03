@@ -8,6 +8,7 @@ import {
   ensureBuildGlowTexture, ensureIconFallbackTexture, ensureShadowTexture,
 } from '../systems/Presentation.ts'
 import { ensureGrey } from '../systems/Desaturate.ts'
+import { ensurePeanutIcon } from '../systems/PeanutIcon.ts'
 import { ART } from '../systems/Art.ts'
 import { COLOR, FONT_UI } from '../ui/Theme.ts'
 
@@ -89,6 +90,10 @@ export class BootScene extends Phaser.Scene {
     // Greyed copies of anything the UI shows as unavailable, built once rather
     // than per frame.
     for (const key of ART.greyable) ensureGrey(this, key)
+    // The peanut, cut out of the counter plate it is painted on: the pack has
+    // no peanut icon, and the sell button used to wear a cash symbol for a
+    // currency this game does not have.
+    ensurePeanutIcon(this, ART.ui.counters.peanuts, ART.generated.peanutIcon)
     this.scene.start('Splash')
     // Drawn over the running game rather than instead of it, so the fault is
     // reportable without being fatal.

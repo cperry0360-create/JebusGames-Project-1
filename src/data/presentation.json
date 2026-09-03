@@ -587,6 +587,12 @@
     "_scrollbar": "Shown only when the grid actually scrolls. Without it, at 568x320, two of the six towers are off the bottom of a panel that looks complete.",
     "nodePulseMs": 760,
     "nodePulseScale": 0.22,
+    "nodeRingFill": 14263361,
+    "nodeRingEdge": 12879418,
+    "nodeRingFillAlpha": [0.06, 0.14],
+    "nodeRingEdgeAlpha": [0.28, 0.55],
+    "nodeRingEdgeWidth": 2,
+    "_nodeRing": "A highlight PAINTED ON THE GROUND, not a decal laid over it. It was 0xffd23f at up to 0.20 fill and a full-strength 3px rim, drawn above the pad marker: a flat yellow ellipse floating over the map in a colour the painted grass does not contain. Warm ochre now, at a fraction of the contrast, squashed to the same ground plane the pads use and drawn UNDER the pad art rather than over it. The pulse carries the attention; the colour does not have to shout as well. The edge peaks at 0.55 against the old 1.0 and the fill at 0.14 against the old 0.20; if they still read as decals the lever is these four numbers, not the shape.",
     "_nodePulse": "How a build node says it will take the selected tower. A scale beat rather than a colour flash: the pads are already tinted three ways and a fourth tint would be a colour nobody can name."
   }
 }

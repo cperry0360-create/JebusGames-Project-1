@@ -413,7 +413,10 @@ test('the ring never covers the tower it is asking about, and never leaves the s
   // Both placed together by the tested geometry, not by arithmetic at the call
   // site: they constrain each other, and a ring in the middle of a narrow
   // strip has to move aside before the panel has anywhere to go.
-  assert.match(ring, /fitRingAndPanel\(\s*\n\s*anchor\.x, anchor\.y, this\.buttons\.length/,
+  // `slotCount`, not `buttons.length`: the tower panel reserves three slots so
+  // its geometry is identical at every tier, and SELL cannot arrive in a place
+  // UPGRADE used to hold.
+  assert.match(ring, /fitRingAndPanel\(\s*\n\s*anchor\.x, anchor\.y, this\.slotCount/,
     'the ring and panel are placed separately, or by hand')
 
   const game = src('scenes/GameScene.ts')
@@ -691,3 +694,81 @@ test('every icon resolves through one place, so none can miss its fallback', () 
     'the resolver does not check the texture actually loaded')
   assert.doesNotMatch(ring, /ART\.icons\[/, 'the ring indexes the icon map directly')
 })
+
+/* ------------------------------------------------------------------ SELL */
+
+test('SELL has a fixed slot that UPGRADE can never take', () => {
+  /*
+   * "SELL goes last" was the first answer and it was not enough. The ring's
+   * geometry is a function of HOW MANY buttons are on it — an arc of two sits
+   * at a different radius from an arc of three — so the position a thumb
+   * learned as UPGRADE over twelve waves is a position SELL can arrive at when
+   * the tower reaches the specialisation branch and the count changes.
+   *
+   * Three slots are reserved instead and each option names its index. Measured
+   * over all 48 states (six towers, every tier, both branches) at 844x390:
+   * UPGRADE at 287,155 and SELL at 392,155, in every one of them, 55.6px apart
+   * at the closest.
+   */
+  const game = src('scenes/GameScene.ts')
+  const opts = game.slice(game.indexOf('const options: RingOption[] = []'),
+    game.indexOf('this.openRing(options, () => this.towerAnchor(tower)'))
+  assert.match(opts, /id: 'sell',\s*\n\s*slot: 2,/, 'SELL does not claim slot 2')
+  for (const m of opts.matchAll(/id: 'upgrade',\s*\n\s*slot: (\d)/g)) {
+    assert.equal(m[1], '0', 'an UPGRADE option is not in slot 0')
+  }
+  assert.match(game, /\}, 3\)/, 'the tower panel does not reserve three slots')
+  // And the ring lays out for the reserved count, not the option count.
+  const ring = src('ui/TowerRing.ts')
+  assert.match(ring, /private get slotCount\(\): number/, 'the ring has no reserved slot count')
+  assert.match(ring, /p\.buttons\[this\.slotOf\(i\)\]/,
+    'options are placed by index again, so the slots do nothing')
+})
+
+test('only SELL asks twice, and it asks in words', () => {
+  // A tick glyph is not a confirmation when the button beside it is also a
+  // tick. Upgrading is reversible in the only sense that matters — the tower
+  // is still there — and a confirm on the action taken forty times a run is
+  // friction on the wrong button.
+  const game = src('scenes/GameScene.ts')
+  const fn = game.slice(game.indexOf('private confirmSell('))
+  const body = fn.slice(0, fn.indexOf('\n  }'))
+  assert.match(body, /title: `Sell \$\{tower\.def\.name\} for \$\{refund\} peanuts\?`/,
+    'the confirmation does not name the tower and the refund in words')
+  assert.match(body, /confirm: \{ label: 'Sell'/, 'the confirm button is not worded')
+  assert.match(body, /cancelLabel: 'Cancel'/, 'the way out is not worded')
+  // The sell option routes through it; the upgrade option does not.
+  assert.match(game, /onConfirm: \(\) => this\.confirmSell\(tower, refund\)/,
+    'SELL still goes straight through')
+  assert.match(game, /onConfirm: \(\) => this\.upgradeTower\(tower\)/,
+    'UPGRADE no longer upgrades directly')
+  assert.doesNotMatch(game, /confirmUpgrade/, 'UPGRADE grew a confirmation too')
+})
+
+test('the sell button wears the currency the game actually uses', () => {
+  /*
+   * It wore a cash symbol. The currency is peanuts.
+   *
+   * And the counter's own key is NOT the answer: `hud-peanuts` is the whole
+   * 233x96 counter PLATE with a peanut painted into its left end, so pointing
+   * the button at it drew that plate squashed into a 40px square. The peanut
+   * is cut out of the plate at boot. Measured: a 54x72 cut-out, 41.3% opaque —
+   * a shape in a box rather than a filled rectangle.
+   */
+  const art = JSON.parse(readFileSync(new URL('../src/data/art.json', import.meta.url), 'utf8'))
+  assert.equal(art.ui.icons.sell, 'gen-icon-peanut')
+  assert.equal(art.files['icon-sell'], undefined, 'the cash symbol is still shipped')
+  assert.equal(art.ui.counters.peanuts, 'hud-peanuts',
+    'the counter changed, so the cut-out is now taken from the wrong plate')
+  const boot = src('scenes/BootScene.ts')
+  assert.match(boot, /ensurePeanutIcon\(\s*\n?\s*this, ART\.ui\.counters\.peanuts, ART\.generated\.peanutIcon\)/,
+    'nothing generates the cut-out, so the sell button has no icon at all')
+  assert.equal(art.generated.peanutIcon, 'gen-icon-peanut',
+    'the generated key is not declared in the manifest')
+  const peanut = src('systems/PeanutIcon.ts')
+  assert.match(peanut, /outKey: string,/, 'the key is hardcoded in the component again')
+  // The background is FLOODED from the border, not colour-keyed: the peanut's
+  // own outline is as dark as the plate behind it, and a colour key eats it.
+  assert.match(peanut, /stack\.push/, 'the knockout is not a flood fill')
+})
+

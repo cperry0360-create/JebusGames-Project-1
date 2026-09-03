@@ -837,7 +837,16 @@ export class HudScene extends Phaser.Scene {
    * costs a run.
    */
   private slotShown(slot: SlotRegion, s: GameScene['status']): boolean {
-    return slot.kind !== 'restructure' || s.lastStand
+    if (slot.kind !== 'restructure') return true
+    // AND WHILE IT IS RECHARGING, even once Last Stand has ended.
+    //
+    // The cooldown used to be announced on the instruction row — "Grinder
+    // restructured. Back in 16s." — which held that row for the whole
+    // sixteen seconds with a number that was wrong after the first one. A
+    // cooldown is a status and belongs somewhere it can tick, and this slot
+    // already draws the sweep and the live count. It just used to disappear
+    // the moment Last Stand did, taking the only live readout with it.
+    return s.lastStand || !this.world.cooldowns.ready('restructure')
   }
 
   /**

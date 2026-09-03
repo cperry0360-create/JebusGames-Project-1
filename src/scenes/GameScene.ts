@@ -385,7 +385,10 @@ export class GameScene extends Phaser.Scene {
     this.markerLayer = this.add.graphics().setDepth(GROUND_DEPTH + 6)
     // Above the pads and below everything that stands on them, so the mark
     // reads as being ON the node rather than over the board.
-    this.eligibleLayer = this.add.graphics().setDepth(GROUND_DEPTH + 6)
+    // UNDER THE PAD ART, which sits at GROUND_DEPTH + 5. It was at +6, over
+    // the top of the marker it is highlighting, which is most of why a warm
+    // ellipse read as an interface decal rather than as light on the grass.
+    this.eligibleLayer = this.add.graphics().setDepth(GROUND_DEPTH + 2)
     this.projectedRing = this.add.graphics().setDepth(GROUND_DEPTH + 5)
     // A world object: it marks a place on the map, so it pans and zooms with
     // it. Its SIZE is divided by the zoom, so it stays constant on the glass.
@@ -403,6 +406,11 @@ export class GameScene extends Phaser.Scene {
       tiles: () => this.drawerTiles(),
       onSelect: (id) => {
         this.drawerPick = id
+        // A pick is a cancellable state like an armed ability, so it lights
+        // the same button. Closing the drawer clears the pick, which turns
+        // the button off again — there is no path that leaves one without
+        // the other.
+        this.refreshCancel()
         this.drawSpots()
       },
     })
@@ -498,7 +506,7 @@ this.armReadyCountdown()
       (part as Phaser.GameObjects.Image).setDepth?.(OVERLAY_DEPTH + 5)
     }
     this.asScreenSpace(this.cancelBtn.parts)
-    this.setCancelVisible(false)
+    this.refreshCancel()
 
     // The camera goes on last, so bounds are set against a world that is
     // fully built. The world stays 1280x720; only the view moves.
@@ -843,21 +851,31 @@ this.armReadyCountdown()
    * sorts by its own y from 0 upward, so a prop can never draw over a unit.
    */
   /**
-   * The archway, put back in front of the enemies walking under it.
+   * The near pier of the archway, lifted out of the map plate and put in
+   * front of the enemies walking out from behind it.
    *
-   * The arch is painted into the map plate, which is one image at the bottom
-   * of the depth order, so nothing can be drawn behind part of it. The fix
-   * needs no new art: the two stone piers are cropped OUT of the plate at
-   * scene start and re-added as their own images, sorted by their base like
-   * any other scenery. An enemy under the arch is then behind real stone
-   * rather than approximately behind it.
+   * WHICH PARTS, AND WHY ONLY ONE. The road runs left to right and descends,
+   * so the gateway's two piers are not side by side across it. The near pier
+   * is planted below the road's near edge; the far pier and the span stand
+   * above its far edge. That makes the far pier and the span BEHIND everything
+   * on the road, and the map plate already draws them at the bottom of the
+   * depth order — they need no occluder, and giving them one is what broke it.
    *
-   * The passage between the piers is deliberately not covered. Cropping the
-   * whole arch rectangle would also copy the road, and an enemy standing in
-   * the opening would be hidden behind a picture of the ground it is on.
+   * They had one: a 20x112 RECTANGLE over the far pier at x 98-118. The
+   * painted column is x 88-118, so the rectangle cut it in half down its
+   * length — the stones left of the cut stayed at plate depth and the stones
+   * right of it jumped to depth 398. An enemy walking out then drew over one
+   * half of the pier and under the other, which is the split the recording
+   * shows. Its depth of 398 was the rectangle's base rather than the pier's:
+   * the painted base is y 388, and the road there runs y 375 to 411.
+   *
+   * The near pier is cut to its painted OUTLINE, not to a box. A box around it
+   * contains road and grass, and this piece is drawn in FRONT of enemies — so
+   * a box would paint a copy of the road over anyone standing on it, which is
+   * a worse artefact than the one being fixed.
    *
    * Cropped at the plate's own resolution and scaled down on the way out, so
-   * the piers carry exactly the detail the plate does and no less.
+   * the pier carries exactly the detail the plate does and no less.
    */
   private createArchOccluders(): void {
     const plate = this.textures.get(ART.map.level1)
@@ -868,26 +886,47 @@ this.armReadyCountdown()
     // The plate is authored larger than the world box it covers.
     const perWorld = srcW / displayData.width
 
-    MAP.entrance.occluders.forEach((r, i) => {
-      const key = `gen-arch-${i}`
-      if (!this.textures.exists(key)) {
-        const sw = Math.round(r.w * perWorld)
-        const sh = Math.round(r.h * perWorld)
-        const canvas = this.textures.createCanvas(key, sw, sh)
-        if (!canvas) return
-        canvas.context.drawImage(
-          img, Math.round(r.x * perWorld), Math.round(r.y * perWorld), sw, sh, 0, 0, sw, sh,
-        )
-        canvas.refresh()
+    const near = MAP.entrance.arch.near
+    const pts = near.outline as Array<[number, number]>
+    if (pts.length < 3) return
+    const xs = pts.map((q) => q[0])
+    const ys = pts.map((q) => q[1])
+    const box = {
+      x: Math.min(...xs), y: Math.min(...ys),
+      w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys),
+    }
+
+    const key = 'gen-arch-near'
+    if (!this.textures.exists(key)) {
+      const sw = Math.round(box.w * perWorld)
+      const sh = Math.round(box.h * perWorld)
+      const canvas = this.textures.createCanvas(key, sw, sh)
+      if (!canvas) return
+      const ctx = canvas.context
+      // THE OUTLINE IS THE CLIP. Everything outside the painted stone stays
+      // transparent, so nothing but stone is ever drawn in front of a unit.
+      ctx.save()
+      ctx.beginPath()
+      for (const [i, [wx, wy]] of pts.entries()) {
+        const px = (wx - box.x) * perWorld
+        const py = (wy - box.y) * perWorld
+        if (i === 0) ctx.moveTo(px, py)
+        else ctx.lineTo(px, py)
       }
-      const piece = this.add.image(r.x + r.w / 2, r.y + r.h / 2, key)
-      piece.setDisplaySize(r.w, r.h)
-      // Sorted by its base, exactly like a tower or a rock: an enemy higher up
-      // the screen is behind it, one lower down is in front. That is the same
-      // one rule the rest of the board uses, not a special case for the arch.
-      piece.setDepth(r.y + r.h)
-      this.archOccluders.push(piece)
-    })
+      ctx.closePath()
+      ctx.clip()
+      ctx.drawImage(
+        img, Math.round(box.x * perWorld), Math.round(box.y * perWorld), sw, sh, 0, 0, sw, sh,
+      )
+      ctx.restore()
+      canvas.refresh()
+    }
+    const piece = this.add.image(box.x + box.w / 2, box.y + box.h / 2, key)
+    piece.setDisplaySize(box.w, box.h)
+    // Its painted base, which is what a y-sort would give it. Every enemy on
+    // this stretch of road is above it, so it is in front of all of them.
+    piece.setDepth(near.depth)
+    this.archOccluders.push(piece)
   }
 
   private createScatter(): void {
@@ -1046,12 +1085,18 @@ this.armReadyCountdown()
     // One rhythm for all of them: a set beats together, six phases is noise.
     const t = (this.time.now % d.nodePulseMs) / d.nodePulseMs
     const beat = 0.5 + 0.5 * Math.sin(t * Math.PI * 2)
+    // Warm, low-contrast, and squashed onto the same ground plane the pads
+    // use. The pulse is what draws the eye; the colour does not have to shout
+    // as well, and a saturated yellow at full-strength rim was reading as a
+    // sticker laid on the map rather than as a lit patch of it.
+    const [f0, f1] = d.nodeRingFillAlpha
+    const [e0, e1] = d.nodeRingEdgeAlpha
     for (const spot of this.build.spots) {
       if (!this.nodeTakesPick(spot)) continue
       const r = MAP.spotRadius * (1 + d.nodePulseScale * beat)
-      this.eligibleLayer.fillStyle(0xffd23f, 0.10 + beat * 0.10)
+      this.eligibleLayer.fillStyle(d.nodeRingFill, f0 + beat * (f1 - f0))
       this.eligibleLayer.fillEllipse(spot.x, spot.y, r * 2, r * 2 * PAD_SQUASH)
-      this.eligibleLayer.lineStyle(3, 0xffd23f, 0.65 + beat * 0.35)
+      this.eligibleLayer.lineStyle(d.nodeRingEdgeWidth, d.nodeRingEdge, e0 + beat * (e1 - e0))
       this.eligibleLayer.strokeEllipse(spot.x, spot.y, r * 2, r * 2 * PAD_SQUASH)
     }
   }
@@ -1282,6 +1327,7 @@ this.armReadyCountdown()
     if (this.drawerPick) {
       this.drawer.select(null)
       this.drawerPick = null
+      this.refreshCancel()
       this.drawSpots()
       return
     }
@@ -1426,6 +1472,7 @@ this.armReadyCountdown()
     this.drawerPick = null
     this.drawer.select(null)
     this.drawer.setEnabled(controlDrawerOn())
+    this.refreshCancel()
     this.drawSpots()
   }
 
@@ -1451,6 +1498,7 @@ this.armReadyCountdown()
     this.place(id, spot)
     this.drawer.select(null)
     this.drawerPick = null
+    this.refreshCancel()
     this.drawSpots()
   }
 
@@ -1483,12 +1531,16 @@ this.armReadyCountdown()
     options: RingOption[],
     anchor: () => { x: number; y: number } | null,
     onPreview: (id: string | null) => void,
+    /** Reserved slots, when the caller wants the geometry fixed across
+     *  states. The tower panel does; the build ring does not. */
+    slots?: number,
   ): void {
     this.ring?.close()
     if (options.length === 0) return
     this.ring = new TowerRing(this, TICKET_DEPTH, {
       options,
       anchor,
+      slots,
       // The part of the screen where chrome does not cover a counter, the
       // start button or the ability bar. Inset by the safe area too: a notch
       // has coordinates but is not screen.
@@ -1682,27 +1734,36 @@ this.armReadyCountdown()
     const options: RingOption[] = []
     const choosing = tower.atSpecChoice && !tower.upgrading
 
-    // A FIXED FIRST SLOT AND A FIXED LAST ONE.
-    //
-    // SELL used to be pushed last onto whatever was already there, so its
-    // POSITION moved with the tower's tier: option 2 of 2 with an upgrade
-    // available, 3 of 3 at the specialisation branch, and — at max tier —
-    // 1 of 1, sitting in exactly the place UPGRADE had occupied all game. The
-    // muscle memory built over twelve waves then sold the tower.
-    //
-    // The upgrade slot is emitted ALWAYS, disabled with a reason when there is
-    // nothing left to buy, so the first slot is never SELL. The ring's own
-    // contract already says a disabled option opens and explains itself, and
-    // "Tier 3 of 3, nothing further" is worth a tap.
+    /*
+     * THREE RESERVED SLOTS, AND SELL OWNS THE LAST ONE.
+     *
+     * "Sell goes last" was not enough and could not be. The ring's geometry is
+     * a function of HOW MANY buttons are on it — an arc of two sits at a
+     * different radius from an arc of three — so the position a thumb learned
+     * as UPGRADE over twelve waves is a position SELL can arrive at when the
+     * tower reaches the specialisation branch and the count changes under it.
+     *
+     * The slot count is fixed at three instead, and each option names its own
+     * index: 0 is always upgrade (or the first branch), 1 is the second branch
+     * and is empty the rest of the time, 2 is always SELL. Nothing about the
+     * ring moves between tier 1 and tier 3, so there is no position for the
+     * two to trade.
+     *
+     * The upgrade slot is emitted ALWAYS, disabled with a reason when there is
+     * nothing left to buy. The ring's own contract already says a disabled
+     * option opens and explains itself, and "Tier 3 of 3, nothing further" is
+     * worth a tap.
+     */
     if (choosing) {
       // THE BRANCH, AS TWO BUTTONS. It used to be a separate full-screen
       // dialog reached through a third icon — a menu inside a menu, for the
       // one decision in the game that cannot be undone. Two ring options put
       // both futures side by side, each with its own description panel, and
       // each still needing the second explicit press.
-      for (const spec of def.specializations) {
+      for (const [i, spec] of def.specializations.entries()) {
         options.push({
           id: `spec:${spec.id}`,
+          slot: i,
           icon: specIcon(spec),
           price: spec.cost,
           affordable: peanuts >= spec.cost,
@@ -1717,6 +1778,7 @@ this.armReadyCountdown()
     } else if (step !== null && !tower.upgrading) {
       options.push({
         id: 'upgrade',
+        slot: 0,
         icon: 'upgrade',
         price: step.cost,
         affordable: peanuts >= step.cost,
@@ -1732,6 +1794,7 @@ this.armReadyCountdown()
       // here, holding the place so SELL never inherits it.
       options.push({
         id: 'upgrade',
+        slot: 0,
         icon: 'upgrade',
         price: 0,
         affordable: false,
@@ -1746,39 +1809,27 @@ this.armReadyCountdown()
       })
     }
 
-    // MOVE. It exists at last: the only way to relocate a tower used to be the
-    // hero's Restructure, which refused unless DAD MODE was active — so a
-    // player who never dropped to 25% health never found out a tower could be
-    // moved. Same ability, same cooldown, offered where the decision is made.
-    const moveReady = this.cooldowns.ready('restructure') && !this.hero.down
-    const freePads = this.build.freeSpots().length
-    options.push({
-      id: 'move',
-      icon: 'target',
-      sprite: this.hero.def.restructure.icon,
-      price: 0,
-      affordable: moveReady && freePads > 0,
-      reason: this.hero.down
-        ? `${this.hero.def.name} is down.`
-        : !this.cooldowns.ready('restructure')
-            ? `${this.hero.def.restructure.name} is still recharging.`
-            : freePads === 0 ? 'Every other pad is taken.' : undefined,
-      title: def.name,
-      trait: def.trait,
-      stats: now,
-      confirmLabel: 'Move',
-      onConfirm: () => this.beginMove(tower),
-    })
+    /*
+     * NO MOVE HERE. It was offered from this panel — free, on every tower, at
+     * every moment — and that made DAD MODE's grant of Restructure worth
+     * nothing: the player already had the thing Last Stand was handing them.
+     * A reward that duplicates a permanently available button is not a reward.
+     *
+     * The ability is back to what it was for. Moving a tower is Restructure,
+     * Restructure arrives at 25% health, and the ability bar is where it
+     * lives. The 'Moving X. Tap a free pad.' line that belonged to this path
+     * went with it.
+     */
 
-    // Selling is always offered, always affordable, and ALWAYS LAST — after
-    // an upgrade slot that is always present and a move slot that is always
-    // present, so it can never slide into the first position.
+    // Selling is always offered, always affordable, and ALWAYS IN SLOT 2 —
+    // a place no upgrade and no branch can reach.
     //
     // Its numbers are what the tower IS, never the upgrade projection: a
     // marked-up "17 -> 31" describes a purchase the player is not making, on
     // the one button that destroys the thing being described.
     options.push({
       id: 'sell',
+      slot: 2,
       icon: 'sell',
       price: refund,
       affordable: true,
@@ -1786,13 +1837,14 @@ this.armReadyCountdown()
       trait: def.trait,
       stats: now,
       confirmLabel: 'Sell',
-      onConfirm: () => this.sellTower(tower),
+      onConfirm: () => this.confirmSell(tower, refund),
     })
 
+    // THREE, always: see the slot note above.
     this.openRing(options, () => this.towerAnchor(tower), (id) => {
       this.previewingUpgrade = id !== null && id !== 'sell'
       if (this.selected) this.drawSelectedRange(this.selected)
-    })
+    }, 3)
   }
 
   /** The tower's position on the glass, or null once it is gone. */
@@ -1837,6 +1889,28 @@ this.armReadyCountdown()
       `It fires slowly for ${realSeconds(step.buildSeconds, 1)}s.`
   }
 
+  /**
+   * The one confirmation in the tower panel, and it is worded.
+   *
+   * UPGRADE DOES NOT GET ONE. An upgrade is reversible in the only sense that
+   * matters — the tower is still there and still yours — and a confirm on the
+   * action a player takes forty times a run is friction on the wrong button.
+   * Selling is the one that cannot be taken back.
+   *
+   * WORDS, not a glyph. The ring's own second press is a confirm button with a
+   * tick on it, and the button beside it carries a tick too; two ticks side by
+   * side are not a question, they are a shape. "Sell Grinder for 45 peanuts?"
+   * with SELL and CANCEL under it is a sentence the player has to answer.
+   */
+  private confirmSell(tower: Tower, refund: number): void {
+    this.openDialog({
+      title: `Sell ${tower.def.name} for ${refund} peanuts?`,
+      subtitle: 'The pad goes back to empty. This cannot be undone.',
+      confirm: { label: 'Sell', onPick: () => this.sellTower(tower) },
+      cancelLabel: 'Cancel',
+    })
+  }
+
   private sellTower(tower: Tower): void {
     // A tier that is still going up has already been paid for, so it counts
     // towards the refund. Otherwise selling mid-build quietly eats the cost of
@@ -1868,6 +1942,23 @@ this.armReadyCountdown()
    *  how it was caught outliving the mode it belongs to. */
   cancelVisible = false
 
+  /**
+   * CANCEL's visibility, COMPUTED from what there is to cancel.
+   *
+   * It used to be set by hand at each place a mode was entered or left, and
+   * the bug that pattern always has arrived on schedule: after one successful
+   * Restructure the button stayed on the glass for the rest of the encounter,
+   * because one of the exits forgot to turn it off. A fourth cancellable
+   * state — the drawer's pick — would have been a fourth chance to forget.
+   */
+  private refreshCancel(): void {
+    this.setCancelVisible(
+      this.status.mode === 'targeting'
+      || this.status.mode === 'restructure'
+      || this.drawerPick !== null,
+    )
+  }
+
   private setCancelVisible(on: boolean): void {
     this.cancelVisible = on
     for (const part of this.cancelBtn.parts) {
@@ -1877,7 +1968,6 @@ this.armReadyCountdown()
   }
 
   private clearSelection(): void {
-    this.setCancelVisible(false)
     this.clearGhost()
     this.ring?.close()
     this.ring?.close()
@@ -1889,6 +1979,12 @@ this.armReadyCountdown()
     this.markers.cancel()
     this.status.mode = 'normal'
     this.status.pendingAbility = null
+    // The drawer's pick is one of the things CANCEL cancels, and this is
+    // where CANCEL and ESC both land. Closing the drawer clears the pick on
+    // its own side; this is the other direction.
+    this.drawerPick = null
+    this.drawer?.select(null)
+    this.refreshCancel()
     this.rangeRing.clear()
     this.targetRing.clear()
     this.castCursor.hide()
@@ -2014,7 +2110,7 @@ this.armReadyCountdown()
     this.ring?.close()
     this.status.mode = 'targeting'
     this.status.pendingAbility = id
-    this.setCancelVisible(true)
+    this.refreshCancel()
     const within = ABILITIES[id].pathOnlyWithin
     this.status.message = within !== undefined
       ? `${ABILITIES[id].name}: drop it on the road. The cursor says where.`
@@ -2220,20 +2316,24 @@ this.armReadyCountdown()
   /**
    * Arms a move from the ability bar: pick a tower, then a free spot.
    *
-   * NO LONGER GATED ON DAD MODE. It was, on the reasoning that a hero who can
-   * rearrange the board at will turns Restructure into a permanent editing
-   * mode rather than something earned by nearly dying. That reasoning held for
-   * the ability; what it produced was a GAME WITH NO WAY TO MOVE A TOWER. Dad
-   * Mode fires once per encounter at 25% health, so the only route to picking
-   * a tower up was to almost die first, and a player who never dropped that
-   * low never discovered the feature existed.
+   * DAD MODE GATES IT, AGAIN. The gate came off once, on the reasoning that
+   * Last Stand fires at 25% health so a player who never dropped that low
+   * never learned towers could move — a real problem, answered at the time by
+   * putting a free MOVE button on every tower's own panel, always available.
    *
-   * The cost is the 22-second cooldown, which is a real one, and the ring now
-   * offers the same move on the tower itself — see `openTowerRing`.
+   * That answer was worse than the problem. A permanent free button doing the
+   * thing Last Stand hands you means Last Stand hands you nothing: the reward
+   * was already in the player's pocket. So MOVE is off the tower panel and the
+   * gate is back, and Restructure is once more something the hero earns by
+   * nearly dying, with a 22-second cooldown on top.
    */
   armRestructure(): void {
     if (this.hero.down) {
       this.refuse(`${this.hero.def.name} is down.`)
+      return
+    }
+    if (!this.hero.lastStandActive) {
+      this.refuse(`${this.hero.def.restructure.name} needs ${this.hero.def.lastStand.name}.`)
       return
     }
     if (!this.cooldowns.ready('restructure')) {
@@ -2248,39 +2348,9 @@ this.armReadyCountdown()
     this.ring?.close()
     this.status.mode = 'restructure'
     this.restructuring = null
-    this.setCancelVisible(true)
+    this.refreshCancel()
     this.drawSpots()
     this.status.message = `${this.hero.def.restructure.name}: click a tower, then a free spot.`
-  }
-
-  /**
-   * Starts a move of ONE KNOWN TOWER, from its own ring.
-   *
-   * `armRestructure` asks "which tower?" and then "where to?", because from
-   * the ability bar it has to. The ring is already open on a tower, so the
-   * first question is answered and asking it again would be the menu losing
-   * track of what the player tapped.
-   *
-   * Public so the harness can drive it without the ring.
-   */
-  beginMove(tower: Tower): void {
-    if (this.hero.down) {
-      this.refuse(`${this.hero.def.name} is down.`)
-      return
-    }
-    if (!this.cooldowns.ready('restructure')) {
-      this.refuse(`${this.hero.def.restructure.name} is still recharging.`)
-      return
-    }
-    this.clearGhost()
-    this.ring?.close()
-    this.selected = null
-    this.status.mode = 'restructure'
-    this.restructuring = tower
-    this.showTowerRange(tower.x, tower.y, tower)
-    this.setCancelVisible(true)
-    this.drawSpots()
-    this.status.message = `Moving ${tower.def.name}. Tap a free pad.`
   }
 
   /** Drops a relocation in progress and leaves the board as it was. */
@@ -2288,7 +2358,7 @@ this.armReadyCountdown()
     if (this.status.mode !== 'restructure') return
     this.restructuring = null
     this.status.mode = 'normal'
-    this.setCancelVisible(false)
+    this.refreshCancel()
     this.rangeRing.clear()
     this.drawSpots()
     this.status.message = `${this.hero.def.lastStand.name} is over. Restructure with it.`
@@ -2320,17 +2390,27 @@ this.armReadyCountdown()
     this.refreshSupport()
     this.cooldowns.start('restructure')
     play(this, 'upgrade')
-    const cd = this.hero.def.restructure.cooldown
-    // Named, not "No charge." It costs a 22-second cooldown, and a message
-    // saying otherwise is why the ability read as a free UI convenience.
-    this.status.message = `${moving.def.name} restructured. Back in ${realSeconds(cd)}s.`
+    /*
+     * WHAT HAPPENED, NOT HOW LONG UNTIL THE NEXT ONE.
+     *
+     * This line used to read "Grinder restructured. Back in 16s." and then sat
+     * there, unchanged, for the whole cooldown — so the instruction row was
+     * held for sixteen seconds by a number that was wrong after the first one,
+     * and nothing else the game had to say could be said.
+     *
+     * A cooldown is a STATUS. It belongs where it can tick: the Restructure
+     * slot in the ability bar carries the sweep and the live count, and it
+     * stays on the glass until the cooldown ends rather than vanishing with
+     * Last Stand. The message row goes back to being the message row.
+     */
+    this.status.message = `${moving.def.name} moved.`
     this.restructuring = null
     this.status.mode = 'normal'
     // The CANCEL button was never taken down here, so after one successful
     // move it stayed on the screen for the rest of the encounter. That is what
     // made Restructure look like a permanent mode toggle rather than an
     // ability on a cooldown — the button outlived the mode it belonged to.
-    this.setCancelVisible(false)
+    this.refreshCancel()
     this.drawSpots()
     this.rangeRing.clear()
   }
@@ -2406,6 +2486,13 @@ this.armReadyCountdown()
       play(this, 'wave-cleared')
       this.earn(RULES.peanutsPerWaveCleared)
     }
+    // THE WAVE ENDING CANCELS THE PICK. A selection made during a fight is
+    // about that fight's board, and carrying it silently across the boundary
+    // leaves nodes pulsing at a player who has stopped looking at them.
+    this.drawer?.collapse()
+    this.drawerPick = null
+    this.refreshCancel()
+    this.drawSpots()
     this.status.wave++
     this.grantTowerUnlocks()
 

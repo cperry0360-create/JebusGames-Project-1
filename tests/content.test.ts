@@ -620,8 +620,9 @@ test('the tier-3 fork is two separate options, not two rows sharing a line', () 
   const scene = readFileSync(url('../src/scenes/GameScene.ts'), 'utf8')
   assert.ok(!/openSpecChoice/.test(scene), 'the old fork dialog is still reachable')
   const fork = scene.slice(scene.indexOf('if (choosing) {'), scene.indexOf("id: 'sell',"))
-  assert.match(fork, /for \(const spec of def\.specializations\)/,
+  assert.match(fork, /for \(const \[i, spec\] of def\.specializations\.entries\(\)\)/,
     'the fork does not offer one option per specialization')
+  assert.match(fork, /slot: i/, 'the two branches do not take the reserved slots')
   assert.match(fork, /id: `spec:\$\{spec\.id\}`/, 'the two options are not told apart by id')
   // Each carries its own price, its own trait phrase and its own icon: two
   // buttons wearing the same picture are a coin toss rather than a choice.

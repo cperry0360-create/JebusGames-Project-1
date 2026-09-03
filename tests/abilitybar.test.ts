@@ -165,8 +165,14 @@ test('the HUD hides Restructure rather than removing it', () => {
   const hud = readFileSync(new URL('../src/scenes/HudScene.ts', import.meta.url), 'utf8')
   // Visibility is decided per frame from the run's state, not by rebuilding
   // the bar with a different set of slots.
-  assert.match(hud, /slotShown\([\s\S]{0,400}kind !== 'restructure' \|\| s\.lastStand/,
+  // Shown during DAD MODE, and afterwards only while the cooldown is still
+  // running — the countdown is a status and this slot is where it ticks. It
+  // used to be announced on the instruction row instead, which held that row
+  // for sixteen seconds with a number that was wrong after the first one.
+  assert.match(hud, /slotShown\([\s\S]{0,900}s\.lastStand \|\| !this\.world\.cooldowns\.ready\('restructure'\)/,
     'Restructure is not gated on DAD MODE in the HUD')
+  assert.match(hud, /slotUsable[\s\S]{0,200}kind === 'restructure'\) return s\.lastStand/,
+    'a Restructure slot left on screen for its cooldown is castable outside DAD MODE')
   // A hidden slot is out of hit-testing entirely, not merely flagged off:
   // `input.enabled = false` leaves the rectangle registered, hovering, and
   // swallowing the press.
@@ -183,16 +189,32 @@ test('the HUD hides Restructure rather than removing it', () => {
   assert.match(hud, /strokeCircle\(r\.cx, r\.cy, r\.boxH \/ 2 - e\.inset\)/,
     'the reserved slot is not drawn as an empty socket')
 
-  // THE DAD MODE GATE IS GONE, deliberately. It made the reasoning right and
-  // the game wrong: Dad Mode fires once per encounter at 25% health, so the
-  // only route to moving a tower was to nearly die first, and a player who
-  // never dropped that low never learned towers could move at all. The cost is
-  // the cooldown, which is real, and the tower's own ring offers the same move.
+  /*
+   * THE DAD MODE GATE IS BACK, and the round trip is worth recording.
+   *
+   * It came off because Last Stand fires once per encounter at 25% health, so
+   * the only route to moving a tower was to nearly die first and a player who
+   * never dropped that low never learned towers could move at all. The answer
+   * chosen then was a free MOVE button on every tower's own panel, always
+   * available — which solved discoverability by making the reward worthless:
+   * Last Stand handed the player a thing they already had in their pocket.
+   *
+   * MOVE is off the tower panel now and the gate is back on the ability. The
+   * discoverability problem is real and is a separate one to solve; solving it
+   * by giving the reward away permanently was the wrong trade.
+   */
   const game = readFileSync(new URL('../src/scenes/GameScene.ts', import.meta.url), 'utf8')
-  assert.doesNotMatch(game, /if \(!this\.hero\.lastStandActive\) \{[\s\S]{0,200}refuse/,
-    'the DAD MODE gate on armRestructure is back')
-  assert.match(game, /armRestructure\(\): void \{[\s\S]{0,300}?cooldowns\.ready\('restructure'\)/,
-    'the cooldown is the only thing left holding it back, and it went too')
+  assert.match(game, /armRestructure\(\): void \{[\s\S]{0,600}?lastStandActive/,
+    'the DAD MODE gate on armRestructure is gone again')
+  assert.match(game, /armRestructure\(\): void \{[\s\S]{0,600}?cooldowns\.ready\('restructure'\)/,
+    'the cooldown is no longer checked either')
+  // And the panel must not offer it: a free permanent MOVE is what made the
+  // ability redundant in the first place.
+  // Code only. The comment where MOVE used to be names the line it deleted,
+  // and deleting that history to satisfy a regex would be the wrong tidy.
+  const code = game.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n')
+  assert.doesNotMatch(code, /id: 'move'/, 'MOVE is back on the tower panel')
+  assert.doesNotMatch(code, /Tap a free pad/, "the tower panel's move instruction is back")
   assert.match(game, /cancelRestructure\(\)/,
     'a relocation in progress is not cancelled when DAD MODE ends')
 })

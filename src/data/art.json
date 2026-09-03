@@ -81,7 +81,7 @@
     "scatter-stump": "props/stump.png",
     "scatter-mushrooms": "props/mushrooms.png",
     "icon-upgrade": "ui/icon_upgrade.png",
-    "icon-sell": "ui/icon_sell.png",
+    
     "icon-target": "ui/icon_target.png",
     "icon-cancel": "ui/icon_cancel.png",
     "icon-locked": "ui/icon_locked.png",
@@ -471,12 +471,6 @@
       "contentWidth": 256,
       "contentHeight": 256
     },
-    "icon-sell": {
-      "anchorX": 0.5,
-      "anchorY": 0.5,
-      "contentWidth": 256,
-      "contentHeight": 256
-    },
     "icon-target": {
       "anchorX": 0.5,
       "anchorY": 0.5,
@@ -595,7 +589,7 @@
     },
     "icons": {
       "upgrade": "icon-upgrade",
-      "sell": "icon-sell",
+      "sell": "gen-icon-peanut",
       "target": "icon-target",
       "cancel": "icon-cancel",
       "locked": "icon-locked",
@@ -627,7 +621,8 @@
   "generated": {
     "groundShadow": "gen-ground-shadow",
     "buildGlow": "generated-build-glow",
-    "iconMissing": "generated-icon-missing"
+    "iconMissing": "generated-icon-missing",
+    "peanutIcon": "gen-icon-peanut"
   },
   "greyable": [
     "turret-ledger",
@@ -675,7 +670,6 @@
   },
   "optional": [
     "icon-upgrade",
-    "icon-sell",
     "icon-target",
     "icon-cancel",
     "icon-locked",

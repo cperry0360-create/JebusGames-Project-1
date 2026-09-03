@@ -1,7 +1,7 @@
 {
   "plate": "level1",
   "roadWidth": 38.0,
-  "note": "Re-measured against the 3840x2160 plate on 2026-09-02. Every coordinate here was traced off the painting rather than adjusted from the old numbers: the lane by following the road from the arch to the gate, the arch and gate by their stonework and woodwork, the sign by the board the innkeeper is painted holding. The previous values described the 1672x941 plate, which was a DIFFERENT PICTURE — the lane left the painted road at 11 of 33 sampled columns, by up to 120px.",
+  "note": "Re-measured against the 3840x2160 plate on 2026-09-02. Every coordinate here was traced off the painting rather than adjusted from the old numbers: the lane by following the road from the arch to the gate, the arch and gate by their stonework and woodwork, the sign by the board the innkeeper is painted holding. The previous values described the 1672x941 plate, which was a DIFFERENT PICTURE \u2014 the lane left the painted road at 11 of 33 sampled columns, by up to 120px.",
   "heroStart": [
     521.7,
     524.2
@@ -191,7 +191,7 @@
     "x": 925.0,
     "y": 183.0,
     "boardWidth": 36.0,
-    "_note": "The centre of the blank board the innkeeper is painted holding, at world x 907-943, y 163-203. The sprite is the gameplay object — it carries the tap target and the bribe swap to sign_courjahan — so it goes ONTO the board rather than standing alone in grass 65px to its left, which is where the old plate put it."
+    "_note": "The centre of the blank board the innkeeper is painted holding, at world x 907-943, y 163-203. The sprite is the gameplay object \u2014 it carries the tap target and the bribe swap to sign_courjahan \u2014 so it goes ONTO the board rather than standing alone in grass 65px to its left, which is where the old plate put it."
   },
   "scatterExclude": [
     {
@@ -238,25 +238,56 @@
     }
   ],
   "entrance": {
-    "_note": "Measured off the new plate: the left pier is world x 26-50, the passage is open from 50 to 98, and the right pier runs 98-116. An enemy is clear of the arch past x=130. The old values said 0-34, 33-83 and 84-128 and described a different arch.",
+    "_note": "Measured off the plate: the near pier is world x 15-50, the passage is open from 50 to 95, and the far pier runs 88-118. An enemy is clear of the arch past x=130.",
     "emergeFromX": 50.0,
     "clearOfArchX": 130.0,
     "fadeMs": 400,
     "startScale": 0.9,
-    "occluders": [
-      {
-        "x": 26.0,
-        "y": 286.0,
-        "w": 26.0,
-        "h": 112.0
-      },
-      {
-        "x": 98.0,
-        "y": 286.0,
-        "w": 20.0,
-        "h": 112.0
+    "arch": {
+      "_note": "THE ARCH'S DEPTH, SPLIT BY WHICH SIDE OF THE ROAD EACH PART STANDS ON.\n\nThe road runs left to right and descends as it goes, so the gateway's two piers are not side by side across it: the NEAR pier (x 15-50) is planted below the road's near edge, and the FAR pier (x 88-118) and the span stand above its far edge. Measured off the plate with the lane drawn on it: at x=30 the road runs y 357-396 and the near pier's base is y 410; at x=104 the road runs y 375-411 and the far pier's base is y 388.\n\nSo the far pier and the span are BEHIND everything on the road and need no occluder at all \u2014 the map plate already draws them at the bottom of the depth order. They used to be lifted out of the plate into a 20x112 RECTANGLE at x 98-118, which cut the painted column in half down its length: the stones left of x=98 stayed at plate depth and the stones right of it jumped to 398, so an enemy walking out drew over one half of the pier and under the other. That is the split the player saw.\n\nOnly the near pier is lifted, and it is cut to its painted OUTLINE rather than to a box, because a box around it contains road and grass \u2014 and a copy of the road drawn in front of an enemy standing on it is a worse artefact than the one being fixed.\n\nTHE OUTLINE IS MEASURED AGAINST ONE PLATE. It traces the stone in the art `map.level1` currently resolves to. A new plate \u2014 public/assets/map/map_level1_v2.png is sitting in the repository unreferenced as of 2026-09-03 \u2014 moves the stone and invalidates every number here. Re-measure with `sh run.sh archplate 40 844x390 left`, which draws the outline and the lane over the plate at 14x with a 5px grid, and re-run `sh run.sh arch` for the pixel diff.",
+      "near": {
+        "outline": [
+          [
+            15,
+            356
+          ],
+          [
+            34,
+            355
+          ],
+          [
+            49,
+            357
+          ],
+          [
+            50,
+            372
+          ],
+          [
+            50,
+            392
+          ],
+          [
+            47,
+            409
+          ],
+          [
+            30,
+            413
+          ],
+          [
+            15,
+            405
+          ],
+          [
+            13,
+            374
+          ]
+        ],
+        "depth": 413,
+        "_depth": "The near pier's base, which is what a y-sort would give it. Every enemy on the road at this stretch is above it \u2014 the road's near edge at x=30 is y=396 and the lateral spread reaches y=401 \u2014 so the pier is in front of all of them and they emerge from behind real stone."
       }
-    ]
+    }
   },
   "exit": {
     "_note": "THE GATE IS OPEN in this plate. Its two leaves stand apart with a dark gap between them at world x 1235-1248, so the lane runs through it and there is nothing to walk into. An enemy fades out across that gap and is gone by the time it clears the far leaf. There is no impact: the slam, the camera shake and the two dust puffs all described a gate that is painted shut, and this one is not.",

@@ -72,7 +72,11 @@ test('the tab is the size asked for and nothing in code decides it', () => {
   assert.equal(CFG.tabHeight, 88)
   assert.equal(CFG.tileHeight, 62)
   assert.equal(CFG.columns, 2)
-  const drawer = src('ui/ControlDrawer.ts')
+  // CODE ONLY. The comments cite the measured sizes on purpose — a note that
+  // says "the panel holds 118 to 152 pixels" is why the reader believes the
+  // rest of it — and a regex over the whole file matched the explanation.
+  const drawer = src('ui/ControlDrawer.ts').split('\n')
+    .filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n')
   // Not preceded or followed by a digit or a point, so `w * 0.88` — a
   // fraction of a size that DOES come from the data — is not a dimension.
   assert.doesNotMatch(drawer, /(?<![\d.])(34|88|152|118|62)(?![\d.])/,
@@ -178,14 +182,32 @@ test('six towers make three rows of two', () => {
   assert.ok(l.tiles[1]!.x > l.tiles[0]!.x)
 })
 
-test('the narrow viewport is the one that scrolls, and it does', () => {
-  // Measured, not assumed: 198px of tiles in a 132px grid at 568x320, and
-  // 198 in 202 at 844x390. The scroll path is only reachable on the phone,
-  // which is exactly the screen it matters on.
+test('how far each viewport has to scroll, measured', () => {
+  /*
+   * MEASURED, AND ONE OF THESE MOVED. 198px of tiles is the content at every
+   * size; what varies is the grid it is seen through.
+   *
+   * At 844x390 the grid was 202 and nothing scrolled. Moving CANCEL out of the
+   * bottom-right corner and into the HUD band cost `panelArea` eighteen pixels
+   * — the button is 40 tall and the row it joined is 22 — so the grid is 184
+   * and the last row is fourteen pixels short of fitting. That is a real cost
+   * of taking chrome off the board, and it is written down here rather than
+   * discovered later: the drag and the scroll indicator both exist, and every
+   * tile is still reachable (see the test below), but the wide screen scrolls
+   * now where it used to fit.
+   *
+   * The levers, in order of least damage: `drawer.pad`, `drawer.tileGap`,
+   * `drawer.widths`. None of them is worth spending until 62px tiles have
+   * been judged on a real thumb.
+   */
   const wide = drawerLayout(844, area(844, 390), 6, 0, CFG)
   const narrow = drawerLayout(568, area(568, 320), 6, 0, CFG)
-  assert.equal(wide.maxScroll, 0, 'the wide drawer should not need to scroll')
-  assert.ok(narrow.maxScroll > 0, 'the narrow drawer must scroll or a tile is unreachable')
+  const desk = drawerLayout(1280, area(1280, 720), 6, 0, CFG)
+  assert.equal(Math.round(wide.maxScroll), 14, '844x390 no longer scrolls by 14')
+  assert.equal(Math.round(narrow.maxScroll), 84, '568x320 no longer scrolls by 84')
+  assert.equal(desk.maxScroll, 0, 'a 720-tall screen should never need to scroll')
+  assert.ok(narrow.maxScroll > wide.maxScroll,
+    'the narrow screen must be the worse case, or the widths are the wrong way round')
 })
 
 test('scrolling moves the tiles and nothing else', () => {

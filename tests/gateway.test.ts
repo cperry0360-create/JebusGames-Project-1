@@ -135,19 +135,82 @@ test('the archway is put back in front, from the plate itself', () => {
   const game = src('scenes/GameScene.ts')
   const fn = /private createArchOccluders\(\)[\s\S]*?\n  \}/.exec(game)
   assert.ok(fn, 'nothing draws the arch over the enemies under it')
-  // No new art: the piers are cropped out of the map plate.
-  assert.match(fn[0], /getSourceImage\(\)/, 'the occluders are not taken from the plate')
+  // No new art: the pier is cropped out of the map plate.
+  assert.match(fn[0], /getSourceImage\(\)/, 'the piece is not taken from the plate')
   assert.match(fn[0], /drawImage\(/, 'nothing is cropped')
-  // Sorted by its base like every other piece of scenery, not pinned above.
-  assert.match(fn[0], /setDepth\(r\.y \+ r\.h\)/,
-    'the arch uses a fixed depth instead of the one Y-sort rule')
+  // AND CLIPPED TO THE PAINTED OUTLINE. This piece is drawn in FRONT of
+  // units, so every pixel of it that is not stone is a pixel of road or grass
+  // painted over somebody standing there.
+  assert.match(fn[0], /ctx\.clip\(\)/, 'the crop is a rectangle again')
+  assert.match(fn[0], /setDepth\(near\.depth\)/, 'the pier does not take its depth from the data')
+})
 
-  // The passage between the piers must NOT be covered, or an enemy in the
-  // opening is hidden behind a picture of the road it is standing on.
-  const occ = MAP.entrance.occluders as Array<{ x: number; w: number }>
-  assert.equal(occ.length, 2, 'the arch should be two piers with a gap between them')
-  const gap = occ[1].x - (occ[0].x + occ[0].w)
-  assert.ok(gap > 30, `only ${gap}px between the piers; the passage is being covered`)
-  assert.ok(occ[1].x + occ[1].w <= MAP.entrance.clearOfArchX + 4,
-    'an occluder reaches past the point where the arch is meant to be behind you')
+test('only the near pier is lifted, and it is a traced outline not a box', () => {
+  /*
+   * THE FAR PIER USED TO BE LIFTED TOO, INTO A RECTANGLE, AND THAT WAS THE BUG.
+   *
+   * The road runs left to right and descends, so the gateway's piers are not
+   * side by side across it: the near pier is planted below the road's near
+   * edge and the far pier stands above its far edge. The far pier is therefore
+   * behind everything on the road and the plate already draws it there.
+   *
+   * It was lifted into a 20x112 box at x 98-118 while the painted column is
+   * x 88-118 — so the box cut the column in half down its length, and an enemy
+   * walking out drew over the half still at plate depth and under the half at
+   * 398. Measured: 25% of that pier's pixels changed colour as an enemy passed.
+   */
+  const arch = (MAP.entrance as Record<string, unknown>).arch as {
+    near: { outline: number[][]; depth: number }
+  }
+  assert.equal((MAP.entrance as Record<string, unknown>).occluders, undefined,
+    'the rectangular occluders are back')
+  assert.ok(Array.isArray(arch.near.outline), 'the near pier has no outline')
+  assert.ok(arch.near.outline.length >= 6,
+    `an outline of ${arch.near.outline.length} points is a box with extra steps`)
+  for (const p of arch.near.outline) {
+    assert.equal(p.length, 2, 'an outline point is not an [x, y] pair')
+    assert.ok(Number.isFinite(p[0]!) && Number.isFinite(p[1]!), 'a point is not a number')
+  }
+})
+
+test('the near pier is in front of every enemy that can stand at the arch', () => {
+  /*
+   * The depth is the pier's painted base, and the claim it makes is that no
+   * enemy on this stretch of road is ever lower on the screen than it. Enemies
+   * walk the lane centre with a lateral offset of up to half the road's width,
+   * so the deepest one is the road centre plus that. Checked here rather than
+   * asserted, because the lane and the road width are both tunable.
+   */
+  const arch = (MAP.entrance as Record<string, unknown>).arch as {
+    near: { outline: number[][]; depth: number }
+  }
+  const xs = arch.near.outline.map((p) => p[0]!)
+  const lo = Math.min(...xs)
+  const hi = Math.max(...xs)
+  const half = MAP.roadWidth / 2
+  let deepest = -Infinity
+  const w = MAP.waypoints
+  for (let i = 1; i < w.length; i++) {
+    const a = w[i - 1]!
+    const b = w[i]!
+    for (let t = 0; t <= 1; t += 0.02) {
+      const x = a[0]! + (b[0]! - a[0]!) * t
+      if (x < lo - 20 || x > hi + 20) continue
+      deepest = Math.max(deepest, a[1]! + (b[1]! - a[1]!) * t + half)
+    }
+  }
+  assert.ok(Number.isFinite(deepest), 'the lane never passes the near pier')
+  assert.ok(arch.near.depth > deepest,
+    `the pier's depth is ${arch.near.depth} and an enemy can reach ${deepest.toFixed(1)}`)
+})
+
+test('the passage is not covered by the piece drawn in front', () => {
+  // An enemy standing in the opening must not be hidden behind a picture of
+  // the road it is standing on. The outline stops at the mouth.
+  const arch = (MAP.entrance as Record<string, unknown>).arch as {
+    near: { outline: number[][] }
+  }
+  const right = Math.max(...arch.near.outline.map((p) => p[0]!))
+  assert.ok(right <= MAP.entrance.emergeFromX + 2,
+    `the outline reaches x=${right}, past the arch mouth at ${MAP.entrance.emergeFromX}`)
 })

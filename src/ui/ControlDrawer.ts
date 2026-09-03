@@ -194,17 +194,36 @@ export class ControlDrawer {
     this.refresh()
   }
 
-  /** Opens or closes the panel. The tab stays either way. */
+  /** Opens or closes the panel. The tab stays either way. Closing cancels
+   *  the pick — see `setOpen`. */
   toggle(): void {
-    this.open = !this.open
-    this.refresh()
+    this.setOpen(!this.open)
   }
 
-  /** Collapses to the tab. Called after a pick, so the board is visible for
-   *  the tap that follows — that is the point of the inverted flow. */
+  /** Collapses to the tab, cancelling the pick with it. */
   collapse(): void {
-    if (!this.open) return
-    this.open = false
+    this.setOpen(false)
+  }
+
+  /**
+   * CLOSING THE DRAWER CANCELS WHATEVER IS PICKED.
+   *
+   * The pulsing rings on the board and the CANCEL button are this drawer's
+   * selection, shown somewhere else. A shut drawer with a live selection is a
+   * mode with no visible handle on it: the board is telling the player it is
+   * waiting for a tap and the thing that put it there is gone.
+   *
+   * This is also why a pick no longer collapses the panel. It used to, so the
+   * board would be clear for the tap that follows — but a collapse IS a close,
+   * and a close that keeps the selection is precisely the orphaned state
+   * above. The panel stays out while a tile is picked. It holds the right-hand
+   * 118 to 152 pixels and the board pans under it, which is the price of the
+   * selection being visible in the same place it was made.
+   */
+  private setOpen(next: boolean): void {
+    if (this.open === next) return
+    this.open = next
+    if (!next) this.select(null)
     this.refresh()
   }
 
@@ -294,10 +313,9 @@ export class ControlDrawer {
     if (!r || !tile || tile.locked || !tileVisible(r, this.layout.grid, 0.5)) return
     const { x, y } = pointerToScreen(this.scene, p, this.opts.camera())
     if (!inRect(r, x, y)) return
-    // Tapping the selected tile again cancels. The other cancel is a tap on
-    // bare ground, which the scene owns.
+    // Tapping the selected tile again cancels. The other cancels are a tap on
+    // bare ground and closing the drawer, which the scene and `setOpen` own.
     this.select(this.selected === tile.id ? null : tile.id)
-    if (this.selected) this.collapse()
   }
 
   /** Rebuilds the whole drawer from the current state. Cheap: a handful of

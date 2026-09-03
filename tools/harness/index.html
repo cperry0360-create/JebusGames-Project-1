@@ -4285,12 +4285,16 @@ async function run() {
       note('    gate departure at x=' + d.x.toFixed(0) + ' alpha ' + d.alpha.toFixed(2))
     }
 
+    // ONE lifted piece, not two. The far pier and the span stand above the
+    // road's far edge, so they are behind everything on it and the plate
+    // already draws them there; only the near pier is cut out and put in
+    // front. See the `arch` scenario for the pixel test.
     const occ = g.archOccluders || []
-    note('  arch occluders drawn: ' + occ.length +
+    note('  arch pieces lifted out of the plate: ' + occ.length +
       (occ.length ? ' at depth ' + occ.map((o) => o.depth.toFixed(0)).join(', ') : ''))
     await shot('gateway-' + VP.w + 'x' + VP.h)
     const ok = visibleBeforeArch === 0 && fadedInOpen === 0 && stillSolid.length === 0 &&
-      atGate.length > 0 && occ.length === 2
+      atGate.length > 0 && occ.length === 1
     note('RESULT ' + (ok
       ? 'nothing appears or disappears in open ground'
       : '*** SOMETHING APPEARS OR DISAPPEARS IN OPEN GROUND ***'))
@@ -4693,6 +4697,255 @@ async function run() {
     return
   }
 
+  if (scenario === 'archplate') {
+    // THE PAINTED ARCH, AT SOURCE RESOLUTION, WITH THE MEASURED RECTANGLES
+    // AND THE LANE DRAWN ON IT.
+    //
+    // Which pillar is near and which is far is a fact about the picture, and
+    // every attempt to infer it from a game screenshot at 1.72 zoom cost a run
+    // and produced a different answer. This is the picture.
+    const MAPD = (await import('./js/data/map.json', { with: { type: 'json' } })).default
+    const D = (await import('./js/data/display.json', { with: { type: 'json' } })).default
+    const tex = game.textures.get('map-level1').getSourceImage()
+    const per = tex.width / D.width
+    // The arch and a good margin round it, in WORLD units.
+    const box = arg === 'near'
+      ? { x: 80, y: 280, w: 60, h: 140 }
+      : arg === 'left'
+        ? { x: 10, y: 280, w: 60, h: 140 }
+        : { x: 0, y: 250, w: 220, h: 220 }
+    const scale = arg ? 14 : 4
+    const c = document.createElement('canvas')
+    c.width = box.w * scale
+    c.height = box.h * scale
+    const ctx = c.getContext('2d')
+    ctx.imageSmoothingEnabled = false
+    ctx.drawImage(tex,
+      box.x * per, box.y * per, box.w * per, box.h * per,
+      0, 0, c.width, c.height)
+    const X = (wx) => (wx - box.x) * scale
+    const Y = (wy) => (wy - box.y) * scale
+    // The near pier's traced outline: the one part of the arch that is lifted
+    // out of the plate and drawn in front of units.
+    ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 3
+    ctx.beginPath()
+    for (const [i, [wx, wy]] of MAPD.entrance.arch.near.outline.entries()) {
+      if (i === 0) ctx.moveTo(X(wx), Y(wy))
+      else ctx.lineTo(X(wx), Y(wy))
+    }
+    ctx.closePath()
+    ctx.stroke()
+    // The lane centre, and its two edges at roadWidth.
+    const half = MAPD.roadWidth / 2
+    for (const [colour, off] of [['#00ffff', 0], ['#00ff88', half], ['#00ff88', -half]]) {
+      ctx.strokeStyle = colour; ctx.lineWidth = off === 0 ? 3 : 2
+      ctx.beginPath()
+      let first = true
+      for (let i = 1; i < MAPD.waypoints.length; i++) {
+        const a = MAPD.waypoints[i - 1], b = MAPD.waypoints[i]
+        if (a[0] > box.x + box.w && b[0] > box.x + box.w) continue
+        const ang = Math.atan2(b[1] - a[1], b[0] - a[0])
+        const nx = -Math.sin(ang) * off, ny = Math.cos(ang) * off
+        if (first) { ctx.moveTo(X(a[0] + nx), Y(a[1] + ny)); first = false }
+        ctx.lineTo(X(b[0] + nx), Y(b[1] + ny))
+      }
+      ctx.stroke()
+    }
+    // A ruler every 20 world px in x and y, labelled, so a rectangle can be
+    // read off the picture instead of guessed at.
+    ctx.font = '20px monospace'
+    const step = arg ? 5 : 20
+    for (let wx = box.x; wx <= box.x + box.w; wx += step) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1
+      ctx.beginPath(); ctx.moveTo(X(wx), 0); ctx.lineTo(X(wx), c.height); ctx.stroke()
+      ctx.fillStyle = '#ffffff'; ctx.fillText(String(wx), X(wx) + 3, 22)
+    }
+    for (let wy = box.y; wy <= box.y + box.h; wy += step) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1
+      ctx.beginPath(); ctx.moveTo(0, Y(wy)); ctx.lineTo(c.width, Y(wy)); ctx.stroke()
+      ctx.fillStyle = '#ffffff'; ctx.fillText(String(wy), 3, Y(wy) - 3)
+    }
+    note('plate ' + tex.width + 'x' + tex.height + '  ' + per.toFixed(2) + ' source px per world px')
+    note('window: world ' + box.x + ',' + box.y + ' ' + box.w + 'x' + box.h + ' at ' + scale + 'x')
+    await post('/shot/archplate' + (arg ? '-' + arg : ''), c.toDataURL('image/png'))
+    return
+  }
+
+  if (scenario === 'arch') {
+    // THE ARCH, MEASURED IN PIXELS RATHER THAN LOOKED AT.
+    //
+    // The complaint was that an enemy walking out of the entry arch draws over
+    // painted stone. "Looks right" cannot settle that: the overlap is a shield
+    // and a rake tip against a stone column, and it is exactly the kind of
+    // thing that reads as correct in a still and wrong in motion.
+    //
+    // So the assertion is a DIFF, and it is taken only over pixels INSIDE the
+    // near pier's painted outline. Freeze the camera, photograph the stone
+    // with nothing behind it, walk a wave through, photograph it again, and
+    // count the stone pixels that changed. Stone is static art at a fixed
+    // depth in front of every unit on this stretch of road. If any of it
+    // changed colour, something drew on top of it.
+    //
+    // The far pier is measured too, and it is EXPECTED to change: it stands
+    // above the road's far edge, so everything on the road is in front of it.
+    // A run where neither changes proves nothing — it means no enemy was
+    // there — so the far pier is the probe's own control.
+    const MAPD = (await import('./js/data/map.json', { with: { type: 'json' } })).default
+    const RES = await import('./js/systems/Resolution.js')
+    const dpr = window.devicePixelRatio || 1
+    const problems = []
+    const push = (m) => { problems.push(m); note('   *** ' + m) }
+    note('viewport ' + VP.w + 'x' + VP.h + '  dpr ' + dpr)
+
+    // A FIXED CAMERA. The rig eases every frame, and a diff between two frames
+    // taken at two scroll positions is a diff of the whole map.
+    const cam = g.cameras.main
+    await lookAt(90, 380)
+    await sleep(400)
+    g.rig.setEnabled(false)
+    note('camera frozen at scroll ' + Math.round(cam.scrollX) + ',' + Math.round(cam.scrollY) +
+      '  zoom ' + cam.zoom.toFixed(3))
+
+    const toCanvas = (wx, wy) => {
+      const at = RES.worldToScreen(g, wx, wy)
+      return { x: at.x * dpr, y: at.y * dpr }
+    }
+    const boxOf = (pts) => {
+      const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1])
+      const a = toCanvas(Math.min(...xs), Math.min(...ys))
+      const b = toCanvas(Math.max(...xs), Math.max(...ys))
+      return {
+        x: Math.floor(a.x), y: Math.floor(a.y),
+        w: Math.max(1, Math.ceil(b.x - a.x)), h: Math.max(1, Math.ceil(b.y - a.y)),
+      }
+    }
+    // Inside the traced silhouette, in canvas pixels: the only pixels whose
+    // colour is a claim about depth.
+    const maskFor = (pts, b) => {
+      const poly = pts.map(([wx, wy]) => {
+        const c = toCanvas(wx, wy)
+        return [c.x - b.x, c.y - b.y]
+      })
+      const m = new Uint8Array(b.w * b.h)
+      for (let y = 0; y < b.h; y++) {
+        for (let x = 0; x < b.w; x++) {
+          let inside = false
+          for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+            const [xi, yi] = poly[i], [xj, yj] = poly[j]
+            if ((yi > y + 0.5) !== (yj > y + 0.5)
+              && x + 0.5 < ((xj - xi) * (y + 0.5 - yi)) / (yj - yi) + xi) inside = !inside
+          }
+          if (inside) m[y * b.w + x] = 1
+        }
+      }
+      return m
+    }
+
+    const nearPts = MAPD.entrance.arch.near.outline
+    // The far pier, as the control. Read off the same plate dump the outline
+    // came from: the painted column is x 88-118, y 300-390.
+    const farPts = [[90, 302], [116, 302], [116, 388], [90, 388]]
+    const targets = [
+      { name: 'near pier', pts: nearPts, mustNotChange: true },
+      { name: 'far pier (control)', pts: farPts, mustNotChange: false },
+    ]
+    for (const t of targets) {
+      t.box = boxOf(t.pts)
+      t.mask = maskFor(t.pts, t.box)
+      t.pixels = t.mask.reduce((a, b) => a + b, 0)
+      note(t.name + ': world outline of ' + t.pts.length + ' points  canvas ' +
+        t.box.x + ',' + t.box.y + ' ' + t.box.w + 'x' + t.box.h +
+        '  ' + t.pixels + ' pixels inside')
+      if (t.pixels < 200) push(t.name + ' has only ' + t.pixels + ' pixels to test')
+    }
+    for (const [i, p] of g.archOccluders.entries()) {
+      note('  lifted piece ' + i + ' depth ' + p.depth + '  ' +
+        Math.round(p.displayWidth) + 'x' + Math.round(p.displayHeight) +
+        ' at ' + Math.round(p.x) + ',' + Math.round(p.y))
+    }
+    if (g.archOccluders.length !== 1) {
+      push('expected exactly one lifted piece, found ' + g.archOccluders.length)
+    }
+
+    const grab = (b) => new Promise((resolve) => {
+      game.renderer.snapshotArea(b.x, b.y, b.w, b.h, (img) => {
+        const c = document.createElement('canvas')
+        c.width = b.w; c.height = b.h
+        const cx = c.getContext('2d')
+        cx.drawImage(img, 0, 0)
+        resolve(cx.getImageData(0, 0, b.w, b.h).data)
+      })
+    })
+
+    await sleep(200)
+    for (const t of targets) t.before = await grab(t.box)
+
+    // Walk them through. No towers, so nothing dies on the way.
+    g.startWave()
+    let best = null
+    for (let i = 0; i < 300; i++) {
+      await sleep(60)
+      const inArch = g.enemies.filter((e) => e.alive && e.art && e.art.alpha > 0.5
+        && e.x > MAPD.entrance.emergeFromX - 4 && e.x < MAPD.entrance.clearOfArchX)
+      if (!inArch.length) continue
+      const e = inArch.sort((a, b2) => b2.x - a.x)[0]
+      const now = []
+      for (const t of targets) {
+        const after = await grab(t.box)
+        let n = 0
+        for (let px = 0; px < t.mask.length; px++) {
+          if (!t.mask[px]) continue
+          const o = px * 4
+          if (Math.abs(t.before[o] - after[o]) > 12
+            || Math.abs(t.before[o + 1] - after[o + 1]) > 12
+            || Math.abs(t.before[o + 2] - after[o + 2]) > 12) n++
+        }
+        now.push(n)
+      }
+      const overNear = now[0]
+      if (!best || overNear > best.near || (overNear === best.near && now[1] > best.far)) {
+        best = { near: overNear, far: now[1], x: e.x, y: e.y, depth: e.depth }
+      }
+      if (i > 120 && best.far > 0) break
+    }
+    if (!best) { push('no enemy ever reached the arch'); return }
+    note('worst frame: enemy at ' + Math.round(best.x) + ',' + Math.round(best.y) +
+      '  depth ' + Math.round(best.depth))
+    const nearPct = 100 * best.near / targets[0].pixels
+    const farPct = 100 * best.far / targets[1].pixels
+    note('  near pier: ' + best.near + ' of ' + targets[0].pixels +
+      ' stone pixels changed (' + nearPct.toFixed(2) + '%)')
+    note('  far pier:  ' + best.far + ' of ' + targets[1].pixels +
+      ' stone pixels changed (' + farPct.toFixed(2) + '%)')
+    // A whole tolerance percent, not zero: the snapshot is a GPU read-back and
+    // an antialiased silhouette edge inside the mask moves by a shade.
+    if (nearPct > 1) push('something drew over the near pier: ' + nearPct.toFixed(2) + '% of it')
+    if (best.far === 0) {
+      push('the far pier never changed either, so the run proves nothing —'
+        + ' no enemy was actually behind it')
+    }
+    // AND A FRAME WITH SOMEONE ACTUALLY BEHIND THE NEAR PIER, which is the
+    // one the eye has to accept. The diff above proves no stone changed; this
+    // proves the stone is still all there.
+    for (let i = 0; i < 300; i++) {
+      await sleep(50)
+      const behind = g.enemies.filter((e) => e.alive && e.art && e.art.alpha > 0.4
+        && e.x > 40 && e.x < 72)
+      if (behind.length) {
+        note('shot with ' + behind.length + ' emerging at x ' +
+          behind.map((e) => Math.round(e.x)).join(','))
+        break
+      }
+    }
+    await shot('arch-' + VP.w + 'x' + VP.h + '-dpr' + dpr)
+    g.rig.setEnabled(true)
+    note('RESULT ' + (problems.length === 0
+      ? 'the near pier is untouched and the far pier is walked over, at '
+        + VP.w + 'x' + VP.h + ' dpr ' + dpr
+      : '*** ' + problems.length + ' problem(s) ***'))
+    return
+  }
+
   if (scenario === 'drawer') {
     // THE CONTROL DRAWER, DRIVEN END TO END AND MEASURED BY POSITION.
     //
@@ -4865,12 +5118,12 @@ async function run() {
         continue
       }
       reached++
-      // Selecting collapses the drawer so the board is visible. Re-open for
-      // the next tile.
-      if (g.drawer.open) push('the drawer did not collapse after a pick')
+      // A PICK NO LONGER COLLAPSES THE PANEL. It used to, so the board would be
+      // clear for the tap that follows — but a collapse is a close, and a close
+      // that keeps the selection leaves nodes pulsing behind a shut drawer with
+      // no visible handle on the mode. The panel stays out.
+      if (!g.drawer.open) push('picking a tile closed the drawer')
       g.drawer.select(null)
-      g.drawer.open = true
-      g.drawer.refresh()
       await sleep(90)
     }
     note('tiles reached and pressed: ' + reached + ' of ' + n)
@@ -4938,10 +5191,66 @@ async function run() {
     const pickId = g.drawerTiles()[affordable].id
     await click(tileR.x + tileR.width / 2, tileR.y + tileR.height / 2)
     await sleep(200)
-    note('picked ' + pickId + '   drawer collapsed = ' + !g.drawer.open +
-      '   scene pick = ' + g.drawerPick)
-    if (g.drawer.open) push('the drawer stayed open after a pick')
+    note('picked ' + pickId + '   drawer still open = ' + g.drawer.open +
+      '   scene pick = ' + g.drawerPick + '   CANCEL on glass = ' + g.cancelVisible)
+    if (!g.drawer.open) push('picking a tile closed the drawer')
     if (g.drawerPick !== pickId) push('the scene did not learn the pick')
+    // A pick is a cancellable state, so it lights the same button an armed
+    // ability does.
+    if (!g.cancelVisible) push('a pick did not put CANCEL on the glass')
+
+    /* --- NOTHING PULSES BEHIND A SHUT DRAWER ---------------------------- */
+
+    // The failure this replaces: closing the drawer left the tile selected, so
+    // the node rings kept pulsing and CANCEL stayed up with nothing on screen
+    // that could clear them. Asserted BY POSITION, on the real objects.
+    //
+    // Computed here rather than through an accessor added to the scene: a
+    // method that exists only so a probe can call it is a method whose
+    // behaviour nobody checks. `eligibleLayer` is a real field — TypeScript's
+    // `private` is compile-time only — and the pulse rule is four lines.
+    const ringsUp = () => {
+      const gm = g.eligibleLayer
+      return gm && gm.commandBuffer ? gm.commandBuffer.length > 0 : null
+    }
+    const pulsing = () => {
+      if (!g.drawerPick) return 0
+      const cost = T[g.drawerPick].cost
+      return g.build.spots.filter(
+        (sp) => g.build.isFree(sp.index) && g.status.peanuts >= cost).length
+    }
+    note('with the drawer open and ' + pickId + ' picked: ' + pulsing() + ' nodes pulsing' +
+      (ringsUp() === null ? '' : ', ring layer drawn = ' + ringsUp()))
+    // The highlight rings, on the board, for the eye. They used to be flat
+    // yellow ellipses drawn OVER the pad art; they are warm, low-contrast and
+    // under it now, so this is the picture that says whether that landed.
+    {
+      const anyNode = g.build.freeSpots()[0]
+      if (anyNode) { await lookAt(anyNode.x, anyNode.y); await sleep(300) }
+      await shot('drawer-nodes-' + VP.w + 'x' + VP.h + '-dpr' + dpr)
+    }
+    if (pulsing() === 0) push('a pick lit no nodes at all, so the check below proves nothing')
+    // CLOSE IT BY THE TAB, the way a player does.
+    const tabNow = g.drawer.layout.tab
+    await click(tabNow.x + tabNow.width / 2, tabNow.y + tabNow.height / 2)
+    await sleep(220)
+    note('after closing the drawer: open = ' + g.drawer.open +
+      '   selected = ' + g.drawer.selected + '   scene pick = ' + g.drawerPick +
+      '   nodes pulsing = ' + pulsing() + '   CANCEL on glass = ' + g.cancelVisible)
+    if (g.drawer.open) push('the tab did not close the panel')
+    if (g.drawer.selected !== null) push('the drawer kept its selection after closing')
+    if (g.drawerPick !== null) push('the scene kept the pick after the drawer closed')
+    if (pulsing() !== 0) push(pulsing() + ' nodes are still pulsing behind a shut drawer')
+    if (g.cancelVisible) push('CANCEL is still on the glass with the drawer shut')
+    if (ringsUp() === true) push('the highlight layer still has geometry in it')
+
+    // And put it back for the rest of the run.
+    g.drawer.open = true
+    g.drawer.refresh()
+    await sleep(120)
+    await click(tileR.x + tileR.width / 2, tileR.y + tileR.height / 2)
+    await sleep(200)
+    if (g.drawerPick !== pickId) push('the pick could not be made again after a close')
 
     // Which nodes pulse. Eligible = free and affordable.
     const cost = T[pickId].cost
@@ -5284,76 +5593,256 @@ async function run() {
   }
 
   if (scenario === 'towerring') {
-    // THE TOWER'S OWN RING: what it offers, in what ORDER, and what the second
-    // press says.
+    // THE TOWER'S OWN RING: what it offers, WHERE, and what the second press
+    // says — driven through every tier and both branches of every tower.
     //
-    // The complaint was that SELL and UPGRADE were confusable. Two causes:
-    // SELL was pushed last onto whatever was already there, so at max tier it
-    // was option 1 of 1 — exactly where UPGRADE had been all game — and the
-    // confirm button was the same tick glyph either way. So this checks the
-    // ORDER at every tier the tower passes through, not just that the options
-    // exist.
+    // The complaint was that SELL and UPGRADE were confusable. "SELL goes
+    // last" was the first answer and it was not enough: the ring's geometry is
+    // a function of how many buttons are on it, so the arc of two at tier 1
+    // sits at a different radius from the arc of three at the branch, and the
+    // position a thumb learned as UPGRADE is a position SELL can arrive at.
+    //
+    // So the assertion is RECTANGLES, gathered across every state a tower can
+    // be in, and the claim is that no SELL rectangle from any state overlaps
+    // an UPGRADE rectangle from any other. Not "sell is last" — where it is.
+    const TOWERSD = (await import('./js/data/towers.json', { with: { type: 'json' } })).default
+    const dpr = window.devicePixelRatio || 1
+    note('viewport ' + VP.w + 'x' + VP.h + '  dpr ' + dpr)
+    const problems = []
+    const push = (m) => { problems.push(m); note('   *** ' + m) }
     g.status.peanuts = 999999
+    // NO WAVES. Forty-eight ring states take a couple of minutes, and waves
+    // start on their own — the run reached wave 4, leaked, and ended halfway
+    // through the sweep with "the ring did not open" as the only symptom.
+    // The board under test is a tower on a pad; the fight is not part of it.
+    g.startWave = () => {}
+    g.status.lives = 9999
     await sleep(400)
-    const spot = g.build.freeSpots()[0]
-    const id = g.status.unlockedTowers[0]
-    g.place(id, spot)
-    await sleep(300)
-    const tower = g.towers[0]
-    note('tower ' + tower.def.name + ' on spot ' + spot.index)
 
-    const openAndRead = async (label) => {
+    const rectOf = (state, id) => {
+      const b = (g.ring ? g.ring.hitBoxes : []).find((h) => h.id === id)
+        || (g.ring ? g.ring.hitBoxes : []).find((h) => h.id === 'ring:' + id)
+      return b ? { state, id, ...b.rect } : null
+    }
+    const overlap = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width
+      && a.y < b.y + b.height && b.y < a.y + a.height
+
+    const sells = []
+    const upgrades = []
+    let states = 0
+    let sawBranch = 0
+
+    const read = async (tower, label) => {
+      // LOOK AT THE TOWER FIRST. Opened with its pad off camera the ring is
+      // clamped into a corner of the usable area, and every state then reports
+      // the SAME rectangles — which looks like a perfect result and is the
+      // probe measuring its own aim. The scene says so out loud ("The tower
+      // menu opened away from its pad"), which is how this was caught.
+      await lookAt(tower.x, tower.y)
       g.openTowerRing(tower)
-      await sleep(350)
+      await sleep(320)
+      if (g.ring && g.ring.bounds) {
+        const b = g.ring.bounds
+        const a = { x: 0, y: 0, width: VP.w, height: VP.h }
+        if (b.x < a.x || b.y < a.y || b.x + b.width > a.width || b.y + b.height > a.height) {
+          push(label + ': the ring is off screen at ' + Math.round(b.x) + ',' + Math.round(b.y))
+        }
+      }
+      if (!g.ring || !g.ring.active) { push(label + ': the ring did not open'); return null }
       const list = g.ring.opts.options
-      const opts = list.map((o) => o.id)
-      const labels = list.map((o) => o.confirmLabel)
-      note(label + ': [' + opts.join(', ') + ']  confirms [' + labels.join(', ') + ']')
-      return { opts, labels }
+      const ids = list.map((o) => o.id)
+      const slots = list.map((o) => o.slot)
+      const sell = rectOf(label, 'sell')
+      const up = rectOf(label, 'upgrade')
+      if (!sell) push(label + ': no SELL option')
+      if (sell) sells.push(sell)
+      if (up) upgrades.push(up)
+      // The branch's two options take slots 0 and 1; SELL takes 2 always.
+      for (const o of list) {
+        if (o.id === 'sell' && o.slot !== 2) push(label + ': SELL is in slot ' + o.slot)
+        if (o.id === 'upgrade' && o.slot !== 0) push(label + ': UPGRADE is in slot ' + o.slot)
+      }
+      if (ids.includes('move')) push(label + ': MOVE is back on the tower panel')
+      states++
+      // Two pictures: the two-option state with slot 1 reserved and empty, and
+      // the branch that fills it. If the gap reads as a missing button rather
+      // than as a held place, it is visible in these.
+      if (label === 'withholding t1' || label === 'withholding branch') {
+        await shot('ring-' + label.replace(/ /g, '-') + '-' + VP.w + 'x' + VP.h)
+      }
+      note('  ' + label + ': [' + ids.join(', ') + ']  slots [' + slots.join(', ') + ']'
+        + (sell ? '  SELL at ' + Math.round(sell.x) + ',' + Math.round(sell.y) : '')
+        + (up ? '  UPGRADE at ' + Math.round(up.x) + ',' + Math.round(up.y) : ''))
+      return { ids, list }
     }
 
-    const seen = []
-    seen.push(await openAndRead('tier 1'))
-    // Straight up the tiers without the ring, so the ring is read fresh each
-    // time rather than being driven by the presses under test.
-    g.ring.close(); await sleep(120)
-    g.upgradeTower(tower)
-    await until(() => !tower.upgrading, 30000)
-    seen.push(await openAndRead('tier 2'))
-    g.ring.close(); await sleep(120)
-    if (tower.atSpecChoice) {
-      seen.push(await openAndRead('spec branch'))
-      g.ring.close(); await sleep(120)
-      g.specialize(tower, tower.def.specializations[0].id)
-      await until(() => !tower.upgrading, 30000)
-      seen.push(await openAndRead('maxed'))
+    // EVERY TOWER, EVERY TIER, BOTH BRANCHES. Placed one at a time on the same
+    // pad so the ring's anchor is identical throughout — which is what makes
+    // the rectangles comparable at all.
+    const spot = g.build.freeSpots()[0]
+    for (const id of Object.keys(TOWERSD)) {
+      for (const branch of [0, 1]) {
+        g.ring && g.ring.close()
+        await sleep(80)
+        if (g.towers.length) { g.sellTowerForProbe ? 0 : 0 }
+        // Clear the pad by hand rather than through the sell dialog.
+        for (const t of [...g.towers]) {
+          g.build.release(t.spot)
+          g.towers = g.towers.filter((x) => x !== t)
+          t.destroy()
+        }
+        g.status.peanuts = 999999
+        g.place(id, spot)
+        await sleep(220)
+        const tower = g.towers[g.towers.length - 1]
+        if (!tower) { push(id + ': did not place'); continue }
+        await read(tower, id + ' t1' + (branch ? ' (b)' : ''))
+        g.ring && g.ring.close(); await sleep(80)
+        g.upgradeTower(tower)
+        await until(() => !tower.upgrading, 30000)
+        await read(tower, id + ' t2' + (branch ? ' (b)' : ''))
+        g.ring && g.ring.close(); await sleep(80)
+        if (tower.atSpecChoice) {
+          sawBranch++
+          await read(tower, id + ' branch' + (branch ? ' (b)' : ''))
+          g.ring && g.ring.close(); await sleep(80)
+          const spec = tower.def.specializations[branch]
+          if (spec) {
+            g.specialize(tower, spec.id)
+            await until(() => !tower.upgrading, 30000)
+            await read(tower, id + ' ' + spec.id)
+            g.ring && g.ring.close(); await sleep(80)
+          }
+        }
+      }
     }
+    g.ring && g.ring.close()
 
-    // THE INVARIANT: the first slot is never SELL, at any tier.
-    const firstIsSell = seen.filter((s) => s.opts[0] === 'sell')
-    note('tiers where SELL was the FIRST option: ' + firstIsSell.length +
-      (firstIsSell.length ? '  *** this is the bug ***' : '  — none'))
-    const sellLast = seen.every((s) => s.opts[s.opts.length - 1] === 'sell')
-    note('SELL is last at every tier: ' + sellLast)
-    const hasMove = seen.every((s) => s.opts.includes('move'))
-    note('MOVE offered at every tier: ' + hasMove)
-    note('confirm words: ' + JSON.stringify(seen.map((s) => s.labels)))
+    note('states read: ' + states + '   SELL rects ' + sells.length +
+      '   UPGRADE rects ' + upgrades.length + '   branches reached ' + sawBranch)
+    if (states < 12) push('only ' + states + ' states were read; that is not every tier')
+    if (!sawBranch) push('the specialisation branch was never reached')
 
-    // And MOVE actually moves it, without DAD MODE.
-    note('hero lastStandActive: ' + g.hero.lastStandActive + ' (the old gate)')
-    const before = tower.spot
-    g.beginMove(tower)
-    await sleep(200)
-    note('after MOVE: mode=' + g.status.mode + ' cancelVisible=' + g.cancelVisible)
-    const target = g.build.freeSpots()[0]
-    g.doRestructure(target.x, target.y)
+    // THE ASSERTION: no SELL rectangle anywhere overlaps an UPGRADE rectangle
+    // anywhere. Muscle memory is built across states, so the comparison is too.
+    let clashes = 0
+    for (const sell of sells) {
+      for (const up of upgrades) {
+        if (!overlap(sell, up)) continue
+        clashes++
+        if (clashes <= 4) {
+          push('SELL in "' + sell.state + '" overlaps UPGRADE in "' + up.state + '" at '
+            + Math.round(sell.x) + ',' + Math.round(sell.y))
+        }
+      }
+    }
+    note('SELL/UPGRADE rectangle clashes across all states: ' + clashes)
+    // And how far apart they actually are, at the closest.
+    let nearest = Infinity
+    for (const sell of sells) {
+      for (const up of upgrades) {
+        const dx = Math.max(0, Math.max(up.x - (sell.x + sell.width), sell.x - (up.x + up.width)))
+        const dy = Math.max(0, Math.max(up.y - (sell.y + sell.height), sell.y - (up.y + up.height)))
+        nearest = Math.min(nearest, Math.hypot(dx, dy))
+      }
+    }
+    note('closest a SELL ever gets to an UPGRADE: ' + nearest.toFixed(1) + 'px')
+
+    // THE SELL CONFIRMATION, in words.
+    for (const t of [...g.towers]) { g.build.release(t.spot); t.destroy() }
+    g.towers = []
+    g.status.peanuts = 999999
+    g.place(Object.keys(TOWERSD)[0], spot)
+    await sleep(250)
+    const tower = g.towers[0]
+    g.openTowerRing(tower)
+    await sleep(320)
+    const sellBtn = g.ring.hitBoxes.find((h) => h.id === 'sell')
+    await click(sellBtn.rect.x + sellBtn.rect.width / 2, sellBtn.rect.y + sellBtn.rect.height / 2)
     await sleep(300)
-    note('spot ' + before + ' -> ' + tower.spot + '  (wanted ' + target.index + ')')
+    const confirmBtn = g.ring.hitBoxes.find((h) => h.id === 'ring:confirm')
+    if (!confirmBtn) { push('the ledger card has no confirm button'); }
+    else {
+      const towersBefore = g.towers.length
+      await click(confirmBtn.rect.x + confirmBtn.rect.width / 2,
+        confirmBtn.rect.y + confirmBtn.rect.height / 2)
+      await sleep(350)
+      const dlg = g.dialog
+      note('after the ring confirm: dialog up = ' + !!dlg + '   towers ' + towersBefore +
+        ' -> ' + g.towers.length)
+      if (!dlg) push('SELL went through with no confirmation')
+      if (g.towers.length !== towersBefore) push('the tower was sold before anything was confirmed')
+      if (dlg) {
+        const words = []
+        for (const o of dlg.layer.list) if (o.text) words.push(String(o.text))
+        note('  the dialog says: ' + JSON.stringify(words))
+        const all = words.join(' ')
+        if (!/Sell/.test(all)) push('the confirmation does not say Sell')
+        if (!/peanuts/.test(all)) push('the confirmation does not name the currency in words')
+        if (!new RegExp(tower.def.name).test(all)) push('the confirmation does not name the tower')
+        if (!/Cancel/i.test(all)) push('the confirmation has no worded way out')
+      }
+    }
 
-    note('RESULT ' + (!firstIsSell.length && sellLast && hasMove && tower.spot === target.index
-      ? 'SELL never takes the first slot, MOVE is offered ungated, and it moves the tower'
-      : '*** wrong: firstIsSell=' + firstIsSell.length + ' sellLast=' + sellLast +
-        ' hasMove=' + hasMove + ' moved=' + (tower.spot === target.index) + ' ***'))
+    // AND UPGRADE DOES NOT GET ONE.
+    g.dialog && g.dialog.close()
+    await sleep(200)
+    for (const t of [...g.towers]) { g.build.release(t.spot); t.destroy() }
+    g.towers = []
+    g.status.peanuts = 999999
+    g.place(Object.keys(TOWERSD)[0], spot)
+    await sleep(250)
+    const t2 = g.towers[0]
+    g.openTowerRing(t2)
+    await sleep(320)
+    const upBtn = g.ring.hitBoxes.find((h) => h.id === 'upgrade')
+    await click(upBtn.rect.x + upBtn.rect.width / 2, upBtn.rect.y + upBtn.rect.height / 2)
+    await sleep(300)
+    const upConfirm = g.ring.hitBoxes.find((h) => h.id === 'ring:confirm')
+    if (upConfirm) {
+      await click(upConfirm.rect.x + upConfirm.rect.width / 2,
+        upConfirm.rect.y + upConfirm.rect.height / 2)
+      await sleep(350)
+      note('after the upgrade confirm: dialog up = ' + !!g.dialog +
+        '  tower upgrading = ' + t2.upgrading)
+      if (g.dialog) push('UPGRADE got a confirmation dialog too')
+      if (!t2.upgrading) push('the upgrade did not go through')
+    }
+
+    // AND THE SELL BUTTON WEARS THE CURRENCY THE GAME USES.
+    // THE SELL BUTTON WEARS THE CURRENCY THE GAME ACTUALLY USES.
+    //
+    // Not the counter's key: `hud-peanuts` is the whole 233x96 counter PLATE
+    // with a peanut painted into its left end, and pointing the button at it
+    // drew that plate squashed into a 40px square. The peanut is cut out of it
+    // at boot instead, so this checks the cut-out exists and is peanut-shaped
+    // rather than a black rectangle.
+    const ARTD = (await import('./js/data/art.json', { with: { type: 'json' } })).default
+    const iconKey = ARTD.ui.icons.sell
+    note('the sell icon is ' + iconKey + ' (the counter plate is ' +
+      ARTD.ui.counters.peanuts + ')')
+    if (!g.textures.exists(iconKey)) push('the sell icon texture does not exist')
+    else {
+      const src = g.textures.get(iconKey).getSourceImage()
+      const cc = document.createElement('canvas')
+      cc.width = src.width; cc.height = src.height
+      const cx2 = cc.getContext('2d')
+      cx2.drawImage(src, 0, 0)
+      const px = cx2.getImageData(0, 0, src.width, src.height).data
+      let opaque = 0
+      for (let i = 3; i < px.length; i += 4) if (px[i] > 200) opaque++
+      const total = src.width * src.height
+      const pct = 100 * opaque / total
+      note('  cut-out ' + src.width + 'x' + src.height + ', ' + pct.toFixed(1) +
+        '% opaque (a plate would be ~100%, a peanut is a shape in a box)')
+      if (pct > 80) push('the sell icon is still the whole plate: ' + pct.toFixed(1) + '% opaque')
+      if (pct < 8) push('the sell icon is nearly empty: ' + pct.toFixed(1) + '% opaque')
+    }
+
+    await shot('towerring-' + VP.w + 'x' + VP.h)
+    note('RESULT ' + (problems.length === 0
+      ? 'SELL never lands where UPGRADE has been, and only SELL asks twice'
+      : '*** ' + problems.length + ' problem(s) ***'))
     return
   }
 
@@ -6225,6 +6714,47 @@ async function run() {
       ' CANCEL visible=' + g.cancelVisible + ' msg="' + g.status.message + '"')
     note('  ' + shownOf().join('  '))
     await shot('restructure-03-ended-' + VP.w + 'x' + VP.h)
+
+    /* --- THE COOLDOWN IS A STATUS, NOT AN ANNOUNCEMENT ------------------ */
+
+    // It used to read "Grinder restructured. Back in 16s." and then sit there
+    // for the whole sixteen seconds — the instruction row held by a number
+    // that was wrong after the first one, with nothing else able to be said.
+    g.hero.lastStandActive = true
+    g.cooldowns.reset('restructure')
+    await sleep(200)
+    g.armRestructure()
+    await sleep(150)
+    const moving = g.towers[0]
+    const fromSpot = moving.spot
+    g.doRestructure(moving.x, moving.y)
+    await sleep(150)
+    const free = g.build.freeSpots()[0]
+    g.doRestructure(free.x, free.y)
+    await sleep(300)
+    const msg = g.status.message
+    const left = g.cooldowns.secondsLeft('restructure')
+    note('after a completed move: spot ' + fromSpot + ' -> ' + moving.spot)
+    note('  the instruction line says: "' + msg + '"')
+    note('  the cooldown has ' + left.toFixed(1) + 's left')
+    if (/\d+s/.test(msg)) note('   *** the instruction line is holding a countdown ***')
+    if (msg.length > 40) note('   *** the confirmation is a paragraph, not a line ***')
+    // AND IT TICKS SOMEWHERE. The Restructure slot stays on the glass while it
+    // recharges, even once DAD MODE has ended, because that is the only live
+    // readout there is.
+    g.hero.lastStandActive = false
+    await sleep(500)
+    const rslot = hud.slots.find((sl) => sl.region.id === 'restructure')
+    note('  with DAD MODE over and ' + g.cooldowns.secondsLeft('restructure').toFixed(1) +
+      's left: slot icon visible = ' + rslot.icon.visible +
+      '  timer reads "' + rslot.timer.text + '"')
+    if (!rslot.icon.visible) note('   *** the only live readout vanished with DAD MODE ***')
+    if (!rslot.timer.text) note('   *** the slot is shown but not counting ***')
+    const t1 = rslot.timer.text
+    await sleep(2200)
+    note('  two seconds later the timer reads "' + rslot.timer.text + '"')
+    if (rslot.timer.text === t1) note('   *** the countdown is frozen ***')
+    await shot('restructure-04-cooldown-' + VP.w + 'x' + VP.h)
     return
   }
 
