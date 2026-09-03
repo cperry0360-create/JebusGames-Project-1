@@ -82,7 +82,6 @@
     "scatter-stump": "props/stump.png",
     "scatter-mushrooms": "props/mushrooms.png",
     "icon-upgrade": "ui/icon_upgrade.png",
-    
     "icon-target": "ui/icon_target.png",
     "icon-cancel": "ui/icon_cancel.png",
     "icon-locked": "ui/icon_locked.png",
@@ -351,10 +350,11 @@
     },
     "prop-pad": {
       "anchorX": 0.5,
-      "anchorY": 1.0,
+      "anchorY": 0.719,
       "contentWidth": 320,
       "contentHeight": 290,
-      "displayHeight": 72
+      "displayHeight": 72,
+      "groundY": 0.719
     },
     "unit-gnome-rake": {
       "anchorX": 0.5611,
@@ -540,9 +540,10 @@
     },
     "prop-pad-flagstone": {
       "anchorX": 0.5,
-      "anchorY": 0.5,
+      "anchorY": 0.518,
       "contentWidth": 356,
-      "contentHeight": 272
+      "contentHeight": 272,
+      "groundY": 0.518
     }
   },
   "map": {

@@ -596,16 +596,28 @@
     "nodeRingFill": 14263361,
     "nodeRingEdge": 12879418,
     "nodeRingFillAlpha": [
-      0.06,
-      0.14
+      0.1,
+      0.2
     ],
     "nodeRingEdgeAlpha": [
-      0.28,
-      0.55
+      0.45,
+      0.62
     ],
-    "nodeRingEdgeWidth": 2,
-    "_nodeRing": "A highlight PAINTED ON THE GROUND, not a decal laid over it. It was 0xffd23f at up to 0.20 fill and a full-strength 3px rim, drawn above the pad marker: a flat yellow ellipse floating over the map in a colour the painted grass does not contain. Warm ochre now, at a fraction of the contrast, squashed to the same ground plane the pads use and drawn UNDER the pad art rather than over it. The pulse carries the attention; the colour does not have to shout as well. The edge peaks at 0.55 against the old 1.0 and the fill at 0.14 against the old 0.20; if they still read as decals the lever is these four numbers, not the shape.",
-    "_nodePulse": "How a build node says it will take the selected tower. A scale beat rather than a colour flash: the pads are already tinted three ways and a fourth tint would be a colour nobody can name."
+    "nodeRingEdgeWidth": [
+      2.5,
+      4.5
+    ],
+    "_nodeRing": "A highlight PAINTED ON THE GROUND, not a decal laid over it. Two passes: a dark under-stroke first, then the warm ochre on top of it, the way a painted line on dirt has a shadow in the groove it sits in. The dark pass is what makes it hold up on light dirt and where it crosses the road, which a single bright stroke did not. IT WAS INVISIBLE BEFORE THIS. Measured on the plate, the previous settings lifted the channels by about 8-12 levels above the surrounding grass and needed roughly 5x amplification to be seen in analysis at all. That was an overcorrection from the flat 0xffd23f decal before it: the edge went from a full-strength 3px rim to 0.55 alpha at 2px, which is the other ditch. The lever is these six numbers and not the shape.",
+    "_nodePulse": "How a build node says it will take the selected tower. A scale beat rather than a colour flash: the pads are already tinted three ways and a fourth tint would be a colour nobody can name. The alphas and BOTH stroke widths beat with the scale, because a pulse that only moves the radius by a fifth of a stroke width is a change of almost nothing into almost nothing.",
+    "nodeRingUnder": 1971208,
+    "nodeRingUnderAlpha": [
+      0.25,
+      0.36
+    ],
+    "nodeRingUnderWidth": [
+      5.0,
+      7.5
+    ]
   },
   "safeArea": {
     "housingAtAngle90": "left",

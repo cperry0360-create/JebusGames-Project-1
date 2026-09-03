@@ -564,6 +564,12 @@ export interface SpriteRender {
   displayHeight?: number
   /** Width of the ground shadow under this sprite. */
   shadowWidth?: number
+  /** Ground plates only: where the middle of the painted GROUND sits inside
+   *  the canvas, as a fraction of its height. A build pad is not a thing
+   *  standing on the ground, it is a patch of ground, so what has to land on
+   *  the spot is the middle of the dirt and not the bottom of the canvas.
+   *  `anchorY` must equal this, and a test says so. */
+  groundY?: number
   /** The artwork's real extents inside its canvas, for art with padding.
    *  Sizing by these means a logo drawn at a requested height really is that
    *  tall on screen, rather than that tall including its transparent margin. */

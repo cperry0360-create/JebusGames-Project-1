@@ -1143,19 +1143,28 @@ this.armReadyCountdown()
     // One rhythm for all of them: a set beats together, six phases is noise.
     const t = (this.time.now % d.nodePulseMs) / d.nodePulseMs
     const beat = 0.5 + 0.5 * Math.sin(t * Math.PI * 2)
-    // Warm, low-contrast, and squashed onto the same ground plane the pads
-    // use. The pulse is what draws the eye; the colour does not have to shout
-    // as well, and a saturated yellow at full-strength rim was reading as a
-    // sticker laid on the map rather than as a lit patch of it.
-    const [f0, f1] = d.nodeRingFillAlpha
-    const [e0, e1] = d.nodeRingEdgeAlpha
+    // TWO STROKES, dark then bright, the way a painted line on dirt has a
+    // shadow in the groove it sits in. One bright stroke was legible on grass
+    // and vanished on light dirt and where the ring crosses the road, and the
+    // dark pass is what holds it together across all three.
+    //
+    // Everything beats: both alphas, both widths, and the radius. A pulse that
+    // moves only the radius, by a fifth of a stroke width, is a change of
+    // almost nothing into almost nothing.
+    const lerp = ([a, b]: number[], k: number) => a! + k * (b! - a!)
     for (const spot of this.build.spots) {
       if (!this.nodeTakesPick(spot)) continue
       const r = MAP.spotRadius * (1 + d.nodePulseScale * beat)
-      this.eligibleLayer.fillStyle(d.nodeRingFill, f0 + beat * (f1 - f0))
-      this.eligibleLayer.fillEllipse(spot.x, spot.y, r * 2, r * 2 * PAD_SQUASH)
-      this.eligibleLayer.lineStyle(d.nodeRingEdgeWidth, d.nodeRingEdge, e0 + beat * (e1 - e0))
-      this.eligibleLayer.strokeEllipse(spot.x, spot.y, r * 2, r * 2 * PAD_SQUASH)
+      const w = r * 2
+      const h = r * 2 * PAD_SQUASH
+      this.eligibleLayer.fillStyle(d.nodeRingFill, lerp(d.nodeRingFillAlpha, beat))
+      this.eligibleLayer.fillEllipse(spot.x, spot.y, w, h)
+      this.eligibleLayer.lineStyle(lerp(d.nodeRingUnderWidth, beat),
+        d.nodeRingUnder, lerp(d.nodeRingUnderAlpha, beat))
+      this.eligibleLayer.strokeEllipse(spot.x, spot.y, w, h)
+      this.eligibleLayer.lineStyle(lerp(d.nodeRingEdgeWidth, beat),
+        d.nodeRingEdge, lerp(d.nodeRingEdgeAlpha, beat))
+      this.eligibleLayer.strokeEllipse(spot.x, spot.y, w, h)
     }
   }
 

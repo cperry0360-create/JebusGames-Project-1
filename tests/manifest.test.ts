@@ -165,12 +165,31 @@ test('a sprite anchored at its base is what makes it stand on the ground', () =>
   // The anchor puts the artwork's bottom on the painted ground line. It is not
   // always exactly 1: a canvas with transparent padding below the art needs a
   // slightly smaller value, or the art floats by the height of that padding.
-  const tall = Object.entries(art.render).filter(([, c]: [string, any]) =>
-    c.displayHeight !== undefined && c.displayHeight > 64)
+  //
+  // GROUND PLATES ARE THE EXCEPTION, and they are the reason the rule needs
+  // one. A build pad is not a thing standing on the ground, it IS a patch of
+  // ground, and what has to land on the spot is the middle of that patch and
+  // not the bottom of the canvas. The DO NOT BUILD HERE pad — a dirt oval with
+  // a sign planted in it — was anchored at 1.0 like a standing prop, which
+  // drew its dirt entirely above the spot and left the node's highlight ring
+  // circling the grass underneath it. Its ground band is centred at 0.719 of
+  // the canvas, measured, and that is where it anchors now.
+  const plates = new Set([art.prop.buildPad, art.prop.buildPadQuiet])
+  const tall = Object.entries(art.render).filter(([k, c]: [string, any]) =>
+    c.displayHeight !== undefined && c.displayHeight > 64 && !plates.has(k))
   assert.ok(tall.length > 0, 'no tall art is configured, so this proves nothing')
   for (const [key, cfg] of tall as [string, any][]) {
     assert.ok(cfg.anchorY >= 0.95,
       `${key} is tall art but anchors at ${cfg.anchorY}; it will float or sink`)
+  }
+  // And the plates are held to the rule they DO have to obey: anchored on
+  // their own ground band, which is nowhere near the canvas edge.
+  for (const key of plates) {
+    if (!key) continue
+    const cfg = (art.render as any)[key]
+    if (!cfg || cfg.anchorY === undefined) continue
+    assert.ok(cfg.anchorY > 0.35 && cfg.anchorY < 0.9,
+      `${key} is a ground plate anchored at ${cfg.anchorY}; that is a standing prop's anchor`)
   }
 })
 

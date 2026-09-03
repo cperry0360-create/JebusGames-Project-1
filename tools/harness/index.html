@@ -5315,6 +5315,193 @@ async function run() {
     return
   }
 
+  if (scenario === 'noderings') {
+    // THE NODE HIGHLIGHT, MEASURED RATHER THAN LOOKED AT.
+    //
+    // The complaint was that it lifts the channels by 8-12 levels above the
+    // surrounding grass and needs about 5x amplification to be seen at all.
+    // So the number this prints is the honest one: the same frame with the
+    // ring on and with it off, differenced, over each pad's own footprint.
+    // That is exactly "how much does this ring change the pixels underneath
+    // it", and it needs no assumption about which pixels are stroke.
+    const MAPD = (await import('./js/data/map.json', { with: { type: 'json' } })).default
+    const P = (await import('./js/data/presentation.json', { with: { type: 'json' } })).default
+    const SAVE = await import('./js/systems/Save.js')
+    const RES = await import('./js/systems/Resolution.js')
+    const dpr = window.devicePixelRatio || 1
+    const problems = []
+    const push = (m) => { problems.push(m); note('   *** ' + m) }
+
+    SAVE.setControlDrawer(true)
+    g.applyControlScheme()
+    g.status.peanuts = 99999
+    await sleep(300)
+
+    // EVERY node's ring centre against its own pad centre. Not a sample.
+    const ART = (await import('./js/data/art.json', { with: { type: 'json' } })).default
+    note('--- ring centre vs the PAINTED GROUND of each pad, all ' +
+      g.build.spots.length + ' nodes ---')
+    for (const spot of g.build.spots) {
+      const pad = g.pads[spot.index]
+      // The middle of the pad's painted DIRT, not the middle of its canvas.
+      // The first version of this line took the canvas centre and reported a
+      // correctly anchored pad as 16.5px out — the probe measuring its own
+      // assumption. `groundY` is the measured band, recorded in art.json.
+      const cfg = ART.render[pad.texture.key] || {}
+      const gy = cfg.groundY !== undefined ? cfg.groundY : 0.5
+      const groundY = pad.y + (gy - pad.originY) * pad.displayHeight
+      const dy = groundY - spot.y
+      const isSign = spot.index === g.signSpotIndex
+      note('  node ' + spot.index + (isSign ? ' (DO NOT BUILD HERE)' : '') +
+        '  spot ' + spot.x.toFixed(1) + ',' + spot.y.toFixed(1) +
+        '  painted ground y ' + groundY.toFixed(1) +
+        '  originY ' + pad.originY.toFixed(3) + ' groundY ' + gy +
+        '  offset ' + dy.toFixed(2) + 'px' + (Math.abs(dy) <= 1 ? '  OK' : '  *** OFF CENTRE ***'))
+      if (Math.abs(dy) > 1) push('node ' + spot.index + ' draws its dirt ' +
+        dy.toFixed(1) + 'px from its own spot, so the ring is not concentric with it')
+    }
+
+    // Does the joke node take a tower at all?
+    const sign = g.build.spots[g.signSpotIndex]
+    // Is the joke node actually buildable? If it is not, it must not pulse as
+    // though it were; if it is, the sign is a joke and the ring belongs there.
+    note('the DO NOT BUILD HERE node is spot ' + g.signSpotIndex +
+      ', free: ' + g.build.isFree(sign.index))
+
+    // --- contrast ---
+    const grab = () => {
+      const c = document.createElement('canvas')
+      c.width = game.canvas.width; c.height = game.canvas.height
+      c.getContext('2d').drawImage(game.canvas, 0, 0)
+      return c.getContext('2d').getImageData(0, 0, c.width, c.height)
+    }
+    // Ring off, then ring on, with the pulse frozen at its peak both times.
+    g.drawerPick = null
+    await sleep(220)
+    const off = grab()
+    g.drawerPick = 'withholding'
+    await sleep(220)
+    const on = grab()
+
+    const box = (spot) => {
+      const r = MAPD.spotRadius * (1 + P.drawer.nodePulseScale) + 8
+      const a = RES.worldToScreen(g, spot.x - r, spot.y - r)
+      const b = RES.worldToScreen(g, spot.x + r, spot.y + r)
+      return {
+        x0: Math.max(0, Math.floor(a.x * dpr)), y0: Math.max(0, Math.floor(a.y * dpr)),
+        x1: Math.min(on.width - 1, Math.ceil(b.x * dpr)),
+        y1: Math.min(on.height - 1, Math.ceil(b.y * dpr)),
+      }
+    }
+    // Which surface each pad sits on, from the pixels themselves: painted
+    // grass is green-dominant, the road is not.
+    // SAMPLED OUTSIDE THE PAD, not at its centre. The first version read the
+    // middle of the pad and called every node "dirt", because the middle of a
+    // pad is the pad's own painted dirt whatever it is standing on.
+    const surface = (spot) => {
+      const r = MAPD.spotRadius * 1.9
+      let grass = 0, n = 0
+      for (const [ox, oy] of [[-r, 0], [r, 0], [0, -r], [0, r]]) {
+        const p = RES.worldToScreen(g, spot.x + ox, spot.y + oy)
+        const x = Math.round(p.x * dpr), y = Math.round(p.y * dpr)
+        if (x < 0 || y < 0 || x >= off.width || y >= off.height) continue
+        const i = (y * off.width + x) * 4
+        const rr = off.data[i], gg = off.data[i + 1], b = off.data[i + 2]
+        n++
+        if (gg > rr + 12 && gg > b + 20) grass++
+      }
+      return n === 0 ? 'unknown' : (grass * 2 >= n ? 'grass' : 'dirt')
+    }
+
+    // TWO NUMBERS, because they answer different questions and only one of
+    // them is what was asked for.
+    //
+    //   LOCAL  — the stroke against the pixels immediately either side of it,
+    //            in the same frame. This is edge contrast: what makes the ring
+    //            readable at a glance. The brief's 35-50 target is this one.
+    //   CHANGE — the same pixel with the ring on and off. This is how much the
+    //            ring alters the map underneath, which a dark under-stroke on
+    //            light dirt makes large by design.
+    const px = (img, x, y) => {
+      const i = (y * img.width + x) * 4
+      return [img.data[i], img.data[i + 1], img.data[i + 2]]
+    }
+    const chan = (a, b) => Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]),
+      Math.abs(a[2] - b[2]))
+    note('--- ring contrast, per node ---')
+    let worstLocal = 999
+    for (const spot of g.build.spots) {
+      const bx = box(spot)
+      let change = 0
+      for (let y = bx.y0; y <= bx.y1; y++) {
+        for (let x = bx.x0; x <= bx.x1; x++) {
+          const d = chan(px(on, x, y), px(off, x, y))
+          if (d > change) change = d
+        }
+      }
+      // Local: walk the horizontal cut through the spot outward from the
+      // centre, find where the ring band ends, and compare the strongest
+      // stroke pixel against clean map just outside it.
+      const c = RES.worldToScreen(g, spot.x, spot.y)
+      const cy = Math.round(c.y * dpr)
+      let local = 0
+      for (const dir of [-1, 1]) {
+        let edge = -1
+        for (let k = 1; k < (bx.x1 - bx.x0); k++) {
+          const x = Math.round(c.x * dpr) + dir * k
+          if (x < 0 || x >= on.width) break
+          if (chan(px(on, x, cy), px(off, x, cy)) > 8) edge = x
+        }
+        if (edge < 0) continue
+        const outside = px(on, Math.min(on.width - 1, Math.max(0, edge + dir * 5)), cy)
+        for (let k = 0; k < 12; k++) {
+          const x = edge - dir * k
+          if (x < 0 || x >= on.width) break
+          const d = chan(px(on, x, cy), outside)
+          if (d > local) local = d
+        }
+      }
+      const s = surface(spot)
+      note('  node ' + spot.index + ' on ' + s.padEnd(5) +
+        '  LOCAL ' + String(local).padStart(3) +
+        '   change-vs-off ' + String(change).padStart(3) +
+        (local >= 35 ? '  OK' : '  *** TOO FAINT ***'))
+      if (local < worstLocal) worstLocal = local
+      if (local < 35) push('node ' + spot.index + ' on ' + s + ' reads at ' + local +
+        ' against the map beside it, and the target is 35-50')
+    }
+    note('weakest node: LOCAL ' + worstLocal + ' (target 35-50, was about 8-12)')
+    await shot('noderings-on')
+
+    // The pulse, measured over a whole cycle at one node.
+    const spot0 = g.build.spots[0]
+    const bx0 = box(spot0)
+    const samples = []
+    for (let k = 0; k < 10; k++) {
+      await sleep(P.drawer.nodePulseMs / 10)
+      const f = grab()
+      let peak = 0
+      for (let y = bx0.y0; y <= bx0.y1; y++) {
+        for (let x = bx0.x0; x <= bx0.x1; x++) {
+          const i = (y * f.width + x) * 4
+          const d = Math.max(
+            Math.abs(f.data[i] - off.data[i]),
+            Math.abs(f.data[i + 1] - off.data[i + 1]),
+            Math.abs(f.data[i + 2] - off.data[i + 2]))
+          if (d > peak) peak = d
+        }
+      }
+      samples.push(peak)
+    }
+    const lo = Math.min(...samples), hi = Math.max(...samples)
+    note('pulse over one cycle at node 0: peak delta ranges ' + lo + '..' + hi +
+      '  (swing ' + (hi - lo) + ')')
+
+    note(problems.length ? 'PROBLEMS: ' + problems.length : 'no problems found')
+    for (const m of problems) note('  - ' + m)
+    return
+  }
+
   if (scenario === 'notch') {
     // THE SAFE-AREA INSET, PER EDGE, against the actual viewport.
     //

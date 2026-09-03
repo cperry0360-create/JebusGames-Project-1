@@ -17,10 +17,20 @@ test('the pad art is in the manifest and on disk', () => {
   assert.ok(existsSync(url(`../public/${art.assetRoot}${path}`)), `${key} -> ${path} is missing`)
   const cfg = art.render[key]
   assert.ok(cfg, 'the pad has no render entry, so it would be drawn at its source size')
-  // Bottom centre: the dirt patch sits on the ground rather than the sprite
-  // being centred on it, which would sink the sign and float the dirt.
+  // ANCHORED ON ITS DIRT, not on the bottom of its canvas.
+  //
+  // This asserted 1.0 and said bottom-centre was right because otherwise the
+  // sign would sink and the dirt would float. It is the other way round: the
+  // art is a dirt oval with a sign planted in the middle of it, so anchoring
+  // the canvas bottom on the spot lifted the whole oval above the spot and the
+  // node's highlight ring — which is drawn at the spot — circled the grass
+  // underneath it. That was the one node out of seven that looked wrong.
+  //
+  // The oval's own centre is at 0.719 of the canvas, measured, and is recorded
+  // as `groundY` so the two cannot drift apart.
   assert.equal(cfg.anchorX, 0.5, 'the pad is not centred horizontally')
-  assert.equal(cfg.anchorY, 1, 'the pad is not anchored on its base')
+  assert.equal(cfg.anchorY, cfg.groundY,
+    `the pad anchors at ${cfg.anchorY} but its painted dirt is centred at ${cfg.groundY}`)
   assert.ok(cfg.displayHeight > 0, 'the pad has no on-screen size')
 })
 
