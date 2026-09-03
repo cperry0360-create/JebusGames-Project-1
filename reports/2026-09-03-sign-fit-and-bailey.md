@@ -6,6 +6,7 @@
 |---|---|---|
 | Sign overlays fitted to the measured wood panel | `e169dea` | green |
 | Bailey re-sited onto two real clumps | `46d2b1f` | green |
+| Bailey raised so both eyes clear | `c4ff6b0` | green |
 | This report's completion | — | documentation only; the loop closes here |
 
 ---
@@ -276,3 +277,77 @@ it is that one.
   lane; balance not re-tuned for the v2 lane; `icon_confirm.png` and
   `assets/nodes` unreferenced; `checks` not required on PRs; `hud_peanut_icon.png`
   unwired.
+
+---
+
+# 4. Bailey, the amount (third pass)
+
+The spot and the mask were right; the amount was not. At 0.33 she showed ears
+and a sliver of forehead with her eyes under the line — two ears rather than a
+dog.
+
+## Measured against her own art, not chosen
+
+On the 872px source, as fractions of its height:
+
+| | |
+|---|---|
+| ear tips | 1% |
+| eyes | **40–54%** |
+| nose | 60–66% |
+| collar | 69% and down |
+
+`peakVisible` **0.33 → 0.60**. The line lands at 60% — across the muzzle, with
+both eyes fully clear and no collar or chest showing.
+
+Visible height: **40.2 world px = 26.5 CSS px** at 844x390.
+
+## The number asked for and the principle asked for did not agree
+
+The brief said 30–40% more visible height, 82px to about 110px in that capture.
+Both eyes clearing takes **+82%**, not +34%: the line has to fall below 54% of
+her height, and 0.44 — the +34% figure — puts it exactly on the eyes' upper
+edge, which is the half-cut-eye case the previous pass was rejected for.
+
+The principle was the one stated with a reason ("the eyes are the whole point"),
+so it won. In the units of that capture the result is about 149px.
+
+## It has now been wrong in both directions
+
+- **0.5** — ears, forehead and both eyes half-cut. Read as a severed sprite.
+- **0.33** — the correction, overshot. Eyes under the line.
+- **0.60** — muzzle line, eyes clear.
+
+So the bound in test is no longer a number but her own landmarks: below the
+eyes, above the collar. Neither mistake can come back quietly.
+
+## Both spots, both tests
+
+| | is it a dog looking at you? | is something painted hiding her? |
+|---|---|---|
+| spot 1 — conifer, lower right | yes: ears, forehead, both eyes | the conifer crosses her muzzle |
+| spot 0 — grass tuft above the waterfall | yes | the blades cross her muzzle |
+
+Spot 1 is the stronger of the two. Captures sent with the answer rather than
+committed; `tools/harness/shots/` is gitignored on purpose.
+
+```sh
+BAILEY=1 DPR=3 sh tools/harness/run.sh bailey 40 844x390
+```
+
+## Where this leaves the repository
+
+- **Waiting on you:** re-cut the sign art at ~270px wide (filtering is not the
+  cause — one global LINEAR setting covers plate and overlay; it is 17.1x
+  minification in world units).
+- **Closed this round:** Bailey's placement, mask and amount. She reads.
+- **Still open:** the 568x320 drawer grid lever — my recommendation is letting
+  the drawer run below `panelArea`'s bottom at that width, since the ability
+  strip does not reach it there; whether the drawer's tab bar should have words,
+  which needs `minUiSize` lowered from 15; and the sign *text* alignment item
+  from the withdrawn message, which this round may or may not have been.
+- Longer-standing, unchanged: 18 trait phrases await approval; towers 0.91x the
+  lane against a ~1.2x intent; balance not re-tuned for the v2 lane;
+  `icon_confirm.png` and `assets/nodes` unreferenced; `checks` not a required
+  status on PRs; `hud_peanut_icon.png` unwired, which would let `PeanutIcon.ts`
+  be deleted.
