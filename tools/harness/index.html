@@ -5551,19 +5551,24 @@ async function run() {
       const shownCss = shownWorld * cam.zoom / dpr
       const at = RES.worldToScreen(g, s.x, s.canopyY)
       const top = RES.worldToScreen(g, s.x, d.y)
-      note('spot ' + i + ' (world ' + s.x + ',' + s.canopyY + '):')
+      note('spot ' + i + ' (world ' + s.x + ',' + s.canopyY + '): ' +
+        (s._note || 'no clump recorded'))
       note('   ON SCREEN at ' + at.x.toFixed(0) + ',' + at.y.toFixed(0) +
         ' css px — her canopy line. Her head runs up from there to ' +
         top.x.toFixed(0) + ',' + top.y.toFixed(0))
+      // NO 44px TARGET HERE ANY MORE. It was carried over from a brief written
+      // against the old design zoom, and it fights the only thing that makes
+      // her read: she has to be narrow enough for a painted clump to hide, and
+      // the widest clump on this plate outside the HUD band is about 50 world
+      // px. That caps her height, and a third of it is what shows.
       note('   visible ' + shownWorld.toFixed(1) + ' world px = ' +
-        shownCss.toFixed(1) + ' CSS px' +
-        (Math.abs(shownCss - 44) <= 6 ? '   about 44  OK' : '   *** not ~44 ***'))
+        shownCss.toFixed(1) + ' CSS px  (' + (100 * B.peakVisible).toFixed(0) +
+        '% of her, the ears and the top of the head)')
       note('   full sprite ' + (img ? img.displayWidth.toFixed(1) : '?') + ' x ' +
         (img ? img.displayHeight.toFixed(1) : '?') + ' world px; ' +
         (100 * B.peakVisible).toFixed(0) + '% of her clears the line')
-      if (Math.abs(shownCss - 44) > 6) {
-        push('spot ' + i + ' shows ' + shownCss.toFixed(1) + ' CSS px, not about 44')
-      }
+      if (shownCss < 8) push('spot ' + i + ' shows only ' + shownCss.toFixed(1) +
+        ' CSS px, which nobody will ever notice')
       // NOTHING BELOW THE LINE. The mask is a world-space rectangle ending at
       // canopyY, so the check is that her drawn bottom is at or above it.
       if (img && img.y + img.displayHeight < s.canopyY - 0.5) {

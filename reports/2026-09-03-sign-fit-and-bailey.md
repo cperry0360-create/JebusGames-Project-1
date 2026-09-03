@@ -4,7 +4,8 @@
 
 | | commit | CI |
 |---|---|---|
-| Sign overlays fitted to the measured wood panel | `PENDING` | pending |
+| Sign overlays fitted to the measured wood panel | `e169dea` | green |
+| Bailey re-sited onto two real clumps | `PENDING` | pending |
 
 ---
 
@@ -207,6 +208,69 @@ are not the previous one, so there is no bias to exploit and nothing to camp.
 - **Still open:** the 568x320 drawer grid lever; whether the drawer's tab bar
   should have words; the sign *text* alignment item from the withdrawn message,
   which this may or may not have been.
+- Longer-standing, unchanged: 18 trait phrases await approval; towers 0.91x the
+  lane; balance not re-tuned for the v2 lane; `icon_confirm.png` and
+  `assets/nodes` unreferenced; `checks` not required on PRs; `hud_peanut_icon.png`
+  unwired.
+
+---
+
+# 3. Bailey, re-sited (second pass)
+
+## The cut had nothing under it because the line was where foliage STOPS
+
+The four `canopyY` values were the FRONT edge of the wood — the boundary where
+the trees end and the grass begins. She rose over open grass, so the straight
+cut across her face was the mask and only the mask. Correct diagnosis.
+
+Found properly this time: mask the painted conifer and bush mass, then scan for
+a position where that mass runs across her whole width for 26 world px BELOW
+the line with an open top edge above it.
+
+**The plate has exactly two such places outside the HUD band.** There is no
+third, which is why there is no third spot — not a judgement call, a search
+result. Two convincing ones, as offered.
+
+| spot | world | plate | mass below the line | what hides her |
+|---|---|---|---|---|
+| 0 | 125, 526 | 375, 1578 | **72%** | the bush cluster above the waterfall |
+| 1 | 1118, 630 | 3354, 1890 | **74%** | the conifer at the lower right |
+
+Both are on screen at the opening zoom and clear of every piece of HUD: spot 0
+at screen **82, 285**, spot 1 at **737, 353**.
+
+## Less of her
+
+`peakVisible` 0.5 to **0.33**. At a half you get ears, forehead and both eyes —
+the worst case. At a third it is the ears and the top of the head with the eyes
+at or just under the line. Visible height **22.1 world px = 14.6 CSS px** at
+844x390.
+
+## The 44px target is dropped, and here is why
+
+It cannot coexist with the mask reading correctly. She has to be narrow enough
+for a painted clump to cover, and the widest clump on this plate outside the
+HUD band is about 50 world px. That caps her height at ~68 world px through her
+0.737 aspect, and a third of that is 14.6 CSS px. Chasing 44 CSS px visible
+would make her 3x wider than anything that can hide her, and the cut comes
+straight back.
+
+The 44 came from a brief written when the game opened at the design zoom of
+1.72. It opens at 0.659 now. The two cannot both be satisfied on this plate.
+
+## Looked at, not asserted
+
+Both captures attached. Spot 1 is the stronger of the two: two ears and a
+forehead over a conifer, the tree unmistakably in front. Spot 0 works but its
+bush is smaller, so there is less margin — if one of the two ever needs to go,
+it is that one.
+
+## Where this leaves the repository
+
+- **Waiting on you:** re-cut the sign art at ~270px wide; whether 14.6 CSS px of
+  dog is enough or whether the plate should get a bigger clump painted for her.
+- **Still open:** the 568x320 drawer grid lever; words on the drawer's tab bar;
+  the sign *text* alignment item from the withdrawn message.
 - Longer-standing, unchanged: 18 trait phrases await approval; towers 0.91x the
   lane; balance not re-tuned for the v2 lane; `icon_confirm.png` and
   `assets/nodes` unreferenced; `checks` not required on PRs; `hud_peanut_icon.png`

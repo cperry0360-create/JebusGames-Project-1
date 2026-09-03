@@ -34,8 +34,11 @@ test('she never appears twice in the same spot', () => {
   // THE RULE MOST LIKELY TO BE GOT WRONG, because the obvious implementation
   // is to re-roll until the index differs, which loops forever on one spot
   // and is biased on two.
+  // TWO, not three or four. The plate has exactly two places outside the HUD
+  // band where painted foliage runs across her whole width below a visible top
+  // edge; two convincing spots beat four that need explaining.
   const n = map.baileySpots.spots.length
-  assert.ok(n >= 3, `only ${n} peek spots; a small set still needs to be a set`)
+  assert.ok(n >= 2, `only ${n} peek spots; she would come up in the same one twice`)
   const r = ramp(37)
   let prev = -1
   for (let i = 0; i < 400; i++) {
@@ -89,18 +92,21 @@ test('she is on screen for well under two seconds', () => {
 
 test('only the top half of her clears the canopy', () => {
   // Any more and she reads as a dog sitting on top of a tree.
-  assert.ok(CFG.peakVisible > 0.2 && CFG.peakVisible <= 0.6,
-    `${CFG.peakVisible} of her would show at the peak`)
+  // A third. At a half you get both eyes and it reads as a cut-off sprite.
+  assert.ok(CFG.peakVisible > 0.2 && CFG.peakVisible <= 0.4,
+    `${CFG.peakVisible} of her would show at the peak; above 0.4 the whole face clears`)
 })
 
 test('the peek spots are on the plate, in the top left, and far apart', () => {
   const display = read('display')
   const spots = map.baileySpots.spots as Array<{ x: number; canopyY: number }>
   for (const s of spots) {
-    assert.ok(s.x > 0 && s.x < display.width * 0.35,
-      `a spot at x ${s.x} is not in the top-left corner of the map`)
-    assert.ok(s.canopyY > 0 && s.canopyY < display.height * 0.5,
-      `a spot at y ${s.canopyY} is not up in the tree line`)
+    // ON SCREEN AND CLEAR OF THE HUD, which the top-left forest is not: the
+    // opening camera shows world y 94 downward and the HUD band covers world
+    // y 94..218, so every spot in that forest was behind the peanut counter.
+    assert.ok(s.x > 0 && s.x < display.width, `a spot at x ${s.x} is off the plate`)
+    assert.ok(s.canopyY > 232 && s.canopyY < 660,
+      `a spot at y ${s.canopyY} is under the HUD band or below the visible map`)
   }
   // Far enough apart that two consecutive appearances cannot overlap.
   const w = CFG.worldHeight

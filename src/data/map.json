@@ -518,23 +518,17 @@
   ],
   "_heroStart": "Open grass, 150px from the road's edge and 112px from the nearest pad. The trace put him at 42% along the lane, which on this painting is on the road itself.",
   "baileySpots": {
-    "_note": "Gaps in the conifers at the top left she can come up through. `canopyY` is the world y of the foliage she peeks over: nothing of her draws below it, so the rise is her moving up through a line that stays put, and what clears it is the top of her head. READ OFF THE PLATE, NOT VERIFIED AGAINST THE SPRITE \u2014 prop_bailey_peek.png is not in the repository yet, so these are the front edge of the painted foliage per column and will want one pass once the art lands. Kept apart by more than her own width so two consecutive appearances never overlap.",
+    "_note": "TWO SPOTS, NOT FOUR, and each one is a real clump. `canopyY` is the world y of the TOP EDGE of painted foliage at that x \u2014 nothing of her draws below it, so the cut in her sprite lands on the top of something painted and what is under it is leaves. THE FOUR SPOTS THESE REPLACE WERE THE FRONT EDGE OF THE WOOD, where the foliage stops rather than starts: she rose over open grass and the straight cut across her face had nothing under it to explain it. They were also all in the top-left forest, which the opening camera puts behind the HUD. Found by masking the painted conifer and bush mass and scanning for a position where that mass runs across her whole width for 26 world px below the line with an open top edge above it. The plate has exactly two such places outside the HUD band, at 74% and 72% coverage; there is no third, which is why there is no third spot.",
     "spots": [
       {
-        "x": 34,
-        "canopyY": 190
+        "x": 125,
+        "canopyY": 526,
+        "_note": "The bush cluster above the waterfall, plate x 375 y 1578. Mass below the line: 72%."
       },
       {
-        "x": 68,
-        "canopyY": 180
-      },
-      {
-        "x": 100,
-        "canopyY": 186
-      },
-      {
-        "x": 130,
-        "canopyY": 178
+        "x": 1118,
+        "canopyY": 630,
+        "_note": "The conifer at the lower right, plate x 3354 y 1890. Mass below the line: 74%."
       }
     ]
   }

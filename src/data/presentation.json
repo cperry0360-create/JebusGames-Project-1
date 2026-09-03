@@ -660,8 +660,8 @@
     "riseMs": 400,
     "holdMs": 1200,
     "dropMs": 400,
-    "peakVisible": 0.5,
-    "_peakVisible": "How much of her clears the canopy at the top of the rise. Half: the head and the ears, and nothing that would read as a dog standing on top of a tree.",
+    "peakVisible": 0.33,
+    "_peakVisible": "How much of her clears the canopy at the top of the rise. A THIRD, not a half. At a half you get ears, forehead and both eyes, which is the worst case: enough face to read as a severed sprite rather than as a dog looking over a bush. A third is the ears and the top of the head with the eyes at or just under the line.",
     "worldHeight": 67,
     "_worldHeight": "Her full height in WORLD pixels; `peakVisible` of it clears the canopy. THE \"44px\" IS AMBIGUOUS AND THE TWO READINGS ARE NOW IN TENSION, so this is left at the first one and the numbers are on the record: 67 world px is 44 CSS px of dog at the OPENING zoom (0.659 css per world unit at 844x390), of which 22 CSS px clears the trees. Making the VISIBLE part 44 CSS px instead needs 134 world px \u2014 and that makes her visible head as tall as Cory is whole, because the opening zoom is 2.6x further out than the design zoom the original 44 was written against. Whichever is meant, she is behind the HUD at the opening zoom on this map; see reports/2026-09-03-sign-fit-and-bailey.md."
   }
