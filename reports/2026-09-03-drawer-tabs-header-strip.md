@@ -6,8 +6,12 @@ place, still no drag-to-build.
 
 | | commit | CI |
 |---|---|---|
-| Tab bar, currency header, detail strip | `55c91e0` | see below |
+| Tab bar, currency header, detail strip | `55c91e0` | green |
 | Bailey's art, uploaded by Cory | `44fd18f` | — |
+| Bailey verified against it, and this report | `c37722e` | green |
+
+The last row is the loop closing: a documentation-only commit records its own
+CI result here and stops.
 
 ---
 
