@@ -9,8 +9,13 @@ Every number below was measured by driving the game, not read off the source.
 | Run opens on the whole board | `4c76f48` | green |
 | Node ring visible and centred | `acb8f2e` | green |
 | Bailey behind the trees | `2fe7c86` | green |
+| This report, and the Reports rule it tightened | `b0e8c47` | green |
 
-All four are on `main` and deployed. 606 tests pass; `tsdiff` introduces
+The last row is the loop closing, not a fifth fix. A documentation-only commit
+records its own CI result here and stops; recording the recording would never
+terminate.
+
+All four fixes are on `main` and deployed. 606 tests pass; `tsdiff` introduces
 nothing beyond the documented `phaser`-cannot-resolve line for the one new
 Phaser file, which the harness run covers by execution instead.
 
