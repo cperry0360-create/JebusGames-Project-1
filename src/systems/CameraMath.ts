@@ -173,3 +173,96 @@ export function safeScroll(v: number, min: number, max: number): number {
   if (lo > hi) return Math.round((min + max) / 2)
   return Math.min(Math.max(Math.round(v), lo), hi)
 }
+
+/* ------------------------------------------------------- the opening view */
+
+export interface Box { x: number; y: number; width: number; height: number }
+
+/**
+ * Everything the player has to see before the first wave, as one rectangle.
+ *
+ * A tower defense player needs the board: where the enemies come in, where
+ * they leave, and every pad in between. The run used to open at the design
+ * zoom centred on the hero, which on this map frames a patch of grass and
+ * about a third of the lane, and the player could not see the gate they were
+ * defending.
+ *
+ * Built from the map data rather than written down, so re-tracing the plate
+ * moves it. The lane is padded by half a road so the walk is inside the frame
+ * rather than on its edge, and each pad by its own tap radius. Waypoints run
+ * off both ends deliberately — enemies walk in from off-screen — so the whole
+ * thing is clipped to the plate, which is the most there is to look at.
+ */
+export function boardBounds(
+  waypoints: number[][],
+  buildSpots: number[][],
+  roadWidth: number,
+  spotRadius: number,
+  worldW: number,
+  worldH: number,
+  margin = 0,
+): Box {
+  const half = roadWidth / 2
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+  const eat = (x: number, y: number, r: number) => {
+    x0 = Math.min(x0, x - r); x1 = Math.max(x1, x + r)
+    y0 = Math.min(y0, y - r); y1 = Math.max(y1, y + r)
+  }
+  for (const [x, y] of waypoints) eat(x ?? 0, y ?? 0, half)
+  for (const [x, y] of buildSpots) eat(x ?? 0, y ?? 0, spotRadius)
+  if (!Number.isFinite(x0)) return { x: 0, y: 0, width: worldW, height: worldH }
+  x0 -= margin; y0 -= margin; x1 += margin; y1 += margin
+  // Clipped to the plate: there is nothing painted outside it to frame.
+  x0 = Math.max(0, x0); y0 = Math.max(0, y0)
+  x1 = Math.min(worldW, x1); y1 = Math.min(worldH, y1)
+  return { x: x0, y: y0, width: Math.max(1, x1 - x0), height: Math.max(1, y1 - y0) }
+}
+
+/**
+ * The zoom at which a box exactly fits the viewport.
+ *
+ * IN THE SAME SPACE AS THE CEILING, which is the thing to get right here. The
+ * band in display.json is CSS pixels per world unit and GameScene multiplies
+ * it by the device ratio before handing it to the rig, so the rig's numbers
+ * are DEVICE pixels per world unit. `cam.width` is device pixels too, so
+ * passing it in lands on the same scale — and a zoom that came out three times
+ * the ceiling on a retina phone is the shape of the mistake this avoids.
+ */
+export function zoomToFit(viewW: number, viewH: number, box: Box): number {
+  if (box.width <= 0 || box.height <= 0) return 1
+  return Math.min(viewW / box.width, viewH / box.height)
+}
+
+/**
+ * Where the run opens: the widest honest view of the board, centred on it.
+ *
+ * FLOORED AT COVER, NOT AT THE DESIGN MINIMUM. Cover is the real floor —
+ * below it the map stops filling the screen and the player is looking at
+ * background. `minZoom` is a floor the design puts on the PINCH, to stop a
+ * gesture parking the whole map at a scale where a tower is a smudge, and the
+ * brief was explicit that this changes the initial value and not the limits.
+ *
+ * On this map that distinction is the whole feature: the board box spans the
+ * full plate width, so the zoom that frames it is cover-by-width, and the
+ * design minimum of 0.776 sits above it. Clamping the opening into the band
+ * would hand back a view with a fifth of the lane off screen.
+ *
+ * `framesWholeBox` is false when even cover cannot show all of it, which
+ * happens when the viewport is a narrower aspect than the board.
+ */
+export function openingView(
+  viewW: number,
+  viewH: number,
+  box: Box,
+  cover: number,
+  maxZoom: number,
+): { zoom: number; x: number; y: number; framesWholeBox: boolean } {
+  const wanted = zoomToFit(viewW, viewH, box)
+  const zoom = clampZoom(wanted, cover, maxZoom)
+  return {
+    zoom,
+    x: box.x + box.width / 2,
+    y: box.y + box.height / 2,
+    framesWholeBox: zoom <= wanted + 1e-9,
+  }
+}

@@ -20,6 +20,7 @@ import type { BuildSpot } from '../systems/BuildSystem.ts'
 import { WaveSpawner } from '../systems/WaveSpawner.ts'
 import { withinRadius, pickNearest } from '../systems/Targeting.ts'
 import { GROUND_DEPTH } from '../systems/DepthSort.ts'
+import { boardBounds, coverZoom, openingView } from '../systems/CameraMath.ts'
 import { distanceAtX, type EmergeConfig } from '../systems/Gateway.ts'
 import { makeRng } from '../systems/Draft.ts'
 import { scatter, type ScatterKind, type Rect } from '../systems/Scatter.ts'
@@ -536,13 +537,34 @@ this.armReadyCountdown()
     // Gestures belong to the run and die with it, so nothing can pan or zoom
     // on a menu after the scene stops.
     this.events.once('shutdown', () => this.rig?.destroy())
+    // WHERE THE RUN OPENS: the whole board, not the hero.
+    //
+    // It used to open at the design zoom centred on the hero's start, which
+    // frames about a third of the lane — the player could not see where
+    // enemies enter, where the pads are, or where the gate is, which is the
+    // one thing a tower defense player needs before the first wave.
+    //
+    // Note the camera does NOT follow anything, then or now: the rig's centre
+    // is written by the constructor and by gestures, and by nothing else. The
+    // wave screenshots of empty grass were this same fault — the camera sat
+    // where the hero STARTED while the hero walked off — not a follow that
+    // undid the opening frame.
+    const board = boardBounds(
+      MAP.waypoints, MAP.buildSpots, MAP.roadWidth, MAP.spotRadius,
+      displayData.width, displayData.height, displayData.camera.openingMargin,
+    )
+    const cam0 = this.cameras.main
+    const opening = openingView(
+      cam0.width, cam0.height, board,
+      coverZoom(cam0.width, cam0.height, displayData.width, displayData.height),
+      displayData.camera.maxZoom * deviceScale(),
+    )
     this.rig = new CameraRig(this, {
       worldWidth: displayData.width,
       worldHeight: displayData.height,
-      // Open on the hero, not on the middle of the map: at the closer default
-      // zoom the centre of the board is a patch of grass.
-      startX: MAP.heroStart[0],
-      startY: MAP.heroStart[1],
+      startX: opening.x,
+      startY: opening.y,
+      startZoom: opening.zoom,
       // Scaled by the device ratio. These are screen pixels per world unit,
       // and a screen pixel is a device pixel now, so a band written against
       // CSS pixels would show three times as much map on a retina phone.

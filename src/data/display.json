@@ -14,6 +14,9 @@
     "momentumDecay": 0.0022,
     "momentumMinSpeed": 35,
     "minZoom": 0.776,
-    "boundsMarginPx": 0
+    "boundsMarginPx": 0,
+    "openingMargin": 24,
+    "_openingMargin": "Breathing room around the board on the opening frame, in world pixels. The box itself is the lane padded by half a road and every pad padded by its tap radius; this is the gap between that and the edge of the screen, so the arch and the gate are inside the frame rather than on its rim.",
+    "_defaultZoom": "What a reset returns to. NOT what the run opens at: the opening frames the whole board and comes out at the floor of the band on any phone. Both are CSS pixels per world unit and are multiplied by the device ratio before the rig sees them."
   }
 }

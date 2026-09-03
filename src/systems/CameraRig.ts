@@ -57,6 +57,10 @@ export interface CameraLimits {
   /** Absolute zoom the run starts at, chosen so a tower renders at the size
    *  the art was drawn for. Raised to cover on a viewport that needs more. */
   defaultZoom: number
+  /** Where the run OPENS, if that is not the design default. The board is
+   *  framed on the first frame so the player can see the whole lane before
+   *  the first wave; the default is what a reset returns to. */
+  startZoom?: number
   /** Absolute ceiling, a little above the default. */
   maxZoom: number
   /** Absolute floor, a little below it. The band is deliberately narrow: the
@@ -167,11 +171,25 @@ export class CameraRig {
     // An absolute zoom, not a multiple of cover: the point of the number is
     // the size a tower is on the glass, and that cannot depend on how wide the
     // window happens to be.
-    this.targetZoom = this.clampZ(limits.defaultZoom)
-    // Where the run opens. The middle of the map was fine while the whole
-    // board fit on screen; at the closer default it shows whatever happens to
-    // be at the centre, which on this map is grass with the hero's head cut
-    // off by the top edge. Callers point it at the hero instead.
+    // THE OPENING ZOOM IS CLAMPED AGAINST COVER, NOT AGAINST THE BAND.
+    //
+    // `minZoom` is a floor on the PINCH — it stops a gesture parking the whole
+    // map at a scale where a tower is a smudge — and on this map it sits above
+    // the zoom that frames the board. Putting the opening through it would
+    // hand back a first frame with a fifth of the lane missing, which is the
+    // fault being fixed. Cover is still enforced, so the map always fills the
+    // screen: what is relaxed is the design minimum, not honesty about the
+    // edge of the world.
+    //
+    // The consequence, deliberately not hidden: the first pinch clamps back
+    // into the band, so a player who opens wider than `minZoom` and then
+    // pinches will see the view step in once. That is the cost of leaving the
+    // band alone, and the band is where the fix belongs if it ever grates.
+    this.targetZoom = limits.startZoom !== undefined
+      ? clampZoom(limits.startZoom, this.cover, limits.maxZoom)
+      : this.clampZ(limits.defaultZoom)
+    // Where the run opens. Callers point it at the board's own centre, which
+    // is what the opening zoom is framing.
     this.targetCenterX = limits.startX ?? limits.worldWidth / 2
     this.targetCenterY = limits.startY ?? limits.worldHeight / 2
     cam.setZoom(this.targetZoom)

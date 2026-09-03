@@ -5238,6 +5238,83 @@ async function run() {
     return
   }
 
+  if (scenario === 'opening') {
+    // THE FIRST FRAME OF LEVEL ONE, measured, before anything is touched.
+    //
+    // The claim being checked is that a tower defense player can see the whole
+    // board before the first wave: the arch they come in through, every pad,
+    // and the gate they are defending.
+    const DISP = (await import('./js/data/display.json', { with: { type: 'json' } })).default
+    const MAPD = (await import('./js/data/map.json', { with: { type: 'json' } })).default
+    const CM = await import('./js/systems/CameraMath.js')
+    const cam = g.cameras.main
+    const dpr = window.devicePixelRatio || 1
+    const problems = []
+    const push = (m) => { problems.push(m); note('   *** ' + m) }
+
+    const v = cam.worldView
+    const cover = CM.coverZoom(cam.width, cam.height, DISP.width, DISP.height)
+    note('viewport ' + VP.w + 'x' + VP.h + '  dpr ' + dpr +
+      '  canvas ' + cam.width + 'x' + cam.height)
+    note('zoom: opening ' + cam.zoom.toFixed(4) +
+      '  cover ' + cover.toFixed(4) +
+      '  design default ' + (DISP.camera.defaultZoom * Math.min(dpr, 3)).toFixed(4) +
+      '  pinch floor ' + (DISP.camera.minZoom * Math.min(dpr, 3)).toFixed(4) +
+      '  ceiling ' + (DISP.camera.maxZoom * Math.min(dpr, 3)).toFixed(4))
+    note('visible world rect: x ' + v.x.toFixed(1) + '..' + v.right.toFixed(1) +
+      '  y ' + v.y.toFixed(1) + '..' + v.bottom.toFixed(1) +
+      '  (' + v.width.toFixed(1) + ' x ' + v.height.toFixed(1) + ' world px)')
+
+    // THE SPACE CHECK. A zoom computed in CSS pixels and compared against a
+    // ceiling in device pixels is the fifth issue in this class; it shows up
+    // as the ceiling being breached by exactly the device ratio.
+    const ceiling = DISP.camera.maxZoom * Math.min(dpr, 3)
+    if (cam.zoom > ceiling + 1e-6) push('the opening zoom ' + cam.zoom.toFixed(4) +
+      ' is above the ceiling ' + ceiling.toFixed(4) + ' — wrong space')
+    if (cam.zoom < cover - 1e-6) push('the opening zoom is below cover, so the map ' +
+      'does not fill the screen')
+
+    // Is the lane in frame, end to end?
+    const inX = (x) => x >= v.x - 0.5 && x <= v.right + 0.5
+    const inY = (y) => y >= v.y - 0.5 && y <= v.bottom + 0.5
+    const lane = MAPD.waypoints.filter((p) => p[0] >= 0 && p[0] <= DISP.width)
+    const off = lane.filter((p) => !inX(p[0]) || !inY(p[1]))
+    note('lane waypoints on the plate: ' + lane.length + ', out of frame: ' + off.length)
+    if (off.length) note('   first off-frame waypoint ' + JSON.stringify(off[0]))
+    const arch = MAPD.entrance.emergeFromX, gate = MAPD.exit.gateX
+    note('entry arch x ' + arch + ' in frame: ' + inX(arch) +
+      '   gate x ' + gate + ' in frame: ' + inX(gate))
+    if (!inX(arch)) push('the entry arch is off screen on the first frame')
+    if (!inX(gate)) push('the gate is off screen on the first frame')
+
+    const pads = MAPD.buildSpots
+    const padsOff = pads.filter((p) => !inX(p[0]) || !inY(p[1]))
+    note('build pads: ' + pads.length + ', out of frame: ' + padsOff.length +
+      (padsOff.length ? '  ' + JSON.stringify(padsOff) : ''))
+    if (padsOff.length) push(padsOff.length + ' build pad(s) are off screen on the first frame')
+
+    note('camera centre ' + ((v.x + v.right) / 2).toFixed(1) + ',' +
+      ((v.y + v.bottom) / 2).toFixed(1) +
+      '   hero starts at ' + MAPD.heroStart[0] + ',' + MAPD.heroStart[1])
+    await shot('opening-' + VP.w + 'x' + VP.h + '-dpr' + dpr)
+
+    // THE CAMERA MUST NOT DRIFT. Walk the hero to the far end and check the
+    // view has not moved: the opening frame is only worth setting if nothing
+    // follows anything.
+    const before = { x: v.x, y: v.y, w: v.width }
+    g.hero.setRally(1150, 470)
+    await sleep(2500)
+    const after = g.cameras.main.worldView
+    const moved = Math.hypot(after.x - before.x, after.y - before.y)
+    note('after ordering the hero across the map, the view moved ' + moved.toFixed(2) + 'px' +
+      (moved < 0.5 ? '  OK, nothing follows' : '  *** the camera followed ***'))
+    if (moved >= 0.5) push('the camera moved ' + moved.toFixed(1) + 'px on its own')
+
+    note(problems.length ? 'PROBLEMS: ' + problems.length : 'no problems found')
+    for (const m of problems) note('  - ' + m)
+    return
+  }
+
   if (scenario === 'notch') {
     // THE SAFE-AREA INSET, PER EDGE, against the actual viewport.
     //
