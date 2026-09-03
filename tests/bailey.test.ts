@@ -92,9 +92,17 @@ test('she is on screen for well under two seconds', () => {
 
 test('only the top half of her clears the canopy', () => {
   // Any more and she reads as a dog sitting on top of a tree.
-  // A third. At a half you get both eyes and it reads as a cut-off sprite.
-  assert.ok(CFG.peakVisible > 0.2 && CFG.peakVisible <= 0.4,
-    `${CFG.peakVisible} of her would show at the peak; above 0.4 the whole face clears`)
+  /*
+   * MEASURED OFF HER ART, not chosen. On the 872px source the eyes span 40-54%
+   * of the height, the nose 60-66% and the collar starts at 69%. The line has
+   * to fall below the eyes and above the collar: any less and she is two ears,
+   * any more and she is a whole dog sitting on a bush.
+   *
+   * Wrong in both directions before this — 0.5 cut the eyes in half and read
+   * as a severed sprite, 0.33 put them under the line entirely.
+   */
+  assert.ok(CFG.peakVisible > 0.55, `${CFG.peakVisible} leaves her eyes under the foliage`)
+  assert.ok(CFG.peakVisible < 0.69, `${CFG.peakVisible} shows her collar and chest`)
 })
 
 test('the peek spots are on the plate, in the top left, and far apart', () => {
