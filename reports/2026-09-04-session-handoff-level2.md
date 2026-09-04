@@ -15,13 +15,15 @@ session, not a new piece of work: no code changed while writing it.
 | `f7fc205` | closed that report's CI table | checks/build/deploy success, run [33929688002](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33929688002) |
 | `b02ed07` `b6c5749` | the earlier gate-check report | green; see `2026-09-04-level2-gate-check.md` |
 | `5f886c1` | this handoff | checks/build/deploy success, run [33930057705](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33930057705) |
+| `9617846` | closed this handoff's CI table | checks/build/deploy success, run [33930166599](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33930166599) |
 
 `76041d1` and `68a3fdb` were pushed together with `aad8518`, so GitHub built
 the head rather than each one. Both were run locally under `npm test` and
 `tools/tsdiff.sh` when made, and the head containing them is green including
 `npx tsc --noEmit` against the real Phaser typings.
 
-`main` is at `5f886c1`, green, deployed, working tree clean.
+`main` is at `9617846`, green, deployed, working tree clean. Every commit in
+the table above is green on all three jobs.
 
 ## What was asked, and what happened
 
@@ -166,7 +168,7 @@ guard added to `GameScene`. Its base is still `c64737a`, many commits behind.
 
 ## Where this leaves the repository
 
-- **`main` green and deployed** at `5f886c1`; tree clean; nothing in flight.
+- **`main` green and deployed** at `9617846`; tree clean; nothing in flight.
 - **Blocked on a decision — level 2 is unwinnable.** Numbers above. Nothing was
   retuned on purpose.
 - **Waiting on a look — nothing about level 2 has been seen.** A Phaser dist in
