@@ -9,6 +9,12 @@ const read = (n: string) => JSON.parse(readFileSync(url(`../src/data/${n}.json`)
 const art = read('art'), abilities = read('abilities'), heroes = read('heroes'), rules = read('rules')
 const towers = read('towers'), enemies = read('enemies'), map = read('map'), pres = read('presentation')
 const display = read('display'), waves = read('waves')
+const levels = read('levels')
+/** Every level's wave table, by id. The curve and economy rules below hold
+ *  for all of them, not only for the one GameScene happens to load. */
+const WAVE_TABLES: Record<string, any> = Object.fromEntries(
+  levels.levels.map((l: any) => [l.id, read(l.waves.replace(/\.json$/, ''))]),
+)
 
 const ART_KEYS = new Set(Object.keys(art.files))
 
@@ -114,7 +120,7 @@ test('the three enemies are the painted art, standing on the ground', () => {
   }
 })
 
-test('the enemies keep the sizes they were drawn at, relative to each other', () => {
+test('the Kenney cast keeps the sizes it was drawn at, relative to itself', () => {
   // They arrived already scaled against each other with the brute the tallest.
   // Normalising them to a common height would throw that away, so every one
   // has to sit at the same scale factor from its own source art.
@@ -125,19 +131,65 @@ test('the enemies keep the sizes they were drawn at, relative to each other', ()
   // costs about half a percent. A genuine normalisation costs the full height
   // ratio between the brute and the scout — a factor of nearly two — so this
   // still catches the mistake it was written for.
+  //
+  // THE SET IS NAMED, and that is the change the demons forced. This rule was
+  // written when every enemy in the game came out of one pack, and it read
+  // "every enemy". The three demons were commissioned separately and drawn on
+  // their own canvases — 550, 698 and 697 tall against the pack's 120 to 282 —
+  // so a shared factor would size them by whatever canvas the artist chose:
+  // the Underling would stand taller than Buckethead on the strength of a
+  // bigger export. They are placed by on-screen height instead, and the test
+  // for THAT is the next one.
+  const KENNEY = ['lateFiler', 'shredder', 'finalNotice', 'politician']
   const SPREAD = 0.015
-  const scales = Object.values(enemies).map((e: any) => {
-    const cfg = art.render[e.sprite]
+  const scales = KENNEY.map((id) => {
+    const cfg = art.render[(enemies as any)[id].sprite]
     return cfg.displayHeight / cfg.contentHeight
   })
   for (const s of scales) {
     assert.ok(Math.abs(s / scales[0] - 1) < SPREAD,
-      `enemies draw at different scales (${scales.map((v) => v.toFixed(4)).join(', ')}); ` +
+      `the pack enemies draw at different scales (${scales.map((v) => v.toFixed(4)).join(', ')}); ` +
       'that is a normalised height, not the artist\'s proportions')
   }
   const heights = Object.values(enemies).map((e: any) => art.render[e.sprite].displayHeight)
   assert.ok(Math.max(...heights) > Math.min(...heights) * 1.5,
-    'the three should be visibly different sizes on screen')
+    'the cast should be visibly different sizes on screen')
+})
+
+test('the demons are placed by the height they should read at, not by their canvas', () => {
+  // Their canvases are all much larger than the pack's and nearly the same as
+  // each other (550 / 698 / 697), so canvas size carries no information about
+  // how big any of them should look. Each is placed against an enemy already
+  // on the board, and this is that brief, in numbers.
+  const h = (id: string): number => art.render[(enemies as any)[id].sprite].displayHeight
+  const w = (id: string): number => {
+    const cfg = art.render[(enemies as any)[id].sprite]
+    return (cfg.contentWidth / cfg.contentHeight) * cfg.displayHeight
+  }
+
+  // The Underling is a smaller Scrapper: quicker than a Bruiser, and less of
+  // him than the enemy he stands in for.
+  assert.ok(h('directReport') < h('shredder'),
+    'the Underling should stand slightly shorter than the Scrapper')
+  assert.ok(h('directReport') > h('shredder') * 0.85,
+    'slightly shorter, not half the size')
+
+  // The Middle Manager stands in for Buckethead: the same height, and much
+  // more of him across. The width is not a separate setting — it falls out of
+  // the source aspect at that height, which is the point of the check.
+  assert.ok(Math.abs(h('middleManager') - h('finalNotice')) < 2,
+    'the Middle Manager should stand about as tall as Buckethead')
+  assert.ok(w('middleManager') > w('finalNotice') * 1.15,
+    'the Middle Manager should be noticeably wider than Buckethead')
+
+  // The Devil is the slim one. He is placed against the Underling rather than
+  // against the Middle Manager, which is the brief taken literally: it leaves
+  // a 6200-health boss reading smaller than a 185-health elite. If that is
+  // wrong, his displayHeight is the only number to move.
+  assert.ok(h('theDevil') > h('directReport'), 'the Devil should stand taller than the Underling')
+  assert.ok(h('theDevil') < h('directReport') * 1.3, 'a little taller, not a different size class')
+  assert.ok(w('theDevil') < w('middleManager') * 0.5,
+    'the Devil should be much slimmer than the Middle Manager')
 })
 
 test('an enemy is smaller than a tower but big enough to read', () => {
@@ -152,15 +204,35 @@ test('health bars are sized from the sprite, not fixed', () => {
   assert.ok(b.widthFactor > 0 && b.widthFactor <= 1, 'a bar should not be wider than its sprite')
   assert.ok(b.minWidth > 0 && b.maxWidth > b.minWidth, 'bar clamp is inverted')
   assert.ok(b.heightPx > 0 && b.gapAbovePx > 0, 'the bar needs height, and air above the head')
-  // The clamp must not flatten the three enemies back to one width, or scaling
-  // to the sprite achieves nothing.
-  const widths = Object.values(enemies).map((e: any) => {
+  // The clamp must not flatten the cast back to one width, or scaling to the
+  // sprite achieves nothing.
+  //
+  // WHAT COUNTS AS FLATTENING CHANGED WHEN THE CAST GREW. This used to demand
+  // that all of them come out different, which held while there were four and
+  // none of them reached the stops. Seven do: the Middle Manager's natural bar
+  // is 59px against a 54px ceiling and the Devil's is 20px against a 22px
+  // floor, so each shares a width with whoever else is pinned there. That is
+  // the clamp doing its job — a bar wider than the plate is what it exists to
+  // prevent — and it is not the bug this test was written for.
+  //
+  // So the rule is now about the enemies the clamp does NOT touch: between the
+  // stops, every enemy still gets its own width off its own sprite. Anything
+  // sharing a width has to be pinned to a stop, and pinned for a reason the
+  // arithmetic agrees with.
+  const bars = Object.entries(enemies).map(([id, e]: [string, any]) => {
     const cfg = art.render[e.sprite]
-    const w = (cfg.contentWidth / cfg.contentHeight) * cfg.displayHeight * b.widthFactor
-    return Math.min(Math.max(w, b.minWidth), b.maxWidth)
+    const natural = (cfg.contentWidth / cfg.contentHeight) * cfg.displayHeight * b.widthFactor
+    return { id, natural, width: Math.min(Math.max(natural, b.minWidth), b.maxWidth) }
   })
-  assert.equal(new Set(widths.map((w) => Math.round(w))).size, widths.length,
-    'the clamp collapses two enemies to the same bar width')
+  const free = bars.filter((x) => x.natural > b.minWidth && x.natural < b.maxWidth)
+  assert.ok(free.length >= 4, `only ${free.length} enemies are sized by their own sprite`)
+  assert.equal(new Set(free.map((x) => Math.round(x.width))).size, free.length,
+    'two enemies inside the clamp collapse to the same bar width')
+  for (const x of bars) {
+    if (free.includes(x)) continue
+    assert.ok(x.natural <= b.minWidth || x.natural >= b.maxWidth,
+      `${x.id} is pinned to a stop its natural width ${x.natural.toFixed(1)} does not reach`)
+  }
 })
 
 test('every icon the UI shows can be sized from the manifest', () => {
@@ -834,14 +906,16 @@ test('the wave curve has no cliff in it', () => {
   // This is the shape, not the absolute numbers, so tuning up later is free.
   const load = (w: any): number =>
     w.spawns.reduce((n: number, s: any) => n + s.count * enemies[s.enemy].maxHealth, 0)
-  const totals = waves.waves.map(load)
-  for (let i = 1; i < totals.length; i++) {
-    const step = totals[i] / totals[i - 1] - 1
-    // The boss wave is allowed to spike; that is what a boss is for.
-    const cap = waves.waves[i].boss ? 0.8 : 0.55
-    assert.ok(step <= cap,
-      `wave ${i + 1} is ${Math.round(step * 100)}% heavier than wave ${i}, which is a cliff`)
-    assert.ok(step > 0, `wave ${i + 1} is lighter than wave ${i}`)
+  for (const [level, table] of Object.entries(WAVE_TABLES)) {
+    const totals = table.waves.map(load)
+    for (let i = 1; i < totals.length; i++) {
+      const step = totals[i] / totals[i - 1] - 1
+      // The boss wave is allowed to spike; that is what a boss is for.
+      const cap = table.waves[i].boss ? 0.8 : 0.55
+      assert.ok(step <= cap,
+        `${level} wave ${i + 1} is ${Math.round(step * 100)}% heavier than wave ${i}, which is a cliff`)
+      assert.ok(step > 0, `${level} wave ${i + 1} is lighter than wave ${i}`)
+    }
   }
 })
 
@@ -852,13 +926,17 @@ test('cutting the wave counts did not quietly cut the economy with them', () => 
     w.spawns.reduce((n: number, s: any) => n + s.count * enemies[s.enemy].peanutReward, 0)
   const health = (w: any): number =>
     w.spawns.reduce((n: number, s: any) => n + s.count * enemies[s.enemy].maxHealth, 0)
-  const totalIncome = waves.waves.reduce((n: number, w: any) => n + income(w), 0)
-  const totalHealth = waves.waves.reduce((n: number, w: any) => n + health(w), 0)
-  // Peanuts per point of health the player has to chew through. Below this and
-  // the board cannot be built fast enough to keep up.
-  const ratio = totalIncome / totalHealth
-  assert.ok(ratio >= 0.13,
-    `the run pays ${ratio.toFixed(3)} peanuts per point of enemy health, which is too thin`)
+  for (const [level, table] of Object.entries(WAVE_TABLES)) {
+    const totalIncome = table.waves.reduce((n: number, w: any) => n + income(w), 0)
+    const totalHealth = table.waves.reduce((n: number, w: any) => n + health(w), 0)
+    // Peanuts per point of health the player has to chew through. Below this
+    // and the board cannot be built fast enough to keep up. It matters most on
+    // a level whose enemies were made tougher without the purse being touched,
+    // which is exactly what level 2 is: rules.json is shared.
+    const ratio = totalIncome / totalHealth
+    assert.ok(ratio >= 0.13,
+      `${level} pays ${ratio.toFixed(3)} peanuts per point of enemy health, which is too thin`)
+  }
 })
 
 test('nothing ships a font or a pack file the game never asks for', () => {

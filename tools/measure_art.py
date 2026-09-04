@@ -192,6 +192,12 @@ escale = BRUTE_ON_SCREEN / brute_source_h
 print(f'uniform scale {escale:.4f} (brute {brute_source_h}px -> {BRUTE_ON_SCREEN}px on screen)\n')
 for f in sorted(glob.glob('public/assets/enemies/enemy_*.png')):
     name = os.path.basename(f)
+    if name not in ENEMY_KEY:
+        # Art that is in the folder but not in the manifest — the beetle was
+        # uploaded and never registered. Skipping beats a KeyError that stops
+        # the whole script before the hero and HUD sections run.
+        print(f'{name:20s} not in ENEMY_KEY; skipped')
+        continue
     key, band = ENEMY_KEY[name]
     w, h, px = png.read(f)
     low = ground_silhouette(w, h, px)
@@ -493,3 +499,71 @@ for name, (key, band) in sorted(GNOME_KEY.items()):
     print(f'{"":20s} -> {key}: footprint x{lo}-{hi} ({footW}px), '
           f'on screen {round(w * escale, 1)}x{round(h * escale, 1)}, {grender[key]}')
 json.dump({'files': gfiles, 'render': grender}, open('/tmp/gnomepatch.json', 'w'), indent=2)
+
+
+# ----------------------------------------------------------------- demons
+
+# The three demons do NOT share the enemy set's scale, and cannot.
+#
+# The Kenney cast arrived drawn against each other — brute, soldier, scout and
+# the Politician all sit at one factor from their own source art, which is why
+# `escale` above is a single number. These three were commissioned separately
+# and drawn at their own canvas sizes (550, 698 and 697 tall), so a single
+# factor would size them by whatever the artist's canvas happened to be. The
+# Underling would come out taller than Buckethead on the strength of a bigger
+# JPEG.
+#
+# So each one is placed by the height it should read at ON SCREEN, and its
+# scale falls out of that. The heights themselves are a design call, set
+# against the enemies already on the board:
+#
+#   junior  slightly shorter than the Scrapper (35.2)
+#   manager Buckethead's height (66.0), and much wider at the same height
+#   devil   a little taller than the junior, and much slimmer than the manager
+#
+# THE DEVIL'S HEIGHT IS THE ONE TO ARGUE WITH. It follows the brief literally
+# — "a little taller than the junior" — which leaves a 6200-health boss
+# reading smaller than a 185-health elite. If he was meant to stand a little
+# taller than the MANAGER instead, change the one number below to 70.0 and
+# re-run; nothing else moves.
+DEMON_ON_SCREEN = {
+    'demon_direct_report.png': ('enemy-demon-junior',  33.4, 0.90),
+    'demon_middle_manager.png': ('enemy-demon-manager', 66.0, 0.90),
+    'demon_the_devil.png':     ('enemy-devil',         37.0, 0.90),
+}
+# The third value is the foot band, as for the enemies above. 0.90 is the
+# deepest cut that still catches both feet on all three: the Underling stands
+# in a wide stride with his back hoof at the left, and the manager's leading
+# shoe and trailing hoof are 60px apart vertically.
+
+print('\n\ndemons')
+dfiles, drender = {}, {}
+for name, (key, on_screen, band) in DEMON_ON_SCREEN.items():
+    path = f'public/assets/enemies/{name}'
+    w, h, px = png.read(path)
+    low = ground_silhouette(w, h, px)
+    bot = max(low)
+    groups = foot_groups(low, int(h * band))
+    lo = min(g[0] for g in groups)
+    hi = max(g[1] for g in groups)
+    footW = hi - lo + 1
+    scale = on_screen / h
+
+    dfiles[key] = f'enemies/{name}'
+    drender[key] = {
+        'anchorX': round(((lo + hi) / 2) / w, 4),
+        'anchorY': round((bot + 1) / h, 4),
+        'displayHeight': round(on_screen, 1),
+        'shadowWidth': round(footW * scale, 1),
+        'contentWidth': w,
+        'contentHeight': h,
+    }
+    # Rule 7 in CLAUDE.md, checked rather than assumed: source height must
+    # cover the on-screen height at full zoom on the densest screen.
+    want = on_screen * 2.37 * 3
+    print(f'{name:26s} {w}x{h}  cut y{int(h * band):4d}  feet {groups}')
+    print(f'{"":26s} -> {key}: scale {scale:.4f}, on screen '
+          f'{round(w * scale, 1)}x{round(h * scale, 1)}, {drender[key]}')
+    print(f'{"":26s}    rule 7 wants >= {want:.0f}px of source; has {h}px '
+          f'({h / want:.1f}x)')
+json.dump({'files': dfiles, 'render': drender}, open('/tmp/demonpatch.json', 'w'), indent=2)

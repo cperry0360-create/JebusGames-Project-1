@@ -12,6 +12,9 @@
     "enemy-filer": "enemies/enemy_soldier.png",
     "enemy-shredder": "enemies/enemy_scout.png",
     "enemy-notice": "enemies/enemy_brute.png",
+    "enemy-demon-junior": "enemies/demon_direct_report.png",
+    "enemy-demon-manager": "enemies/demon_middle_manager.png",
+    "enemy-devil": "enemies/demon_the_devil.png",
     "unit-gnome-trowel": "units/gnome_trowel.png",
     "unit-gnome-rake": "units/gnome_rake.png",
     "shot-small": "kenney/towerDefense_tile272.png",
@@ -175,6 +178,30 @@
       "shadowWidth": 25.0,
       "contentWidth": 162,
       "contentHeight": 150
+    },
+    "enemy-demon-junior": {
+      "anchorX": 0.4774,
+      "anchorY": 1.0,
+      "displayHeight": 33.4,
+      "shadowWidth": 23.5,
+      "contentWidth": 509,
+      "contentHeight": 550
+    },
+    "enemy-demon-manager": {
+      "anchorX": 0.5075,
+      "anchorY": 1.0,
+      "displayHeight": 66.0,
+      "shadowWidth": 41.6,
+      "contentWidth": 734,
+      "contentHeight": 698
+    },
+    "enemy-devil": {
+      "anchorX": 0.6141,
+      "anchorY": 1.0,
+      "displayHeight": 37.0,
+      "shadowWidth": 17.7,
+      "contentWidth": 434,
+      "contentHeight": 697
     },
     "hero-cory": {
       "anchorX": 0.5725,

@@ -1,0 +1,260 @@
+{
+  "_note": "LEVEL 2. Level 1 is waves.json; levels.json says which is which. Same thirteen waves and the same shape as level 1 \u2014 the same spawn groups in the same order, at the same intervals and delays \u2014 with the demons substituted tier for tier: Underling for Scrapper, Middle Manager for Buckethead, The Devil for The Politician. Bruiser stays where he was, so the early waves are not wall-to-wall demons.",
+  "_health": "Total enemy health is 29945 against level 1's 25274, which is +18.5% across the run. That comes from the demons being tougher one-for-one (52/185/6200 against 40/140/4600) minus five Middle Managers trimmed out of waves 6, 9, 11 and 12 to keep it inside the 15-20% band, plus one Bruiser added to each of the first three waves so level 2 opens a step above level 1 rather than identical to it. The stats themselves are enemies.json's and are not touched here.",
+  "_spacing": "SPACING IS LEVEL 1'S, UNCHANGED, and that is a measurement rather than an oversight. Level 2's lane is 1916.7px against level 1's 1976.9px \u2014 3.0% shorter, which is about a third of a second of walking at Bruiser speed. Copying the intervals reproduces level 1's pacing to well inside what a player can feel; scaling them by 0.97 would be arithmetic dressed up as tuning. If the lane changes materially later, this is the note to revisit.",
+  "_economy": "Shared with level 1: rules.json is not per-level. This run pays 0.141 peanuts per point of enemy health against level 1's 0.148.",
+  "waves": [
+    {
+      "name": "Onboarding",
+      "spawns": [
+        {
+          "enemy": "lateFiler",
+          "count": 5,
+          "interval": 1.5,
+          "delay": 0
+        }
+      ]
+    },
+    {
+      "name": "Probation",
+      "spawns": [
+        {
+          "enemy": "lateFiler",
+          "count": 7,
+          "interval": 1.2,
+          "delay": 0
+        }
+      ]
+    },
+    {
+      "name": "The Interns",
+      "spawns": [
+        {
+          "enemy": "lateFiler",
+          "count": 6,
+          "interval": 1.3,
+          "delay": 0
+        },
+        {
+          "enemy": "directReport",
+          "count": 3,
+          "interval": 1.1,
+          "delay": 4
+        }
+      ]
+    },
+    {
+      "name": "Performance Review",
+      "spawns": [
+        {
+          "enemy": "lateFiler",
+          "count": 8,
+          "interval": 1.1,
+          "delay": 0
+        },
+        {
+          "enemy": "middleManager",
+          "count": 1,
+          "interval": 3,
+          "delay": 6
+        }
+      ]
+    },
+    {
+      "name": "Open Plan",
+      "spawns": [
+        {
+          "enemy": "directReport",
+          "count": 12,
+          "interval": 0.7,
+          "delay": 0
+        },
+        {
+          "enemy": "lateFiler",
+          "count": 7,
+          "interval": 1.2,
+          "delay": 3
+        }
+      ]
+    },
+    {
+      "name": "Escalation Path",
+      "spawns": [
+        {
+          "enemy": "middleManager",
+          "count": 4,
+          "interval": 2.4,
+          "delay": 0
+        },
+        {
+          "enemy": "directReport",
+          "count": 10,
+          "interval": 0.8,
+          "delay": 5
+        }
+      ]
+    },
+    {
+      "name": "All Hands",
+      "spawns": [
+        {
+          "enemy": "lateFiler",
+          "count": 12,
+          "interval": 0.95,
+          "delay": 0
+        },
+        {
+          "enemy": "directReport",
+          "count": 10,
+          "interval": 0.75,
+          "delay": 4
+        },
+        {
+          "enemy": "middleManager",
+          "count": 3,
+          "interval": 2.8,
+          "delay": 7
+        }
+      ]
+    },
+    {
+      "name": "The Reorg",
+      "spawns": [
+        {
+          "enemy": "lateFiler",
+          "count": 16,
+          "interval": 0.9,
+          "delay": 0
+        },
+        {
+          "enemy": "directReport",
+          "count": 12,
+          "interval": 0.7,
+          "delay": 4
+        },
+        {
+          "enemy": "middleManager",
+          "count": 4,
+          "interval": 2.6,
+          "delay": 8
+        }
+      ]
+    },
+    {
+      "name": "Quarterly Targets",
+      "spawns": [
+        {
+          "enemy": "middleManager",
+          "count": 7,
+          "interval": 2.1,
+          "delay": 0
+        },
+        {
+          "enemy": "directReport",
+          "count": 15,
+          "interval": 0.75,
+          "delay": 3
+        },
+        {
+          "enemy": "lateFiler",
+          "count": 13,
+          "interval": 0.9,
+          "delay": 6
+        }
+      ]
+    },
+    {
+      "name": "The Offsite",
+      "spawns": [
+        {
+          "enemy": "directReport",
+          "count": 21,
+          "interval": 0.62,
+          "delay": 0
+        },
+        {
+          "enemy": "middleManager",
+          "count": 7,
+          "interval": 2,
+          "delay": 4
+        },
+        {
+          "enemy": "lateFiler",
+          "count": 16,
+          "interval": 0.8,
+          "delay": 7
+        }
+      ]
+    },
+    {
+      "name": "Synergy",
+      "spawns": [
+        {
+          "enemy": "middleManager",
+          "count": 9,
+          "interval": 1.7,
+          "delay": 0
+        },
+        {
+          "enemy": "lateFiler",
+          "count": 17,
+          "interval": 0.85,
+          "delay": 3
+        },
+        {
+          "enemy": "directReport",
+          "count": 17,
+          "interval": 0.65,
+          "delay": 6
+        }
+      ]
+    },
+    {
+      "name": "Deadline",
+      "spawns": [
+        {
+          "enemy": "middleManager",
+          "count": 10,
+          "interval": 1.8,
+          "delay": 0
+        },
+        {
+          "enemy": "directReport",
+          "count": 21,
+          "interval": 0.6,
+          "delay": 3
+        },
+        {
+          "enemy": "lateFiler",
+          "count": 19,
+          "interval": 0.82,
+          "delay": 6
+        }
+      ]
+    },
+    {
+      "name": "The Devil",
+      "boss": "theDevil",
+      "spawns": [
+        {
+          "enemy": "theDevil",
+          "count": 1,
+          "interval": 1,
+          "delay": 2
+        },
+        {
+          "enemy": "directReport",
+          "count": 8,
+          "interval": 1.2,
+          "delay": 6
+        },
+        {
+          "enemy": "lateFiler",
+          "count": 6,
+          "interval": 1.6,
+          "delay": 12
+        }
+      ]
+    }
+  ]
+}

@@ -8,6 +8,12 @@ import { openingPurse } from '../src/systems/Economy.ts'
 const read = (n: string) => JSON.parse(readFileSync(new URL(`../src/data/${n}.json`, import.meta.url), 'utf8'))
 const heroes = read('heroes'), towers = read('towers'), enemies = read('enemies')
 const rules = read('rules'), waves = read('waves'), art = read('art')
+const levels = read('levels')
+/** Every level's wave table, by level id. `waves` above stays level 1's,
+ *  which is what the level-1 rules below are written against. */
+const WAVE_TABLES: Record<string, any> = Object.fromEntries(
+  levels.levels.map((l: any) => [l.id, read(l.waves.replace(/\.json$/, ''))]),
+)
 
 const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), 'utf8')
 
@@ -197,11 +203,22 @@ test('damage per second spread is wide enough for the choice to matter', () => {
 
 // ------------------------------------------------------------------ enemies
 
-test('there are three fightable enemy types, plus the boss', () => {
-  const rank = enemyList.filter(([, e]) => e.tier !== 'boss')
-  assert.equal(rank.length, 3)
-  assert.deepEqual(new Set(rank.map(([, e]) => e.role)), new Set(['basic', 'fast', 'armored']))
-  assert.equal(enemyList.filter(([, e]) => e.tier === 'boss').length, 1, 'act one has one boss')
+test('each level fields three fightable enemy types and exactly one boss', () => {
+  // This used to count the whole of enemies.json, because the whole of
+  // enemies.json was one level's cast. Level 2 added a second set — Underling,
+  // Middle Manager and The Devil — so the count that means anything now is
+  // per wave table: whichever level you play, you meet a basic, a fast, an
+  // armoured and one boss, and never two bosses in a run.
+  for (const [level, table] of Object.entries(WAVE_TABLES)) {
+    const used = new Set<string>()
+    for (const w of table.waves) for (const sp of w.spawns) used.add(sp.enemy)
+    const cast = [...used].map((id) => enemies[id])
+    const rank = cast.filter((e) => e.tier !== 'boss')
+    assert.equal(rank.length, 3, `${level} fields ${rank.length} fightable types`)
+    assert.deepEqual(new Set(rank.map((e) => e.role)), new Set(['basic', 'fast', 'armored']),
+      `${level} does not cover all three roles`)
+    assert.equal(cast.filter((e) => e.tier === 'boss').length, 1, `${level} does not have exactly one boss`)
+  }
 })
 
 test('each enemy role is actually different', () => {
@@ -246,15 +263,22 @@ test('waves escalate in total effective health, not just headcount', () => {
 
 test('every wave references a real enemy and introduces types gradually', () => {
   const seen = new Set<string>()
-  waves.waves.forEach((w: any, i: number) => {
-    for (const s of w.spawns) {
-      assert.ok(enemies[s.enemy], `wave ${i + 1} references unknown enemy ${s.enemy}`)
-      assert.ok(s.count > 0 && s.interval > 0 && s.delay >= 0)
-      seen.add(s.enemy)
-    }
-  })
-  assert.equal(seen.size, Object.keys(enemies).length, 'not every enemy type appears')
-  assert.equal(waves.waves[0].spawns.length, 1, 'wave 1 should teach one thing')
+  for (const [level, table] of Object.entries(WAVE_TABLES)) {
+    table.waves.forEach((w: any, i: number) => {
+      for (const s of w.spawns) {
+        assert.ok(enemies[s.enemy], `${level} wave ${i + 1} references unknown enemy ${s.enemy}`)
+        assert.ok(s.count > 0 && s.interval > 0 && s.delay >= 0)
+        seen.add(s.enemy)
+      }
+    })
+    assert.equal(table.waves[0].spawns.length, 1, `${level} wave 1 should teach one thing`)
+  }
+  // Every enemy that exists has to be fought somewhere. Across the tables
+  // rather than within one of them: an enemy drawn, statted and shipped but
+  // spawned by no level is dead weight in the deploy, and that is what this
+  // has always been checking.
+  assert.equal(seen.size, Object.keys(enemies).length,
+    `enemies never spawned by any level: ${Object.keys(enemies).filter((id) => !seen.has(id)).join(', ')}`)
 })
 
 test('the run ends on a boss, escorted but not buried', () => {
@@ -281,17 +305,24 @@ test('the run ends on a boss, escorted but not buried', () => {
   }
 })
 
-test('only the boss taxes, and only the boss walks through the line', () => {
+test('nothing but a boss walks through the line, and nothing but a boss taxes', () => {
+  // The tax used to be required of every boss, because there was one boss and
+  // the tax was his. The Devil is a plain boss with no mechanic of his own yet
+  // — that is deliberate and was asked for — so the rule that survives is the
+  // one that is actually about bosses: they cannot be held, and they do not
+  // attack. Taxing is a mechanic a boss MAY have and nothing else may.
+  let taxing = 0
   for (const [id, e] of Object.entries(enemies) as [string, any][]) {
     if (e.tier === 'boss') {
       assert.equal(e.blockable, false, `${id} is a boss that can be held in place`)
-      assert.ok(e.tax, `${id} is a boss with no tax`)
-      assert.equal(e.damage, 0, 'the boss does not attack towers or the hero')
+      assert.equal(e.damage, 0, `${id} is a boss that attacks towers or the hero`)
+      if (e.tax) taxing++
     } else {
       assert.equal(e.blockable, true, `${id} should be holdable`)
       assert.equal(e.tax, undefined, `${id} should not tax the player`)
     }
   }
+  assert.ok(taxing >= 1, 'no boss taxes any more; the mechanic has been deleted rather than reused')
 })
 
 test('the tax escalates as the boss is worn down, and always bites', () => {

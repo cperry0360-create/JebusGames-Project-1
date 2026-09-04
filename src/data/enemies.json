@@ -78,5 +78,50 @@
       ],
       "minimumTake": 5
     }
+  },
+  "directReport": {
+    "name": "Underling",
+    "flavor": "Carrying everything. Deciding nothing. There are always more.",
+    "role": "fast",
+    "tier": "basic",
+    "sprite": "enemy-demon-junior",
+    "maxHealth": 52,
+    "armor": 0,
+    "speed": 104,
+    "peanutReward": 8,
+    "livesCost": 1,
+    "damage": 5,
+    "attackInterval": 0.8,
+    "blockable": true
+  },
+  "middleManager": {
+    "name": "Middle Manager",
+    "flavor": "Holds a clipboard. Has never filled one in.",
+    "role": "armored",
+    "tier": "elite",
+    "sprite": "enemy-demon-manager",
+    "maxHealth": 185,
+    "armor": 5,
+    "speed": 38,
+    "peanutReward": 21,
+    "livesCost": 2,
+    "damage": 14,
+    "attackInterval": 1.4,
+    "blockable": true
+  },
+  "theDevil": {
+    "name": "The Devil",
+    "flavor": "Carries nothing. Signs everything. Someone else will handle it.",
+    "role": "boss",
+    "tier": "boss",
+    "sprite": "enemy-devil",
+    "maxHealth": 6200,
+    "armor": 4,
+    "speed": 26,
+    "peanutReward": 1200,
+    "livesCost": 12,
+    "damage": 0,
+    "attackInterval": 99,
+    "blockable": false
   }
 }
