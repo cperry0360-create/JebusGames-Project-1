@@ -1,8 +1,15 @@
+# Build and publish to GitHub Pages.
+#
+# This is no longer triggered by a push. It is called by the Checks workflow,
+# which runs the tests and typecheck first and only reaches this once they are
+# green — see .github/workflows/checks.yml. Triggering it on `push: main` again
+# would put an unverified deploy back on the site.
 name: Deploy to GitHub Pages
 
 on:
-  push:
-    branches: [main]
+  workflow_call:
+  # Manual escape hatch: re-publish the current main without waiting on a push.
+  # Deliberately skips the gate, so it is a human decision, not the default.
   workflow_dispatch:
 
 # Allow the workflow to publish to Pages.
@@ -10,11 +17,6 @@ permissions:
   contents: read
   pages: write
   id-token: write
-
-# One deploy at a time; let an in-flight run finish rather than cancelling it.
-concurrency:
-  group: pages
-  cancel-in-progress: false
 
 jobs:
   build:
@@ -31,6 +33,8 @@ jobs:
       # cache) once a lockfile lands.
       - run: npm install --no-audit --no-fund
 
+      # Redundant when called from Checks, which has already run this. Kept so
+      # a manual workflow_dispatch is not a way to publish untested code.
       - run: npm test
 
       - run: npm run build
@@ -44,6 +48,12 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    # One deploy at a time; let an in-flight run finish rather than cancelling
+    # it. Job-level rather than workflow-level because this workflow is called
+    # by another one and shares its run.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

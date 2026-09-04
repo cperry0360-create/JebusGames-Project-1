@@ -73,7 +73,8 @@ almost useless against Final Notices, which is the point.
 ## Layout
 
 ```
-.github/workflows/deploy.yml  Build, test and publish to GitHub Pages
+.github/workflows/checks.yml  Tests and typecheck on every push and PR
+.github/workflows/deploy.yml  Publish to GitHub Pages, gated on checks
 public/assets/kenney/         Kenney tower defense pack, CC0
 public/assets/branding/       Studio marks
 public/assets/fonts/          Kenney font package, CC0

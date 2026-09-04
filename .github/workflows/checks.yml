@@ -1,27 +1,22 @@
-# Tests and typecheck, on every branch and every pull request.
+# Tests and typecheck, on every branch, every pull request, and main.
 #
-# The deploy workflow only runs on a push to main, so until now a branch or a
-# pull request got no CI at all — "CI green" could only ever mean "green after
-# it was already deployed". This runs the same two checks the deploy job runs,
-# and publishes nothing.
+# main used to be excluded here (`branches-ignore: [main]`), which meant a
+# commit pushed straight to main ran no checks at all and went to Pages
+# unverified. Now main runs the same two checks as every other branch, and the
+# Pages deploy hangs off them: the deploy job below only starts once `checks`
+# has passed, so a red build publishes nothing.
 name: Checks
 
 on:
   pull_request:
   push:
-    branches-ignore: [main]
   workflow_dispatch:
-
-permissions:
-  contents: read
-
-concurrency:
-  group: checks-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   checks:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -30,3 +25,20 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npm test
       - run: npx tsc --noEmit
+
+  # The gate. `needs: checks` means a failed or cancelled checks job leaves
+  # this skipped, and Pages keeps serving whatever it served before.
+  deploy:
+    needs: checks
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/deploy.yml
+
+# One checks run per ref. On main, let an in-flight run finish rather than
+# cancelling it — a cancelled run there would take a Pages deploy down with it.
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
