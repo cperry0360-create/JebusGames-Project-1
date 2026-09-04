@@ -153,3 +153,72 @@ test('the level 2 overlay is a tool input, not a shipped asset', () => {
   assert.ok(!/public\/assets\/maps\/level2_path_overlay/.test(script),
     'check_level2.py still points at the old public/ path')
 })
+
+/* ------------------------------------------------------- every pad can shoot */
+
+test('every build pad is within the shortest tower\'s range of the lane', () => {
+  // THE REASON LEVEL 2 WAS UNWINNABLE. The first ring set put pads 117-185
+  // world px from the centreline. The shortest tower reaches 132, so a pad out
+  // at 185 was a pad four of the five towers could be built on and never fire
+  // from — the soak won 0 of 60 runs. Level 1's pads sit 87-119 and every
+  // tower covers every one of them.
+  //
+  // Checked against the SHORTEST range in towers.json rather than a number
+  // written here, so a future tower with a shorter reach tightens this test
+  // instead of silently escaping it.
+  const towers = read('towers') as Record<string, { range?: number; supportRadius?: number }>
+  const ranges = Object.values(towers)
+    .filter((t) => typeof t.range === 'number' && !(t.supportRadius! > 0))
+    .map((t) => t.range as number)
+  assert.ok(ranges.length > 0, 'no tower declares a range')
+  const shortest = Math.min(...ranges)
+
+  const w = L2.waypoints as [number, number][]
+  const toLane = (p: [number, number]): number => {
+    let best = Infinity
+    for (let i = 0; i < w.length - 1; i++) {
+      const [ax, ay] = w[i]!
+      const [bx, by] = w[i + 1]!
+      const dx = bx - ax, dy = by - ay
+      const len2 = dx * dx + dy * dy
+      const t = len2 ? Math.max(0, Math.min(1, ((p[0] - ax) * dx + (p[1] - ay) * dy) / len2)) : 0
+      best = Math.min(best, Math.hypot(p[0] - (ax + t * dx), p[1] - (ay + t * dy)))
+    }
+    return best
+  }
+
+  const far: string[] = []
+  for (const [i, spot] of (L2.buildSpots as [number, number][]).entries()) {
+    const d = toLane(spot)
+    if (d > shortest) far.push(`pad ${i} at (${spot[0]}, ${spot[1]}) is ${d.toFixed(1)}px from the lane`)
+  }
+  assert.deepEqual(far, [],
+    `these pads are further from the road than the shortest tower (${shortest}px) can reach, ` +
+    'so a tower built on one would never fire')
+})
+
+test('level 2 pads sit no further from the lane than level 1\'s do', () => {
+  // Not just "in range" but in the same NEIGHBOURHOOD as the map that is known
+  // to play well. A pad much further out than level 1's still reaches, but it
+  // reaches less of the lane, and the difference is what a player feels.
+  const spread = (m: any): [number, number] => {
+    const w = m.waypoints as [number, number][]
+    const ds = (m.buildSpots as [number, number][]).map((p) => {
+      let best = Infinity
+      for (let i = 0; i < w.length - 1; i++) {
+        const [ax, ay] = w[i]!
+        const [bx, by] = w[i + 1]!
+        const dx = bx - ax, dy = by - ay
+        const len2 = dx * dx + dy * dy
+        const t = len2 ? Math.max(0, Math.min(1, ((p[0] - ax) * dx + (p[1] - ay) * dy) / len2)) : 0
+        best = Math.min(best, Math.hypot(p[0] - (ax + t * dx), p[1] - (ay + t * dy)))
+      }
+      return best
+    })
+    return [Math.min(...ds), Math.max(...ds)]
+  }
+  const [, l1Far] = spread(L1)
+  const [, l2Far] = spread(L2)
+  assert.ok(l2Far <= l1Far + 1,
+    `level 2's furthest pad is ${l2Far.toFixed(1)}px from the lane against level 1's ${l1Far.toFixed(1)}px`)
+})
