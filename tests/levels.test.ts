@@ -134,20 +134,53 @@ test('the scene builds the optional furniture only where the map declares it', (
 
 /* -------------------------------------------------------------- the unlock */
 
-test('level 1 is always open and level 2 costs exactly one cleared run', () => {
-  assert.ok(isLevelUnlocked('level1', 0), 'the first level is not open to a new player')
-  assert.ok(!isLevelUnlocked('level2', 0), 'level 2 is reachable before clearing anything')
-  assert.ok(isLevelUnlocked('level2', 1), 'clearing a run does not open level 2')
-  assert.ok(isLevelUnlocked('level2', 9), 'more runs somehow close level 2 again')
+test('a level opens exactly at its own threshold and never closes again', () => {
+  // Reads each threshold from levels.json rather than naming a number. The
+  // count is a tuning knob — level 2's moved from 1 to 99 to take an
+  // unwinnable level out of reach — and a test that hardcodes it fails on the
+  // tuning instead of on the gate, which is the thing worth protecting.
+  for (const l of LEVELS) {
+    const need = l.runsClearedToUnlock
+    if (need > 0) {
+      assert.ok(!isLevelUnlocked(l.id, need - 1),
+        `${l.id} is reachable one run short of its ${need}`)
+    }
+    assert.ok(isLevelUnlocked(l.id, need), `${l.id} does not open at its own threshold of ${need}`)
+    assert.ok(isLevelUnlocked(l.id, need + 50), `${l.id} closes again after more runs`)
+  }
+  // The first level is open to someone who has never finished anything.
+  assert.ok(isLevelUnlocked(LEVELS[0]!.id, 0), 'the first level is not open to a new player')
   // An id that is not a level is not unlocked by any amount of play.
-  assert.ok(!isLevelUnlocked('level-that-never-was', 99))
+  assert.ok(!isLevelUnlocked('level-that-never-was', 9999))
 })
 
 test('unlockedLevels grows with cleared runs and never reorders', () => {
-  assert.deepEqual(unlockedLevels(0).map((l: any) => l.id), ['level1'])
-  assert.deepEqual(unlockedLevels(1).map((l: any) => l.id), ['level1', 'level2'])
+  assert.deepEqual(unlockedLevels(0).map((l: any) => l.id),
+    LEVELS.filter((l) => l.runsClearedToUnlock === 0).map((l) => l.id))
+  const most = Math.max(...LEVELS.map((l) => l.runsClearedToUnlock))
   // File order, so the select draws them in the order they were authored.
-  assert.deepEqual(unlockedLevels(99).map((l: any) => l.id), LEVELS.map((l) => l.id))
+  assert.deepEqual(unlockedLevels(most).map((l: any) => l.id), LEVELS.map((l) => l.id))
+  // Monotonic: clearing more runs never takes a level away.
+  let seen = 0
+  for (let runs = 0; runs <= most; runs++) {
+    const n = unlockedLevels(runs).length
+    assert.ok(n >= seen, `unlockedLevels shrank from ${seen} to ${n} at ${runs} cleared runs`)
+    seen = n
+  }
+})
+
+test('level 2 is out of reach while it cannot be won', () => {
+  // Deliberate, not a typo. Level 2 wins 0 of 60 soaked runs: its pads sit
+  // 117-185 px from the road where level 1's sit 87-119, so nine of fifteen
+  // are out of range of the two shortest towers, and its waves carry 18.5%
+  // more health. See reports/2026-09-04-level2-playable.md. The unlock count
+  // is the stopgap that stops a player reaching a level they cannot beat.
+  // DELETE THIS TEST when level 2 is tuned and the count comes back down.
+  const l2 = LEVELS.find((l) => l.id === 'level2')
+  assert.ok(l2, 'level 2 has gone from the registry')
+  assert.equal(l2!.runsClearedToUnlock, 99,
+    'level 2 is reachable again; it was put out of reach because it cannot be won')
+  assert.ok(!isLevelUnlocked('level2', 50), 'fifty cleared runs should not be enough')
 })
 
 test('the title screen gates the start rather than only greying the button', () => {
