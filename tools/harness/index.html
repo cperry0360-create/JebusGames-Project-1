@@ -5599,6 +5599,95 @@ async function run() {
     return
   }
 
+  if (scenario === 'nodefirst') {
+    // TAPPING AN EMPTY NODE WITH THE DRAWER SHUT.
+    //
+    // Driven with a real press on the canvas, because the whole fault was a
+    // tap that did nothing: a source check can say the branch exists and
+    // cannot say the tap reaches it.
+    const RES = await import('./js/systems/Resolution.js')
+    const SAVE = await import('./js/systems/Save.js')
+    const problems = []
+    const push = (m) => { problems.push(m); note('   *** ' + m) }
+
+    SAVE.setControlDrawer(true)
+    g.applyControlScheme()
+    g.status.peanuts = 400
+    await sleep(300)
+    note('viewport ' + VP.w + 'x' + VP.h + '  dpr ' + (window.devicePixelRatio || 1))
+
+    const tapSpot = async (i) => {
+      const sp = g.build.spots[i]
+      const at = RES.worldToScreen(g, sp.x, sp.y)
+      await click(at.x, at.y)
+      await sleep(260)
+      return sp
+    }
+
+    // 1. FROM CLOSED.
+    g.drawer.setOpen(false)
+    await sleep(200)
+    note('before: drawer open ' + g.drawer.open + ', tab ' + g.drawer.activeTab +
+      ', pendingSpot ' + (g.pendingSpot ? g.pendingSpot.index : 'none'))
+    if (g.drawer.open) push('the drawer did not start closed')
+
+    const sp0 = await tapSpot(0)
+    note('after tapping empty node ' + sp0.index + ':  drawer open ' + g.drawer.open +
+      '   tab ' + g.drawer.activeTab + ' (' + (g.drawer.tabLabelReport[g.drawer.activeTab] || {}).label +
+      ')   pendingSpot ' + (g.pendingSpot ? g.pendingSpot.index : 'none') +
+      '   message "' + g.status.message + '"')
+    if (!g.drawer.open) push('the drawer did not open on an empty-node tap')
+    if (g.drawer.activeTab !== 0) push('the drawer opened on tab ' + g.drawer.activeTab +
+      ', not TOWERS')
+    if (!g.pendingSpot || g.pendingSpot.index !== sp0.index) {
+      push('the node tapped is not the one held')
+    }
+    if (!/tower/i.test(g.status.message || '')) push('no placement instruction is shown')
+    await shot('nodefirst-' + VP.w + 'x' + VP.h + '-opened')
+
+    // 2. A SECOND NODE WHILE THE PANEL IS OUT must move the selection, not
+    //    shut the panel. This is the difference between setOpen and toggle.
+    const free = g.build.spots.filter((sp) => g.build.isFree(sp.index))
+    if (free.length > 1) {
+      const sp1 = await tapSpot(free[1].index)
+      note('after tapping a second node while open: drawer open ' + g.drawer.open +
+        '   pendingSpot ' + (g.pendingSpot ? g.pendingSpot.index : 'none'))
+      if (!g.drawer.open) push('a second node tap SHUT the drawer')
+      if (!g.pendingSpot || g.pendingSpot.index !== sp1.index) {
+        push('the second node did not take the selection')
+      }
+    }
+
+    // 3. THE ANSWER: a tile tap builds into the held node.
+    const held = g.pendingSpot ? g.pendingSpot.index : -1
+    const tile = g.drawer.tileRects[0]
+    const before = g.status.peanuts
+    if (tile) {
+      await click(tile.x + tile.width / 2, tile.y + tile.height / 2)
+      await sleep(400)
+    }
+    const built = held >= 0 && !g.build.isFree(held)
+    note('after picking the first tower card: node ' + held + ' built ' + built +
+      '   peanuts ' + before + ' -> ' + g.status.peanuts +
+      '   pendingSpot ' + (g.pendingSpot ? g.pendingSpot.index : 'none'))
+    if (!built) push('picking a tower did not build into the held node')
+    if (g.pendingSpot) push('the held node survived the build')
+    await shot('nodefirst-' + VP.w + 'x' + VP.h + '-built')
+
+    // 4. An OCCUPIED node keeps its old behaviour: it selects the tower.
+    if (built) {
+      await tapSpot(held)
+      note('tapping the now-occupied node: selected ' +
+        (g.selected ? g.selected.def.name : 'nothing') +
+        '   pendingSpot ' + (g.pendingSpot ? g.pendingSpot.index : 'none'))
+      if (g.pendingSpot) push('an occupied node was held as a build target')
+    }
+
+    note(problems.length ? 'PROBLEMS: ' + problems.length : 'no problems found')
+    for (const m of problems) note('  - ' + m)
+    return
+  }
+
   if (scenario === 'notch') {
     // THE SAFE-AREA INSET, PER EDGE, against the actual viewport.
     //

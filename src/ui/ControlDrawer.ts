@@ -289,8 +289,14 @@ export class ControlDrawer {
    * above. The panel stays out while a tile is picked. It holds the right-hand
    * 118 to 152 pixels and the board pans under it, which is the price of the
    * selection being visible in the same place it was made.
+   *
+   * PUBLIC, and deliberately not a toggle. Tapping an empty node opens the
+   * drawer to ask which tower goes there, and a second node tapped while the
+   * panel is already out must move the selection rather than shut the panel —
+   * so the scene asks for `setOpen(true)`, which is a no-op when it already
+   * is, and never for `toggle()`.
    */
-  private setOpen(next: boolean): void {
+  setOpen(next: boolean): void {
     if (this.open === next) return
     this.open = next
     if (!next) this.select(null)

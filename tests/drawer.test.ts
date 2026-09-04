@@ -453,11 +453,84 @@ test('tiles do not overlap each other', () => {
 /* ---------------------------------------------------- the placement flow */
 
 test('the drawer path never opens the build ring on an empty node', () => {
-  // "While the drawer flag is ON, tapping an EMPTY node does nothing."
+  /*
+   * The drawer scheme and the ring scheme must not both answer one tap. This
+   * used to look for `openPadRing` within 600 characters of the branch, which
+   * measured a comment's length rather than the code's shape and broke the
+   * moment the comment grew. It reads the branch BODY now.
+   */
   const game = src('scenes/GameScene.ts')
-  assert.match(game, /if \(this\.drawerOn\(\)\) \{[\s\S]{0,600}?openPadRing/,
-    'the empty-node branch does not check the flag')
-  assert.match(game, /placeFromDrawer/, 'there is no drawer placement path')
+  const at = game.indexOf('if (this.drawerOn()) {')
+  assert.ok(at > 0, 'the empty-node branch does not check the flag')
+  const body = game.slice(at, game.indexOf('\n      }', at))
+  const code = body.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n')
+  assert.doesNotMatch(code, /openPadRing/,
+    'the drawer branch falls through to the build ring')
+  assert.match(code, /placeFromDrawer/, 'there is no drawer placement path')
+  assert.match(code, /chooseSpotFirst/,
+    'an empty node with nothing picked does nothing again')
+  // And the ring path is still there for the OTHER scheme.
+  assert.match(game, /this\.openPadRing\(spot\)/, 'the build ring is gone entirely')
+})
+
+test('an empty node with nothing picked opens the drawer on TOWERS', () => {
+  /*
+   * THE FAULT: tapping an empty node with the drawer shut did nothing at all,
+   * which reads as a dead control rather than as a rule.
+   *
+   * Asserted on the code because the flow crosses Phaser — the scene calls
+   * `setOpen(true)` and sets the tab, and both of those are the whole
+   * behaviour. `toggle()` here would be the bug: a second node tapped while
+   * the panel is out has to move the selection, not shut the panel.
+   */
+  const game = src('scenes/GameScene.ts')
+  const at = game.indexOf('private chooseSpotFirst(')
+  assert.ok(at > 0, 'there is no node-first path')
+  const fn = game.slice(at, game.indexOf('\n  }', at))
+  const code = fn.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n')
+  assert.match(code, /activeTab\s*=\s*0/, 'it does not switch to the TOWERS tab')
+  assert.match(code, /setOpen\(true\)/, 'it does not open the drawer')
+  assert.doesNotMatch(code, /toggle\(\)/,
+    'it toggles, so tapping a second node while the panel is out would shut it')
+  assert.match(code, /pendingSpot = spot/, 'the node is not held')
+  assert.match(code, /status\.message/, 'there is no placement instruction')
+})
+
+test('TOWERS is the tab a node asks for, at every viewport', () => {
+  // The tab bar is the same three tabs at both sizes, and TOWERS is index 0 in
+  // the data — which is what `chooseSpotFirst` sets. If the labels are ever
+  // reordered, the node would open the drawer on the wrong group.
+  assert.equal(CFG.tabLabels[0], 'TOWERS', 'TOWERS is no longer the first tab')
+  for (const [name, w, h] of VIEWPORTS) {
+    const l = drawerLayout(w, area(w, h), 6, 0, CFG, true, w)
+    assert.equal(l.tabs.length, 3, `${name}: the tab bar is not three tabs`)
+    // The tab a node opens onto has to be a real rectangle on screen at both
+    // sizes, or "open on TOWERS" is a state with nothing to show for it.
+    const t = l.tabs[0]!
+    assert.ok(t.width > 20 && t.height > 10,
+      `${name}: the TOWERS tab is ${t.width}x${t.height}`)
+    assert.ok(t.x >= l.panel.x && t.x + t.width <= l.panel.x + l.panel.width,
+      `${name}: the TOWERS tab is outside the panel`)
+    assert.ok(l.panel.width > 0 && l.grid.height > 0,
+      `${name}: the panel the node opens has no grid in it`)
+  }
+})
+
+test('a waiting node is cancelled by everything that cancels a pick', () => {
+  // There must be no state in which a ring is pulsing and the drawer is shut,
+  // and a node held with nothing to answer it is exactly that state.
+  const game = src('scenes/GameScene.ts')
+  const at = game.indexOf('private clearSelection(')
+  const clear = game.slice(at, game.indexOf('\n  }', at))
+  assert.match(clear, /pendingSpot = null/, 'CANCEL does not drop a waiting node')
+  const rc = game.indexOf('private refreshCancel(')
+  const cancel = game.slice(rc, game.indexOf('\n  }', rc))
+  assert.match(cancel, /pendingSpot/, 'CANCEL does not light for a waiting node')
+  // And the ring only draws for one of the two reasons.
+  const de = game.indexOf('private drawEligibleNodes(')
+  const draw = game.slice(de, game.indexOf('\n  }', de))
+  assert.match(draw, /!this\.drawerPick && !this\.pendingSpot/,
+    'the ring does not account for a waiting node')
 })
 
 test('placement from the drawer asks for no confirmation', () => {

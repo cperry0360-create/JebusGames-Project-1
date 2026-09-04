@@ -253,6 +253,14 @@ export class GameScene extends Phaser.Scene {
   drawer!: ControlDrawer
   /** The tower the drawer has selected, waiting for a node. */
   drawerPick: string | null = null
+  /**
+   * A node chosen BEFORE a tower, waiting for one.
+   *
+   * The drawer's flow runs both ways now. Picking a tower and then a node was
+   * the only order it supported, and tapping an empty node with the drawer
+   * shut did nothing at all — which reads as a dead control, not as a rule.
+   */
+  pendingSpot: BuildSpot | null = null
   /** Banners waiting for the slot, and whether the slot is taken. One at a
    *  time; see announce(). */
   private readonly bannerQueue: Array<{ text: string; color: string }> = []
@@ -275,7 +283,8 @@ export class GameScene extends Phaser.Scene {
   private readonly markers = new HeroMarkers(PRESENTATION.heroMarkers as MarkersDef)
   private rangeRing!: Phaser.GameObjects.Graphics
   private targetRing!: Phaser.GameObjects.Graphics
-  private selected: Tower | null = null
+  /** Public so the probe can read which tower a tap selected. */
+  selected: Tower | null = null
   /** The tower being moved, exposed so a harness run can see a half-finished
    *  relocation get cancelled. */
   restructuring: Tower | null = null
@@ -418,6 +427,18 @@ export class GameScene extends Phaser.Scene {
       detailFor: (id) => this.drawerDetail(id),
       onSelect: (id) => {
         this.drawerPick = id
+        // A NODE WAS ASKED FIRST: this tap is the answer, so build there
+        // rather than leaving the player to tap the node they just tapped.
+        // A CLOSE OR A DESELECT DROPS THE WAITING NODE WITH IT. There must be
+        // no state in which a ring is pulsing and the drawer is shut, and a
+        // node held with nothing to answer it is exactly that state.
+        if (!id) this.pendingSpot = null
+        if (id && this.pendingSpot) {
+          const spot = this.pendingSpot
+          this.pendingSpot = null
+          this.placeFromDrawer(spot)
+          return
+        }
         // A pick is a cancellable state like an armed ability, so it lights
         // the same button. Closing the drawer clears the pick, which turns
         // the button off again — there is no path that leaves one without
@@ -1119,7 +1140,11 @@ this.armReadyCountdown()
    */
   private drawEligibleNodes(): void {
     this.eligibleLayer.clear()
-    if (!this.drawerPick) return
+    // TWO WAYS TO HAVE A RING. A tower is picked, so every node that would
+    // take it pulses; or a NODE is picked and waiting for a tower, so that one
+    // node pulses on its own. There is no state with a ring and a shut drawer:
+    // closing it clears both.
+    if (!this.drawerPick && !this.pendingSpot) return
     const d = PRESENTATION.drawer
     // One rhythm for all of them: a set beats together, six phases is noise.
     const t = (this.time.now % d.nodePulseMs) / d.nodePulseMs
@@ -1133,8 +1158,10 @@ this.armReadyCountdown()
     // moves only the radius, by a fifth of a stroke width, is a change of
     // almost nothing into almost nothing.
     const lerp = ([a, b]: number[], k: number) => a! + k * (b! - a!)
-    for (const spot of this.build.spots) {
-      if (!this.nodeTakesPick(spot)) continue
+    const ringed = this.pendingSpot
+      ? this.build.spots.filter((sp) => sp.index === this.pendingSpot!.index)
+      : this.build.spots.filter((sp) => this.nodeTakesPick(sp))
+    for (const spot of ringed) {
       const r = MAP.spotRadius * (1 + d.nodePulseScale * beat)
       const w = r * 2
       const h = r * 2 * PAD_SQUASH
@@ -1343,11 +1370,17 @@ this.armReadyCountdown()
     const spot = this.build.spotAt(w.x, w.y)
     if (spot && this.build.isFree(spot.index)) {
       if (this.drawerOn()) {
-        // THE INVERTED FLOW. With the drawer on, an empty node is not a menu
-        // any more — it is a destination. Tapping one with nothing picked
-        // does NOTHING on purpose: the drawer is where a build starts, and a
-        // node that opened a second menu would be two ways to do one thing.
+        // THE FLOW RUNS BOTH WAYS. A tower then a node, or a node then a
+        // tower — an empty node is a destination when something is picked and
+        // a question when nothing is.
+        //
+        // It used to do NOTHING in the second case, on the reasoning that a
+        // node opening a second menu would be two ways to do one thing. That
+        // was wrong about which menu: opening the drawer is not a second menu,
+        // it is the SAME one, brought out to answer the node just tapped. A
+        // tap that does nothing at all is the thing that reads as broken.
         if (this.drawerPick) this.placeFromDrawer(spot)
+        else this.chooseSpotFirst(spot)
         return
       }
       this.openPadRing(spot)
@@ -1429,7 +1462,11 @@ this.armReadyCountdown()
       this.status.message =
         `${this.hero.def.name} breaks off — exposed while he pulls out.`
     } else {
-      this.status.message = `${this.hero.def.name} is moving up.`
+      // NO DIRECTION WORD. It said "is moving up" whichever way he went —
+      // the word was a constant, not a reading of anywhere he was going, so
+      // it was wrong more often than right. "Up" is also the one direction
+      // that means two things on a 3/4 map.
+      this.status.message = `${this.hero.def.name} is moving.`
     }
   }
 
@@ -1568,8 +1605,31 @@ this.armReadyCountdown()
     this.place(id, spot)
     this.drawer.select(null)
     this.drawerPick = null
+    this.pendingSpot = null
     this.refreshCancel()
     this.drawSpots()
+  }
+
+  /**
+   * An empty node tapped with no tower picked: hold the node and open the
+   * drawer to ask which tower.
+   *
+   * The drawer is opened rather than TOGGLED. A tap on a second node while
+   * the panel is already out has to move the selection, not shut the panel —
+   * `setOpen(true)` on an open drawer is a no-op, which is the point.
+   */
+  private chooseSpotFirst(spot: BuildSpot): void {
+    if (!this.build.isFree(spot.index)) return
+    this.pendingSpot = spot
+    // TOWERS. The other two tabs are not populated yet, but the node is asking
+    // for a tower specifically, so this says so rather than relying on TOWERS
+    // happening to be the tab that is already up.
+    this.drawer.activeTab = 0
+    this.drawer.setOpen(true)
+    this.drawer.refresh()
+    this.refreshCancel()
+    this.drawSpots()
+    this.status.message = 'Node selected — pick a tower to build here.'
   }
 
   /** True when this node would take the drawer's current pick: free, and
@@ -2025,7 +2085,8 @@ this.armReadyCountdown()
     this.setCancelVisible(
       this.status.mode === 'targeting'
       || this.status.mode === 'restructure'
-      || this.drawerPick !== null,
+      || this.drawerPick !== null
+      || this.pendingSpot !== null,
     )
   }
 
@@ -2058,6 +2119,7 @@ this.armReadyCountdown()
     // where CANCEL and ESC both land. Closing the drawer clears the pick on
     // its own side; this is the other direction.
     this.drawerPick = null
+    this.pendingSpot = null
     this.drawer?.select(null)
     this.refreshCancel()
     this.rangeRing.clear()
