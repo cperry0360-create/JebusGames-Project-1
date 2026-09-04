@@ -109,10 +109,13 @@ only an untested *tree*, and only when someone asks for it by hand.
   trigger, both of which are visible in the diff; the skip itself was observed
   in run 33871025863, though there it came from the `if`, not from a failed
   `needs`.
-- **No Pages deploy has run through the new call path.** The first push to main
-  after this merges will be the first one. If `actions/deploy-pages` objects to
-  running inside a called workflow, that is where it will show up — the fallback
-  is one `workflow_dispatch` on `deploy.yml` while it is sorted out.
+- ~~**No Pages deploy has run through the new call path.**~~ **RESOLVED
+  2026-09-04.** This merged to main as `9206b4b` and the gated deploy ran end
+  to end — `checks` → `deploy / build` → `deploy / deploy`, all success — in run
+  [33872696041](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33872696041),
+  and again on `4acbeb9`. `actions/deploy-pages` is content to run inside a
+  workflow called by another. See
+  `reports/2026-09-04-demons-level2-and-run-save.md`.
 - Nothing in `src/` changed, so `tools/tsdiff.sh` was not run.
 
 ## Where this leaves the repository
