@@ -4,6 +4,8 @@ import displayData from '../data/display.json'
 import brandingData from '../data/branding.json'
 import { setRunState } from '../systems/RunState.ts'
 import { clearRun, loadRun } from '../systems/RunSave.ts'
+import { DEFAULT_LEVEL_ID, LEVELS, isLevelUnlocked, resolveLevelId } from '../systems/Levels.ts'
+import { loadSave } from '../systems/Save.ts'
 import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { plateButton } from '../ui/Plate.ts'
 import { AudioToggle } from '../ui/AudioToggle.ts'
@@ -20,6 +22,9 @@ const BRANDING = brandingData as BrandingDef
 /** Title, hero selection, and the only place a run can begin. */
 export class TitleScene extends Phaser.Scene {
   private selectedHero = 'cory'
+  /** Which level START RUN begins. Always a level that is actually open —
+   *  the default level's unlock count is 0, and `start` re-checks anyway. */
+  private selectedLevel = DEFAULT_LEVEL_ID
 
   constructor() {
     super('Title')
@@ -80,6 +85,11 @@ export class TitleScene extends Phaser.Scene {
     // stale one from a scene that has gone returns without touching anything.
     onMusicProblem(sayMusic)
 
+    // The select takes a row and a line of explanation, so the buttons below
+    // move down to make room for it. Zero when there is nothing to choose
+    // between, which is what keeps a single-level build's layout identical.
+    const shift = this.buildLevelSelect(W, 300)
+
     // A run left in progress is offered back before anything else.
     //
     // OFFERED, NOT RESUMED AUTOMATICALLY. Dropping the player straight into a
@@ -89,14 +99,14 @@ export class TitleScene extends Phaser.Scene {
     // means what it says: that run is then gone.
     const saved = loadRun()
     if (saved) {
-      plateButton(this, W / 2, 372, 320, 68, `RESUME  ·  WAVE ${saved.wave + 1}`,
+      plateButton(this, W / 2, 372 + shift, 320, 68, `RESUME  ·  WAVE ${saved.wave + 1}`,
         () => this.resume(), 26)
-      plateButton(this, W / 2, 452, 260, 56, 'NEW RUN', () => this.start(), 22, 'secondary')
-      plateButton(this, W / 2, 524, 260, 56, 'CREDITS',
+      plateButton(this, W / 2, 452 + shift, 260, 56, 'NEW RUN', () => this.start(), 22, 'secondary')
+      plateButton(this, W / 2, 524 + shift, 260, 56, 'CREDITS',
         () => this.scene.start('Credits'), 22, 'secondary')
     } else {
-      plateButton(this, W / 2, 386, 320, 68, 'START RUN', () => this.start(), 28)
-      plateButton(this, W / 2, 470, 260, 56, 'CREDITS',
+      plateButton(this, W / 2, 386 + shift, 320, 68, 'START RUN', () => this.start(), 28)
+      plateButton(this, W / 2, 470 + shift, 260, 56, 'CREDITS',
         () => this.scene.start('Credits'), 22, 'secondary')
     }
 
@@ -151,6 +161,69 @@ export class TitleScene extends Phaser.Scene {
     // Design-box coordinates, not viewport: this screen is fitted.
     new AudioToggle(this, 44, H - 44, 40, H)
 
+  }
+
+  /**
+   * Which level a new run plays.
+   *
+   * Drawn only when there is more than one level to choose between, so a
+   * single-level build — and the screen as it looked before level 2 existed —
+   * is untouched. A level the player has not earned is DRAWN, disabled, with
+   * what it costs written under the row: a lock you can see is an invitation,
+   * and a level select that hides everything locked just looks empty.
+   *
+   * The selection is shown by tinting the label and moving an underline
+   * rather than by rebuilding the buttons, because a plate's weight is fixed
+   * when it is made.
+   */
+  private buildLevelSelect(W: number, y: number): number {
+    if (LEVELS.length < 2) return 0
+
+    const cleared = loadSave().runsCleared
+    const width = 240
+    const gap = 16
+    const span = LEVELS.length * width + (LEVELS.length - 1) * gap
+    const left = W / 2 - span / 2 + width / 2
+
+    const underline = this.add.rectangle(0, y + 30, width - 70, 4, 0xf0a830).setOrigin(0.5)
+    const labels: Phaser.GameObjects.Text[] = []
+    const centres: number[] = []
+
+    const show = (): void => {
+      LEVELS.forEach((l, i) => {
+        const on = l.id === this.selectedLevel
+        labels[i]?.setColor(on ? COLOR.amber : COLOR.ink)
+        if (on) underline.setX(centres[i]!)
+      })
+    }
+
+    const stillLocked: typeof LEVELS = []
+    LEVELS.forEach((l, i) => {
+      const x = left + i * (width + gap)
+      centres.push(x)
+      const open = isLevelUnlocked(l.id, cleared)
+      const btn = plateButton(this, x, y, width, 46, l.name.toUpperCase(), () => {
+        this.selectedLevel = l.id
+        show()
+      }, 20, 'secondary')
+      labels.push(btn.text)
+      if (!open) {
+        btn.setEnabled(false)
+        stillLocked.push(l)
+      }
+    })
+
+    if (stillLocked.length > 0) {
+      const need = Math.min(...stillLocked.map((l) => l.runsClearedToUnlock))
+      const runs = need === 1 ? 'a run' : `${need} runs`
+      this.add.text(W / 2, y + 46, `Clear ${runs} to unlock ${stillLocked.map((l) => l.name).join(', ')}.`, {
+        fontFamily: FONT_UI, fontSize: '22px', color: COLOR.dim,
+        stroke: '#0d1016', strokeThickness: 3,
+      }).setOrigin(0.5)
+    }
+
+    show()
+    return 30
   }
 
   /**
@@ -221,9 +294,13 @@ export class TitleScene extends Phaser.Scene {
       this.start()
       return
     }
-    logEvent('scene', `Title -> Game (resume at wave ${saved.wave + 1})`)
+    logEvent('scene', `Title -> Game (resume ${resolveLevelId(saved.level)} at wave ${saved.wave + 1})`)
     setRunState({
       heroId: saved.heroId,
+      // The run goes back to the level it was saved on. GameScene reads
+      // resumeFrom.level in preference to this, so the two cannot disagree;
+      // it is set for anything that asks the run state which level is live.
+      levelId: resolveLevelId(saved.level),
       seed: saved.seed,
       abilities: [...saved.abilities],
       openingTowers: [...saved.openingTowers],
@@ -242,8 +319,15 @@ export class TitleScene extends Phaser.Scene {
     // The hand is cleared as well as the seed: the loadout screen deals only
     // when there is no hand, so leaving the last run's cards here would show
     // them again.
+    // Re-checked here rather than trusted to the button being disabled. The
+    // enforcement has to live where the run actually starts: the row above is
+    // a drawing, and a drawing is not a gate.
+    const cleared = loadSave().runsCleared
+    const levelId = isLevelUnlocked(this.selectedLevel, cleared)
+      ? this.selectedLevel
+      : DEFAULT_LEVEL_ID
     setRunState({
-      heroId: this.selectedHero, seed: Date.now() >>> 0,
+      heroId: this.selectedHero, seed: Date.now() >>> 0, levelId,
       openingTowers: [], abilities: [], reserveTowers: [], resumeFrom: null,
     })
     this.scene.start('Loadout')

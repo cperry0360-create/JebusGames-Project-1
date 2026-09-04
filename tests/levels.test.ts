@@ -132,6 +132,46 @@ test('the scene builds the optional furniture only where the map declares it', (
   assert.ok(!/ART\.map\.level1/.test(game), 'the scene still names level 1\'s plate directly')
 })
 
+/* -------------------------------------------------------------- the unlock */
+
+test('level 1 is always open and level 2 costs exactly one cleared run', () => {
+  assert.ok(isLevelUnlocked('level1', 0), 'the first level is not open to a new player')
+  assert.ok(!isLevelUnlocked('level2', 0), 'level 2 is reachable before clearing anything')
+  assert.ok(isLevelUnlocked('level2', 1), 'clearing a run does not open level 2')
+  assert.ok(isLevelUnlocked('level2', 9), 'more runs somehow close level 2 again')
+  // An id that is not a level is not unlocked by any amount of play.
+  assert.ok(!isLevelUnlocked('level-that-never-was', 99))
+})
+
+test('unlockedLevels grows with cleared runs and never reorders', () => {
+  assert.deepEqual(unlockedLevels(0).map((l: any) => l.id), ['level1'])
+  assert.deepEqual(unlockedLevels(1).map((l: any) => l.id), ['level1', 'level2'])
+  // File order, so the select draws them in the order they were authored.
+  assert.deepEqual(unlockedLevels(99).map((l: any) => l.id), LEVELS.map((l) => l.id))
+})
+
+test('the title screen gates the start rather than only greying the button', () => {
+  // A disabled plate is a drawing. The enforcement has to be where the run
+  // actually begins, or a stale selection walks straight past it.
+  const title = src('scenes/TitleScene.ts')
+  assert.match(title, /isLevelUnlocked\(this\.selectedLevel, cleared\)/,
+    'START RUN does not re-check that the chosen level is unlocked')
+  assert.match(title, /levelId,/, 'the chosen level is never handed to the run')
+  assert.match(title, /setEnabled\(false\)/, 'a locked level is still clickable')
+})
+
+test('a resume goes back to the level it was saved on', () => {
+  const title = src('scenes/TitleScene.ts')
+  assert.match(title, /levelId: resolveLevelId\(saved\.level\)/,
+    'resuming does not carry the saved level through')
+  const game = src('scenes/GameScene.ts')
+  assert.match(game, /resumeFrom\?\.level/,
+    'the scene ignores the level the run was saved on')
+  // And the save writes what is being played, not a literal.
+  assert.match(game, /level: this\.level\.id/, 'the save still hardcodes a level')
+  assert.ok(!/level: 'level1'/.test(game), 'the save still writes level1 unconditionally')
+})
+
 /* ------------------------------------------------------------ the same shape */
 
 test('level 2 has level 1\'s wave count and level 1\'s shape', () => {
