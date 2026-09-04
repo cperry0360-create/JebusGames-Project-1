@@ -7,6 +7,8 @@
 | CI change merged to main (from `claude/main-branch-ci-checks-svdxut`) | `9206b4b` | checks:success build:success **deploy:success** |
 | The three demons, and level 2's own waves | `36f0e1d` | covered by the run below |
 | A run in progress, kept across closing the app | `4acbeb9` | checks:success build:success **deploy:success** |
+| This report | `87a44e4` | checks:success build:success **deploy:success** |
+| Deploy-path item closed in the earlier report | `1e68c24` | checks:success build:success **deploy:success** |
 
 All work is on `main`, as asked. Run
 [33873389865](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33873389865)
@@ -14,7 +16,14 @@ is the one that matters: `checks` (639 tests, `tsc --noEmit`), then `deploy /
 build` (`npm run build`, so a real `tsc` against real Phaser types), then
 `deploy / deploy` (`actions/deploy-pages`). Green all the way through, and the
 site published. `36f0e1d` and `4acbeb9` went up in one push, so GitHub ran the
-head commit; `36f0e1d` has no run of its own.
+head commit; `36f0e1d` has no run of its own. Runs
+[33873705606](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33873705606)
+and
+[33873738407](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33873738407)
+cover the two report commits and deployed as well — and they queued rather
+than cancelling each other, which is main's concurrency rule doing what it
+was changed to do. One further commit closes this table and touches nothing
+but this file; its own run is reported in chat.
 
 ---
 
