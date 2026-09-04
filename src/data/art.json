@@ -33,6 +33,7 @@
     "brand-jebusgames": "branding/logo_jebusgames.png",
     "brand-cpplays": "branding/logo_cpplays.png",
     "map-level1": "maps/map_level1_v2.webp",
+    "map-level2": "maps/map_level2.webp",
     "hero-cory": "hero/hero_cory.png",
     "hero-cory-ultimate": "hero/hero_cory_ultimate.png",
     "ui-title-bg": "ui/title_bg.webp",
@@ -534,7 +535,8 @@
     }
   },
   "map": {
-    "level1": "map-level1"
+    "level1": "map-level1",
+    "level2": "map-level2"
   },
   "ui": {
     "titleBackdrop": "ui-title-bg",
