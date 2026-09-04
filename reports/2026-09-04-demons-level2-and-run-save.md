@@ -359,10 +359,30 @@ and four enemies drawn by one artist":
 - **Waiting on you — The Devil's height.** 37.0 (literal) against 70.0 (taller
   than the manager). One number in `art.json`, one in `measure_art.py`, one
   test bound. Everything else about him is settled.
-- **Waiting on you — level 2 needs a scene that can load it.** The data is
-  complete and nothing reads it. That is the level-aware GameScene refactor,
-  and it is explicitly not approved. Until it is, level 2 exists as JSON and
-  the run save's `level` field always says `level1`.
+- **Waiting on you — level 2 is not playable, and needs more than a scene
+  change.** Correcting a phrase from an earlier draft of this report: level 2's
+  WAVE data is complete, not its data. Four things are missing, and the second
+  is the big one.
+  1. Nothing in `src/` reads `levels.json` or `waves.level2.json` — only tests
+     do. GameScene imports `map.json` and `waves.json` at module scope. That is
+     the level-aware refactor, and it is explicitly not approved.
+  2. **There is no map geometry for level 2 at all.** `map.json` describes
+     level 1 only: 43 waypoints traced off the plate, 7 build spots, the hero
+     start, the road width, the entrance arch and the exit gate, the sign
+     quads. Level 2 has none of that, and it cannot be derived — it has to be
+     traced against `map_level2.webp` the way level 1's was. That is real work,
+     and it is the actual blocker; the wave table is the easy half.
+     `public/assets/maps/level2_path_overlay.png` and the two overlays in
+     `tools/` look like a start on it.
+  3. The plate is not in the manifest: `art.json`'s `map` section holds only
+     `level1`, so `map_level2.webp` ships but cannot be loaded by key.
+  4. `runsClearedToUnlock: 1` records the intent and enforces nothing; there is
+     no level select, and the run save's `level` field always says `level1`.
+
+  One consequence worth flagging: level 2's `laneLengthPx` of 1916.7 is the
+  number that came with the plate. Level 1's 1976.9 I measured from its
+  waypoints. Until level 2 has waypoints, the 3.0% difference the wave spacing
+  rests on is unverified — it is a figure I was given, not one I checked.
 - **Waiting on you — the wave names.** Corporate-hell against level 1's
   fantasy. Cheap to change.
 - **New, small:** the Underling and the Devil carry 2.3x and 2.6x the source
