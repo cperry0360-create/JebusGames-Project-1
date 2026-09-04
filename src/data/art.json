@@ -82,8 +82,7 @@
     "hero-cory-attack-1": "hero/hero_cory_attack_1.png",
     "hero-cory-attack-2": "hero/hero_cory_attack_2.png",
     "hero-cory-attack-3": "hero/hero_cory_attack_3.png",
-    "hero-cory-attack-4": "hero/hero_cory_attack_4.png",
-    "prop-bailey-peek": "props/prop_bailey_peek.png"
+    "hero-cory-attack-4": "hero/hero_cory_attack_4.png"
   },
   "render": {
     "turret-escalation": {
@@ -617,8 +616,7 @@
     "signBribed": "prop-sign-courjahan",
     "signTavern": "prop-sign-tavern",
     "buildPad": "prop-pad",
-    "buildPadQuiet": "prop-pad-flagstone",
-    "baileyPeek": "prop-bailey-peek"
+    "buildPadQuiet": "prop-pad-flagstone"
   },
   "towerTiers": {
     "turret-ledger": [
@@ -643,8 +641,7 @@
     "hero-cory-attack-1",
     "hero-cory-attack-2",
     "hero-cory-attack-3",
-    "hero-cory-attack-4",
-    "prop-bailey-peek"
+    "hero-cory-attack-4"
   ],
   "hero": {
     "_note": "Frame lists for the hero animations. Anchors and displayHeight are per SET, not shared: walk is 557x704 and attack is 787x720, their feet sit at different fractions of their canvases, and their figures are 677 and 690 source px tall. One anchor for both would step the hero sideways on every swing. Frame 1 of each set is the registration reference; frames 2-4 move relative to it, which is the animation.",

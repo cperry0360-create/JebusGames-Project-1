@@ -43,7 +43,6 @@ import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { platePanel, plateButton, type PlateButton } from '../ui/Plate.ts'
 import { dockedSlab } from '../ui/EdgeDock.ts'
 import { SignBribe } from '../ui/SignBribe.ts'
-import { Bailey } from '../entities/Bailey.ts'
 import { fitAspect, placeSign } from '../systems/SignPlacement.ts'
 import { CameraRig } from '../systems/CameraRig.ts'
 import { Dialog, type DialogOptions } from '../ui/Dialog.ts'
@@ -164,9 +163,6 @@ export class GameScene extends Phaser.Scene {
   private build!: BuildSystem
   /** Public so the probe can drive the bribe through the real swap. */
   sign!: SignBribe
-  /** The dog behind the trees. Does nothing, and is allowed to be absent:
-   *  her art is an optional hook, and without it she never appears. */
-  bailey!: Bailey
   private cancelBtn!: PlateButton
   /** The docked slab CANCEL is drawn on. Its own object, because the painted
    *  button plate cannot have a square corner. */
@@ -703,12 +699,6 @@ this.armReadyCountdown()
 
     this.sign = new SignBribe(this, MAP.signs.held, w, h, RULES.signBribe)
     this.sign.setDepth(this.sign.depthY)
-
-    // Loaded with the level's other props, not added to the boot path.
-    const b = PRESENTATION.bailey
-    this.bailey = new Bailey(this, ART.prop.baileyPeek, MAP.baileySpots.spots, b,
-      b.worldHeight, GROUND_DEPTH + 1)
-    this.events.once('shutdown', () => this.bailey.destroy())
 
     const tavernArt = this.textures.get(ART.prop.signTavern).getSourceImage()
     const tavern = fitAspect(placeSign(MAP.signs.tavern, w, h),
@@ -2822,11 +2812,6 @@ this.armReadyCountdown()
     // The camera runs on real time. It is feel, not simulation, and a camera
     // that eased 40% faster would read as twitchy rather than as brisk.
     this.rig.update(real)
-
-    // Real time as well: she is scenery, and a game-speed setting should not
-    // make the dog frantic. Build phase only — an easter egg that moves while
-    // a wave walks in is competing with the thing the player has to watch.
-    this.bailey.update(_time, this.status.phase === 'ready' && !this.modalOpen)
 
     if (this.status.phase === 'won' || this.status.phase === 'lost') return
 

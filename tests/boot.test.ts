@@ -61,12 +61,6 @@ test('an optional key is a short deliberate list, and every one has a fallback',
   const FAMILIES: Array<{ match: RegExp; fallback: string }> = [
     { match: /^icon-/, fallback: 'the generated icon stand-in' },
     { match: /^hero-cory-(walk|attack)-\d$/, fallback: 'the static idle sprite' },
-    // Bailey's fallback is nothing at all, and for once that is the right one:
-    // she is an easter egg that does nothing, so an absent file means she
-    // never appears rather than a placeholder dog on the map. The pad's
-    // never-arriving hook is the cautionary tale (see below) and the
-    // difference is that a build pad is load-bearing and she is not.
-    { match: /^prop-bailey-peek$/, fallback: 'she never appears' },
   ]
   assert.ok(FAMILIES.length <= 6,
     `${FAMILIES.length} families of optional art; this list is for art being drawn`)
@@ -80,9 +74,6 @@ test('an optional key is a short deliberate list, and every one has a fallback',
   assert.match(src('scenes/BootScene.ts'), /ensureIconFallbackTexture\(this\)/, 'no icon fallback')
   assert.match(src('entities/Hero.ts'), /return this\.def\.bodySprite/,
     'a missing hero frame does not fall back to the static idle')
-  assert.match(src('entities/Bailey.ts'), /!scene\.textures\.exists\(key\)/,
-    'Bailey does not check for her own texture, so an absent file is a crash ' +
-    'rather than a dog who stays behind the trees')
 
   // The build pad is REQUIRED art now, not an optional hook — it was the one
   // that took the game down to a green screen, and a hook whose file never

@@ -94,6 +94,35 @@ shape of each one — add a field there when you add one here.
 - **`draft.unlockAfterWave` is `[4, 8]`** and both must land before the last
   wave or the unlock never happens; a test enforces that.
 
+## Removed: Bailey, the dog behind the trees
+
+An easter egg where Bailey put her head up over the tree line between waves.
+**Removed** — `map.baileySpots`, the `bailey` block in `presentation.json`,
+`src/entities/Bailey.ts`, `src/systems/PeekSchedule.ts`, her manifest entry and
+her tests all went with it.
+
+**Why.** She was never behind the foliage. The map is one painted plate drawn
+at `GROUND_DEPTH`, so every sprite on the board is above every painted leaf on
+it — there is nothing to sort behind. What stood in for occlusion was a
+rectangular geometry mask that cut her off at a `canopyY` recorded per spot, so
+she was a straight horizontal **crop** of her own sprite sitting on top of the
+tree line. That is why no value of `peakVisible` ever read as a dog behind a
+bush: the amount showing was the only thing it could change, and the amount was
+not the problem. It was tuned three times — 0.5, 0.33, 0.6 — chasing a look the
+mechanism could not produce.
+
+**What it would need to come back.** The canopy drawn IN FRONT of her, as a
+separate overlay: the painted foliage at each spot cut out of the plate as its
+own sprite, drawn above her instead of below, so she is occluded rather than
+cropped. Then her bottom edge follows the leaves, `canopyY` becomes the
+overlay's depth rather than a cut line, and `peakVisible` becomes a real
+question again. That is a plate-authoring job as much as a code one, and it was
+not worth building for an easter egg that does nothing.
+
+**Her art is deliberately still in the repo** at
+`public/assets/props/prop_bailey_peek.png`, unreferenced by `art.json`. It is
+kept for that return, not by accident.
+
 ## Swapping art
 
 `art.json` is built so new art is a change to this file alone. Two fields carry

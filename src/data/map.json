@@ -364,20 +364,5 @@
     "gateX": 1205.0,
     "vanishX": 1235.0
   },
-  "_heroStart": "Open grass, 150px from the road's edge and 112px from the nearest pad. The trace put him at 42% along the lane, which on this painting is on the road itself.",
-  "baileySpots": {
-    "_note": "TWO SPOTS, NOT FOUR, and each one is a real clump. `canopyY` is the world y of the TOP EDGE of painted foliage at that x \u2014 nothing of her draws below it, so the cut in her sprite lands on the top of something painted and what is under it is leaves. THE FOUR SPOTS THESE REPLACE WERE THE FRONT EDGE OF THE WOOD, where the foliage stops rather than starts: she rose over open grass and the straight cut across her face had nothing under it to explain it. They were also all in the top-left forest, which the opening camera puts behind the HUD. Found by masking the painted conifer and bush mass and scanning for a position where that mass runs across her whole width for 26 world px below the line with an open top edge above it. The plate has exactly two such places outside the HUD band, at 74% and 72% coverage; there is no third, which is why there is no third spot.",
-    "spots": [
-      {
-        "x": 125,
-        "canopyY": 526,
-        "_note": "The bush cluster above the waterfall, plate x 375 y 1578. Mass below the line: 72%."
-      },
-      {
-        "x": 1118,
-        "canopyY": 630,
-        "_note": "The conifer at the lower right, plate x 3354 y 1890. Mass below the line: 74%."
-      }
-    ]
-  }
+  "_heroStart": "Open grass, 150px from the road's edge and 112px from the nearest pad. The trace put him at 42% along the lane, which on this painting is on the road itself."
 }

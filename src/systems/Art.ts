@@ -31,9 +31,6 @@ export const ART = {
   prop: art.prop as {
     signDefault: string; signBribed: string; signTavern: string
     buildPad: string; buildPadQuiet?: string
-    /** Optional art: absent until the file lands, and she simply never
-     *  appears until then. */
-    baileyPeek?: string
   },
   optional: (art as { optional?: string[] }).optional ?? [],
   fx: art.fx,
