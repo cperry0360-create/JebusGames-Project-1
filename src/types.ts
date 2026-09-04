@@ -38,17 +38,27 @@ export interface MapDef {
   waypoints: number[][]
   buildSpots: number[][]
   /** The blank painted boards, and the rectangle a lettering overlay is drawn
-   *  in on each. See systems/SignPlacement. */
-  signs: {
+   *  in on each. See systems/SignPlacement.
+   *
+   *  OPTIONAL, like the four fields below it. Level 1 is a village with an
+   *  arch, a gate, two signboards and gaps in its tree line; level 2 is a
+   *  corridor whose lane runs off both edges of the plate and has none of
+   *  them. A level declares the scenery it has, and GameScene builds only
+   *  what is declared — see `buildSign`, `createArchOccluders` and the
+   *  gateway defaults in `create`. */
+  signs?: {
     /** The board hanging from the tavern beam. Never changes. */
     tavern: SignBoard
     /** The board the innkeeper holds. The bribe swaps its texture. */
     held: SignBoard
   }
-  /** Gaps in the tree line Bailey can put her head up through. */
-  baileySpots: { spots: Array<{ x: number; canopyY: number }> }
-  /** The stone archway enemies walk out of, measured off the painted plate. */
-  entrance: {
+  /** Gaps in the tree line Bailey can put her head up through. Optional: a
+   *  level with no tree line simply never shows her. */
+  baileySpots?: { spots: Array<{ x: number; canopyY: number }> }
+  /** The stone archway enemies walk out of, measured off the painted plate.
+   *  Optional: without one, enemies are at full opacity from their first
+   *  frame because there is nothing for them to walk out from behind. */
+  entrance?: {
     /** Map x at the arch's mouth: where the fade starts. */
     emergeFromX: number
     /** Map x past which nothing of the arch is in front any more. */
@@ -77,8 +87,9 @@ export interface MapDef {
   }
   /** The open gate enemies walk out through. `gateX` is the near edge of the
    *  dark gap between its two leaves, where the fade starts, and `vanishX` the
-   *  far edge, where there is nothing left. */
-  exit: { gateX: number; vanishX: number }
+   *  far edge, where there is nothing left. Optional: without one, an enemy
+   *  walks the lane to its end at full opacity and leaks there. */
+  exit?: { gateX: number; vanishX: number }
 }
 
 export interface ServerNukeDef {

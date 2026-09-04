@@ -6,6 +6,10 @@ const url = (p: string) => new URL(p, import.meta.url)
 const read = (n: string) => JSON.parse(readFileSync(url(`../src/data/${n}.json`), 'utf8'))
 const src = (p: string) => readFileSync(url(`../src/${p}`), 'utf8')
 
+import {
+  DEFAULT_LEVEL_ID, LEVELS, isLevelUnlocked, levelDef, loadLevel, resolveLevelId, unlockedLevels,
+} from '../src/systems/Levels.ts'
+
 const levels = read('levels'), enemies = read('enemies')
 const l1 = read('waves'), l2 = read('waves.level2')
 
@@ -30,14 +34,102 @@ test('every level names a wave table that exists, and no two share one', () => {
   }
 })
 
-test('level 1 is still the table the scene loads, and it is not level 2\'s', () => {
-  // GameScene is deliberately NOT level-aware yet, so the one table it imports
-  // has to stay the one levels.json calls level 1. If that import ever moves,
-  // this is the test that says the registry and the scene have parted company.
+test('the scene takes its level from the registry rather than importing one', () => {
+  // This used to assert the OPPOSITE — that GameScene imported waves.json
+  // directly — because the registry was data nothing read. It is read now, so
+  // the property worth holding is that the scene has no private opinion about
+  // which map or wave table a run plays.
   const byId = Object.fromEntries(levels.levels.map((l: any) => [l.id, l]))
   assert.equal(byId.level1.waves, 'waves.json')
-  assert.match(src('scenes/GameScene.ts'), /from '\.\.\/data\/waves\.json'/,
-    'GameScene no longer loads waves.json; levels.json needs to become real')
+
+  const game = src('scenes/GameScene.ts')
+  assert.ok(!/from '\.\.\/data\/(waves|map)\.json'/.test(game),
+    'GameScene imports a level\'s data directly again, going round the registry')
+  assert.match(game, /loadLevel\(/, 'GameScene never resolves a level')
+
+  // Every level in the registry must be buildable, which is the failure the
+  // static import table in Levels.ts is there to make impossible.
+  const src_ = src('systems/Levels.ts')
+  for (const l of levels.levels) {
+    assert.ok(src_.includes(`${l.id}:`), `Levels.ts registers no map for ${l.id}`)
+    assert.ok(src_.includes(`'${l.waves}'`), `Levels.ts imports no wave table for ${l.waves}`)
+  }
+})
+
+/* --------------------------------------------------------------- the loader */
+
+test('the registry hands back each level\'s own map and wave table', () => {
+  // The refactor's whole claim: a level id in, that level's data out. Checked
+  // against the JSON directly rather than against itself.
+  const l1 = loadLevel('level1')
+  assert.equal(l1.id, 'level1')
+  assert.deepEqual(l1.map.waypoints, read('map').waypoints)
+  assert.deepEqual(l1.waveTable.waves, read('waves').waves)
+
+  const l2 = loadLevel('level2')
+  assert.equal(l2.id, 'level2')
+  assert.deepEqual(l2.map.waypoints, read('map_level2').waypoints)
+  assert.deepEqual(l2.waveTable.waves, read('waves.level2').waves)
+
+  // And they are genuinely different maps, which is the bug a copy-paste
+  // registry would produce and every other assertion here would still pass.
+  assert.notDeepEqual(l1.map.waypoints, l2.map.waypoints)
+})
+
+test('every level in levels.json can actually be built', () => {
+  for (const l of LEVELS) {
+    const loaded = loadLevel(l.id)
+    assert.ok(loaded.map.waypoints.length >= 2, `${l.id} has no usable lane`)
+    assert.ok(loaded.map.buildSpots.length > 0, `${l.id} has nowhere to build`)
+    assert.ok(loaded.waveTable.waves.length > 0, `${l.id} has no waves`)
+    assert.ok(loaded.map.plate, `${l.id} names no plate`)
+  }
+})
+
+test('an unknown level id falls back rather than throwing', () => {
+  // A save can name a level that has been renamed or removed. Resuming onto
+  // the wrong map is recoverable; taking the scene down on its first frame is
+  // not, and that is the only reason this is a fallback and not an error.
+  assert.equal(resolveLevelId('level-that-never-was'), DEFAULT_LEVEL_ID)
+  assert.equal(resolveLevelId(null), DEFAULT_LEVEL_ID)
+  assert.equal(resolveLevelId(undefined), DEFAULT_LEVEL_ID)
+  assert.equal(loadLevel('level-that-never-was').id, DEFAULT_LEVEL_ID)
+  // A real id is never rewritten.
+  assert.equal(resolveLevelId('level2'), 'level2')
+  assert.equal(DEFAULT_LEVEL_ID, 'level1')
+  assert.equal(levelDef('level-that-never-was'), null)
+})
+
+/* ------------------------------------------------------- optional furniture */
+
+test('level 1 has its arch, gate and signs, and level 2 has none of them', () => {
+  // Not a wish: these four fields are optional on MapDef precisely because
+  // level 2's lane runs off both edges of its plate and there is nothing to
+  // animate at either end. If level 1 ever loses one, the guards in GameScene
+  // start silently skipping scenery that is supposed to be there.
+  const l1 = loadLevel('level1').map
+  for (const k of ['entrance', 'exit', 'signs', 'baileySpots'] as const) {
+    assert.ok(l1[k], `level 1 lost its ${k}`)
+  }
+  const l2 = loadLevel('level2').map
+  for (const k of ['entrance', 'exit', 'signs', 'baileySpots'] as const) {
+    assert.equal(l2[k], undefined, `level 2 grew a ${k}; the map was traced without one`)
+  }
+})
+
+test('the scene builds the optional furniture only where the map declares it', () => {
+  const game = src('scenes/GameScene.ts')
+  // Each of the four is behind a check on the map, not assumed present.
+  assert.match(game, /if \(!entrance\) return/, 'the arch occluders assume an entrance')
+  assert.match(game, /if \(map\.signs\) \{/, 'the signs are built unconditionally')
+  assert.match(game, /if \(map\.baileySpots\) \{/, 'Bailey is built unconditionally')
+  assert.match(game, /map\.entrance \? distanceAtX/, 'the arch mouth assumes an entrance')
+  assert.match(game, /map\.exit \? distanceAtX/, 'the gate assumes an exit')
+  // And the taps that reach them tolerate their absence.
+  assert.match(game, /this\.sign\?\.owns/, 'a tap would throw on a level with no sign')
+  assert.match(game, /this\.bailey\?\.update/, 'the frame would throw on a level with no Bailey')
+  // The arch is cropped out of the LEVEL'S plate, not level 1's by name.
+  assert.ok(!/ART\.map\.level1/.test(game), 'the scene still names level 1\'s plate directly')
 })
 
 /* ------------------------------------------------------------ the same shape */

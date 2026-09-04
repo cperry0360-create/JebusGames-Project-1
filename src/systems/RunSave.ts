@@ -53,11 +53,14 @@ export interface SavedRun {
   /**
    * Which level is being played.
    *
-   * Always 'level1' today, because GameScene loads one map and one wave table
-   * and making it level-aware is a separate, unapproved refactor. It is stored
-   * anyway: a resumed run has to know what it is resuming INTO, and adding the
-   * field later would mean every run saved before the change resumes onto the
-   * wrong map.
+   * Written from the level actually being played, and read back on resume to
+   * decide which map and wave table the run returns to. It was stored before
+   * anything could vary it, on the reasoning that adding the field later would
+   * strand every run saved before the change; that turned out right, and saves
+   * written by the single-level build carry 'level1' and resume correctly.
+   *
+   * An id no longer in levels.json falls back to the default level rather than
+   * failing the resume — see Levels.resolveLevelId.
    */
   level: string
   /** Waves cleared so far, which is also the index of the wave about to run. */

@@ -64,7 +64,8 @@ test('exactly one build spot keeps the sign, and it is the one nearest the entra
   const g = src('scenes/GameScene.ts')
   const fn = g.slice(g.indexOf('private createPads()'), g.indexOf('/** Shows the pads still free'))
   assert.match(fn, /const isSign = i === signIndex/, 'more than one spot can carry the sign')
-  assert.match(fn, /MAP\.waypoints\[0\]/, 'the sign is not placed relative to the entrance')
+  assert.match(fn, /this\.level\.map\.waypoints\[0\]/,
+    'the sign is not placed relative to the entrance')
 
   // THE COUNT. There are seven build spots and exactly one may carry the full
   // sign. This shipped with SEVEN of them: the quiet marker was a manifest

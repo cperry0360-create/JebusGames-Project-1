@@ -233,7 +233,7 @@ test('a resume is consumed once, and clamped to a wave that exists', () => {
   const restore = /private restoreRun\(saved: SavedRun\): void \{[\s\S]*?\n  \}/.exec(game)!
   assert.match(game, /setRunState\(\{ resumeFrom: null \}\)/,
     'restarting the scene would restore the same board again')
-  assert.match(restore[0], /Math\.min\(saved\.wave, WAVES\.waves\.length - 1\)/,
+  assert.match(restore[0], /Math\.min\(saved\.wave, this\.level\.waveTable\.waves\.length - 1\)/,
     'a wave index past the end of the table would read an undefined wave')
   assert.match(restore[0], /restoreTier/, 'towers come back at tier 1 whatever they were')
   assert.match(restore[0], /this\.build\.occupy/, 'restored towers do not claim their pads')

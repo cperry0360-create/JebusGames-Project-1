@@ -1,10 +1,19 @@
 // What the title and draft screens decide, and the game scene consumes.
 // A plain module rather than the Phaser registry so it can be read in tests.
 
+import { DEFAULT_LEVEL_ID } from './Levels.ts'
 import type { SavedRun } from './RunSave.ts'
 
 export interface RunState {
   heroId: string
+  /**
+   * Which level a FRESH run plays.
+   *
+   * The title screen's level select writes it. A resumed run ignores it and
+   * uses the level recorded in the save instead — see GameScene.create — so
+   * picking up a level 2 run does not depend on this having survived.
+   */
+  levelId: string
   abilities: string[]
   openingTowers: string[]
   /** Towers not drawn at the start, in the order they unlock later. */
@@ -26,6 +35,7 @@ export interface RunState {
 
 const state: RunState = {
   heroId: 'cory',
+  levelId: DEFAULT_LEVEL_ID,
   abilities: [],
   openingTowers: [],
   reserveTowers: [],

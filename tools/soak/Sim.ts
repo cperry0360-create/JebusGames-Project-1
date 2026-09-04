@@ -23,11 +23,10 @@ import towersData from '../../src/data/towers.json' with { type: 'json' }
 import enemiesData from '../../src/data/enemies.json' with { type: 'json' }
 import abilitiesData from '../../src/data/abilities.json' with { type: 'json' }
 import heroesData from '../../src/data/heroes.json' with { type: 'json' }
-import wavesData from '../../src/data/waves.json' with { type: 'json' }
 import rulesData from '../../src/data/rules.json' with { type: 'json' }
-import mapData from '../../src/data/map.json' with { type: 'json' }
 import draftData from '../../src/data/draft.json' with { type: 'json' }
 
+import { DEFAULT_LEVEL_ID, loadLevel } from '../../src/systems/Levels.ts'
 import { Path } from '../../src/systems/Path.ts'
 import { BuildSystem } from '../../src/systems/BuildSystem.ts'
 import { WaveSpawner } from '../../src/systems/WaveSpawner.ts'
@@ -53,9 +52,7 @@ const TOWERS = towersData as any
 const ENEMIES = enemiesData as any
 const ABILITIES = abilitiesData as any
 const HEROES = heroesData as any
-const WAVES = (wavesData as any).waves
 const RULES = rulesData as any
-const MAP = mapData as any
 const DRAFT = draftData as any
 
 /** A tick, in game seconds. Small enough that a fast enemy cannot step over a
@@ -135,7 +132,16 @@ interface SimTower {
  */
 export type SoakMode = 'normal' | 'nobuild' | 'supportonly' | 'noabilities'
 
-export function simulate(seed: number, mode: SoakMode = 'normal'): SoakResult {
+export function simulate(
+  seed: number, mode: SoakMode = 'normal', levelId: string = DEFAULT_LEVEL_ID,
+): SoakResult {
+  // The level is a parameter now rather than two module-scope imports, so a
+  // soak can be pointed at level 2. Everything below reads these two and does
+  // not care which level they came from.
+  const level = loadLevel(levelId)
+  const MAP = level.map as any
+  const WAVES = level.waveTable.waves
+
   const rng = makeRng(seed)
   const findings: SoakFinding[] = []
   const firedTowers = new Set<string>()
@@ -240,6 +246,27 @@ export function simulate(seed: number, mode: SoakMode = 'normal'): SoakResult {
     }
   }
 
+  // How far each pad is from the nearest point on the road.
+  //
+  // On level 1 this is 87-119 world px and every tower out-ranges it, so the
+  // number never mattered and nothing measured it. Level 2's pads run to 185,
+  // past four of the five ranges, and a tower built on one of those is a
+  // tower that never fires. A player sees the range ring and does not do
+  // that; a soak that picks at random does it constantly and reports the
+  // level as unwinnable for a reason no human would hit.
+  const padToLane: number[] = build.spots.map((spot) => {
+    let best = Infinity
+    for (let i = 0; i < MAP.waypoints.length - 1; i++) {
+      const [ax, ay] = MAP.waypoints[i]
+      const [bx, by] = MAP.waypoints[i + 1]
+      const dx = bx - ax, dy = by - ay
+      const len2 = dx * dx + dy * dy
+      const t = len2 ? Math.max(0, Math.min(1, ((spot.x - ax) * dx + (spot.y - ay) * dy) / len2)) : 0
+      best = Math.min(best, Math.hypot(spot.x - (ax + t * dx), spot.y - (ay + t * dy)))
+    }
+    return best
+  })
+
   // --- the scripted player ----------------------------------------------
   const spend = (): void => {
     if (mode === 'nobuild') return
@@ -248,7 +275,12 @@ export function simulate(seed: number, mode: SoakMode = 'normal'): SoakResult {
       const pickable = mode === 'supportonly'
         ? Object.keys(TOWERS).filter((id) => TOWERS[id].supportRadius > 0)
         : unlocked
-      const affordable = pickable.filter((id) => TOWERS[id].cost <= peanuts)
+      const reach = padToLane[spot.index] ?? 0
+      const affordable = pickable
+        .filter((id) => TOWERS[id].cost <= peanuts)
+        // A support tower buffs its neighbours rather than shooting, so its
+        // range is not the thing that has to reach the road.
+        .filter((id) => TOWERS[id].supportRadius > 0 || TOWERS[id].range >= reach)
       if (affordable.length === 0) break
       const id = rng.pick(affordable)
       peanuts -= TOWERS[id].cost

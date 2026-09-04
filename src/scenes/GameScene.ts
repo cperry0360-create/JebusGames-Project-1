@@ -2,18 +2,17 @@ import Phaser from 'phaser'
 import type { ScratchOutcome } from '../systems/Scratch.ts'
 import { NukeEarnedOverlay, NukeLaunchOverlay } from '../ui/NukeOverlays.ts'
 import type {
-  AbilityDef, DraftDef, EnemyDef, HeroDef, MapDef, RulesDef, TowerDef, TowerSpec, WavesDef,
+  AbilityDef, DraftDef, EnemyDef, HeroDef, RulesDef, TowerDef, TowerSpec, WavesDef,
 } from '../types.ts'
 import displayData from '../data/display.json'
-import mapData from '../data/map.json'
 import rulesData from '../data/rules.json'
 import towersData from '../data/towers.json'
 import enemiesData from '../data/enemies.json'
 import heroesData from '../data/heroes.json'
-import wavesData from '../data/waves.json'
 import abilitiesData from '../data/abilities.json'
 import draftData from '../data/draft.json'
 
+import { loadLevel, type Level } from '../systems/Levels.ts'
 import { Path } from '../systems/Path.ts'
 import { BuildSystem } from '../systems/BuildSystem.ts'
 import type { BuildSpot } from '../systems/BuildSystem.ts'
@@ -80,12 +79,10 @@ import { bothUnits, realSeconds } from '../systems/GameTime.ts'
 /** The HUD's layout constants, shared with HudScene so both agree. */
 const LAYOUT = PRESENTATION.hud.layout
 
-const MAP = mapData as MapDef
 const RULES = rulesData as RulesDef
 const TOWERS = towersData as Record<string, TowerDef>
 const ENEMIES = enemiesData as Record<string, EnemyDef>
 const HEROES = heroesData as Record<string, HeroDef>
-const WAVES = wavesData as WavesDef
 const ABILITIES = abilitiesData as Record<string, AbilityDef>
 const DRAFT = draftData as DraftDef
 
@@ -150,7 +147,7 @@ const MARKER_BLUE = 0x4fa3e3
 
 export class GameScene extends Phaser.Scene {
   readonly status: GameStatus = {
-    peanuts: 0, lives: 0, wave: 0, waveCount: WAVES.waves.length, waveName: '',
+    peanuts: 0, lives: 0, wave: 0, waveCount: 0, waveName: '',
     phase: 'ready', mode: 'normal', enemiesLeft: 0,
     heroName: '', heroHealth: 0, heroMax: 0, heroDown: false, heroReviveIn: 0,
     lastStand: false,
@@ -165,11 +162,13 @@ export class GameScene extends Phaser.Scene {
 
   private lane!: Path
   private build!: BuildSystem
-  /** Public so the probe can drive the bribe through the real swap. */
-  sign!: SignBribe
+  /** Public so the probe can drive the bribe through the real swap. Undefined
+   *  on a level whose map declares no signs — see `buildSign`. */
+  sign?: SignBribe
   /** The dog behind the trees. Does nothing, and is allowed to be absent:
-   *  her art is an optional hook, and without it she never appears. */
-  bailey!: Bailey
+   *  her art is an optional hook, and without it she never appears. Undefined
+   *  as well on a level with no tree line to put her head through. */
+  bailey?: Bailey
   private cancelBtn!: PlateButton
   /** The docked slab CANCEL is drawn on. Its own object, because the painted
    *  button plate cannot have a square corner. */
@@ -203,6 +202,17 @@ export class GameScene extends Phaser.Scene {
   private splitAt = -1
   private spawner!: WaveSpawner
   private hero!: Hero
+
+  /**
+   * The level being played: its map, its wave table, its plate.
+   *
+   * Set on the first line of `create` from the run state, so every method
+   * below reads one level for the whole scene and a restart picks up whatever
+   * the title screen chose. It is not read at construction time — a Phaser
+   * scene is constructed once and started many times, and a level chosen at
+   * construction would be the same level for the rest of the session.
+   */
+  private level!: Level
 
   private enemies: Enemy[] = []
   private towers: Tower[] = []
@@ -328,6 +338,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Before anything else: everything below reads this. A resumed run plays
+    // the level it was saved on, a fresh one plays whatever the title screen
+    // picked, and an id neither recognises falls back to the default rather
+    // than throwing on the first frame — see Levels.resolveLevelId.
+    this.level = loadLevel(runState().resumeFrom?.level ?? runState().levelId)
+
     // What plays here is data; see music.json. A scene not listed keeps
     // whatever is already playing, which is what carries the battle track
     // across Title -> Loadout without a restart.
@@ -382,20 +398,34 @@ export class GameScene extends Phaser.Scene {
       this.applyBands()
     })
 
-    this.lane = new Path(MAP.waypoints)
+    this.lane = new Path(this.level.map.waypoints)
     // The arch mouth and the two edges of the open gate's gap are measured off
     // the painted plate as map positions; the enemy walks in lane distance.
     // Converted once here rather than per enemy per frame.
+    //
+    // Both ends are OPTIONAL. Level 1 has an arch to walk out of and an open
+    // gate to dissolve in; level 2's lane simply runs off both edges of the
+    // plate, so there is nothing to emerge from and nothing to vanish into.
+    // The defaults say exactly that:
+    //   no entrance -> mouth at distance 0 with a zero-length fade, so an
+    //     enemy is at full opacity and full size from its first frame.
+    //   no exit -> the gap sits at the very end of the lane, so nothing ever
+    //     starts fading (applyVanish returns early below gateDistance) and the
+    //     enemy leaks on reaching the end, which is where it walks off-plate.
+    const map = this.level.map
+    const laneEnd = this.lane.totalLength
     this.gateway = {
       // Measured, not chosen: the painted road is 38 world pixels across, and
       // until now nothing but the band-drawing code read that number.
-      laneHalfWidth: MAP.roadWidth / 2,
-      mouthDistance: distanceAtX(MAP.waypoints, MAP.entrance.emergeFromX),
-      gateDistance: distanceAtX(MAP.waypoints, MAP.exit.gateX),
-      stopDistance: distanceAtX(MAP.waypoints, MAP.exit.vanishX),
-      emerge: { fadeMs: MAP.entrance.fadeMs, startScale: MAP.entrance.startScale },
+      laneHalfWidth: map.roadWidth / 2,
+      mouthDistance: map.entrance ? distanceAtX(map.waypoints, map.entrance.emergeFromX) : 0,
+      gateDistance: map.exit ? distanceAtX(map.waypoints, map.exit.gateX) : laneEnd,
+      stopDistance: map.exit ? distanceAtX(map.waypoints, map.exit.vanishX) : laneEnd,
+      emerge: map.entrance
+        ? { fadeMs: map.entrance.fadeMs, startScale: map.entrance.startScale }
+        : { fadeMs: 0, startScale: 1 },
     }
-    this.build = new BuildSystem(MAP.buildSpots, MAP.spotRadius)
+    this.build = new BuildSystem(this.level.map.buildSpots, this.level.map.spotRadius)
     this.spawner = new WaveSpawner()
 
     this.drawPlate()
@@ -464,7 +494,7 @@ export class GameScene extends Phaser.Scene {
     this.rangeRing = this.add.graphics().setDepth(OVERLAY_DEPTH)
     this.targetRing = this.add.graphics().setDepth(OVERLAY_DEPTH + 1)
 
-    this.hero = new Hero(this, MAP.heroStart[0], MAP.heroStart[1], heroDef)
+    this.hero = new Hero(this, this.level.map.heroStart[0], this.level.map.heroStart[1], heroDef)
     this.hero.on('revived', () => {
       play(this, 'build')
       logEvent('hero', 'revived where he fell')
@@ -496,7 +526,8 @@ export class GameScene extends Phaser.Scene {
     this.status.peanutsEarned = 0
     this.status.phase = 'ready'
     this.status.mode = 'normal'
-    this.status.waveName = WAVES.waves[0].name
+    this.status.waveCount = this.level.waveTable.waves.length
+    this.status.waveName = this.level.waveTable.waves[0].name
     this.status.enemiesLeft = 0
     this.status.heroName = heroDef.name
     this.status.heroMax = heroDef.maxHealth
@@ -589,7 +620,7 @@ export class GameScene extends Phaser.Scene {
     // where the hero STARTED while the hero walked off — not a follow that
     // undid the opening frame.
     const board = boardBounds(
-      MAP.waypoints, MAP.buildSpots, MAP.roadWidth, MAP.spotRadius,
+      this.level.map.waypoints, this.level.map.buildSpots, this.level.map.roadWidth, this.level.map.spotRadius,
       displayData.width, displayData.height, displayData.camera.openingMargin,
     )
     const cam0 = this.cameras.main
@@ -698,7 +729,7 @@ export class GameScene extends Phaser.Scene {
    * the map's own coordinate space.
    */
   private drawPlate(): void {
-    const plate = this.add.image(0, 0, ART.map[MAP.plate]).setOrigin(0, 0).setDepth(GROUND_DEPTH)
+    const plate = this.add.image(0, 0, ART.map[this.level.map.plate]).setOrigin(0, 0).setDepth(GROUND_DEPTH)
     this.createArchOccluders()
     plate.setDisplaySize(displayData.width, displayData.height)
   }
@@ -715,23 +746,34 @@ export class GameScene extends Phaser.Scene {
   private buildSign(): void {
     const w = displayData.width
     const h = displayData.height
+    const map = this.level.map
 
-    this.sign = new SignBribe(this, MAP.signs.held, w, h, RULES.signBribe)
-    this.sign.setDepth(this.sign.depthY)
+    // All three are scenery a level either has or does not. Level 2 is a
+    // corridor with no village in it: no boards to letter and no tree line for
+    // the dog to look through. Each is built only where the map declares it,
+    // and `sign` and `bailey` stay undefined otherwise — the taps and the
+    // per-frame update below both check.
+    if (map.signs) {
+      this.sign = new SignBribe(this, map.signs.held, w, h, RULES.signBribe)
+      this.sign.setDepth(this.sign.depthY)
 
-    // Loaded with the level's other props, not added to the boot path.
-    const b = PRESENTATION.bailey
-    this.bailey = new Bailey(this, ART.prop.baileyPeek, MAP.baileySpots.spots, b,
-      b.worldHeight, GROUND_DEPTH + 1)
-    this.events.once('shutdown', () => this.bailey.destroy())
+      const tavernArt = this.textures.get(ART.prop.signTavern).getSourceImage()
+      const tavern = fitAspect(placeSign(map.signs.tavern, w, h),
+        tavernArt.width / tavernArt.height)
+      this.add.image(tavern.x, tavern.y, ART.prop.signTavern)
+        .setDisplaySize(tavern.width, tavern.height)
+        .setRotation(tavern.rotationRad)
+        .setDepth(tavern.footY)
+    }
 
-    const tavernArt = this.textures.get(ART.prop.signTavern).getSourceImage()
-    const tavern = fitAspect(placeSign(MAP.signs.tavern, w, h),
-      tavernArt.width / tavernArt.height)
-    this.add.image(tavern.x, tavern.y, ART.prop.signTavern)
-      .setDisplaySize(tavern.width, tavern.height)
-      .setRotation(tavern.rotationRad)
-      .setDepth(tavern.footY)
+    if (map.baileySpots) {
+      // Loaded with the level's other props, not added to the boot path.
+      const b = PRESENTATION.bailey
+      this.bailey = new Bailey(this, ART.prop.baileyPeek, map.baileySpots.spots, b,
+        b.worldHeight, GROUND_DEPTH + 1)
+      const dog = this.bailey
+      this.events.once('shutdown', () => dog.destroy())
+    }
   }
 
   /**
@@ -739,8 +781,10 @@ export class GameScene extends Phaser.Scene {
    * so the only thing that changes is the sign and the size of your wallet.
    */
   private tapSign(): void {
+    const sign = this.sign
+    if (!sign) return
     const cfg = RULES.signBribe
-    switch (this.sign.tap(this.status.peanuts)) {
+    switch (sign.tap(this.status.peanuts)) {
       case 'done':
         this.status.message = cfg.paidToast
         return
@@ -772,7 +816,7 @@ export class GameScene extends Phaser.Scene {
             return
           }
           this.status.peanuts -= cfg.cost
-          this.sign.pay()
+          sign.pay()
           play(this, 'peanuts', 0.9)
           this.status.message = cfg.paidToast
         },
@@ -982,7 +1026,16 @@ export class GameScene extends Phaser.Scene {
    * the pier carries exactly the detail the plate does and no less.
    */
   private createArchOccluders(): void {
-    const plate = this.textures.get(ART.map.level1)
+    // No arch, nothing to cut out of the plate. Level 2's lane runs off the
+    // edge of its board rather than through stonework, so there is no piece
+    // of scenery that has to be drawn in FRONT of the units on the road.
+    const entrance = this.level.map.entrance
+    if (!entrance) return
+
+    // The level's OWN plate, not level 1's. This read the level 1 key
+    // directly, which was invisible while there was one level and would have
+    // cropped a piece of the village out of the volcanic board.
+    const plate = this.textures.get(ART.map[this.level.map.plate])
     const img = plate?.getSourceImage() as CanvasImageSource | undefined
     if (!img) return
     const srcW = plate.source[0]?.width ?? 0
@@ -990,7 +1043,7 @@ export class GameScene extends Phaser.Scene {
     // The plate is authored larger than the world box it covers.
     const perWorld = srcW / displayData.width
 
-    const near = MAP.entrance.arch.near
+    const near = entrance.arch.near
     const pts = near.outline as Array<[number, number]>
     if (pts.length < 3) return
     const xs = pts.map((q) => q[0])
@@ -1057,7 +1110,7 @@ export class GameScene extends Phaser.Scene {
     // Exactly ONE sign, at the spot nearest where the enemies come in, because
     // that is where the player looks first. Seven of them was seven copies of
     // the same joke shouting over the board they are standing on.
-    const entrance = this.build.spots.length > 0 ? MAP.waypoints[0]! : [0, 0]
+    const entrance = this.build.spots.length > 0 ? this.level.map.waypoints[0]! : [0, 0]
     let signIndex = 0
     let best = Infinity
     this.build.spots.forEach((spot, i) => {
@@ -1177,7 +1230,7 @@ export class GameScene extends Phaser.Scene {
       ? this.build.spots.filter((sp) => sp.index === this.pendingSpot!.index)
       : this.build.spots.filter((sp) => this.nodeTakesPick(sp))
     for (const spot of ringed) {
-      const r = MAP.spotRadius * (1 + d.nodePulseScale * beat)
+      const r = this.level.map.spotRadius * (1 + d.nodePulseScale * beat)
       const w = r * 2
       const h = r * 2 * PAD_SQUASH
       this.eligibleLayer.fillStyle(d.nodeRingFill, lerp(d.nodeRingFillAlpha, beat))
@@ -1285,7 +1338,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Wave and enemy tables, for a harness run reporting on the curve. */
   get waveDefs(): WavesDef['waves'] {
-    return WAVES.waves
+    return this.level.waveTable.waves
   }
 
   get enemyDefs(): Record<string, EnemyDef> {
@@ -1373,7 +1426,7 @@ export class GameScene extends Phaser.Scene {
 
     // The sign sits off the lane with no pad under it, so it can take its tap
     // first without ever stealing one from a build spot.
-    if (this.sign.owns(this.input.hitTestPointer(p))) {
+    if (this.sign?.owns(this.input.hitTestPointer(p))) {
       this.tapSign()
       return
     }
@@ -2609,7 +2662,7 @@ export class GameScene extends Phaser.Scene {
     // Clamped rather than trusted. RunSave validates the SHAPE; only the scene
     // knows how many waves this level has, and a wave index past the end would
     // read an undefined wave and take the board down with it.
-    this.status.wave = Math.min(saved.wave, WAVES.waves.length - 1)
+    this.status.wave = Math.min(saved.wave, this.level.waveTable.waves.length - 1)
     this.status.lives = saved.lives
     this.status.peanuts = saved.peanuts
     // Unlocks are re-derived rather than trusted, then reconciled with what
@@ -2641,7 +2694,7 @@ export class GameScene extends Phaser.Scene {
     // by drawing them, by which time these spots are occupied and the pads
     // under the restored towers are hidden. Drawing them here would be a call
     // against an empty array.
-    this.status.waveName = WAVES.waves[this.status.wave].name
+    this.status.waveName = this.level.waveTable.waves[this.status.wave].name
     logEvent('run-resumed',
       `wave ${this.status.wave + 1} lives=${this.status.lives} peanuts=${this.status.peanuts} ` +
       `towers=${this.towers.length}/${saved.towers.length}`)
@@ -2666,7 +2719,7 @@ export class GameScene extends Phaser.Scene {
       // GameScene loads one level and does not know which it is. The field is
       // written honestly rather than guessed at: level 1 is the only thing
       // this scene can currently be playing.
-      level: 'level1',
+      level: this.level.id,
       wave: this.status.wave,
       lives: this.status.lives,
       peanuts: this.status.peanuts,
@@ -2704,11 +2757,11 @@ export class GameScene extends Phaser.Scene {
     this.status.readyCountdown = 0
     this.escapedThisWave = 0
     this.clearSelection()
-    this.spawner.begin(WAVES.waves[this.status.wave])
-    logEvent('wave-start', `${this.status.wave + 1} ${WAVES.waves[this.status.wave].name} bonus=${bonus}`)
+    this.spawner.begin(this.level.waveTable.waves[this.status.wave])
+    logEvent('wave-start', `${this.status.wave + 1} ${this.level.waveTable.waves[this.status.wave].name} bonus=${bonus}`)
     this.status.phase = 'wave'
     play(this, 'wave-start')
-    this.status.waveName = WAVES.waves[this.status.wave].name
+    this.status.waveName = this.level.waveTable.waves[this.status.wave].name
     if (bonus > 0) {
       this.earn(bonus)
       play(this, 'peanuts')
@@ -2730,7 +2783,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.spawner.done || this.enemies.length > 0) return
 
     const escaped = this.escapedThisWave
-    const last = this.status.wave + 1 >= WAVES.waves.length
+    const last = this.status.wave + 1 >= this.level.waveTable.waves.length
     const { cleared, runEnds } = waveOutcome(escaped, last)
     logEvent('wave-end', `${this.status.wave + 1} cleared=${cleared} escaped=${escaped}`)
 
@@ -2753,7 +2806,7 @@ export class GameScene extends Phaser.Scene {
       return
     }
     this.status.phase = 'ready'
-    this.status.waveName = WAVES.waves[this.status.wave].name
+    this.status.waveName = this.level.waveTable.waves[this.status.wave].name
     this.armReadyCountdown()
     // THE MAIN SAVE POINT. A wave boundary is the only place the run is in a
     // state worth restoring: nothing is on the field, nothing is in flight,
@@ -2949,7 +3002,7 @@ export class GameScene extends Phaser.Scene {
     // Real time as well: she is scenery, and a game-speed setting should not
     // make the dog frantic. Build phase only — an easter egg that moves while
     // a wave walks in is competing with the thing the player has to watch.
-    this.bailey.update(_time, this.status.phase === 'ready' && !this.modalOpen)
+    this.bailey?.update(_time, this.status.phase === 'ready' && !this.modalOpen)
 
     if (this.status.phase === 'won' || this.status.phase === 'lost') return
 
