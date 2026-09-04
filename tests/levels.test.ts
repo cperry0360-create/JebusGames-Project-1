@@ -137,6 +137,24 @@ test('level 2 ends on its boss, escorted rather than buried', () => {
   }
 })
 
+test('each level\'s laneLengthPx is what its own map actually walks', () => {
+  // levels.json carried 1916.7 for level 2 for as long as there was no level 2
+  // map to check it against: a figure that came with the plate, never measured.
+  // The traced lane walks 1955.3. Nothing caught the 38.6 px because nothing
+  // compared the constant to the geometry, so this does.
+  const maps: Record<string, string> = { level1: 'map', level2: 'map_level2' }
+  for (const l of levels.levels) {
+    const file = maps[l.id]
+    assert.ok(file, `${l.id} has no map file in this test's table; add it`)
+    const w = read(file).waypoints as [number, number][]
+    let walked = 0
+    for (let i = 0; i < w.length - 1; i++)
+      walked += Math.hypot(w[i + 1][0] - w[i][0], w[i + 1][1] - w[i][1])
+    assert.equal(Math.round(walked * 10) / 10, l.laneLengthPx,
+      `${l.id} records laneLengthPx ${l.laneLengthPx} but its waypoints walk ${(Math.round(walked * 10) / 10)}`)
+  }
+})
+
 test('the lane lengths are close enough that copied spacing is honest', () => {
   // The reason level 2's intervals and delays are level 1's, unchanged. If a
   // later map moves the lane materially, this fails and the spacing has to be

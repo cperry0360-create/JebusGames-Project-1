@@ -1,6 +1,6 @@
 {
   "_note": "WHICH WAVE TABLE BELONGS TO WHICH LEVEL, and nothing more yet. It exists because level 2 stopped sharing level 1's waves and something has to say so; it is data, and no scene reads it. GameScene still loads waves.json directly and is still single-level on purpose — making it level-aware is a separate refactor and is not approved.",
-  "_lane": "laneLengthPx is the walked length of the painted road, summed over the level's waypoints. Level 1's is measured from map.json; level 2's was given with the plate. It is recorded because wave spacing is only comparable between levels that walk the same distance, and the two here differ by 3.0%, which is not enough to retune.",
+  "_lane": "laneLengthPx is the walked length of the painted road, summed over the level's waypoints, rounded to 0.1. BOTH are now measured from the level's own map file by that one method: level 1 from map.json, level 2 from map_level2.json. Level 2 previously carried 1916.7, a figure that arrived with the plate before the lane was traced and was never checked; the traced waypoints walk 1955.3, so it was short by 38.6 px. It is recorded because wave spacing is only comparable between levels that walk the same distance, and the two here differ by 1.1%, which is not enough to retune. Re-measure after any retrace rather than carrying a number forward.",
   "_unlock": "level 2 opens once a run has been cleared, which Save.runsCleared already counts. Nothing enforces it yet — there is no level select — so this records the intent rather than implementing it.",
   "levels": [
     {
@@ -14,7 +14,7 @@
       "id": "level2",
       "name": "Head Office",
       "waves": "waves.level2.json",
-      "laneLengthPx": 1916.7,
+      "laneLengthPx": 1955.3,
       "runsClearedToUnlock": 1
     }
   ]
