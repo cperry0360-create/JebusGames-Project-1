@@ -4,7 +4,7 @@
 
 | | commit | CI |
 |---|---|---|
-| Node-first build flow, and the move line | `PENDING` | pending |
+| Node-first build flow, and the move line | `e3fdba5` | green |
 
 ---
 
@@ -83,6 +83,41 @@ resolves to a path, so the first leg's direction and the destination's bearing
 can disagree, and a word that is right about one and wrong about the other is
 the same class of bug in a smaller font.
 
+## Appendix: the hero walk frames, measured
+
+Not part of this change. A brief arrived asking for the walk sheet to be
+redrawn for two defects — a head facing the wrong way and a see-through shirt —
+with two images that did not arrive, and it is the same shape as the
+image-generation prompt withdrawn on 2026-09-03. Nothing was started from it.
+Recorded here because the measurements are worth having whoever does redraw it.
+
+**The game wants four separate PNGs, not one horizontal sheet.** `art.json`
+names `hero/hero_cory_walk_1.png` through `_4.png` individually; a four-frame
+strip would need slicing or a `sheet` entry like the effects use.
+
+**Neither defect is present in what ships.**
+
+| file | canvas | ink bottom | near-white px: opaque / semi |
+|---|---|---:|---|
+| `hero_cory.png` (idle) | 386x470 | 469 | 11675 / 0 |
+| `hero_cory_walk_1.png` | 557x704 | 693 | 9003 / 244 (2.6%) |
+| `hero_cory_walk_2.png` | 557x704 | 693 | 6633 / 313 (4.5%) |
+| `hero_cory_walk_3.png` | 557x704 | 693 | 8535 / 225 (2.6%) |
+| `hero_cory_walk_4.png` | 557x704 | 692 | 7369 / 179 (2.4%) |
+
+2.4-4.5% semi-transparent white is edge antialiasing, not a translucent shirt:
+a see-through garment puts the semi-transparency through the INTERIOR and there
+would be far more of it. Baselines agree within one pixel across all four, so
+there is no vertical drift either.
+
+**If it is regenerated:** ~560px tall per frame hits rule 7 at `displayHeight`
+78.8 (78.8 x 2.37 maxZoom x 3 dpr); the current 704 is slightly over. Re-run
+`tools/measure_art.py` afterwards — `anchorX`, `anchorY`, `contentWidth` and
+`contentHeight` are source extents and go stale silently.
+
+Head direction cannot be measured, only looked at. The other two can: shirt
+opacity from the alpha channel, drift from the ink bottom per frame.
+
 ## Where this leaves the repository
 
 - **Waiting on you:** re-cut the sign art at ~270px wide; the 568x320 drawer
@@ -91,6 +126,8 @@ the same class of bug in a smaller font.
   needs `minUiSize` lowered from 15.
 - **Closed:** Bailey's placement, mask and amount; the sign overlay placement.
 - **Still open:** the sign *text* alignment item from the withdrawn message.
+- **Not a task unless you say so:** the hero walk-sheet redraw — see the
+  appendix. No images arrived and the shipped frames show neither defect.
 - Longer-standing, unchanged: 18 trait phrases await approval; towers 0.91x the
   lane; balance not re-tuned for the v2 lane; `icon_confirm.png` and
   `assets/nodes` unreferenced; `checks` not a required status on PRs;
