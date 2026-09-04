@@ -3,6 +3,7 @@ import type { BrandingDef } from '../types.ts'
 import displayData from '../data/display.json'
 import brandingData from '../data/branding.json'
 import { setRunState } from '../systems/RunState.ts'
+import { clearRun, loadRun } from '../systems/RunSave.ts'
 import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { plateButton } from '../ui/Plate.ts'
 import { AudioToggle } from '../ui/AudioToggle.ts'
@@ -79,8 +80,25 @@ export class TitleScene extends Phaser.Scene {
     // stale one from a scene that has gone returns without touching anything.
     onMusicProblem(sayMusic)
 
-    plateButton(this, W / 2, 386, 320, 68, 'START RUN', () => this.start(), 28)
-    plateButton(this, W / 2, 470, 260, 56, 'CREDITS', () => this.scene.start('Credits'), 22, 'secondary')
+    // A run left in progress is offered back before anything else.
+    //
+    // OFFERED, NOT RESUMED AUTOMATICALLY. Dropping the player straight into a
+    // half-finished board takes away the choice to start again, and the answer
+    // is not always yes — the run they abandoned may be the one they were
+    // losing. So it is a button, it is the first one, and START RUN beside it
+    // means what it says: that run is then gone.
+    const saved = loadRun()
+    if (saved) {
+      plateButton(this, W / 2, 372, 320, 68, `RESUME  ·  WAVE ${saved.wave + 1}`,
+        () => this.resume(), 26)
+      plateButton(this, W / 2, 452, 260, 56, 'NEW RUN', () => this.start(), 22, 'secondary')
+      plateButton(this, W / 2, 524, 260, 56, 'CREDITS',
+        () => this.scene.start('Credits'), 22, 'secondary')
+    } else {
+      plateButton(this, W / 2, 386, 320, 68, 'START RUN', () => this.start(), 28)
+      plateButton(this, W / 2, 470, 260, 56, 'CREDITS',
+        () => this.scene.start('Credits'), 22, 'secondary')
+    }
 
     // Which build this is. Small and out of the way, but readable without
     // squinting: this is the line that answers "did my deploy actually reach
@@ -187,14 +205,46 @@ export class TitleScene extends Phaser.Scene {
 
 
 
+  /**
+   * Picks the saved run back up, skipping the draft.
+   *
+   * The loadout is part of what was saved — the hero, the hand it dealt and
+   * the reserve — because a resumed run with a fresh draft is a different run.
+   * Dealing again here would hand the player towers they had not earned and
+   * take away the ones already standing on the board.
+   */
+  private resume(): void {
+    const saved = loadRun()
+    // It was there when the screen was drawn. If it has gone since — another
+    // tab, a cleared site — start a run rather than a scene with nothing in it.
+    if (!saved) {
+      this.start()
+      return
+    }
+    logEvent('scene', `Title -> Game (resume at wave ${saved.wave + 1})`)
+    setRunState({
+      heroId: saved.heroId,
+      seed: saved.seed,
+      abilities: [...saved.abilities],
+      openingTowers: [...saved.openingTowers],
+      reserveTowers: [...saved.reserveTowers],
+      resumeFrom: saved,
+    })
+    this.scene.start('Game')
+  }
+
   private start(): void {
+    // A NEW run replaces the saved one. Keeping it would leave the title
+    // screen offering to resume a run the player has already walked away from,
+    // with a board from two games ago.
+    clearRun()
     // A fresh seed per run, so the draft differs each time.
     // The hand is cleared as well as the seed: the loadout screen deals only
     // when there is no hand, so leaving the last run's cards here would show
     // them again.
     setRunState({
       heroId: this.selectedHero, seed: Date.now() >>> 0,
-      openingTowers: [], abilities: [], reserveTowers: [],
+      openingTowers: [], abilities: [], reserveTowers: [], resumeFrom: null,
     })
     this.scene.start('Loadout')
   }

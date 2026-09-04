@@ -59,6 +59,9 @@ import {
 } from '../systems/Save.ts'
 import { bannerPointsFor, verdictFor, type RunOutcome } from '../systems/Banner.ts'
 import { waveOutcome } from '../systems/Wave.ts'
+// No loadRun here on purpose: whether to resume is the title screen's
+// question to ask, and it arrives through RunState.resumeFrom.
+import { clearRun, saveRun, type SavedRun } from '../systems/RunSave.ts'
 import { logEvent, provideState } from '../systems/Diagnostics.ts'
 import { heartbeat, setRunActive } from '../systems/Watchdog.ts'
 import { hudLayout, hudTakesPress, NO_INSETS, type HudLayout } from '../systems/HudLayout.ts'
@@ -514,8 +517,20 @@ export class GameScene extends Phaser.Scene {
     this.status.bossMax = 0
     this.nukeUsed = false
     this.status.unlockedTowers = run.openingTowers.slice(0, DRAFT.towersAtStart)
-this.armReadyCountdown()
-        this.status.message = this.idleHint()
+
+    // A run picked up where it was left. Everything above set a fresh run up;
+    // this puts the saved one back over the top of it, and it happens here —
+    // after the board, the hero and the purse exist, and before the countdown
+    // is armed — because it rewrites what the countdown is counting towards.
+    if (run.resumeFrom) {
+      const saved = run.resumeFrom
+      // Consumed once. A scene restart is not a second resume.
+      setRunState({ resumeFrom: null })
+      this.restoreRun(saved)
+    }
+
+    this.armReadyCountdown()
+    this.status.message = this.idleHint()
 
     for (const id of this.status.abilities) this.cooldowns.register(id, ABILITIES[id].cooldown)
     this.cooldowns.register(RULES.serverNuke.abilityId, ABILITIES[RULES.serverNuke.abilityId].cooldown)
@@ -1738,9 +1753,12 @@ this.armReadyCountdown()
     this.status.peanuts -= def.cost
     this.build.occupy(spot.index)
     const tower = new Tower(this, spot.x, spot.y, id, def, spot.index)
-    tower.on('tierup', () => this.refreshSupport())
+    // A finished tier changes the board, so it is saved like any other change
+    // to it — and it is the moment an upgrade becomes real, since the tier
+    // number only moves when the work completes.
+    tower.on('tierup', () => this.onBoardChanged())
     this.towers.push(tower)
-    this.refreshSupport()
+    this.onBoardChanged()
     play(this, 'build')
     this.clearGhost()
     this.ring?.close()
@@ -1997,6 +2015,7 @@ this.armReadyCountdown()
     }
     this.status.peanuts -= spec.cost
     tower.beginUpgrade(specId)
+    this.saveProgress()
     play(this, 'upgrade')
     logEvent('tower-spec', `${tower.def.name} -> ${spec.id} cost=${spec.cost}`)
     this.status.message = `${tower.def.name} becoming ${spec.name}.`
@@ -2013,6 +2032,10 @@ this.armReadyCountdown()
     this.status.peanuts -= step.cost
     logEvent('tower-upgraded', `${tower.def.name} tier ${tower.tier + 1} cost=${step.cost}`)
     tower.beginUpgrade()
+    // The peanuts are spent now and the tier arrives later. Saving here books
+    // the cost; the 'tierup' handler books what it bought. A run resumed in
+    // between keeps the tower at the tier it had actually finished paying for.
+    this.saveProgress()
     play(this, 'upgrade')
     this.status.message =
       `${tower.def.name} going to tier ${tower.tier + 1}. ` +
@@ -2052,7 +2075,7 @@ this.armReadyCountdown()
     this.towers = this.towers.filter((t) => t !== tower)
     tower.destroy()
     if (this.selected === tower) this.selected = null
-    this.refreshSupport()
+    this.onBoardChanged()
     this.refreshMenuOptions()
     this.rangeRing.clear()
     this.drawSpots()
@@ -2524,7 +2547,7 @@ this.armReadyCountdown()
     this.build.release(moving.spot)
     this.build.occupy(spot.index)
     moving.relocate(spot.x, spot.y, spot.index)
-    this.refreshSupport()
+    this.onBoardChanged()
     this.cooldowns.start('restructure')
     play(this, 'upgrade')
     /*
@@ -2571,6 +2594,98 @@ this.armReadyCountdown()
     if (this.status.readyCountdown <= 0) return
     this.status.readyCountdown = Math.max(0, this.status.readyCountdown - realDt)
     if (this.status.readyCountdown === 0) this.startWave()
+  }
+
+  /**
+   * Puts a saved run back on the board.
+   *
+   * Only what was saved: the wave to play next, the purse, the lives and the
+   * towers. NOT the wave in flight — a run is always resumed from the start of
+   * the wave it was saved on, because the enemies on the field were never
+   * saved. Replaying one wave is a small gift; restoring a wave with no
+   * enemies in it would be a bug the player cannot see.
+   */
+  private restoreRun(saved: SavedRun): void {
+    // Clamped rather than trusted. RunSave validates the SHAPE; only the scene
+    // knows how many waves this level has, and a wave index past the end would
+    // read an undefined wave and take the board down with it.
+    this.status.wave = Math.min(saved.wave, WAVES.waves.length - 1)
+    this.status.lives = saved.lives
+    this.status.peanuts = saved.peanuts
+    // Unlocks are re-derived rather than trusted, then reconciled with what
+    // was saved: the wave count is what earns them, so a saved list that
+    // disagrees with the wave — a file edited by hand, or a draft that changed
+    // shape — must not hand out a tower the run never drew.
+    const drawn = new Set([...runState().openingTowers, ...runState().reserveTowers])
+    const kept = saved.unlockedTowers.filter((id) => drawn.has(id) && TOWERS[id])
+    if (kept.length > 0) this.status.unlockedTowers = kept
+    this.grantTowerUnlocks()
+
+    for (const t of saved.towers) {
+      const def = TOWERS[t.id]
+      // A tower id or a pad that no longer exists is skipped rather than
+      // fatal. The peanuts that bought it are gone either way, and a board one
+      // tower short is recoverable; a scene that throws on create is not.
+      if (!def || !this.build.isFree(t.spot)) continue
+      const spot = this.build.spots[t.spot]
+      if (!spot) continue
+      this.build.occupy(t.spot)
+      const tower = new Tower(this, spot.x, spot.y, t.id, def, t.spot)
+      tower.restoreTier(t.tier, t.spec)
+      tower.on('tierup', () => this.onBoardChanged())
+      this.towers.push(tower)
+    }
+    this.refreshSupport()
+    this.refreshMenuOptions()
+    // The pads are not built yet — createPads runs later in create() and ends
+    // by drawing them, by which time these spots are occupied and the pads
+    // under the restored towers are hidden. Drawing them here would be a call
+    // against an empty array.
+    this.status.waveName = WAVES.waves[this.status.wave].name
+    logEvent('run-resumed',
+      `wave ${this.status.wave + 1} lives=${this.status.lives} peanuts=${this.status.peanuts} ` +
+      `towers=${this.towers.length}/${saved.towers.length}`)
+  }
+
+  /**
+   * Writes the run to local storage.
+   *
+   * Called when something discrete happens — a wave ends, a tower is built,
+   * sold, moved or finishes a tier — and never from update(). A snapshot per
+   * frame would be a JSON.stringify and a synchronous localStorage write sixty
+   * times a second, on the main thread, for a board that changes a few dozen
+   * times a run.
+   *
+   * A finished run is not a run in progress: `endRun` clears the record
+   * instead, and this refuses to write one back.
+   */
+  private saveProgress(): void {
+    if (this.status.phase === 'won' || this.status.phase === 'lost') return
+    const r = runState()
+    saveRun({
+      // GameScene loads one level and does not know which it is. The field is
+      // written honestly rather than guessed at: level 1 is the only thing
+      // this scene can currently be playing.
+      level: 'level1',
+      wave: this.status.wave,
+      lives: this.status.lives,
+      peanuts: this.status.peanuts,
+      towers: this.towers.map((t) => ({ id: t.id, spot: t.spot, tier: t.tier, spec: t.spec })),
+      heroId: r.heroId,
+      abilities: [...this.status.abilities],
+      openingTowers: [...r.openingTowers],
+      reserveTowers: [...r.reserveTowers],
+      unlockedTowers: [...this.status.unlockedTowers],
+      seed: r.seed,
+    })
+  }
+
+  /** The board changed in a way worth remembering: built, sold, moved, or a
+   *  tier finished. Support has to be recomputed either way, so the two go
+   *  together and neither can be forgotten without the other. */
+  private onBoardChanged(): void {
+    this.refreshSupport()
+    this.saveProgress()
   }
 
   /** Restarts the clock for the wave that is now pending. */
@@ -2640,6 +2755,10 @@ this.armReadyCountdown()
     this.status.phase = 'ready'
     this.status.waveName = WAVES.waves[this.status.wave].name
     this.armReadyCountdown()
+    // THE MAIN SAVE POINT. A wave boundary is the only place the run is in a
+    // state worth restoring: nothing is on the field, nothing is in flight,
+    // and the next wave has not started.
+    this.saveProgress()
     if (cleared) {
       this.announce('WAVE CLEARED', COLOR.good)
       this.status.message =
@@ -2676,6 +2795,10 @@ this.armReadyCountdown()
     for (const p of this.pads) p.setVisible(false)
 
     const won = phase === 'won'
+    // The run is over, so there is no run in progress. Won or lost: a finished
+    // run offered back on the title screen would be a resume into a results
+    // dialog, and the record is cleared before anything else can write it.
+    clearRun()
     // Clearing a run is what unlocks the Server Nuke for every run after it.
     if (won) recordRunCleared()
     play(this, won ? 'won' : 'lost')

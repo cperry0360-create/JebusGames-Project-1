@@ -227,8 +227,19 @@ test('finishing a tier recomputes support', () => {
   const tower = src('entities/Tower.ts')
   assert.match(tower, /this\.emit\('tierup'/, 'a completed tier should announce itself')
   const game = src('scenes/GameScene.ts')
-  assert.match(game, /on\('tierup', \(\) => this\.refreshSupport\(\)\)/,
-    'the scene should recompute support when a tier finishes')
+  // The handler is onBoardChanged now, because a finished tier is also a
+  // change worth writing to the run save. Support still has to come out of it,
+  // so the chain is checked rather than the one call it used to be.
+  const handlers = [...game.matchAll(/on\('tierup', \(\) => this\.(\w+)\(\)\)/g)].map((m) => m[1])
+  assert.ok(handlers.length > 0, 'nothing listens for a finished tier any more')
+  for (const h of handlers) {
+    if (h === 'refreshSupport') continue
+    const body = new RegExp(`private ${h}\\(\\): void \\{[\\s\\S]*?\\n  \\}`).exec(game)
+    assert.ok(body, `the tierup handler ${h} does not exist`)
+    assert.match(body[0], /this\.refreshSupport\(\)/,
+      `${h} handles a finished tier without recomputing support`)
+  }
+  assert.equal(new Set(handlers).size, 1, 'two different things happen on a finished tier')
 })
 
 test('a tower under construction fires slower and keeps its old stats', () => {

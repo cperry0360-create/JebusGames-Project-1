@@ -293,6 +293,25 @@ export class Tower extends Phaser.GameObjects.Container {
     this.drawScaffold()
   }
 
+  /**
+   * Puts a tower straight at a tier, with no build time and no fanfare.
+   *
+   * For a run restored from a save, and for nothing else. `beginUpgrade` is
+   * the path a player takes: it costs peanuts, takes seconds, and slows the
+   * tower down while the work is done. A restored tower finished all of that
+   * before the app was closed, so replaying it would charge the player twice
+   * and leave the board defenceless while it caught up.
+   */
+  restoreTier(tier: number, spec: string | null): void {
+    const top = maxTier(this.def)
+    this.tier = Math.max(BASE_TIER, Math.min(top, Math.floor(tier)))
+    // A spec only exists at the tier that grants it; carrying one onto a
+    // tier-1 tower would show a specialization the tower does not have.
+    this.spec = this.tier >= top ? spec : null
+    this.wearTier(false)
+    this.drawTier()
+  }
+
   /** True when the next purchase is the mutually exclusive tier-3 choice. */
   get atSpecChoice(): boolean {
     return atSpecChoice(this.def, this.tier)
