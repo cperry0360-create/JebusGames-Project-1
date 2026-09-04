@@ -10,9 +10,11 @@ instructed and nothing in this report changed a line of game code.
 
 | commit | what | CI |
 | --- | --- | --- |
-| _this report only_ | `reports/2026-09-04-level2-gate-check.md` | see below |
+| `b02ed07` | `reports/2026-09-04-level2-gate-check.md` | checks:success build:success deploy:success, run [33927747835](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33927747835) |
 
-No source, data or asset file was touched.
+No source, data or asset file was touched. The commit is this report and
+nothing else, so the green is a formality — recorded because the rule is that
+the table is always closed, not because a docs commit was ever at risk.
 
 ## The gate
 
