@@ -15,6 +15,7 @@ was retuned, because the fix is a design call.
 | `76041d1` | measure level 2's lane; pin both lanes with a test | covered by the run below |
 | `68a3fdb` | the level-aware refactor | covered by the run below |
 | `aad8518` | unlock gating and the level select | checks/build/deploy success, run [33929450637](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33929450637) |
+| `6a99048` | this report | checks/build/deploy success, run [33929598742](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33929598742) |
 
 The three commits were pushed together, so GitHub built the head. `76041d1`
 and `68a3fdb` were not built individually; both were run locally under
