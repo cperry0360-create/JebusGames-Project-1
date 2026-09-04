@@ -5,7 +5,10 @@
 | | commit | CI |
 |---|---|---|
 | Run checks on main, and gate the Pages deploy on them | `d7e74fa` | checks:success deploy:skipped (not main) |
-| This report | `PENDING` | pending |
+| This report | `35314bf` | checks:success deploy:skipped (not main) |
+
+One further commit closes this table's CI column and touches nothing but
+this file; its own run is reported in chat.
 
 ---
 
@@ -90,7 +93,9 @@ only an untested *tree*, and only when someone asks for it by hand.
   test`, `npx tsc --noEmit`, 22s), `deploy` **skipped**. The run's
   `referenced_workflows` lists `deploy.yml@d7e74fa`, which is GitHub resolving
   the `uses:` call — the reusable-workflow reference is valid, not merely
-  well-formed YAML.
+  well-formed YAML. Run
+  [33871206915](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33871206915)
+  repeated it on the report commit.
 - The last five `deploy.yml` runs are all `push` on main, conclusion success,
   which confirms Pages is sourced from Actions rather than from a branch. A
   branch-sourced Pages site would publish on push regardless of any workflow,
