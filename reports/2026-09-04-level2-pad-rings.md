@@ -5,6 +5,7 @@
 | commit | CI |
 |---|---|
 | [`c588dfb`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/c588dfbc57154ef783d1c485280355a0c1f9bf13) Move the level 2 pads onto the re-drawn rings, and hold the 68px tap floor | **green** — [push run](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33867163623) and [PR run](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33867167548), 614/614 tests, `tsc --noEmit` clean |
+| [`c1cc292`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/c1cc2928bb1a2baf4dbe4a659e1691c3cd6108ee) Write up the pad-ring move, and record CI green | **green** — [run](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33867279225), `npm test` and `tsc --noEmit` both passed |
 
 ## The short version
 
