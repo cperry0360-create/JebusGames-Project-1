@@ -24,10 +24,18 @@ therefore left in git history.
 Nothing at runtime depends on this. It is the record of where map_level2.json
 came from, and how to redo it when the art changes.
 
-WHICH MARKERS BECOME PADS IS A DESIGN DECISION. The overlay rings seventeen
-spots and the map uses fifteen. An unused ring is reported and never fails the
-run: a script cannot know whether a spot was dropped on purpose, and a check
-that failed on it would be a check somebody silences.
+ONE RING, ONE PAD. The overlay used to ring seventeen spots for fifteen pads,
+and the two leftovers were printed on every run and never failed it, because a
+script cannot know whether a spot was dropped on purpose. The re-drawn overlay
+rings exactly the fifteen it means, so there is nothing left to excuse: a ring
+with no pad is now an ordinary disagreement and fails like the rest.
+
+CHECK THE OVERLAY IS THE RIGHT ONE FIRST. The correct file has 9641 pixels
+matching R<60 G>200 B>200. A superseded export went round with its cyan stroke
+one pixel thinner (7623), and since the road's half-width is a median of
+integer distances sampled along that stroke, it moved roadWidth 65.8 -> 67.6
+and the waypoint count 49 -> 47 without the painted route having moved at all.
+Nothing in the output flags that; the numbers just come out different.
 """
 
 import argparse
@@ -429,11 +437,10 @@ def main():
             break
         print(f'  pads {i} and {j} are {d:.1f} px apart; their {data["spotRadius"]}px '
               f'tap rings overlap')
-    # PRINTED, NEVER FAILED. Dropping a marked spot is a design decision and
-    # the overlay cannot record one; see the note at the top of this file.
+    # FAILED, NOT PRINTED. Every ring the painter drew is a pad; see the note at
+    # the top of this file for why this stopped being a judgement call.
     for x, y in sorted(left):
-        print(f'  ring at {x / w:.3f},{y / h:.3f} (canvas {x * scale:.1f}, {y * scale:.1f}) '
-              f'carries no pad')
+        bad.append(f'the ring at canvas ({x * scale:.1f}, {y * scale:.1f}) carries no pad')
 
     # 4. The hero stands somewhere he can actually stand.
     hx, hy = data['heroStart']

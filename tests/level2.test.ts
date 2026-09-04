@@ -85,25 +85,34 @@ test('every level 2 pad is off the road, on the plate, and worth building on', (
     assert.ok(d > L2.roadWidth / 2, `pad ${i} is ${d.toFixed(1)}px from the lane centre; it is in the road`)
     assert.ok(d < reach, `pad ${i} is ${d.toFixed(1)}px from the lane and the longest range is ${reach}`)
   }
-  // THE PADS ON THIS PLATE ARE TIGHT, and the threshold says so honestly
-  // rather than pretending otherwise. Level 1's closest pair is 186px, set by
-  // a 141px minimum in the tracer so no two spots could cover the same bend.
-  // These are painted, and the painter spaced them by the ring drawn in the
-  // overlay — 15 world px across — not by the 34px tap radius the game gives
-  // a node. Two pairs land inside 2 x spotRadius: 2-5 at 59.0 and 5-7 at 59.6,
-  // with 5-6 clearing it by 1.3. That is a real problem for the day it is played,
-  // when two overlapping tap targets are one mis-tap, and it is a problem in
-  // the ART: it is fixed by moving a ring, not by editing this file. What is
-  // held here is the part that is not a judgement call — two pads may never
-  // be so close that one sits inside the other's ring.
+  // TWO PADS MAY NEVER SHARE A TAP TARGET. A node's tap radius is spotRadius,
+  // so two centres closer than 2 x spotRadius put a thumb over both at once —
+  // one mis-tap, every time, on the pad you did not mean. The first ring set
+  // was packed at a 59.0 px minimum against a 68 px requirement, and pads 2-5
+  // (59.0) and 5-7 (59.6) overlapped; the re-drawn overlay is packed at 72.1.
+  //
+  // THIS IS THE ASSERTION THAT KEEPS IT THAT WAY. The pads are painted, so the
+  // only thing standing between a re-export and the old overlap is this test.
+  // Note which end is fixed: 68 falls out of spotRadius, and spotRadius is 34
+  // because world 1280 renders to 844 CSS px, making it a 44.8 px tap diameter
+  // against the 44 pt minimum. Dropping it to 28 would buy room for tighter
+  // pads and land at 36.9 px, under that minimum. If this fails, move the ring
+  // in the overlay and re-derive — do not shrink the radius to fit the art.
+  const floor = 2 * L2.spotRadius
+  let closest = Infinity
   for (let i = 0; i < spots.length; i++) {
     for (let j = i + 1; j < spots.length; j++) {
       const [ax, ay] = spots[i] as [number, number]
       const [bx, by] = spots[j] as [number, number]
       const d = Math.hypot(bx - ax, by - ay)
-      assert.ok(d > L2.spotRadius, `pads ${i} and ${j} are ${d.toFixed(1)}px apart; one is inside the other`)
+      closest = Math.min(closest, d)
+      assert.ok(d > floor,
+        `pads ${i} and ${j} are ${d.toFixed(1)}px apart; their ${L2.spotRadius}px tap ` +
+        `targets overlap, which needs ${floor}px. Move a ring in the overlay and ` +
+        're-derive with tools/check_level2.py --emit.')
     }
   }
+  assert.ok(closest > floor, `closest pair is ${closest.toFixed(1)}px, under the ${floor}px floor`)
 })
 
 /**
