@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { LaneNetwork, MAIN_LANE, advance, validateLanes, type Walker } from '../src/systems/Lanes.ts'
-import { loadLevel } from '../src/systems/Levels.ts'
+import { furthestUnlocked, isLevelUnlocked, loadLevel, unlockedLevels } from '../src/systems/Levels.ts'
 import map from '../src/data/map_level3.json' with { type: 'json' }
 import waves from '../src/data/waves.level3.json' with { type: 'json' }
 import enemies from '../src/data/enemies.json' with { type: 'json' }
@@ -241,5 +241,54 @@ test('level 3 loads through the registry with its own map and waves', () => {
   assert.equal(lv.map.buildSpots.length, 15)
   assert.equal(lv.waveTable.waves.length, 13)
   assert.equal((lv.map as any).plate, 'level3')
-  assert.equal(lv.runsClearedToUnlock, 1)
+  assert.equal(lv.runsClearedToUnlock, 2)
+})
+
+test('level 3 is locked until level 2 has been cleared, and open after', () => {
+  // The progression the thresholds describe: clear level 1 and level 2 opens,
+  // clear level 2 and level 3 does. The value here is 2 rather than the 1 the
+  // brief named, because 1 is level 2's OWN threshold -- at 1 both open at
+  // once, and START RUN, which asks for the furthest unlocked level, would
+  // walk a player who has just finished level 1 straight past level 2.
+  assert.equal(isLevelUnlocked('level3', 0), false, 'level 3 is open before anything is cleared')
+  assert.equal(isLevelUnlocked('level3', 1), false, 'level 3 opens as soon as level 1 is cleared')
+  assert.equal(isLevelUnlocked('level3', 2), true, 'level 3 stays locked after two cleared runs')
+  assert.equal(furthestUnlocked(1).id, 'level2', 'START RUN skips level 2')
+  assert.equal(furthestUnlocked(2).id, 'level3')
+
+  // One honest limit, the same one Levels.isLevelCleared records: the save
+  // counts runs, not which levels they were on, so clearing level 1 twice also
+  // opens level 3. Gating on a specific level needs a new save field.
+  assert.equal(unlockedLevels(2).length, 3)
+})
+
+test('level 3 has a place on the world map and a card to draw there', () => {
+  const art = JSON.parse(readFileSync(new URL('../src/data/art.json', import.meta.url), 'utf8'))
+  const l3 = (levels as any).levels.find((l: any) => l.id === 'level3')
+  assert.ok(Array.isArray(l3.mapPosition) && l3.mapPosition.length === 2)
+  const key = art.worldMap.cards.level3
+  assert.ok(key, 'no world map card for level 3')
+  assert.equal(art.files[key], 'ui/card_level3.webp')
+
+  // And the cards do not sit on top of one another. These are WorldMapScene's
+  // own numbers; a position that overlapped would draw one card over another
+  // and there is nothing on screen to catch it here.
+  const [W, H, CW, CH, TOP, BOT] = [1280, 720, 264, 176, 150, 150]
+  const centre = (l: any) => ({
+    x: CW / 2 + l.mapPosition[0] * (W - CW),
+    y: (TOP + CH / 2) + l.mapPosition[1] * ((H - BOT - CH / 2) - (TOP + CH / 2)),
+  })
+  const spots = (levels as any).levels.map((l: any) => ({ id: l.id, ...centre(l) }))
+  for (const p of spots) {
+    assert.ok(p.x - CW / 2 >= 0 && p.x + CW / 2 <= W, `${p.id}'s card runs off the world`)
+    assert.ok(p.y - CH / 2 >= 0 && p.y + CH / 2 <= H, `${p.id}'s card runs off the world`)
+  }
+  for (let i = 0; i < spots.length; i++) {
+    for (let j = i + 1; j < spots.length; j++) {
+      const dx = Math.abs(spots[i].x - spots[j].x)
+      const dy = Math.abs(spots[i].y - spots[j].y)
+      assert.ok(dx >= CW || dy >= CH,
+        `${spots[i].id} and ${spots[j].id} overlap on the world map`)
+    }
+  }
 })

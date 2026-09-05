@@ -57,13 +57,19 @@ FILLER = 'pompom'
 # more it dilutes him. That puts a CEILING on total rank health of about 25500,
 # which is the opposite of the direction difficulty usually pushes.
 #
-# So the curve has to reach 5600 by wave 12 while summing to less than that
-# ceiling, which means it must be STEEP: about 30% a wave, against the 55% a step
-# the cliff bound allows. It starts at 330 -- level 1 opens at 330 too -- and
-# nearly doubles every two waves. That steepness is a consequence of the cast's
-# economics, not a taste, and it is the first thing to revisit if the soak says
-# the back half is too sharp.
-CURVE = [320, 415, 540, 700, 910, 1180, 1530, 1985, 2575, 3340, 4270, 5600]
+# So the curve has to reach 5460 by wave 12 while summing to less than that
+# ceiling, which means it must be STEEP: 40% a wave, against the 55% a step the
+# cliff bound allows. That steepness is a consequence of the cast's economics
+# rather than a taste.
+#
+# THE OPENING IS DELIBERATELY LIGHT, at 150 against level 1's 330, and the soak
+# is why. Level 3 asks a player to cover TWO gates from one purse on a lane 21%
+# shorter than level 1's, with the fastest enemy in the game as its filler. At
+# the 30%-a-wave curve this started on, thirteen of sixty runs had lost their
+# first life by wave 4 and never recovered enough board to matter. At 40% from
+# 130, forty-nine of sixty reach the boss and thirty-four of those arrive having
+# lost nothing at all, which is the rank game doing its job.
+CURVE = [150, 205, 285, 395, 545, 750, 1035, 1430, 1975, 2725, 3755, 5460]
 
 # How much of each wave's health comes down the UPPER gate. The rest comes down
 # the lower one. Deliberately alternating: a board committed to one gate has to
@@ -112,7 +118,7 @@ def spawn(enemy, count, interval, delay, lane):
                                     ('interval', interval), ('delay', delay), ('lane', lane)])
 
 
-OVERSHOOT = []
+TRIMMED = []
 
 
 def build():
@@ -123,16 +129,27 @@ def build():
         for lane, share in ((U, UPPER_SHARE[i]), (L, 1.0 - UPPER_SHARE[i])):
             want = target * share
             spent = 0
+            # HEAVIES ARE CAPPED BY THE BUDGET, not asserted over it. A lane
+            # whose heavies cost more than its share of the target cannot be
+            # filled DOWN, so the wave overshoots its point on the curve and the
+            # step into it reads as a cliff -- which is what happened when the
+            # opening was lightened: two Long Snappers are 300 health and wave 2
+            # is only worth 180, so wave 2 arrived 92% heavier than wave 1.
+            #
+            # So a heavy that does not fit is simply not sent, and the shortfall
+            # is reported rather than hidden. The curve is the thing a player
+            # feels; HEAVIES says what KIND of wave it is, and the kind gives way
+            # when the two disagree.
             for j, (enemy, n) in enumerate(heavies.get(lane, [])):
-                spawns.append(spawn(enemy, n, HEAVY_INTERVAL[enemy], 2 + j, lane))
-                spent += n * HP[enemy]
-            # A lane whose heavies already cost more than its share of the
-            # target cannot be filled DOWN, so the wave overshoots its point on
-            # the curve and the step into it reads as a cliff. That is a fault
-            # in HEAVIES, not something to paper over here, so it is reported.
-            if spent > want + HP[FILLER]:
-                OVERSHOOT.append(f'wave {i + 1} {lane}: heavies cost {spent:.0f} '
-                                 f'against a budget of {want:.0f}')
+                room = int((want - spent) // HP[enemy])
+                sent = max(0, min(n, room))
+                if sent < n:
+                    TRIMMED.append(f'wave {i + 1} {lane}: {n - sent} of {n} {enemy} '
+                                   f'did not fit a budget of {want:.0f}')
+                if sent == 0:
+                    continue
+                spawns.append(spawn(enemy, sent, HEAVY_INTERVAL[enemy], 2 + j, lane))
+                spent += sent * HP[enemy]
             fill = max(0, round((want - spent) / HP[FILLER]))
             if fill:
                 spawns.append(spawn(FILLER, fill, FILLER_INTERVAL[i],
@@ -189,8 +206,8 @@ def main():
              for s in w['spawns'])
     print(f'health {hp}  ({100 * (hp / l2 - 1):+.1f}% vs level 2)   '
           f'income {inc}   ratio {inc / hp:.4f}')
-    for line in OVERSHOOT:
-        print('  OVERSHOOT ' + line)
+    for line in TRIMMED:
+        print('  trimmed: ' + line)
     prev = None
     for i, w in enumerate(waves):
         u = sum(s['count'] * HP[s['enemy']] for s in w['spawns'] if s['lane'] == U)

@@ -18,6 +18,7 @@ const save = (name, blob) => fetch('/save/' + name, { method: 'POST', body: blob
 const PLATES = {
   level1: 'public/assets/maps/map_level1_v2.webp',
   level2: 'public/assets/maps/map_level2.webp',
+  level3: 'public/assets/maps/map_level3.webp',
 }
 
 async function load(path) {
@@ -37,6 +38,11 @@ const CROPS = {
   // The volcano, top-centre-right, mid-eruption with lava either side. Same
   // test: it has to say "where" in 300x200.
   level2: [0.52, 0.00, 0.33, 0.39],
+  // THE FORK, which is the whole point of level 3 and the one thing its plate
+  // has that the other two do not. Centred a little left of the merge at
+  // (733, 378) so both branches are still separate on the way in and joined on
+  // the way out -- a crop of the shared tail alone would be another road.
+  level3: [0.30, 0.04, 0.55, 0.65],
 }
 
 const CARD_W = 300, CARD_H = 200

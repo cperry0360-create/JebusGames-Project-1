@@ -97,7 +97,8 @@
     "enemy-unicorn": "enemies/boss_unicorn.png",
     "map-level3": "maps/map_level3.webp",
     "fx-boss-bolt": "effects/boss_projectile.png",
-    "fx-stunned": "effects/fx_stunned.png"
+    "fx-stunned": "effects/fx_stunned.png",
+    "card-level3": "ui/card_level3.webp"
   },
   "render": {
     "turret-escalation": {
@@ -774,7 +775,8 @@
     "background": "map-bg",
     "cards": {
       "level1": "card-level1",
-      "level2": "card-level2"
+      "level2": "card-level2",
+      "level3": "card-level3"
     }
   }
 }

@@ -1,7 +1,7 @@
 {
   "_note": "WHICH MAP, WAVE TABLE AND PLATE BELONG TO WHICH LEVEL. GameScene reads this: it takes a level id and loads that level's map, waves and plate through here, which is what made a second and third level possible at all. The note this replaces still claimed GameScene loaded waves.json directly and was single-level on purpose; that stopped being true when the level-aware refactor landed, and a file describing an architecture the repository no longer has is worse than no note.",
   "_lane": "laneLengthPx is the walked length of the painted road, summed over the level's waypoints, rounded to 0.1. BOTH are now measured from the level's own map file by that one method: level 1 from map.json, level 2 from map_level2.json. Level 2 previously carried 1916.7, a figure that arrived with the plate before the lane was traced and was never checked; the traced waypoints walk 1955.3, so it was short by 38.6 px. It is recorded because wave spacing is only comparable between levels that walk the same distance, and the two here differ by 1.1%, which is not enough to retune. Re-measure after any retrace rather than carrying a number forward. LEVEL 3 IS THE SHORT ONE: 1560.2 px, both routes, against 1976.9 and 1955.3. That is 21% less road than level 1, which is far outside the 1.1% that made levels 1 and 2 comparable, so its wave spacing is NOT copied from theirs and its health total is not directly comparable either. Its two branches walk 1560.18 and 1560.15 -- equal to 0.03 px, which is in the geometry rather than arranged, and means neither gate is the fast one.",
-  "_unlock": "runsClearedToUnlock is how many runs must be cleared before a level can be picked, counted by Save.runsCleared. It IS enforced: the title screen greys a locked level and START RUN re-checks the count before handing the level to the run. Level 2 was held at 99 while it was unwinnable; its pads have since been moved inside tower range and its wave health cut, so it is back to 1.",
+  "_unlock": "runsClearedToUnlock is how many runs must be cleared before a level can be picked, counted by Save.runsCleared. It IS enforced: the title screen greys a locked level and START RUN re-checks the count before handing the level to the run. Level 2 was held at 99 while it was unwinnable; its pads have since been moved inside tower range and its wave health cut, so it is back to 1. LEVEL 3 IS 2, NOT 1, and the brief asked for 1. The two halves of that brief disagree: it also asks to confirm that level 3 is locked until level 2 has been cleared once and open after. At 1 it is not -- 1 is level 2's own threshold, so clearing level 1 opens BOTH, and because START RUN asks for the furthest unlocked level it would send a player who has just finished level 1 straight past level 2 into level 3. At 2 the confirmation holds and the progression is the one the numbers describe. Set it back to 1 here if skipping level 2 is wanted; nothing else needs to change. WHAT NEITHER VALUE CAN DO is gate on level 2 SPECIFICALLY. The save counts runs cleared and not which levels they were on -- the limitation Levels.isLevelCleared is documented with -- so clearing level 1 twice also opens level 3. Fixing that needs a new save field and a migration.",
   "levels": [
     {
       "id": "level1",
@@ -30,10 +30,10 @@
       "name": "Sports Complex at Dusk",
       "waves": "waves.level3.json",
       "laneLengthPx": 1560.2,
-      "runsClearedToUnlock": 1,
+      "runsClearedToUnlock": 2,
       "mapPosition": [
-        0.5,
-        0.18
+        1.0,
+        0.06
       ]
     }
   ],
