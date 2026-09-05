@@ -183,6 +183,18 @@ export interface PlateButton {
   /** Every piece, in draw order. A caller putting one inside a container must
    *  add all of them, or the plate draws over its own label. */
   parts: Phaser.GameObjects.GameObject[]
+  /**
+   * JUST THE PAINTED PLATE ART — both states of it, and nothing else.
+   *
+   * This exists because `parts` contains the hit rectangle, and a caller that
+   * wants a button without its plate (one drawn on a docked slab, say) reaches
+   * for the list of pieces and hides all of them. That is what killed CANCEL:
+   * Phaser excludes anything that would not render from hit-testing, so hiding
+   * the rectangle along with the plate left a button whose handler was wired,
+   * whose input flag was correct, and which could never be pressed. Hiding
+   * `plates` cannot reach the rectangle or the label.
+   */
+  plates: Phaser.GameObjects.GameObject[]
 }
 
 /** Resting tint. The plates are painted, and Phaser's tint multiplies, so
@@ -271,6 +283,7 @@ export function plateButton(
     hit,
     text: t,
     parts: [...on, ...off, t, hit],
+    plates: [...on, ...off],
     setLabel: fitLabel,
     setEnabled: (v: boolean) => {
       // Idempotent: the HUD calls this every frame with the same value, and

@@ -348,6 +348,17 @@ export class HudScene extends Phaser.Scene {
     this.settings = undefined
   }
 
+  /**
+   * Whether the HUD has a modal of its own up — the pause and settings panels.
+   *
+   * Read by GameScene, which cannot see this scene's objects: a scene's hit
+   * list holds only its own. Without this the camera rig heard drags on the
+   * settings sliders and panned the board behind the dialog.
+   */
+  get modalOpen(): boolean {
+    return this.paused || this.panel !== undefined
+  }
+
   /** A dialog owned by the HUD, so it keeps working while Game is paused. */
   private showPanel(opts: ConstructorParameters<typeof Dialog>[4]): void {
     this.panel?.close()

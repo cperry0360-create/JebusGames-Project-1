@@ -157,11 +157,15 @@ test('nothing reads a raw pointer coordinate against a CSS-pixel layout', () => 
   // the way across the BOARD tested as a tap on the button — and the map
   // ignored it.
   const game = src('scenes/GameScene.ts')
-  assert.doesNotMatch(game, /hudTakesPress\(this\.layout, p\.x, p\.y\)/,
+  assert.doesNotMatch(game, /hud(TakesPress|BlocksGesture)\(this\.layout, p\.x, p\.y\)/,
     'the HUD press test is back on raw canvas pixels')
   assert.match(game, /const ui = pointerToScreen\(this, p, this\.uiCam\)/,
     'the press is not converted through the camera that drew the HUD')
-  assert.match(game, /hudTakesPress\(this\.layout, ui\.x, ui\.y\)/)
+  // `hudBlocksGesture` is the wider of the two questions — every control plus
+  // every solid plate — and it is what the board and the camera rig both ask
+  // now. It calls `hudTakesPress` internally, so the narrow one is still the
+  // thing deciding which taps a control takes.
+  assert.match(game, /hudBlocksGesture\(this\.layout, ui\.x, ui\.y\)/)
 
   // And the slider, which is where this was first caught.
   const slider = src('ui/Slider.ts')

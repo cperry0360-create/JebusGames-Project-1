@@ -257,6 +257,22 @@ export class ControlDrawer {
     return took || this.owns(x, y)
   }
 
+  /**
+   * The same answer, WITHOUT consuming the record.
+   *
+   * The camera rig has to ask the same question and it asks first: it listens
+   * at the scene level and Phaser delivers scene-level handlers in the order
+   * they were registered, which puts the rig ahead of the board. If the rig
+   * asked `claimsPress` it would eat the record and the board — the thing the
+   * record exists for — would then be told the press was not the drawer's.
+   *
+   * So there are two readers and exactly one of them consumes. Ownership is
+   * still recorded in ONE place, `press`, which is the property that matters.
+   */
+  ownsPress(x: number, y: number): boolean {
+    return this.tookPress || this.owns(x, y)
+  }
+
   setEnabled(on: boolean): void {
     if (this.enabled === on) return
     this.enabled = on

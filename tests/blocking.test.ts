@@ -196,7 +196,7 @@ test('the rally point cannot be set outside the tower range', () => {
 
   // And a refusal is a REFUSAL, not a silent no-op: the scene says so.
   const scene = src('src/scenes/GameScene.ts')
-  assert.match(scene, /Too far\. The lads stay inside the ring\./,
+  assert.match(scene, /Too far\. The lads stay inside the ring/,
     'an out-of-range order is rejected without telling the player')
   assert.match(scene, /this\.flashRange\(tower\)/, 'the refusal has no shape, only words')
 

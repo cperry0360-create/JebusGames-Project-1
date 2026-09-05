@@ -37,8 +37,18 @@ test('no interaction anywhere in the game is keyboard-only', () => {
     'the run-end screen offers no way to start another run')
   assert.match(game, /cancelLabel: 'QUIT TO TITLE'/,
     'the run-end screen has no way out, so a touch player cannot leave it')
-  assert.match(game, /'CANCEL'/,
-    'an armed ability can only be cancelled with a key')
+  // FOUR POINTER ROUTES OUT OF TARGETING MODE, because one of them was dead
+  // for a whole build and the mode has no other exit than deploying the skill.
+  // The label itself lives in presentation.json now, so what is asserted is
+  // the wiring rather than the word.
+  assert.match(game, /this\.clearSelection\('button'\)/,
+    'the CANCEL control does not clear the selection')
+  assert.match(game, /armed === 'toggled'/,
+    'pressing the armed ability a second time does not back out of targeting')
+  assert.match(game, /this\.clearSelection\('outside'\)/,
+    'a tap outside the legal area does not leave targeting')
+  assert.match(game, /this\.cancelBtn\.hit\.setVisible\(on\)/,
+    "CANCEL's hit rectangle is not shown with the button, so it cannot be hit")
   assert.match(hud, /plateButton\(/, 'the HUD start-wave button is not a button')
   // The credits are a scroll, not a page, so the pointer route is the whole
   // screen rather than a button in a corner of a roll that is moving.

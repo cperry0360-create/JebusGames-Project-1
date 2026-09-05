@@ -62,6 +62,20 @@
     "haymakerIntensity": 0.016
   },
   "hud": {
+    "cancel": {
+      "_note": "CANCEL's own colours. It is the way out of a mode the player may have entered by accident, so it is the loudest control on the screen rather than the quietest: a warm red slab with a cream glyph and label, not the grey wash it was. The wash read as disabled chrome, which is most of why playtesting reported it as unfindable before it was reported as dead.",
+      "fill": 12621611,
+      "outline": 856086,
+      "outlineWidth": 3,
+      "radius": 10,
+      "label": "CANCEL",
+      "labelSize": 13,
+      "glyphSize": 15,
+      "glyphWidth": 4,
+      "labelColour": 16182489,
+      "glyphColour": 16182489,
+      "pressedFill": 10040347
+    },
     "plateHeight": 44,
     "plateGap": 8,
     "marginX": 12,
@@ -84,7 +98,8 @@
       "cornerButton": 40,
       "startWidth": 240,
       "startMinWidth": 150,
-      "cancelWidth": 100
+      "cancelWidth": 116,
+      "cancelHeight": 48
     },
     "heroBar": {
       "_note": "Cory's name and health, top-left under the counters. OPAQUE, because it lives over a full-bleed painted map and there is no screen position a HUD element can occupy that the camera cannot put painted art under — measured: 0 of 82,290 screen cells at 844x390 are unreachable by painted content at some camera position. So the answer is not a safer corner, it is a proper plate. It was a 55% black wash, which let the tavern's painted signboard show through the bar and the bar show through the signboard.",
@@ -379,6 +394,19 @@
     "_width": "Clamped to the viewport, so on a 568x320 screen it is the screen minus its margins rather than 420. minWidth is where the label, the track and the percentage stop fitting on one line.",
     "labelColumn": 154,
     "_labelColumn": "Room reserved for a row's name, so the three tracks start in one column whatever the words are. Measured against SOUND EFFECTS, the longest, at labelSize with its letter spacing: it was 118 and the words ran under the track."
+  },
+  "targeting": {
+    "_note": "What the board looks like while it is waiting for a tap. On a touch device there is no hover, so a targeting mode that only draws under the pointer draws NOTHING until the player has already committed — which is how a mode with no visible state came to be reported as a soft-lock. These numbers are the standing affordance: a breathing wash over the area a tap is legal in, drawn from the moment the mode is entered.",
+    "pulseMs": 900,
+    "washAlpha": 0.1,
+    "washAlphaPeak": 0.2,
+    "edgeAlpha": 0.55,
+    "edgeWidth": 3,
+    "laneColour": 16095834,
+    "areaColour": 16095834,
+    "rallyColour": 15771696,
+    "step": 12,
+    "laneRadius": 22
   },
   "castCursor": {
     "_note": "Where a summon will land, drawn under the pointer instead of as an outline down both edges of the whole lane. The band described the RULE; the cursor answers the QUESTION, which is 'can I drop it here?'. Kingdom Rush draws nothing on the map.",

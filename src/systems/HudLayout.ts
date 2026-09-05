@@ -110,11 +110,15 @@ export interface LayoutConfig {
   rowGap: number
   rowHeight: number
   iconHeight: number
-  /** The settings gear. Square, and it sets the height of the CANCEL button
-   *  in the opposite corner too. */
+  /** The settings gear. Square. It used to set CANCEL's height as well; CANCEL
+   *  has its own now, because it is not a peer of the gear — one is opened
+   *  once a session and the other is the way out of a mode. */
   cornerButton: number
-  /** CANCEL is a word, not a glyph, so it is wider than it is tall. */
+  /** CANCEL is a word AND a glyph, so it is wider than it is tall. */
   cancelWidth: number
+  /** Taller than the gear. It is the way out of a mode the player entered by
+   *  accident, and it is pressed with a thumb, in a hurry, on a moving board. */
+  cancelHeight: number
   /** Widest the start-wave button may be; it takes less when the counters and
    *  the insets leave less. */
   startWidth: number
@@ -148,27 +152,36 @@ export interface HudLayout {
    */
   settings: Rect
   /**
-   * CANCEL, at the right-hand end of the second row, directly under the gear.
+   * CANCEL, in the BOTTOM-RIGHT CORNER, on the ability row's own line.
    *
    * It is only on the glass while there is something to cancel — an armed
-   * ability, a tile picked in the control drawer — but it is
-   * reserved from the layout ALWAYS. A button that appears into whatever space
-   * happens to be free is a button that will one day appear on top of
-   * something.
+   * ability, a rally order waiting for a tap, a tile picked in the control
+   * drawer — but it is reserved from the layout ALWAYS. A button that appears
+   * into whatever space happens to be free is a button that will one day
+   * appear on top of something.
    *
-   * IT HAS MOVED TWICE, and the second move is the one that matters. It began
-   * at `viewW / 2` just above the ability icons; that was the middle of the
-   * board, and the board is where the player is being asked to tap. It went to
-   * the bottom-right corner the gear had vacated — which is still the board,
-   * just a quieter part of it. Nothing that is not part of the game world
-   * belongs on the board at all, so it is in the HUD band now, grouped with
-   * the counters and the gear and the instruction line it answers.
+   * IT HAS MOVED THREE TIMES AND THIS IS THE ONE THAT MATTERS. It began at
+   * `viewW / 2` just above the ability icons, went to the bottom-right corner
+   * the gear vacated, and was then moved up into the HUD band beside the
+   * counters on the reasoning that nothing which is not part of the game world
+   * belongs on the board.
    *
-   * THE PRICE IS EIGHTEEN PIXELS OF `panelArea`. The button is 40 tall and the
-   * row it joins is 22, so the area below starts lower than it used to. That
-   * is the honest cost of the move and it is paid on every screen; the
-   * ability row gets the 224px it used to reserve for this button back in
-   * exchange.
+   * That reasoning put THE ONLY WAY OUT OF TARGETING MODE in the far corner
+   * from the thumb that armed it. Playtesting found the button unreadable and
+   * unreachable, and the player stuck. Tidiness lost: it is back at the bottom
+   * of the screen, at the end of the row the ability icons are in, so the hand
+   * that armed the ability is already there — and it is in the same reading
+   * order as the icons, which is where the eye goes when a tap has just put
+   * the game into a mode.
+   *
+   * THE PRICE, paid honestly: on a narrow screen the ability row gives way
+   * rather than run under it (see `abilities` below), so a notched phone in
+   * landscape draws smaller icons than it did. Smaller icons are survivable.
+   * A player who cannot leave targeting mode is not.
+   *
+   * DOCKED to the display's right edge, like the drawer's handle — flush, no
+   * margin, no rounded corner on that side. See `EdgeDock`. It keeps the
+   * bottom margin, because the ability row it is aligned with keeps it.
    */
   cancel: Rect
   /**
@@ -251,33 +264,43 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
   const heroRow: Rect = {
     x: left, y: rowY, width: heroW, height: cfg.rowHeight,
   }
-  // CANCEL at the right-hand end of row two, under the gear. It is taller than
-  // the row's text — a 22px tap target is not one — so it hangs below the
-  // line, and `panelTop` clears it.
-  // FLUSH TO THE EDGE, not `right`, which carries `marginX`. CANCEL is docked
-  // chrome: it is anchored to the display's edge, so it gets no gap there and
-  // no rounded corner there either — see `EdgeDock`. The gear above it is a
-  // floating control and keeps its margin.
-  const cancel: Rect = {
-    x: W - insets.right - cfg.cancelWidth, y: rowY, width: cfg.cancelWidth, height: btn,
-  }
+  // The second row is the hero's health and the message, and nothing else:
+  // CANCEL has left it for the bottom of the screen, so the message row takes
+  // the width back rather than reserving a hole for a button that is not there.
   const messageRow: Rect = {
     x: left + heroW + gap, y: rowY,
-    width: Math.max(60, rowW - heroW - gap - cfg.cancelWidth - gap),
+    width: Math.max(60, rowW - heroW - gap),
     height: cfg.rowHeight,
   }
 
-  // The bottom row is the ability icons and NOTHING ELSE now. CANCEL used to
-  // hold the bottom-right corner and reserved its own width off both ends of
-  // this row to keep the icons centred; with the button in the HUD band that
-  // reservation is gone and the hand gets the room back.
+  // CANCEL, flush to the display's right edge and sitting on the same baseline
+  // as the ability icons. FLUSH means `W - insets.right`, not `right`, which
+  // carries `marginX`: docked chrome takes no gap on the edge it is docked to.
+  const cancel: Rect = {
+    x: W - insets.right - cfg.cancelWidth,
+    y: bottom - cfg.cancelHeight,
+    width: cfg.cancelWidth,
+    height: cfg.cancelHeight,
+  }
+
+  // THE ABILITY ROW GIVES WAY TO CANCEL, and only as far as it has to.
+  //
+  // The icons are centred in the whole row. On a screen with room to spare
+  // that puts them nowhere near the corner and nothing is reserved at all —
+  // 1280x720 keeps every icon at full size. On a narrow one the row would
+  // reach under the button, so its half-width is capped at the distance from
+  // the row's centre to CANCEL's left edge, which shrinks it SYMMETRICALLY and
+  // leaves the icons centred. A one-sided reservation would keep them larger
+  // and slide the whole hand off centre, which reads as a layout fault.
   const lo = left
   const hi = right
   const room = Math.max(0, hi - lo)
-  const abilitiesW = Math.min(input.abilitiesWidth, room)
+  const centre = (lo + hi) / 2
+  const halfRoom = Math.max(0, cancel.x - cfg.marginX - centre)
+  const abilitiesW = Math.min(input.abilitiesWidth, room, halfRoom * 2)
   const abilityScale = input.abilitiesWidth > 0 ? abilitiesW / input.abilitiesWidth : 1
   const abilities: Rect = {
-    x: lo + (room - abilitiesW) / 2,
+    x: centre - abilitiesW / 2,
     y: bottom - cfg.iconHeight * abilityScale,
     width: abilitiesW,
     height: cfg.iconHeight * abilityScale,
@@ -285,16 +308,15 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
 
   // WHERE CHROME MAY GO: under everything in the HUD band, above the hand.
   //
-  // The top is now bounded by CANCEL rather than by the text row, because
-  // CANCEL is 40 tall in a 22-tall row and hangs below it. That is where the
-  // eighteen pixels go.
+  // The top is the text row again. CANCEL used to hang eighteen pixels below
+  // it and push this down; it is at the bottom of the screen now, so the
+  // drawer gets those eighteen pixels back.
   //
-  // The bottom used to be `min(abilities.y, cancel.y)`, because CANCEL was
-  // down there and on a narrow screen `abilityScale` shrinks the icons below
-  // its 40px so CANCEL became the lower bound. With the button gone from that
-  // corner the icons are the only thing left to clear.
-  const panelTop = Math.max(rowY + cfg.rowHeight, cancel.y + cancel.height) + 8
-  const panelBottom = abilities.y
+  // The bottom is `min` of the two things down there, and the `min` matters:
+  // on a narrow screen `abilityScale` shrinks the icons below CANCEL's height,
+  // so CANCEL is the taller of the pair and the lower bound.
+  const panelTop = rowY + cfg.rowHeight + 8
+  const panelBottom = Math.min(abilities.y, cancel.y)
   const panelArea: Rect = {
     x: insets.left + 6,
     y: panelTop,
@@ -349,4 +371,28 @@ export function hudTakesPress(layout: HudLayout, x: number, y: number): boolean 
     x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height
   return inside(layout.abilities) || inside(layout.startButton)
     || inside(layout.settings) || inside(layout.cancel)
+}
+
+/**
+ * Whether a GESTURE that starts at this screen point belongs to the HUD.
+ *
+ * A DIFFERENT QUESTION FROM `hudTakesPress`, and the difference is the whole
+ * point. That one asks "does this TAP belong to a control?" and is deliberately
+ * narrow: `messageRow` is a line of text and `panelArea` is most of the board,
+ * so neither may take a tap away from the world.
+ *
+ * This one asks "is there SOLID CHROME under this finger?" — which is what
+ * decides whether a drag may pan the map. Dragging on a painted counter plate
+ * slid the board underneath it, because the plate is not a control and so was
+ * never in the list above. It is still not a control; it is still opaque, and a
+ * map that moves under opaque furniture reads as the furniture being a hole.
+ *
+ * So: every control, plus every plate. Not `messageRow`, which is stroked text
+ * with nothing behind it, and not `panelArea`, which is a hint rather than an
+ * element.
+ */
+export function hudBlocksGesture(layout: HudLayout, x: number, y: number): boolean {
+  const inside = (r: Rect): boolean =>
+    x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height
+  return hudTakesPress(layout, x, y) || inside(layout.counters) || inside(layout.heroRow)
 }

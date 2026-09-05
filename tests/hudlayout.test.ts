@@ -149,12 +149,18 @@ test('the HUD is pinned to the corners it is supposed to be pinned to', () => {
     'the gear must sit outboard of START WAVE, not on it')
   assert.ok(l.cancel.x + l.cancel.width > width * 0.95,
     'CANCEL is not at the right-hand edge')
-  assert.ok(l.cancel.y < height / 3, 'CANCEL is not in the HUD band')
+  // AND IT IS AT THE BOTTOM, with the ability icons rather than with the
+  // counters. It spent a while up in the HUD band on the reasoning that chrome
+  // does not belong on the board; that put the only way out of targeting mode
+  // in the opposite corner from the thumb that armed it, and playtesting found
+  // it unfindable. See `HudLayout.cancel`.
+  assert.ok(l.cancel.y > height * 0.6, 'CANCEL is not on the bottom row')
+  assert.equal(l.cancel.y + l.cancel.height, l.abilities.y + l.abilities.height,
+    'CANCEL does not share a baseline with the ability icons')
   assert.ok(l.cancel.y >= l.settings.y + l.settings.height,
-    'CANCEL is not below the gear: it is in the top row, not the second')
-  // And it is out of the board entirely: everything below the band belongs to
-  // the world, and the ability row is the one exception the game already made.
-  assert.ok(l.cancel.y + l.cancel.height < l.panelArea.y,
+    'CANCEL is somehow back up in the top row')
+  // The drawer's area stops above it, so a panel can never cover the way out.
+  assert.ok(l.panelArea.y + l.panelArea.height <= l.cancel.y + 0.001,
     'the panel area runs over CANCEL')
   assert.equal((l as Record<string, unknown>).mute, undefined, 'the mute control is back')
   assert.equal((l as Record<string, unknown>).pause, undefined, 'the pause button is back')
