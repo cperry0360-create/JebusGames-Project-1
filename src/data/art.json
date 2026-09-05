@@ -47,7 +47,16 @@
     "ability-chain": "abilities/ability_chain.png",
     "ability-scratchticket": "abilities/ability_scratchticket.png",
     "ability-servernuke": "abilities/ability_servernuke.png",
-    "ability-haymaker": "abilities/ability_haymaker.png",
+    "ability-cory-1": "abilities/ability_cory_1.png",
+    "ability-cory-2": "abilities/ability_cory_2.png",
+    "ability-courtland-1": "abilities/ability_courtland_1.png",
+    "ability-courtland-2": "abilities/ability_courtland_2.png",
+    "ability-han-1": "abilities/ability_han_1.png",
+    "ability-han-2": "abilities/ability_han_2.png",
+    "ability-eli-1": "abilities/ability_eli_1.png",
+    "ability-eli-2": "abilities/ability_eli_2.png",
+    "ability-bailey-1": "abilities/ability_bailey_1.png",
+    "ability-bailey-2": "abilities/ability_bailey_2.png",
     "hud-peanuts": "ui/hud_peanuts.png",
     "hud-lives": "ui/hud_lives.png",
     "hud-wave": "ui/hud_wave.png",
@@ -374,12 +383,6 @@
         "top": 162,
         "bottom": 159
       }
-    },
-    "ability-haymaker": {
-      "anchorX": 0.5,
-      "anchorY": 0.5,
-      "contentWidth": 256,
-      "contentHeight": 233
     },
     "prop-pad": {
       "anchorX": 0.5,
@@ -755,6 +758,66 @@
       "shadowWidth": 32.0,
       "contentWidth": 638,
       "contentHeight": 700
+    },
+    "ability-cory-1": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 256,
+      "contentHeight": 256
+    },
+    "ability-cory-2": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 256,
+      "contentHeight": 256
+    },
+    "ability-courtland-1": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 256,
+      "contentHeight": 256
+    },
+    "ability-courtland-2": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 256,
+      "contentHeight": 256
+    },
+    "ability-han-1": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 256,
+      "contentHeight": 256
+    },
+    "ability-han-2": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 256,
+      "contentHeight": 256
+    },
+    "ability-eli-1": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 256,
+      "contentHeight": 256
+    },
+    "ability-eli-2": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 256,
+      "contentHeight": 256
+    },
+    "ability-bailey-1": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 256,
+      "contentHeight": 256
+    },
+    "ability-bailey-2": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 256,
+      "contentHeight": 256
     }
   },
   "map": {
@@ -875,7 +938,9 @@
     "hero-cory-attack-1",
     "hero-cory-attack-2",
     "hero-cory-attack-3",
-    "hero-cory-attack-4"
+    "hero-cory-attack-4",
+    "ability-bailey-1",
+    "ability-eli-1"
   ],
   "hero": {
     "_note": "Frame lists for the hero animations. Anchors and displayHeight are per SET, not shared: walk is 557x704 and attack is 787x720, their feet sit at different fractions of their canvases, and their figures are 677 and 690 source px tall. One anchor for both would step the hero sideways on every swing. Frame 1 of each set is the registration reference; frames 2-4 move relative to it, which is the animation.",
@@ -952,5 +1017,7 @@
       "unit-dummy-2",
       "unit-dummy-3"
     ]
-  }
+  },
+  "_optional": "Art that may legitimately be absent. A key here is skipped by the loader with a console warning rather than a missing-texture error, and every one belongs to a family with a named fallback -- tests/boot.test.ts enforces that. ability-bailey-1 and ability-eli-1 are the two hero slot-1 icons that were not in the upload; every other ability_<hero>_<slot>.png is present. They fall back to the generated missing-icon stand-in, and dropping the real files in later needs no code change.",
+  "_haymakerIcon": "abilities/ability_haymaker.png is still in the repo and is no longer bound to anything. The ten ability_<hero>_<slot>.png icons replaced it: every hero's two buttons now draw their own icon, Cory's included, so the whole bar is one scheme rather than one hero's real art beside four placeholders. The placeholders are marked as such and are to be replaced by files with the same names, at which point Cory's button improves with everyone else's. Re-binding the old icon is one line here plus one in heroes.json."
 }

@@ -471,8 +471,12 @@ export class LoadoutScene extends Phaser.Scene {
         fontFamily: FONT_UI, fontSize: `${size}px`, color: COLOR.dim, ...BODY_SPACING,
         align: 'center', wordWrap: { width: innerW },
       }).setOrigin(0.5, 0)
+      // BOTH BUTTONS, in bar order. It used to read "Haymaker · DAD MODE",
+      // which was the slot-1 name beside the Last Stand name -- and every hero
+      // carried both of those strings verbatim, so the line said the same
+      // thing on all five cards.
       const kit = this.add.text(0, 0,
-        `${selected.def.haymaker.name} · ${selected.def.lastStand.name}`, {
+        `${selected.def.slot1.name} · ${selected.def.slot2.name}`, {
           fontFamily: FONT_UI, fontSize: `${size}px`, color: COLOR.good,
           align: 'center', wordWrap: { width: innerW },
         }).setOrigin(0.5, 0)

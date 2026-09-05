@@ -46,7 +46,7 @@ screenshots are the evidence.
 | `title`, `draft`, `credits` | the screens before the map |
 | `creditsroll` | the roll parked at fractions of its own height, with where each department and each real credit landed |
 | `game` | a fresh board |
-| `ui` | pads, build menu, tower selection, hero select-then-order, tap precedence, restructure, ability targeting |
+| `ui` | pads, build menu, tower selection, hero select-then-order, tap precedence, the two hero slots, ability targeting |
 | `combat` | four towers through a whole wave |
 | `poor` | picking a tower you cannot afford |
 | `skilled` | all seven pads, hero posted on the lane, abilities spent, twelve waves |

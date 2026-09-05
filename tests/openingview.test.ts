@@ -137,12 +137,22 @@ test('a viewport wide enough gets the whole board, not the floor', () => {
   void b
 })
 
-test('the camera is centred on the board, not on the hero', () => {
+test('the camera is centred on the board, and on nothing that moves', () => {
   const b = BOARD()
   const o = openingView(2532, 1170, b, coverZoom(2532, 1170, W, H), 7.11)
   assert.equal(o.x, b.x + b.width / 2)
   assert.equal(o.y, b.y + b.height / 2)
-  assert.notEqual(Math.round(o.x), Math.round(map.heroStart[0]))
+  // It USED to add "and not on the hero" by asserting the opening centre was
+  // not his starting x, back when the hero started somewhere each map had
+  // measured. He starts at the centre of the board now, so that assertion
+  // would be comparing the opening view against a point it is meant to be near.
+  // What it was really guarding -- that nothing follows the hero -- is the test
+  // below, against the rig itself.
+  //
+  // The board is the design box inset by `openingMargin`, so its centre is not
+  // the world's centre: this is 389 in y against the hero's 360, and the two
+  // are allowed to differ.
+  assert.notEqual(o.y, H / 2)
 })
 
 test('nothing in the rig follows anything', () => {

@@ -25,8 +25,14 @@
 // Phaser-free on purpose. The layout is arithmetic, and arithmetic that
 // decides whether the game is playable should be testable without a canvas.
 
-/** What a slot is, which decides its shape and what tapping it does. */
-export type SlotKind = 'ability' | 'haymaker'
+/**
+ * What a slot is, which decides its shape and what tapping it does.
+ *
+ * `heroSlot` was called `haymaker` while there was one hero with one active.
+ * There are five heroes with two buttons each now, and naming the kind after
+ * one hero's punch made the bar read as though Bark were a Haymaker.
+ */
+export type SlotKind = 'ability' | 'heroSlot'
 
 /** One slot, before it knows where it is. */
 export interface SlotDef {

@@ -399,15 +399,35 @@ test('a voice line wins when something else plays over it', () => {
 test('each line is wired to the moment it describes, not to the button', () => {
   const game = src('scenes/GameScene.ts')
 
-  // HAYMAKER: on the punch. Every refusal returns before the damage, so a
-  // press that lands nothing says nothing.
-  const cast = game.slice(game.indexOf('castHaymaker(): void {'))
+  // SLOT 1: after the ability has committed, never on the press.
+  //
+  // There are five of these now, one per hero, and they run through one entry
+  // point -- so the ordering is checked once, against that. Both cues fire
+  // after `cooldowns.start`, which every refusal returns before: a press that
+  // is refused for cooldown, for the hero being down, or for nothing being in
+  // reach makes no sound at all.
+  //
+  // The voice line comes before the effect and the effect's own cue, because
+  // the duck only reaches a cue that STARTS after a line. Played the other way
+  // round the punch would sit on top of the words rather than under them.
+  const cast = game.slice(game.indexOf('castHeroSlot1(): void {'))
   const body = cast.slice(0, cast.indexOf('\n  }'))
-  const refusals = body.indexOf('this.cooldowns.start')
-  assert.ok(body.indexOf("play(this, 'haymaker-voice')") > refusals,
+  const committed = body.indexOf('this.cooldowns.start(SLOT1)')
+  assert.ok(committed > 0, 'slot 1 no longer starts its own cooldown')
+  assert.ok(body.indexOf('if (k.voice) play(this, k.voice)') > committed,
     'the line plays before the ability has committed, so a refused press talks')
-  assert.match(body, /this\.damageEnemy\(target[^\n]*\n(?:\s*\/\/[^\n]*\n)*\s*play\(this, 'haymaker-voice'\)/,
-    'the line is not on the punch landing')
+  assert.ok(body.indexOf('play(this, k.sound)') > committed,
+    'the effect cue plays before the ability has committed')
+  assert.ok(body.indexOf('play(this, k.sound)') > body.indexOf('if (k.voice) play(this, k.voice)'),
+    'the effect cue starts before the voice line, so the duck cannot reach it')
+  assert.ok(body.indexOf('switch (k.effect)') > body.indexOf('play(this, k.sound)'),
+    'the payload runs before its own sound')
+
+  // And every refusal really is above the commit.
+  for (const refusal of ['is still recharging', 'is down', 'nothing in reach']) {
+    assert.ok(body.indexOf(refusal) < committed && body.indexOf(refusal) > 0,
+      `the "${refusal}" refusal is below the commit, so it would sound`)
+  }
 
   // DAD MODE: ON THE TRANSFORMATION, not on the frame he drops to 25%.
   //
@@ -447,8 +467,13 @@ test('each line is wired to the moment it describes, not to the button', () => {
   // The line starts at transformPauseMs minus its lead-in and the sting at
   // transformPauseMs, so the line is still first.
   assert.ok(voice.leadInMs > 0, 'with no lead-in the sting and the line start together')
-  assert.ok(body.indexOf("'haymaker-voice'") < body.indexOf("play(this, 'haymaker')"),
-    'the punch effect is played before the line, so it never steps back for it')
+  // The same rule on the punch. The two cues are named in the DATA now, one
+  // pair per hero, so what is checked here is that Cory's pair is still the
+  // recorded line and the impact -- the code's ordering of voice before sound
+  // is asserted above, once, against the shared entry point.
+  const cory = read('heroes').cory
+  assert.equal(cory.slot1.voice, 'haymaker-voice', 'the punch lost its line')
+  assert.equal(cory.slot1.sound, 'haymaker', 'the punch lost its impact')
   // 2.2s, and the invulnerability window is shorter than that — so the line is
   // still talking after the moment it belongs to has passed, which is exactly
   // why nothing may cut it.

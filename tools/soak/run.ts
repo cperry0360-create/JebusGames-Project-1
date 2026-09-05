@@ -8,6 +8,7 @@
 //   node --experimental-strip-types -e "import {simulate} from './tools/soak/Sim.ts'; console.log(simulate(SEED))" --input-type=module
 
 import { simulate, ALL_ABILITIES, ALL_HEROES, ALL_TOWERS, type SoakMode, type SoakResult } from './Sim.ts'
+import { DEFAULT_HERO_ID } from '../../src/systems/Heroes.ts'
 
 const RUNS = Number(process.argv[2] ?? 500)
 // Most runs are a competent player. A slice of them are not, because the
@@ -37,11 +38,30 @@ const firedTowers = new Set<string>()
 const firedAbilities = new Set<string>()
 const byKind = new Map<string, Array<{ seed: number; detail: string; wave: number }>>()
 
+/**
+ * THE HERO ROTATES TOO, and it did not before.
+ *
+ * `coverage.heroes` used to print `ALL_HEROES` -- the roster, not what was
+ * played -- while every single run used the default. It said five heroes were
+ * covered when one was, and it said it in the section whose whole job is to
+ * report what was exercised. Now the run picks one, and the coverage below is
+ * the set that actually took the field.
+ *
+ * The default is first and appears more often than the rest, deliberately: it
+ * is the hero every level's win rate is tuned against, so the aggregate stays
+ * mostly a statement about the tuned game.
+ */
+const HEROES: string[] = [DEFAULT_HERO_ID, DEFAULT_HERO_ID, DEFAULT_HERO_ID,
+  ...ALL_HEROES.filter((h) => h !== DEFAULT_HERO_ID)]
+const heroFor = (seed: number): string => HEROES[seed % HEROES.length]!
+const heroesPlayed = new Set<string>()
+
 const t0 = Date.now()
 for (let seed = 1; seed <= RUNS; seed++) {
   currentSeed = seed
   try {
-    const r = simulate(seed, MODES[seed % MODES.length]!)
+    heroesPlayed.add(heroFor(seed))
+    const r = simulate(seed, MODES[seed % MODES.length]!, undefined, heroFor(seed))
     results.push(r)
     for (const t of r.firedTowers) firedTowers.add(t)
     for (const a of r.firedAbilities) firedAbilities.add(a)
@@ -53,7 +73,8 @@ for (let seed = 1; seed <= RUNS; seed++) {
     const err = e as Error
     crashes.push({
       seed, error: String(err?.message ?? err),
-      stack: `mode=${MODES[seed % MODES.length]} ${String(err?.stack ?? '').slice(0, 500)}`,
+      stack: `mode=${MODES[seed % MODES.length]} hero=${heroFor(seed)} `
+        + String(err?.stack ?? '').slice(0, 500),
     })
   }
 }
@@ -89,8 +110,9 @@ const out = {
   neverFired: {
     towers: ALL_TOWERS.filter((t) => !firedTowers.has(t)),
     // The Server Nuke is a mid-run drop gated on having cleared a run, so it
-    // is not in the draft pool and cannot be cast here. Restructure is a hero
-    // action, not a drafted ability.
+    // is not in the draft pool and cannot be cast here. The hero's own two
+    // buttons are not drafted abilities either -- slot 1 shows up in
+    // `abilitiesSeen` as `heroSlot1` because it really does fire.
     abilities: ALL_ABILITIES.filter((a) => !firedAbilities.has(a)),
   },
   modes: Object.fromEntries(MODES.filter((m, i) => MODES.indexOf(m) === i).map((m) => [
@@ -101,7 +123,8 @@ const out = {
     })(),
   ])),
   coverage: {
-    heroes: ALL_HEROES,
+    heroes: [...heroesPlayed].sort(),
+    heroesInRoster: ALL_HEROES.length,
     levels: ['level1'],
     towersSeen: [...firedTowers].sort(),
     abilitiesSeen: [...firedAbilities].sort(),

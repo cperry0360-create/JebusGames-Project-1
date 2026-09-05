@@ -50,7 +50,6 @@ export interface MapDef {
    *  Tower bases are sized against it. */
   roadWidth: number
   note: string
-  heroStart: number[]
   /** Click tolerance and highlight size for a build spot, in canvas pixels. */
   spotRadius: number
   /**
@@ -471,14 +470,54 @@ export interface PassiveDef {
   maxArmorShred: number
 }
 
-export interface HaymakerDef {
+/**
+ * What a hero's slot-1 active does.
+ *
+ * ONE BLOCK OF FIELDS FOR ALL FIVE, with `effect` choosing which of them are
+ * read. Every skill declares every field, zeros included, so `damage: 0` on
+ * Bark is a statement rather than an omission and a new hero is data rather
+ * than a new shape. The alternative -- a discriminated union per effect --
+ * would move the same decision into the type system and cost a code change
+ * every time a hero is added.
+ */
+export type HeroSkillEffect = 'punch' | 'burst' | 'burn' | 'double' | 'howl'
+
+export interface HeroSkillDef {
   name: string
   icon: string
+  effect: HeroSkillEffect
   cooldown: number
+  /** Reach, for a skill that picks a target. 0 for one centred on the hero. */
   range: number
+  /** Blast radius, for a skill centred on the hero. 0 for a targeted one. */
+  radius: number
   damage: number
   ignoresArmor: boolean
   knockbackPixels: number
+  stunSeconds: number
+  /** Multiplier on enemy speed. 1 is no slow. */
+  slowFactor: number
+  slowSeconds: number
+  burnPerSecond: number
+  burnSeconds: number
+  /** How many times it lands. 1 for everything but Quick Cut. */
+  hits: number
+  /** Seconds between those hits. */
+  gapSeconds: number
+  sound: string
+  /** A voice line on the hit, or null for a hero who has none recorded. */
+  voice: string | null
+}
+
+/**
+ * The hero power in slot 2: reserved, gated on the powered form, and NOT YET
+ * IMPLEMENTED. `effect` is null, which is what says so -- the button is wired
+ * and drawn, and pressing it while powered does nothing but report that.
+ */
+export interface HeroPowerDef {
+  name: string
+  icon: string
+  effect: null
 }
 
 
@@ -528,7 +567,10 @@ export interface HeroDef {
   }
   ignoresArmor: boolean
   passive: PassiveDef
-  haymaker: HaymakerDef
+  /** Always available. */
+  slot1: HeroSkillDef
+  /** Powered form only, and not yet implemented. */
+  slot2: HeroPowerDef
   lastStand: LastStandDef
 }
 

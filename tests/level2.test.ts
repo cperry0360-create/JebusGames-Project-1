@@ -127,14 +127,12 @@ test('every level 2 pad is off the road, on the plate, and worth building on', (
  * opening the image at all: a hero who starts outside the band the lane
  * occupies is a hero standing somewhere the board does not go.
  */
-test('the hero starts inside the band the lane occupies', () => {
-  const [hx, hy] = L2.heroStart as [number, number]
-  const ys = (L2.waypoints as number[][]).map((p) => p[1]!)
-  assert.ok(hy >= Math.min(...ys), `the hero starts at y=${hy}, above the lane's highest point`)
-  assert.ok(hx > 0 && hx < W && hy > 0 && hy < H, 'the hero starts off the plate')
-  assert.ok(L2._heroStart && /measured/i.test(L2._heroStart),
-    'heroStart carries no note saying what it was measured against')
-})
+// The hero start is no longer a property of this map. It is the centre of the
+// board on every level, and tests/logic.test.ts checks that rule once for all
+// three -- including that this file's own `heroStart` is gone rather than
+// merely unread. What that measurement was protecting against, a hero whose
+// head sat above the top of the plate, is checked there against the sprite's
+// real height.
 
 /**
  * The overlay is 1.9MB and exactly one thing reads it: tools/check_level2.py.

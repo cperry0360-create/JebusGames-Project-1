@@ -19,6 +19,7 @@ import {
   barWidth, iconBox, regions, slotDefs, slotSignature,
   type BarMetrics, type SlotDef, type SlotRegion,
 } from '../systems/AbilityBar.ts'
+import { SLOT2, heroSlotDefs, slot2Usable } from '../systems/HeroSkills.ts'
 import { onSceneResize, sceneIsLive } from '../systems/SceneEvents.ts'
 import { fitUiCamera, viewH, viewW } from '../systems/Resolution.ts'
 
@@ -192,14 +193,11 @@ export class HudScene extends Phaser.Scene {
   private currentSlotDefs(): SlotDef[] {
     const s = this.world.status
     const hero = this.world.heroDef()
-    const heroSlots: SlotDef[] = [
-      { id: 'haymaker', kind: 'haymaker', icon: hero.haymaker.icon, hero: true },
-    ]
     return slotDefs(
       s.abilities,
       s.rareAbility,
       (id) => this.world.abilityDef(id),
-      heroSlots,
+      heroSlotDefs(hero),
     )
   }
 
@@ -483,7 +481,8 @@ export class HudScene extends Phaser.Scene {
         // kind of gap this bar has now been through twice.
         if (!this.slotShown(region, this.world.status)) return
         if (region.kind === 'ability') this.world.armAbility(region.id)
-        else this.world.castHaymaker()
+        else if (region.id === SLOT2) this.world.castHeroSlot2()
+        else this.world.castHeroSlot1()
       })
 
       this.slots.push({ region, frame, sweep, icon, timer, hit })
@@ -788,6 +787,12 @@ export class HudScene extends Phaser.Scene {
   /** Castable at all, ignoring cooldown: the hero has to be up for his own
    *  actives, and a rare drop is only usable while it is held. */
   private slotUsable(slot: SlotRegion, s: GameScene['status']): boolean {
+    // SLOT 2 IS GREY UNTIL THE HERO HAS TRANSFORMED. Not hidden: the player
+    // should be able to see that the power exists and read its icon while it
+    // is out of reach, which is the difference between a locked door and a
+    // wall. `slotUsable` false swaps the icon for its greyscale copy and takes
+    // the tap with it, so it cannot be pressed by accident either.
+    if (slot.id === SLOT2) return slot2Usable(s.heroPowered, s.heroDown)
     if (slot.kind !== 'ability') return !s.heroDown
     if (slot.id === s.rareAbility) return true
     return s.abilities.includes(slot.id)

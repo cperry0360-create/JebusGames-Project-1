@@ -319,6 +319,9 @@ test('every manifest section is re-exported by ART', () => {
   for (const section of Object.keys(art)) {
     // `optional` is re-exported with a fallback rather than straight through,
     // so the naive `x: art.x` match does not see it.
+    // `_`-prefixed keys are notes, the same convention every other data file
+    // uses. They document a decision; nothing reads them.
+    if (section.startsWith('_')) continue
     if (section === 'note' || section === 'render') continue
     if (section === 'optional') {
       assert.match(src, new RegExp(`${section}:\\s*\\(art`), `ART never exports "${section}"`)

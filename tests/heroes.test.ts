@@ -29,6 +29,11 @@ const {
   afterRespawn, afterTransform, damageToHero, shouldTransform, tickTransform,
 } = await import('../src/systems/Transform.ts')
 const { loadSave, writeSave, DEFAULT_SAVE } = await import('../src/systems/Save.ts')
+const {
+  SLOT1, SLOT2, heroSlotDefs, skillDamage, slot1Of, slot2Usable,
+} = await import('../src/systems/HeroSkills.ts')
+const { Cooldowns } = await import('../src/systems/Cooldowns.ts')
+const { simulate } = await import('../tools/soak/Sim.ts')
 
 const src = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
 const json = (p: string) => JSON.parse(src(p))
@@ -36,6 +41,8 @@ const HEROES = json('src/data/heroes.json')
 const ART = json('src/data/art.json')
 const LOADOUT = src('src/scenes/LoadoutScene.ts')
 const HERO_TS = src('src/entities/Hero.ts')
+const GAME = src('src/scenes/GameScene.ts')
+const HUD = src('src/scenes/HudScene.ts')
 
 /** Source with comment lines removed, so a regex that means "the code does
  *  this" cannot be satisfied or broken by prose about it. */
@@ -284,6 +291,118 @@ test('death returns the hero to base form', () => {
   assert.match(revive, /this\.powered = false/, 'revive() no longer drops the powered form')
 })
 
+/* ------------------------------------------------------------ the two slots */
+
+test('each slot 1 ability fires and respects its cooldown', () => {
+  // FIRES: driven through the soak, which is the only thing in this repo that
+  // runs the rule layer without a canvas. It picks a hero per run, casts slot 1
+  // whenever the cooldown allows and records what actually went off, so a
+  // skill that could never fire -- no target in range, a zero cooldown, an
+  // effect the runner does not know -- shows up here as an absence.
+  for (const id of HERO_IDS) {
+    const r = simulate(4, 'normal', 'level1', id)
+    assert.ok(r.firedAbilities.has(SLOT1),
+      `${id}'s ${slot1Of(id).name} never fired in a whole run`)
+  }
+
+  // RESPECTS ITS COOLDOWN: against the real Cooldowns, per hero, at its own
+  // declared length. Ready at the start, spent on the cast, still spent one
+  // tick before it is up, ready again on the tick that finishes it.
+  for (const id of HERO_IDS) {
+    const k = slot1Of(id)
+    const cd = new Cooldowns()
+    cd.register(SLOT1, k.cooldown)
+    assert.equal(cd.ready(SLOT1), true, `${id} starts with ${k.name} on cooldown`)
+    cd.start(SLOT1)
+    assert.equal(cd.ready(SLOT1), false, `${id}'s ${k.name} is castable again immediately`)
+    // Two clean ticks from the same cast rather than one tick split in two:
+    // a float sum of two parts lands a hair either side of the boundary and
+    // the RULE is the cooldown, not the arithmetic.
+    cd.tick(k.cooldown - 0.5)
+    assert.equal(cd.ready(SLOT1), false, `${id}'s ${k.name} came back early`)
+    const cd2 = new Cooldowns()
+    cd2.register(SLOT1, k.cooldown)
+    cd2.start(SLOT1)
+    cd2.tick(k.cooldown)
+    assert.equal(cd2.ready(SLOT1), true, `${id}'s ${k.name} never came back`)
+  }
+
+  // And the five are five different things rather than five copies of the
+  // punch, which is what they were before this.
+  const effects = HERO_IDS.map((id) => slot1Of(id).effect)
+  assert.deepEqual(effects, ['punch', 'burst', 'burn', 'double', 'howl'])
+  assert.equal(new Set(HERO_IDS.map((id) => slot1Of(id).name)).size, 5)
+  // Cory's is unchanged, which is what the rest of the game was tuned against.
+  assert.equal(skillDamage(slot1Of('cory')), 130)
+  assert.equal(slot1Of('cory').cooldown, 12)
+  // Bark does nothing to health at all, on purpose.
+  assert.equal(skillDamage(slot1Of('bailey')), 0)
+  assert.ok(slot1Of('bailey').slowSeconds > 0, 'Bark neither damages nor slows')
+
+  // The scene refuses every one of them the same way, through one entry point.
+  const cast = GAME.slice(GAME.indexOf('castHeroSlot1(): void {'))
+  const body = cast.slice(0, cast.indexOf('\n  }'))
+  assert.match(body, /if \(!this\.cooldowns\.ready\(SLOT1\)\)/, 'slot 1 does not check its cooldown')
+  assert.match(body, /if \(this\.hero\.down\)/, 'a downed hero can still cast slot 1')
+  assert.match(body, /this\.cooldowns\.start\(SLOT1\)/, 'casting slot 1 does not spend it')
+  for (const effect of ['punch', 'burst', 'burn', 'double', 'howl']) {
+    assert.ok(body.includes(`case '${effect}'`), `the runner cannot cast a ${effect}`)
+  }
+})
+
+test('slot 2 is unusable in base form and enabled in powered form', () => {
+  // THE RULE, on its own.
+  assert.equal(slot2Usable(false, false), false, 'a base-form hero can use its power')
+  assert.equal(slot2Usable(true, false), true, 'a powered hero cannot use its power')
+  assert.equal(slot2Usable(true, true), false, 'a hero that is down can still use its power')
+  assert.equal(slot2Usable(false, true), false)
+
+  // Across a life, driven the way the entity drives it: base, then powered at
+  // half health, then base again after a death.
+  const h = life(100)
+  assert.equal(slot2Usable(h.powered, false), false)
+  h.hit(60)
+  assert.equal(slot2Usable(h.powered, false), true, 'the transformation did not light the slot')
+  h.die()
+  h.revive()
+  assert.equal(slot2Usable(h.powered, false), false, 'the slot stayed lit through a death')
+
+  // THE HUD ASKS THAT RULE, and it asks it about the status flag rather than
+  // reaching into the hero -- the HUD is a separate scene and cannot.
+  assert.match(HUD, /slot2Usable\(s\.heroPowered, s\.heroDown\)/,
+    'the HUD does not gate slot 2 on the powered form')
+  assert.match(code(GAME), /this\.status\.heroPowered = this\.hero\.powered/,
+    'nothing keeps the status flag in step with the hero')
+  assert.match(code(GAME), /heroPowered: false/, 'the flag does not start false')
+
+  // Unusable means GREY AND INERT, not hidden: a player should be able to see
+  // that the power exists and read its icon while it is out of reach. Both
+  // halves of that are already in drawSlots -- the greyscale swap and the
+  // hit rectangle -- and this is what says slot 2 goes through them.
+  assert.match(HUD, /const usable = this\.slotUsable\(r, s\)/)
+  assert.match(HUD, /const wantKey = usable \? base : greyKey\(base\)/)
+
+  // And the button is wired, to something that says it is not built yet.
+  assert.match(HUD, /else if \(region\.id === SLOT2\) this\.world\.castHeroSlot2\(\)/,
+    'tapping slot 2 does nothing at all')
+  const cast = GAME.slice(GAME.indexOf('castHeroSlot2(): void {'))
+  const body = cast.slice(0, cast.indexOf('\n  }'))
+  assert.match(body, /slot2Usable\(this\.hero\.powered, this\.hero\.down\)/,
+    'the cast path does not apply the same gate the HUD draws')
+  assert.doesNotMatch(body, /cooldowns\.start/,
+    'the unbuilt power spends a cooldown, so pressing it costs something')
+
+  // Both slots are in the bar, in order, and neither is an ability card.
+  for (const id of HERO_IDS) {
+    const def = heroDef(id)!
+    const defs = heroSlotDefs(def)
+    assert.deepEqual(defs.map((d) => d.id), [SLOT1, SLOT2])
+    assert.ok(defs.every((d) => d.hero && d.kind === 'heroSlot'),
+      `${id}'s buttons are not hero medallions`)
+    assert.deepEqual(defs.map((d) => d.icon), [def.slot1.icon, def.slot2.icon])
+  }
+})
+
 /* ------------------------------------------------------------ the rest of it */
 
 test('no Restructure code or data remains', () => {
@@ -292,9 +411,9 @@ test('no Restructure code or data remains', () => {
   for (const [id, h] of Object.entries(HEROES) as [string, any][]) {
     if (id.startsWith('_')) continue
     assert.equal(h.restructure, undefined, `${id} still carries a restructure block`)
-    assert.ok(h.haymaker, `${id} has no Haymaker`)
+    assert.ok(h.slot1, `${id} has no slot 1`)
   }
-  assert.equal(HEROES.cory.haymaker.name, 'Haymaker', 'Cory keeps Haymaker')
+  assert.equal(HEROES.cory.slot1.name, 'Haymaker', 'Cory keeps Haymaker')
   assert.equal(ART.files['ability-restructure'], undefined)
   assert.doesNotMatch(code(HERO_TS), /[Rr]estructure/, 'Hero.ts still has Restructure code in it')
   assert.doesNotMatch(code(LOADOUT), /[Rr]estructure/)

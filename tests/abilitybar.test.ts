@@ -18,8 +18,8 @@ function hand(drafted: number, rare = false): SlotDef[] {
     rare ? 'serverNuke' : null,
     (id) => ({ icon: `icon-${id}` }),
     [
-      { id: 'haymaker', kind: 'haymaker', icon: 'icon-haymaker', hero: true },
-      { id: 'restructure', kind: 'restructure', icon: 'icon-restructure', hero: true },
+      { id: 'heroSlot1', kind: 'heroSlot', icon: 'icon-haymaker', hero: true },
+      { id: 'heroSlot2', kind: 'heroSlot', icon: 'icon-power', hero: true },
     ],
   )
 }
@@ -114,10 +114,10 @@ test('the rebuild signature does not depend on where the rare drop is listed', (
   // And the signature genuinely is bar order, so anything comparing against it
   // has to build it the same way rather than by hand.
   assert.equal(sig, defs.map((d) => d.id).join(','))
-  assert.equal(sig, 'molotov,gnomes,serverNuke,haymaker,restructure')
+  assert.equal(sig, 'molotov,gnomes,serverNuke,heroSlot1,heroSlot2')
 
   // The old check, reinstated, to show it never matches.
-  const oldWanted = ['molotov', 'gnomes', 'haymaker', 'restructure', 'serverNuke'].join(',')
+  const oldWanted = ['molotov', 'gnomes', 'heroSlot1', 'heroSlot2', 'serverNuke'].join(',')
   assert.notEqual(oldWanted, sig,
     'this is the comparison that rebuilt the bar every frame')
 
@@ -140,10 +140,11 @@ test('the two shapes stay in their own groups, with one seam between them', () =
 })
 
 test('a hidden ability keeps its slot, so nothing else moves', () => {
-  // Restructure only exists during DAD MODE, and it arrives and leaves
-  // mid-fight. The bar is laid out from a fixed list of ids, so hiding it must
-  // not reflow anything: a bar that shifts under the player's thumb causes
-  // misfires, and misfiring the Server Nuke costs a run.
+  // Restructure only existed during DAD MODE, and it arrived and left
+  // mid-fight. Nothing hides today -- slot 2 GREYS OUT rather than vanishing,
+  // which is the better answer and is why -- but the bar is still laid out
+  // from a fixed list of ids, because a bar that shifts under the player's
+  // thumb causes misfires and misfiring the Server Nuke costs a run.
   //
   // This is a property of the LAYOUT, not of the drawing: the same defs go in
   // whether or not the icon is on the glass, so the same regions come out.
@@ -157,8 +158,8 @@ test('a hidden ability keeps its slot, so nothing else moves', () => {
 
   // And the signature is unchanged, so the bar is not rebuilt when it toggles.
   assert.equal(slotSignature(defs), slotSignature(defs))
-  assert.ok(defs.some((d) => d.id === 'restructure'),
-    'restructure must stay in the slot list even while it is hidden')
+  assert.ok(defs.some((d) => d.id === 'heroSlot2'),
+    'a slot that is not usable must stay in the list rather than being dropped')
 })
 
 test('Restructure is gone, and the machinery it forced into existence is not', () => {
@@ -189,8 +190,8 @@ test('Restructure is gone, and the machinery it forced into existence is not', (
     const code = src.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n')
     assert.doesNotMatch(code, /[Rr]estructure/, `${name} still has Restructure code in it`)
   }
-  // Cory keeps Haymaker.
-  assert.equal(heroes.cory.haymaker.name, 'Haymaker')
+  // Cory keeps Haymaker, in slot 1.
+  assert.equal(heroes.cory.slot1.name, 'Haymaker')
 
   // A free permanent MOVE is not the answer either, and never was.
   const code = game.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n')

@@ -2,13 +2,16 @@ import Phaser from 'phaser'
 import type { ScratchOutcome } from '../systems/Scratch.ts'
 import { NukeEarnedOverlay, NukeLaunchOverlay } from '../ui/NukeOverlays.ts'
 import type {
-  AbilityDef, DraftDef, EnemyDef, HeroDef, RulesDef, TowerDef, TowerSpec, WavesDef,
+  AbilityDef, DraftDef, EnemyDef, HeroDef, HeroSkillDef, RulesDef, TowerDef, TowerSpec, WavesDef,
 } from '../types.ts'
 import displayData from '../data/display.json'
 import rulesData from '../data/rules.json'
 import towersData from '../data/towers.json'
 import enemiesData from '../data/enemies.json'
 import { DEFAULT_HERO_ID, heroDef as heroDef_, resolveHeroId } from '../systems/Heroes.ts'
+import {
+  SLOT1, SLOT2, heroSlotDefs, isAreaSkill, isHeroSlot, slot2Usable, slotContents,
+} from '../systems/HeroSkills.ts'
 import abilitiesData from '../data/abilities.json'
 import draftData from '../data/draft.json'
 
@@ -116,6 +119,9 @@ export interface GameStatus {
   bossHealth: number
   bossMax: number
   pendingAbility: string | null
+  /** Whether the hero has transformed. Slot 2 is gated on it, and the HUD
+   *  reads it rather than reaching into the hero. */
+  heroPowered: boolean
   /** Seconds until the next wave starts by itself. 0 when nothing is counting. */
   readyCountdown: number
   /** Run totals, for the results screen. Kills counts enemies killed by any
@@ -142,6 +148,24 @@ const TICKET_DEPTH = LAYER.modal
 /** Ground markings are ellipses, not circles: the map is painted in 3/4. */
 const PAD_SQUASH = 0.62
 
+/**
+ * Where the hero starts, on every level.
+ *
+ * The middle of the board. The world is `display.json`'s box on every map, so
+ * this is one number rather than a measurement per painting -- see the note at
+ * the point of use for why the per-map value went.
+ */
+const HERO_START: readonly [number, number] = [displayData.width / 2, displayData.height / 2]
+
+/**
+ * The clock on slot 2, until the power that goes in it has one of its own.
+ *
+ * It is registered rather than left unregistered so the slot draws like a slot
+ * -- a button with no cooldown behind it is a button the bar cannot render the
+ * same way as its neighbours. Nothing starts it yet.
+ */
+const HERO_POWER_COOLDOWN = 30
+
 /** One blue for both hero markers: they are two halves of one idea, and two
  *  blues would read as two systems. */
 const MARKER_BLUE = 0x4fa3e3
@@ -151,6 +175,7 @@ export class GameScene extends Phaser.Scene {
     peanuts: 0, lives: 0, wave: 0, waveCount: 0, waveName: '',
     phase: 'ready', mode: 'normal', enemiesLeft: 0,
     heroName: '', heroHealth: 0, heroMax: 0, heroDown: false, heroReviveIn: 0,
+    heroPowered: false,
     lastStand: false,
     unlockedTowers: [], abilities: [], rareAbility: null, pendingAbility: null,
     readyCountdown: 0, message: '',
@@ -195,7 +220,7 @@ export class GameScene extends Phaser.Scene {
   private readonly screenSpace: Phaser.GameObjects.GameObject[] = []
   /** Set at press time when the press belonged to a menu, ticket or dialog. */
   private pressTakenByUi = false
-  /** Held still for a beat on a big impact. See `castHaymaker`. Public so a
+  /** Held still for a beat on a big impact. See `skillPunch`. Public so a
    *  harness run can assert the pause happened rather than infer it. */
   hitPaused = false
   /** Child count at the last camera split, so new objects get assigned. */
@@ -505,7 +530,13 @@ export class GameScene extends Phaser.Scene {
     this.rangeRing = this.add.graphics().setDepth(OVERLAY_DEPTH)
     this.targetRing = this.add.graphics().setDepth(OVERLAY_DEPTH + 1)
 
-    this.hero = new Hero(this, this.level.map.heroStart[0], this.level.map.heroStart[1],
+    // THE CENTRE OF THE BOARD, ON EVERY LEVEL. It used to be a per-map
+    // `heroStart` measured against each painting, which meant every new map
+    // owed a measurement and level 2 shipped one that put his head off the top
+    // of the screen. The centre needs no measurement and cannot be wrong in
+    // that way: the world is 1280x720 on every level, and a hero whose feet are
+    // at 360 and who stands about 120 px tall reaches y=240, well inside it.
+    this.hero = new Hero(this, HERO_START[0], HERO_START[1],
       heroDef, resolveHeroId(run.heroId))
     this.hero.on('revived', () => {
       play(this, 'build')
@@ -545,6 +576,7 @@ export class GameScene extends Phaser.Scene {
     this.status.heroMax = heroDef.maxHealth
     this.status.heroHealth = heroDef.maxHealth
     this.status.heroDown = false
+    this.status.heroPowered = false
     this.status.heroReviveIn = 0
     this.status.lastStand = false
     this.status.pendingAbility = null
@@ -577,7 +609,10 @@ export class GameScene extends Phaser.Scene {
 
     for (const id of this.status.abilities) this.cooldowns.register(id, ABILITIES[id].cooldown)
     this.cooldowns.register(RULES.serverNuke.abilityId, ABILITIES[RULES.serverNuke.abilityId].cooldown)
-    this.cooldowns.register('haymaker', heroDef.haymaker.cooldown)
+    this.cooldowns.register(SLOT1, heroDef.slot1.cooldown)
+    // Registered even though nothing fires it yet, so the slot draws like a
+    // slot rather than like a hole with no clock behind it.
+    this.cooldowns.register(SLOT2, HERO_POWER_COOLDOWN)
 
     // Arming an ability used to be escapable only with ESC or
     // a right-click, neither of which exists on a touch device: once armed, the
@@ -1415,7 +1450,7 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-W', () => this.armAbility(this.status.abilities[1]))
     // The rare drop gets its own key, since it arrives after the hand is dealt.
     this.input.keyboard?.on('keydown-F', () => this.armAbility(this.status.rareAbility ?? undefined))
-    this.input.keyboard?.on('keydown-E', () => this.castHaymaker())
+    this.input.keyboard?.on('keydown-E', () => this.castHeroSlot1())
     this.input.keyboard?.on('keydown-R', () => {
       if (this.status.phase === 'won' || this.status.phase === 'lost') this.toTitle()
     })
@@ -2496,48 +2531,97 @@ export class GameScene extends Phaser.Scene {
       `${count} gnomes at ${Math.round(x)},${Math.round(y)} for ${bothUnits(seconds)}`)
   }
 
-  castHaymaker(): void {
-    const hm = this.hero.def.haymaker
-    if (!this.cooldowns.ready('haymaker')) {
-      this.refuse(`${hm.name} is still recharging.`)
+  /**
+   * SLOT 1: the hero's own active, whoever the hero is.
+   *
+   * One entry point for all five rather than a method each, because everything
+   * around the effect is the same for all of them -- the cooldown, the three
+   * ways it can be refused, the sound on the hit rather than on the press, and
+   * the message. Only the payload differs, and the payload is chosen by a
+   * field in the data, so a sixth hero is a JSON entry.
+   */
+  castHeroSlot1(): void {
+    const k = this.hero.def.slot1
+    if (!this.cooldowns.ready(SLOT1)) {
+      this.refuse(`${k.name} is still recharging.`)
       return
     }
     if (this.hero.down) {
       this.refuse(`${this.hero.def.name} is down.`)
       return
     }
-    const target = pickNearest(this.enemies, this.hero.x, this.hero.y, hm.range)
-    if (!target) {
-      this.refuse(`${hm.name}: nothing in reach.`)
+
+    // An area skill lands wherever the hero is standing, so it cannot miss and
+    // is never refused for want of a target. A targeted one needs somebody.
+    const target = isAreaSkill(k)
+      ? null
+      : pickNearest(this.enemies, this.hero.x, this.hero.y, k.range)
+    if (!isAreaSkill(k) && !target) {
+      this.refuse(`${k.name}: nothing in reach.`)
       return
     }
-    this.cooldowns.start('haymaker')
+    this.cooldowns.start(SLOT1)
 
-    // The biggest hit in the game, and it used to read as a slightly larger
-    // spark. Four things carry an impact and it had one of them.
+    // The sounds go on the EFFECT, not on the press. Every way this can be
+    // refused -- cooldown, hero down, nothing in reach -- has already returned
+    // above, so a press that does nothing says nothing.
     //
-    // 1. The pause. One held frame is what makes the eye read a collision
-    //    rather than a health bar changing, and it costs nothing.
-    // 2. The spark, at nearly twice the size, so it covers the target rather
-    //    than sitting on it.
-    // 3. The shake, longer and harder than a tower's.
-    // 4. The number, which is 130 and should look like 130.
-    //
-    // The knockback was already in the data at 150px and already applied; what
-    // it lacked was anything around it to make the throw legible.
+    // The voice line first and the impact second, because the duck only
+    // reaches a cue that STARTS after a line: played the other way round the
+    // punch would sit on top of the words rather than under them.
+    if (k.voice) play(this, k.voice)
+    play(this, k.sound)
+
+    switch (k.effect) {
+      case 'punch': this.skillPunch(k, target!); break
+      case 'double': this.skillDouble(k, target!); break
+      case 'burn': this.skillBurn(k, target!); break
+      case 'burst': this.skillBurst(k); break
+      case 'howl': this.skillHowl(k); break
+    }
+    logEvent('hero-skill', `${k.effect} ${k.name}`)
+    this.status.message = `${k.name}!`
+  }
+
+  /**
+   * SLOT 2: the hero power. WIRED, GATED, AND NOT YET IMPLEMENTED.
+   *
+   * The button is in the bar, it is greyed and inert in base form, and it
+   * lights up the moment the hero transforms. What it does not do is anything
+   * at all, and it says so rather than pretending: it starts no cooldown and
+   * spends nothing, so nothing is lost by pressing it while the effect is
+   * being written.
+   */
+  castHeroSlot2(): void {
+    const p = this.hero.def.slot2
+    if (this.hero.down) {
+      this.refuse(`${this.hero.def.name} is down.`)
+      return
+    }
+    if (!slot2Usable(this.hero.powered, this.hero.down)) {
+      this.refuse(`${p.name} needs ${this.hero.def.name} at half health or less.`)
+      return
+    }
+    logEvent('hero-power', `${p.name} pressed, no effect implemented`)
+    this.refuse(`${p.name} is not wired up yet.`)
+  }
+
+  /**
+   * Haymaker, unchanged: the biggest hit in the game, and it used to read as a
+   * slightly larger spark. Four things carry an impact and it had one of them.
+   *
+   * 1. The pause. One held frame is what makes the eye read a collision rather
+   *    than a health bar changing, and it costs nothing.
+   * 2. The spark, at nearly twice the size, so it covers the target rather
+   *    than sitting on it.
+   * 3. The shake, longer and harder than a tower's.
+   * 4. The number, which is 130 and should look like 130.
+   */
+  private skillPunch(k: HeroSkillDef, target: Enemy): void {
     const s = PRESENTATION.shake
-    this.damageEnemy(target, hm.damage, hm.ignoresArmor, 0, false)
-    // Both sounds go on the PUNCH, here, not on the press. Every way this can
-    // be refused — cooldown, hero down, nothing in reach — has already
-    // returned above, so a press that does not land a punch says nothing.
-    //
-    // The line first and the impact second, because the duck only reaches what
-    // starts AFTER a line: played the other way round the punch would sit on
-    // top of the words rather than under them.
-    play(this, 'haymaker-voice')
-    play(this, 'haymaker')
-    target.knockBack(hm.knockbackPixels)
-    floatingDamage(this, target.x, target.centreY, hm.damage, true, undefined,
+    this.damageEnemy(target, k.damage, k.ignoresArmor, 0, false)
+    target.knockBack(k.knockbackPixels)
+    floatingDamage(this, target.x, target.centreY, k.damage, true, undefined,
       EFFECT_MS.haymakerNumberScale)
     this.cameras.main.shake(s.haymakerMs, s.haymakerIntensity)
     playEffect(this, ART.fx.spark, target.x, target.centreY, {
@@ -2545,7 +2629,80 @@ export class GameScene extends Phaser.Scene {
       durationMs: EFFECT_MS.hitSparkMs + 140,
     })
     hitPause(this, EFFECT_MS.haymakerHitPauseMs, (on) => { this.hitPaused = on })
-    this.status.message = `${hm.name}!`
+  }
+
+  /** Quick Cut: two fast hits. The second is skipped if the first killed it,
+   *  which is why the hits are separate rather than one doubled number. */
+  private skillDouble(k: HeroSkillDef, target: Enemy): void {
+    const land = (): void => {
+      if (!target.alive) return
+      this.damageEnemy(target, k.damage, k.ignoresArmor, 0, false)
+      floatingDamage(this, target.x, target.centreY, k.damage, false)
+      playEffect(this, ART.fx.spark, target.x, target.centreY, {
+        size: EFFECT_MS.haymakerSparkSize * 0.7, depth: target.y + 8,
+        durationMs: EFFECT_MS.hitSparkMs,
+      })
+    }
+    land()
+    for (let i = 1; i < k.hits; i++) {
+      this.time.delayedCall(k.gapSeconds * 1000 * i, () => land())
+    }
+  }
+
+  /**
+   * Ember: a hit now and a burn afterwards.
+   *
+   * The burn ticks once a second on the scene's own clock and stops itself if
+   * the target dies, so a corpse is never charged for the rest of it. Nothing
+   * is attached to the enemy: a timer that outlives its target is a leak, and
+   * this one is checked against `alive` on every tick.
+   */
+  private skillBurn(k: HeroSkillDef, target: Enemy): void {
+    this.damageEnemy(target, k.damage, k.ignoresArmor, 0, false)
+    floatingDamage(this, target.x, target.centreY, k.damage, false)
+    let left = k.burnSeconds
+    const tick = this.time.addEvent({
+      delay: 1000,
+      loop: true,
+      callback: () => {
+        left -= 1
+        if (!target.alive || left < 0) { tick.remove(); return }
+        this.damageEnemy(target, k.burnPerSecond, k.ignoresArmor, 0, false)
+        playEffect(this, ART.fx.blast, target.x, target.centreY, {
+          size: 34, depth: target.y + 8, durationMs: EFFECT_MS.hitSparkMs,
+        })
+      },
+    })
+  }
+
+  /** Shockwave: everything around him takes a hit and stops for a moment. */
+  private skillBurst(k: HeroSkillDef): void {
+    const s = PRESENTATION.shake
+    playEffect(this, ART.fx.blast, this.hero.x, this.hero.y, {
+      size: sizeForRadius(k.radius), depth: this.hero.y + 6, durationMs: EFFECT_MS.blastMs,
+    })
+    this.cameras.main.shake(s.haymakerMs * 0.6, s.haymakerIntensity * 0.7)
+    // Inferred rather than given as `withinRadius<Enemy>`: with node_modules
+    // absent the Enemy class loses its Phaser base and satisfies neither form,
+    // and this is how every other call site in this file reads. See CLAUDE.md
+    // on tsdiff -- AbilityRunner has carried the identical artifact for months.
+    for (const e of withinRadius(this.enemies, this.hero.x, this.hero.y, k.radius)) {
+      this.damageEnemy(e, k.damage, k.ignoresArmor, 0, false)
+      e.applyStun(k.stunSeconds, RULES.combat.stunLockoutMultiple, RULES.combat.stunDiminish)
+    }
+  }
+
+  /** Bark: no damage at all, and everything nearby slows down. */
+  private skillHowl(k: HeroSkillDef): void {
+    const ring = this.add.graphics().setDepth(OVERLAY_DEPTH)
+    ring.lineStyle(3, 0xf6ecd9, 0.8).strokeCircle(this.hero.x, this.hero.y, k.radius)
+    this.tweens.add({
+      targets: ring, alpha: 0, duration: 420, ease: 'Quad.easeOut',
+      onComplete: () => ring.destroy(),
+    })
+    for (const e of withinRadius(this.enemies, this.hero.x, this.hero.y, k.radius)) {
+      e.applySlow(k.slowFactor, k.slowSeconds, RULES.combat.slowDiminish)
+    }
   }
 
   // ---------------------------------------------------------------- waves
@@ -3028,6 +3185,7 @@ export class GameScene extends Phaser.Scene {
     this.status.heroHealth = this.hero.health
     this.status.heroDown = this.hero.down
     this.status.heroReviveIn = this.hero.reviveIn
+    this.status.heroPowered = this.hero.powered
     this.status.lastStand = this.hero.lastStandActive
     this.noteHeroState()
     this.status.enemiesLeft = this.enemies.length + this.spawner.remaining
@@ -3736,9 +3894,7 @@ export class GameScene extends Phaser.Scene {
       this.status.abilities,
       this.status.rareAbility,
       (aid) => ABILITIES[aid],
-      [
-        { id: 'haymaker', kind: 'haymaker', icon: hero.haymaker.icon, hero: true },
-      ],
+      heroSlotDefs(hero),
     )
     // The bar is laid out for the hand INCLUDING the new drop, which is what
     // the HUD will do on its next frame.
@@ -3879,11 +4035,21 @@ export class GameScene extends Phaser.Scene {
     return ABILITIES[id]
   }
 
-  /** The un-greyed icon key for a slot, ability or hero active alike. */
+  /**
+   * The un-greyed icon key for a slot, ability or hero button alike.
+   *
+   * FALLS BACK when the texture is not loaded. Two of the ten hero icons were
+   * not in the art upload, and a manifest key with no file behind it draws
+   * Phaser's missing-texture green rather than nothing -- in the middle of the
+   * ability bar, which reads as a rendering fault. The generated stand-in says
+   * "not here yet" instead, and dropping the real file in later needs no code
+   * change at all.
+   */
   abilityIcon(id: string): string | undefined {
-    if (ABILITIES[id]) return ABILITIES[id].icon
-    if (id === 'haymaker') return this.hero.def.haymaker.icon
-    return undefined
+    const key = ABILITIES[id]?.icon
+      ?? (isHeroSlot(id) ? slotContents(this.hero.heroId, id).icon : undefined)
+    if (key === undefined) return undefined
+    return this.textures.exists(key) ? key : ART.generated.iconMissing
   }
 
   heroDef(): HeroDef {

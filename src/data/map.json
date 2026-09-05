@@ -3,10 +3,6 @@
   "roadWidth": 80.0,
   "_roadWidth": "MEASURED off the plate, not assumed: the median clearance from the lane's centre to the nearest non-road pixel, doubled. The previous plate's road was 38 canvas px and this one is more than twice that, which is why every lateral figure derived from it had to move. The widest point is 120 and the median is the honest number, because the lane has to fit the narrowest stretch.",
   "note": "EVERY NUMBER HERE IS TRACED FROM map_level1_v2, and nothing is carried forward from the first plate. That painting had a different road on a different path at a different width, with the arch, the gate and the tavern all somewhere else. Regenerate with `python3 tools/trace_map.py --plate <png>` after any re-export; the source PNG lives in the commit that added it, because a 10.9MB PNG in public/ is 10.9MB of deploy.",
-  "heroStart": [
-    642.0,
-    244.0
-  ],
   "spotRadius": 34,
   "waypoints": [
     [
@@ -213,7 +209,7 @@
     ]
   ],
   "signs": {
-    "_note": "EVERY BOARD IN THIS PLATE IS PAINTED BLANK AND STAYS BLANK. The lettering is a separate overlay drawn on top, so what is recorded here is the rectangle to draw it in: `centre` and `size` are the PLAIN WOOD INSIDE THE FRAME RAILS \u2014 the writable panel \u2014 as fractions of the plate, plus the angle to rotate by. `inset` shrinks the overlay inside that so the words do not touch the rails. `outer` is the whole painted board, rails included; nothing draws it, it is there so a check can ask how much of the board the lettering covers. Fractions rather than pixels because a re-export at another resolution must not move a sign, and rotation in the engine rather than baked into the texture because a pre-rotated texture is resampled twice. MEASURED, NOT SUPPLIED. The quads these replace were described as the inner panel and are the OUTER board: 138.6 plate px against the wood field\u2019s 119.2 for the innkeeper\u2019s. Drawing at 94% of an outer board puts the words on the rails, which is what \"the lettering is at 100% of the board\" was. The two boards tilt OPPOSITE WAYS and share no constant.",
+    "_note": "EVERY BOARD IN THIS PLATE IS PAINTED BLANK AND STAYS BLANK. The lettering is a separate overlay drawn on top, so what is recorded here is the rectangle to draw it in: `centre` and `size` are the PLAIN WOOD INSIDE THE FRAME RAILS — the writable panel — as fractions of the plate, plus the angle to rotate by. `inset` shrinks the overlay inside that so the words do not touch the rails. `outer` is the whole painted board, rails included; nothing draws it, it is there so a check can ask how much of the board the lettering covers. Fractions rather than pixels because a re-export at another resolution must not move a sign, and rotation in the engine rather than baked into the texture because a pre-rotated texture is resampled twice. MEASURED, NOT SUPPLIED. The quads these replace were described as the inner panel and are the OUTER board: 138.6 plate px against the wood field’s 119.2 for the innkeeper’s. Drawing at 94% of an outer board puts the words on the rails, which is what \"the lettering is at 100% of the board\" was. The two boards tilt OPPOSITE WAYS and share no constant.",
     "tavern": {
       "centre": [
         0.74479,
@@ -243,7 +239,7 @@
           0.2136
         ]
       ],
-      "_note": "The board hanging from the tavern beam. It never changes: no swap, no state. The rectangle is the plain wood inside the rails, measured by projecting the wood mask onto the board\u2019s own rotated axes \u2014 not by edge fitting, which this board has now defeated four separate times (a min-area rectangle at 18 degrees, a hull landing on the chamfer midpoints, a parallelogram dragged to 17 by the mounting rings, and a per-column extreme fit that came back at 18 again). `quad` is the corner reading it came from and is kept as the record. The rails are about 19 plate px, measured on the two sides nothing touches: the beam crosses the top and the tavern wall meets the right.",
+      "_note": "The board hanging from the tavern beam. It never changes: no swap, no state. The rectangle is the plain wood inside the rails, measured by projecting the wood mask onto the board’s own rotated axes — not by edge fitting, which this board has now defeated four separate times (a min-area rectangle at 18 degrees, a hull landing on the chamfer midpoints, a parallelogram dragged to 17 by the mounting rings, and a per-column extreme fit that came back at 18 again). `quad` is the corner reading it came from and is kept as the record. The rails are about 19 plate px, measured on the two sides nothing touches: the beam crosses the top and the tavern wall meets the right.",
       "outer": {
         "centre": [
           0.74479,
@@ -284,7 +280,7 @@
           0.3124
         ]
       ],
-      "_note": "The board the innkeeper holds, and the only one with a state: the bribe swaps the texture and changes nothing else, so both overlays share this one rectangle and this one angle. The rectangle is the plain wood inside the rails. The rails are about 12 plate px, measured on the three sides nothing touches \u2014 his hand and the post meet the bottom, so that side is mirrored rather than scanned.",
+      "_note": "The board the innkeeper holds, and the only one with a state: the bribe swaps the texture and changes nothing else, so both overlays share this one rectangle and this one angle. The rectangle is the plain wood inside the rails. The rails are about 12 plate px, measured on the three sides nothing touches — his hand and the post meet the bottom, so that side is mirrored rather than scanned.",
       "outer": {
         "centre": [
           0.69812,
@@ -354,7 +350,7 @@
         ],
         "depth": 448.1,
         "_depth": "Above every enemy that can stand at the arch: the lane's lowest point between x 0 and 60 plus half the road's width, plus a margin. Taking the pier's painted base instead worked on the old plate only because that road was 38 px wide; at 80 the near half of the lane reaches below the stone.",
-        "_outline": "FITTED to the painted stone, not read off a grid. The first outline for this plate was traced by eye from a 12x crop and enclosed 15.7% grass and banner pole down its left side \u2014 which the arch scenario's pixel diff could never have caught, because that diff only proves nothing draws OVER the pier and an outline half the size passes it by covering less. Re-fitted by thresholding desaturated stone in a box around the pier, taking the largest blob and thinning its convex hull to ten points. Verify with the draw-back check as well as the diff."
+        "_outline": "FITTED to the painted stone, not read off a grid. The first outline for this plate was traced by eye from a 12x crop and enclosed 15.7% grass and banner pole down its left side — which the arch scenario's pixel diff could never have caught, because that diff only proves nothing draws OVER the pier and an outline half the size passes it by covering less. Re-fitted by thresholding desaturated stone in a box around the pier, taking the largest blob and thinning its convex hull to ten points. Verify with the draw-back check as well as the diff."
       },
       "_note": "Only the NEAR pier is lifted out of the plate, and it is cut to its painted outline rather than to a box, because it is drawn in front of units and a box around it contains road. The far pier and the span stand above the road's far edge, so the plate already draws them behind everything."
     }
@@ -363,6 +359,5 @@
     "_note": "THE GATE IS SHUT IN THIS PLATE, and it has no wall attached, which reads oddly; that is a known art issue being handled separately and this traces it as it stands. There is no painted gap to fade through as there was on the old plate, so the fade runs over the last 33px of lane, ending where the road does. Distance, not time: the roster spans a wide speed range and a timed fade would let the fastest walk out still visible while the slowest dissolved before arriving.",
     "gateX": 1205.0,
     "vanishX": 1235.0
-  },
-  "_heroStart": "Open grass, 150px from the road's edge and 112px from the nearest pad. The trace put him at 42% along the lane, which on this painting is on the road itself."
+  }
 }

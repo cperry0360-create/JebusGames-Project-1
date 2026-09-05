@@ -61,6 +61,11 @@ test('an optional key is a short deliberate list, and every one has a fallback',
   const FAMILIES: Array<{ match: RegExp; fallback: string }> = [
     { match: /^icon-/, fallback: 'the generated icon stand-in' },
     { match: /^hero-cory-(walk|attack)-\d$/, fallback: 'the static idle sprite' },
+    // The two hero slot-1 icons that were not in the art upload. Every other
+    // ability_<hero>_<slot>.png is present; these two fall back to the same
+    // generated stand-in the UI icons use, through GameScene.abilityIcon,
+    // which checks the texture rather than trusting the manifest.
+    { match: /^ability-(bailey|eli)-1$/, fallback: 'the generated icon stand-in' },
   ]
   assert.ok(FAMILIES.length <= 6,
     `${FAMILIES.length} families of optional art; this list is for art being drawn`)
@@ -74,6 +79,8 @@ test('an optional key is a short deliberate list, and every one has a fallback',
   assert.match(src('scenes/BootScene.ts'), /ensureIconFallbackTexture\(this\)/, 'no icon fallback')
   assert.match(src('entities/Hero.ts'), /return heroSprite\(this\.heroId, this\.powered\)/,
     'a missing hero frame does not fall back to the static idle')
+  assert.match(src('scenes/GameScene.ts'), /this\.textures\.exists\(key\) \? key : ART\.generated\.iconMissing/,
+    'a hero ability icon with no file behind it draws the missing texture')
 
   // The build pad is REQUIRED art now, not an optional hook — it was the one
   // that took the game down to a green screen, and a hook whose file never

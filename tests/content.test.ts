@@ -36,7 +36,7 @@ test('every sprite key referenced anywhere resolves to a real file', () => {
   for (const [id, h] of heroEntries()) {
     refs.push([`hero ${id} body`, h.bodySprite], [`hero ${id} ultimate`, h.ultimateSprite],
       [`hero ${id} portrait`, h.portraitSprite],
-      [`hero ${id} haymaker`, h.haymaker.icon])
+      [`hero ${id} slot 1`, h.slot1.icon], [`hero ${id} slot 2`, h.slot2.icon])
     h.fighterSprites.forEach((s: string, i: number) => refs.push([`hero ${id} gnome ${i}`, s]))
   }
   refs.push([`map plate ${map.plate}`, art.map[map.plate]])
@@ -272,7 +272,7 @@ test('every icon the UI shows can be sized from the manifest', () => {
   const icons: Array<[string, string]> = []
   for (const [id, a] of Object.entries(abilities) as [string, any][]) icons.push([`ability ${id}`, a.icon])
   for (const [id, h] of heroEntries()) {
-    icons.push([`hero ${id} haymaker`, h.haymaker.icon])
+    icons.push([`hero ${id} slot 1`, h.slot1.icon], [`hero ${id} slot 2`, h.slot2.icon])
   }
   for (const [id, t] of Object.entries(towers) as [string, any][]) icons.push([`tower ${id}`, t.sprite])
 
@@ -540,16 +540,59 @@ test("Cory's kit matches the design doc", () => {
       `${name} calls Cory an auditor`)
   }
   assert.equal(c.passive.name, 'Depreciation')
-  assert.equal(c.haymaker.name, 'Haymaker')
+  assert.equal(c.slot1.name, 'Haymaker')
   assert.equal(c.lastStand.name, 'DAD MODE')
 })
 
 test('Haymaker is a real burst with knockback', () => {
   const c = heroes.cory
-  assert.ok(c.haymaker.damage > c.damage * 4, 'Haymaker should dwarf a normal swing')
-  assert.ok(c.haymaker.knockbackPixels > 0, 'Haymaker needs knockback')
-  assert.ok(c.haymaker.ignoresArmor, 'a haymaker should not be stopped by armour')
-  assert.ok(c.haymaker.cooldown > 0)
+  assert.equal(c.slot1.effect, 'punch')
+  assert.ok(c.slot1.damage > c.damage * 4, 'Haymaker should dwarf a normal swing')
+  assert.ok(c.slot1.knockbackPixels > 0, 'Haymaker needs knockback')
+  assert.ok(c.slot1.ignoresArmor, 'a haymaker should not be stopped by armour')
+  assert.ok(c.slot1.cooldown > 0)
+})
+
+test('every hero declares a whole slot 1, and slot 2 is honestly empty', () => {
+  // ONE BLOCK OF FIELDS FOR ALL FIVE. Every skill declares every field, zeros
+  // included, so a reader can see what Bark does NOT do and a new hero cannot
+  // half-declare itself and read `undefined` as 0 at some later call site.
+  const FIELDS = ['name', 'icon', 'effect', 'cooldown', 'range', 'radius', 'damage',
+    'ignoresArmor', 'knockbackPixels', 'stunSeconds', 'slowFactor', 'slowSeconds',
+    'burnPerSecond', 'burnSeconds', 'hits', 'gapSeconds', 'sound', 'voice']
+  const EFFECTS = ['punch', 'burst', 'burn', 'double', 'howl']
+  const cues = Object.keys(read('audio').cues)
+  const names = new Set<string>()
+  for (const [id, h] of heroEntries()) {
+    assert.deepEqual(Object.keys(h.slot1), FIELDS, `${id}'s slot 1 is not the shared shape`)
+    assert.ok(EFFECTS.includes(h.slot1.effect), `${id}'s slot 1 has no known effect`)
+    assert.ok(h.slot1.cooldown > 0, `${id}'s slot 1 has no cooldown`)
+    // Reach in ONE of the two fields, never both and never neither: an area
+    // skill lands where the hero stands and a targeted one needs a target.
+    const area = h.slot1.effect === 'burst' || h.slot1.effect === 'howl'
+    assert.ok(area ? h.slot1.radius > 0 && h.slot1.range === 0
+                   : h.slot1.range > 0 && h.slot1.radius === 0,
+      `${id}'s slot 1 declares its reach in the wrong field for a ${h.slot1.effect}`)
+    // Sounds have to exist. A cue that is not in audio.json warns at play
+    // time, and a warning is a soak failure.
+    assert.ok(cues.includes(h.slot1.sound), `${id}'s slot 1 plays "${h.slot1.sound}", which is not a cue`)
+    if (h.slot1.voice !== null) {
+      assert.ok(cues.includes(h.slot1.voice), `${id}'s voice line "${h.slot1.voice}" is not a cue`)
+    }
+
+    // SLOT 2 IS RESERVED, NOT BUILT. `effect: null` is the whole of what says
+    // so, and it is checked here so that filling it in later cannot be done
+    // half way -- the day it gains an effect, this test is what asks whether
+    // everything else about it was finished too.
+    assert.deepEqual(Object.keys(h.slot2), ['name', 'icon', 'effect'])
+    assert.equal(h.slot2.effect, null, `${id}'s slot 2 claims an effect it does not have`)
+
+    // Distinct names, or the bar has two buttons the player cannot tell apart.
+    for (const n of [h.slot1.name, h.slot2.name]) {
+      assert.ok(!names.has(n), `"${n}" is on two hero buttons`)
+      names.add(n)
+    }
+  }
 })
 
 test('Depreciation fully strips the cast it was tuned against, and dents the rest', () => {
@@ -602,7 +645,7 @@ test("the hero's own actives use ability art, not a tower or a placeholder", () 
   const heroes = JSON.parse(readFileSync(new URL('../src/data/heroes.json', import.meta.url), 'utf8'))
   const art = JSON.parse(readFileSync(new URL('../src/data/art.json', import.meta.url), 'utf8'))
   for (const [, hero] of heroEntries(heroes)) {
-    for (const slot of ['haymaker'] as const) {
+    for (const slot of ['slot1', 'slot2'] as const) {
       const key = hero[slot].icon
       const path = art.files[key]
       assert.ok(path, `${hero.name}'s ${slot} points at unknown art key "${key}"`)
@@ -845,21 +888,38 @@ test('the hero abilities point at their own icons, not at borrowed ones', () => 
   // AUDIT #2: Haymaker pointed at a tower sprite and the second slot at a Kenney
   // placeholder tile. Both then spent a while pointing at other abilities'
   // icons as stand-ins, which is better but still borrowed.
+  //
+  // They are per-hero now: ten icons, ability_<hero>_<slot>.png, one scheme for
+  // the whole bar. Cory's Haymaker moved onto it with everybody else rather
+  // than keeping ability_haymaker.png -- one hero's finished art beside four
+  // marked placeholders would have read as four bugs.
   const art = JSON.parse(readFileSync(new URL('../src/data/art.json', import.meta.url), 'utf8'))
-  const c = heroes.cory
-  for (const [slot, key] of [['haymaker', c.haymaker.icon]] as const) {
-    assert.equal(key, `ability-${slot}`, `${slot} does not use its own icon`)
-    assert.ok(art.files[key], `${key} is not in the manifest`)
-    assert.match(art.files[key], new RegExp(`ability_${slot}\\.png$`), `${key} points at the wrong file`)
-    assert.ok(art.render[key], `${key} has no render entry, so it cannot be fitted`)
-    assert.equal(existsSync(new URL(`../public/${art.files[key]}`.replace('/assets/', '/assets/'), import.meta.url))
-      || existsSync(new URL(`../public/assets/${art.files[key]}`, import.meta.url)), true,
-      `${art.files[key]} is not on disk`)
+  const optional: string[] = art.optional ?? []
+  for (const [id, h] of heroEntries()) {
+    for (const [slot, n] of [['slot1', 1], ['slot2', 2]] as const) {
+      const key = h[slot].icon
+      assert.equal(key, `ability-${id}-${n}`, `${id}'s ${slot} does not use its own icon`)
+      assert.ok(art.files[key], `${key} is not in the manifest`)
+      assert.equal(art.files[key], `abilities/ability_${id}_${n}.png`,
+        `${key} points at the wrong file`)
+      assert.ok(art.render[key], `${key} has no render entry, so it cannot be fitted`)
+      // On disk, unless it is one of the two the upload did not include -- and
+      // those have to be declared optional, or a missing file is a hard error
+      // at boot rather than a stand-in icon.
+      const there = existsSync(new URL(`../public/assets/${art.files[key]}`, import.meta.url))
+      if (!there) {
+        assert.ok(optional.includes(key),
+          `${art.files[key]} is not on disk and ${key} is not marked optional`)
+      }
+      // And nothing borrows a drafted ability's icon.
+      assert.doesNotMatch(key, /meteor|gnomes|molotov|glacier|chain|scratch/,
+        `${key} is still a borrowed icon`)
+    }
   }
-  // And nothing borrows a drafted ability's icon any more.
-  for (const key of [c.haymaker.icon]) {
-    assert.doesNotMatch(key, /meteor|gnomes|molotov|glacier|chain|scratch/, `${key} is still a borrowed icon`)
-  }
+  // The two that are missing, named so that the day they land is a data change
+  // and nothing else. If this list is ever empty, drop them from `optional`.
+  assert.deepEqual(optional.filter((k: string) => k.startsWith('ability-')).sort(),
+    ['ability-bailey-1', 'ability-eli-1'])
 })
 
 test('the hero medallions are round and the drafted plates are not', () => {
@@ -867,7 +927,13 @@ test('the hero medallions are round and the drafted plates are not', () => {
   // this run dealt. The manifest has to reflect that, or the bar cannot.
   const art = JSON.parse(readFileSync(new URL('../src/data/art.json', import.meta.url), 'utf8'))
   const ratio = (k: string): number => art.render[k].contentWidth / art.render[k].contentHeight
-  for (const k of ['ability-haymaker']) {
+  // Every hero button, both slots. The ten replaced one shared Haymaker icon,
+  // and the shape rule is the reason the set has to be checked rather than a
+  // sample: a rectangular icon in a round socket is what says "this is a
+  // drafted card" to a player reading the bar at a glance.
+  const medallions = heroEntries().flatMap(([, h]) => [h.slot1.icon, h.slot2.icon])
+  assert.equal(medallions.length, 10)
+  for (const k of medallions) {
     assert.ok(Math.abs(ratio(k) - 1) < 0.15, `${k} is ${ratio(k).toFixed(2)}:1, not a square medallion`)
   }
   for (const k of ['ability-molotov', 'ability-glacier', 'ability-meteor']) {

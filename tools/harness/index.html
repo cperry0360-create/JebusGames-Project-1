@@ -830,8 +830,6 @@ async function run() {
     await shot('ui-11-pad-beats-ground')
     await click(20, 700)
 
-    await key('KeyR'); await shot('ui-12-restructure')
-    await key('Escape')
     await key('KeyQ'); await move(700, 430); await shot('ui-13-ability-target')
     await key('Escape')
     return
@@ -2056,9 +2054,9 @@ async function run() {
     await shot('herofx-01-passive')
 
     // 2. Haymaker.
-    g.cooldowns.reset('haymaker')
+    g.cooldowns.reset('heroSlot1')
     const before = g.enemies.map((e) => ({ e, x: e.x, y: e.y, hp: e.health }))
-    g.castHaymaker()
+    g.castHeroSlot1()
     await sleep(60)
     note('haymaker: hitPaused=' + g.hitPaused)
     await shot('herofx-02-haymaker')
@@ -2068,32 +2066,7 @@ async function run() {
       .map((b) => Math.round(Math.hypot(b.e.x - b.x, b.e.y - b.y)))
       .filter((d) => d > 4)
     note('haymaker: knocked back ' + moved.join(',') + 'px (data says ' +
-      hero.def.haymaker.knockbackPixels + '); hitPaused now ' + g.hitPaused)
-
-    // 3. Restructure, which should travel rather than teleport.
-    const tower = g.towers[0]
-    const freeSpot = g.build.spots.findIndex((sp, i) => g.build.isFree(i))
-    if (tower && freeSpot >= 0) {
-      const from = { x: tower.x, y: tower.y }
-      g.cooldowns.reset('restructure')
-      g.armRestructure()
-      g.doRestructure(tower.x, tower.y)
-      g.doRestructure(g.build.spots[freeSpot].x, g.build.spots[freeSpot].y)
-      await sleep(180)
-      const mid = { x: tower.x, y: tower.y }
-      note('restructure: from ' + Math.round(from.x) + ',' + Math.round(from.y) +
-        ' -> at 180ms ' + Math.round(mid.x) + ',' + Math.round(mid.y) +
-        ' (lifted ' + Math.round(from.y - mid.y) + 'px)')
-      await lookAt(tower.x, tower.y)
-      await shot('herofx-03-restructure')
-      await sleep(700)
-      note('restructure: landed ' + Math.round(tower.x) + ',' + Math.round(tower.y) +
-        ' target ' + Math.round(g.build.spots[freeSpot].x) + ',' +
-        Math.round(g.build.spots[freeSpot].y) +
-        '; cooldown ' + g.cooldowns.secondsLeft('restructure').toFixed(1) + 's of ' +
-        hero.def.restructure.cooldown + 's, ready=' + g.cooldowns.ready('restructure') +
-        '; mode=' + g.status.mode + ' CANCEL visible=' + g.cancelVisible)
-    }
+      hero.def.slot1.knockbackPixels + '); hitPaused now ' + g.hitPaused)
 
     // 4. Last Stand, forced, and the invulnerability that makes it happen.
     await lookAt(hero.x, hero.y)
@@ -2198,17 +2171,17 @@ async function run() {
     const hudState = async (label) => {
       let fired = 0
       const orig = g.armAbility.bind(g)
-      const origH = g.castHaymaker.bind(g)
+      const origH = g.castHeroSlot1.bind(g)
       const origW = g.startWave.bind(g)
       g.armAbility = (id) => { fired++; return orig(id) }
-      g.castHaymaker = () => { fired++; return origH() }
+      g.castHeroSlot1 = () => { fired++; return origH() }
       g.startWave = () => { fired++; return origW() }
       for (const sl of hud.slots) {
         const b = sl.hit.getBounds()
         await click(b.centerX, b.centerY)
         await sleep(50)
       }
-      g.armAbility = orig; g.castHaymaker = origH; g.startWave = origW
+      g.armAbility = orig; g.castHeroSlot1 = origH; g.startWave = origW
       note('  ' + label + ': HUD camera visible=' + hud.cameras.main.visible +
         ' scene input=' + (hud.input ? hud.input.enabled : 'n/a') +
         ' | tapped all ' + hud.slots.length + ' ability slots -> ' + fired +
@@ -2896,7 +2869,7 @@ async function run() {
 
     // --- HAYMAKER, refused. A press that lands no punch says nothing.
     const before = got('haymaker-voice').length
-    g.castHaymaker()   // no wave yet, so nothing is in reach
+    g.castHeroSlot1()   // no wave yet, so nothing is in reach
     note('refused press (nothing in reach): line played ' +
       (got('haymaker-voice').length - before) + ' time(s)' +
       (got('haymaker-voice').length === before ? '  correct — silent' : '  *** IT TALKED ***'))
@@ -2913,7 +2886,7 @@ async function run() {
     note('an enemy came into haymaker range: ' + reached +
       '  (hero at ' + Math.round(g.hero.x) + ',' + Math.round(g.hero.y) + ')')
     const tPunch = performance.now()
-    g.castHaymaker()
+    g.castHeroSlot1()
     const hv = got('haymaker-voice')[0]
     note('haymaker: line played ' + got('haymaker-voice').length + ' time(s)' +
       (hv ? '  at volume ' + hv.vol.toFixed(3) : '  *** SILENT ***'))
@@ -5295,7 +5268,7 @@ async function run() {
 
     note('camera centre ' + ((v.x + v.right) / 2).toFixed(1) + ',' +
       ((v.y + v.bottom) / 2).toFixed(1) +
-      '   hero starts at ' + MAPD.heroStart[0] + ',' + MAPD.heroStart[1])
+      '   hero starts at the centre of the board, ' + (DISP.width / 2) + ',' + (DISP.height / 2))
     await shot('opening-' + VP.w + 'x' + VP.h + '-dpr' + dpr)
 
     // THE CAMERA MUST NOT DRIFT. Walk the hero to the far end and check the
@@ -7414,154 +7387,12 @@ async function run() {
     return
   }
 
-  if (scenario === 'restructure') {
-    // Restructure is DAD MODE only, and its slot must not move when it goes.
-    const hud = game.scene.getScene('Hud')
-    g.status.peanuts = 99999
-    await build(3, 0)
-    g.startWave()
-    await sleep(1200)
-
-    const positions = () => hud.slots.map((sl) =>
-      sl.region.id + '@' + Math.round(sl.region.cx) + ',' + Math.round(sl.region.cy))
-    const shownOf = () => hud.slots.map((sl) =>
-      sl.region.id + '=' + (sl.icon.visible ? 'shown' : 'SOCKET'))
-
-    note('viewport ' + VP.w + 'x' + VP.h)
-    note('out of DAD MODE:')
-    note('  ' + positions().join('  '))
-    note('  ' + shownOf().join('  '))
-    const before = positions().join('|')
-
-    // And does a tap on its reserved slot do anything? Nine points across the
-    // whole reserved box, not just the middle: the report was that it responds,
-    // and one probe at the centre proves only the centre.
-    const slot = hud.slots.find((sl) => sl.region.id === 'restructure')
-    let reached = 0
-    const orig = g.armRestructure.bind(g)
-    g.armRestructure = () => { reached++; return orig() }
-    const bb = slot.hit.getBounds()
-    note('  socket box ' + Math.round(bb.x) + ',' + Math.round(bb.y) + ' ' +
-      Math.round(bb.width) + 'x' + Math.round(bb.height) +
-      ' hitInInputList=' + !!slot.hit.input +
-      ' hitVisible=' + slot.hit.visible +
-      ' frameAlpha=' + slot.frame.alpha + ' iconVisible=' + slot.icon.visible)
-    // The direct armRestructure() above raised a refusal, and its toast lives
-    // for a couple of seconds. Waited out, or the first probes read it as
-    // their own — which is exactly the false positive it produced first time.
-    const was = { mode: g.status.mode, msg: g.status.message, alert: g.status.alert || '',
-                  toast: '', sel: !!g.selected, rally: !!g.heroSelected }
-    const bad = []
-    for (const fx of [0.08, 0.5, 0.92]) {
-      for (const fy of [0.08, 0.5, 0.92]) {
-        const x = bb.x + bb.width * fx, y = bb.y + bb.height * fy
-        await click(x, y)
-        await sleep(80)
-        const t = hud.activeToast
-        const now = {
-          mode: g.status.mode,
-          alert: g.status.alert || '',
-          toast: t && t.active && t.visible && t.list ? t.list.map((c) => c.text || '').join('') : '',
-          msg: g.status.message,
-          rally: !!g.heroSelected,
-          sel: !!g.selected,
-        }
-        // `msg` is excluded: the status banner is a timed wave announcement
-        // that reverts to the idle hint on its own, so it changes during the
-        // probe whether or not anything is tapped. It is printed separately.
-        const diff = Object.keys(now).filter((k) =>
-          k !== 'msg' && String(now[k]) !== String(was[k] ?? ''))
-        if (diff.length) {
-          bad.push('(' + fx + ',' + fy + ') ' +
-            diff.map((k) => k + ': "' + was[k] + '" -> "' + now[k] + '"').join(', '))
-        }
-        g.status.alert = ''
-      }
-    }
-    note('  tapping the empty socket reached armRestructure ' + reached + ' times')
-    note('  banner after the taps: "' + g.status.message + '"')
-    note('  taps that changed anything: ' + (bad.length ? bad.join(' | ') : 'NONE'))
-    g.armRestructure = orig
-    // Does it refuse?
-    let armed = g.status.mode
-    g.armRestructure()
-    await sleep(200)
-    note('  armRestructure outside DAD MODE: mode=' + g.status.mode +
-      ' (was ' + armed + ') alert="' + g.status.alert + '"' +
-      (g.status.mode === 'restructure' ? '  *** ALLOWED ***' : '  refused'))
-
-    await shot('restructure-01-hidden-' + VP.w + 'x' + VP.h)
-
-    // Into DAD MODE.
-    g.hero.health = g.hero.def.maxHealth * 0.3
-    g.hero.hurt(g.hero.def.maxHealth * 4)
-    await sleep(1400)
-    note('in DAD MODE (lastStand=' + g.status.lastStand + '):')
-    note('  ' + positions().join('  '))
-    note('  ' + shownOf().join('  '))
-    const after = positions().join('|')
-    note('  slot positions identical: ' + (before === after ? 'YES' : 'NO *** THEY MOVED ***'))
-    await shot('restructure-02-shown-' + VP.w + 'x' + VP.h)
-
-    g.cooldowns.reset('restructure')
-    g.armRestructure()
-    await sleep(200)
-    note('  armRestructure in DAD MODE: mode=' + g.status.mode)
-
-    // Half-finished move, then DAD MODE ends.
-    g.doRestructure(g.towers[0].x, g.towers[0].y)
-    await sleep(150)
-    note('  picked a tower up: restructuring=' + !!g.restructuring + ' mode=' + g.status.mode)
-    g.hero.lastStandActive = false
-    await sleep(400)
-    note('  after DAD MODE ends: mode=' + g.status.mode +
-      ' restructuring=' + !!g.restructuring +
-      ' CANCEL visible=' + g.cancelVisible + ' msg="' + g.status.message + '"')
-    note('  ' + shownOf().join('  '))
-    await shot('restructure-03-ended-' + VP.w + 'x' + VP.h)
-
-    /* --- THE COOLDOWN IS A STATUS, NOT AN ANNOUNCEMENT ------------------ */
-
-    // It used to read "Grinder restructured. Back in 16s." and then sit there
-    // for the whole sixteen seconds — the instruction row held by a number
-    // that was wrong after the first one, with nothing else able to be said.
-    g.hero.lastStandActive = true
-    g.cooldowns.reset('restructure')
-    await sleep(200)
-    g.armRestructure()
-    await sleep(150)
-    const moving = g.towers[0]
-    const fromSpot = moving.spot
-    g.doRestructure(moving.x, moving.y)
-    await sleep(150)
-    const free = g.build.freeSpots()[0]
-    g.doRestructure(free.x, free.y)
-    await sleep(300)
-    const msg = g.status.message
-    const left = g.cooldowns.secondsLeft('restructure')
-    note('after a completed move: spot ' + fromSpot + ' -> ' + moving.spot)
-    note('  the instruction line says: "' + msg + '"')
-    note('  the cooldown has ' + left.toFixed(1) + 's left')
-    if (/\d+s/.test(msg)) note('   *** the instruction line is holding a countdown ***')
-    if (msg.length > 40) note('   *** the confirmation is a paragraph, not a line ***')
-    // AND IT TICKS SOMEWHERE. The Restructure slot stays on the glass while it
-    // recharges, even once DAD MODE has ended, because that is the only live
-    // readout there is.
-    g.hero.lastStandActive = false
-    await sleep(500)
-    const rslot = hud.slots.find((sl) => sl.region.id === 'restructure')
-    note('  with DAD MODE over and ' + g.cooldowns.secondsLeft('restructure').toFixed(1) +
-      's left: slot icon visible = ' + rslot.icon.visible +
-      '  timer reads "' + rslot.timer.text + '"')
-    if (!rslot.icon.visible) note('   *** the only live readout vanished with DAD MODE ***')
-    if (!rslot.timer.text) note('   *** the slot is shown but not counting ***')
-    const t1 = rslot.timer.text
-    await sleep(2200)
-    note('  two seconds later the timer reads "' + rslot.timer.text + '"')
-    if (rslot.timer.text === t1) note('   *** the countdown is frozen ***')
-    await shot('restructure-04-cooldown-' + VP.w + 'x' + VP.h)
-    return
-  }
+  // The `restructure` scenario is gone with the ability. It was the harness's
+  // most-used page for a while -- a hidden slot that still hit-tested, a
+  // handler that trusted the frame before it, and a greyed icon where an empty
+  // socket belonged were all found here. The slot machinery it exercised is
+  // still in HudScene, deliberately, and the next transient ability inherits
+  // both the machinery and the reason for it.
 
   if (scenario === 'leak') {
     // The reported crash: a stale ScaleManager listener belonging to a dead
@@ -7781,18 +7612,18 @@ async function run() {
       if (!slot) return 'no slot ' + i
       let fired = 0
       const orig = g.armAbility.bind(g)
-      const origH = g.castHaymaker.bind(g)
-      const origR = g.armRestructure.bind(g)
+      const origH = g.castHeroSlot1.bind(g)
+      const origP = g.castHeroSlot2.bind(g)
       g.armAbility = (id) => { fired++; return orig(id) }
-      g.castHaymaker = () => { fired++; return origH() }
-      g.armRestructure = () => { fired++; return origR() }
+      g.castHeroSlot1 = () => { fired++; return origH() }
+      g.castHeroSlot2 = () => { fired++; return origP() }
       const b = slot.hit.getBounds()
       await click(b.centerX, b.centerY)
       await sleep(160)
       // Disarm, so the next probe tap cannot be read as casting this one.
       g.status.pendingAbility = null
       g.status.mode = 'normal'
-      g.armAbility = orig; g.castHaymaker = origH; g.armRestructure = origR
+      g.armAbility = orig; g.castHeroSlot1 = origH; g.castHeroSlot2 = origP
       return fired > 0 ? 'REACHED' : 'DEAD'
     }
 

@@ -175,16 +175,20 @@ test('every pad reaches a lane, and none of them stands in one', () => {
   }
 })
 
-test('the hero starts on the board, clear of both lanes', () => {
-  const [x, y] = M.heroStart as [number, number]
+test('the board centre, where the hero now starts, is off this level\'s road', () => {
+  // The per-map `heroStart` is gone: the hero starts at the centre of the
+  // board on every level, and tests/logic.test.ts owns that rule. What is
+  // still worth knowing HERE is how tight the centre is on this particular
+  // plate, because level 3 is the tightest of the three -- a fork puts road on
+  // both sides of the middle.
   const routes = [toPoly(M.waypoints), ...M.lanes.map((l) => toPoly(l.waypoints))]
-  const d = Math.min(...routes.map((r) => distToPoly(x, y, r))) - M.roadWidth / 2
-  assert.ok(d >= 90, `he stands ${d.toFixed(1)}px from the road's edge`)
-  // He is about 120 world px tall and heroStart is his FEET, so his head has to
-  // clear the top of the board. The value this guards against put level 2's
-  // hero at y=128 with his head over the edge.
-  assert.ok(y - 120 > 0, `his head is at y=${(y - 120).toFixed(0)}, off the top of the board`)
-  assert.ok(y < 720 && x > 0 && x < 1280, 'he does not start on the board at all')
+  const d = Math.min(...routes.map((r) => distToPoly(640, 360, r))) - M.roadWidth / 2
+  assert.ok(d > 0, `the centre is ${d.toFixed(1)}px INSIDE the road`)
+  // 20.9 px as measured. His footprint is about 55 px wide, so it overlaps the
+  // track -- he stands at the roadside rather than back from it, which on a
+  // fork is where a hero is worth most. Recorded so a re-traced plate that
+  // moved the lanes over the middle of the board is a failure here.
+  assert.ok(d > 15, `the centre is only ${d.toFixed(1)}px off the road's edge`)
 })
 
 /* --------------------------------------------------------------- the waves */

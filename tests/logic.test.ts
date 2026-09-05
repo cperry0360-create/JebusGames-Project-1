@@ -205,10 +205,55 @@ test('spots cover the whole walk, not just the near end', () => {
     `-${(fractions[fractions.length - 1] * 100).toFixed(0)}% of the walk`)
 })
 
-test('the hero rallies on open ground, away from the road', () => {
-  const [x, y] = map.heroStart
-  assert.ok(x > 0 && x < display.width && y > 0 && y < display.height, 'hero start is off the plate')
-  assert.ok(lane.distanceTo(x, y) > map.spotRadius, 'the hero starts standing in the road')
+/**
+ * THE HERO STARTS AT THE CENTRE OF THE BOARD, ON EVERY LEVEL.
+ *
+ * This replaces a per-map `heroStart`, and it replaces three separate tests --
+ * one per level -- that each checked a different measured value against a
+ * different set of clearances. The old scheme owed every new painting a
+ * measurement, and level 2 shipped one that put the hero's head above the top
+ * of the board because nothing checked it until afterwards. A rule that is the
+ * same on every map cannot go wrong that way, and it is checked here once for
+ * all of them.
+ *
+ * What is NOT claimed any more is roadside clearance. Level 3's centre is
+ * 20.9 px outside its road's edge, so his footprint overlaps the track; that
+ * is a consequence of the rule and is recorded rather than asserted away.
+ */
+test('the hero starts at the centre of the board, on every level', () => {
+  const HERO_HEIGHT = 120
+  const cx = display.width / 2
+  const cy = display.height / 2
+
+  for (const name of ['map', 'map_level2', 'map_level3']) {
+    const m = read(name)
+    assert.equal(m.heroStart, undefined, `${name} still declares a heroStart`)
+    assert.equal(m._heroStart, undefined, `${name} still carries a heroStart note`)
+
+    // FEET, so the head is HERO_HEIGHT above and the sprite has to clear the
+    // top edge as well as the bottom one.
+    assert.ok(cy - HERO_HEIGHT > 0,
+      `his head is at y=${cy - HERO_HEIGHT}, off the top of the board`)
+    assert.ok(cy < display.height && cx > 0 && cx < display.width,
+      'the centre of the board is not on the board')
+
+    // Not standing IN the road on any of them. The margin varies by map and is
+    // reported by the level reports rather than fixed here.
+    const routes: number[][][] = m.lanes
+      ? Object.values(m.lanes as Record<string, { waypoints: number[][] }>).map((l) => l.waypoints)
+      : []
+    if (m.waypoints) routes.push(m.waypoints)
+    const clear = Math.min(...routes.map((r) => new Path(r).distanceTo(cx, cy))) - m.roadWidth / 2
+    assert.ok(clear > 0, `${name}: the hero starts ${clear.toFixed(1)}px inside the road`)
+  }
+
+  // And nothing reads a per-map value any more.
+  const game = readFileSync(new URL('../src/scenes/GameScene.ts', import.meta.url), 'utf8')
+  assert.match(game, /const HERO_START: readonly \[number, number\] = \[displayData\.width \/ 2, displayData\.height \/ 2\]/,
+    'the hero start is not the centre of the design box')
+  assert.doesNotMatch(
+    game.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n'),
+    /map\.heroStart/, 'something still reads a per-map hero start')
 })
 
 // --------------------------------------------------------------- build system

@@ -28,6 +28,7 @@ import draftData from '../../src/data/draft.json' with { type: 'json' }
 
 import { DEFAULT_LEVEL_ID, loadLevel, towerWeightsFor } from '../../src/systems/Levels.ts'
 import { DEFAULT_HERO_ID, HERO_IDS, resolveHeroId } from '../../src/systems/Heroes.ts'
+import { SLOT1, isAreaSkill } from '../../src/systems/HeroSkills.ts'
 import {
   TRANSFORM_INVULNERABLE_SECONDS, damageToHero, shouldTransform,
 } from '../../src/systems/Transform.ts'
@@ -262,7 +263,7 @@ export function simulate(
   const spawner = new WaveSpawner()
   const cooldowns = new Cooldowns()
   for (const id of draftedAbilities) cooldowns.register(id, ABILITIES[id].cooldown)
-  cooldowns.register('haymaker', hero.haymaker.cooldown)
+  cooldowns.register(SLOT1, hero.slot1.cooldown)
 
   let peanuts = openingPurse(
     RULES.startingPeanuts, RULES.startingPeanutsMargin,
@@ -617,21 +618,50 @@ export function simulate(
         }
       }
     }
-    if (mode !== 'noabilities' && cooldowns.ready('haymaker') && !heroState.down) {
-      const target = pickNearest(
-        enemies.filter((e) => e.alive) as any, heroState.x, heroState.y, hero.haymaker.range,
+    // SLOT 1, whichever hero is standing here. All five are modelled, not
+    // just Cory's punch: the soak picks a hero per run, and a Bailey run whose
+    // Bark did nothing would report a hero that is weaker than the one the
+    // player has.
+    const k = hero.slot1
+    if (mode !== 'noabilities' && cooldowns.ready(SLOT1) && !heroState.down) {
+      const area = isAreaSkill(k)
+      const target = area ? null : pickNearest(
+        enemies.filter((e) => e.alive) as any, heroState.x, heroState.y, k.range,
       ) as SimEnemy | null
-      if (target) {
-        cooldowns.start('haymaker')
-        firedAbilities.add('haymaker')
-        hurtEnemy(target, hero.haymaker.damage, hero.haymaker.ignoresArmor)
-        // BOTH DISTANCES, as Enemy.ts does it. `distance` is progress and
-        // `laneDistance` is where the enemy actually stands; moving only the
-        // first would drop the target's priority without moving it an inch,
-        // which is the Haymaker doing nothing but damage.
-        const back = Math.min(hero.haymaker.knockbackPixels, target.laneDistance, target.distance)
-        target.distance -= back
-        target.laneDistance -= back
+      const caught = area
+        ? withinRadius(enemies.filter((e) => e.alive) as any,
+                       heroState.x, heroState.y, k.radius) as SimEnemy[]
+        : []
+      if (target || caught.length > 0) {
+        cooldowns.start(SLOT1)
+        firedAbilities.add(SLOT1)
+        if (target) {
+          // Every hit it lands, including the ones a real Quick Cut spaces out
+          // over a fifth of a second -- close enough at this resolution, and a
+          // second hit that is skipped when the first kills is modelled by
+          // hurtEnemy ignoring a corpse.
+          for (let i = 0; i < k.hits; i++) hurtEnemy(target, k.damage, k.ignoresArmor)
+          // The burn, applied whole. It arrives over four seconds in the game
+          // and at once here, which flatters Ember slightly on a target that
+          // was going to die anyway and is worth knowing when its numbers move.
+          if (k.burnSeconds > 0) {
+            hurtEnemy(target, k.burnPerSecond * k.burnSeconds, k.ignoresArmor)
+          }
+          // BOTH DISTANCES, as Enemy.ts does it. `distance` is progress and
+          // `laneDistance` is where the enemy actually stands; moving only the
+          // first would drop the target's priority without moving it an inch,
+          // which is the Haymaker doing nothing but damage.
+          if (k.knockbackPixels > 0) {
+            const back = Math.min(k.knockbackPixels, target.laneDistance, target.distance)
+            target.distance -= back
+            target.laneDistance -= back
+          }
+        }
+        for (const e of caught) {
+          if (k.damage > 0) hurtEnemy(e, k.damage, k.ignoresArmor)
+          if (k.stunSeconds > 0) applyStun(e, k.stunSeconds)
+          if (k.slowSeconds > 0) applySlow(e, k.slowFactor, k.slowSeconds)
+        }
       }
     }
   }
