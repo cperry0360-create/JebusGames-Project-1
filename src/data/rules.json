@@ -59,5 +59,11 @@
   "laneSpread": {
     "fraction": 0.72,
     "_note": "How much of the room between an enemy's own edge and the edge of the painted road it may wander into, chosen once at spawn. 0 puts every enemy back on the centreline, which is where they all were: a wave was a single file and two enemies at different speeds walked straight through each other. 0.72 keeps everyone clear of the paint's edge. It is in rules rather than presentation because it is not only a look — a splash radius now covers a band rather than a line."
+  },
+  "heroTransform": {
+    "_note": "THE TWO-STATE HERO. A hero starts in base form and changes the first time its health is at or below `belowHealth` of its maximum, for the rest of that life. `damageTaken` 0.6 is the 40% reduction; `invulnerableSeconds` is grace at the moment of the swap so the hero cannot be deleted mid-change. Death and respawn put it back to base at full health, and it has to earn the change again.",
+    "belowHealth": 0.5,
+    "damageTaken": 0.6,
+    "invulnerableSeconds": 1.5
   }
 }

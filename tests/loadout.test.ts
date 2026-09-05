@@ -81,6 +81,14 @@ test('the loadout is built so cards can be dealt face down later', () => {
     assert.ok(!body.includes('platePanel('),
       `${section} draws its own plate instead of going through card()`)
   }
+  // The hero row's picker tiles go INSIDE that card rather than beside it: a
+  // tile that built its own plate would be a sixth card in a three-card
+  // screen, and the reveal would not know about it.
+  const tile = s.slice(s.indexOf('private heroTile('), s.indexOf('private pickHero('))
+  assert.ok(tile.length > 0, 'the hero picker is gone')
+  assert.ok(!/this\.(card|cardRow|platePanel)\(/.test(tile),
+    'a hero tile builds a card of its own instead of sitting on the hero card')
+  assert.match(s, /c\.face\.add\(this\.heroTile\(/, 'the tiles are not on the card face')
   assert.match(s, /c\.face\.add\(/, 'nothing puts content on a card face at all')
 })
 
@@ -154,9 +162,13 @@ test('the reroll is one whole-hand redeal, and its count is data', () => {
   // One deal function, so a redeal cannot draw by different rules than the
   // opening hand did, and it redeals everything rather than one slot.
   const deal = s.slice(s.indexOf('private deal('), s.indexOf('private reroll('))
-  for (const part of ['heroId', 'abilities', 'openingTowers', 'reserveTowers']) {
+  for (const part of ['abilities', 'openingTowers', 'reserveTowers']) {
     assert.ok(deal.includes(part), `a redeal does not redraw ${part}`)
   }
+  // AND NOT THE HERO. It was in this list while the hero was dealt with
+  // everything else; the hero is a choice now, and a reroll that quietly
+  // replaced it would be taking the one decision this screen exists for.
+  assert.ok(!deal.includes('heroId'), 'a reroll still redeals the hero')
   assert.match(s, /this\.deal\(runState\(\)\.seed/, 'a redeal is not derived from the run seed')
 })
 
@@ -244,6 +256,40 @@ test('the loadout fits the design box with room for the buttons', () => {
     'the ladder bottoms out below 18px, which is not readable on a phone')
 })
 
+test('the hero picker fits five heroes even in the narrow column', () => {
+  // Arithmetic, since CI has no renderer. The row is ONE card with five
+  // picker tiles in it, and the tile is what the numbers have to clear: at
+  // the narrowest the panel ever gets, a tile still has to hold a portrait
+  // and a name at the bottom rung of the type ladder.
+  const P = read('presentation') as any
+  const LO = P.loadout
+  const roster = Object.keys(read('heroes')).filter((id) => !id.startsWith('_'))
+  assert.equal(roster.length, 5, 'the roster changed size; these numbers were measured for five')
+
+  const tile = Math.floor((LO.minContentWidth - LO.heroCardGap * (roster.length - 1)) / roster.length)
+  assert.ok(tile >= 90, `a ${tile}px tile cannot hold a portrait and a name`)
+  assert.ok(tile >= LO.heroPortrait + 8,
+    `a ${LO.heroPortrait}px portrait does not fit a ${tile}px tile with its frame`)
+
+  // The longest NAME has to sit on one line in that tile at the bottom rung
+  // of the ladder, or the picker labels wrap and the strip grows. 0.62em is a
+  // conservative average for a bold uppercase UI sans.
+  // The tile steps the name down from the bottom rung to `heroNameMin`, and
+  // the FLOOR is what has to fit: below it the label stops shrinking and
+  // wraps instead. 0.62em is a conservative average for a bold uppercase UI
+  // sans.
+  const longest = Math.max(...roster.map((id) => (read('heroes') as any)[id].name.length))
+  assert.ok(longest * LO.heroNameMin * 0.62 <= tile,
+    `the longest hero name needs ${Math.ceil(longest * LO.heroNameMin * 0.62)}px in a ${tile}px tile`)
+  assert.ok(LO.heroNameMin >= 15, `a ${LO.heroNameMin}px picker label is not readable on a phone`)
+  assert.ok(LO.heroNameMin <= LO.bodySizes[LO.bodySizes.length - 1],
+    'the name floor is above the ladder it steps down from, so it can never be reached')
+
+  // And the strip has to leave the description a readable share of the row.
+  assert.ok(LO.rowShares.hero >= LO.rowShares.towers,
+    'the hero row is now the picker and the description; it cannot be the shortest row')
+})
+
 test('every hero, tower and special is covered, and none is too long to fit', () => {
   // Enumerated, not sampled. The budget is the measured worst case: at
   // 568x320 the narrowest card gives a 162px text column, and the deepest
@@ -262,7 +308,9 @@ test('every hero, tower and special is covered, and none is too long to fit', ()
 
   let combinations = 0
   const tooLong: string[] = []
-  for (const [hid, h] of Object.entries(heroes) as [string, any][]) {
+  // `_note` and `_stats` document the roster; they are not heroes.
+  const heroIds = Object.entries(heroes).filter(([id]) => !id.startsWith('_')) as [string, any][]
+  for (const [hid, h] of heroIds) {
     for (const [tid, t] of Object.entries(towers) as [string, any][]) {
       for (const [aid, a] of Object.entries(abilities) as [string, any][]) {
         combinations++
@@ -278,7 +326,7 @@ test('every hero, tower and special is covered, and none is too long to fit', ()
       }
     }
   }
-  assert.equal(combinations, Object.keys(heroes).length * Object.keys(towers).length
+  assert.equal(combinations, heroIds.length * Object.keys(towers).length
     * Object.keys(abilities).length, 'not every combination was enumerated')
   assert.deepEqual([...new Set(tooLong)], [],
     'a card body is longer than the longest one measured to fit')

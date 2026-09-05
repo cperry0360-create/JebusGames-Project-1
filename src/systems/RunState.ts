@@ -34,7 +34,10 @@ export interface RunState {
 }
 
 const state: RunState = {
-  heroId: 'cory',
+  // EMPTY, not 'cory'. The hero is the player's choice now, and the loadout
+  // screen fills this from the save on the way in; a hardcoded default here
+  // would be truthy and would quietly beat the remembered pick.
+  heroId: '',
   levelId: DEFAULT_LEVEL_ID,
   abilities: [],
   openingTowers: [],

@@ -9,6 +9,10 @@ const url = (p: string) => new URL(p, import.meta.url)
 const read = (n: string) => JSON.parse(readFileSync(url(`../src/data/${n}.json`), 'utf8'))
 const src = (p: string) => readFileSync(url(`../src/${p}`), 'utf8')
 const towers = read('towers'), rules = read('rules')
+/** Heroes only. `_note` and `_stats` in heroes.json document the roster's
+ *  shape, and a loop that treats them as heroes asks a string for its stats. */
+const heroEntries = (src: any): Array<[string, any]> =>
+  Object.entries(src).filter(([id]) => !id.startsWith('_')) as Array<[string, any]>
 
 test('no interaction anywhere in the game is keyboard-only', () => {
   // A key is allowed as a *shortcut*. It may never be the only way to do
@@ -345,6 +349,10 @@ test('a downed hero comes back, and says where and when', () => {
   assert.match(hero, /this\.health = this\.def\.maxHealth/, 'he returns hurt')
   // Last Stand is once per encounter, revive or no revive.
   const body = hero.slice(hero.indexOf('private revive(): void {'), hero.indexOf('get returnPoint'))
+    // Comments stripped: one of them explains that `lastStandUsed` is
+    // deliberately NOT reset here, and deleting that reasoning to satisfy a
+    // regex would throw away the only record of why.
+    .split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n')
   assert.ok(body.length > 0, 'revive() not found')
   assert.ok(!/lastStandUsed/.test(body),
     'the revive re-arms Last Stand, which makes it a cooldown rather than a climax')
@@ -365,7 +373,7 @@ test('a downed hero comes back, and says where and when', () => {
 
 test('the revive timer is data, not a number typed into a scene', () => {
   const heroes = JSON.parse(readFileSync(url('../src/data/heroes.json'), 'utf8'))
-  for (const [id, h] of Object.entries(heroes) as [string, any][]) {
+  for (const [id, h] of heroEntries(heroes)) {
     assert.equal(typeof h.reviveSeconds, 'number', `${id} has no revive timer`)
     // Long enough that losing him still costs most of a wave.
     assert.ok(h.reviveSeconds >= 15, `${id} is back in ${h.reviveSeconds}s, which costs nothing`)
@@ -412,7 +420,7 @@ test('a new rally point overrides combat', () => {
 
 test('breaking off a fight costs something, from JSON', () => {
   const heroes = JSON.parse(readFileSync(url('../src/data/heroes.json'), 'utf8'))
-  for (const [id, h] of Object.entries(heroes) as [string, any][]) {
+  for (const [id, h] of heroEntries(heroes)) {
     const r = h.retreat
     assert.ok(r, `${id} can retreat for free`)
     assert.ok(r.vulnerableSeconds > 0, `${id}'s retreat opens no window`)

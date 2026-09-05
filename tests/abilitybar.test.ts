@@ -161,62 +161,58 @@ test('a hidden ability keeps its slot, so nothing else moves', () => {
     'restructure must stay in the slot list even while it is hidden')
 })
 
-test('the HUD hides Restructure rather than removing it', () => {
+test('Restructure is gone, and the machinery it forced into existence is not', () => {
+  // THE ABILITY IS CUT. It let the player move a tower, it was gated on DAD
+  // MODE, and it went round a full loop in its life -- gate off because a
+  // player who never dropped to 25% never learned towers could move, then a
+  // free MOVE on every tower panel, then the gate back on because a permanent
+  // free button made the reward worthless. It is now simply removed, and the
+  // discoverability problem it was trying to solve goes with it.
   const hud = readFileSync(new URL('../src/scenes/HudScene.ts', import.meta.url), 'utf8')
-  // Visibility is decided per frame from the run's state, not by rebuilding
-  // the bar with a different set of slots.
-  // Shown during DAD MODE, and afterwards only while the cooldown is still
-  // running — the countdown is a status and this slot is where it ticks. It
-  // used to be announced on the instruction row instead, which held that row
-  // for sixteen seconds with a number that was wrong after the first one.
-  assert.match(hud, /slotShown\([\s\S]{0,900}s\.lastStand \|\| !this\.world\.cooldowns\.ready\('restructure'\)/,
-    'Restructure is not gated on DAD MODE in the HUD')
-  assert.match(hud, /slotUsable[\s\S]{0,200}kind === 'restructure'\) return s\.lastStand/,
-    'a Restructure slot left on screen for its cooldown is castable outside DAD MODE')
-  // A hidden slot is out of hit-testing entirely, not merely flagged off:
-  // `input.enabled = false` leaves the rectangle registered, hovering, and
-  // swallowing the press.
+  const game = readFileSync(new URL('../src/scenes/GameScene.ts', import.meta.url), 'utf8')
+  const heroes = JSON.parse(
+    readFileSync(new URL('../src/data/heroes.json', import.meta.url), 'utf8'))
+  const art = JSON.parse(readFileSync(new URL('../src/data/art.json', import.meta.url), 'utf8'))
+
+  // Nothing left in the DATA, which is what a player could actually meet.
+  for (const [id, h] of Object.entries(heroes) as [string, any][]) {
+    assert.equal(h.restructure, undefined, `${id} still carries a restructure block`)
+  }
+  assert.equal(art.files['ability-restructure'], undefined, 'the icon is still in the manifest')
+  assert.equal(art.render['ability-restructure'], undefined, 'the icon still has a render entry')
+
+  // And nothing in the CODE. Comments are exempt on purpose: two of them
+  // record why there is no MOVE on the tower panel and why the slot machinery
+  // below exists, and deleting that history to satisfy a regex is the wrong
+  // tidy -- it is exactly the reasoning a future change needs.
+  for (const [name, src] of [['HudScene', hud], ['GameScene', game]] as const) {
+    const code = src.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n')
+    assert.doesNotMatch(code, /[Rr]estructure/, `${name} still has Restructure code in it`)
+  }
+  // Cory keeps Haymaker.
+  assert.equal(heroes.cory.haymaker.name, 'Haymaker')
+
+  // A free permanent MOVE is not the answer either, and never was.
+  const code = game.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n')
+  assert.doesNotMatch(code, /id: 'move'/, 'MOVE is back on the tower panel')
+  assert.doesNotMatch(code, /Tap a free pad/, "the tower panel's move instruction is back")
+
+  // THE HIDE MACHINERY STAYS. Restructure was the one slot that came and went
+  // mid-fight, and getting that right cost three bugs: a hidden slot that
+  // still hit-tested, a handler that trusted the frame before it, and a greyed
+  // icon where an empty socket belonged. Nothing hides today -- `slotShown`
+  // returns true -- but the next transient ability will, and deleting this
+  // would re-open all three.
   assert.match(hud, /slot\.hit\.disableInteractive\(\)/,
     'a hidden slot is not taken out of hit-testing')
   assert.match(hud, /slot\.hit\.setVisible\(shown\)/,
     'a hidden slot still renders, so Phaser will still hit-test it')
   assert.ok(!/slot\.hit\.input!\.enabled/.test(hud),
     'the hidden slot is still relying on the flag that was not enough')
-  // And the handler refuses on its own, so no frame window can dispatch one.
   assert.match(hud, /if \(!this\.slotShown\(region, this\.world\.status\)\) return/,
     'the slot handler dispatches without checking the slot is shown')
-  // An empty socket, not a greyed copy of the icon.
   assert.match(hud, /strokeCircle\(r\.cx, r\.cy, r\.boxH \/ 2 - e\.inset\)/,
     'the reserved slot is not drawn as an empty socket')
-
-  /*
-   * THE DAD MODE GATE IS BACK, and the round trip is worth recording.
-   *
-   * It came off because Last Stand fires once per encounter at 25% health, so
-   * the only route to moving a tower was to nearly die first and a player who
-   * never dropped that low never learned towers could move at all. The answer
-   * chosen then was a free MOVE button on every tower's own panel, always
-   * available — which solved discoverability by making the reward worthless:
-   * Last Stand handed the player a thing they already had in their pocket.
-   *
-   * MOVE is off the tower panel now and the gate is back on the ability. The
-   * discoverability problem is real and is a separate one to solve; solving it
-   * by giving the reward away permanently was the wrong trade.
-   */
-  const game = readFileSync(new URL('../src/scenes/GameScene.ts', import.meta.url), 'utf8')
-  assert.match(game, /armRestructure\(\): void \{[\s\S]{0,600}?lastStandActive/,
-    'the DAD MODE gate on armRestructure is gone again')
-  assert.match(game, /armRestructure\(\): void \{[\s\S]{0,600}?cooldowns\.ready\('restructure'\)/,
-    'the cooldown is no longer checked either')
-  // And the panel must not offer it: a free permanent MOVE is what made the
-  // ability redundant in the first place.
-  // Code only. The comment where MOVE used to be names the line it deleted,
-  // and deleting that history to satisfy a regex would be the wrong tidy.
-  const code = game.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n')
-  assert.doesNotMatch(code, /id: 'move'/, 'MOVE is back on the tower panel')
-  assert.doesNotMatch(code, /Tap a free pad/, "the tower panel's move instruction is back")
-  assert.match(game, /cancelRestructure\(\)/,
-    'a relocation in progress is not cancelled when DAD MODE ends')
 })
 
 test('a disabled button stops taking the pointer, not just the click', () => {

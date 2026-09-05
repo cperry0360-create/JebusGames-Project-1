@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import type { AbilityDef, DraftDef, HeroDef, TowerDef } from '../types.ts'
 import displayData from '../data/display.json'
-import heroesData from '../data/heroes.json'
+import { chooseHero, chosenHero, heroList } from '../systems/Heroes.ts'
 import towersData from '../data/towers.json'
 import abilitiesData from '../data/abilities.json'
 import draftData from '../data/draft.json'
@@ -21,7 +21,6 @@ import { play } from '../systems/Audio.ts'
 import { musicForScene } from '../systems/Music.ts'
 import { viewH, viewW } from '../systems/Resolution.ts'
 
-const HEROES = heroesData as Record<string, HeroDef>
 const TOWERS = towersData as Record<string, TowerDef>
 const ABILITIES = abilitiesData as Record<string, AbilityDef>
 const DRAFT = draftData as DraftDef
@@ -80,6 +79,10 @@ export class LoadoutScene extends Phaser.Scene {
     // fourteen it thought it was forcing. Title clears the hand when a run
     // starts, so a fresh run still gets a fresh draw.
     if (runState().openingTowers.length === 0) this.deal(runState().seed)
+    // The remembered pick, applied before the first render. A save with no
+    // choice in it resolves to the default, which is Cory -- so a player who
+    // never touches the row plays exactly the game that was tuned.
+    if (!runState().heroId) setRunState({ heroId: chosenHero() })
 
     this.contentWidth = this.drawBackdrop()
     this.render()
@@ -104,12 +107,11 @@ export class LoadoutScene extends Phaser.Scene {
   private deal(seed: number): void {
     const rng = makeRng(seed)
 
-    // Phase 1 has one hero, so this draws Cory every time. It is written as a
-    // draw anyway: the reroll is specified as rerolling the hero too, and the
-    // day a second hero lands this needs no edit.
-    const heroPool = Object.keys(HEROES)
-    const heroId = heroPool[Math.floor(rng() * heroPool.length)] ?? 'cory'
-
+    // THE HERO IS NOT DEALT. It used to be drawn with everything else, back
+    // when there was one of them and a draw was indistinguishable from a
+    // constant. With five it is a decision, so it is made by the player in the
+    // HERO row and remembered in the save -- and reroll, below, redeals the
+    // towers and the specials and leaves it alone.
     // Server Nuke is a mid-run drop, never a starting hand.
     const pool = Object.keys(ABILITIES).filter((id) => ABILITIES[id].draftable)
     const abilities = draftAbilities(pool, DRAFT.abilitiesDrawn, rng)
@@ -122,7 +124,7 @@ export class LoadoutScene extends Phaser.Scene {
       .map(([id, t]) => ({ id, weight: weights[id]!, archetype: t.archetype }))
     const opening = draftOpeningTowers(towerPool, DRAFT, rng)
     const reserve = reserveTowers(towerPool, opening, rng)
-    setRunState({ heroId, abilities, openingTowers: opening, reserveTowers: reserve })
+    setRunState({ abilities, openingTowers: opening, reserveTowers: reserve })
   }
 
   /**
@@ -256,7 +258,6 @@ export class LoadoutScene extends Phaser.Scene {
     this.layer = this.add.container(0, 0)
     this.cards = []
     const run = runState()
-    const hero = HEROES[run.heroId] ?? HEROES.cory
 
     const title = this.add.text(W / 2, 8, 'YOUR LOADOUT', {
       fontFamily: FONT_DISPLAY, fontSize: '44px', color: COLOR.ink,
@@ -290,7 +291,7 @@ export class LoadoutScene extends Phaser.Scene {
     }
 
     let y = top
-    y = this.heroSection(hero, y, heights.hero) + LO.sectionGap
+    y = this.heroSection(run.heroId, y, heights.hero) + LO.sectionGap
     y = this.towerSection(run.openingTowers, y, heights.towers) + LO.sectionGap
     this.abilitySection(run.abilities, y, heights.specials)
 
@@ -427,54 +428,146 @@ export class LoadoutScene extends Phaser.Scene {
     return c
   }
 
-  private heroSection(hero: HeroDef, top: number, height: number): number {
+  /**
+   * The HERO row: every hero on one card, one tap, and the choice remembered.
+   *
+   * NOT A DEAL. It used to be one card showing whatever the draft handed you,
+   * which was indistinguishable from a constant while there was one hero. With
+   * five it is the decision this screen exists for, so every hero is on it,
+   * the pick is a tap, and REROLL -- which redeals the towers and the specials
+   * -- leaves it alone.
+   *
+   * ONE CARD WITH A PICKER STRIP, not five cards. Five cards across the 720px
+   * content column is 130px each, and a 63-character description in a 114px
+   * text column needs six lines: it only fits at about 11px, and this screen's
+   * own floor is 18px because the whole design box is fitted down to the
+   * viewport. So the portraits and the names sit in a strip -- every hero
+   * visible, tappable and highlighted -- and the selected hero's description
+   * and ability names are written underneath at full width, where they are
+   * read at the same size as every other card's body.
+   */
+  private heroSection(selectedId: string, top: number, height: number): number {
     const y = this.heading('HERO', top)
     const w = this.contentWidth
-    const x = W / 2 - w / 2
-    const h = height
+    const c = this.card(W / 2 - w / 2, y, w, height)
+    const frame = this.frameInsetFor(w, height)
+    const pad = Math.max(LO.cardPad, Math.ceil(Math.max(frame.left, frame.right)))
+    const padT = Math.max(LO.cardPad, Math.ceil(frame.top))
+    const padB = Math.max(LO.cardPad, Math.ceil(frame.bottom))
+    const innerW = w - pad * 2
+    const innerH = height - padT - padB
 
-    const frame = this.frameInsetFor(w, h)
-    const pad = Math.max(LO.cardPad, Math.ceil(Math.max(frame.left, frame.top, frame.bottom)))
-    const portraitBox = Math.min(104, h - pad * 2)
-    const textX = -w / 2 + pad + portraitBox + 18
-    const textW = w - pad - portraitBox - 18 - pad
-    const room = h - pad * 2
+    const roster = heroList()
+    const selected = roster.find((h) => h.id === selectedId) ?? roster[0]!
 
-    // One size for the whole card, like the tower and special cards. The name
-    // used to be a fixed 26px and could not give ground, so a shorter hero row
-    // pushed CORY out through the top of his own frame.
-    let built: { name: Phaser.GameObjects.Text; line: Phaser.GameObjects.Text;
-      kit: Phaser.GameObjects.Text; total: number } | null = null
+    // The blurb and the kit, at the largest size on the shared ladder that
+    // fits the third of the card they are allowed. Built first, because what
+    // is left over is what the portraits get.
+    const textRoom = Math.floor(innerH * 0.42)
+    let text: { parts: Phaser.GameObjects.Text[]; total: number } | null = null
     for (const size of LO.bodySizes) {
-      built?.name.destroy(); built?.line.destroy(); built?.kit.destroy()
-      const name = this.add.text(textX, 0, hero.name.toUpperCase(), {
-        fontFamily: FONT_UI, fontSize: `${size + 4}px`, fontStyle: 'bold',
-        color: COLOR.ink, letterSpacing: 2,
-      }).setOrigin(0, 0)
-      const line = this.add.text(textX, 0, hero.blurb, {
+      text?.parts.forEach((p) => p.destroy())
+      const blurb = this.add.text(0, 0, selected.def.blurb, {
         fontFamily: FONT_UI, fontSize: `${size}px`, color: COLOR.dim, ...BODY_SPACING,
-        wordWrap: { width: textW },
-      }).setOrigin(0, 0)
-      const kit = this.add.text(textX, 0, `${hero.haymaker.name}  ·  ${hero.restructure.name}`, {
-        fontFamily: FONT_UI, fontSize: `${size}px`, color: COLOR.good, letterSpacing: 1,
-      }).setOrigin(0, 0)
-      const total = name.height + 4 + line.height + 6 + kit.height
-      built = { name, line, kit, total }
-      if (total <= room) break
+        align: 'center', wordWrap: { width: innerW },
+      }).setOrigin(0.5, 0)
+      const kit = this.add.text(0, 0,
+        `${selected.def.haymaker.name} · ${selected.def.lastStand.name}`, {
+          fontFamily: FONT_UI, fontSize: `${size}px`, color: COLOR.good,
+          align: 'center', wordWrap: { width: innerW },
+        }).setOrigin(0.5, 0)
+      text = { parts: [blurb, kit], total: blurb.height + 2 + kit.height }
+      if (text.total <= textRoom) break
     }
-    const b = built as NonNullable<typeof built>
+    const t = text as NonNullable<typeof text>
 
-    const c = this.card(x, y, w, h)
-    let ty = pad + Math.max(0, (room - b.total) / 2)
-    b.name.setY(ty); ty += b.name.height + 4
-    b.line.setY(ty); ty += b.line.height + 6
-    b.kit.setY(ty)
+    const gap = LO.heroCardGap
+    const tileW = Math.floor((innerW - gap * (roster.length - 1)) / roster.length)
+    const stripH = innerH - t.total - 6
+    const left = -w / 2 + pad
 
-    const portrait = this.add.image(-w / 2 + pad + portraitBox / 2, h / 2, hero.portraitSprite)
-    fitInBox(portrait, hero.portraitSprite, portraitBox)
-    c.face.add([portrait, b.name, b.line, b.kit])
-    return y + h
+    for (const [i, { id, def }] of roster.entries()) {
+      const cx = left + i * (tileW + gap) + tileW / 2
+      c.face.add(this.heroTile(def, id, id === selected.id, cx, -height / 2 + padT, tileW, stripH))
+    }
+
+    let ty = height / 2 - padB - t.total
+    for (const [i, p] of t.parts.entries()) {
+      p.setY(ty)
+      ty += p.height + (i === 0 ? 2 : 0)
+    }
+    c.face.add(t.parts)
+    return y + height
   }
+
+  /**
+   * One hero in the picker strip: a portrait, a name, and a tap.
+   *
+   * The name stays on the bottom rung of the shared type ladder rather than
+   * being shrunk to fit a tile -- a label nobody can read is not a picker.
+   */
+  private heroTile(
+    hero: HeroDef, id: string, selected: boolean,
+    cx: number, top: number, w: number, h: number,
+  ): Phaser.GameObjects.Container {
+    const tile = this.add.container(cx, top + h / 2)
+    // The bottom rung of the shared ladder, stepped down only as far as this
+    // tile needs. MEASURED rather than assumed: a name's width is a font
+    // question, and this is the one place that can ask it.
+    const rung = LO.bodySizes[LO.bodySizes.length - 1]!
+    let name!: Phaser.GameObjects.Text
+    for (let size = rung; size >= LO.heroNameMin; size--) {
+      name?.destroy()
+      name = this.add.text(0, 0, hero.name.toUpperCase(), {
+        fontFamily: FONT_UI, fontSize: `${size}px`, fontStyle: 'bold',
+        color: selected ? COLOR.amber : COLOR.ink, align: 'center',
+        wordWrap: { width: w },
+      }).setOrigin(0.5, 1)
+      if (name.width <= w - 4 || size === LO.heroNameMin) break
+    }
+    name.setY(h / 2 - 2)
+
+    const box = Math.max(24, Math.min(LO.heroPortrait, Math.min(w - 8, h - name.height - 6)))
+    const portrait = this.add.image(0, -h / 2 + box / 2 + 2, hero.portraitSprite)
+    fitInBox(portrait, hero.portraitSprite, box)
+    tile.add([portrait, name])
+
+    // THE HIGHLIGHT IS A RING PLUS A COLOUR PLUS A TICK, deliberately three
+    // things: a border alone is easy to miss on a phone at arm's length, and
+    // this is the one control on the screen that changes what the run is.
+    if (selected) {
+      const ring = this.add.graphics()
+      ring.lineStyle(3, 0xf0a830, 1).strokeRoundedRect(-w / 2, -h / 2, w, h, 8)
+      const tick = this.add.text(w / 2 - 4, -h / 2, '\u2713', {
+        fontFamily: FONT_UI, fontSize: `${rung}px`, fontStyle: 'bold', color: COLOR.amber,
+      }).setOrigin(1, 0)
+      tile.add([ring, tick])
+    } else {
+      tile.setAlpha(0.72)
+    }
+
+    const hit = this.add.rectangle(0, 0, w, h, 0xffffff, 0.001)
+      .setInteractive({ useHandCursor: true })
+    hit.on('pointerdown', () => this.pickHero(id))
+    tile.add(hit)
+    return tile
+  }
+
+  /**
+   * Takes a hero, remembers it, and redraws.
+   *
+   * Written to the save immediately rather than on BEGIN: a player who backs
+   * out to the title and comes back should find their pick still made, and the
+   * run state is cleared on the way through.
+   */
+  private pickHero(id: string): void {
+    if (runState().heroId === id) return
+    play(this, 'upgrade')
+    chooseHero(id)
+    setRunState({ heroId: id })
+    this.render()
+  }
+
 
 
 

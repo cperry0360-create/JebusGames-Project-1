@@ -481,11 +481,6 @@ export interface HaymakerDef {
   knockbackPixels: number
 }
 
-export interface RestructureDef {
-  name: string
-  icon: string
-  cooldown: number
-}
 
 export interface HeroDef {
   name: string
@@ -494,6 +489,12 @@ export interface HeroDef {
   bodySprite: string
   /** The Last Stand form. Cory does not get angrier; he gets into an SUV. */
   ultimateSprite: string
+  /**
+   * The form worn once health has been at or below half, or null for a hero
+   * with no powered art. Cory is the null: `ultimateSprite` is already his DAD
+   * MODE look, and spending it here would leave Last Stand nothing to show.
+   */
+  poweredSprite?: string | null
   portraitSprite: string
   /** The sprites the summoned gnomes wear, one per gnome, cycled. Two entries
    *  because the ability summons two: a pair drawn from one sprite reads as
@@ -528,7 +529,6 @@ export interface HeroDef {
   ignoresArmor: boolean
   passive: PassiveDef
   haymaker: HaymakerDef
-  restructure: RestructureDef
   lastStand: LastStandDef
 }
 

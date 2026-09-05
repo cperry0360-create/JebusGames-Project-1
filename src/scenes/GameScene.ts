@@ -8,7 +8,7 @@ import displayData from '../data/display.json'
 import rulesData from '../data/rules.json'
 import towersData from '../data/towers.json'
 import enemiesData from '../data/enemies.json'
-import heroesData from '../data/heroes.json'
+import { DEFAULT_HERO_ID, heroDef as heroDef_, resolveHeroId } from '../systems/Heroes.ts'
 import abilitiesData from '../data/abilities.json'
 import draftData from '../data/draft.json'
 
@@ -84,13 +84,12 @@ const LAYOUT = PRESENTATION.hud.layout
 const RULES = rulesData as RulesDef
 const TOWERS = towersData as Record<string, TowerDef>
 const ENEMIES = enemiesData as Record<string, EnemyDef>
-const HEROES = heroesData as Record<string, HeroDef>
 const ABILITIES = abilitiesData as Record<string, AbilityDef>
 const DRAFT = draftData as DraftDef
 
 export type Phase = 'ready' | 'wave' | 'won' | 'lost'
 /** What a click means right now. */
-export type Mode = 'normal' | 'targeting' | 'restructure'
+export type Mode = 'normal' | 'targeting'
 
 export interface GameStatus {
   peanuts: number
@@ -309,9 +308,6 @@ export class GameScene extends Phaser.Scene {
   private targetRing!: Phaser.GameObjects.Graphics
   /** Public so the probe can read which tower a tap selected. */
   selected: Tower | null = null
-  /** The tower being moved, exposed so a harness run can see a half-finished
-   *  relocation get cancelled. */
-  restructuring: Tower | null = null
   /** Public so a harness run can assert the modal contract from outside. */
   ticket: ScratchCard | null = null
   /** The Server Nuke's two moments. Both are modals; see ui/NukeOverlays.ts. */
@@ -368,13 +364,12 @@ export class GameScene extends Phaser.Scene {
     this.garrisons = []
     this.hoverSpot = null
     this.selected = null
-    this.restructuring = null
     this.heroSelected = false
     this.ticket?.destroy()
     this.ticket = null
 
     const run = runState()
-    const heroDef = HEROES[run.heroId] ?? HEROES.cory
+    const heroDef = heroDef_(run.heroId) ?? heroDef_(DEFAULT_HERO_ID)!
 
     resetVoices()
 
@@ -510,11 +505,12 @@ export class GameScene extends Phaser.Scene {
     this.rangeRing = this.add.graphics().setDepth(OVERLAY_DEPTH)
     this.targetRing = this.add.graphics().setDepth(OVERLAY_DEPTH + 1)
 
-    this.hero = new Hero(this, this.level.map.heroStart[0], this.level.map.heroStart[1], heroDef)
+    this.hero = new Hero(this, this.level.map.heroStart[0], this.level.map.heroStart[1],
+      heroDef, resolveHeroId(run.heroId))
     this.hero.on('revived', () => {
       play(this, 'build')
       logEvent('hero', 'revived where he fell')
-      this.status.message = `${heroDef.name} is back on his feet.`
+      this.status.message = `${heroDef.name} is back up.`
     })
     // The DAD MODE sting, on the frame the SUV appears rather than on the
     // frame he starts changing. Once per run by construction: the
@@ -582,9 +578,8 @@ export class GameScene extends Phaser.Scene {
     for (const id of this.status.abilities) this.cooldowns.register(id, ABILITIES[id].cooldown)
     this.cooldowns.register(RULES.serverNuke.abilityId, ABILITIES[RULES.serverNuke.abilityId].cooldown)
     this.cooldowns.register('haymaker', heroDef.haymaker.cooldown)
-    this.cooldowns.register('restructure', heroDef.restructure.cooldown)
 
-    // Arming an ability or a restructure used to be escapable only with ESC or
+    // Arming an ability used to be escapable only with ESC or
     // a right-click, neither of which exists on a touch device: once armed, the
     // player was stuck casting. This is the way out.
     //
@@ -992,7 +987,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private get placing(): boolean {
-    return this.ring?.active === true || this.status.mode === 'restructure'
+    return this.ring?.active === true
   }
 
   /**
@@ -1423,7 +1418,6 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-E', () => this.castHaymaker())
     this.input.keyboard?.on('keydown-R', () => {
       if (this.status.phase === 'won' || this.status.phase === 'lost') this.toTitle()
-      else this.armRestructure()
     })
   }
 
@@ -1437,11 +1431,6 @@ export class GameScene extends Phaser.Scene {
 
     if (this.status.mode === 'targeting' && this.status.pendingAbility) {
       this.fireAbility(this.status.pendingAbility, w.x, w.y)
-      return
-    }
-
-    if (this.status.mode === 'restructure') {
-      this.doRestructure(w.x, w.y)
       return
     }
 
@@ -1536,7 +1525,7 @@ export class GameScene extends Phaser.Scene {
     // him is one of the rings the brief calls for gone: state 2 is a ring at
     // his feet and nothing else.
     this.markers.select()
-    this.status.message = `${this.hero.def.name} selected — click where he should hold.`
+    this.status.message = `${this.hero.def.name} selected — click where to hold.`
   }
 
   private orderHero(x: number, y: number): void {
@@ -1558,7 +1547,7 @@ export class GameScene extends Phaser.Scene {
       play(this, 'hero-hit', 0.5)
       logEvent('hero', `disengaged to ${Math.round(x)},${Math.round(y)}`)
       this.status.message =
-        `${this.hero.def.name} breaks off — exposed while he pulls out.`
+        `${this.hero.def.name} breaks off — exposed while pulling out.`
     } else {
       // NO DIRECTION WORD. It said "is moving up" whichever way he went —
       // the word was a constant, not a reading of anywhere he was going, so
@@ -2051,15 +2040,11 @@ export class GameScene extends Phaser.Scene {
     }
 
     /*
-     * NO MOVE HERE. It was offered from this panel — free, on every tower, at
-     * every moment — and that made DAD MODE's grant of Restructure worth
-     * nothing: the player already had the thing Last Stand was handing them.
-     * A reward that duplicates a permanently available button is not a reward.
-     *
-     * The ability is back to what it was for. Moving a tower is Restructure,
-     * Restructure arrives at 25% health, and the ability bar is where it
-     * lives. The 'Moving X. Tap a free pad.' line that belonged to this path
-     * went with it.
+     * NO MOVE HERE, and there is no longer anywhere else either: Restructure
+     * has been cut. A free MOVE on every tower's panel was rejected once for
+     * making DAD MODE's grant of it worthless; with the ability gone, what is
+     * left is the older reason — a tower is a decision about a place, and a
+     * board that can be rearranged at will is a board with no decisions on it.
      */
 
     // Selling is always offered, always affordable, and ALWAYS IN SLOT 2 —
@@ -2193,14 +2178,13 @@ export class GameScene extends Phaser.Scene {
    *
    * It used to be set by hand at each place a mode was entered or left, and
    * the bug that pattern always has arrived on schedule: after one successful
-   * Restructure the button stayed on the glass for the rest of the encounter,
-   * because one of the exits forgot to turn it off. A fourth cancellable
-   * state — the drawer's pick — would have been a fourth chance to forget.
+   * tower move the button stayed on the glass for the rest of the encounter,
+   * because one of the exits forgot to turn it off. A third cancellable
+   * state — the drawer's pick — would have been a third chance to forget.
    */
   private refreshCancel(): void {
     this.setCancelVisible(
       this.status.mode === 'targeting'
-      || this.status.mode === 'restructure'
       || this.drawerPick !== null
       || this.pendingSpot !== null,
     )
@@ -2222,10 +2206,8 @@ export class GameScene extends Phaser.Scene {
   private clearSelection(): void {
     this.clearGhost()
     this.ring?.close()
-    this.ring?.close()
     this.selected = null
     this.projectedRing.clear()
-    this.restructuring = null
     this.heroSelected = false
     // Both markers fade the same way rather than being cut.
     this.markers.cancel()
@@ -2564,108 +2546,6 @@ export class GameScene extends Phaser.Scene {
     })
     hitPause(this, EFFECT_MS.haymakerHitPauseMs, (on) => { this.hitPaused = on })
     this.status.message = `${hm.name}!`
-  }
-
-  /**
-   * Arms a move from the ability bar: pick a tower, then a free spot.
-   *
-   * DAD MODE GATES IT, AGAIN. The gate came off once, on the reasoning that
-   * Last Stand fires at 25% health so a player who never dropped that low
-   * never learned towers could move — a real problem, answered at the time by
-   * putting a free MOVE button on every tower's own panel, always available.
-   *
-   * That answer was worse than the problem. A permanent free button doing the
-   * thing Last Stand hands you means Last Stand hands you nothing: the reward
-   * was already in the player's pocket. So MOVE is off the tower panel and the
-   * gate is back, and Restructure is once more something the hero earns by
-   * nearly dying, with a 22-second cooldown on top.
-   */
-  armRestructure(): void {
-    if (this.hero.down) {
-      this.refuse(`${this.hero.def.name} is down.`)
-      return
-    }
-    if (!this.hero.lastStandActive) {
-      this.refuse(`${this.hero.def.restructure.name} needs ${this.hero.def.lastStand.name}.`)
-      return
-    }
-    if (!this.cooldowns.ready('restructure')) {
-      this.refuse(`${this.hero.def.restructure.name} is still recharging.`)
-      return
-    }
-    if (this.towers.length === 0) {
-      this.refuse('Build a tower first, then you can move it.')
-      return
-    }
-    this.clearGhost()
-    this.ring?.close()
-    this.status.mode = 'restructure'
-    this.restructuring = null
-    this.refreshCancel()
-    this.drawSpots()
-    this.status.message = `${this.hero.def.restructure.name}: click a tower, then a free spot.`
-  }
-
-  /** Drops a relocation in progress and leaves the board as it was. */
-  private cancelRestructure(): void {
-    if (this.status.mode !== 'restructure') return
-    this.restructuring = null
-    this.status.mode = 'normal'
-    this.refreshCancel()
-    this.rangeRing.clear()
-    this.drawSpots()
-    this.status.message = `${this.hero.def.lastStand.name} is over. Restructure with it.`
-  }
-
-  private doRestructure(x: number, y: number): void {
-    if (!this.restructuring) {
-      const tower = this.towerAt(x, y)
-      if (!tower) {
-        this.status.message = 'Click one of your towers first.'
-        return
-      }
-      this.restructuring = tower
-      this.showTowerRange(tower.x, tower.y, tower)
-      this.status.message = `Moving ${tower.def.name}. Click a free spot.`
-      return
-    }
-
-    const spot = this.build.spotAt(x, y)
-    if (!spot || !this.build.isFree(spot.index)) {
-      this.status.message = 'That spot is not free.'
-      return
-    }
-
-    const moving = this.restructuring
-    this.build.release(moving.spot)
-    this.build.occupy(spot.index)
-    moving.relocate(spot.x, spot.y, spot.index)
-    this.onBoardChanged()
-    this.cooldowns.start('restructure')
-    play(this, 'upgrade')
-    /*
-     * WHAT HAPPENED, NOT HOW LONG UNTIL THE NEXT ONE.
-     *
-     * This line used to read "Grinder restructured. Back in 16s." and then sat
-     * there, unchanged, for the whole cooldown — so the instruction row was
-     * held for sixteen seconds by a number that was wrong after the first one,
-     * and nothing else the game had to say could be said.
-     *
-     * A cooldown is a STATUS. It belongs where it can tick: the Restructure
-     * slot in the ability bar carries the sweep and the live count, and it
-     * stays on the glass until the cooldown ends rather than vanishing with
-     * Last Stand. The message row goes back to being the message row.
-     */
-    this.status.message = `${moving.def.name} moved.`
-    this.restructuring = null
-    this.status.mode = 'normal'
-    // The CANCEL button was never taken down here, so after one successful
-    // move it stayed on the screen for the rest of the encounter. That is what
-    // made Restructure look like a permanent mode toggle rather than an
-    // ability on a cooldown — the button outlived the mode it belonged to.
-    this.refreshCancel()
-    this.drawSpots()
-    this.rangeRing.clear()
   }
 
   // ---------------------------------------------------------------- waves
@@ -3148,10 +3028,6 @@ export class GameScene extends Phaser.Scene {
     this.status.heroHealth = this.hero.health
     this.status.heroDown = this.hero.down
     this.status.heroReviveIn = this.hero.reviveIn
-    // Leaving DAD MODE takes the ability with it, and any half-finished move
-    // with that. A player left holding a tower in a mode that no longer exists
-    // has no way to put it down.
-    if (this.status.lastStand && !this.hero.lastStandActive) this.cancelRestructure()
     this.status.lastStand = this.hero.lastStandActive
     this.noteHeroState()
     this.status.enemiesLeft = this.enemies.length + this.spawner.remaining
@@ -3862,7 +3738,6 @@ export class GameScene extends Phaser.Scene {
       (aid) => ABILITIES[aid],
       [
         { id: 'haymaker', kind: 'haymaker', icon: hero.haymaker.icon, hero: true },
-        { id: 'restructure', kind: 'restructure', icon: hero.restructure.icon, hero: true },
       ],
     )
     // The bar is laid out for the hand INCLUDING the new drop, which is what
@@ -4008,7 +3883,6 @@ export class GameScene extends Phaser.Scene {
   abilityIcon(id: string): string | undefined {
     if (ABILITIES[id]) return ABILITIES[id].icon
     if (id === 'haymaker') return this.hero.def.haymaker.icon
-    if (id === 'restructure') return this.hero.def.restructure.icon
     return undefined
   }
 

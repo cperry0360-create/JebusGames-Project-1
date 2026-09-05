@@ -95,18 +95,35 @@ test('a swing is never interrupted, and never lands twice', () => {
   assert.equal(hits, 1, 'a long frame fired the hit twice or not at all')
 })
 
-test('there is no bob, bounce or vertical oscillation left on the hero', () => {
+test('the fake motion is gone from the hero that has real frames', () => {
   // HeroMotion existed to fake movement on a static sprite: an idle bob, a
-  // walk bounce and an attack lunge, all vertical oscillation. There is real
-  // animation now, so the fake is gone rather than layered under it.
+  // walk bounce and an attack lunge, all layered UNDER real animation. It is
+  // gone and stays gone.
+  //
+  // What came back with the roster is the opposite case rather than a relapse.
+  // Four of the five heroes have no walk sheet at all, so they are a single
+  // picture that would slide across the field, and Hero.ts bobs THOSE -- and
+  // only those, because the condition is the sheet's absence rather than a
+  // flag. Cory has frames, so Cory does not bob, which is what this test was
+  // protecting in the first place.
   assert.equal(existsSync(new URL('../src/systems/HeroMotion.ts', import.meta.url)), false,
     'HeroMotion is still here, so something can still add a bounce')
   const hero = src('entities/Hero.ts')
-  for (const gone of ['HeroMotion', 'swingAt', 'offsetY', 'shadowScale', 'bobPhase']) {
+  for (const gone of ['HeroMotion', 'swingAt', 'offsetY', 'shadowScale']) {
     assert.ok(!hero.includes(gone), `Hero still references ${gone}`)
   }
   assert.equal(P.heroMotion, undefined, 'the bob and bounce numbers are still in the data')
-  // The frame swap sets a texture and an anchor. It must not set y or rotation.
+
+  const bob = /private bob\([\s\S]*?\n  \}/.exec(hero)
+  assert.ok(bob, 'the sheetless heroes have nothing stopping them sliding')
+  assert.match(bob[0], /if \(walkFramesFor\(this\.heroId\)\)/,
+    'the bob is not conditioned on the walk sheet, so an animated hero can be bobbed too')
+  assert.match(bob[0], /this\.body_\.y = this\.restingBodyY/,
+    'an animated hero is not put back on its resting line')
+
+  // The frame swap sets a texture and an anchor. It must not set y or
+  // rotation: the bob owns the vertical, and two writers is how the double
+  // motion happened the first time.
   const fn = /private applyPose\([\s\S]*?\n  \}/.exec(hero)
   assert.ok(fn, 'applyPose is gone')
   assert.ok(!/body_\.y\s*=/.test(fn[0]), 'the frame swap moves the sprite vertically')
@@ -149,7 +166,11 @@ test('a missing frame falls back to the idle rather than blanking the hero', () 
   const fn = /private frameKey\([\s\S]*?\n  \}/.exec(hero)
   assert.ok(fn, 'there is no frame resolver')
   assert.match(fn[0], /this\.scene\.textures\.exists\(key\)/, 'it does not check the texture loaded')
-  assert.match(fn[0], /return this\.def\.bodySprite/, 'it does not fall back to the static idle')
+  // Through the roster now, so a hero with no sheet at all takes the same
+  // path a missing frame does -- and a POWERED hero falls back to its powered
+  // picture rather than reverting to base art for the length of one frame.
+  assert.match(fn[0], /return heroSprite\(this\.heroId, this\.powered\)/,
+    'it does not fall back to the hero\'s own static art')
   for (const k of [...ART.hero.walk, ...ART.hero.attack]) {
     assert.ok(ART.optional.includes(k), `${k} is not optional, so a miss would fail loudly`)
     assert.ok(ART.files[k], `${k} is not in the manifest`)

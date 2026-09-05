@@ -151,7 +151,7 @@ export interface HudLayout {
    * CANCEL, at the right-hand end of the second row, directly under the gear.
    *
    * It is only on the glass while there is something to cancel — an armed
-   * ability, a Restructure, a tile picked in the control drawer — but it is
+   * ability, a tile picked in the control drawer — but it is
    * reserved from the layout ALWAYS. A button that appears into whatever space
    * happens to be free is a button that will one day appear on top of
    * something.

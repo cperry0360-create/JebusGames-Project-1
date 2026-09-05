@@ -76,12 +76,20 @@ export interface SaveData {
    * player rather than about a run, and it has to survive one.
    */
   seenCutscenes: string[]
+  /**
+   * The hero the player last chose, preselected on the next run.
+   *
+   * An empty string means they never have, and the roster resolves that to
+   * the default -- which is Cory, so a save from before the row existed plays
+   * exactly the game it always did.
+   */
+  heroId: string
 }
 
 export const DEFAULT_SAVE: SaveData = {
   volume: 0.7, musicVolume: 1, voiceVolume: 1,
   muted: false, runsCleared: 0, bannerPoints: 0, lastReport: '',
-  controlDrawer: false, seenCutscenes: [],
+  controlDrawer: false, seenCutscenes: [], heroId: '',
 }
 
 /** localStorage is small and shared; a report is truncated rather than
@@ -124,6 +132,11 @@ export function loadSave(): SaveData {
       // hand-edited or written by an older build can hold anything here, and a
       // non-string in the list would compare false against every level id
       // forever -- a comic that silently never plays again.
+      // A string or nothing. Validated rather than trusted for the same reason
+      // the cutscene list is: a save can hold anything, and a hero id that is
+      // not a hero resolves to the default at the point of use rather than
+      // being repaired here -- one place decides what an unknown id means.
+      heroId: typeof parsed.heroId === 'string' ? parsed.heroId : '',
       seenCutscenes: Array.isArray(parsed.seenCutscenes)
         ? [...new Set(parsed.seenCutscenes.filter((v): v is string => typeof v === 'string'))]
         : [],

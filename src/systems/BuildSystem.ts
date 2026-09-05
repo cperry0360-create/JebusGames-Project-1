@@ -39,7 +39,7 @@ export class BuildSystem {
     this.occupied.add(index)
   }
 
-  /** Frees a spot again — Restructure moves a tower off one. */
+  /** Frees a spot again — selling takes a tower off one. */
   release(index: number): void {
     this.occupied.delete(index)
   }

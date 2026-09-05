@@ -34,11 +34,6 @@
       "ignoresArmor": true,
       "knockbackPixels": 150
     },
-    "restructure": {
-      "name": "Restructure",
-      "icon": "ability-restructure",
-      "cooldown": 22
-    },
     "lastStand": {
       "name": "DAD MODE",
       "healthThreshold": 0.25,
@@ -60,6 +55,245 @@
     "fighterSprites": [
       "unit-gnome-trowel",
       "unit-gnome-rake"
+    ],
+    "poweredSprite": null
+  },
+  "courtland": {
+    "name": "Courtland",
+    "title": "The Spark",
+    "blurb": "Fast, reckless and always where the trouble is.",
+    "bodySprite": "hero-courtland",
+    "poweredSprite": "hero-courtland-power",
+    "ultimateSprite": "hero-courtland-power",
+    "portraitSprite": "hero-courtland",
+    "maxHealth": 300,
+    "reviveSeconds": 25,
+    "moveSpeed": 126,
+    "attackRange": 78,
+    "blockRange": 50,
+    "blockCapacity": 2,
+    "damage": 17,
+    "attackInterval": 0.72,
+    "retreat": {
+      "vulnerableSeconds": 2.5,
+      "damageTakenMultiplier": 1.5,
+      "readySeconds": 1.0
+    },
+    "ignoresArmor": false,
+    "passive": {
+      "name": "Static Cling",
+      "armorShredRadius": 84,
+      "armorShredPerSecond": 0.9,
+      "maxArmorShred": 4
+    },
+    "haymaker": {
+      "name": "Haymaker",
+      "icon": "ability-haymaker",
+      "cooldown": 12,
+      "range": 110,
+      "damage": 130,
+      "ignoresArmor": true,
+      "knockbackPixels": 150
+    },
+    "lastStand": {
+      "name": "DAD MODE",
+      "healthThreshold": 0.25,
+      "damageMultiplier": 2,
+      "attackIntervalMultiplier": 0.8,
+      "damageTakenMultiplier": 1.5,
+      "hitsAllInRange": true,
+      "attackRangeMultiplier": 1.9,
+      "blockRangeMultiplier": 2.2,
+      "moveSpeedMultiplier": 1.35,
+      "rammingDamage": 26,
+      "rammingKnockbackPixels": 54,
+      "transformShakeMs": 420,
+      "transformFlashMs": 260,
+      "transformPauseMs": 500,
+      "invulnerableSeconds": 1.2
+    },
+    "fighterSprites": [
+      "unit-gnome-trowel",
+      "unit-gnome-rake"
     ]
-  }
+  },
+  "han": {
+    "name": "Han",
+    "title": "The Ember",
+    "blurb": "Reaches further than anyone and asks for nothing back.",
+    "bodySprite": "hero-han",
+    "poweredSprite": "hero-han-power",
+    "ultimateSprite": "hero-han-power",
+    "portraitSprite": "hero-han",
+    "maxHealth": 330,
+    "reviveSeconds": 25,
+    "moveSpeed": 94,
+    "attackRange": 122,
+    "blockRange": 54,
+    "blockCapacity": 2,
+    "damage": 24,
+    "attackInterval": 1.05,
+    "retreat": {
+      "vulnerableSeconds": 2.5,
+      "damageTakenMultiplier": 1.5,
+      "readySeconds": 1.0
+    },
+    "ignoresArmor": false,
+    "passive": {
+      "name": "Slow Burn",
+      "armorShredRadius": 110,
+      "armorShredPerSecond": 1.3,
+      "maxArmorShred": 6
+    },
+    "haymaker": {
+      "name": "Haymaker",
+      "icon": "ability-haymaker",
+      "cooldown": 12,
+      "range": 134,
+      "damage": 130,
+      "ignoresArmor": true,
+      "knockbackPixels": 150
+    },
+    "lastStand": {
+      "name": "DAD MODE",
+      "healthThreshold": 0.25,
+      "damageMultiplier": 2,
+      "attackIntervalMultiplier": 0.8,
+      "damageTakenMultiplier": 1.5,
+      "hitsAllInRange": true,
+      "attackRangeMultiplier": 1.9,
+      "blockRangeMultiplier": 2.2,
+      "moveSpeedMultiplier": 1.35,
+      "rammingDamage": 26,
+      "rammingKnockbackPixels": 54,
+      "transformShakeMs": 420,
+      "transformFlashMs": 260,
+      "transformPauseMs": 500,
+      "invulnerableSeconds": 1.2
+    },
+    "fighterSprites": [
+      "unit-gnome-trowel",
+      "unit-gnome-rake"
+    ]
+  },
+  "eli": {
+    "name": "Elijah",
+    "title": "The Wall",
+    "blurb": "Immovable. Holds four at once and never complains.",
+    "bodySprite": "hero-eli",
+    "poweredSprite": "hero-eli-power",
+    "ultimateSprite": "hero-eli-power",
+    "portraitSprite": "hero-eli",
+    "maxHealth": 430,
+    "reviveSeconds": 25,
+    "moveSpeed": 90,
+    "attackRange": 74,
+    "blockRange": 58,
+    "blockCapacity": 4,
+    "damage": 19,
+    "attackInterval": 1.0,
+    "retreat": {
+      "vulnerableSeconds": 2.5,
+      "damageTakenMultiplier": 1.5,
+      "readySeconds": 1.0
+    },
+    "ignoresArmor": false,
+    "passive": {
+      "name": "Dead Weight",
+      "armorShredRadius": 92,
+      "armorShredPerSecond": 1.1,
+      "maxArmorShred": 5
+    },
+    "haymaker": {
+      "name": "Haymaker",
+      "icon": "ability-haymaker",
+      "cooldown": 12,
+      "range": 108,
+      "damage": 130,
+      "ignoresArmor": true,
+      "knockbackPixels": 150
+    },
+    "lastStand": {
+      "name": "DAD MODE",
+      "healthThreshold": 0.25,
+      "damageMultiplier": 2,
+      "attackIntervalMultiplier": 0.8,
+      "damageTakenMultiplier": 1.5,
+      "hitsAllInRange": true,
+      "attackRangeMultiplier": 1.9,
+      "blockRangeMultiplier": 2.2,
+      "moveSpeedMultiplier": 1.35,
+      "rammingDamage": 26,
+      "rammingKnockbackPixels": 54,
+      "transformShakeMs": 420,
+      "transformFlashMs": 260,
+      "transformPauseMs": 500,
+      "invulnerableSeconds": 1.2
+    },
+    "fighterSprites": [
+      "unit-gnome-trowel",
+      "unit-gnome-rake"
+    ]
+  },
+  "bailey": {
+    "name": "Bailey",
+    "title": "Good Dog",
+    "blurb": "Very fast, very keen, and completely without a plan.",
+    "bodySprite": "hero-bailey",
+    "poweredSprite": "hero-bailey-power",
+    "ultimateSprite": "hero-bailey-power",
+    "portraitSprite": "hero-bailey",
+    "maxHealth": 270,
+    "reviveSeconds": 25,
+    "moveSpeed": 142,
+    "attackRange": 70,
+    "blockRange": 46,
+    "blockCapacity": 2,
+    "damage": 12,
+    "attackInterval": 0.58,
+    "retreat": {
+      "vulnerableSeconds": 2.5,
+      "damageTakenMultiplier": 1.5,
+      "readySeconds": 1.0
+    },
+    "ignoresArmor": false,
+    "passive": {
+      "name": "The Zoomies",
+      "armorShredRadius": 78,
+      "armorShredPerSecond": 0.7,
+      "maxArmorShred": 3
+    },
+    "haymaker": {
+      "name": "Haymaker",
+      "icon": "ability-haymaker",
+      "cooldown": 12,
+      "range": 100,
+      "damage": 130,
+      "ignoresArmor": true,
+      "knockbackPixels": 150
+    },
+    "lastStand": {
+      "name": "DAD MODE",
+      "healthThreshold": 0.25,
+      "damageMultiplier": 2,
+      "attackIntervalMultiplier": 0.8,
+      "damageTakenMultiplier": 1.5,
+      "hitsAllInRange": true,
+      "attackRangeMultiplier": 1.9,
+      "blockRangeMultiplier": 2.2,
+      "moveSpeedMultiplier": 1.35,
+      "rammingDamage": 26,
+      "rammingKnockbackPixels": 54,
+      "transformShakeMs": 420,
+      "transformFlashMs": 260,
+      "transformPauseMs": 500,
+      "invulnerableSeconds": 1.2
+    },
+    "fighterSprites": [
+      "unit-gnome-trowel",
+      "unit-gnome-rake"
+    ]
+  },
+  "_note": "THE FIVE HEROES. Cory is first and is the default: a save with no choice in it preselects him, so a player who never touches the row plays exactly the game that was tuned. `poweredSprite` is the form a hero wears once its health has been below half; CORY'S IS NULL ON PURPOSE -- he has no powered art, and `ultimateSprite` is already his DAD MODE look, so giving the powered form that art would spend Last Stand's only visual before Last Stand arrives. He transforms with the burst and the damage reduction and keeps his own picture.",
+  "_stats": "DAMAGE PER SECOND IS DELIBERATELY FLAT across the roster: 19 to 24 against Cory's 21.2, a spread of about 12%. Level 1 is tuned to 45 of 60 with Cory, and a hero twice as strong would throw that away the first time anyone picked him. What differs is everything else -- Elijah holds four enemies where Bailey holds two, Han reaches 122 where Bailey reaches 70, Bailey moves at 142 where Elijah moves at 90 -- so the choice is about how you want to play rather than about which hero is better."
 }

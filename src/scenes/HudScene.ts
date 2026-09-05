@@ -88,7 +88,6 @@ export class HudScene extends Phaser.Scene {
   private slotsBuilt = false
   /** Last frame's DAD MODE state, so the arrival of a new option can be
    *  announced once rather than every frame. */
-  private lastStandWas = false
   /** Which abilities the slots were built for, so a rare drop rebuilds them. */
   private slotKeys = ''
   /** Last drawn values, so a change can be shown rather than just displayed. */
@@ -195,7 +194,6 @@ export class HudScene extends Phaser.Scene {
     const hero = this.world.heroDef()
     const heroSlots: SlotDef[] = [
       { id: 'haymaker', kind: 'haymaker', icon: hero.haymaker.icon, hero: true },
-      { id: 'restructure', kind: 'restructure', icon: hero.restructure.icon, hero: true },
     ]
     return slotDefs(
       s.abilities,
@@ -485,8 +483,7 @@ export class HudScene extends Phaser.Scene {
         // kind of gap this bar has now been through twice.
         if (!this.slotShown(region, this.world.status)) return
         if (region.kind === 'ability') this.world.armAbility(region.id)
-        else if (region.kind === 'haymaker') this.world.castHaymaker()
-        else this.world.armRestructure()
+        else this.world.castHaymaker()
       })
 
       this.slots.push({ region, frame, sweep, icon, timer, hit })
@@ -540,11 +537,6 @@ export class HudScene extends Phaser.Scene {
       this.buildSlots()
       this.slotsBuilt = true
     }
-
-    // A new option arriving mid-fight has to be noticed, or the player never
-    // learns it is there.
-    if (s.lastStand && !this.lastStandWas) this.flashSlot('restructure')
-    this.lastStandWas = s.lastStand
 
     this.setCounter(this.peanutsText, `${s.peanuts}`, this.peanutsField)
     this.setCounter(this.livesText, `${s.lives}`, this.livesField)
@@ -753,7 +745,6 @@ export class HudScene extends Phaser.Scene {
       const ready = this.world.cooldowns.ready(r.id)
       const usable = this.slotUsable(r, s)
       const armed = s.pendingAbility === r.id
-        || (r.kind === 'restructure' && s.mode === 'restructure')
       const left = this.world.cooldowns.secondsLeft(r.id)
 
       const base = this.world.abilityIcon(r.id) ?? slot.icon.texture.key
@@ -794,34 +785,9 @@ export class HudScene extends Phaser.Scene {
     }
   }
 
-  /** A brief highlight on one slot, for an ability that has just appeared. */
-  private flashSlot(id: string): void {
-    const slot = this.slots.find((sl) => sl.region.id === id)
-    if (!slot) return
-    play(this, 'upgrade')
-    const r = slot.region
-    const ring = this.add.graphics().setDepth(9000)
-    slot.icon.setScale(slot.icon.scale * 1.4)
-    this.tweens.add({
-      targets: slot.icon, scaleX: slot.icon.scaleX / 1.4, scaleY: slot.icon.scaleY / 1.4,
-      duration: 260, ease: 'Back.easeOut',
-    })
-    this.tweens.addCounter({
-      from: 0, to: 1, duration: 900,
-      onUpdate: (tw) => {
-        const t = tw.getValue() ?? 0
-        ring.clear()
-        ring.lineStyle(3, 0xf2d06b, 1 - t)
-        ring.strokeCircle(r.cx, r.cy, r.boxH / 2 + 2 + t * 18)
-      },
-      onComplete: () => ring.destroy(),
-    })
-  }
-
   /** Castable at all, ignoring cooldown: the hero has to be up for his own
    *  actives, and a rare drop is only usable while it is held. */
   private slotUsable(slot: SlotRegion, s: GameScene['status']): boolean {
-    if (slot.kind === 'restructure') return s.lastStand && !s.heroDown
     if (slot.kind !== 'ability') return !s.heroDown
     if (slot.id === s.rareAbility) return true
     return s.abilities.includes(slot.id)
@@ -830,23 +796,14 @@ export class HudScene extends Phaser.Scene {
   /**
    * Whether a slot's icon is on the glass at all.
    *
-   * Restructure only exists during DAD MODE. Its slot is NOT removed when it
-   * is gone — the bar is laid out from a fixed list of ids, so every other
-   * icon keeps its exact position whether or not this one is showing. A bar
-   * that reflows mid-fight causes misfires, and misfiring the Server Nuke
-   * costs a run.
+   * Every slot is, now that Restructure is gone: it was the one ability that
+   * came and went mid-fight, and its slot was kept in the layout even while
+   * hidden so nothing else moved. The bar is still laid out from a fixed list
+   * of ids for that reason -- a bar that reflows mid-fight causes misfires,
+   * and misfiring the Server Nuke costs a run -- but nothing hides any more.
    */
-  private slotShown(slot: SlotRegion, s: GameScene['status']): boolean {
-    if (slot.kind !== 'restructure') return true
-    // AND WHILE IT IS RECHARGING, even once Last Stand has ended.
-    //
-    // The cooldown used to be announced on the instruction row — "Grinder
-    // restructured. Back in 16s." — which held that row for the whole
-    // sixteen seconds with a number that was wrong after the first one. A
-    // cooldown is a status and belongs somewhere it can tick, and this slot
-    // already draws the sweep and the live count. It just used to disappear
-    // the moment Last Stand did, taking the only live readout with it.
-    return s.lastStand || !this.world.cooldowns.ready('restructure')
+  private slotShown(_slot: SlotRegion, _s: GameScene['status']): boolean {
+    return true
   }
 
   /**

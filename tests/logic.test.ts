@@ -222,7 +222,7 @@ test('a click lands on the nearest spot, and only within its radius', () => {
   assert.equal(b.spotAt(-500, -500), null)
 })
 
-test('one tower per spot, and Restructure frees the old one', () => {
+test('one tower per spot, and selling frees it again', () => {
   const b = new BuildSystem(map.buildSpots, map.spotRadius)
   assert.equal(b.freeSpots().length, spots.length)
   assert.equal(b.isFree(0), true)
@@ -232,7 +232,7 @@ test('one tower per spot, and Restructure frees the old one', () => {
   assert.equal(b.freeSpots().length, spots.length - 1)
   assert.ok(!b.freeSpots().some((s) => s.index === 0), 'an occupied spot must not offer itself again')
   b.release(0)
-  assert.equal(b.isFree(0), true, 'moving a tower off a spot should free it')
+  assert.equal(b.isFree(0), true, 'taking a tower off a spot should free it')
   assert.equal(b.towerCount, 0)
   assert.equal(b.isFree(-1), false)
   assert.equal(b.isFree(spots.length), false)

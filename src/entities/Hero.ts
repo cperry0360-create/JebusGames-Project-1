@@ -5,12 +5,21 @@ import { pickNearest, withinRadius } from '../systems/Targeting.ts'
 import { applyHit, attackInterval, incomingDamage, outgoingDamage } from '../systems/LastStand.ts'
 import { HeroFrames, type FrameDef, type HeroPose } from '../systems/HeroFrames.ts'
 import { makeShadow, deathPuff } from '../systems/Presentation.ts'
-import { applyGroundRender, ART } from '../systems/Art.ts'
+import { applyGroundRender } from '../systems/Art.ts'
 import { facesLeft } from '../systems/Facing.ts'
 import presentationData from '../data/presentation.json'
+import { attackFramesFor, heroSprite, walkFramesFor } from '../systems/Heroes.ts'
+import {
+  TRANSFORM_INVULNERABLE_SECONDS, damageToHero, shouldTransform,
+} from '../systems/Transform.ts'
 import { Enemy } from './Enemy.ts'
 
 const PRESENTATION = presentationData
+
+/** The stand-in walk cycle for a hero with no sheet: how far, and how fast.
+ *  Two pixels reads as steps; four reads as a hovercraft. */
+const BOB_PIXELS = 2.5
+const BOB_SPEED = 11
 
 /**
  * Cory. Rally-point control, not free movement: select him, tap a spot, he
@@ -54,6 +63,15 @@ export class Hero extends Phaser.GameObjects.Container {
    *  him. Last Stand is the hero's one scripted moment and it was possible to
    *  be killed in the middle of it. */
   invulnerableFor = 0
+  /**
+   * Powered form: entered the first time this life's health is at or below
+   * half, kept until he dies. Distinct from Last Stand, which is Cory's own
+   * once-per-encounter beat at 25% and changes how he FIGHTS -- this changes
+   * how much he takes, and every hero has it.
+   */
+  powered = false
+  /** Seconds of the bob's own clock. Only a hero with no walk sheet uses it. */
+  private bobPhase = 0
   /** How many enemies he is holding right now, and the most he may hold. The
    *  scene sets the first every frame; both are read by the HUD and by the
    *  at-capacity marker, so the number the player is shown is the number the
@@ -70,6 +88,12 @@ export class Hero extends Phaser.GameObjects.Container {
   /** Offset that puts the art's feet (or wheels) on his position; negated on
    *  a flip, exactly as the enemies do it. */
   private artOffset = 0
+  /** Which hero this is, for the roster lookups: art, walk frames, powered
+   *  form. Taken from the run rather than inferred from the def, because two
+   *  heroes could legitimately share a name. */
+  readonly heroId: string
+  /** Where the sprite sits when it is not bobbing. */
+  private restingBodyY = 0
   private facingRight = false
   /** Whatever he swung at last frame, so `engaged` can be asked before the
    *  order is carried out rather than after. */
@@ -111,9 +135,10 @@ export class Hero extends Phaser.GameObjects.Container {
   private baseScale = 1
   /** The shadow's resting size, for the same reason. */
 
-  constructor(scene: Phaser.Scene, x: number, y: number, def: HeroDef) {
+  constructor(scene: Phaser.Scene, x: number, y: number, def: HeroDef, heroId = 'cory') {
     super(scene, x, y)
     this.def = def
+    this.heroId = heroId
     this.health = def.maxHealth
     this.rallyX = x
     this.rallyY = y
@@ -123,6 +148,7 @@ export class Hero extends Phaser.GameObjects.Container {
     this.shadow = makeShadow(scene, def.bodySprite)
     this.body_ = scene.add.sprite(0, 0, def.bodySprite)
     this.artOffset = applyGroundRender(this.body_, def.bodySprite)
+    this.restingBodyY = this.body_.y
     this.captureRest()
     this.bar = scene.add.graphics()
     this.add([this.shadow, this.body_, this.bar])
@@ -325,6 +351,9 @@ export class Hero extends Phaser.GameObjects.Container {
     // carries the pending hit: the swing's damage is applied from inside here
     // because that is where the impact frame is known.
     this.applyPose(dt, walking)
+    // The stand-in for the four heroes with no walk sheet. After applyPose,
+    // which is what sets the resting position it works from.
+    this.bob(dt, walking)
 
     if (this.inVehicle) this.ram(enemies, onHit)
 
@@ -365,7 +394,12 @@ export class Hero extends Phaser.GameObjects.Container {
     if (this.invulnerableFor > 0) return 'none'
 
     const exposed = this.retreatVulnerableFor > 0 ? this.def.retreat.damageTakenMultiplier : 1
-    const damage = incomingDamage(amount, this.def.lastStand, this.lastStandActive) * exposed
+    // POWERED FORM COMES OFF LAST, after the retreat penalty and Last Stand's
+    // own multiplier, so it is 40% off whatever the hit had become rather than
+    // 40% off the base and then multiplied back up.
+    const damage = damageToHero(
+      incomingDamage(amount, this.def.lastStand, this.lastStandActive) * exposed,
+      this.powered, 0)
 
     // One rule, in one place, so death cannot be decided before the transform
     // is. See `applyHit`: a hit that would carry him through the 25% band
@@ -384,7 +418,52 @@ export class Hero extends Phaser.GameObjects.Container {
       this.triggerLastStand()
       return 'lastStand'
     }
+    // CHECKED AFTER THE HIT LANDS, on the health that is left. Asking before
+    // would power him up at 51% because the incoming blow was going to take
+    // him under, which is a different moment from the one the player sees.
+    if (shouldTransform(this.health, this.def.maxHealth, this.powered)) {
+      this.transformToPowered()
+    }
     return 'none'
+  }
+
+  /**
+   * Into the powered form: new art if the hero has any, a burst either way,
+   * and a second and a half of grace.
+   *
+   * THE GRACE IS NOT A REDUCTION. It is there so the hero cannot be deleted in
+   * the middle of the swap, and against a boss swinging for a third of his bar
+   * a 40% cut would not do that job.
+   */
+  private transformToPowered(): void {
+    this.powered = true
+    this.invulnerableFor = TRANSFORM_INVULNERABLE_SECONDS
+
+    const key = heroSprite(this.heroId, true)
+    if (key !== this.body_.texture.key && this.scene.textures.exists(key)) {
+      this.wearSprite(key)
+    }
+
+    // A ring that opens and fades, plus a white flash on the sprite itself.
+    // Two things rather than one: the ring says WHERE and the flash says it is
+    // him, and on a busy board either alone is missable.
+    const ring = this.scene.add.graphics().setDepth(this.y + 1)
+    this.scene.tweens.addCounter({
+      from: 0, to: 1, duration: 420,
+      onUpdate: (tw: Phaser.Tweens.TweenChain) => {
+        const t = (tw as unknown as { getValue(): number }).getValue() ?? 0
+        ring.clear()
+        ring.lineStyle(4, 0xffd98a, 1 - t)
+        ring.strokeCircle(this.x, this.y - 20, 14 + t * 58)
+      },
+      onComplete: () => ring.destroy(),
+    })
+    this.body_.setTintFill(0xffffff)
+    this.scene.time.delayedCall(90, () => this.body_.clearTint())
+    this.scene.tweens.add({
+      targets: this, scaleX: 1.14, scaleY: 1.14, duration: 130, yoyo: true, ease: 'Quad.easeOut',
+    })
+    this.emit('powered')
   }
 
   /**
@@ -446,6 +525,16 @@ export class Hero extends Phaser.GameObjects.Container {
     this.body_.setFlipX(this.facingRight)
   }
 
+  /** Puts on a different picture and re-anchors, the same way a frame swap
+   *  does -- the two forms do not share a canvas or a foot fraction. */
+  private wearSprite(key: string): void {
+    this.body_.setTexture(key)
+    this.artOffset = applyGroundRender(this.body_, key)
+    this.body_.x = this.facingRight ? -this.artOffset : this.artOffset
+    this.body_.setFlipX(this.facingRight)
+    this.restingBodyY = this.body_.y
+  }
+
   /**
    * The texture for a pose and frame, or the static idle when the animation
    * art is not present.
@@ -455,10 +544,34 @@ export class Hero extends Phaser.GameObjects.Container {
    * build pad and the UI icons follow.
    */
   private frameKey(pose: HeroPose, index: number): string {
-    const clip = pose === 'walk' ? ART.hero.walk : pose === 'attack' ? ART.hero.attack : []
+    const clip = (pose === 'walk' ? walkFramesFor(this.heroId)
+      : pose === 'attack' ? attackFramesFor(this.heroId) : null) ?? []
     const key = clip[index]
     if (key && this.scene.textures.exists(key)) return key
-    return this.def.bodySprite
+    // No sheet for this pose: the hero's CURRENT form, so a powered hero with
+    // no frames does not drop back to its base picture the moment it moves.
+    return heroSprite(this.heroId, this.powered)
+  }
+
+  /**
+   * The stand-in for a walk cycle: a couple of pixels, up and down.
+   *
+   * Only for a hero with no walk sheet. Four of the five are single pictures
+   * and would otherwise slide across the field like a chess piece; two pixels
+   * of vertical travel is enough to read as steps without pretending to be
+   * animation. It turns itself off for a hero that HAS a sheet -- the
+   * condition is the sheet's presence, not a flag someone has to set -- so
+   * dropping real frames into art.json's roster is all it takes.
+   */
+  private bob(dt: number, moving: boolean): void {
+    if (walkFramesFor(this.heroId)) { this.body_.y = this.restingBodyY; return }
+    if (!moving) {
+      this.bobPhase = 0
+      this.body_.y = this.restingBodyY
+      return
+    }
+    this.bobPhase += dt * BOB_SPEED
+    this.body_.y = this.restingBodyY - Math.abs(Math.sin(this.bobPhase)) * BOB_PIXELS
   }
 
   private faceTowards(x: number, y: number): void {
@@ -580,6 +693,10 @@ export class Hero extends Phaser.GameObjects.Container {
     this.frames.reset()
     this.health = this.def.maxHealth
     this.lastStandActive = false
+    // BACK TO BASE, and it has to be earned again. The powered form is a fact
+    // about one life, not about the run -- Last Stand is the opposite, and
+    // `lastStandUsed` staying set just below is what keeps them different.
+    this.powered = false
     this.transforming = false
     this.retreatVulnerableFor = 0
     this.arrivalDelay = 0

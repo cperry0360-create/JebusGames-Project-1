@@ -16,6 +16,12 @@ const WAVE_TABLES: Record<string, any> = Object.fromEntries(
   levels.levels.map((l: any) => [l.id, read(l.waves.replace(/\.json$/, ''))]),
 )
 
+/** Heroes only. `_note` and `_stats` in heroes.json are documentation of the
+ *  roster's shape, and a loop that treats them as heroes reads `.icon` off a
+ *  string. Underscore is the same convention art.json already uses. */
+const heroEntries = (src: any = heroes): Array<[string, any]> =>
+  Object.entries(src).filter(([id]) => !id.startsWith('_')) as Array<[string, any]>
+
 const ART_KEYS = new Set(Object.keys(art.files))
 
 test('every sprite key referenced anywhere resolves to a real file', () => {
@@ -27,10 +33,10 @@ test('every sprite key referenced anywhere resolves to a real file', () => {
   }
   for (const [id, e] of Object.entries(enemies) as [string, any][]) refs.push([`enemy ${id}`, e.sprite])
   for (const [id, a] of Object.entries(abilities) as [string, any][]) refs.push([`ability ${id}`, a.icon])
-  for (const [id, h] of Object.entries(heroes) as [string, any][]) {
+  for (const [id, h] of heroEntries()) {
     refs.push([`hero ${id} body`, h.bodySprite], [`hero ${id} ultimate`, h.ultimateSprite],
       [`hero ${id} portrait`, h.portraitSprite],
-      [`hero ${id} haymaker`, h.haymaker.icon], [`hero ${id} restructure`, h.restructure.icon])
+      [`hero ${id} haymaker`, h.haymaker.icon])
     h.fighterSprites.forEach((s: string, i: number) => refs.push([`hero ${id} gnome ${i}`, s]))
   }
   refs.push([`map plate ${map.plate}`, art.map[map.plate]])
@@ -265,8 +271,8 @@ test('every icon the UI shows can be sized from the manifest', () => {
   // how a 616px tower ended up drawn at 444px across the middle of the map.
   const icons: Array<[string, string]> = []
   for (const [id, a] of Object.entries(abilities) as [string, any][]) icons.push([`ability ${id}`, a.icon])
-  for (const [id, h] of Object.entries(heroes) as [string, any][]) {
-    icons.push([`hero ${id} haymaker`, h.haymaker.icon], [`hero ${id} restructure`, h.restructure.icon])
+  for (const [id, h] of heroEntries()) {
+    icons.push([`hero ${id} haymaker`, h.haymaker.icon])
   }
   for (const [id, t] of Object.entries(towers) as [string, any][]) icons.push([`tower ${id}`, t.sprite])
 
@@ -535,17 +541,15 @@ test("Cory's kit matches the design doc", () => {
   }
   assert.equal(c.passive.name, 'Depreciation')
   assert.equal(c.haymaker.name, 'Haymaker')
-  assert.equal(c.restructure.name, 'Restructure')
   assert.equal(c.lastStand.name, 'DAD MODE')
 })
 
-test('Haymaker is a real burst with knockback, and Restructure is free', () => {
+test('Haymaker is a real burst with knockback', () => {
   const c = heroes.cory
   assert.ok(c.haymaker.damage > c.damage * 4, 'Haymaker should dwarf a normal swing')
   assert.ok(c.haymaker.knockbackPixels > 0, 'Haymaker needs knockback')
   assert.ok(c.haymaker.ignoresArmor, 'a haymaker should not be stopped by armour')
-  assert.ok(c.haymaker.cooldown > 0 && c.restructure.cooldown > 0)
-  assert.equal((c.restructure as any).cost, undefined, 'Restructure is free by design')
+  assert.ok(c.haymaker.cooldown > 0)
 })
 
 test('Depreciation fully strips the cast it was tuned against, and dents the rest', () => {
@@ -593,12 +597,12 @@ test('presentation numbers are present and sane', () => {
 })
 
 test("the hero's own actives use ability art, not a tower or a placeholder", () => {
-  // Haymaker drew the Write-Off tower and Restructure drew a leftover Kenney
+  // Haymaker drew the Write-Off tower and the hero's second slot drew a Kenney
   // pad tile, sitting beside two real ability cards in the same HUD row.
   const heroes = JSON.parse(readFileSync(new URL('../src/data/heroes.json', import.meta.url), 'utf8'))
   const art = JSON.parse(readFileSync(new URL('../src/data/art.json', import.meta.url), 'utf8'))
-  for (const hero of Object.values(heroes) as any[]) {
-    for (const slot of ['haymaker', 'restructure'] as const) {
+  for (const [, hero] of heroEntries(heroes)) {
+    for (const slot of ['haymaker'] as const) {
       const key = hero[slot].icon
       const path = art.files[key]
       assert.ok(path, `${hero.name}'s ${slot} points at unknown art key "${key}"`)
@@ -838,12 +842,12 @@ test('tier is visible on the board without opening a panel', () => {
 /* --------------------------------------- hero abilities have their own art */
 
 test('the hero abilities point at their own icons, not at borrowed ones', () => {
-  // AUDIT #2: Haymaker pointed at a tower sprite and Restructure at a Kenney
+  // AUDIT #2: Haymaker pointed at a tower sprite and the second slot at a Kenney
   // placeholder tile. Both then spent a while pointing at other abilities'
   // icons as stand-ins, which is better but still borrowed.
   const art = JSON.parse(readFileSync(new URL('../src/data/art.json', import.meta.url), 'utf8'))
   const c = heroes.cory
-  for (const [slot, key] of [['haymaker', c.haymaker.icon], ['restructure', c.restructure.icon]] as const) {
+  for (const [slot, key] of [['haymaker', c.haymaker.icon]] as const) {
     assert.equal(key, `ability-${slot}`, `${slot} does not use its own icon`)
     assert.ok(art.files[key], `${key} is not in the manifest`)
     assert.match(art.files[key], new RegExp(`ability_${slot}\\.png$`), `${key} points at the wrong file`)
@@ -853,7 +857,7 @@ test('the hero abilities point at their own icons, not at borrowed ones', () => 
       `${art.files[key]} is not on disk`)
   }
   // And nothing borrows a drafted ability's icon any more.
-  for (const key of [c.haymaker.icon, c.restructure.icon]) {
+  for (const key of [c.haymaker.icon]) {
     assert.doesNotMatch(key, /meteor|gnomes|molotov|glacier|chain|scratch/, `${key} is still a borrowed icon`)
   }
 })
@@ -863,7 +867,7 @@ test('the hero medallions are round and the drafted plates are not', () => {
   // this run dealt. The manifest has to reflect that, or the bar cannot.
   const art = JSON.parse(readFileSync(new URL('../src/data/art.json', import.meta.url), 'utf8'))
   const ratio = (k: string): number => art.render[k].contentWidth / art.render[k].contentHeight
-  for (const k of ['ability-haymaker', 'ability-restructure']) {
+  for (const k of ['ability-haymaker']) {
     assert.ok(Math.abs(ratio(k) - 1) < 0.15, `${k} is ${ratio(k).toFixed(2)}:1, not a square medallion`)
   }
   for (const k of ['ability-molotov', 'ability-glacier', 'ability-meteor']) {

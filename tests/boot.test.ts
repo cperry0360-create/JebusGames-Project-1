@@ -72,7 +72,7 @@ test('an optional key is a short deliberate list, and every one has a fallback',
   }
   // Every family's fallback is real code, not a comment.
   assert.match(src('scenes/BootScene.ts'), /ensureIconFallbackTexture\(this\)/, 'no icon fallback')
-  assert.match(src('entities/Hero.ts'), /return this\.def\.bodySprite/,
+  assert.match(src('entities/Hero.ts'), /return heroSprite\(this\.heroId, this\.powered\)/,
     'a missing hero frame does not fall back to the static idle')
 
   // The build pad is REQUIRED art now, not an optional hook — it was the one

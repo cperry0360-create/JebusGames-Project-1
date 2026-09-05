@@ -26,7 +26,7 @@
 // decides whether the game is playable should be testable without a canvas.
 
 /** What a slot is, which decides its shape and what tapping it does. */
-export type SlotKind = 'ability' | 'haymaker' | 'restructure'
+export type SlotKind = 'ability' | 'haymaker'
 
 /** One slot, before it knows where it is. */
 export interface SlotDef {

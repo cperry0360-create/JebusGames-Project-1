@@ -27,6 +27,10 @@ import rulesData from '../../src/data/rules.json' with { type: 'json' }
 import draftData from '../../src/data/draft.json' with { type: 'json' }
 
 import { DEFAULT_LEVEL_ID, loadLevel, towerWeightsFor } from '../../src/systems/Levels.ts'
+import { DEFAULT_HERO_ID, HERO_IDS, resolveHeroId } from '../../src/systems/Heroes.ts'
+import {
+  TRANSFORM_INVULNERABLE_SECONDS, damageToHero, shouldTransform,
+} from '../../src/systems/Transform.ts'
 import { Path } from '../../src/systems/Path.ts'
 import { LaneNetwork, MAIN_LANE, advance, type Walker } from '../../src/systems/Lanes.ts'
 import { defaultRally, soldierStations } from '../../src/systems/Rally.ts'
@@ -181,6 +185,7 @@ export type SoakMode = 'normal' | 'nobuild' | 'supportonly' | 'noabilities'
 
 export function simulate(
   seed: number, mode: SoakMode = 'normal', levelId: string = DEFAULT_LEVEL_ID,
+  heroFor?: string,
 ): SoakResult {
   // The level is a parameter now rather than two module-scope imports, so a
   // soak can be pointed at level 2. Everything below reads these two and does
@@ -201,7 +206,19 @@ export function simulate(
   }
 
   // --- the draft ---------------------------------------------------------
-  const heroId = rng.pick(Object.keys(HEROES))
+  // THE HERO IS NO LONGER DRAWN. It used to be picked at random, which was
+  // indistinguishable from a constant while there was one of them; there are
+  // five now and the player chooses, so the soak measures the DEFAULT unless a
+  // caller names one. Picking at random here would mean every reported win
+  // rate was an average over five heroes and comparable to nothing.
+  // ONE RNG VALUE IS STILL DRAWN AND THROWN AWAY, and that is deliberate.
+  // Every seed's whole run hangs off the order values come out of this
+  // generator, so simply deleting the draw reseeds all 60 of them: level 2
+  // moved 7/60 -> 12/60 with no game change at all. The soak's entire value is
+  // that a number can be compared with the one before it, so the draw stays
+  // until someone re-baselines the reports on purpose.
+  rng.pick(HERO_IDS)
+  const heroId = resolveHeroId(heroFor ?? DEFAULT_HERO_ID)
   const hero = HEROES[heroId]
   const pool = Object.keys(ABILITIES).filter((id) => ABILITIES[id].draftable)
   const abilities = draftAbilities(pool, DRAFT.abilitiesDrawn, rng)
@@ -269,6 +286,11 @@ export function simulate(
     health: hero.maxHealth,
     down: false,
     reviveIn: 0,
+    // The two-state hero, modelled: a 40% cut on everything the hero takes
+    // from half health onward moves every win rate the soak reports, so a
+    // simulation without it would be measuring a different game.
+    powered: false,
+    poweredGrace: 0,
     lastStand: false,
     lastStandUsed: false,
     invulnerable: 0,
@@ -723,12 +745,16 @@ export function simulate(
           heroState.down = false
           heroState.health = hero.maxHealth
           heroState.reviveIn = 0
+          // Back to base form, to be earned again.
+          heroState.powered = false
+          heroState.poweredGrace = 0
         }
         // The lads do not stop because Cory did.
         for (const e of enemies) if (e.blockedBy === 'hero') e.blockedBy = null
         assignSoldierBlocks()
       } else {
         if (heroState.invulnerable > 0) heroState.invulnerable -= DT
+        if (heroState.poweredGrace > 0) heroState.poweredGrace -= DT
         const blockRange = hero.blockRange * (heroState.lastStand ? hero.lastStand.blockRangeMultiplier : 1)
         const near = withinRadius(
           enemies.filter((e) => e.alive && e.def.blockable) as any, heroState.x, heroState.y, blockRange,
@@ -789,11 +815,18 @@ export function simulate(
           if (e.attackTimer <= 0) {
             e.attackTimer = e.def.attackInterval
             if (heroState.invulnerable <= 0) {
-              const dmg = incomingDamage(e.def.damage, hero.lastStand, heroState.lastStand)
+              const dmg = damageToHero(
+                incomingDamage(e.def.damage, hero.lastStand, heroState.lastStand),
+                heroState.powered, heroState.poweredGrace)
               const out = applyHit(
                 heroState.health, hero.maxHealth, dmg, hero.lastStand, heroState.lastStandUsed,
               )
               heroState.health = finite('hero.health', out.health)
+              // Checked on what is LEFT, as the scene does it.
+              if (shouldTransform(heroState.health, hero.maxHealth, heroState.powered)) {
+                heroState.powered = true
+                heroState.poweredGrace = TRANSFORM_INVULNERABLE_SECONDS
+              }
               if (out.triggers) {
                 heroState.lastStand = true
                 heroState.lastStandUsed = true
@@ -889,4 +922,4 @@ export function simulate(
 
 export const ALL_TOWERS = Object.keys(TOWERS)
 export const ALL_ABILITIES = Object.keys(ABILITIES)
-export const ALL_HEROES = Object.keys(HEROES)
+export const ALL_HEROES = HERO_IDS

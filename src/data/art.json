@@ -48,7 +48,6 @@
     "ability-scratchticket": "abilities/ability_scratchticket.png",
     "ability-servernuke": "abilities/ability_servernuke.png",
     "ability-haymaker": "abilities/ability_haymaker.png",
-    "ability-restructure": "abilities/ability_restructure.png",
     "hud-peanuts": "ui/hud_peanuts.png",
     "hud-lives": "ui/hud_lives.png",
     "hud-wave": "ui/hud_wave.png",
@@ -104,7 +103,15 @@
     "turret-dummy-t3": "towers/tower_dummy_3.png",
     "unit-dummy-1": "towers/soldier_dummy_1.png",
     "unit-dummy-2": "towers/soldier_dummy_2.png",
-    "unit-dummy-3": "towers/soldier_dummy_3.png"
+    "unit-dummy-3": "towers/soldier_dummy_3.png",
+    "hero-courtland": "heroes/hero_courtland_base.png",
+    "hero-courtland-power": "heroes/hero_courtland_power.png",
+    "hero-han": "heroes/hero_han_base.png",
+    "hero-han-power": "heroes/hero_han_power.png",
+    "hero-eli": "heroes/hero_eli_base.png",
+    "hero-eli-power": "heroes/hero_eli_power.png",
+    "hero-bailey": "heroes/hero_bailey_base.png",
+    "hero-bailey-power": "heroes/hero_bailey_power.png"
   },
   "render": {
     "turret-escalation": {
@@ -373,12 +380,6 @@
       "anchorY": 0.5,
       "contentWidth": 256,
       "contentHeight": 233
-    },
-    "ability-restructure": {
-      "anchorX": 0.5,
-      "anchorY": 0.5,
-      "contentWidth": 256,
-      "contentHeight": 252
     },
     "prop-pad": {
       "anchorX": 0.5,
@@ -690,6 +691,70 @@
       "shadowWidth": 13.2,
       "contentWidth": 398,
       "contentHeight": 600
+    },
+    "hero-courtland": {
+      "anchorX": 0.4961,
+      "anchorY": 1.0,
+      "displayHeight": 78.0,
+      "shadowWidth": 20.3,
+      "contentWidth": 404,
+      "contentHeight": 700
+    },
+    "hero-courtland-power": {
+      "anchorX": 0.5036,
+      "anchorY": 1.0,
+      "displayHeight": 78.0,
+      "shadowWidth": 28.1,
+      "contentWidth": 560,
+      "contentHeight": 700
+    },
+    "hero-han": {
+      "anchorX": 0.4846,
+      "anchorY": 1.0,
+      "displayHeight": 78.0,
+      "shadowWidth": 24.5,
+      "contentWidth": 489,
+      "contentHeight": 700
+    },
+    "hero-han-power": {
+      "anchorX": 0.4938,
+      "anchorY": 1.0,
+      "displayHeight": 78.0,
+      "shadowWidth": 26.5,
+      "contentWidth": 529,
+      "contentHeight": 700
+    },
+    "hero-eli": {
+      "anchorX": 0.4696,
+      "anchorY": 1.0,
+      "displayHeight": 78.0,
+      "shadowWidth": 28.1,
+      "contentWidth": 561,
+      "contentHeight": 700
+    },
+    "hero-eli-power": {
+      "anchorX": 0.5004,
+      "anchorY": 1.0,
+      "displayHeight": 78.0,
+      "shadowWidth": 31.2,
+      "contentWidth": 623,
+      "contentHeight": 700
+    },
+    "hero-bailey": {
+      "anchorX": 0.542,
+      "anchorY": 1.0,
+      "displayHeight": 78.0,
+      "shadowWidth": 37.3,
+      "contentWidth": 744,
+      "contentHeight": 700
+    },
+    "hero-bailey-power": {
+      "anchorX": 0.5384,
+      "anchorY": 1.0,
+      "displayHeight": 78.0,
+      "shadowWidth": 32.0,
+      "contentWidth": 638,
+      "contentHeight": 700
     }
   },
   "map": {
@@ -827,7 +892,50 @@
       "hero-cory-attack-3",
       "hero-cory-attack-4"
     ],
-    "attackImpactFrame": 3
+    "attackImpactFrame": 3,
+    "roster": {
+      "cory": {
+        "base": "hero-cory",
+        "powered": null,
+        "walk": [
+          "hero-cory-walk-1",
+          "hero-cory-walk-2",
+          "hero-cory-walk-3",
+          "hero-cory-walk-4"
+        ],
+        "attack": [
+          "hero-cory-attack-1",
+          "hero-cory-attack-2",
+          "hero-cory-attack-3",
+          "hero-cory-attack-4"
+        ]
+      },
+      "courtland": {
+        "base": "hero-courtland",
+        "powered": "hero-courtland-power",
+        "walk": null,
+        "attack": null
+      },
+      "han": {
+        "base": "hero-han",
+        "powered": "hero-han-power",
+        "walk": null,
+        "attack": null
+      },
+      "eli": {
+        "base": "hero-eli",
+        "powered": "hero-eli-power",
+        "walk": null,
+        "attack": null
+      },
+      "bailey": {
+        "base": "hero-bailey",
+        "powered": "hero-bailey-power",
+        "walk": null,
+        "attack": null
+      }
+    },
+    "_roster": "EVERY HERO'S ART, in one place. `base` is how it starts, `powered` is what it wears once its health has been below half, and `walk`/`attack` are its frame lists or null. NULL IS THE INTERESTING CASE: a hero with no walk sheet is a single picture that would slide across the field, so Hero.ts gives it a small procedural bob instead. Dropping a real sheet in later is replacing the null with a frame list here -- the bob turns itself off, because it is conditioned on the sheet being absent rather than on a flag someone has to remember."
   },
   "worldMap": {
     "_note": "The world map screen, COMPOSED rather than painted. One tiling background reused at every size, one small card cropped from each level's own plate, and a trail drawn in code from the levels' mapPositions. Adding a level is a row in levels.json and one card here; no art is regenerated.",
