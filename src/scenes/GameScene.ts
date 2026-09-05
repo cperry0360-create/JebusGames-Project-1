@@ -96,7 +96,10 @@ const LAYOUT = PRESENTATION.hud.layout
 
 const RULES = rulesData as RulesDef
 const TOWERS = towersData as Record<string, TowerDef>
-const ENEMIES = enemiesData as Record<string, EnemyDef>
+// `as unknown as`, the same way Heroes.ts casts its own roster. `artFacing` is
+// a string literal union in the type and a plain `string` in the JSON, and TS
+// will not bridge that in one step.
+const ENEMIES = enemiesData as unknown as Record<string, EnemyDef>
 const ABILITIES = abilitiesData as Record<string, AbilityDef>
 const DRAFT = draftData as DraftDef
 

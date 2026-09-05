@@ -4305,6 +4305,64 @@ async function run() {
     return
   }
 
+  // WHICH WAY EVERY ENEMY IS ACTUALLY DRAWN ON THE BOARD.
+  //
+  // `enemyfacing` with arg `level3` (the default) or `level1` -- `facing` was
+  // taken, by the scenario that checks the HERO's. Spawns one of every
+  // enemy the level uses, walks them, and reports the heading and the flip
+  // together -- plus a screenshot, because "flipX is false" and "he is facing
+  // the way he is walking" are not the same claim and only the picture settles
+  // the second one.
+  if (scenario === 'enemyfacing') {
+    for (const k of ['Title', 'Splash', 'Credits', 'Boot', 'Loadout']) game.scene.stop(k)
+    const RS = await import('./js/systems/RunState.js')
+    const lvl = arg || 'level3'
+    RS.setRunState({ heroId: 'cory', openingTowers: ['withholding', 'rounding'],
+      abilities: ['molotov', 'glacier'], reserveTowers: [], levelId: lvl })
+    game.scene.start('Game')
+    await until(() => running('Game'), 12000)
+    await until(() => running('Hud'), 12000)
+    await sleep(800)
+    const g = scene('Game')
+    note('level ' + lvl + ' at ' + VP.w + 'x' + VP.h)
+
+    // One wave after another until every type this level uses has been seen.
+    const seen = new Map()
+    for (let w = 0; w < 14 && seen.size < 5; w++) {
+      g.status.wave = w
+      g.startWave()
+      const t0 = Date.now()
+      while (Date.now() - t0 < 9000) {
+        for (const e of g.enemies) {
+          if (seen.has(e.def.name)) continue
+          // Heading from the art's own flip and the walk direction, so this is
+          // what the player sees rather than what the data says.
+          seen.set(e.def.name, {
+            drawn: e.def.artFacing,
+            flipped: !!e.art.flipX,
+            // Where the art's nose points, after the flip.
+            shows: (e.def.artFacing === 'left') !== !!e.art.flipX ? 'left' : 'right',
+          })
+        }
+        if (seen.size >= 5) break
+        await sleep(200)
+      }
+      if (seen.size >= 5) break
+    }
+    await sleep(400)
+    await shot('facing-' + lvl + '-' + VP.w + 'x' + VP.h)
+    let wrong = 0
+    for (const [name, v] of seen) {
+      // Every enemy on every level walks from the arch towards the cabinet, so
+      // it should be showing the side it is travelling towards.
+      note('  ' + name.padEnd(18) + ' drawn=' + v.drawn.padEnd(5)
+        + ' flipped=' + String(v.flipped).padEnd(5) + ' shows=' + v.shows)
+    }
+    note('RESULT ' + seen.size + ' enemy type(s) seen on ' + lvl
+      + (wrong ? '  *** ' + wrong + ' backwards ***' : ''))
+    return
+  }
+
   if (scenario === 'pauseresume') {
     // THE REPORTED FAILURE, end to end and through real input: start a run,
     // start a wave, tap PAUSE, tap RESUME, and check the wave actually moves

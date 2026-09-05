@@ -8,7 +8,7 @@ import { makeShadow, PRESENTATION, floatingDamage, deathPuff } from '../systems/
 import { emergeState, vanishAlpha, type EmergeConfig } from '../systems/Gateway.ts'
 import { MAIN_LANE, followMerges, type LaneNetwork } from '../systems/Lanes.ts'
 import { applyGroundRender } from '../systems/Art.ts'
-import { facesLeft } from '../systems/Facing.ts'
+import { facesLeft, mirroredFor } from '../systems/Facing.ts'
 import rulesData from '../data/rules.json'
 import { onBoard } from '../systems/Liveness.ts'
 
@@ -193,6 +193,14 @@ export class Enemy extends Phaser.GameObjects.Container {
     // keep the sizes they were drawn at relative to each other.
     this.artOffset = applyGroundRender(this.art, def.sprite)
     this.baseScaleX = this.art.scaleX
+    // THE FIRST FRAME COUNTS. `face()` early-returns when the heading has not
+    // changed, so an enemy that spawns walking the way it starts out facing
+    // never reaches it -- and a left-drawn sprite would stand there mirrored
+    // wrongly until the lane happened to turn. The opening flip is applied
+    // here, from the same two facts.
+    const flip0 = mirroredFor(this.facingLeft, def.artFacing)
+    this.art.setFlipX(flip0)
+    this.art.x = flip0 ? -this.artOffset : this.artOffset
     this.bar = scene.add.graphics()
     // Shadow first, then the art, then the bar, so each draws over the last.
     this.add([this.shadow, this.art, this.bar])
@@ -588,15 +596,25 @@ export class Enemy extends Phaser.GameObjects.Container {
     )
   }
 
-  /** Mirrors the art when the lane turns back to the left. */
+  /**
+   * Mirrors the art when the lane turns back to the left.
+   *
+   * TWO THINGS, AND THE SECOND ONE IS DATA: which way the enemy is heading,
+   * and which way its art was drawn. This used to be a bare `setFlipX(left)`,
+   * which is the same statement as "every enemy is drawn facing right" -- true
+   * of all seven that existed when it was written, and false of all five added
+   * for level 3, so the entire level walked backwards. `mirroredFor` is the
+   * same function the heroes use, for the same reason.
+   */
   private face(angle: number): void {
     const left = facesLeft(angle, this.facingLeft, PRESENTATION.facing.deadZone)
     if (left === this.facingLeft) return
     this.facingLeft = left
-    this.art.setFlipX(left)
+    const flip = mirroredFor(left, this.def.artFacing)
+    this.art.setFlipX(flip)
     // Mirroring is about the art's centre, so the feet stay put once the
     // offset that put them on the lane is mirrored too.
-    this.art.x = left ? -this.artOffset : this.artOffset
+    this.art.x = flip ? -this.artOffset : this.artOffset
   }
 
   /** Mid-body height, for anything that should land on the enemy rather than

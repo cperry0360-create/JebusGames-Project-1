@@ -110,8 +110,11 @@ test('The Devil summons, and has grown nothing else', () => {
     'The Devil no longer summons what he was asked to')
   assert.ok(enemies[d.summons.enemy], 'The Devil summons an enemy that does not exist')
 
-  // The field list, plus the one field that was added on purpose.
+  // The field list, plus the two that were added on purpose. `artFacing` is
+  // one of them: every enemy declares which way its art is drawn now, because
+  // Enemy.ts used to assume "right" for all of them and level 3's five are all
+  // drawn facing left.
   assert.deepEqual(Object.keys(d).sort(),
-    [...Object.keys(BRIEF.theDevil), 'flavor', 'summons'].sort(),
+    [...Object.keys(BRIEF.theDevil), 'flavor', 'summons', 'artFacing'].sort(),
     'The Devil carries fields nobody asked for')
 })

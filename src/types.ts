@@ -392,6 +392,16 @@ export interface DisableDef {
 
 export interface EnemyDef {
   name: string
+  /**
+   * Which way this enemy's art is drawn, before any mirroring.
+   *
+   * A PROPERTY OF THE ART, so it lives with the enemy -- the same shape, and
+   * for the same reason, as `HeroDef.artFacing`. Enemy.ts used to carry "the
+   * art is drawn facing right" as a blanket rule; it was true of all seven
+   * enemies that existed when it was written and false of all five added for
+   * level 3, so every enemy on that level walked backwards.
+   */
+  artFacing: 'left' | 'right'
   flavor: string
   role: string
   /** What kind of thing this is, for rules that key off importance rather
