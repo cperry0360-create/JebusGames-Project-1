@@ -268,9 +268,21 @@ export function simulate(
   })
 
   // --- the scripted player ----------------------------------------------
+  // Nearest the road first, not the order the pads happen to sit in the JSON.
+  //
+  // The scripted player fills pads in the order it walks them, so with index
+  // order the result depended on how the map file happened to list its spots.
+  // Level 2 measured 9/60 in overlay reading order and 21/60 with the SAME
+  // fifteen pads sorted by distance — a 12-run swing from a field the map's
+  // own note calls meaningless. That is the harness ranking maps by their
+  // array order. A player looks at the board and covers the road first, so
+  // the sim does too, and the number now describes the level.
+  const byReach = [...build.spots].sort(
+    (a, b) => (padToLane[a.index] ?? 0) - (padToLane[b.index] ?? 0))
+
   const spend = (): void => {
     if (mode === 'nobuild') return
-    for (const spot of build.spots) {
+    for (const spot of byReach) {
       if (!build.isFree(spot.index)) continue
       const pickable = mode === 'supportonly'
         ? Object.keys(TOWERS).filter((id) => TOWERS[id].supportRadius > 0)
