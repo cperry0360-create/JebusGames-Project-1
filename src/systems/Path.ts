@@ -32,6 +32,19 @@ export class Path {
     this.totalLength = total
   }
 
+  /**
+   * How far along the lane a given waypoint sits.
+   *
+   * Branching maps need this: a lane that merges into another one joins it at
+   * a waypoint INDEX, and the enemy walking it needs the DISTANCE that index
+   * stands at. Clamped, so a merge index past the end lands at the end rather
+   * than off it.
+   */
+  distanceAtIndex(index: number): number {
+    const i = Math.max(0, Math.min(Math.floor(index), this.cumulative.length - 1))
+    return this.cumulative[i]!
+  }
+
   /** Position at a distance travelled from the spawn end. Clamped at both ends. */
   pointAt(distance: number): PathPoint {
     if (distance <= 0) return { ...this.points[0] }

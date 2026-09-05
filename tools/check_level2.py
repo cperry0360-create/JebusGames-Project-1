@@ -327,6 +327,73 @@ def worst_deviation(line, way):
 
 # ------------------------------------------------------------------ main
 
+def check_lanes(data: dict) -> list:
+    """Structural problems with a map's lanes, as a list of sentences.
+
+    The mirror of validateLanes in src/systems/Lanes.ts. Kept in step by hand
+    and on purpose: this script runs against the FILE before the game ever
+    loads it, so a map that would strand its walkers is caught by the tool that
+    already knows how to say what is wrong with a map.
+    """
+    lanes = [{'id': 'main', 'waypoints': data['waypoints']}] + list(data.get('lanes', []))
+    if len(lanes) == 1:
+        print(f'lanes: one, "main", {len(data["waypoints"])} waypoints (no branches)')
+        return []
+
+    print(f'lanes: {len(lanes)}')
+    problems = []
+    seen = set()
+    for l in lanes:
+        if l['id'] in seen:
+            problems.append(f'two lanes are called "{l["id"]}"')
+        seen.add(l['id'])
+        n = len(l.get('waypoints') or [])
+        if n < 2:
+            problems.append(f'lane "{l["id"]}" has fewer than two waypoints')
+        merge = l.get('merge')
+        where = f' -> {merge["into"]}@{merge["atIndex"]}' if merge else '  (runs to the exit)'
+        print(f'  "{l["id"]}" {n} waypoints{where}')
+
+    by_id = {l['id']: l for l in lanes}
+    for l in lanes:
+        merge = l.get('merge')
+        if not merge:
+            continue
+        if merge['into'] == l['id']:
+            problems.append(f'lane "{l["id"]}" merges into itself')
+            continue
+        target = by_id.get(merge['into'])
+        if target is None:
+            problems.append(f'lane "{l["id"]}" merges into "{merge["into"]}", which is not a lane')
+            continue
+        i = merge['atIndex']
+        if not isinstance(i, int) or i < 0 or i >= len(target['waypoints']):
+            problems.append(
+                f'lane "{l["id"]}" merges into "{target["id"]}" at waypoint {i}, '
+                f'which that lane does not have (it has {len(target["waypoints"])})')
+
+    terminals = [l for l in lanes if not l.get('merge')]
+    if not terminals:
+        problems.append('every lane merges; none reaches the exit')
+    elif len(terminals) > 1:
+        names = ' and '.join(f'"{t["id"]}"' for t in terminals)
+        problems.append(f'lanes {names} both run to the exit; branches must merge before it')
+
+    for l in lanes:
+        walked, at = {l['id']}, l
+        while at is not None and at.get('merge'):
+            nxt = by_id.get(at['merge']['into'])
+            if nxt is None:
+                break
+            if nxt['id'] in walked:
+                problems.append(f'lane "{l["id"]}" merges in a circle through "{nxt["id"]}"')
+                break
+            walked.add(nxt['id'])
+            at = nxt
+
+    return list(dict.fromkeys(problems))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -467,6 +534,20 @@ def main():
         bad.append(f'the hero is {pad_clear:.1f} px from a pad, wanted {HERO_PAD_CLEARANCE}')
     if hy < min(y for _, y in data['waypoints']):
         bad.append(f'the hero starts at y={hy}, above the lane\'s own highest point')
+
+    # ---------------------------------------------------------------- lanes
+    #
+    # A branching map declares extra lanes beside its own `waypoints`, each
+    # with an optional merge into another. The overlay tracing above cannot
+    # derive those — it finds ONE cyan stroke and would have no way to say
+    # which branch it was — so what is checked here is the STRUCTURE: that
+    # every merge names a lane that exists, at a waypoint that lane has, and
+    # that the lanes do not form a circle or leave two routes to the exit.
+    #
+    # This mirrors validateLanes in src/systems/Lanes.ts, which is the version
+    # the game and its tests run. A single-lane map has nothing extra to check
+    # and prints one line saying so.
+    bad += check_lanes(data)
 
     print()
     for line_ in bad:

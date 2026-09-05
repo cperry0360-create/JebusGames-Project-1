@@ -19,6 +19,30 @@ export interface DisplayDef {
   camera: { defaultZoom: number; maxZoom: number; tapSlopPx: number }
 }
 
+/**
+ * One lane of a map: a route enemies walk.
+ *
+ * A map with no `lanes` has exactly one, built from its own `waypoints` and
+ * called "main" — which is every map that exists today, and why levels 1 and 2
+ * needed no edits when branching arrived.
+ *
+ * A branch's waypoints END at the join. `merge` names the lane it joins and
+ * the waypoint INDEX on THAT lane to carry on from, so the join is stated in
+ * the target's terms: moving the branch cannot silently detach it, and moving
+ * the target's waypoints moves the join with them.
+ */
+export interface LaneDef {
+  /** Unique within the map. "main" is taken by the map's own waypoints. */
+  id: string
+  waypoints: number[][]
+  /** Where this lane joins another. Absent means it runs to the exit itself,
+   *  which exactly one lane per map may do. */
+  merge?: {
+    into: string
+    atIndex: number
+  }
+}
+
 export interface MapDef {
   /** Key into art.json's map section. */
   plate: string
@@ -36,6 +60,16 @@ export interface MapDef {
    * the arch and out through the gate.
    */
   waypoints: number[][]
+  /**
+   * EXTRA lanes beyond the one `waypoints` describes, for maps with more than
+   * one spawn gate. Absent on a single-lane map, which is the shape levels 1
+   * and 2 use and the reason they were not touched when this arrived.
+   *
+   * The trunk is NOT repeated here — it is `waypoints`, resolved as the lane
+   * "main" — so there is one place a route's geometry lives and no way for two
+   * copies of it to drift. See systems/Lanes.ts.
+   */
+  lanes?: LaneDef[]
   buildSpots: number[][]
   /** The blank painted boards, and the rectangle a lettering overlay is drawn
    *  in on each. See systems/SignPlacement.
@@ -543,6 +577,10 @@ export interface WaveSpawnDef {
   interval: number
   /** Seconds after the wave starts before this group begins spawning. */
   delay: number
+  /** Which lane this group walks in from. Absent means the map's main lane,
+   *  which is what every wave written before branching existed means — so no
+   *  wave table needed editing. */
+  lane?: string
 }
 
 export interface WaveDef {

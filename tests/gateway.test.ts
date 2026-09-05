@@ -105,7 +105,12 @@ test('the enemy fades out through the gate, and nothing slams', () => {
   const enemy = src('entities/Enemy.ts')
   const game = src('scenes/GameScene.ts')
   // The walk ends at the far edge of the gap, not at the lane's end.
-  assert.match(enemy, /if \(this\.distance >= this\.stopDistance\) return true/,
+  // The test moved with the code: the walk still ends at the far edge of the
+  // gap, but the check is now in `leaked()`, which also refuses to leak an
+  // enemy that is only at the end of a BRANCH rather than at the exit.
+  assert.match(enemy, /if \(this\.leaked\(\)\) return true/,
+    'the enemy no longer ends its walk through the leak check')
+  assert.match(enemy, /return this\.laneDistance >= this\.stopDistance/,
     'the enemy still walks to the end of the lane and off the plate')
   assert.doesNotMatch(enemy, /this\.distance >= this\.lane\.totalLength/,
     'the old walk-off-the-end condition is back')
@@ -113,7 +118,7 @@ test('the enemy fades out through the gate, and nothing slams', () => {
   // is gated on being past the gap's near edge.
   assert.equal((enemy.match(/emergeState\(/g) ?? []).length, 1,
     'the entrance emergence is applied in more than one place')
-  assert.match(enemy, /if \(this\.distance <= this\.gateDistance\) return/,
+  assert.match(enemy, /if \(this\.laneDistance <= this\.gateDistance\) return/,
     'the exit fade is not gated on reaching the gate, so it runs over the whole lane')
 
   const leak = /private leak\(enemy: Enemy\)[\s\S]*?\n  \}/.exec(game)

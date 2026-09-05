@@ -5,6 +5,7 @@ import { ySort } from '../systems/DepthSort.ts'
 import { canStun, damageAfterArmor, diminishedSeconds, slowedSpeed, slowStacksAfter, stunLockoutFor, type DiminishDef } from '../systems/Combat.ts'
 import { makeShadow, PRESENTATION, floatingDamage, deathPuff } from '../systems/Presentation.ts'
 import { emergeState, vanishAlpha, type EmergeConfig } from '../systems/Gateway.ts'
+import { MAIN_LANE, followMerges, type LaneNetwork } from '../systems/Lanes.ts'
 import { applyGroundRender } from '../systems/Art.ts'
 import { facesLeft } from '../systems/Facing.ts'
 import rulesData from '../data/rules.json'
@@ -26,8 +27,26 @@ export class Enemy extends Phaser.GameObjects.Container {
   readonly def: EnemyDef
   readonly maxHealth: number
   health: number
-  /** Distance walked along the lane. Doubles as "how close to the exit". */
+  /**
+   * TOTAL distance walked, across every lane this enemy has been on.
+   *
+   * MONOTONIC BY CONSTRUCTION: it only ever has movement added to it, and a
+   * merge does not touch it. That is what targeting sorts on — "furthest
+   * along" — and why a transfer cannot make a tower drop the enemy it was
+   * shooting and pick a different one on the same frame.
+   *
+   * On a single-lane map this is identical to `laneDistance` at every instant,
+   * which is why levels 1 and 2 behave exactly as before.
+   */
   distance = 0
+  /**
+   * Distance along the lane this enemy is on RIGHT NOW, which is what its
+   * position is looked up with. Reset to the join point when a branch merges,
+   * so it is NOT monotonic and must never be used for targeting.
+   */
+  laneDistance = 0
+  /** The lane being walked. Changes at a merge. */
+  laneId: string
   status: EnemyState = 'walking'
   /** Whatever is currently holding this enemy up, set each frame by the
    *  scene. The hero and any summoned fighter both qualify. */
@@ -41,7 +60,8 @@ export class Enemy extends Phaser.GameObjects.Container {
   /** Counts down to the next tax. Only The Politician uses it. */
   private taxTimer = 0
 
-  private readonly lane: Path
+  private lane: Path
+  private readonly lanes: LaneNetwork | null
   private readonly art: Phaser.GameObjects.Sprite
   private readonly shadow: Phaser.GameObjects.Image
   private readonly bar: Phaser.GameObjects.Graphics
@@ -116,10 +136,16 @@ export class Enemy extends Phaser.GameObjects.Container {
        *  spread so nobody walks in the grass. */
       laneHalfWidth: number
     },
+    /** The map's lanes, and which one this enemy walks in on. Omitted on a
+     *  single-lane map, where there is nothing to transfer to and `lane` is
+     *  the whole route. */
+    network?: { lanes: LaneNetwork; laneId: string },
   ) {
     super(scene, 0, 0)
     this.def = def
-    this.lane = lane
+    this.lane = network ? network.lanes.lane(network.laneId).path : lane
+    this.lanes = network?.lanes ?? null
+    this.laneId = network?.laneId ?? MAIN_LANE
     this.maxHealth = def.maxHealth
     this.health = def.maxHealth
 
@@ -147,7 +173,7 @@ export class Enemy extends Phaser.GameObjects.Container {
     this.laneOffset = (Math.random() * 2 - 1) * room
     // Behind the arch and invisible, not at its mouth at full opacity.
     this.sinceMouth = -1
-    const p = lane.pointAt(0)
+    const p = this.lane.pointAt(0)
     this.setPosition(p.x, p.y)
     scene.add.existing(this)
     this.applyEmergence(0)
@@ -177,7 +203,7 @@ export class Enemy extends Phaser.GameObjects.Container {
     // did, and that is the shape of bug this file has had before.
     if (this.emerged) return
     if (this.sinceMouth < 0) {
-      if (this.distance >= this.mouthDistance) {
+      if (this.laneDistance >= this.mouthDistance) {
         this.sinceMouth = 0
         const fn = this.onEmerge
         this.onEmerge = null
@@ -205,8 +231,11 @@ export class Enemy extends Phaser.GameObjects.Container {
    * pixels along.
    */
   private applyVanish(): void {
-    if (this.distance <= this.gateDistance) return
-    const a = vanishAlpha(this.distance, this.gateDistance, this.stopDistance)
+    // The gate belongs to the lane that reaches the exit. A branch has not
+    // got there yet, so nothing on one fades.
+    if (this.lanes && this.lanes.transferFrom(this.laneId)) return
+    if (this.laneDistance <= this.gateDistance) return
+    const a = vanishAlpha(this.laneDistance, this.gateDistance, this.stopDistance)
     this.art.setAlpha(a)
     this.bar.setAlpha(a)
     this.shadow.setAlpha(a * PRESENTATION.shadow.alpha)
@@ -328,10 +357,53 @@ export class Enemy extends Phaser.GameObjects.Container {
     this.stunLockout = stunLockoutFor(dealt, lockoutMultiple)
   }
 
+  /**
+   * Hands this enemy over to the lane its branch joins, once it reaches the
+   * end of the branch.
+   *
+   * `distance` IS NOT TOUCHED. That is the whole point: progress is the sum of
+   * every step taken and a merge is not a step, so the enemy keeps its place
+   * in the targeting order across the join. `laneDistance` jumps to wherever
+   * the join lands on the new lane, which is the only thing that moves.
+   *
+   * Loops rather than transfers once, because a branch may join a branch that
+   * joins the trunk, and a long frame can carry an enemy through both in one
+   * step. `validateLanes` rejects the cycle that would make this unbounded.
+   */
+  private followMerge(): void {
+    if (!this.lanes) return
+    const at = followMerges(this.lanes, { laneId: this.laneId, laneDistance: this.laneDistance })
+    if (at.laneId === this.laneId) return
+    this.laneId = at.laneId
+    this.laneDistance = at.laneDistance
+    this.lane = this.lanes.lane(at.laneId).path
+  }
+
+  /**
+   * True once this enemy has walked off the end of its route.
+   *
+   * Only a lane that reaches the exit can leak. A branch ENDS at its join, and
+   * without this an enemy would count as escaped the moment it got there —
+   * which on a fork is most of the way through the level.
+   */
+  private leaked(): boolean {
+    if (this.lanes && this.lanes.transferFrom(this.laneId)) return false
+    return this.laneDistance >= this.stopDistance
+  }
+
   /** Haymaker knockback: shoved back along the lane it came from. */
   knockBack(pixels: number): void {
-    this.distance = Math.max(0, this.distance - pixels)
-    const p = this.lane.pointAt(this.distance)
+    // Both, and by the same amount. The position goes back along the lane;
+    // the progress goes back with it, because an enemy shoved twenty pixels
+    // backwards that kept its place in the targeting order would be shot
+    // ahead of the one that overtook it.
+    //
+    // Clamped at the lane's own start, not at zero progress: a knockback does
+    // not push anyone back up the branch they merged out of.
+    const back = Math.min(pixels, this.laneDistance)
+    this.laneDistance -= back
+    this.distance = Math.max(0, this.distance - back)
+    const p = this.lane.pointAt(this.laneDistance)
     this.scene.tweens.add({ targets: this, x: p.x, y: p.y, duration: 180, ease: 'Quad.easeOut' })
   }
 
@@ -392,9 +464,13 @@ export class Enemy extends Phaser.GameObjects.Container {
       // whether or not the target shuffled out of range in the middle of it.
       //
       // The field starts at 0, so a first engagement still lands immediately.
-      this.distance += slowedSpeed(this.def.speed, this.slowFactor, this.slowed) * dt
-      const p = this.lane.pointAt(this.distance)
-      const a = this.lane.angleAt(this.distance)
+      const step = slowedSpeed(this.def.speed, this.slowFactor, this.slowed) * dt
+      // Progress only ever grows. The lane position is what a merge rewrites.
+      this.distance += step
+      this.laneDistance += step
+      this.followMerge()
+      const p = this.lane.pointAt(this.laneDistance)
+      const a = this.lane.angleAt(this.laneDistance)
       // Offset along the lane's NORMAL, so the spread follows the road round a
       // bend instead of shearing across it. (-sin, cos) is the left-hand
       // normal to the direction (cos, sin).
@@ -403,7 +479,7 @@ export class Enemy extends Phaser.GameObjects.Container {
       // The far side of the open gate's gap, not the end of the lane. The
       // enemy has been fading across the gap for the last few pixels, so by
       // here there is nothing left to see and the leak is bookkeeping.
-      if (this.distance >= this.stopDistance) return true
+      if (this.leaked()) return true
     }
 
     this.applyEmergence(dt)

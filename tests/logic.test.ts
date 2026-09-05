@@ -290,7 +290,7 @@ test('spawner emits exactly the wave composition, honouring group delays', () =>
     const counts: Record<string, number> = {}
     let guard = 0
     while (!s.done && guard++ < 200000) {
-      for (const id of s.update(1 / 60)) counts[id] = (counts[id] ?? 0) + 1
+      for (const sp of s.update(1 / 60)) counts[sp.enemy] = (counts[sp.enemy] ?? 0) + 1
     }
     for (const g of wave.spawns) {
       assert.ok((counts[g.enemy] ?? 0) >= g.count, `wave ${i + 1} short on ${g.enemy}`)
@@ -305,9 +305,22 @@ test('a delayed group really waits', () => {
   const s = new WaveSpawner()
   s.begin({ name: 't', spawns: [{ enemy: 'a', count: 1, interval: 1, delay: 0 },
                                 { enemy: 'b', count: 1, interval: 1, delay: 5 }] })
-  assert.deepEqual(s.update(0.1), ['a'], 'undelayed group spawns immediately')
-  assert.deepEqual(s.update(1), [], 'delayed group must not spawn yet')
-  assert.deepEqual(s.update(5), ['b'], 'delayed group spawns after its delay')
+  const ids = (out: { enemy: string }[]) => out.map((o) => o.enemy)
+  assert.deepEqual(ids(s.update(0.1)), ['a'], 'undelayed group spawns immediately')
+  assert.deepEqual(ids(s.update(1)), [], 'delayed group must not spawn yet')
+  assert.deepEqual(ids(s.update(5)), ['b'], 'delayed group spawns after its delay')
+})
+
+test('a group carries its lane, and defaults to none for the map to resolve', () => {
+  // The spawner does not know what lanes a map has and must not: it passes the
+  // name through, and LaneNetwork.lane turns undefined into the main lane.
+  const s = new WaveSpawner()
+  s.begin({ name: 't', spawns: [
+    { enemy: 'a', count: 1, interval: 1, delay: 0, lane: 'west' },
+    { enemy: 'b', count: 1, interval: 1, delay: 0 },
+  ] })
+  const out = s.update(0.1)
+  assert.deepEqual(out.map((o) => [o.enemy, o.lane]), [['a', 'west'], ['b', undefined]])
 })
 
 test('spawner pays out backlog on a long frame', () => {

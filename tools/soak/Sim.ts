@@ -401,7 +401,10 @@ export function simulate(
         break runLoop
       }
 
-      for (const id of spawner.update(DT)) spawn(id)
+      // The rule layer walks one lane. A branching map's routes differ in
+      // length, so a soak of one would need a lane per enemy here too; that is
+      // a change to make when a branching level exists to soak.
+      for (const sp of spawner.update(DT)) spawn(sp.enemy)
       cooldowns.tick(DT)
 
       // Towers.

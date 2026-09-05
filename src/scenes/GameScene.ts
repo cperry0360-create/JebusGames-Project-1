@@ -13,6 +13,7 @@ import abilitiesData from '../data/abilities.json'
 import draftData from '../data/draft.json'
 
 import { loadLevel, type Level } from '../systems/Levels.ts'
+import { LaneNetwork } from '../systems/Lanes.ts'
 import { Path } from '../systems/Path.ts'
 import { BuildSystem } from '../systems/BuildSystem.ts'
 import type { BuildSpot } from '../systems/BuildSystem.ts'
@@ -160,6 +161,9 @@ export class GameScene extends Phaser.Scene {
   readonly cooldowns = new Cooldowns()
 
   private lane!: Path
+  /** Every lane this map has, and how they join. One lane on a single-lane
+   *  map, which is every level that exists today. */
+  private lanes!: LaneNetwork
   private build!: BuildSystem
   /** Public so the probe can drive the bribe through the real swap. Undefined
    *  on a level whose map declares no signs — see `buildSign`. */
@@ -393,7 +397,11 @@ export class GameScene extends Phaser.Scene {
       this.applyBands()
     })
 
-    this.lane = new Path(this.level.map.waypoints)
+    // The lane network first; `lane` stays the MAIN lane, which is what the
+    // board bounds, the sign placement and the gateway distances are all
+    // measured against, exactly as before.
+    this.lanes = new LaneNetwork(this.level.map)
+    this.lane = this.lanes.main.path
     // The arch mouth and the two edges of the open gate's gap are measured off
     // the painted plate as map positions; the enemy walks in lane distance.
     // Converted once here rather than per enemy per frame.
@@ -3005,10 +3013,14 @@ export class GameScene extends Phaser.Scene {
     this.cooldowns.tick(dt)
 
     if (this.status.phase === 'wave') {
-      for (const id of this.spawner.update(dt)) {
-        const def = ENEMIES[id]
+      for (const spawn of this.spawner.update(dt)) {
+        const def = ENEMIES[spawn.enemy]
         if (!def) continue
-        const enemy = new Enemy(this, def, this.lane, this.gateway)
+        // The lane the group named, or the main one. An unknown name resolves
+        // to main rather than throwing — see LaneNetwork.lane.
+        const lane = this.lanes.lane(spawn.lane)
+        const enemy = new Enemy(this, def, lane.path, this.gateway,
+          { lanes: this.lanes, laneId: lane.id })
         // The goblin's line, once per run, on the FIRST enemy to actually come
         // out of the arch. Hung off the emergence rather than the spawn so it
         // lands with the fade-in — spawning happens off the plate, behind the
@@ -3050,7 +3062,7 @@ export class GameScene extends Phaser.Scene {
           })
         }
         if (onEmerge.length > 0) enemy.onEmerge = () => { for (const fn of onEmerge) fn() }
-        logEvent('spawn', `${id} hp=${def.maxHealth}`)
+        logEvent('spawn', `${spawn.enemy} hp=${def.maxHealth} lane=${lane.id}`)
         this.enemies.push(enemy)
         if (def.tier === 'boss') this.announceBoss(enemy)
       }
