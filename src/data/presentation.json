@@ -418,6 +418,21 @@
     "labelColumn": 154,
     "_labelColumn": "Room reserved for a row's name, so the three tracks start in one column whatever the words are. Measured against SOUND EFFECTS, the longest, at labelSize with its letter spacing: it was 118 and the words ran under the track."
   },
+  "heroFx": {
+    "_note": "PLACEHOLDER effect art for the five hero powers, in numbers rather than in pictures. None of the five has art yet and waiting for it would mean shipping abilities nobody can judge -- the question a first balance pass has to answer is whether a radius is right, and that is a question about a shape on the board. Every shape is tinted to the hero (heroes.json `colour`) and sized to the power's real radius, so what the player sees is what the rule uses. See systems/HeroFx.ts; when the art lands, that file and this block go together.",
+    "ringMs": 480,
+    "ringWidth": 3,
+    "fillAlpha": 0.34,
+    "sweepMs": 420,
+    "rainRingMs": 700,
+    "strikeMs": 260,
+    "strikeLength": 26,
+    "strikeWidth": 3,
+    "hazardThickness": 0.32,
+    "hazardTeeth": 9,
+    "hazardToothHeight": 6,
+    "hazardPulseMs": 1100
+  },
   "targeting": {
     "_note": "What the board looks like while it is waiting for a tap. On a touch device there is no hover, so a targeting mode that only draws under the pointer draws NOTHING until the player has already committed — which is how a mode with no visible state came to be reported as a soft-lock. These numbers are the standing affordance: a breathing wash over the area a tap is legal in, drawn from the moment the mode is entered.",
     "pulseMs": 900,

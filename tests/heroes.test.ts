@@ -387,10 +387,19 @@ test('slot 2 is unusable in base form and enabled in powered form', () => {
     'tapping slot 2 does nothing at all')
   const cast = GAME.slice(GAME.indexOf('castHeroSlot2(): void {'))
   const body = cast.slice(0, cast.indexOf('\n  }'))
-  assert.match(body, /slot2Usable\(this\.hero\.powered, this\.hero\.down\)/,
-    'the cast path does not apply the same gate the HUD draws')
+  assert.match(body, /powerRefusal\(\s*\n?\s*p, this\.hero\.powered, this\.hero\.down/,
+    'the cast path does not apply the gate')
+  // And that gate CALLS the one the HUD draws from rather than restating it.
+  assert.match(src('src/systems/HeroPowers.ts'), /slot2Usable\(powered, heroDown\)/,
+    'the power gate is a second copy of the rule the bar greys the button with')
+  // ARMING MUST NOT SPEND. The cooldown starts in `firePower`, which is
+  // reached only from a tap that resolved to `commit`, so every way of backing
+  // out of the targeting is free.
   assert.doesNotMatch(body, /cooldowns\.start/,
-    'the unbuilt power spends a cooldown, so pressing it costs something')
+    'pressing the button spends the cooldown before the power has been placed')
+  const fire = GAME.slice(GAME.indexOf('private firePower('))
+  assert.match(fire.slice(0, fire.indexOf('\n  }')), /this\.cooldowns\.start\(SLOT2\)/,
+    'nothing starts the cooldown when the power actually lands')
 
   // Both slots are in the bar, in order, and neither is an ability card.
   for (const id of HERO_IDS) {

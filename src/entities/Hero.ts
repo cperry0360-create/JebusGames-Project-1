@@ -6,7 +6,7 @@ import { applyHit, attackInterval, incomingDamage, outgoingDamage } from '../sys
 import { HeroFrames, type FrameDef, type HeroPose } from '../systems/HeroFrames.ts'
 import { makeShadow, deathPuff } from '../systems/Presentation.ts'
 import { applyGroundRender } from '../systems/Art.ts'
-import { facesLeft } from '../systems/Facing.ts'
+import { facesLeft, mirroredFor } from '../systems/Facing.ts'
 import presentationData from '../data/presentation.json'
 import { attackFramesFor, heroSprite, walkFramesFor } from '../systems/Heroes.ts'
 import {
@@ -27,8 +27,10 @@ const BOB_SPEED = 11
  *
  * He has two forms. On foot he is a man with a rolled-up newspaper; at 25%
  * health he gets into an armoured SUV, which is wider than the road and does
- * not care about it. Both are drawn facing LEFT, which is the opposite of the
- * enemy art, so his facing rule is inverted rather than shared.
+ * not care about it. Both are drawn facing LEFT — but the four heroes added
+ * after him are drawn facing right, so which way the art points is a property
+ * of the hero (`artFacing`) and not a rule in here. It was a rule in here, and
+ * it made the other four walk backwards everywhere they went.
  *
  * Three rules are load-bearing here:
  *   - Last Stand fires once at 25% health, and cannot re-arm inside an
@@ -94,7 +96,13 @@ export class Hero extends Phaser.GameObjects.Container {
   readonly heroId: string
   /** Where the sprite sits when it is not bobbing. */
   private restingBodyY = 0
-  private facingRight = false
+  /**
+   * Which way he is HEADING, not which way the sprite is drawn. The two are
+   * the same question only for a hero whose art faces right, which is four of
+   * the five — and the one it is not true of is the one the old code was
+   * written against.
+   */
+  private headingLeft = false
   /** Whatever he swung at last frame, so `engaged` can be asked before the
    *  order is carried out rather than after. */
   private lastTarget: Enemy | null = null
@@ -473,11 +481,21 @@ export class Hero extends Phaser.GameObjects.Container {
     this.emit('powered')
   }
 
-  /**
-   * Both hero sprites are drawn facing LEFT, the opposite of the enemy art, so
-   * the shared rule is asked about the reversed heading and the answer means
-   * "facing right" here.
-   */
+  /** Whether the sprite is mirrored right now: the heading, resolved against
+   *  the way this particular hero's art was drawn. */
+  private get mirrored(): boolean {
+    return mirroredFor(this.headingLeft, this.def.artFacing)
+  }
+
+  /** The flip and the anchor, which always move together: the horizontal
+   *  ground-anchor correction changes sign when the sprite is mirrored. One
+   *  place, because the five call sites that did it by hand are five chances
+   *  to update the flip and forget the offset. */
+  private applyFacing(): void {
+    this.body_.setFlipX(this.mirrored)
+    this.body_.x = this.mirrored ? -this.artOffset : this.artOffset
+  }
+
   /**
    * Records the resting scale of the sprite and the shadow.
    *
@@ -528,8 +546,7 @@ export class Hero extends Phaser.GameObjects.Container {
     // anchor from the manifest per FRAME is what keeps his feet in one place
     // across a transition.
     this.artOffset = applyGroundRender(this.body_, key)
-    this.body_.x = this.facingRight ? -this.artOffset : this.artOffset
-    this.body_.setFlipX(this.facingRight)
+    this.applyFacing()
   }
 
   /** Puts on a different picture and re-anchors, the same way a frame swap
@@ -537,8 +554,7 @@ export class Hero extends Phaser.GameObjects.Container {
   private wearSprite(key: string): void {
     this.body_.setTexture(key)
     this.artOffset = applyGroundRender(this.body_, key)
-    this.body_.x = this.facingRight ? -this.artOffset : this.artOffset
-    this.body_.setFlipX(this.facingRight)
+    this.applyFacing()
     this.restingBodyY = this.body_.y
   }
 
@@ -583,11 +599,15 @@ export class Hero extends Phaser.GameObjects.Container {
 
   private faceTowards(x: number, y: number): void {
     const angle = Math.atan2(y - this.y, x - this.x)
-    const right = facesLeft(angle + Math.PI, this.facingRight, PRESENTATION.facing.deadZone)
-    if (right === this.facingRight) return
-    this.facingRight = right
-    this.body_.setFlipX(right)
-    this.body_.x = right ? -this.artOffset : this.artOffset
+    // The HEADING, asked the same way the enemies and the fighters ask it.
+    // It used to be asked about `angle + Math.PI` and stored as "facing
+    // right", which is the blanket inversion that made four of the five heroes
+    // walk backwards. The mirroring is resolved from the heading and the
+    // hero's own `artFacing` in `mirrored`.
+    const left = facesLeft(angle, this.headingLeft, PRESENTATION.facing.deadZone)
+    if (left === this.headingLeft) return
+    this.headingLeft = left
+    this.applyFacing()
   }
 
   /**
@@ -614,8 +634,7 @@ export class Hero extends Phaser.GameObjects.Container {
       if (this.down) return
       this.body_.setTexture(this.def.ultimateSprite)
       this.artOffset = applyGroundRender(this.body_, this.def.ultimateSprite)
-      this.body_.setFlipX(this.facingRight)
-      this.body_.x = this.facingRight ? -this.artOffset : this.artOffset
+      this.applyFacing()
       // The shadow belongs to the vehicle now, not to the man.
       this.shadow.destroy()
       this.shadow = makeShadow(this.scene, this.def.ultimateSprite)
@@ -720,8 +739,7 @@ export class Hero extends Phaser.GameObjects.Container {
       this.addAt(this.shadow, 0)
       this.captureRest()
     }
-    this.body_.setFlipX(this.facingRight)
-    this.body_.x = this.facingRight ? -this.artOffset : this.artOffset
+    this.applyFacing()
 
     // WHERE HE FELL, AND STILL UNDER ORDERS.
     //

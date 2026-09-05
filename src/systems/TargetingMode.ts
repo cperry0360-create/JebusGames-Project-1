@@ -20,8 +20,15 @@
 // has not started a cooldown, has not spent a rare drop, and has not moved a
 // soldier. Nothing here can spend anything, because nothing here knows how.
 
-/** What the mode is waiting for a place for. */
-export type TargetKind = 'ability' | 'rally'
+/**
+ * What the mode is waiting for a place for.
+ *
+ * `power` is slot 2, the hero power. It is its own kind rather than an
+ * `ability` because the two are looked up in different tables — one in
+ * abilities.json and one on the hero — and a kind that means "look it up
+ * somewhere" is a kind that gets looked up in the wrong place.
+ */
+export type TargetKind = 'ability' | 'rally' | 'power'
 
 /** One request for a place on the map. `id` identifies it inside its kind: an
  *  ability id, or the key of the tower whose lads are being posted. */
@@ -89,10 +96,16 @@ export class TargetingMode {
     return this.req
   }
 
-  /** The armed ability's id, or null — including when what is armed is a
-   *  rally order, which is not an ability and must not read as one. */
+  /**
+   * The armed BUTTON's id, or null.
+   *
+   * Both kinds that come off the ability bar, because the bar draws its armed
+   * glow from this and a hero power armed with no glow reads as a press that
+   * did nothing. Not a rally order: that is a tower's selection, has no button
+   * on the bar, and must not light one.
+   */
   get pendingAbility(): string | null {
-    return this.req?.kind === 'ability' ? this.req.id : null
+    return this.req !== null && this.req.kind !== 'rally' ? this.req.id : null
   }
 
   /**

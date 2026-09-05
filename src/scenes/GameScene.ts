@@ -2,7 +2,8 @@ import Phaser from 'phaser'
 import type { ScratchOutcome } from '../systems/Scratch.ts'
 import { NukeEarnedOverlay, NukeLaunchOverlay } from '../ui/NukeOverlays.ts'
 import type {
-  AbilityDef, DraftDef, EnemyDef, HeroDef, HeroSkillDef, RulesDef, TowerDef, TowerSpec, WavesDef,
+  AbilityDef, DraftDef, EnemyDef, HeroDef, HeroPowerDef, HeroSkillDef, RulesDef, TowerDef,
+  TowerSpec, WavesDef,
 } from '../types.ts'
 import displayData from '../data/display.json'
 import rulesData from '../data/rules.json'
@@ -10,7 +11,7 @@ import towersData from '../data/towers.json'
 import enemiesData from '../data/enemies.json'
 import { DEFAULT_HERO_ID, heroDef as heroDef_, resolveHeroId } from '../systems/Heroes.ts'
 import {
-  SLOT1, SLOT2, heroSlotDefs, isAreaSkill, isHeroSlot, slot2Usable, slotContents,
+  SLOT1, SLOT2, heroSlotDefs, isAreaSkill, isHeroSlot, slotContents,
 } from '../systems/HeroSkills.ts'
 import abilitiesData from '../data/abilities.json'
 import draftData from '../data/draft.json'
@@ -72,6 +73,11 @@ import {
   hudBlocksGesture, hudLayout, NO_INSETS, type HudLayout, type Rect,
 } from '../systems/HudLayout.ts'
 import { TargetingMode, type ExitReason } from '../systems/TargetingMode.ts'
+import {
+  hazardExpired, makeHazard, powerRefusal, rainPoints, tickHazard,
+  withinCastRange, withinDash, type Hazard, type PowerRefusal,
+} from '../systems/HeroPowers.ts'
+import { expandingRing, hazardBand, lineSweep, strike, type HazardArt } from '../systems/HeroFx.ts'
 import { cameraAcceptsGestures, LAYER } from '../systems/Layers.ts'
 import { barWidth, regions, slotDefs, type BarMetrics } from '../systems/AbilityBar.ts'
 import { safeAreaInsets } from '../systems/SafeArea.ts'
@@ -167,7 +173,8 @@ const HERO_START: readonly [number, number] = [displayData.width / 2, displayDat
  * -- a button with no cooldown behind it is a button the bar cannot render the
  * same way as its neighbours. Nothing starts it yet.
  */
-const HERO_POWER_COOLDOWN = 30
+/** Live Spike Strips, with the art each one owns. See `tickHazards`. */
+interface LiveHazard { state: Hazard; art: HazardArt }
 
 /** One blue for both hero markers: they are two halves of one idea, and two
  *  blues would read as two systems. */
@@ -213,6 +220,9 @@ export class GameScene extends Phaser.Scene {
    * class. Public so the harness can drive the escapes it is here to guarantee.
    */
   readonly targeting = new TargetingMode()
+  /** Spike Strips on the board. Plain data plus its art, ticked in `update`
+   *  rather than on a timer each: a timer outlives the run that made it. */
+  private readonly hazards: LiveHazard[] = []
   /** The standing highlight over the area a tap is legal in. See
    *  `drawTargetArea`: on a touch device this is the ONLY thing that says the
    *  game is waiting, because there is no pointer to draw a cursor under. */
@@ -579,6 +589,14 @@ export class GameScene extends Phaser.Scene {
       play(this, 'last-stand', 0.85)
       logEvent('hero', 'DAD MODE transformation complete')
     })
+    // THE TRANSFORMATION HANDS THE POWER BACK. Slot 2 is gated on the powered
+    // form, so a hero who changes with the clock half-run has a button that
+    // has just become usable and is not usable yet — which reads as the gate
+    // being broken rather than as a cooldown. Changing IS the recharge.
+    this.hero.on('powered', () => {
+      this.cooldowns.reset(SLOT2)
+      logEvent('hero-power', `${heroDef.slot2.name} ready: ${heroDef.name} powered up`)
+    })
 
     // A floor rather than a constant: the opening instruction is to build a
     // tower, so the purse has to cover the cheapest one this run actually drew.
@@ -636,9 +654,9 @@ export class GameScene extends Phaser.Scene {
     for (const id of this.status.abilities) this.cooldowns.register(id, ABILITIES[id].cooldown)
     this.cooldowns.register(RULES.serverNuke.abilityId, ABILITIES[RULES.serverNuke.abilityId].cooldown)
     this.cooldowns.register(SLOT1, heroDef.slot1.cooldown)
-    // Registered even though nothing fires it yet, so the slot draws like a
-    // slot rather than like a hole with no clock behind it.
-    this.cooldowns.register(SLOT2, HERO_POWER_COOLDOWN)
+    // The hero's own number, not a constant in here. All five are 12.5s; the
+    // point is that changing it is a data edit.
+    this.cooldowns.register(SLOT2, heroDef.slot2.cooldown)
 
     // THE WAY OUT OF EVERY MODE THE BOARD CAN BE IN.
     //
@@ -700,7 +718,12 @@ export class GameScene extends Phaser.Scene {
     // fully built. The world stays 1280x720; only the view moves.
     // Gestures belong to the run and die with it, so nothing can pan or zoom
     // on a menu after the scene stops.
-    this.events.once('shutdown', () => this.rig?.destroy())
+    this.events.once('shutdown', () => {
+      this.rig?.destroy()
+      // A Spike Strip is scene state with a Graphics behind it; the scene is
+      // restarted rather than rebuilt, so anything left here outlives the run.
+      this.clearHazards()
+    })
     // WHERE THE RUN OPENS: the whole board, not the hero.
     //
     // It used to open at the design zoom centred on the hero's start, which
@@ -1577,6 +1600,21 @@ export class GameScene extends Phaser.Scene {
     // do was keep the player where they were. Nothing is spent either way, so
     // backing out costs the ability nothing.
     const pending = this.targeting.request
+    if (pending?.kind === 'power') {
+      const p = this.hero.def.slot2
+      const tap = this.targeting.resolveTap(
+        withinCastRange(p, { x: this.hero.x, y: this.hero.y }, w.x, w.y),
+      )
+      if (tap?.reason === 'commit') {
+        this.syncTargeting()
+        this.firePower(w.x, w.y)
+        return
+      }
+      this.clearSelection('outside')
+      this.status.message = `${p.name} only reaches so far. Still ready — tap the medallion again.`
+      play(this, 'error')
+      return
+    }
     if (pending?.kind === 'ability') {
       const def = ABILITIES[pending.id]
       const tap = this.targeting.resolveTap(
@@ -2512,8 +2550,23 @@ export class GameScene extends Phaser.Scene {
 
   private updateHover(p: Phaser.Input.Pointer): void {
     const w = this.worldAt(p)
-    if (this.status.mode === 'targeting' && this.status.pendingAbility) {
-      const def = ABILITIES[this.status.pendingAbility]
+    // THE REQUEST, not the mirror. `status.pendingAbility` carries the hero
+    // power's SLOT id as well as an ability's, because the bar lights its
+    // medallion from it — and that id is not in `ABILITIES`, so reading the
+    // table off the mirror would hand back undefined and take the frame down
+    // on the first mouse move after arming a power.
+    const armed = this.targeting.request
+    if (armed?.kind === 'power') {
+      // No cursor and no radius ring: the power's affordance is the disc
+      // around the hero, which `drawTargetArea` has already painted and which
+      // does not move with the pointer.
+      this.targetRing.clear()
+      this.castCursor.hide()
+      return
+    }
+    if (armed?.kind === 'ability') {
+      const def = ABILITIES[armed.id]
+      if (!def) return
       this.targetRing.clear()
       const ok = this.validCastPoint(def, w.x, w.y)
       // Green where the cast will land, red where it will be refused, so the
@@ -2662,6 +2715,16 @@ export class GameScene extends Phaser.Scene {
       this.washLane(T.rallyColour, (p) => Math.hypot(p.x - tower.x, p.y - tower.y) <= tower.range)
       g.lineStyle(T.edgeWidth, T.rallyColour, T.edgeAlpha)
       g.strokeCircle(tower.x, tower.y, tower.range)
+      return
+    }
+    if (req.kind === 'power') {
+      // The disc the power reaches, centred on the hero. It is his reach, so
+      // it is drawn around him rather than under the finger.
+      const p = this.hero.def.slot2
+      g.fillStyle(this.hero.def.colour, T.washAlpha)
+      g.fillCircle(this.hero.x, this.hero.y, p.castRadius)
+      g.lineStyle(T.edgeWidth, this.hero.def.colour, T.edgeAlpha)
+      g.strokeCircle(this.hero.x, this.hero.y, p.castRadius)
       return
     }
     const def = ABILITIES[req.id]
@@ -2909,18 +2972,215 @@ export class GameScene extends Phaser.Scene {
    * spends nothing, so nothing is lost by pressing it while the effect is
    * being written.
    */
+  /**
+   * SLOT 2: the hero power.
+   *
+   * One mechanic for all five — powered form only, one cooldown, and a point
+   * tapped on the map inside `castRadius` of the hero. The placement goes
+   * through the SAME targeting mode the Ima Dummy rally point uses, so it
+   * inherits all four ways out of it: the CANCEL control, pressing the
+   * medallion again, ESC, and a tap outside the disc. A power the player armed
+   * by accident costs nothing to put down.
+   */
   castHeroSlot2(): void {
     const p = this.hero.def.slot2
-    if (this.hero.down) {
-      this.refuse(`${this.hero.def.name} is down.`)
+    const why = powerRefusal(
+      p, this.hero.powered, this.hero.down, this.cooldowns.ready(SLOT2),
+    )
+    if (why !== null) {
+      this.refuse(this.powerRefusalText(p, why))
+      logEvent('hero-power', `${p.name} refused: ${why}`)
       return
     }
-    if (!slot2Usable(this.hero.powered, this.hero.down)) {
-      this.refuse(`${p.name} needs ${this.hero.def.name} at half health or less.`)
+    // An UNTARGETED power would land on the hero and be done. None of the five
+    // is one today; the branch is here rather than the field being ignored,
+    // because a config field nothing reads is a field that quietly stops being
+    // true — this repo has two dead ones on record.
+    if (!p.targeted) {
+      this.firePower(this.hero.x, this.hero.y)
       return
     }
-    logEvent('hero-power', `${p.name} pressed, no effect implemented`)
-    this.refuse(`${p.name} is not wired up yet.`)
+    // The second press is the way out, exactly as it is for a drafted active.
+    const armed = this.targeting.arm({ kind: 'power', id: SLOT2 })
+    if (armed === 'toggled') {
+      this.clearSelection('toggle')
+      play(this, 'click')
+      return
+    }
+    this.clearGhost()
+    this.ring?.close()
+    this.selected = null
+    this.heroSelected = false
+    this.syncTargeting()
+    this.status.message =
+      `${p.name}: tap inside the ring. Tap outside it, or CANCEL, to back out.`
+  }
+
+  /** Why the button did nothing, in words the player can act on. */
+  private powerRefusalText(p: HeroPowerDef, why: PowerRefusal): string {
+    const who = this.hero.def.name
+    if (why === 'unbuilt') return `${p.name} is not wired up yet.`
+    if (why === 'down') return `${who} is down.`
+    if (why === 'base-form') return `${p.name} needs ${who} at half health or less.`
+    return `${p.name} is still recharging.`
+  }
+
+  /**
+   * The power lands.
+   *
+   * Reached only from a tap that resolved to `commit`, which is the one exit
+   * from targeting that spends anything. The cooldown starts HERE and nowhere
+   * else, so every way of backing out is free by construction.
+   */
+  private firePower(x: number, y: number): void {
+    const p = this.hero.def.slot2
+    if (p.effect === null) return
+    this.cooldowns.start(SLOT2)
+    play(this, p.sound)
+    logEvent('hero-power', `${p.name} at ${Math.round(x)},${Math.round(y)}`)
+    switch (p.effect) {
+      case 'hazard': this.powerHazard(p, x, y); break
+      case 'burst': this.powerBurst(p, x, y); break
+      case 'bomb': this.powerBurst(p, x, y); break
+      case 'rain': this.powerRain(p, x, y); break
+      case 'dash': this.powerDash(p, x, y); break
+    }
+    this.status.message = `${p.name}!`
+  }
+
+  /**
+   * Seismic and Fireball: one ring of damage at the point.
+   *
+   * ONE METHOD FOR TWO EFFECTS, because they are the same effect with
+   * different numbers — a wide, light, stunning one and a narrow, heavy one.
+   * Splitting them would be two copies of four lines, drifting.
+   */
+  private powerBurst(p: HeroPowerDef, x: number, y: number): void {
+    const s = PRESENTATION.shake
+    expandingRing(this, x, y, p.radius, this.hero.def.colour, OVERLAY_DEPTH)
+    this.cameras.main.shake(s.haymakerMs * 0.8, s.haymakerIntensity * 0.8)
+    for (const e of this.enemiesNear(x, y, p.radius)) {
+      this.damageEnemy(e, p.damage, p.ignoresArmor, 0, false)
+      floatingDamage(this, e.x, e.centreY, p.damage, true)
+      if (p.stunSeconds > 0) {
+        e.applyStun(p.stunSeconds, RULES.combat.stunLockoutMultiple, RULES.combat.stunDiminish)
+      }
+      if (p.knockbackPixels > 0) e.knockBack(p.knockbackPixels)
+    }
+  }
+
+  /**
+   * Star Rain: many small hits scattered over the area.
+   *
+   * Each strike is resolved WHERE AND WHEN it lands rather than all at once at
+   * the start: a strike three quarters of a second in should miss something
+   * that has walked out of the patch, and hit something that has walked into
+   * it. Resolving them up front would make the spread cosmetic.
+   */
+  private powerRain(p: HeroPowerDef, x: number, y: number): void {
+    const points = rainPoints(p, { x, y }, () => Math.random())
+    expandingRing(this, x, y, p.radius, this.hero.def.colour, OVERLAY_DEPTH,
+      PRESENTATION.heroFx.rainRingMs)
+    points.forEach((pt, i) => {
+      const land = (): void => {
+        strike(this, pt.x, pt.y, this.hero.def.colour, OVERLAY_DEPTH + 1)
+        // A small blast per strike, so a scatter over a crowd spreads its
+        // damage instead of all of it landing on one unlucky enemy.
+        for (const e of this.enemiesNear(pt.x, pt.y, PRESENTATION.heroFx.strikeLength)) {
+          this.damageEnemy(e, p.damage, p.ignoresArmor, 0, false)
+          floatingDamage(this, e.x, e.centreY, p.damage, false)
+        }
+      }
+      if (i === 0) land()
+      else this.time.delayedCall(p.gapSeconds * 1000 * i, land)
+    })
+  }
+
+  /**
+   * Zoomies: she runs the line and knocks over what she goes through.
+   *
+   * The damage is resolved along the CORRIDOR, up front, from where she is to
+   * where she is going — not at the destination. What the power is is the run;
+   * a blast at the far end would be Seismic with a walk animation.
+   *
+   * She is moved by her rally point rather than by writing her position, so
+   * she arrives under her own rules, keeps facing the way she went, and does
+   * not teleport through anything she is blocking.
+   */
+  private powerDash(p: HeroPowerDef, x: number, y: number): void {
+    const from = { x: this.hero.x, y: this.hero.y }
+    const to = { x, y }
+    lineSweep(this, from, to, p.radius, this.hero.def.colour, OVERLAY_DEPTH)
+    for (const e of this.enemies.filter((q) => q.alive && withinDash({ x: q.x, y: q.y }, from, to, p.radius))) {
+      this.damageEnemy(e, p.damage, p.ignoresArmor, 0, false)
+      floatingDamage(this, e.x, e.centreY, p.damage, true)
+      e.knockBack(p.knockbackPixels)
+    }
+    this.hero.setRally(x, y)
+    this.markers.orderTo(x, y)
+    this.cameras.main.shake(PRESENTATION.shake.haymakerMs * 0.5,
+      PRESENTATION.shake.haymakerIntensity * 0.5)
+  }
+
+  /**
+   * Live enemies within `r` of a point, STILL TYPED AS ENEMIES.
+   *
+   * `withinRadius` is generic over `Targetable`, and without node_modules the
+   * `Enemy` class loses its Phaser base and does not satisfy that constraint —
+   * so the generic collapses and every `Enemy` member used on the result reads
+   * as an error locally whether or not it is one. CLAUDE.md's note on tsdiff
+   * is about exactly this. Four lines of filter keep the type and cost
+   * nothing; the shared helper is still what the towers and the abilities use,
+   * where the results are not walked for hero-specific members.
+   */
+  private enemiesNear(x: number, y: number, r: number): Enemy[] {
+    return this.enemies.filter((e) => e.alive && Math.hypot(e.x - x, e.y - y) <= r)
+  }
+
+  /** Spike Strip: the only one that stays. See `tickHazards`. */
+  private powerHazard(p: HeroPowerDef, x: number, y: number): void {
+    this.hazards.push({
+      state: makeHazard(p, x, y),
+      // Under the entities, like the lane wash: it is painted on the road.
+      art: hazardBand(this, x, y, p.radius, this.hero.def.colour, GROUND_DEPTH + 3),
+    })
+  }
+
+  /**
+   * Every live Spike Strip, one frame on.
+   *
+   * On the SCALED clock, with the rest of the simulation: a strip that lasted
+   * eight real seconds while the world ran at double speed would last four
+   * waves' worth of walking at one speed and two at another.
+   *
+   * Ticks are a COUNT, not a boolean, so a long frame charges twice rather
+   * than dropping one — a hazard whose damage depends on the frame rate is a
+   * hazard that cannot be balanced.
+   */
+  private tickHazards(dt: number): void {
+    for (let i = this.hazards.length - 1; i >= 0; i--) {
+      const h = this.hazards[i]!
+      const ticks = tickHazard(h.state, dt)
+      for (let t = 0; t < ticks; t++) {
+        for (const e of this.enemiesNear(h.state.x, h.state.y, h.state.radius)) {
+          this.damageEnemy(e, h.state.def.damage, h.state.def.ignoresArmor, 0, false)
+          floatingDamage(this, e.x, e.centreY, h.state.def.damage, false)
+          e.applySlow(h.state.def.slowFactor, h.state.def.slowSeconds, RULES.combat.slowDiminish)
+        }
+      }
+      h.art.update(h.state.left / Math.max(0.0001, h.state.def.durationSeconds))
+      if (hazardExpired(h.state)) {
+        h.art.destroy()
+        this.hazards.splice(i, 1)
+      }
+    }
+  }
+
+  /** Takes every strip off the board. A run ending must not leave one behind
+   *  for the next one, and the scene is restarted rather than rebuilt. */
+  private clearHazards(): void {
+    for (const h of this.hazards) h.art.destroy()
+    this.hazards.length = 0
   }
 
   /**
@@ -2985,6 +3245,10 @@ export class GameScene extends Phaser.Scene {
         left -= 1
         if (!target.alive || left < 0) { tick.remove(); return }
         this.damageEnemy(target, k.burnPerSecond, k.ignoresArmor, 0, false)
+        // The burn is most of Ember's damage and it was silent: a blast puff
+        // with no number reads as decoration rather than as the ability still
+        // working.
+        floatingDamage(this, target.x, target.centreY, k.burnPerSecond, false)
         playEffect(this, ART.fx.blast, target.x, target.centreY, {
           size: 34, depth: target.y + 8, durationMs: EFFECT_MS.hitSparkMs,
         })
@@ -3003,22 +3267,36 @@ export class GameScene extends Phaser.Scene {
     // absent the Enemy class loses its Phaser base and satisfies neither form,
     // and this is how every other call site in this file reads. See CLAUDE.md
     // on tsdiff -- AbilityRunner has carried the identical artifact for months.
-    for (const e of withinRadius(this.enemies, this.hero.x, this.hero.y, k.radius)) {
+    for (const e of this.enemiesNear(this.hero.x, this.hero.y, k.radius)) {
       this.damageEnemy(e, k.damage, k.ignoresArmor, 0, false)
+      // It was the only slot 1 that dealt damage and printed no number, so a
+      // Shockwave into a crowd read as a flash with nothing behind it.
+      floatingDamage(this, e.x, e.centreY, k.damage, false)
       e.applyStun(k.stunSeconds, RULES.combat.stunLockoutMultiple, RULES.combat.stunDiminish)
     }
   }
 
-  /** Bark: no damage at all, and everything nearby slows down. */
+  /**
+   * Bark: no damage at all, and everything nearby slows down.
+   *
+   * THE ONE SKILL WITH NOTHING TO SHOW FOR ITSELF, which is why playtesting
+   * reported it as doing nothing. Every other slot 1 lands a damage number, a
+   * spark or a blast; Bark deals zero by design, so the only feedback it had
+   * was a 3px cream ring at 0.8 alpha that faded in under half a second — over
+   * a painted map, at gameplay zoom, next to a hero who is mid-swing.
+   *
+   * It gets the shared placeholder ring now, tinted to Bailey and drawn at the
+   * radius the rule actually uses, plus a mark on each enemy it caught. A slow
+   * that nothing acknowledges is indistinguishable from a slow that missed.
+   */
   private skillHowl(k: HeroSkillDef): void {
-    const ring = this.add.graphics().setDepth(OVERLAY_DEPTH)
-    ring.lineStyle(3, 0xf6ecd9, 0.8).strokeCircle(this.hero.x, this.hero.y, k.radius)
-    this.tweens.add({
-      targets: ring, alpha: 0, duration: 420, ease: 'Quad.easeOut',
-      onComplete: () => ring.destroy(),
-    })
-    for (const e of withinRadius(this.enemies, this.hero.x, this.hero.y, k.radius)) {
+    expandingRing(this, this.hero.x, this.hero.y, k.radius, this.hero.def.colour, OVERLAY_DEPTH)
+    play(this, 'hero-hit', 0.4)
+    for (const e of this.enemiesNear(this.hero.x, this.hero.y, k.radius)) {
       e.applySlow(k.slowFactor, k.slowSeconds, RULES.combat.slowDiminish)
+      // Named rather than numbered: there is no damage to print, and a "0"
+      // floating off an enemy reads as the skill failing.
+      floatingDamage(this, e.x, e.centreY, 0, false, 'SLOW')
     }
   }
 
@@ -3403,6 +3681,8 @@ export class GameScene extends Phaser.Scene {
     // waiting for a tap, and it has to keep saying so while the world is held
     // still for a hit pause or a wind-up.
     this.pulseTargetArea()
+    // The scaled clock, with the rest of the simulation.
+    this.tickHazards(dt)
 
     if (this.status.phase === 'won' || this.status.phase === 'lost') return
 

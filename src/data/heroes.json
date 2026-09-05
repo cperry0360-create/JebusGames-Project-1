@@ -5,6 +5,8 @@
     "blurb": "Holds the line in person and shreds armour nearby.",
     "bodySprite": "hero-cory",
     "portraitSprite": "hero-cory",
+    "artFacing": "left",
+    "colour": 7323487,
     "maxHealth": 360,
     "reviveSeconds": 25,
     "moveSpeed": 104,
@@ -49,7 +51,22 @@
     "slot2": {
       "name": "Spike Strip",
       "icon": "ability-cory-2",
-      "effect": null
+      "effect": "hazard",
+      "cooldown": 12.5,
+      "targeted": true,
+      "castRadius": 240,
+      "radius": 54,
+      "damage": 26,
+      "ignoresArmor": false,
+      "hits": 0,
+      "gapSeconds": 0,
+      "durationSeconds": 8,
+      "tickSeconds": 0.6,
+      "slowFactor": 0.55,
+      "slowSeconds": 1.2,
+      "knockbackPixels": 0,
+      "stunSeconds": 0,
+      "sound": "cast-glacier"
     },
     "_slot2": "THE HERO POWER, RESERVED AND NOT YET IMPLEMENTED. The slot is in the bar, the button is wired and it is greyed out and unusable until the hero has transformed -- but `effect` is null and pressing it while powered does nothing except say so. The name is a placeholder chosen to fit the hero; rename it freely when the power is written.",
     "lastStand": {
@@ -84,6 +101,8 @@
     "poweredSprite": "hero-courtland-power",
     "ultimateSprite": "hero-courtland-power",
     "portraitSprite": "hero-courtland",
+    "artFacing": "right",
+    "colour": 5884159,
     "maxHealth": 300,
     "reviveSeconds": 25,
     "moveSpeed": 126,
@@ -128,7 +147,22 @@
     "slot2": {
       "name": "Seismic",
       "icon": "ability-courtland-2",
-      "effect": null
+      "effect": "burst",
+      "cooldown": 12.5,
+      "targeted": true,
+      "castRadius": 260,
+      "radius": 120,
+      "damage": 150,
+      "ignoresArmor": false,
+      "hits": 1,
+      "gapSeconds": 0,
+      "durationSeconds": 0,
+      "tickSeconds": 0,
+      "slowFactor": 1,
+      "slowSeconds": 0,
+      "knockbackPixels": 60,
+      "stunSeconds": 0.5,
+      "sound": "cast-meteor"
     },
     "_slot2": "THE HERO POWER, RESERVED AND NOT YET IMPLEMENTED. The slot is in the bar, the button is wired and it is greyed out and unusable until the hero has transformed -- but `effect` is null and pressing it while powered does nothing except say so. The name is a placeholder chosen to fit the hero; rename it freely when the power is written.",
     "lastStand": {
@@ -161,6 +195,8 @@
     "poweredSprite": "hero-han-power",
     "ultimateSprite": "hero-han-power",
     "portraitSprite": "hero-han",
+    "artFacing": "right",
+    "colour": 16738876,
     "maxHealth": 330,
     "reviveSeconds": 25,
     "moveSpeed": 94,
@@ -205,7 +241,22 @@
     "slot2": {
       "name": "Fireball",
       "icon": "ability-han-2",
-      "effect": null
+      "effect": "bomb",
+      "cooldown": 12.5,
+      "targeted": true,
+      "castRadius": 300,
+      "radius": 84,
+      "damage": 260,
+      "ignoresArmor": false,
+      "hits": 1,
+      "gapSeconds": 0,
+      "durationSeconds": 0,
+      "tickSeconds": 0,
+      "slowFactor": 1,
+      "slowSeconds": 0,
+      "knockbackPixels": 0,
+      "stunSeconds": 0,
+      "sound": "cast-molotov"
     },
     "_slot2": "THE HERO POWER, RESERVED AND NOT YET IMPLEMENTED. The slot is in the bar, the button is wired and it is greyed out and unusable until the hero has transformed -- but `effect` is null and pressing it while powered does nothing except say so. The name is a placeholder chosen to fit the hero; rename it freely when the power is written.",
     "lastStand": {
@@ -238,6 +289,8 @@
     "poweredSprite": "hero-eli-power",
     "ultimateSprite": "hero-eli-power",
     "portraitSprite": "hero-eli",
+    "artFacing": "right",
+    "colour": 9414911,
     "maxHealth": 430,
     "reviveSeconds": 25,
     "moveSpeed": 90,
@@ -282,7 +335,22 @@
     "slot2": {
       "name": "Star Rain",
       "icon": "ability-eli-2",
-      "effect": null
+      "effect": "rain",
+      "cooldown": 12.5,
+      "targeted": true,
+      "castRadius": 280,
+      "radius": 140,
+      "damage": 22,
+      "ignoresArmor": false,
+      "hits": 14,
+      "gapSeconds": 0.12,
+      "durationSeconds": 0,
+      "tickSeconds": 0,
+      "slowFactor": 1,
+      "slowSeconds": 0,
+      "knockbackPixels": 0,
+      "stunSeconds": 0,
+      "sound": "hit-b"
     },
     "_slot2": "THE HERO POWER, RESERVED AND NOT YET IMPLEMENTED. The slot is in the bar, the button is wired and it is greyed out and unusable until the hero has transformed -- but `effect` is null and pressing it while powered does nothing except say so. The name is a placeholder chosen to fit the hero; rename it freely when the power is written.",
     "lastStand": {
@@ -315,6 +383,8 @@
     "poweredSprite": "hero-bailey-power",
     "ultimateSprite": "hero-bailey-power",
     "portraitSprite": "hero-bailey",
+    "artFacing": "right",
+    "colour": 15771696,
     "maxHealth": 270,
     "reviveSeconds": 25,
     "moveSpeed": 142,
@@ -359,7 +429,22 @@
     "slot2": {
       "name": "Zoomies",
       "icon": "ability-bailey-2",
-      "effect": null
+      "effect": "dash",
+      "cooldown": 12.5,
+      "targeted": true,
+      "castRadius": 300,
+      "radius": 46,
+      "damage": 90,
+      "ignoresArmor": false,
+      "hits": 1,
+      "gapSeconds": 0,
+      "durationSeconds": 0.42,
+      "tickSeconds": 0,
+      "slowFactor": 1,
+      "slowSeconds": 0,
+      "knockbackPixels": 140,
+      "stunSeconds": 0,
+      "sound": "cast-glacier"
     },
     "_slot2": "THE HERO POWER, RESERVED AND NOT YET IMPLEMENTED. The slot is in the bar, the button is wired and it is greyed out and unusable until the hero has transformed -- but `effect` is null and pressing it while powered does nothing except say so. The name is a placeholder chosen to fit the hero; rename it freely when the power is written.",
     "lastStand": {
@@ -384,7 +469,8 @@
       "unit-gnome-rake"
     ]
   },
+  "_artFacing": "WHICH WAY THE ART IS DRAWN, per hero, because the roster does not agree. Cory -- every frame of him, walk, attack and the SUV -- faces LEFT. The four heroes added after him all face RIGHT. The renderer used to carry `both hero sprites are drawn facing LEFT` as a blanket rule with the flip inverted to match, which was true of the only hero there was when it was written and made all four of the others walk backwards. It is a property of the art, so it lives with the hero. `colour` sits beside it for the same reason: it is the hero's own tint, used by every placeholder effect either of that hero's two buttons draws, and it is a fact about the character rather than about one ability.",
   "_note": "THE FIVE HEROES. Cory is first and is the default: a save with no choice in it preselects him, so a player who never touches the row plays exactly the game that was tuned. `poweredSprite` is the form a hero wears once its health has been below half; CORY'S IS NULL ON PURPOSE -- he has no powered art, and `ultimateSprite` is already his DAD MODE look, so giving the powered form that art would spend Last Stand's only visual before Last Stand arrives. He transforms with the burst and the damage reduction and keeps his own picture.",
   "_stats": "DAMAGE PER SECOND IS DELIBERATELY FLAT across the roster: 19 to 24 against Cory's 21.2, a spread of about 12%. Level 1 is tuned to 45 of 60 with Cory, and a hero twice as strong would throw that away the first time anyone picked him. What differs is everything else -- Eli holds four enemies where Bailey holds two, Han reaches 122 where Bailey reaches 70, Bailey moves at 142 where Eli moves at 90 -- so the choice is about how you want to play rather than about which hero is better.",
-  "_slots": "TWO BUTTONS PER HERO, in the two hero slots the ability bar has always reserved. SLOT 1 is always available and is a short-range active on a low cooldown, one per hero, all modelled on Haymaker's shape: the same block of fields with a different `effect`, so a new hero is data rather than code. Every skill declares EVERY field, with zeros where it does not use one -- Bark's `damage: 0` is a statement rather than an omission. SLOT 2 is the hero power, gated on the powered form and not yet implemented. The five effects: `punch` hits the nearest enemy hard and throws it back; `burst` damages and briefly stuns everything around the hero; `burn` hits one target and sets it alight for a few seconds; `double` lands two fast hits on the nearest enemy; `howl` damages nothing and slows everything nearby."
+  "_slots": "TWO BUTTONS PER HERO, in the two hero slots the ability bar has always reserved. SLOT 1 is always available and is a short-range active on a low cooldown, one per hero, all modelled on Haymaker's shape: the same block of fields with a different `effect`, so a new hero is data rather than code. Every skill declares EVERY field, with zeros where it does not use one -- Bark's `damage: 0` is a statement rather than an omission. The five slot-1 effects: `punch` hits the nearest enemy hard and throws it back; `burst` damages and briefly stuns everything around the hero; `burn` hits one target and sets it alight for a few seconds; `double` lands two fast hits on the nearest enemy; `howl` damages nothing and slows everything nearby. SLOT 2 is the hero power. All five share one mechanic -- powered form only, one cooldown number, and the cooldown RESETS on transformation so a hero who has just changed can cast immediately -- and all five are placed by tapping the button and then tapping the map, inside `castRadius` of the hero, through the same targeting mode the Ima Dummy rally point uses and with the same four ways out of it. The five slot-2 effects: `hazard` leaves a strip on the lane that damages and slows everything crossing it for `durationSeconds`, ticking every `tickSeconds`, and is the only one that persists; `burst` is a single ring of damage at the point; `bomb` is one heavy hit in a small radius; `rain` is `hits` small strikes scattered over `radius`, `gapSeconds` apart; `dash` sends the hero along the line to the point, hurting and throwing back everything within `radius` of it. `colour` is the hero's tint for the placeholder effect art -- see systems/HeroFx.ts -- and every visual is sized to the power's real radius so the numbers can be judged before the art exists. BALANCE IS A FIRST PASS."
 }
