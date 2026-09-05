@@ -95,7 +95,9 @@
     "enemy-catcher": "enemies/enemy_catcher.png",
     "enemy-zamboni": "enemies/enemy_zamboni.png",
     "enemy-unicorn": "enemies/boss_unicorn.png",
-    "map-level3": "maps/map_level3.webp"
+    "map-level3": "maps/map_level3.webp",
+    "fx-boss-bolt": "effects/boss_projectile.png",
+    "fx-stunned": "effects/fx_stunned.png"
   },
   "render": {
     "turret-escalation": {
@@ -619,6 +621,20 @@
       "shadowWidth": 109.6,
       "contentWidth": 1087,
       "contentHeight": 1000
+    },
+    "fx-boss-bolt": {
+      "sheet": {
+        "frameWidth": 482,
+        "frameHeight": 412,
+        "frames": 8
+      }
+    },
+    "fx-stunned": {
+      "sheet": {
+        "frameWidth": 617,
+        "frameHeight": 499,
+        "frames": 6
+      }
     }
   },
   "map": {
@@ -666,7 +682,9 @@
     "spark": "fx-hit-spark",
     "blast": "fx-explosion",
     "puff": "fx-death-puff",
-    "muzzle": "fx-muzzle"
+    "muzzle": "fx-muzzle",
+    "bossBolt": "fx-boss-bolt",
+    "stunned": "fx-stunned"
   },
   "decor": [
     "decor-bush",

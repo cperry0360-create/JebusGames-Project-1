@@ -5,7 +5,7 @@ import { GROUND_ONLY, pickFirst } from '../systems/Targeting.ts'
 import { boostedDamage } from '../systems/Combat.ts'
 import { deathPuff, makeShadow, muzzleFlash, PRESENTATION } from '../systems/Presentation.ts'
 import { applyRender, hasTierArt, tierSprite } from '../systems/Art.ts'
-import { atSpecChoice, BASE_TIER, isMaxed, maxTier, nextStep, specById, statAt } from '../systems/Upgrades.ts'
+import { atSpecChoice, BASE_TIER, investedIn, isMaxed, maxTier, nextStep, specById, statAt } from '../systems/Upgrades.ts'
 import rulesData from '../data/rules.json'
 import type { RulesDef } from '../types.ts'
 import { Enemy } from './Enemy.ts'
@@ -31,6 +31,14 @@ export class Tower extends Phaser.GameObjects.Container {
    *  because a taller building's footing is not the same width. */
   private shadow: Phaser.GameObjects.Image
   private cooldown = 0
+  /** Seconds left switched off by a boss, or 0 when it is working. Public
+   *  because the scene draws the overlay from it and the picker skips a tower
+   *  that is already dark. */
+  disabledFor = 0
+  /** How much road is left between this tower and the exit, set by the scene
+   *  when it is built. Only the boss's tower-disable reads it, as a tie-break
+   *  between two towers that cost the same. */
+  distanceToExit = Infinity
   /** Seconds left on the tier currently going up, or 0 when it is finished. */
   private buildLeft = 0
   private buildTotal = 0
@@ -220,6 +228,12 @@ export class Tower extends Phaser.GameObjects.Container {
     return this.behaviour.supportRangeBonus ?? 0
   }
 
+  /** Peanuts sunk into this tower: its cost, every tier paid for, and the
+   *  specialization. What the Rainbow Reaper measures when it picks one. */
+  get investedValue(): number {
+    return investedIn(this.def, this.tier, this.spec)
+  }
+
   get isSupport(): boolean {
     return this.def.supportRadius > 0
   }
@@ -373,6 +387,20 @@ export class Tower extends Phaser.GameObjects.Container {
 
   tick(dt: number, enemies: Enemy[], fire: (tower: Tower, target: Enemy) => void): void {
     this.tickBuild(dt)
+
+    // SWITCHED OFF. The reload does not run while the lights are out, so the
+    // tower comes back with a FULL cooldown rather than firing the instant it
+    // recovers -- three and a half seconds of nothing, and then a shot, is the
+    // ability doing what it says. Ticked before the support check because a
+    // support tower can be disabled too: its aura is what goes dark.
+    if (this.disabledFor > 0) {
+      this.disabledFor -= dt
+      if (this.disabledFor <= 0) {
+        this.disabledFor = 0
+        this.cooldown = this.fireInterval
+      }
+      return
+    }
     if (this.isSupport) return
 
     this.cooldown -= dt

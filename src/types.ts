@@ -349,6 +349,18 @@ export interface SummonsDef {
   cap?: number
 }
 
+/** A boss ability that switches a tower off for a while. */
+export interface DisableDef {
+  /** Seconds between casts, measured from the moment one lands. */
+  cooldown: number
+  /** Seconds the telegraph runs before the disable lands. */
+  windup: number
+  /** Seconds the tower stays off. */
+  duration: number
+  /** How far the caster reaches, in world pixels. */
+  range: number
+}
+
 export interface EnemyDef {
   name: string
   flavor: string
@@ -377,6 +389,15 @@ export interface EnemyDef {
    * shoot at it.
    */
   layer?: string
+  /**
+   * The tower-disable this enemy casts while it walks, if it casts one.
+   *
+   * Data, so a second boss with the same trick needs no new code -- the same
+   * reasoning as `summons`. The rule itself lives in systems/TowerDisable.ts
+   * and is Phaser-free; this is only the block that turns it on.
+   */
+  towerDisable?: DisableDef
+
   /**
    * What this enemy calls in while it walks, if anything.
    *
@@ -737,6 +758,11 @@ export interface ArtDef {
     puff: string
     /** The flash at a tower's barrel when it fires. */
     muzzle: string
+    /** The Rainbow Reaper's tower-disable bolt, on its way to what it will
+     *  switch off. Eight frames, drawn travelling right. */
+    bossBolt: string
+    /** Drawn over a tower the boss has switched off. Six frames. */
+    stunned: string
   }
   decor: string[]
   /** Keys that get a greyscale copy built at boot, for unavailable states. */

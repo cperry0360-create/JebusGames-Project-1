@@ -1814,6 +1814,7 @@ export class GameScene extends Phaser.Scene {
     this.status.peanuts -= def.cost
     this.build.occupy(spot.index)
     const tower = new Tower(this, spot.x, spot.y, id, def, spot.index)
+    tower.distanceToExit = this.roadLeftFrom(spot.x, spot.y)
     // A finished tier changes the board, so it is saved like any other change
     // to it — and it is the moment an upgrade becomes real, since the tier
     // number only moves when the work completes.
@@ -2692,6 +2693,7 @@ export class GameScene extends Phaser.Scene {
       if (!spot) continue
       this.build.occupy(t.spot)
       const tower = new Tower(this, spot.x, spot.y, t.id, def, t.spot)
+      tower.distanceToExit = this.roadLeftFrom(spot.x, spot.y)
       tower.restoreTier(t.tier, t.spec)
       tower.on('tierup', () => this.onBoardChanged())
       this.towers.push(tower)
@@ -3074,6 +3076,7 @@ export class GameScene extends Phaser.Scene {
 
     this.tickTax(dt)
     this.tickSummons(dt)
+    this.tickTowerDisable(dt)
     this.trackBoss()
 
     this.tickEngagement()
@@ -3160,6 +3163,155 @@ export class GameScene extends Phaser.Scene {
    * shot, blocked, slowed and taxed, and they pay their normal bounty. The one
    * difference is that `checkWaveOver` does not wait for them.
    */
+  /**
+   * How much road is left between a point and the exit.
+   *
+   * The point is projected onto every lane and the SMALLEST remainder wins, so
+   * a tower covering the fork is measured against whichever branch it is really
+   * watching. Used only as the tower-disable's tie-break between two towers
+   * that cost the same, and computed once when a tower is built because a
+   * building does not move.
+   *
+   * Distance to the exit rather than distance travelled: on a branching map the
+   * two branches have their own zero, so "how far along" is not comparable
+   * across them and "how much is left" is.
+   */
+  private roadLeftFrom(x: number, y: number): number {
+    let best = Infinity
+    for (const l of this.lanes.lanes) {
+      const route = this.lanes.routeLength(l.id)
+      const pts = l.path.points
+      let travelled = 0
+      let bestOnLane = Infinity
+      let atBest = 0
+      for (let i = 0; i < pts.length - 1; i++) {
+        const ax = pts[i]!.x, ay = pts[i]!.y
+        const bx = pts[i + 1]!.x, by = pts[i + 1]!.y
+        const dx = bx - ax, dy = by - ay
+        const len2 = dx * dx + dy * dy
+        const seg = Math.sqrt(len2)
+        const t = len2 ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / len2)) : 0
+        const d = Math.hypot(x - (ax + t * dx), y - (ay + t * dy))
+        if (d < bestOnLane) {
+          bestOnLane = d
+          atBest = travelled + seg * t
+        }
+        travelled += seg
+      }
+      best = Math.min(best, route - atBest)
+    }
+    return best
+  }
+
+  /**
+   * The Rainbow Reaper switching the board off, one tower at a time.
+   *
+   * The rule is in systems/TowerDisable.ts and is Phaser-free; this is the
+   * scene half -- who the candidates are, and what the player sees.
+   *
+   * THE BOLT IS THE TELEGRAPH. It launches when the windup starts and lands
+   * exactly when the disable does, so what the player sees pointing at a tower
+   * is the thing that is about to switch it off. A charge-up on the boss with
+   * no line to the target would say "something is coming" and not "that one".
+   */
+  private tickTowerDisable(dt: number): void {
+    if (this.status.phase !== 'wave') return
+    for (const e of this.enemies) {
+      const d = e.disabler
+      if (!d) continue
+      // Rebuilt each tick because value, tier and disabled state all move. The
+      // tower rides along on the candidate so the event can point back at it.
+      const candidates = this.towers.map((t) => ({
+        x: t.x,
+        y: t.y,
+        value: t.investedValue,
+        distanceToExit: t.distanceToExit,
+        disabledFor: t.disabledFor,
+        tower: t,
+      }))
+      const ev = d.tick(dt, e.alive, e.x, e.y, candidates)
+      if (!ev) continue
+      if (ev.kind === 'windup') {
+        this.telegraphDisable(e, ev.target.tower, e.def.towerDisable!.windup)
+      } else {
+        this.landDisable(ev.target.tower, e.def.towerDisable!.duration)
+      }
+    }
+  }
+
+  /** The bolt on its way, and a ring on what it is going to hit. */
+  private telegraphDisable(from: Enemy, tower: Tower, windupSeconds: number): void {
+    const ms = windupSeconds * 1000
+    // World space, which is the default here: `syncCameras` re-splits the
+    // scene every time it runs, so an effect born mid-frame is picked up by
+    // the world camera without being registered anywhere.
+    const bolt = this.add.sprite(from.x, from.centreY, ART.fx.bossBolt)
+    bolt.setDisplaySize(96, 82)      // the sheet's 482x412, kept in proportion
+    bolt.setDepth(tower.y + 40)
+    // The sheet is drawn travelling right, so it is turned to face where it is
+    // actually going. Flattened vertically like everything else on a 3/4 map.
+    bolt.setRotation(Math.atan2((tower.y - from.centreY) * 0.5, tower.x - from.x))
+    bolt.play({ key: ART.fx.bossBolt, duration: ms })
+    this.tweens.add({
+      targets: bolt,
+      x: tower.x,
+      y: tower.y - 20,
+      duration: ms,
+      ease: 'Sine.easeIn',
+      onComplete: () => bolt.destroy(),
+    })
+
+    // And a ring on the target, so the answer to "which one" does not depend on
+    // following a fast-moving sprite across the board.
+    const ring = this.add.graphics()
+    ring.lineStyle(3, 0xff5ce0, 0.9)
+    ring.strokeCircle(0, 0, 34)
+    ring.setPosition(tower.x, tower.y)
+    ring.setDepth(tower.y - 1)
+    this.tweens.add({
+      targets: ring,
+      scale: { from: 2.2, to: 1 },
+      alpha: { from: 0.2, to: 1 },
+      duration: ms,
+      onComplete: () => ring.destroy(),
+    })
+    logEvent('disable-windup', `${from.def.name} -> ${tower.def.name} in ${windupSeconds}s`)
+  }
+
+  /** The lights go out. */
+  private landDisable(tower: Tower, seconds: number): void {
+    tower.disabledFor = seconds
+    // A disabled Shelter's aura goes dark with it, so the towers it was lifting
+    // drop back to their own numbers for the duration.
+    this.refreshSupport()
+
+    const overlay = this.add.sprite(tower.x, tower.y - 26, ART.fx.stunned)
+    overlay.setDisplaySize(74, 60)   // the sheet's 617x499, kept in proportion
+    overlay.setDepth(tower.y + 60)
+    // PLAYED STRAIGHT THROUGH, ONCE. Neither sheet loops seamlessly, so a
+    // three-and-a-half second disable cannot be three and a half seconds of
+    // looped animation without a visible jump every pass. It runs once at a
+    // readable rate and then holds its last frame, pulsing, until the tower
+    // comes back -- motion for the whole duration and no seam in it.
+    overlay.play({ key: ART.fx.stunned, duration: 900 })
+    const pulse = this.tweens.add({
+      targets: overlay,
+      alpha: { from: 1, to: 0.45 },
+      duration: 500,
+      yoyo: true,
+      repeat: -1,
+      delay: 900,
+    })
+    this.time.delayedCall(seconds * 1000, () => {
+      pulse.remove()
+      overlay.destroy()
+      // The tower's own tick clears `disabledFor` and hands it a fresh
+      // cooldown; this only puts the aura back if it was a Shelter.
+      this.refreshSupport()
+    })
+    logEvent('disable-land', `${tower.def.name} off for ${seconds}s`)
+  }
+
   private tickSummons(dt: number): void {
     if (this.status.phase !== 'wave') return
     // A copy, because spawning appends to the list being walked.

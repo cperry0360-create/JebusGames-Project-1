@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import type { EnemyDef, TaxPhase } from '../types.ts'
 import { Path } from '../systems/Path.ts'
+import { Disabler } from '../systems/TowerDisable.ts'
 import { ySort } from '../systems/DepthSort.ts'
 import { canStun, damageAfterArmor, diminishedSeconds, slowedSpeed, slowStacksAfter, stunLockoutFor, type DiminishDef } from '../systems/Combat.ts'
 import { makeShadow, PRESENTATION, floatingDamage, deathPuff } from '../systems/Presentation.ts'
@@ -71,6 +72,15 @@ export class Enemy extends Phaser.GameObjects.Container {
   readonly summonedBy: Enemy | null
   /** Counts down to the next burst. Only a summoner uses it. */
   private summonTimer = 0
+  /**
+   * The tower-disable clock, or null for the great majority of enemies that do
+   * not have one.
+   *
+   * Held here rather than in the scene so it lives and dies with the enemy: a
+   * boss that is killed mid-windup takes its half-finished cast with it, which
+   * is the behaviour a player would otherwise call unfair.
+   */
+  readonly disabler: Disabler | null
 
   private lane: Path
   private readonly lanes: LaneNetwork | null
@@ -173,6 +183,7 @@ export class Enemy extends Phaser.GameObjects.Container {
     // A summoner's first burst waits a full interval, so a boss does not
     // arrive with a crowd already around it.
     this.summonTimer = def.summons?.interval ?? 0
+    this.disabler = def.towerDisable ? new Disabler(def.towerDisable) : null
     this.maxHealth = def.maxHealth
     this.health = def.maxHealth
 

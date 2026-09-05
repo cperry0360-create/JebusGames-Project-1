@@ -26,6 +26,11 @@ const PEAK_FILL = 0.88
 export interface EffectOptions {
   /** On-screen size of the frame box. The visible art peaks at ~88% of it. */
   size: number
+  /** On-screen height, when the sheet's cells are not square. The three
+   *  original sheets are, so `size` alone was enough until the boss's bolt
+   *  (482x412) and stun overlay (617x499) arrived; forcing those into a square
+   *  squashes them by 15% and 19%. Absent means square, as before. */
+  height?: number
   depth: number
   durationMs: number
   tint?: number
@@ -69,7 +74,7 @@ export function playEffect(
 ): Phaser.GameObjects.Sprite {
   const s = scene.add.sprite(x, y, key)
   s.setOrigin(0.5, opts.originY ?? 0.5)
-  s.setDisplaySize(opts.size, opts.size)
+  s.setDisplaySize(opts.size, opts.height ?? opts.size)
   s.setDepth(opts.depth)
   if (opts.tint !== undefined) s.setTint(opts.tint)
   // `duration` is the whole animation, which is what the call sites think in.

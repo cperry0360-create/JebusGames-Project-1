@@ -29,6 +29,7 @@ import draftData from '../../src/data/draft.json' with { type: 'json' }
 import { DEFAULT_LEVEL_ID, loadLevel } from '../../src/systems/Levels.ts'
 import { Path } from '../../src/systems/Path.ts'
 import { LaneNetwork, MAIN_LANE, advance, type Walker } from '../../src/systems/Lanes.ts'
+import { Disabler } from '../../src/systems/TowerDisable.ts'
 import { BuildSystem } from '../../src/systems/BuildSystem.ts'
 import { WaveSpawner } from '../../src/systems/WaveSpawner.ts'
 import { Cooldowns } from '../../src/systems/Cooldowns.ts'
@@ -122,6 +123,10 @@ interface SimEnemy {
   summonedBy: SimEnemy | null
   /** Counts down to the next burst. Only a summoner uses it. */
   summonTimer: number
+  /** The tower-disable clock, or null for everything that does not cast one.
+   *  Held on the enemy so a boss killed mid-windup takes its half-finished
+   *  cast with it, as it does in the scene. */
+  disabler: Disabler | null
 }
 
 interface SimTower {
@@ -134,6 +139,13 @@ interface SimTower {
   spec: string | null
   cooldown: number
   buildLeft: number
+  /** Seconds left switched off by a boss, or 0 when it is working. */
+  disabledFor: number
+  /** How much road is left between it and the exit -- the tower-disable's
+   *  tie-break between two towers that cost the same. */
+  distanceToExit: number
+  /** Peanuts sunk into it, kept up to date as tiers are paid for. */
+  value: number
 }
 
 /**
@@ -258,6 +270,7 @@ export function simulate(
       // The first burst waits a full interval, so a boss does not arrive with
       // a crowd already around it.
       summonTimer: def.summons?.interval ?? 0,
+      disabler: def.towerDisable ? new Disabler(def.towerDisable) : null,
     })
   }
 
@@ -329,6 +342,33 @@ export function simulate(
     return best
   })
 
+  // How much road is left between each pad and the exit -- the tower-disable's
+  // tie-break. Distance to the exit rather than distance travelled, because on
+  // a branching map the two branches have their own zero.
+  const padToExit: number[] = build.spots.map((spot) => {
+    let best = Infinity
+    for (const l of net.lanes) {
+      const route = net.routeLength(l.id)
+      const w = l.path.points
+      let travelled = 0
+      let nearest = Infinity
+      let atNearest = 0
+      for (let i = 0; i < w.length - 1; i++) {
+        const ax = w[i]!.x, ay = w[i]!.y
+        const bx = w[i + 1]!.x, by = w[i + 1]!.y
+        const dx = bx - ax, dy = by - ay
+        const len2 = dx * dx + dy * dy
+        const seg = Math.sqrt(len2)
+        const t = len2 ? Math.max(0, Math.min(1, ((spot.x - ax) * dx + (spot.y - ay) * dy) / len2)) : 0
+        const d = Math.hypot(spot.x - (ax + t * dx), spot.y - (ay + t * dy))
+        if (d < nearest) { nearest = d; atNearest = travelled + seg * t }
+        travelled += seg
+      }
+      best = Math.min(best, route - atNearest)
+    }
+    return best
+  })
+
   // --- the scripted player ----------------------------------------------
   // Nearest the road first, not the order the pads happen to sit in the JSON.
   //
@@ -362,6 +402,8 @@ export function simulate(
       towers.push({
         id, def: TOWERS[id], spot: spot.index, x: spot.x, y: spot.y,
         tier: BASE_TIER, spec: null, cooldown: 0, buildLeft: 0,
+        disabledFor: 0, distanceToExit: padToExit[spot.index] ?? Infinity,
+        value: TOWERS[id].cost,
       })
     }
     for (const t of towers) {
@@ -372,7 +414,21 @@ export function simulate(
       if (!choice || peanuts < choice.cost) continue
       peanuts -= choice.cost
       t.buildLeft = choice.buildSeconds
+      // What has been sunk into it, which is what the boss's tower-disable
+      // measures. Counted as it is spent rather than derived, so a tier still
+      // going up already counts -- the peanuts are gone either way.
+      t.value += choice.cost
       if (atSpecChoice(t.def, t.tier)) t.spec = choice.id
+    }
+  }
+
+  /** The boss switching a tower off. Same rule module as the scene uses, so
+   *  the two cannot drift; the sim only supplies the candidates. */
+  const tickTowerDisable = (dt: number): void => {
+    for (const e of enemies) {
+      if (!e.disabler) continue
+      const ev = e.disabler.tick(dt, e.alive, e.x, e.y, towers)
+      if (ev?.kind === 'land') ev.target.disabledFor = e.def.towerDisable.duration
     }
   }
 
@@ -473,6 +529,7 @@ export function simulate(
       // which is what every wave written before branching existed means.
       for (const sp of spawner.update(DT)) spawn(sp.enemy, 0, null, sp.lane ?? MAIN_LANE, 0)
       tickSummons(DT)
+      tickTowerDisable(DT)
       cooldowns.tick(DT)
 
       // Towers.
@@ -480,6 +537,18 @@ export function simulate(
         if (t.buildLeft > 0) {
           t.buildLeft -= DT
           if (t.buildLeft <= 0) { t.buildLeft = 0; t.tier++ }
+          continue
+        }
+        // SWITCHED OFF by a boss: no shot, and no reload either, so it comes
+        // back with a full cooldown. Modelled rather than skipped because the
+        // level 3 win rate is measured off this file, and a sim in which the
+        // Reaper's ability did nothing would report a fiction.
+        if (t.disabledFor > 0) {
+          t.disabledFor -= DT
+          if (t.disabledFor <= 0) {
+            t.disabledFor = 0
+            t.cooldown = Math.max(0.05, statOf(t, 'fireInterval'))
+          }
           continue
         }
         if (statOf(t, 'supportRadius') > 0) continue

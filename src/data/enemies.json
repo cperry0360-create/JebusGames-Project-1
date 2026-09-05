@@ -203,6 +203,12 @@
     "livesCost": 15,
     "damage": 0,
     "attackInterval": 99,
-    "blockable": false
+    "blockable": false,
+    "towerDisable": {
+      "cooldown": 7,
+      "windup": 1,
+      "duration": 3.5,
+      "range": 260
+    }
   }
 }

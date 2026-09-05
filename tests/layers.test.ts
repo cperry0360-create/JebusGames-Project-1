@@ -84,7 +84,11 @@ test('a tower with nothing it can hit does not fire and does not spend its coold
   const tick = code.slice(code.indexOf('  tick(dt: number'), code.indexOf('this.rampTarget !== target'))
   const pick = tick.indexOf('pickFirst(')
   const noTarget = tick.indexOf('if (!target) return')
-  const setCooldown = tick.indexOf('this.cooldown = this.fireInterval')
+  // Searched from the target check onward. `tick` now assigns a fireInterval in
+  // two places: once here, and once when a tower switched off by the boss comes
+  // back and is handed a fresh cooldown. The one this is about is the FIRING
+  // one, which is the assignment after the target is known.
+  const setCooldown = tick.indexOf('this.cooldown = this.fireInterval', noTarget)
   assert.ok(pick >= 0 && noTarget >= 0 && setCooldown >= 0, 'tick no longer has the shape this describes')
   assert.ok(noTarget < setCooldown,
     'the cooldown is spent before the tower knows whether it had a target')
