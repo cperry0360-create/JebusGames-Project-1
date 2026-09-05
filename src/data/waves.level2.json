@@ -20,7 +20,7 @@
       "spawns": [
         {
           "enemy": "lateFiler",
-          "count": 6,
+          "count": 7,
           "interval": 1.2,
           "delay": 0
         }
@@ -37,7 +37,7 @@
         },
         {
           "enemy": "directReport",
-          "count": 2,
+          "count": 3,
           "interval": 1.1,
           "delay": 4
         }
@@ -65,7 +65,7 @@
       "spawns": [
         {
           "enemy": "directReport",
-          "count": 10,
+          "count": 12,
           "interval": 0.7,
           "delay": 0
         },
@@ -88,7 +88,7 @@
         },
         {
           "enemy": "directReport",
-          "count": 8,
+          "count": 10,
           "interval": 0.8,
           "delay": 5
         }
@@ -99,13 +99,13 @@
       "spawns": [
         {
           "enemy": "lateFiler",
-          "count": 11,
+          "count": 12,
           "interval": 0.95,
           "delay": 0
         },
         {
           "enemy": "directReport",
-          "count": 8,
+          "count": 10,
           "interval": 0.75,
           "delay": 4
         },
@@ -122,13 +122,13 @@
       "spawns": [
         {
           "enemy": "lateFiler",
-          "count": 15,
+          "count": 16,
           "interval": 0.9,
           "delay": 0
         },
         {
           "enemy": "directReport",
-          "count": 9,
+          "count": 12,
           "interval": 0.7,
           "delay": 4
         },
@@ -157,7 +157,7 @@
         },
         {
           "enemy": "lateFiler",
-          "count": 9,
+          "count": 13,
           "interval": 0.9,
           "delay": 6
         }
@@ -168,7 +168,7 @@
       "spawns": [
         {
           "enemy": "directReport",
-          "count": 15,
+          "count": 21,
           "interval": 0.62,
           "delay": 0
         },
@@ -197,7 +197,7 @@
         },
         {
           "enemy": "lateFiler",
-          "count": 12,
+          "count": 17,
           "interval": 0.85,
           "delay": 3
         },
@@ -220,13 +220,13 @@
         },
         {
           "enemy": "directReport",
-          "count": 20,
+          "count": 21,
           "interval": 0.6,
           "delay": 3
         },
         {
           "enemy": "lateFiler",
-          "count": 14,
+          "count": 19,
           "interval": 0.82,
           "delay": 6
         }
@@ -244,13 +244,13 @@
         },
         {
           "enemy": "directReport",
-          "count": 2,
+          "count": 8,
           "interval": 1.2,
           "delay": 6
         },
         {
           "enemy": "lateFiler",
-          "count": 1,
+          "count": 6,
           "interval": 1.6,
           "delay": 12
         }

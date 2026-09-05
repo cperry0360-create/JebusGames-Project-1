@@ -247,18 +247,18 @@ test('the demons stand in tier for tier, and Bruiser keeps the early waves', () 
 
 /* ------------------------------------------------------------------ the step */
 
-test('level 2 is a step up of about 8 percent, not a spike', () => {
-  // The band was 15-20% and level 2 won 0 of 60 soaked runs at the top of it.
-  // Two things were wrong at once — pads out of tower range AND more health —
-  // and the pads were the larger of the two. With those fixed, 18.5% was still
-  // more than the map could carry. 8% is the tuned figure: enough that level 2
-  // is the harder board, little enough that it is beatable. Widened to 5-12%
-  // so ordinary count edits do not fail this, but a slide back toward the old
-  // spike does.
+test('level 2 is a step up of 15 to 20 percent, not a spike', () => {
+  // Back to 15-20% after a detour through 8%.
+  //
+  // Level 2 was unwinnable at 18.5% and the health was blamed for it. It was
+  // not: the pads were 117-185 px from the road, out of range of four of the
+  // five towers, and moving them inward is what made the level playable. The
+  // health cut rode along with that fix and was never needed — with the pads
+  // corrected, 8% played as too easy in real hands.
   const t1 = total(l1), t2 = total(l2)
   const step = t2 / t1 - 1
-  assert.ok(step >= 0.05 && step <= 0.12,
-    `level 2 carries ${Math.round(step * 100)}% more enemy health than level 1, not 5-12%`)
+  assert.ok(step >= 0.15 && step <= 0.20,
+    `level 2 carries ${Math.round(step * 100)}% more enemy health than level 1, not 15-20%`)
 
   // And never LESS than level 1 on any wave: it is the second map, and an
   // early wave that is lighter than level 1's reads as the game going soft.
