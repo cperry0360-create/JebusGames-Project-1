@@ -418,6 +418,23 @@
     "labelColumn": 154,
     "_labelColumn": "Room reserved for a row's name, so the three tracks start in one column whatever the words are. Measured against SOUND EFFECTS, the longest, at labelSize with its letter spacing: it was 118 and the words ran under the track."
   },
+  "cutscene": {
+    "_note": "The comic's layout. A band is RESERVED out of the safe area for SKIP and the panel counter, and the panel is contain-fitted into what is left -- so the controls are never on the art, which a corner placement cannot promise at 16:9 where there is no letterbox band to sit in. Which edge the band comes off is measured rather than chosen: both are fitted and the larger panel wins. skipWidth/skipHeight are POINTS and 44 is the floor; a test holds them there.",
+    "margin": 14,
+    "gap": 14,
+    "skipWidth": 76,
+    "skipHeight": 44,
+    "counterWidth": 72,
+    "counterHeight": 22,
+    "background": 1054237,
+    "skipFill": 0,
+    "skipFillAlpha": 0.55,
+    "skipEdge": 16182489,
+    "skipEdgeAlpha": 0.5,
+    "skipLabelSize": 20,
+    "counterSize": 16,
+    "counterAlpha": 0.65
+  },
   "heroFx": {
     "_note": "PLACEHOLDER effect art for the five hero powers, in numbers rather than in pictures. None of the five has art yet and waiting for it would mean shipping abilities nobody can judge -- the question a first balance pass has to answer is whether a radius is right, and that is a question about a shape on the board. Every shape is tinted to the hero (heroes.json `colour`) and sized to the power's real radius, so what the player sees is what the rule uses. See systems/HeroFx.ts; when the art lands, that file and this block go together.",
     "ringMs": 480,

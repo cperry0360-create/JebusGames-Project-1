@@ -18,6 +18,23 @@ const {
 const { DEFAULT_SAVE, loadSave, writeSave } = await import('../src/systems/Save.ts')
 
 const src = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
+
+const { cutsceneLayout, overlaps, contains } = await import('../src/systems/CutsceneLayout.ts')
+const { NO_INSETS } = await import('../src/systems/HudLayout.ts')
+const CFG = JSON.parse(src('src/data/presentation.json')).cutscene
+/** Every panel in the game is this size; the test that walks the files checks
+ *  it stays 16:9. */
+const PANEL_W = 1672
+const PANEL_H = 941
+/** The viewports the brief names, in both orientations, plus a desktop window
+ *  and the two exact-16:9 shapes where there is no letterbox to hide in. */
+const VIEWPORTS: Array<[number, number]> = [
+  [375, 667], [667, 375],
+  [390, 844], [844, 390],
+  [1440, 900], [900, 1440],
+  [1280, 720], [1920, 1080],
+  [1024, 768], [320, 480],
+]
 const CUTSCENES = JSON.parse(src('src/data/cutscenes.json'))
 const LEVELS = JSON.parse(src('src/data/levels.json')).levels
 
@@ -222,23 +239,38 @@ test('the level select can replay a comic, and only one it has seen', () => {
 })
 
 test('the fit is contain, not cover, so no bubble is ever cut off', () => {
-  const scene = src('src/scenes/CutsceneScene.ts')
-  assert.match(scene, /Math\.min\(w \/ sw, h \/ sh\)/,
+  // Driven through the REAL layout module rather than a second copy of its
+  // arithmetic. The version this replaces asserted that the scene's source
+  // contained `Math.min(w / sw, h / sh)` and then re-implemented the fit here
+  // to check it — which is exactly the shape that let the actual bug through:
+  // the arithmetic was right and it was being applied in the wrong coordinate
+  // space, and a test that re-derives the arithmetic cannot see that.
+  const layout = src('src/systems/CutsceneLayout.ts')
+  assert.match(layout, /Math\.min\(area\.width \/ srcW, area\.height \/ srcH\)/,
     'the panel is scaled by max(), which crops it')
+  assert.doesNotMatch(layout, /Math\.max\(area\.width/, 'a cover-fit has appeared')
 
-  // And the arithmetic, on the shape the brief names: a phone in portrait.
-  const fit = (vw: number, vh: number) => {
-    const s = Math.min(vw / 1672, vh / 941)
-    return { w: 1672 * s, h: 941 * s }
+  for (const [vw, vh] of VIEWPORTS) {
+    const at = cutsceneLayout(
+      { width: vw, height: vh, insets: NO_INSETS, panelWidth: PANEL_W, panelHeight: PANEL_H }, CFG,
+    )
+    // Uniform scale on both axes: the panel's aspect survives exactly.
+    assert.ok(Math.abs(at.panel.width / at.panel.height - PANEL_W / PANEL_H) < 0.001,
+      `${vw}x${vh} distorts the panel`)
+    // And nothing ever overflows the viewport, in either orientation.
+    assert.ok(at.panel.x >= -0.001 && at.panel.y >= -0.001
+      && at.panel.x + at.panel.width <= vw + 0.001
+      && at.panel.y + at.panel.height <= vh + 0.001,
+      `${vw}x${vh} crops the panel`)
   }
-  const portrait = fit(390, 844)
-  assert.ok(Math.abs(portrait.w - 390) < 0.001, 'the panel does not fill the width in portrait')
-  assert.ok(portrait.h < 844, 'the panel is not letterboxed vertically in portrait')
-  // Nothing ever overflows, in either orientation.
-  for (const [vw, vh] of [[390, 844], [844, 390], [1024, 768], [568, 320]] as const) {
-    const f = fit(vw, vh)
-    assert.ok(f.w <= vw + 0.001 && f.h <= vh + 0.001, `${vw}x${vh} crops the panel`)
-  }
+
+  // The shape the brief names: a phone in portrait gets the width, with the
+  // game's dark chrome above and below.
+  const portrait = cutsceneLayout(
+    { width: 390, height: 844, insets: NO_INSETS, panelWidth: PANEL_W, panelHeight: PANEL_H }, CFG,
+  )
+  assert.ok(portrait.panel.width / 390 > 0.9, 'the panel does not fill the width in portrait')
+  assert.ok(portrait.panel.height < 844 * 0.5, 'the panel is not letterboxed vertically')
 })
 
 test('the next panel is fetched while the current one is up', () => {
@@ -252,4 +284,219 @@ test('the next panel is fetched while the current one is up', () => {
   const advance = scene.slice(scene.indexOf('private advance('))
   assert.match(advance.slice(0, 500), /this\.preloadAhead\(\)/,
     'advancing does not start the next fetch')
+})
+
+/* --------------------------------------------------- the panel on the glass */
+
+test('the scene fits its camera, which is the whole of what was broken', () => {
+  /*
+   * THE BUG. `layout` computed a correct contain-fit and centred it, in CSS
+   * pixels — and the scene never fitted its camera, so that was drawn through
+   * an untransformed camera over a canvas measured in PHYSICAL pixels. At
+   * devicePixelRatio 3 the panel came out at a third of its size with its
+   * centre a sixth of the way across: a small comic pinned to the top-left with
+   * black around it, which is the report word for word. At dpr 1 the two spaces
+   * are the same number and it looked perfect, which is how it shipped.
+   *
+   * Every other screen already did this — the menus through
+   * `fitCameraToDesign`, GameScene through its own `uiCam`. This one did not.
+   */
+  const scene = src('src/scenes/CutsceneScene.ts')
+  assert.match(scene, /fitUiCamera\(this\)/, 'the cutscene camera is unfitted again')
+  // Fitted BEFORE anything is measured or placed: a layout computed against a
+  // camera that has not been set up is a layout in the wrong space.
+  const create = scene.slice(scene.indexOf('  create(): void {'))
+  const body = create.slice(0, create.indexOf('\n  }'))
+  assert.ok(body.indexOf('fitUiCamera') < body.indexOf('this.drawPanel()'),
+    'the panel is drawn before the camera is fitted')
+
+  // The arithmetic that shows why dpr matters: a CSS-space fit drawn through a
+  // dpr-3 canvas is a third the size, a sixth of the way across.
+  const cssFit = cutsceneLayout(
+    { width: 390, height: 844, insets: NO_INSETS, panelWidth: PANEL_W, panelHeight: PANEL_H }, CFG,
+  )
+  const dpr = 3
+  assert.ok(cssFit.panel.width / (390 * dpr) < 0.35,
+    'the unfitted case no longer reproduces, so this test is measuring nothing')
+})
+
+test('the panel is centred in the safe area at every viewport, both ways up', () => {
+  for (const [vw, vh] of VIEWPORTS) {
+    for (const [what, insets] of [
+      ['flat', NO_INSETS],
+      ['notched portrait', { top: 47, right: 0, bottom: 34, left: 0 }],
+      ['notched landscape', { top: 0, right: 0, bottom: 21, left: 47 }],
+    ] as const) {
+      const at = cutsceneLayout(
+        { width: vw, height: vh, insets, panelWidth: PANEL_W, panelHeight: PANEL_H }, CFG,
+      )
+      const safeCx = (insets.left + (vw - insets.right)) / 2
+      const safeCy = (insets.top + (vh - insets.bottom)) / 2
+      const cx = at.panel.x + at.panel.width / 2
+      const cy = at.panel.y + at.panel.height / 2
+      // BOTH AXES. A band reserved from one side only would push the panel
+      // down or across by half a control; it is taken off both sides instead.
+      assert.ok(Math.abs(cx - safeCx) < 0.001,
+        `${vw}x${vh} ${what}: the panel is ${(cx - safeCx).toFixed(1)}px off centre horizontally`)
+      assert.ok(Math.abs(cy - safeCy) < 0.001,
+        `${vw}x${vh} ${what}: the panel is ${(cy - safeCy).toFixed(1)}px off centre vertically`)
+    }
+  }
+})
+
+test('nothing important is ever under the notch or the home indicator', () => {
+  // The panel AND both controls sit inside the safe rectangle. `viewport-fit=cover`
+  // means the canvas reaches behind the hardware, so this is the only thing
+  // between a speech bubble and the sensor housing.
+  const notches = [
+    { top: 47, right: 0, bottom: 34, left: 0 },
+    { top: 0, right: 0, bottom: 21, left: 47 },
+    { top: 0, right: 47, bottom: 21, left: 0 },
+    { top: 24, right: 24, bottom: 24, left: 24 },
+  ]
+  for (const [vw, vh] of VIEWPORTS) {
+    for (const insets of notches) {
+      const at = cutsceneLayout(
+        { width: vw, height: vh, insets, panelWidth: PANEL_W, panelHeight: PANEL_H }, CFG,
+      )
+      const safe = {
+        x: insets.left,
+        y: insets.top,
+        width: vw - insets.left - insets.right,
+        height: vh - insets.top - insets.bottom,
+      }
+      if (safe.width <= 0 || safe.height <= 0) continue
+      for (const [name, r] of [
+        ['panel', at.panel], ['skip', at.skip], ['counter', at.counter],
+      ] as const) {
+        assert.ok(contains(safe, r), `${vw}x${vh}: the ${name} runs under the hardware`)
+      }
+    }
+  }
+})
+
+test('SKIP is never on the art, and is always big enough to hit', () => {
+  // A corner placement cannot promise this: at exactly 16:9 there is no
+  // letterbox band for a corner control to sit in, so the corner is on the
+  // picture. A band is reserved instead and both controls live in it.
+  assert.ok(CFG.skipWidth >= 44, `a ${CFG.skipWidth}pt-wide SKIP is under the 44pt minimum`)
+  assert.ok(CFG.skipHeight >= 44, `a ${CFG.skipHeight}pt-tall SKIP is under the 44pt minimum`)
+
+  for (const [vw, vh] of VIEWPORTS) {
+    for (const insets of [
+      NO_INSETS,
+      { top: 47, right: 0, bottom: 34, left: 0 },
+      { top: 0, right: 0, bottom: 21, left: 47 },
+    ]) {
+      const at = cutsceneLayout(
+        { width: vw, height: vh, insets, panelWidth: PANEL_W, panelHeight: PANEL_H }, CFG,
+      )
+      assert.ok(!overlaps(at.panel, at.skip), `${vw}x${vh}: SKIP is on top of the panel`)
+      assert.ok(!overlaps(at.panel, at.counter), `${vw}x${vh}: the counter is on top of the panel`)
+      assert.ok(!overlaps(at.skip, at.counter), `${vw}x${vh}: the two controls overlap`)
+      assert.equal(at.skip.width, CFG.skipWidth)
+      assert.equal(at.skip.height, CFG.skipHeight)
+    }
+  }
+})
+
+test('the panel is as large as those rules leave room for', () => {
+  /*
+   * MEASURED, and the numbers are the report's. "As large as fits" is the rule
+   * that gives way to the other three — never crop, never under a control,
+   * always centred — so what is pinned here is that it still fills the screen
+   * rather than that it is maximal in the abstract.
+   */
+  const at = (w: number, h: number, insets = NO_INSETS) => cutsceneLayout(
+    { width: w, height: h, insets, panelWidth: PANEL_W, panelHeight: PANEL_H }, CFG,
+  )
+  const pct = (w: number, h: number, insets = NO_INSETS) => at(w, h, insets).panel.width / w
+
+  // PORTRAIT: the width, with chrome above and below. The brief's case.
+  assert.ok(pct(375, 667) > 0.9, `375x667 gives ${(pct(375, 667) * 100).toFixed(0)}% of the width`)
+  assert.ok(pct(390, 844) > 0.9, `390x844 gives ${(pct(390, 844) * 100).toFixed(0)}% of the width`)
+  assert.ok(pct(390, 844, { top: 47, right: 0, bottom: 34, left: 0 }) > 0.9,
+    'a notched portrait phone loses the width')
+  assert.equal(at(390, 844).bandEdge, 'top', 'portrait does not put the controls above the panel')
+
+  // LANDSCAPE: most of the width, and the controls go beside rather than above.
+  assert.ok(pct(844, 390) > 0.7, `844x390 gives ${(pct(844, 390) * 100).toFixed(0)}% of the width`)
+  assert.ok(pct(844, 390, { top: 0, right: 0, bottom: 21, left: 47 }) > 0.7,
+    'a notched landscape phone loses most of the width')
+  assert.equal(at(844, 390).bandEdge, 'right', 'landscape stacks the controls above the panel')
+
+  // DESKTOP, including the exact-16:9 window where there is no natural chrome.
+  assert.ok(pct(1440, 900) > 0.9, `1440x900 gives ${(pct(1440, 900) * 100).toFixed(0)}%`)
+  assert.ok(pct(1280, 720) > 0.8, `1280x720 gives ${(pct(1280, 720) * 100).toFixed(0)}%`)
+  assert.ok(pct(1920, 1080) > 0.8, `1920x1080 gives ${(pct(1920, 1080) * 100).toFixed(0)}%`)
+})
+
+test('a viewport smaller than the chrome still produces a usable rectangle', () => {
+  // Not a shape any phone has, but a layout that returns a negative size is how
+  // the loadout hero row put its portraits above their own card. Every extent
+  // here is floored, so the degenerate case is small rather than inverted.
+  for (const [vw, vh] of [[120, 90], [40, 40], [1, 1]] as const) {
+    const at = cutsceneLayout(
+      { width: vw, height: vh, insets: NO_INSETS, panelWidth: PANEL_W, panelHeight: PANEL_H }, CFG,
+    )
+    assert.ok(at.panel.width > 0 && at.panel.height > 0, `${vw}x${vh} produced no panel`)
+    assert.ok(at.scale > 0, `${vw}x${vh} produced a zero scale`)
+  }
+})
+
+test('one layout path serves the first panel, every later panel and the resize', () => {
+  /*
+   * The brief asks for this to be confirmed rather than assumed. There is one
+   * `layout()` and everything reaches it:
+   *
+   *   - the first panel, and every later one, through `drawPanel`;
+   *   - a panel whose texture lands late, through `drawPanel` again from the
+   *     loader's completion;
+   *   - the controls, when they are built;
+   *   - a resize or a rotate, through the resize handler.
+   *
+   * And there is no second placement function to fall out of step with it.
+   */
+  const scene = src('src/scenes/CutsceneScene.ts')
+  const drawPanel = scene.slice(scene.indexOf('private drawPanel()'))
+  assert.match(drawPanel.slice(0, drawPanel.indexOf('\n  }')), /this\.layout\(\)/,
+    'drawing a panel does not lay it out')
+  assert.match(drawPanel, /this\.load\.once\(Phaser\.Loader\.Events\.COMPLETE, \(\) => \{/,
+    'a panel that arrives late is never redrawn')
+
+  const advance = scene.slice(scene.indexOf('private advance('))
+  assert.match(advance.slice(0, advance.indexOf('\n  }')), /this\.drawPanel\(\)/,
+    'later panels take a different path from the first')
+
+  // Resize AND the camera: its centre is derived from the viewport, so a rotate
+  // that only moved the sprites would leave the whole scene offset.
+  const resize = scene.slice(scene.indexOf('onSceneResize(this, () => {'))
+  const handler = resize.slice(0, resize.indexOf('})'))
+  assert.match(handler, /fitUiCamera\(this\)/, 'a rotate does not re-fit the camera')
+  assert.match(handler, /this\.layout\(\)/, 'a rotate does not re-place the panel')
+  assert.match(handler, /zone\.setSize\(viewW\(this\), viewH\(this\)\)/,
+    'the tap-anywhere zone keeps its old size after a rotate')
+
+  // No second placement. `placeSkip` was one, and it was called from two places
+  // and read the raw viewport rather than the safe area.
+  assert.doesNotMatch(scene, /private placeSkip\(/,
+    'the controls have their own placement again, which the next resize will miss')
+  assert.equal((scene.match(/private layout\(\): void/g) ?? []).length, 1)
+
+  // The hand-over into the game is untouched by any of this, and still goes
+  // through the one exit.
+  assert.match(scene, /private handOver\(why: string\): void/)
+  assert.match(scene, /this\.scene\.start\(this\.next\)/)
+})
+
+test('every number the comic is laid out with is in presentation.json', () => {
+  const scene = src('src/scenes/CutsceneScene.ts')
+  for (const key of ['margin', 'gap', 'skipWidth', 'skipHeight', 'counterWidth',
+    'counterHeight', 'background', 'skipLabelSize', 'counterSize']) {
+    assert.equal(typeof CFG[key], 'number', `cutscene.${key} is not in presentation.json`)
+  }
+  // The constants that used to live in the scene are gone.
+  assert.doesNotMatch(scene, /const SKIP_MARGIN|const SKIP_W|const SKIP_H/,
+    'the SKIP geometry is hardcoded in the scene again')
+  assert.doesNotMatch(scene, /0x10161d/, 'the background colour is hardcoded again')
 })
