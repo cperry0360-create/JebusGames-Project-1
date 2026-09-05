@@ -5,7 +5,17 @@
 set -e
 H="$(cd "$(dirname "$0")" && pwd)"
 SRC="${SRC:-$(cd "$H/../.." && pwd)}"
-PHASER="${PHASER_DIST:-/home/user/phaserjs/phaser/dist/phaser.min.js}"
+# Phaser lives in the repository, at vendor/phaser.min.js. It used to default
+# to a path in someone's home directory that does not exist in this
+# environment, and there was no way to create one: npm answers 403 for every
+# package and the CDNs are blocked at the proxy. Five sessions of rendering
+# fixes shipped unseen because of that one line. See vendor/README.md.
+PHASER="${PHASER_DIST:-$SRC/vendor/phaser.min.js}"
+if [ ! -f "$PHASER" ]; then
+  echo "no Phaser dist at $PHASER" >&2
+  echo "expected vendor/phaser.min.js — see vendor/README.md to restore it" >&2
+  exit 1
+fi
 rm -rf "$H/stage" "$H/tssrc"
 mkdir -p "$H/stage"
 cp -r "$SRC/src" "$H/tssrc"
