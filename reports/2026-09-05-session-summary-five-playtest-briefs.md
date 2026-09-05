@@ -12,9 +12,10 @@ verified.
 
 **Branch `claude/targeting-drawer-input-bugs-lb5184`. Not `main`.** Every brief
 said "work directly on main"; this session is bound to that branch by its own
-configuration and cannot push anywhere else. Verified after a fresh fetch: the
-branch is **10 commits ahead of `origin/main` and 0 behind**, so it is a clean
-fast-forward. Nothing here needs rebasing and nothing depends on being on a
+configuration and cannot push anywhere else. Verified after a fresh fetch:
+`origin/main` is at `46f1f72`, the session's own baseline, and the branch is
+ahead of it by the commits in the table below and behind it by **none** — a
+clean fast-forward. Nothing here needs rebasing and nothing depends on being on a
 branch.
 
 **`deploy` has not run for any of this**, and correctly so: it is gated on
@@ -34,7 +35,8 @@ branch.
 | 8 | [`70fbbe1`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/70fbbe1) | Cutscene camera; panel layout | ✅ ✅ ([run 33996563492](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33996563492)) |
 | 9 | [`5206dff`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/5206dff) | Report: the cutscene camera | ✅ ✅ ([run 33996636912](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33996636912)) |
 | 10 | [`f73cd6d`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/f73cd6d) | Close that report's CI table | ✅ ✅ ([run 33996668714](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33996668714)) |
-| 11 | this report | — | filled in by the commit after it |
+| 11 | [`3f37a72`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/3f37a72) | This report | ✅ ✅ ([run 33997081003](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33997081003)) |
+| 12 | [`` ``] closing this table | — | the row a report cannot fill in for itself |
 
 Two columns of ✅ are `test` and `typecheck`; `deploy` is skipped on every run.
 
@@ -126,8 +128,8 @@ has backgrounded a real phone against this build**.
 
 ## Where this leaves the repository
 
-**In flight:** the ten commits above, CI green, a clean fast-forward to `main`.
-Merging is the one remaining step.
+**In flight:** the commits above, CI green on every run, a clean fast-forward to
+`main`. Merging is the one remaining step.
 
 **Waiting on a decision — Cory's, not urgent:**
 
