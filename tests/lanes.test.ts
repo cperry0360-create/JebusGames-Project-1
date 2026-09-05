@@ -189,6 +189,58 @@ test('a tower in the fork covers enemies on both branches', () => {
   assert.equal(pickFirst([behind, ahead], TOWER.x, TOWER.y, 400)!.laneId, 'east')
 })
 
+test('a tower in the fork damages enemies on both branches, not just sees them', () => {
+  // The test above proves the tower SELECTS across lanes. This one proves the
+  // damage lands: a firing loop, both branches walked with the real `advance`,
+  // and both enemies dead on their own branch before either reaches the merge.
+  // Selection and damage are separate failures — a tower can pick a target on
+  // another lane and still have nothing happen to it.
+  const net = new LaneNetwork(FORK)
+  const TOWER = { x: 200, y: 100 }
+  const RANGE = 130
+  const DAMAGE = 12
+
+  const walker = (laneId: string) => ({
+    laneId, laneDistance: 100, distance: 100, alive: true, health: 96,
+    x: 0, y: 0, bornOn: laneId, diedOn: '',
+  })
+  const mobs = [walker('west'), walker('east')]
+  const place = (m: (typeof mobs)[number]) => {
+    const p = net.lane(m.laneId).path.pointAt(m.laneDistance)
+    m.x = p.x
+    m.y = p.y
+  }
+  mobs.forEach(place)
+
+  const dealt: Record<string, number> = { west: 0, east: 0 }
+  for (let frame = 0; frame < 200 && mobs.some((m) => m.alive); frame++) {
+    for (const m of mobs) {
+      if (!m.alive) continue
+      const next = advance(net, m as Walker, 2)
+      m.laneId = next.laneId
+      m.laneDistance = next.laneDistance
+      m.distance = next.distance
+      place(m)
+    }
+    const target = pickFirst(mobs, TOWER.x, TOWER.y, RANGE)
+    if (!target) continue
+    dealt[target.bornOn] = (dealt[target.bornOn] ?? 0) + DAMAGE
+    target.health -= DAMAGE
+    if (target.health <= 0) {
+      target.alive = false
+      target.diedOn = target.laneId
+    }
+  }
+
+  assert.ok(dealt.west! > 0, 'the tower never damaged the enemy on the west branch')
+  assert.ok(dealt.east! > 0, 'the tower never damaged the enemy on the east branch')
+  for (const m of mobs) {
+    assert.equal(m.alive, false, `the ${m.bornOn} enemy survived a tower that reached it`)
+    assert.equal(m.diedOn, m.bornOn,
+      `the ${m.bornOn} enemy only died after merging, so this measured the shared lane`)
+  }
+})
+
 /* ---------------------------------------------------------------- validation */
 
 test('a broken lane network is reported rather than walked', () => {
