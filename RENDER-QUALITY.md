@@ -281,3 +281,38 @@ band. Revisit only if minified shimmer at min zoom is still objectionable once
 ### 5. Restate rule 7 in CLAUDE.md in physical pixels
 
 So the next sprite is authored against the screen it will actually be drawn on.
+
+### 6. Desktop is soft because desktop is dpr 1, and nothing is wrong with the canvas
+
+Added 2026-09-05, from the crash report that recorded `dpr = 1` on a phone.
+
+**The phone's 1 was a bug and is fixed.** `deviceScale()` re-read
+`devicePixelRatio` on every call, and iOS does not report it reliably while a
+page is hidden or is being restored from the back/forward cache — it can read 1
+for a frame or two on the way back in. That number is the exchange rate between
+the two coordinate spaces the whole game is written in, so a transient reading
+would have put two halves of one calculation in different spaces and, through
+`applyResolution`, sized the canvas to a third of the device's pixels. It is
+latched for the session now and only re-read deliberately, with the page
+visible. See `systems/Resolution.ts`.
+
+**Desktop's 1 is not a bug.** A standard desktop monitor genuinely reports
+`devicePixelRatio` 1, and the canvas is doing exactly what this document asks
+of it: one canvas pixel per device pixel. There is nothing to fix in the
+plumbing.
+
+What is true is that rule 7 in CLAUDE.md has no headroom at dpr 1. Cory renders
+at 75.8 world px; at `maxZoom` 2.37 and dpr 1 that is 180 physical pixels
+against a 470px source, which is **2.6x minification** — the number section 4
+above already identifies as the point where a 4px outline starts to smear, and
+with no mipmaps to soften it. On a dpr-3 phone the same sprite draws at 539
+physical pixels and is barely minified at all. So the roster is authored for
+the phone and desktop gets the worst case of it.
+
+**The lever, not pulled here.** A render-scale FLOOR — oversampling to, say, 2x
+on a dpr-1 display — would put desktop back in the same band as the phone. It
+costs 4x the fill rate on the machine best able to afford it, and it is a
+one-line change in `deviceScale()`. It is not made here because it changes what
+every sprite in the game is authored against, which is a call about the art
+rather than about the plumbing, and because rule 7 would have to be restated
+around it. Numbers above; the decision is Cory's.

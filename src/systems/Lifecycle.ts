@@ -22,6 +22,9 @@ import { logEvent } from './Diagnostics.ts'
 import { audioUnavailable, onAudioUnavailable, resumeAudio, suspendAudio } from './Audio.ts'
 import { pauseMusic, resumeMusic } from './Music.ts'
 import { toast } from '../ui/Toast.ts'
+import { gameCanDraw, gameRenderer, installTextGuard, refreshAllText } from './TextGuard.ts'
+import { rendererFault } from './RenderHealth.ts'
+import { refreshDeviceScale } from './Resolution.ts'
 
 /** The loader. Pausing a scene mid-preload stalls it. */
 const NEVER_PAUSE = 'Boot'
@@ -32,9 +35,31 @@ export interface Lifecycle {
   /** For tests and the harness: drive a transition without a real event. */
   background: () => void
   foreground: () => void
+  /** Whether the renderer is currently able to draw. Read by the harness. */
+  canDraw: () => boolean
 }
 
-export function installLifecycle(game: Phaser.Game): Lifecycle {
+export interface LifecycleOptions {
+  /**
+   * Builds the game again, from nothing.
+   *
+   * The last resort, for a context that is gone and will not come back. It is
+   * handed in rather than done here because only `main` knows how to stand the
+   * game up — and because a module that can rebuild the game is a module that
+   * can rebuild it by accident.
+   */
+  recreate?: () => void
+  /** How long to wait for a lost context to come back before giving up. */
+  restoreTimeoutMs?: number
+}
+
+/** How long a lost context is given to return before the game is rebuilt. */
+const RESTORE_TIMEOUT_MS = 4000
+
+export function installLifecycle(game: Phaser.Game, opts: LifecycleOptions = {}): Lifecycle {
+  // Before anything can redraw. iOS purges the backing store of a backgrounded
+  // page's canvases, and every Phaser Text is a canvas — see RenderHealth.
+  installTextGuard()
   /**
    * Which scenes *this* paused, so returning resumes those and only those.
    *
@@ -97,14 +122,73 @@ export function installLifecycle(game: Phaser.Game): Lifecycle {
       logEvent('audio', 'context still suspended after returning; awaiting a tap')
     })
 
+    // THE RENDERER IS CHECKED BEFORE ANYTHING IS ALLOWED TO DRAW, and resuming
+    // the scenes is what causes the first draw. A first draw into a dead
+    // context is the crash rather than a symptom of it, so the order here is
+    // load-bearing: ask, then resume.
+    const fault = rendererFault(gameRenderer(game))
+    if (fault !== null) {
+      logEvent('lifecycle', `renderer is ${fault} on the way back in; holding`)
+      awaitRestore()
+      return
+    }
+    finishForeground()
+  }
+
+  /** The half of coming back that may only run with a live context. */
+  const finishForeground = (): void => {
     resumeScenes()
     // The scale manager measures wrong for a frame or two after a tab switch
-    // on iOS, exactly as it does after a rotation.
+    // on iOS, exactly as it does after a rotation — and `devicePixelRatio` is
+    // one of the things it is wrong about, which is why the ratio is latched
+    // and only re-read here, with the page visible. See Resolution.
+    refreshDeviceScale()
     try {
       game.scale.refresh()
     } catch {
       // Not measurable yet; the next resize settles it.
     }
+    // Every Text is holding a texture the GPU may no longer have, and nothing
+    // marks one dirty on its own: a heading would stay blank until its string
+    // changed, which for a heading is never.
+    const redrawn = refreshAllText(game)
+    if (redrawn > 0) logEvent('lifecycle', `redrew ${redrawn} text objects`)
+  }
+
+  /**
+   * Waits for a lost context, and rebuilds the game if it never comes back.
+   *
+   * `webglcontextrestored` is the signal, and it is not guaranteed — a context
+   * the browser has given up on fires nothing at all. So there is a deadline,
+   * and past it the game is stood up again from scratch rather than left on a
+   * screen that cannot draw. Losing the run is bad; a black rectangle with no
+   * way out of it is worse, and the run is saved between waves anyway.
+   */
+  let restoreTimer: ReturnType<typeof setTimeout> | null = null
+  const awaitRestore = (): void => {
+    if (restoreTimer !== null) return
+    restoreTimer = setTimeout(() => {
+      restoreTimer = null
+      if (rendererFault(gameRenderer(game)) === null) {
+        finishForeground()
+        return
+      }
+      logEvent('lifecycle', 'the graphics context did not come back; rebuilding the game')
+      if (opts.recreate) opts.recreate()
+      else cannotRebuild()
+    }, opts.restoreTimeoutMs ?? RESTORE_TIMEOUT_MS)
+  }
+
+  const clearRestoreWait = (): void => {
+    if (restoreTimer === null) return
+    clearTimeout(restoreTimer)
+    restoreTimer = null
+  }
+
+  /** Nothing was handed in that can rebuild the game. Say so rather than
+   *  sitting on a blank screen pretending. */
+  const cannotRebuild = (): void => {
+    toast('Graphics could not be restored. Reload to carry on.')
   }
 
   const onVisibility = (): void => {
@@ -124,7 +208,32 @@ export function installLifecycle(game: Phaser.Game): Lifecycle {
     if (globalThis.document?.visibilityState === 'hidden') background()
   })
 
-  installContextLossGuard(game, background, foreground)
+  installContextLossGuard(game, {
+    onLost: () => {
+      background()
+      // PAUSING A SCENE DOES NOT STOP THE RENDER LOOP: Phaser keeps drawing a
+      // paused scene's display list every frame, and a draw into a lost
+      // context is the exception this is here to prevent. The loop itself has
+      // to go to sleep.
+      try {
+        game.loop.sleep()
+      } catch {
+        // A loop that is already gone needs no stopping.
+      }
+    },
+    onRestored: () => {
+      clearRestoreWait()
+      try {
+        game.loop.wake()
+      } catch {
+        // Nothing to wake; the recreate path covers it.
+      }
+      // The engine re-uploads its own textures on a restore; the Text canvases
+      // are ours and are not part of that. `foreground` walks them.
+      if (away) foreground()
+      else finishForeground()
+    },
+  })
 
   // Phaser pauses and resumes sound on blur and focus by itself, and its focus
   // handler is one of the unguarded `context.resume()` calls. Backgrounding is
@@ -142,7 +251,12 @@ export function installLifecycle(game: Phaser.Game): Lifecycle {
     toast('Sound is off — this browser would not start the audio device.')
   })
 
-  return { hidden: () => away, background, foreground }
+  return {
+    hidden: () => away,
+    background,
+    foreground,
+    canDraw: () => gameCanDraw(game),
+  }
 }
 
 /**
@@ -155,8 +269,7 @@ export function installLifecycle(game: Phaser.Game): Lifecycle {
  */
 function installContextLossGuard(
   game: Phaser.Game,
-  onLost: () => void,
-  onRestored: () => void,
+  handlers: { onLost: () => void; onRestored: () => void },
 ): void {
   const canvas = game.canvas as HTMLCanvasElement | undefined
   if (!canvas?.addEventListener) return
@@ -165,12 +278,12 @@ function installContextLossGuard(
     // Preventing the default is what makes the loss recoverable at all.
     e.preventDefault()
     logEvent('lifecycle', 'webgl context lost')
-    onLost()
+    handlers.onLost()
   })
 
   canvas.addEventListener('webglcontextrestored', () => {
     logEvent('lifecycle', 'webgl context restored')
-    onRestored()
+    handlers.onRestored()
     toast('Graphics were reset by the browser. Carry on.')
   })
 }
