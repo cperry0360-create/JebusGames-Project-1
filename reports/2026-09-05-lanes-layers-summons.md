@@ -11,10 +11,12 @@ levels 1 and 2 were not edited and play identically.
 | `d2825b8` | Give the engine branching lanes | ❌ red — asset budget only, see below |
 | `7545559` | Give towers something they cannot shoot | (no run of its own; pushed with the next) |
 | `885168c` | Let enemies call in help | ❌ red — asset budget only, see below |
+| `dbda346` | This report | ❌ red — asset budget only |
+| `02f2005` | Prove the fork tower actually damages both branches | ❌ red — asset budget only, run #69 |
 
-All three are pushed. `origin/main` is `885168c` and the working tree is clean.
+All of it is pushed. `origin/main` is `02f2005` and the working tree is clean.
 
-**CI is red on both runs, and it is not these commits.** The only failing test
+**CI is red on every one of those runs, and it is not these commits.** The only failing test
 is `the deploy stays small enough to open on a phone`, and it has been failing
 since `c9ea190` — three "Add files via upload" commits that are not mine. The
 full accounting is in *Where this leaves the repository* at the bottom, because
@@ -188,7 +190,7 @@ npm test        679 tests, 678 pass, 1 fail
 ```
 
 The one failure is `the deploy stays small enough to open on a phone`
-(`tests/content.test.ts:1059`), `assets total 47.4MB, which is a long wait on a
+(`tests/content.test.ts:1059`), `assets total 48.6MB, which is a long wait on a
 phone`. Verified pre-existing by stashing all of this work and running the suite
 again — same failure, same number.
 
@@ -266,6 +268,91 @@ Two things that follow, for whoever tunes this next:
    the board actually has to output. Any future "wave health is +N%" figure for
    level 2 should be read with that in mind.
 
+
+---
+
+## Re-verification pass, and the one gap it found
+
+The branching-lane brief was put to me a second time. Rather than rebuild it I
+walked the shipped code against each line of the spec. Everything matched
+except one clause, and that one was a real gap.
+
+| Spec clause | Where it lives | |
+| --- | --- | --- |
+| Multiple named lanes, each with its own waypoints | `LaneDef` in `types.ts:34`, `MapDef.lanes?` at `:72` | ✅ |
+| A lane merges into another at a waypoint index of the target | `LaneDef.merge { into, atIndex }` | ✅ |
+| Single-lane `MapDef` unchanged; levels 1 and 2 need no edits | `LaneNetwork` prepends `main` from `waypoints`; no level data touched since `8ec7086` | ✅ |
+| Waves specify a lane, defaulting to the first | `WaveSpawnDef.lane?`, `net.lane(undefined) === main` | ✅ |
+| Each enemy tracks and follows its lane | `Enemy.laneId` / `laneDistance` | ✅ |
+| Transfer at the merge, continuing from the merge index | `followMerges`, `transferFrom` | ✅ |
+| Progress monotonic across a transfer, never regressing | `distance` takes the step and nothing else writes it | ✅ |
+| Tower range evaluates enemies on every lane | `Targeting` never reads `laneDistance` | ✅ |
+| Checker validates every lane | `validateLanes` + `check_level2.py` | ✅ |
+| Test: an enemy from each branch reaches the exit | `lanes.test.ts:140` | ✅ |
+| Test: each branch reports its own path length | `:65`, `:83` | ✅ |
+| Test: merge preserves progress, does not regress | `:97`, `:119` | ✅ |
+| Test: a single-lane map still passes unchanged | `:40`, and both real maps through `validateLanes` | ✅ |
+| **Test: a tower between the branches DAMAGES enemies on both lanes** | — | ❌ **gap** |
+
+The existing tower test proved the tower **selected** across both branches:
+`withinRadius` returning two enemies, `pickFirst` preferring the one furthest
+along by progress across lanes. It never proved the damage landed. Those are
+separate failures — a tower can pick a target on another lane and have nothing
+happen to it, and every selection assertion would still pass.
+
+`02f2005` closes it. Both enemies walk their own branch with the real
+`advance`, the tower fires on a cooldown, and both die **on the branch they
+started on** — asserted, so the test cannot quietly end up measuring the shared
+lane after a merge instead of the fork.
+
+Checked load-bearing by mutation, in both directions:
+
+| Mutation | Fails with |
+| --- | --- |
+| Range 130 → 95, so the tower reaches neither branch | `never damaged the enemy on the west branch` |
+| Candidate list filtered to the west lane | `never damaged the enemy on the east branch` |
+
+`npm test`: 680 tests, 679 pass. `tsdiff` against `885168c`: 179 baseline, 179
+working tree, none introduced. Soak unmoved at 47/60 and 7/60. CI run #69 is
+red on the asset budget alone — `npm test` is the only failing step, and it is
+the same single assertion.
+
+---
+
+## Level 3's geometry has arrived, and the model fits it
+
+`6507abd` uploaded `tools/level3 geometry.json` while this was in flight. It is
+the two-gate merging map this engine was built for:
+
+```
+upper   30 waypoints, (23.06, 124.37) -> (731.45, 375.24)
+lower   30 waypoints, (23.0,  578.43) -> (736.96, 385.57)
+shared  26 waypoints, (733.23, 377.97) -> (1272.46, 366.01)
+merge   (733.23, 377.97)          roadWidth 54.6   towerRange 112
+```
+
+The obvious translation — `shared` as the map's own `waypoints`, `upper` and
+`lower` as branches merging into `main` at `atIndex: 0` — **validates clean**
+through `validateLanes`, and both branches resolve to `main` as their terminal.
+So no engine change is needed to author level 3. Two things to settle when
+somebody does, neither of which is a bug in the engine:
+
+1. **The branch endpoints do not sit on the merge point.** `upper` ends 3.26px
+   short of it and `lower` 8.47px. The model expects a branch's last waypoint to
+   BE the join, so as authored an enemy would jump those few pixels sideways on
+   transferring. Snapping both branch endpoints to `shared[0]` fixes it and
+   costs nothing.
+2. **The declared route lengths do not match the waypoints.** The file says
+   `upper 1366.5, lower 1395.5`; summing the waypoint geometry gives 1347.3 and
+   1333.6 — 19px and 62px short. The gaps are unequal, so this is not a constant
+   offset; the declared figures look traced along the painted road rather than
+   summed from the decimated waypoint list. **Level 2 had exactly this problem**
+   (a supplied 1916.7 against an actual 1955.3), and the resolution then was to
+   trust the waypoints. Worth deciding deliberately rather than inheriting.
+
+Reproduce both with the snippet in `tools/`-style scratch form: build the map
+above, call `validateLanes`, then `net.routeLength('upper')`.
+
 ---
 
 ## Where this leaves the repository
@@ -286,6 +373,7 @@ Three "Add files via upload" commits took the asset total past the 40MB cap:
 | `c9ea190` | enemy_catcher 1.39, enemy_longsnap 1.20, enemy_pompom 0.97, enemy_zamboni 1.64 | 43.3MB ❌ |
 | `a6eeacf` | boss_projectile 2.14 | 45.4MB ❌ |
 | `6220081` | fx_stunned 1.99 | 47.4MB ❌ |
+| `dc98cca`, `6507abd` | boss_unicorn 1.24 (plus L3 tracing art in `tools/`, which does not count) | 48.6MB ❌ |
 
 This is somebody else's art and I have not touched it. Two remedies, either of
 which clears the cap, and I need a word before doing either:
@@ -293,8 +381,8 @@ which clears the cap, and I need a word before doing either:
 1. **Move `public/assets/maps/L3_trace.png` (2.12MB) to `tools/`.** It is a
    tracing overlay, not a shipped asset, and the `map_level2.json` note already
    sets that precedent. On its own this is not enough.
-2. **Re-encode the six new PNGs to WebP**, the same treatment the map plates
-   got, via `tools/reencode`. On past ratios that is roughly 9.3MB down to
+2. **Re-encode the seven new PNGs to WebP**, the same treatment the map plates
+   got, via `tools/reencode`. On past ratios that is roughly 10.6MB down to
    1–2MB, which clears the cap comfortably with or without (1).
 
 Until one of them happens, the live site stays four features behind: the world
@@ -303,7 +391,7 @@ and none of them is deployed.
 
 ### In flight
 
-Nothing. All three commits are pushed and the working tree is clean.
+Nothing. Everything is pushed and the working tree is clean.
 
 ### Carried forward from earlier reports
 
@@ -314,6 +402,11 @@ Nothing. All three commits are pushed and the working tree is clean.
   cleared, not which levels they were on, so clearing level 1 twice marks level
   2 cleared. Fixing it needs a new save field and a migration. Unchanged from
   `2026-09-04-level2-playable.md`.
+- **Level 3 is unblocked on the engine but not on its data.** The geometry
+  validates clean, but its branch endpoints want snapping to the merge point
+  and its declared route lengths disagree with its own waypoints. See the
+  section above; both are decisions for whoever authors the level, not
+  engine work.
 - **`tsdiff`'s blind spot for new files** is now load-bearing on two modules
   (`Lanes.ts`, `AirCover.ts`). Both are Phaser-free by design, so it holds — but
   it holds by convention rather than by a check.
