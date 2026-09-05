@@ -450,8 +450,15 @@ export class Hero extends Phaser.GameObjects.Container {
     const ring = this.scene.add.graphics().setDepth(this.y + 1)
     this.scene.tweens.addCounter({
       from: 0, to: 1, duration: 420,
-      onUpdate: (tw: Phaser.Tweens.TweenChain) => {
-        const t = (tw as unknown as { getValue(): number }).getValue() ?? 0
+      // `tw` is left to contextual typing, and so is the getValue call. The
+      // annotation here said TweenChain, which addCounter does not hand out --
+      // it passes a Tween -- and the cast through `unknown` was what stopped
+      // anyone noticing. Local tsc could not see it either: without
+      // node_modules `Phaser` is `any`, so both the wrong type and the cast
+      // that hid it typechecked. This is how GameScene and AbilityRunner
+      // already write the same tween.
+      onUpdate: (tw) => {
+        const t = tw.getValue() ?? 0
         ring.clear()
         ring.lineStyle(4, 0xffd98a, 1 - t)
         ring.strokeCircle(this.x, this.y - 20, 14 + t * 58)
