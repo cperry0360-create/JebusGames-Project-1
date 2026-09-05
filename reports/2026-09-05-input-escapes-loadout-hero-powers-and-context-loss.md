@@ -8,8 +8,8 @@ looked for.
 **Everything is on `claude/targeting-drawer-input-bugs-lb5184`, not on `main`.**
 All four briefs said "work directly on main"; this session is bound to that
 branch by its own configuration and cannot push anywhere else. The branch is
-four commits ahead of `main` and CI is green on it, so a fast-forward merge is
-all that stands between this and `main`. Nothing here depends on being on a
+ahead of `main` by the commits listed below and CI is green on it, so a
+fast-forward merge is all that stands between this and `main`. Nothing here depends on being on a
 branch and nothing needs rebasing.
 
 ## Commits
@@ -477,7 +477,7 @@ fourteen strikes.
 
 ## Where this leaves the repository
 
-**In flight:** the five commits above, on
+**In flight:** the commits above, on
 `claude/targeting-drawer-input-bugs-lb5184`, CI green on both pushes, `deploy`
 correctly skipped because the branch is not `main`. **Merging to `main` is the
 one remaining step** and it is a fast-forward.
