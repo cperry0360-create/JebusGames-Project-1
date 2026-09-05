@@ -1,0 +1,360 @@
+{
+  "_note": "LEVEL 3, SPORTS COMPLEX AT DUSK. Thirteen waves across two gates. GENERATED, not typed: the curve and the unit mix live in tools/gen_waves3.py and this file is its output, so retuning is a change there and a re-run rather than an edit here. Every count below fell out of a target health per wave; none of them was chosen on its own.",
+  "_health": "Total enemy health is 33160 against level 2's 29945, +10.7% across the run, and the run pays 0.1302 peanuts per point of it. THE HEADLINE UNDERSTATES THE DIFFICULTY, for two reasons worth carrying into any retune. FIRST, THE LANE IS SHORTER: both routes walk 1560 px gate to exit against level 2's 1955, so 20% less road and 20% less time under fire for the same health. A point of health here is worth more than a point on level 2 and the totals are not directly comparable. SECOND, THE ARMOUR IS HEAVIER: raw maxHealth is armour-blind, and this cast carries 3, 8 and 12 where level 2's carries 0, 5 and 7. The Zamboni's 12 is past what Cory's Depreciation can strip, which is deliberate -- see content.test.ts. Damage the board actually has to output is well above the number above.",
+  "_lanes": "EVERY GROUP NAMES ITS LANE, which is what makes this level different from the two before it. Wave 1 is upper only and wave 2 lower only, so the two gates are taught one at a time; wave 13 is one gate because the boss arrives alone. Everything between comes down both. THE HEAVIER SIDE ALTERNATES so a board cannot be committed to one gate, and waves 9 and 11 sit close to even, which is the worst case for a lopsided board. This bites harder here than it would elsewhere because THE TWO ROUTES ARE THE SAME LENGTH, 1560.18 and 1560.15 px -- see map_level3.json's _lanes note. Groups released from both gates on the same delay ARRIVE TOGETHER rather than staggered, so a split wave is a genuine two-front problem and not a queue.",
+  "waves": [
+    {
+      "name": "Kickoff",
+      "spawns": [
+        {
+          "enemy": "pompom",
+          "count": 4,
+          "interval": 1.2,
+          "delay": 0,
+          "lane": "upper"
+        }
+      ]
+    },
+    {
+      "name": "The Snap",
+      "spawns": [
+        {
+          "enemy": "longsnap",
+          "count": 2,
+          "interval": 1.5,
+          "delay": 2,
+          "lane": "lower"
+        },
+        {
+          "enemy": "pompom",
+          "count": 1,
+          "interval": 1.1,
+          "delay": 3,
+          "lane": "lower"
+        }
+      ]
+    },
+    {
+      "name": "Two Gates",
+      "spawns": [
+        {
+          "enemy": "pompom",
+          "count": 4,
+          "interval": 1.0,
+          "delay": 0,
+          "lane": "upper"
+        },
+        {
+          "enemy": "longsnap",
+          "count": 1,
+          "interval": 1.5,
+          "delay": 2,
+          "lane": "lower"
+        },
+        {
+          "enemy": "pompom",
+          "count": 1,
+          "interval": 1.0,
+          "delay": 3,
+          "lane": "lower"
+        }
+      ]
+    },
+    {
+      "name": "Special Teams",
+      "spawns": [
+        {
+          "enemy": "longsnap",
+          "count": 3,
+          "interval": 1.5,
+          "delay": 2,
+          "lane": "upper"
+        },
+        {
+          "enemy": "pompom",
+          "count": 4,
+          "interval": 1.0,
+          "delay": 0,
+          "lane": "lower"
+        }
+      ]
+    },
+    {
+      "name": "Behind the Plate",
+      "spawns": [
+        {
+          "enemy": "pompom",
+          "count": 5,
+          "interval": 0.9,
+          "delay": 0,
+          "lane": "upper"
+        },
+        {
+          "enemy": "catcher",
+          "count": 2,
+          "interval": 2.8,
+          "delay": 2,
+          "lane": "lower"
+        }
+      ]
+    },
+    {
+      "name": "Full Count",
+      "spawns": [
+        {
+          "enemy": "catcher",
+          "count": 2,
+          "interval": 2.8,
+          "delay": 2,
+          "lane": "upper"
+        },
+        {
+          "enemy": "pompom",
+          "count": 2,
+          "interval": 0.9,
+          "delay": 3,
+          "lane": "upper"
+        },
+        {
+          "enemy": "longsnap",
+          "count": 3,
+          "interval": 1.5,
+          "delay": 2,
+          "lane": "lower"
+        }
+      ]
+    },
+    {
+      "name": "Ice Time",
+      "spawns": [
+        {
+          "enemy": "pompom",
+          "count": 8,
+          "interval": 0.9,
+          "delay": 0,
+          "lane": "upper"
+        },
+        {
+          "enemy": "zamboni",
+          "count": 1,
+          "interval": 4.0,
+          "delay": 2,
+          "lane": "lower"
+        },
+        {
+          "enemy": "longsnap",
+          "count": 2,
+          "interval": 1.5,
+          "delay": 3,
+          "lane": "lower"
+        },
+        {
+          "enemy": "pompom",
+          "count": 1,
+          "interval": 0.9,
+          "delay": 3,
+          "lane": "lower"
+        }
+      ]
+    },
+    {
+      "name": "Both Benches",
+      "spawns": [
+        {
+          "enemy": "catcher",
+          "count": 3,
+          "interval": 2.8,
+          "delay": 2,
+          "lane": "upper"
+        },
+        {
+          "enemy": "pompom",
+          "count": 5,
+          "interval": 0.8,
+          "delay": 3,
+          "lane": "upper"
+        },
+        {
+          "enemy": "longsnap",
+          "count": 3,
+          "interval": 1.5,
+          "delay": 2,
+          "lane": "lower"
+        },
+        {
+          "enemy": "pompom",
+          "count": 5,
+          "interval": 0.8,
+          "delay": 3,
+          "lane": "lower"
+        }
+      ]
+    },
+    {
+      "name": "Resurfacing",
+      "spawns": [
+        {
+          "enemy": "catcher",
+          "count": 2,
+          "interval": 2.8,
+          "delay": 2,
+          "lane": "upper"
+        },
+        {
+          "enemy": "pompom",
+          "count": 10,
+          "interval": 0.8,
+          "delay": 3,
+          "lane": "upper"
+        },
+        {
+          "enemy": "catcher",
+          "count": 2,
+          "interval": 2.8,
+          "delay": 2,
+          "lane": "lower"
+        },
+        {
+          "enemy": "pompom",
+          "count": 9,
+          "interval": 0.8,
+          "delay": 3,
+          "lane": "lower"
+        }
+      ]
+    },
+    {
+      "name": "Overtime",
+      "spawns": [
+        {
+          "enemy": "longsnap",
+          "count": 3,
+          "interval": 1.5,
+          "delay": 2,
+          "lane": "upper"
+        },
+        {
+          "enemy": "pompom",
+          "count": 14,
+          "interval": 0.8,
+          "delay": 3,
+          "lane": "upper"
+        },
+        {
+          "enemy": "catcher",
+          "count": 3,
+          "interval": 2.8,
+          "delay": 2,
+          "lane": "lower"
+        },
+        {
+          "enemy": "pompom",
+          "count": 14,
+          "interval": 0.8,
+          "delay": 3,
+          "lane": "lower"
+        }
+      ]
+    },
+    {
+      "name": "The Rivalry",
+      "spawns": [
+        {
+          "enemy": "catcher",
+          "count": 3,
+          "interval": 2.8,
+          "delay": 2,
+          "lane": "upper"
+        },
+        {
+          "enemy": "pompom",
+          "count": 16,
+          "interval": 0.8,
+          "delay": 3,
+          "lane": "upper"
+        },
+        {
+          "enemy": "catcher",
+          "count": 2,
+          "interval": 2.8,
+          "delay": 2,
+          "lane": "lower"
+        },
+        {
+          "enemy": "longsnap",
+          "count": 3,
+          "interval": 1.5,
+          "delay": 3,
+          "lane": "lower"
+        },
+        {
+          "enemy": "pompom",
+          "count": 16,
+          "interval": 0.8,
+          "delay": 3,
+          "lane": "lower"
+        }
+      ]
+    },
+    {
+      "name": "Sudden Death",
+      "spawns": [
+        {
+          "enemy": "zamboni",
+          "count": 1,
+          "interval": 4.0,
+          "delay": 2,
+          "lane": "upper"
+        },
+        {
+          "enemy": "longsnap",
+          "count": 4,
+          "interval": 1.5,
+          "delay": 3,
+          "lane": "upper"
+        },
+        {
+          "enemy": "pompom",
+          "count": 26,
+          "interval": 0.7,
+          "delay": 3,
+          "lane": "upper"
+        },
+        {
+          "enemy": "zamboni",
+          "count": 1,
+          "interval": 4.0,
+          "delay": 2,
+          "lane": "lower"
+        },
+        {
+          "enemy": "catcher",
+          "count": 3,
+          "interval": 2.8,
+          "delay": 3,
+          "lane": "lower"
+        },
+        {
+          "enemy": "pompom",
+          "count": 15,
+          "interval": 0.7,
+          "delay": 3,
+          "lane": "lower"
+        }
+      ]
+    },
+    {
+      "name": "The Rainbow Reaper",
+      "boss": "unicornBoss",
+      "spawns": [
+        {
+          "enemy": "unicornBoss",
+          "count": 1,
+          "interval": 1.0,
+          "delay": 2,
+          "lane": "lower"
+        }
+      ]
+    }
+  ]
+}

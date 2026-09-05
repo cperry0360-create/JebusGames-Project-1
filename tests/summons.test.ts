@@ -204,8 +204,8 @@ test('the scene and the sim summon by the same rule', () => {
   assert.match(sim, /e\.summonedBy === parent/, 'the sim does not cap per summoner')
   assert.match(sim, /!enemies\.some\(\(e\) => e\.summonedBy === null\)/,
     'the sim wave-over does not ignore summons, so its numbers would not match the game')
-  assert.match(sim, /spawn\(spec\.enemy, parent\.distance, parent\)/,
-    'the sim does not summon at the parent distance')
+  assert.match(sim, /spawn\(spec\.enemy, parent\.distance, parent, parent\.laneId, parent\.laneDistance\)/,
+    'the sim does not summon at the parent distance, on the parent lane')
 })
 
 test('a summoned child pays its normal bounty', () => {

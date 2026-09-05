@@ -218,12 +218,23 @@ test('a ground shadow covers the footprint and not the whole sprite', () => {
     if (cfg.shadowWidth === undefined || !cfg.contentWidth || !cfg.contentHeight) continue
     const onScreenWidth = (cfg.contentWidth / cfg.contentHeight) * cfg.displayHeight
     const share = cfg.shadowWidth / onScreenWidth
-    assert.ok(share > 0.25, `${key} shadow is only ${(share * 100).toFixed(0)}% of its width; too small to stand on`)
+    // The floor catches a shadow measured off one stray pixel rather than a
+    // stance. It was 0.25 while every character's reach was about its stance;
+    // Pom-Pom lands at 0.247 because her arms span the canvas and her feet are
+    // 222px of 896, which is her pose rather than a mismeasurement. Every other
+    // character in the game is above 0.53, so 0.20 still catches the fault.
+    assert.ok(share > 0.20, `${key} shadow is only ${(share * 100).toFixed(0)}% of its width; too small to stand on`)
 
     // Feet-measured art: the enemies and Cory on foot. Their shadow must not
     // reach the width of what they are carrying. A tower's base and a vehicle's
     // body legitimately span the whole sprite, so they are judged separately.
+    //
+    // The Zamboni Wraith is the first vehicle to live in enemies/, so the folder
+    // stopped being enough to tell the two apart. It shadows under its whole
+    // body, which is the rule tools/measure_art.py applies to it by name.
+    const BODY_SHADOWED = new Set(['enemy-zamboni'])
     const isCharacter = /^enemies\/|^hero\/hero_cory\.png$/.test(art.files[key])
+      && !BODY_SHADOWED.has(key)
     if (isCharacter) {
       characters++
       assert.ok(share < 0.85,

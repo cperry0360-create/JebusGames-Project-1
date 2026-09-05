@@ -192,11 +192,34 @@ test('the demons are placed by the height they should read at, not by their canv
     'the Devil should be much slimmer than the Middle Manager')
 })
 
-test('an enemy is smaller than a tower but big enough to read', () => {
-  const towerHeights = Object.values(towers).map((t: any) => art.render[t.sprite].displayHeight)
-  const biggest = Math.max(...Object.values(enemies).map((e: any) => art.render[e.sprite].displayHeight))
-  assert.ok(biggest < Math.min(...towerHeights), 'the brute towers over the buildings')
+test('a rank-and-file enemy is smaller than a tower, and a boss is not', () => {
+  // THE BOUND IS ON THE RANK AND FILE, and it did not used to need saying because
+  // every boss was under it anyway -- the Politician is 82.5 against a tower's
+  // 87.1. The Rainbow Reaper is 140 and is meant to be: a boss the towers look
+  // small beside is the point of a boss, and level 3's brief asks for one that
+  // visibly towers over the mascots it arrives with.
+  //
+  // What the original assertion was protecting is the line below it: an ordinary
+  // enemy must not dwarf the buildings, or the board stops reading as a board.
+  const shortestTower = Math.min(
+    ...Object.values(towers).map((t: any) => art.render[t.sprite].displayHeight))
+  const height = (e: any): number => art.render[e.sprite].displayHeight
+  const rank = Object.values(enemies).filter((e: any) => e.tier !== 'boss')
+  const bosses = Object.values(enemies).filter((e: any) => e.tier === 'boss')
+
+  const biggest = Math.max(...rank.map(height))
+  assert.ok(biggest < shortestTower,
+    `a rank-and-file enemy is ${biggest} against the shortest tower's ${shortestTower}`)
   assert.ok(biggest > 40, 'the biggest enemy is too small to make out')
+
+  // And the property that was never checked: a boss outsizes what it walks in
+  // with, or it does not read as the thing the wave is named after.
+  for (const b of bosses) {
+    assert.ok(height(b) > Math.min(...rank.map(height)),
+      `${(b as any).name} is no bigger than the smallest enemy in the game`)
+  }
+  assert.ok(Math.max(...bosses.map(height)) > shortestTower,
+    'no boss in the game is big enough to tower over the board')
 })
 
 test('health bars are sized from the sprite, not fixed', () => {
@@ -525,12 +548,32 @@ test('Haymaker is a real burst with knockback, and Restructure is free', () => {
   assert.equal((c.restructure as any).cost, undefined, 'Restructure is free by design')
 })
 
-test('Depreciation strips armour but cannot go past the toughest enemy', () => {
+test('Depreciation fully strips the cast it was tuned against, and dents the rest', () => {
+  // The passive was tuned when 7 was the heaviest armour in the game -- Final
+  // Notice -- and maxArmorShred is 7 exactly, so it stripped the worst enemy to
+  // nothing given time. Level 3 brings The Catcher at 8 and the Zamboni Wraith
+  // at 12, and Cory was deliberately NOT buffed to keep up.
+  //
+  // That is the design, not an oversight. Raising maxArmorShred to 12 is a 71%
+  // buff that lands on Final Notice and the Middle Manager too, and it would
+  // quietly retune levels 1 and 2 to make a level 3 enemy legal. The Zamboni is
+  // supposed to be the thing Cory cannot solve on his own: the armour-piercing
+  // tower is the answer to her, and the test below holds that door open.
   const p = heroes.cory.passive
   assert.ok(p.armorShredPerSecond > 0 && p.armorShredRadius > 0)
-  const worst = Math.max(...Object.values(enemies).map((e: any) => e.armor))
-  assert.ok(p.maxArmorShred >= worst, 'the passive should be able to fully strip the armoured enemy eventually')
-  const seconds = worst / p.armorShredPerSecond
+
+  const armours = Object.values(enemies).map((e: any) => e.armor)
+  const tunedAgainst = 7
+  assert.ok(p.maxArmorShred >= tunedAgainst,
+    'the passive can no longer fully strip the cast it was tuned against')
+
+  // Against the heaviest thing in the game it must still be worth standing near.
+  const worst = Math.max(...armours)
+  assert.ok(p.maxArmorShred / worst >= 0.5,
+    `the passive removes only ${Math.round((p.maxArmorShred / worst) * 100)}% of the worst armour, `
+    + 'which is not worth the hero being there')
+
+  const seconds = tunedAgainst / p.armorShredPerSecond
   assert.ok(seconds > 1, `armour vanishes in ${seconds.toFixed(1)}s, which makes the anti-armour tower pointless`)
 })
 

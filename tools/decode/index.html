@@ -1,0 +1,31 @@
+<!doctype html><meta charset="utf-8"><title>decode</title>
+<script>
+// Decodes whatever image the query string names into a PNG and posts it back.
+// Chromium is the only image pipeline in this environment -- no ImageMagick,
+// no PIL, no cwebp -- and the level plates ship as .webp, which tools/png.py
+// cannot read. Same machinery as tools/reencode and tools/mapcards.
+const post = (p, b) => fetch(p, { method: 'POST', body: b })
+const log = (m) => post('/log', m)
+async function main() {
+  const q = new URLSearchParams(location.search)
+  const src = q.get('src')
+  const out = q.get('out') || 'decoded.png'
+  const img = new Image()
+  img.src = '/' + src.replace(/^\//, '')
+  await img.decode()
+  // Optional w/h: the plates are exported at 3x the 1280x720 canvas, and the
+  // map's coordinate space IS the canvas, so measuring at canvas resolution
+  // both matches the data and keeps tools/png.py's pure-python decode quick.
+  const w = Number(q.get('w')) || img.naturalWidth
+  const h = Number(q.get('h')) || img.naturalHeight
+  const c = new OffscreenCanvas(w, h)
+  const g = c.getContext('2d', { willReadFrequently: true })
+  g.imageSmoothingQuality = 'high'
+  g.drawImage(img, 0, 0, w, h)
+  const blob = await c.convertToBlob({ type: 'image/png' })
+  await post('/save/' + out, blob)
+  await log(`${src} -> ${out} ${img.naturalWidth}x${img.naturalHeight} drawn ${w}x${h} ${blob.size} bytes`)
+  await post('/done', JSON.stringify({ w, h, sourceW: img.naturalWidth, sourceH: img.naturalHeight }))
+}
+main().catch(async (e) => { await log('FAILED ' + e); await post('/done', '{}') })
+</script>

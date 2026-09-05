@@ -89,7 +89,13 @@
     "hero-cory-attack-4": "hero/hero_cory_attack_4.png",
     "map-bg": "ui/map_background.webp",
     "card-level1": "ui/card_level1.webp",
-    "card-level2": "ui/card_level2.webp"
+    "card-level2": "ui/card_level2.webp",
+    "enemy-pompom": "enemies/enemy_pompom.png",
+    "enemy-longsnap": "enemies/enemy_longsnap.png",
+    "enemy-catcher": "enemies/enemy_catcher.png",
+    "enemy-zamboni": "enemies/enemy_zamboni.png",
+    "enemy-unicorn": "enemies/boss_unicorn.png",
+    "map-level3": "maps/map_level3.webp"
   },
   "render": {
     "turret-escalation": {
@@ -573,11 +579,52 @@
       "anchorY": 0.5,
       "contentWidth": 300,
       "contentHeight": 200
+    },
+    "enemy-pompom": {
+      "anchorX": 0.5285,
+      "anchorY": 1.0,
+      "displayHeight": 66.0,
+      "shadowWidth": 16.6,
+      "contentWidth": 896,
+      "contentHeight": 881
+    },
+    "enemy-longsnap": {
+      "anchorX": 0.5215,
+      "anchorY": 1.0,
+      "displayHeight": 74.0,
+      "shadowWidth": 48.0,
+      "contentWidth": 955,
+      "contentHeight": 1242
+    },
+    "enemy-catcher": {
+      "anchorX": 0.6149,
+      "anchorY": 1.0,
+      "displayHeight": 85.0,
+      "shadowWidth": 64.5,
+      "contentWidth": 1005,
+      "contentHeight": 1019
+    },
+    "enemy-zamboni": {
+      "anchorX": 0.5502,
+      "anchorY": 1.0,
+      "displayHeight": 85.0,
+      "shadowWidth": 98.7,
+      "contentWidth": 1105,
+      "contentHeight": 952
+    },
+    "enemy-unicorn": {
+      "anchorX": 0.5179,
+      "anchorY": 1.0,
+      "displayHeight": 140.0,
+      "shadowWidth": 109.6,
+      "contentWidth": 1087,
+      "contentHeight": 1000
     }
   },
   "map": {
     "level1": "map-level1",
-    "level2": "map-level2"
+    "level2": "map-level2",
+    "level3": "map-level3"
   },
   "ui": {
     "titleBackdrop": "ui-title-bg",

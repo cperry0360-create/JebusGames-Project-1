@@ -6,7 +6,7 @@ still and writes the results down.
 import http.server, os, sys, threading
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'out')
+OUT = os.environ.get("DECODE_OUT", os.path.join(os.path.dirname(os.path.abspath(__file__)), "out"))
 os.makedirs(OUT, exist_ok=True)
 DONE = threading.Event()
 

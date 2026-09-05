@@ -20,8 +20,10 @@ import type { MapDef, WavesDef } from '../types.ts'
 import levelsData from '../data/levels.json' with { type: 'json' }
 import mapLevel1 from '../data/map.json' with { type: 'json' }
 import mapLevel2 from '../data/map_level2.json' with { type: 'json' }
+import mapLevel3 from '../data/map_level3.json' with { type: 'json' }
 import wavesLevel1 from '../data/waves.json' with { type: 'json' }
 import wavesLevel2 from '../data/waves.level2.json' with { type: 'json' }
+import wavesLevel3 from '../data/waves.level3.json' with { type: 'json' }
 
 /** A row of levels.json: what the registry records about a level. */
 export interface LevelDef {
@@ -51,19 +53,23 @@ export interface Level extends LevelDef {
 /**
  * Map data by level id.
  *
- * Level 2's cast is looser than level 1's because its map has no entrance,
- * exit or signs — those fields are optional on `MapDef` now, and
- * a JSON import types them as absent rather than optional.
+ * Levels 2 and 3 cast looser than level 1 because their maps have no
+ * entrance, exit or signs — those fields are optional on `MapDef` now, and
+ * a JSON import types them as absent rather than optional. Level 3 adds a
+ * second reason: it is the first map with `lanes`, and a JSON import types
+ * a merge's `into` as `string` rather than the lane id it is.
  */
 const MAPS: Record<string, MapDef> = {
   level1: mapLevel1 as MapDef,
   level2: mapLevel2 as unknown as MapDef,
+  level3: mapLevel3 as unknown as MapDef,
 }
 
 /** Wave tables by the filename levels.json names them with. */
 const WAVE_TABLES: Record<string, WavesDef> = {
   'waves.json': wavesLevel1 as WavesDef,
   'waves.level2.json': wavesLevel2 as WavesDef,
+  'waves.level3.json': wavesLevel3 as unknown as WavesDef,
 }
 
 // `as unknown as` because a JSON import types mapPosition as number[], and the

@@ -28,6 +28,7 @@ import draftData from '../../src/data/draft.json' with { type: 'json' }
 
 import { DEFAULT_LEVEL_ID, loadLevel } from '../../src/systems/Levels.ts'
 import { Path } from '../../src/systems/Path.ts'
+import { LaneNetwork, MAIN_LANE, advance, type Walker } from '../../src/systems/Lanes.ts'
 import { BuildSystem } from '../../src/systems/BuildSystem.ts'
 import { WaveSpawner } from '../../src/systems/WaveSpawner.ts'
 import { Cooldowns } from '../../src/systems/Cooldowns.ts'
@@ -94,7 +95,13 @@ interface SimEnemy {
   id: string
   def: any
   health: number
+  /** Total walked across every lane, and only ever incremented. What
+   *  targeting sorts on, so a merge cannot make a tower drop its target. */
   distance: number
+  /** Which branch it is on now, and how far along THAT lane it stands. A merge
+   *  rewrites both; `distance` is untouched by one. */
+  laneId: string
+  laneDistance: number
   x: number
   y: number
   alive: boolean
@@ -182,7 +189,15 @@ export function simulate(
     ? rng.shuffled(pool).slice(0, DRAFT.abilitiesDrawn)
     : abilities
 
-  const lane = new Path(MAP.waypoints)
+  // The lane NETWORK, not one lane. A single-lane map resolves to exactly one
+  // lane built from its own waypoints, so levels 1 and 2 walk the numbers they
+  // always did; level 3 resolves to two branches and the trunk they share.
+  //
+  // These are the game's own primitives rather than a paraphrase of them, so a
+  // merge means one thing in the scene and in the soak. That matters here more
+  // than usual: this file's output is what level 3 is tuned against.
+  const net = new LaneNetwork(MAP)
+  const lane = net.main
   const build = new BuildSystem(MAP.buildSpots, MAP.spotRadius)
   const spawner = new WaveSpawner()
   const cooldowns = new Cooldowns()
@@ -204,8 +219,10 @@ export function simulate(
 
   // --- the hero ----------------------------------------------------------
   const heroState = {
-    x: lane.pointAt(lane.totalLength * 0.5).x,
-    y: lane.pointAt(lane.totalLength * 0.5).y,
+    // Midway down the trunk, which on a branching map is the shared tail --
+    // where a hero covers whatever came out of either gate.
+    x: lane.path.pointAt(lane.path.totalLength * 0.5).x,
+    y: lane.path.pointAt(lane.path.totalLength * 0.5).y,
     health: hero.maxHealth,
     down: false,
     reviveIn: 0,
@@ -225,12 +242,15 @@ export function simulate(
   const statOf = (t: SimTower, key: string): number =>
     finite(`${t.id}.${key}`, statAt(t.def, t.tier, key as any, t.spec))
 
-  const spawn = (id: string, at = 0, summonedBy: SimEnemy | null = null): void => {
+  const spawn = (id: string, at = 0, summonedBy: SimEnemy | null = null,
+                 laneId: string = MAIN_LANE, laneAt = at): void => {
     const def = ENEMIES[id]
     if (!def) { note('missing-data', `wave names unknown enemy "${id}"`); return }
-    const p = lane.pointAt(at)
+    const on = net.lane(laneId)
+    const p = on.path.pointAt(laneAt)
     enemies.push({
-      id, def, health: def.maxHealth, distance: at, x: p.x, y: p.y, alive: true,
+      id, def, health: def.maxHealth, distance: at,
+      laneId: on.id, laneDistance: laneAt, x: p.x, y: p.y, alive: true,
       slowFactor: 0, slowRemaining: 0, slowStacks: 0, sinceSlow: 99,
       stunRemaining: 0, stunLockout: 0, stunStacks: 0, sinceStun: 99,
       armorShred: 0, attackTimer: 0, blocked: false,
@@ -258,7 +278,10 @@ export function simulate(
         const alive = enemies.filter((e) => e.alive && e.summonedBy === parent).length
         due = Math.min(due, Math.max(0, spec.cap - alive))
       }
-      for (let i = 0; i < due; i++) spawn(spec.enemy, parent.distance, parent)
+      // On its parent's own lane at its parent's own place, so a boss called
+      // down a branch does not send its brood along a different route.
+      for (let i = 0; i < due; i++)
+        spawn(spec.enemy, parent.distance, parent, parent.laneId, parent.laneDistance)
     }
   }
 
@@ -285,15 +308,23 @@ export function simulate(
   // tower that never fires. A player sees the range ring and does not do
   // that; a soak that picks at random does it constantly and reports the
   // level as unwinnable for a reason no human would hit.
+  // EVERY LANE, not just the trunk. On level 3 the trunk is the shared tail
+  // alone, so a pad covering the upper gate is 400px from it and would rank as
+  // unreachable -- the scripted player would fill the fork last or not at all,
+  // and report a level nobody would actually play that way as unwinnable. This
+  // is the level 2 pad-range failure in a different disguise.
   const padToLane: number[] = build.spots.map((spot) => {
     let best = Infinity
-    for (let i = 0; i < MAP.waypoints.length - 1; i++) {
-      const [ax, ay] = MAP.waypoints[i]
-      const [bx, by] = MAP.waypoints[i + 1]
-      const dx = bx - ax, dy = by - ay
-      const len2 = dx * dx + dy * dy
-      const t = len2 ? Math.max(0, Math.min(1, ((spot.x - ax) * dx + (spot.y - ay) * dy) / len2)) : 0
-      best = Math.min(best, Math.hypot(spot.x - (ax + t * dx), spot.y - (ay + t * dy)))
+    for (const l of net.lanes) {
+      const w = l.path.points
+      for (let i = 0; i < w.length - 1; i++) {
+        const ax = w[i]!.x, ay = w[i]!.y
+        const bx = w[i + 1]!.x, by = w[i + 1]!.y
+        const dx = bx - ax, dy = by - ay
+        const len2 = dx * dx + dy * dy
+        const t = len2 ? Math.max(0, Math.min(1, ((spot.x - ax) * dx + (spot.y - ay) * dy) / len2)) : 0
+        best = Math.min(best, Math.hypot(spot.x - (ax + t * dx), spot.y - (ay + t * dy)))
+      }
     }
     return best
   })
@@ -378,7 +409,13 @@ export function simulate(
         cooldowns.start('haymaker')
         firedAbilities.add('haymaker')
         hurtEnemy(target, hero.haymaker.damage, hero.haymaker.ignoresArmor)
-        target.distance = Math.max(0, target.distance - hero.haymaker.knockbackPixels)
+        // BOTH DISTANCES, as Enemy.ts does it. `distance` is progress and
+        // `laneDistance` is where the enemy actually stands; moving only the
+        // first would drop the target's priority without moving it an inch,
+        // which is the Haymaker doing nothing but damage.
+        const back = Math.min(hero.haymaker.knockbackPixels, target.laneDistance, target.distance)
+        target.distance -= back
+        target.laneDistance -= back
       }
     }
   }
@@ -432,10 +469,9 @@ export function simulate(
         break runLoop
       }
 
-      // The rule layer walks one lane. A branching map's routes differ in
-      // length, so a soak of one would need a lane per enemy here too; that is
-      // a change to make when a branching level exists to soak.
-      for (const sp of spawner.update(DT)) spawn(sp.enemy)
+      // A group walks in from the gate its wave named. Absent means the trunk,
+      // which is what every wave written before branching existed means.
+      for (const sp of spawner.update(DT)) spawn(sp.enemy, 0, null, sp.lane ?? MAIN_LANE, 0)
       tickSummons(DT)
       cooldowns.tick(DT)
 
@@ -546,11 +582,19 @@ export function simulate(
           continue
         }
 
-        e.distance += slowedSpeed(e.def.speed, e.slowFactor, e.slowRemaining > 0) * DT
-        const p = lane.pointAt(e.distance)
+        const step = slowedSpeed(e.def.speed, e.slowFactor, e.slowRemaining > 0) * DT
+        const moved = advance(net, e as Walker, step)
+        e.laneId = moved.laneId
+        e.laneDistance = moved.laneDistance
+        e.distance = moved.distance
+        const on = net.lane(e.laneId)
+        const p = on.path.pointAt(e.laneDistance)
         e.x = p.x
         e.y = p.y
-        if (e.distance >= lane.totalLength) {
+        // Only a lane that runs to the exit can leak. A branch ENDS at its
+        // join, so without the terminal check an enemy would count as escaped
+        // on reaching it -- most of the way through the level.
+        if (on.merge === null && e.laneDistance >= on.path.totalLength) {
           e.alive = false
           escaped++
           lives -= e.def.livesCost

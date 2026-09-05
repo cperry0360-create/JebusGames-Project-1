@@ -209,27 +209,67 @@ test('each level fields three fightable enemy types and exactly one boss', () =>
   // Middle Manager and The Devil — so the count that means anything now is
   // per wave table: whichever level you play, you meet a basic, a fast, an
   // armoured and one boss, and never two bosses in a run.
+  // Level 3 fields FOUR, not three: Pom-Pom, the Long Snapper, The Catcher and
+  // the Zamboni Wraith, with two of them armoured. So the count that means
+  // something is a floor rather than an equality -- what a level owes a player
+  // is all three roles and exactly one boss, and how many bodies it spreads
+  // them over is the level's business.
   for (const [level, table] of Object.entries(WAVE_TABLES)) {
     const used = new Set<string>()
     for (const w of table.waves) for (const sp of w.spawns) used.add(sp.enemy)
     const cast = [...used].map((id) => enemies[id])
     const rank = cast.filter((e) => e.tier !== 'boss')
-    assert.equal(rank.length, 3, `${level} fields ${rank.length} fightable types`)
+    assert.ok(rank.length >= 3, `${level} fields only ${rank.length} fightable types`)
     assert.deepEqual(new Set(rank.map((e) => e.role)), new Set(['basic', 'fast', 'armored']),
       `${level} does not cover all three roles`)
     assert.equal(cast.filter((e) => e.tier === 'boss').length, 1, `${level} does not have exactly one boss`)
   }
 })
 
-test('each enemy role is actually different', () => {
-  const byRole = Object.fromEntries(enemyList.filter(([, e]) => e.tier !== 'boss')
-    .map(([, e]) => [e.role, e]))
-  assert.ok(byRole.fast.speed > byRole.basic.speed * 1.5, 'the fast enemy is not fast')
-  assert.ok(byRole.armored.armor > 0, 'the armoured enemy has no armour')
-  assert.equal(byRole.basic.armor, 0)
-  assert.equal(byRole.fast.armor, 0)
-  assert.ok(byRole.armored.maxHealth > byRole.basic.maxHealth, 'the armoured enemy is not tougher')
-  assert.ok(byRole.armored.speed < byRole.basic.speed, 'the armoured enemy should be slow')
+test('each enemy role is actually different, within each level\'s own cast', () => {
+  // Two changes from what this used to be, both forced by level 3.
+  //
+  // GROUPED, NOT KEYED. It built a dict keyed by role, which silently kept only
+  // the LAST enemy of each. Fine while roles were one-to-one; level 3 has two
+  // armoured types -- The Catcher at 8 and the Zamboni Wraith at 12 -- and the
+  // old shape simply discarded one.
+  //
+  // PER LEVEL, NOT GLOBAL. Comparing across levels stopped meaning anything the
+  // moment a later level's basic outgrew an earlier level's armoured: the Long
+  // Snapper has 150 health where Buckethead has 140, and that is progression
+  // rather than a broken role. What a role has to be is coherent inside the run
+  // the player is actually in.
+  for (const [level, table] of Object.entries(WAVE_TABLES)) {
+    const used = new Set<string>()
+    for (const w of table.waves) for (const sp of w.spawns) used.add(sp.enemy)
+    const rank = [...used].map((id) => enemies[id]).filter((e) => e.tier !== 'boss')
+    const of = (role: string) => rank.filter((e) => e.role === role)
+    const [basics, fasts, armoured] = [of('basic'), of('fast'), of('armored')]
+    assert.ok(basics.length && fasts.length && armoured.length, `${level}: a role has no enemies`)
+
+    const slowestFast = Math.min(...fasts.map((e) => e.speed))
+    const fastestBasic = Math.max(...basics.map((e) => e.speed))
+    assert.ok(slowestFast > fastestBasic * 1.5, `${level}: the fast enemies are not fast`)
+
+    for (const e of armoured) assert.ok(e.armor > 0, `${level}: ${e.name} is armoured with no armour`)
+    for (const e of fasts) assert.equal(e.armor, 0, `${level}: ${e.name} is fast AND armoured`)
+
+    // A basic may carry a little armour -- the Long Snapper has 3 -- but it must
+    // stay under every armoured enemy in its own run, or the role stops meaning
+    // anything. The absolute zero this replaces was a fact about levels 1 and 2.
+    const lightestArmoured = Math.min(...armoured.map((e) => e.armor))
+    for (const e of basics) {
+      assert.ok(e.armor < lightestArmoured,
+        `${level}: ${e.name} is a basic carrying ${e.armor} armour, as much as an armoured one`)
+    }
+
+    const toughestBasic = Math.max(...basics.map((e) => e.maxHealth))
+    const slowestBasic = Math.min(...basics.map((e) => e.speed))
+    for (const e of armoured) {
+      assert.ok(e.maxHealth > toughestBasic, `${level}: ${e.name} is armoured but no tougher than a basic`)
+      assert.ok(e.speed < slowestBasic, `${level}: ${e.name} is armoured but not slower than every basic`)
+    }
+  }
 })
 
 test('armour is a real problem for the wrong tower and no problem for the right one', () => {

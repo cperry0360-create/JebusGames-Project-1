@@ -379,16 +379,34 @@ test('each level\'s laneLengthPx is what its own map actually walks', () => {
   // map to check it against: a figure that came with the plate, never measured.
   // The traced lane walks 1955.3. Nothing caught the 38.6 px because nothing
   // compared the constant to the geometry, so this does.
-  const maps: Record<string, string> = { level1: 'map', level2: 'map_level2' }
+  //
+  // ON A BRANCHING MAP `waypoints` IS NOT THE LANE. Level 3's own waypoints are
+  // the shared tail alone -- 672 px of it -- and what a player watches an enemy
+  // walk is a branch plus that tail. So the figure checked is the ROUTE from
+  // each gate to the exit, and on a single-lane map the route is the waypoints,
+  // which is why levels 1 and 2 read the same as they always did.
+  const maps: Record<string, string> = {
+    level1: 'map', level2: 'map_level2', level3: 'map_level3',
+  }
+  const walk = (w: [number, number][]): number => {
+    let d = 0
+    for (let i = 0; i < w.length - 1; i++)
+      d += Math.hypot(w[i + 1][0] - w[i][0], w[i + 1][1] - w[i][1])
+    return d
+  }
   for (const l of levels.levels) {
     const file = maps[l.id]
     assert.ok(file, `${l.id} has no map file in this test's table; add it`)
-    const w = read(file).waypoints as [number, number][]
-    let walked = 0
-    for (let i = 0; i < w.length - 1; i++)
-      walked += Math.hypot(w[i + 1][0] - w[i][0], w[i + 1][1] - w[i][1])
-    assert.equal(Math.round(walked * 10) / 10, l.laneLengthPx,
-      `${l.id} records laneLengthPx ${l.laneLengthPx} but its waypoints walk ${(Math.round(walked * 10) / 10)}`)
+    const map = read(file)
+    const trunk = walk(map.waypoints as [number, number][])
+    const branches = (map.lanes ?? []) as Array<{ id: string; waypoints: [number, number][] }>
+    const routes = branches.length === 0
+      ? [trunk]
+      : branches.map((b) => walk(b.waypoints) + trunk)
+    for (const r of routes) {
+      assert.equal(Math.round(r * 10) / 10, l.laneLengthPx,
+        `${l.id} records laneLengthPx ${l.laneLengthPx} but a route walks ${Math.round(r * 10) / 10}`)
+    }
   }
 })
 

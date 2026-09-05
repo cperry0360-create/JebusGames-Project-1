@@ -147,11 +147,31 @@ BRUTE_ON_SCREEN = 66.0
 BRUTE_SOURCE = 'public/assets/enemies/enemy_brute.png'
 
 ENEMY_KEY = {
-    'enemy_brute.png':           ('enemy-notice',   0.90),
-    'enemy_soldier.png':         ('enemy-filer',    0.87),
-    'enemy_scout.png':           ('enemy-shredder', 0.84),
-    'enemy_boss_politician.png': ('enemy-politician', 0.80),
+    'enemy_brute.png':           ('enemy-notice',   0.90, None),
+    'enemy_soldier.png':         ('enemy-filer',    0.87, None),
+    'enemy_scout.png':           ('enemy-shredder', 0.84, None),
+    'enemy_boss_politician.png': ('enemy-politician', 0.80, None),
+    # The level 3 cast. THE THIRD VALUE IS AN EXPLICIT ON-SCREEN HEIGHT, and
+    # these four and the boss need one: the uniform brute scale below exists to
+    # hold the Kenney-derived cast at one consistent size relative to each
+    # other, and it is derived from a 226px source. This art is drawn at
+    # 880-1240px, so the same scale would put Pom-Pom on screen at 257px --
+    # four times the size of the Bruiser she runs beside. They are sized
+    # against the render instead, and the sizes are the brief's: the four
+    # mascots inside 60-85 so they read as a set, the boss at 140 so he towers
+    # over them, and neither the catcher nor the zamboni under 85, because
+    # below that the two silhouettes stop being tellable apart.
+    'enemy_pompom.png':          ('enemy-pompom',   0.90,  66.0),
+    'enemy_longsnap.png':        ('enemy-longsnap', 0.90,  74.0),
+    'enemy_catcher.png':         ('enemy-catcher',  0.90,  85.0),
+    # A vehicle shadows under its whole body rather than its wheels, the same
+    # rule the tower section applies -- so the zamboni's foot band is only used
+    # for the anchor, and its shadow spans the art.
+    'enemy_zamboni.png':         ('enemy-zamboni',  0.94,  85.0),
+    'boss_unicorn.png':          ('enemy-unicorn',  0.90, 140.0),
 }
+# Enemies whose shadow is cast by the whole body, not by the feet.
+ENEMY_BODY_SHADOW = {'enemy-zamboni'}
 # The second value is where the foot band starts, as a fraction of the sprite's
 # height. It cannot be one number for all three: the brute's leaf blower hangs
 # to within 10% of his ground line while the scout's trailing skate is 13%
@@ -190,7 +210,8 @@ efiles, erender = {}, {}
 brute_source_h = png.read(BRUTE_SOURCE)[1]
 escale = BRUTE_ON_SCREEN / brute_source_h
 print(f'uniform scale {escale:.4f} (brute {brute_source_h}px -> {BRUTE_ON_SCREEN}px on screen)\n')
-for f in sorted(glob.glob('public/assets/enemies/enemy_*.png')):
+for f in sorted(glob.glob('public/assets/enemies/enemy_*.png')
+                + glob.glob('public/assets/enemies/boss_*.png')):
     name = os.path.basename(f)
     if name not in ENEMY_KEY:
         # Art that is in the folder but not in the manifest — the beetle was
@@ -198,22 +219,25 @@ for f in sorted(glob.glob('public/assets/enemies/enemy_*.png')):
         # the whole script before the hero and HUD sections run.
         print(f'{name:20s} not in ENEMY_KEY; skipped')
         continue
-    key, band = ENEMY_KEY[name]
+    key, band, fixed_h = ENEMY_KEY[name]
     w, h, px = png.read(f)
     low = ground_silhouette(w, h, px)
     bot = max(low)
     groups = foot_groups(low, int(h * band))
     lo = min(g[0] for g in groups)
     hi = max(g[1] for g in groups)
-    footW = hi - lo + 1
+    footW = w if key in ENEMY_BODY_SHADOW else hi - lo + 1
     footCx = (lo + hi) / 2.0
+    # An explicit height overrides the uniform scale, and the shadow follows it
+    # so the two stay in proportion however the sprite is sized.
+    scale = (fixed_h / h) if fixed_h else escale
 
     efiles[key] = f'enemies/{name}'
     erender[key] = {
         'anchorX': round(footCx / w, 4),
         'anchorY': round((bot + 1) / h, 4),
-        'displayHeight': round(h * escale, 1),
-        'shadowWidth': round(footW * escale, 1),
+        'displayHeight': round(h * scale, 1),
+        'shadowWidth': round(footW * scale, 1),
         # All three are trimmed, so content is the canvas. Recording it anyway
         # lets anything that needs the on-screen width work it out from the
         # manifest instead of loading the image.
@@ -222,7 +246,7 @@ for f in sorted(glob.glob('public/assets/enemies/enemy_*.png')):
     }
     print(f'{name:20s} {w}x{h}  cut y{int(h*band):4d}  feet {groups}')
     print(f'{"":20s} -> {key}: footprint x{lo}-{hi} ({footW}px), '
-          f'on screen {round(w*escale,1)}x{round(h*escale,1)}, '
+          f'on screen {round(w*scale,1)}x{round(h*scale,1)}, '
           f'anchorX {erender[key]["anchorX"]}, shadowWidth {erender[key]["shadowWidth"]}')
 json.dump({'files': efiles, 'render': erender}, open('/tmp/enemypatch.json', 'w'), indent=2)
 

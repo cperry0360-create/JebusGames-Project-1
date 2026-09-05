@@ -28,3 +28,9 @@ tools/harness/*.log
 # only the chosen one belongs in public/.
 tools/reencode/out/
 tools/reencode/profile/
+
+# Scratch decodes. tools/png.py reads PNG only and every plate ships as .webp,
+# so measuring one means decoding it first; the result is 2-15MB and is
+# reproducible with `sh tools/decode/run.sh`.
+tools/decode/out/
+tools/decode/profile/
