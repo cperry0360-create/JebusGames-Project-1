@@ -93,6 +93,13 @@ const { applyResolution } = await import('./js/systems/Resolution.js')
 applyResolution(game)
 const { installLifecycle } = await import('./js/systems/Lifecycle.js')
 window.lifecycle = installLifecycle(game)
+// THE GAME IS LANDSCAPE-ONLY and main.ts installs a gate that covers a
+// portrait viewport with a rotate prompt and pauses behind it. Without this
+// the harness audits screens at 375x667 that a player never sees, and reports
+// the letterboxed 30%-scale menus behind the overlay as faults.
+const { installOrientationGate, isPortrait } = await import('./js/systems/Orientation.js')
+installOrientationGate(game)
+window.isPortrait = isPortrait
 note('visibilityState at boot: ' + document.visibilityState)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const scene = (k) => game.scene.getScene(k)
@@ -427,6 +434,220 @@ async function run() {
     return
   }
 
+
+  // EVERY SCREEN, MEASURED AND PHOTOGRAPHED, at whatever ?vp= says.
+  //
+  // This is the scenario the VERIFY rule in CLAUDE.md is written against.
+  // It walks Title -> WorldMap -> Loadout -> Cutscene -> Game, shoots each
+  // one, and reports the geometry of what is on it -- because a screenshot
+  // shows a collision and a number says which two things collided.
+  //
+  // Four faults, all of which have shipped at least once:
+  //   OFF    something extends past the edge of the viewport
+  //   NOTCH  a control sits inside a safe-area inset
+  //   SMALL  a control is under 44x44, the minimum tap target
+  //   OVER   two texts, or two controls, overlap each other
+  if (scenario === 'screens') {
+    const RESM = await import('./js/systems/Resolution.js')
+    const SA = await import('./js/systems/SafeArea.js')
+    const DUMP = {}
+    window.__screensDump = DUMP
+    const insets = SA.safeAreaInsets()
+    const raw = SA.rawSafeAreaInsets()
+    note('viewport ' + VP.w + 'x' + VP.h + '  dpr=' + RESM.deviceScale())
+    note('insets raw ' + JSON.stringify(raw) + ' resolved ' + JSON.stringify(insets))
+
+    // PORTRAIT IS NOT A SCREEN. The game is landscape-only and the gate covers
+    // the viewport with a rotate prompt, so auditing the letterboxed menus
+    // behind it would be measuring something no player can touch. The gate
+    // itself is checked instead -- that it is there, that it covers, and that
+    // the game is paused behind it.
+    const gate = document.getElementById('rotate-gate')
+    const gateUp = !!gate && getComputedStyle(gate).display !== 'none'
+    note('portrait=' + (VP.h > VP.w) + '  rotate gate showing=' + gateUp)
+    if (VP.h > VP.w) {
+      const r = gate ? gate.getBoundingClientRect() : null
+      note('  gate covers ' + (r ? Math.round(r.width) + 'x' + Math.round(r.height) : 'nothing')
+        + ' of ' + VP.w + 'x' + VP.h)
+      await shot('screens-0-portrait-gate-' + VP.w + 'x' + VP.h)
+      note('RESULT ' + (gateUp && r && r.width >= VP.w && r.height >= VP.h
+        ? 'portrait is gated; the screens behind it are not a player-facing layout'
+        : '*** PORTRAIT IS NOT GATED -- the letterboxed menus are reachable ***'))
+      return
+    }
+
+    // The camera a given object is actually drawn by. Phaser masks a camera
+    // out with `cameraFilter`, so this is the engine's own answer rather than
+    // a guess -- which matters in GameScene, where the map is on one camera
+    // and the chrome is on another and the two have different zooms.
+    const camFor = (sc, o) => {
+      for (const c of sc.cameras.cameras) if (((o.cameraFilter || 0) & c.id) === 0) return c
+      return sc.cameras.main
+    }
+    // A screen rectangle in CSS pixels, which is the space every layout in the
+    // game is written in and the space the insets are reported in.
+    const rectOf = (sc, o) => {
+      let b
+      try { b = o.getBounds ? o.getBounds() : null } catch { b = null }
+      if (!b || !(b.width > 0) || !(b.height > 0)) return null
+      const c = camFor(sc, o)
+      const a = RESM.worldToScreen(sc, b.x, b.y, c)
+      const z = RESM.worldToScreen(sc, b.right, b.bottom, c)
+      return { x: a.x, y: a.y, w: z.x - a.x, h: z.y - a.y }
+    }
+    const label = (o) => (o.name ? '[' + o.name + '] ' : '') + (o.text !== undefined
+      ? 'TEXT ' + JSON.stringify(String(o.text).replace(/\n/g, ' ').slice(0, 34))
+      : (o.texture && o.texture.key ? 'IMG ' + o.texture.key : o.type))
+
+    // Screen space or world space. A map plate is SUPPOSED to run off the
+    // edges -- that is what panning is -- so only chrome is held to the
+    // viewport. GameScene's uiCam is the screen-space camera; every other
+    // scene draws its chrome on the main one.
+    const screenSpace = (sc, o) => {
+      if (sc.scene.key !== 'Game') return true
+      const c = camFor(sc, o)
+      return !!(sc.uiCam && c === sc.uiCam)
+    }
+    const collect = (sc) => {
+      const items = []
+      const visit = (o) => {
+        if (o.visible === false || (o.alpha ?? 1) <= 0.02) return
+        const r = rectOf(sc, o)
+        const live = !!(o.input && o.input.enabled)
+        // A container's own bounds are the union of its children, which would
+        // collide with everything inside it; only leaves and live controls are
+        // measured.
+        if (r && (live || !o.list || o.list.length === 0)) {
+          items.push({
+            r, live, txt: o.text !== undefined, name: label(o),
+            scene: sc.scene.key, chrome: screenSpace(sc, o),
+          })
+        }
+        if (o.list) for (const c of o.list) visit(c)
+      }
+      for (const o of sc.children.list) visit(o)
+      return items
+    }
+
+    // 3px of slack in each axis. Phaser's text bounds carry the face's ascent
+    // and descent, so a heading and the line under it routinely report one or
+    // two pixels of contact with nothing visibly touching. Three is enough to
+    // clear that and still catch a real collision, which starts at five.
+    const hit = (a, b) => a.x < b.x + b.w - 3 && b.x < a.x + a.w - 3
+                       && a.y < b.y + b.h - 3 && b.y < a.y + a.h - 3
+    const fmt = (r) => Math.round(r.x) + ',' + Math.round(r.y) + ' '
+                     + Math.round(r.w) + 'x' + Math.round(r.h)
+
+    const audit = async (name) => {
+      await sleep(750)
+      await shot('screens-' + name + '-' + VP.w + 'x' + VP.h)
+      const items = []
+      for (const sc of game.scene.scenes) {
+        if (!game.scene.isActive(sc.scene.key)) continue
+        for (const it of collect(sc)) items.push(it)
+      }
+      const vw = VP.w, vh = VP.h
+      // A thing that CONTAINS the whole viewport is a backdrop, a scrim or a
+      // full-screen tap zone, and running past the edges is its job. Only
+      // something partly outside is content the player cannot see.
+      const covers = (r) => r.x <= 1 && r.y <= 1 && r.x + r.w >= vw - 1 && r.y + r.h >= vh - 1
+      const faults = []
+      for (const it of items) {
+        const r = it.r
+        const outside = r.x < -1 || r.y < -1 || r.x + r.w > vw + 1 || r.y + r.h > vh + 1
+        if (it.chrome && outside && !covers(r)) {
+          faults.push('OFF   ' + it.scene + ' ' + it.name + ' @ ' + fmt(r))
+        }
+        // SMALL IS A CHROME RULE. A build pad's hit area is in world space and
+        // the player can zoom the world; a HUD button is 1:1 and they cannot.
+        // Holding a pad to 44 CSS pixels at whatever zoom the run opens at
+        // would be measuring the camera, not the control.
+        if (it.live && it.chrome) {
+          // 43.5 rather than 44: these are floats off a camera transform and a
+          // control that lands on 43.98 is a rounding artifact, not a fault.
+          if (r.w < 43.5 || r.h < 43.5) faults.push('SMALL ' + it.scene + ' ' + it.name + ' @ ' + fmt(r))
+          const band = r.x < insets.left || r.y < insets.top
+            || r.x + r.w > vw - insets.right || r.y + r.h > vh - insets.bottom
+          if (band && (insets.left || insets.right || insets.top || insets.bottom)) {
+            faults.push('NOTCH ' + it.scene + ' ' + it.name + ' @ ' + fmt(r))
+          }
+        }
+      }
+      // Overlap, among peers only: text against text, control against control.
+      // A label sitting on the button it names is the intended case and is not
+      // a fault, which is why the two groups are compared separately.
+      // A full-viewport zone overlaps everything by design -- the cutscene's
+      // tap-to-advance surface is the whole screen, and Skip sits on it.
+      for (const group of [items.filter((i) => i.txt && !covers(i.r)),
+                           items.filter((i) => i.live && !covers(i.r))]) {
+        for (let i = 0; i < group.length; i++) {
+          for (let j = i + 1; j < group.length; j++) {
+            if (group[i].scene !== group[j].scene) continue
+            if (!hit(group[i].r, group[j].r)) continue
+            faults.push('OVER  ' + group[i].scene + ' ' + group[i].name + ' @ ' + fmt(group[i].r)
+              + '  <>  ' + group[j].name + ' @ ' + fmt(group[j].r))
+          }
+        }
+      }
+      const uniq = [...new Set(faults)]
+      // The whole measured layout, not only the faults, kept in the report so
+      // a screen can be read after the fact without a second run. `dump` in
+      // report.json is keyed by the same name the screenshot carries.
+      DUMP[name] = items.map((i) => ({
+        scene: i.scene, name: i.name, live: i.live, chrome: i.chrome,
+        x: +i.r.x.toFixed(1), y: +i.r.y.toFixed(1),
+        w: +i.r.w.toFixed(1), h: +i.r.h.toFixed(1),
+      }))
+      // One number that explains a whole screen at once: a fitted menu at 0.30
+      // makes every 54px button 16px, and that is a design-box problem rather
+      // than twenty separate control problems.
+      const live = game.scene.scenes.filter((sc) => game.scene.isActive(sc.scene.key))
+      const fits = live.map((sc) => sc.scene.key + '=' + sc.cameras.main.zoom.toFixed(2)).join(' ')
+      note('  camera zooms: ' + fits + '  (dpr ' + RESM.deviceScale() + ')')
+      note(name.toUpperCase() + ': ' + items.length + ' drawn, '
+        + items.filter((i) => i.live).length + ' live, ' + uniq.length + ' fault(s)')
+      for (const f of uniq.slice(0, 24)) note('  ' + f)
+      if (uniq.length > 24) note('  ... and ' + (uniq.length - 24) + ' more')
+      return uniq.length
+    }
+
+    let total = 0
+    total += await audit('1-title')
+
+    scene('Title').scene.start('WorldMap')
+    if (await until(() => running('WorldMap'), 8000)) total += await audit('2-worldmap')
+    else note('WORLDMAP: *** did not build ***')
+
+    scene('WorldMap').scene.start('Loadout')
+    if (await until(() => running('Loadout'), 8000)) total += await audit('3-loadout')
+    else note('LOADOUT: *** did not build ***')
+
+    // Straight into the comic, the way BEGIN does it, so this is the real
+    // path and not a scene started by hand with different arguments.
+    scene('Loadout').scene.start('Cutscene', { levelId: 'level1', then: 'Game' })
+    if (await until(() => running('Cutscene'), 8000)) {
+      await sleep(900)
+      total += await audit('4-cutscene')
+      const cs = scene('Cutscene')
+      note('CUTSCENE: ' + (cs.panels ? cs.panels.length : 0) + ' panel(s), '
+        + 'textures loaded: ' + (cs.panels || []).filter(
+          (p) => game.textures.exists('cutscene:' + p)).length)
+    } else note('CUTSCENE: *** did not build ***')
+
+    // And out of it the way Skip does, which also proves Skip still lands in
+    // the level rather than nowhere.
+    const cs = scene('Cutscene')
+    if (cs) cs.skip ? cs.skip() : cs.scene.start('Game')
+    if (await until(() => running('Game'), 10000)) {
+      await until(() => running('Hud'), 8000)
+      await sleep(900)
+      total += await audit('5-game')
+    } else note('GAME: *** did not build after Skip ***')
+
+    note('RESULT ' + (total === 0 ? 'no layout faults at ' + VP.w + 'x' + VP.h
+      : '*** ' + total + ' layout fault(s) at ' + VP.w + 'x' + VP.h + ' ***'))
+    return
+  }
 
   if (scenario === 'diag') {
     // The diagnostics, which only matter if they work when everything else
@@ -8280,5 +8501,8 @@ await post('/done', JSON.stringify({
   towers: gs?.towers?.length, enemies: gs?.enemies?.length, spots: SPOTS.length,
   heroAt: gs?.hero ? [Math.round(gs.hero.x), Math.round(gs.hero.y)] : null,
   scenes: dumpScenes(),
+  // Whatever a scenario measured and wants kept. `screens` puts its whole
+  // per-screen geometry here so a layout can be re-read without a second run.
+  ...(window.__screensDump ? { dump: window.__screensDump } : {}),
 }, null, 1))
 </script></body></html>

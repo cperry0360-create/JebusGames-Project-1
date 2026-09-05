@@ -2,6 +2,7 @@ import Phaser from 'phaser'
 import { ART, renderFor } from '../systems/Art.ts'
 import { COLOR, FONT_UI, uiSize } from './Theme.ts'
 import { play } from '../systems/Audio.ts'
+import { tapFloor } from '../systems/Layout.ts'
 
 /**
  * The painted arcade chrome: six plates that stand in for every button and
@@ -225,6 +226,18 @@ export function plateButton(
   size = 18,
   weight: 'primary' | 'secondary' = 'primary',
 ): PlateButton {
+  // THE TAP FLOOR, APPLIED IN ONE PLACE. A menu screen is composed against the
+  // 1280x720 design box and fitted into the viewport, so on an iPhone in
+  // landscape the whole box comes down to about 54% and a 48-unit button is 26
+  // CSS pixels tall -- under the 44pt minimum, on every button of every menu,
+  // on every phone. In design space it is a comfortable 48, which is why
+  // nothing caught it until a frame was measured.
+  //
+  // `tapFloor` only ever grows the value, and only when the fit is small: on a
+  // desktop window the fit is near 1 and every button keeps exactly the size
+  // it was authored at.
+  h = tapFloor(scene, h)
+  w = tapFloor(scene, w)
   const on = barPlate(scene, ART.ui.buttons[weight], x, y, w, h)
   const off = barPlate(scene, ART.ui.buttons.disabled, x, y, w, h)
   off.forEach((p) => p.setVisible(false))
