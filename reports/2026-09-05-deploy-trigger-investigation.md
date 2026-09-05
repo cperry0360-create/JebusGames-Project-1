@@ -4,10 +4,16 @@
 
 | | commit | CI |
 |---|---|---|
-| This report | `pending` | reported below once the branch run lands |
+| This report | `bf4be30` | checks:success deploy:skipped (not main), run [33932328558](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33932328558) |
+
+One further commit closes this table's CI column and touches nothing but this
+file; its own run is reported in chat.
 
 No workflow file changed. The investigation found nothing to fix, and the
-report is the whole deliverable.
+report is the whole deliverable. It sits on
+`claude/github-pages-deploy-trigger-x8b598`, so it publishes nothing — the
+`deploy` job skipping on `if: github.ref == 'refs/heads/main'` is itself one
+more datapoint that the gate reads the ref it claims to.
 
 ---
 
