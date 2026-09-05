@@ -216,13 +216,13 @@
         },
         {
           "enemy": "shredder",
-          "count": 21,
+          "count": 18,
           "interval": 0.6,
           "delay": 3
         },
         {
           "enemy": "lateFiler",
-          "count": 19,
+          "count": 18,
           "interval": 0.82,
           "delay": 6
         }
