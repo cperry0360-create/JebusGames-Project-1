@@ -43,6 +43,24 @@ import { onSceneResize, sceneIsLive } from './SceneEvents.ts'
  * Panning must not eat taps. A press starts as a potential tap; it only
  * becomes a pan once the pointer has travelled past `tapSlopPx`, and the scene
  * asks `consumedGesture` before acting on the release.
+ *
+ * **Chrome is not the board, and the rig is where that is enforced.** Listening
+ * at the scene level is what makes the two gestures above possible at all — a
+ * pan has no game object under it to hang a handler on — but it is also why an
+ * interactive object on top of the board does not stop the rig hearing a drag.
+ * Phaser delivers scene-level pointer events whatever is under the finger, and
+ * a HUD in a *different scene* is not even in this scene's hit list to be under
+ * it. So every overlay that ever wanted the map to hold still had to remember
+ * to switch the rig off, and the record of that is four bugs: the scratch card,
+ * the control drawer, the ability bar, and the counters.
+ *
+ * `claims` ends that. It is asked ONCE PER POINTER, at the press, and a pointer
+ * it claims is never added to `pointers` at all — so it cannot pan, it cannot
+ * become half of a pinch, and its later moves and its release have nothing to
+ * act on. The gate is per-pointer rather than global on purpose: a second
+ * finger on the drawer must not cancel a pan the first finger is legitimately
+ * making, and a finger on the drawer must never be able to arm a pinch with a
+ * finger on the map.
  */
 
 export interface CameraLimits {
@@ -81,6 +99,15 @@ export interface CameraLimits {
   /** Fraction of glide velocity surviving one second, and the cutoff speed. */
   momentumDecay: number
   momentumMinSpeed: number
+  /**
+   * Whether this pointer belongs to chrome rather than to the board.
+   *
+   * `over` is the hit list Phaser has already computed for the event, handed
+   * straight through so the answer cannot be resolved against a different set
+   * of objects from the one the engine used. Absent means "nothing is ever
+   * chrome", which is what the harness and the tests want.
+   */
+  claims?: (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => boolean
 }
 
 type Mode = 'idle' | 'pan' | 'pinch'
@@ -97,6 +124,15 @@ export class CameraRig {
 
   /** Live pointers in the order they went down. The first two drive gestures. */
   private readonly pointers: Live[] = []
+  /**
+   * Pointers that went down on chrome, so the rig is not tracking them.
+   *
+   * Kept rather than simply not tracked, because `onUp` has to tell "a finger
+   * the rig never had" from "a finger the rig had and lost". Without the
+   * distinction the release of a finger resting on the drawer re-anchored the
+   * pan of a finger that was legitimately dragging the map.
+   */
+  private readonly ignored = new Set<number>()
   private mode: Mode = 'idle'
   private enabled = true
 
@@ -426,14 +462,22 @@ export class CameraRig {
   private endAll(): void {
     this.mode = 'idle'
     this.pointers.length = 0
+    this.ignored.clear()
     this.velX = 0
     this.velY = 0
   }
 
   /* ------------------------------------------------------------ handlers */
 
-  private onDown = (p: Phaser.Input.Pointer): void => {
+  private onDown = (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[] = []): void => {
     if (!this.enabled) return
+    // Asked once, here, and the answer holds for the whole gesture. Asking
+    // again on every move would let a pan that started on the map die the
+    // moment the finger crossed a piece of chrome on its way past.
+    if (this.limits.claims?.(p, over)) {
+      this.ignored.add(p.id)
+      return
+    }
     if (!this.find(p.id)) this.pointers.push({ id: p.id, x: p.x, y: p.y })
 
     if (this.pointers.length === 1) {
@@ -519,6 +563,10 @@ export class CameraRig {
   }
 
   private onUp = (p: Phaser.Input.Pointer): void => {
+    // A finger the rig never took has nothing to release, and running the
+    // transitions in `release` for it would re-anchor whatever the fingers the
+    // rig DID take are in the middle of.
+    if (this.ignored.delete(p.id)) return
     this.release(p.id)
   }
 
@@ -585,8 +633,13 @@ export class CameraRig {
     }
   }
 
-  private onWheel = (_p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number): void => {
+  private onWheel = (
+    _p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[], _dx: number, dy: number,
+  ): void => {
     if (!this.enabled) return
+    // A wheel over a panel scrolls the panel, or nothing. It never zooms the
+    // map out from under it.
+    if (this.limits.claims?.(this.scene.input.activePointer, over ?? [])) return
     const cam = this.scene.cameras.main
     const at = this.scene.input.activePointer
     const before = this.targetZoom

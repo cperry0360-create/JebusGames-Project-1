@@ -38,9 +38,18 @@ async function waitForFonts(): Promise<void> {
   }
 }
 
-async function start(): Promise<void> {
-  await waitForFonts()
-  document.getElementById('boot')?.remove()
+/**
+ * Stands the game up, and everything that has to be installed around it.
+ *
+ * A FUNCTION RATHER THAN A STRAIGHT LINE, because it has to be possible to run
+ * twice. A backgrounded page on iOS can come back with a WebGL context that is
+ * gone and does not return; the lifecycle waits for it, and past its deadline
+ * the only honest options are to rebuild the game or to leave the player
+ * looking at a rectangle that cannot draw. Everything below is per-game state
+ * and is re-installed with it; the module-level installs above are not, and
+ * stay where they are.
+ */
+function boot(): Phaser.Game {
   const game = new Phaser.Game(gameConfig)
   // Before any scene measures anything. The scale mode is NONE, so nothing
   // else sizes the canvas and the first frame would otherwise be drawn at the
@@ -52,7 +61,21 @@ async function start(): Promise<void> {
   // the run stops, the audio device is released, and both are picked back up
   // in a known order. Without this, iOS suspending the AudioContext on the way
   // out crashed the game on the way in.
-  installLifecycle(game)
+  installLifecycle(game, {
+    // The last resort. `destroy(true)` takes the old canvas out of the DOM,
+    // which matters: without it the rebuilt game is parented beside a dead
+    // canvas that still covers the screen.
+    recreate: () => {
+      logEvent('lifecycle', 'rebuilding the game after an unrecoverable context loss')
+      try {
+        game.destroy(true, false)
+      } catch {
+        // Half-destroyed is still better than not destroyed; carry on and
+        // build the new one.
+      }
+      setCurrent(boot())
+    },
+  })
   // The soundtrack rides on its own elements, so the mute control and the
   // volume slider have to reach it explicitly.
   onAudioMixChanged(refreshMusicVolume)
@@ -73,6 +96,28 @@ async function start(): Promise<void> {
   // than a rotated canvas: rotating would put pointer coordinates in a
   // different frame from the one the browser reports them in.
   installOrientationGate(game)
+  return game
+}
+
+/**
+ * The live game. Replaced, not mutated, by a rebuild.
+ *
+ * Published on `globalThis` beside `__errorPanelReady`, because the harness
+ * has to be able to reach the game it is driving — and after a rebuild that is
+ * a different object from the one it started with. A scenario that held the
+ * first one would be driving a destroyed game and reporting that nothing
+ * happened.
+ */
+let current: Phaser.Game | undefined
+function setCurrent(game: Phaser.Game): void {
+  current = game
+  ;(globalThis as unknown as { __game?: Phaser.Game }).__game = current
+}
+
+async function start(): Promise<void> {
+  await waitForFonts()
+  document.getElementById('boot')?.remove()
+  setCurrent(boot())
 }
 
 void start()

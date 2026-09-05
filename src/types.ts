@@ -514,10 +514,51 @@ export interface HeroSkillDef {
  * IMPLEMENTED. `effect` is null, which is what says so -- the button is wired
  * and drawn, and pressing it while powered does nothing but report that.
  */
+/**
+ * What a hero power does. All five are placed by tapping the button and then
+ * tapping the map; only `hazard` leaves anything behind.
+ */
+export type HeroPowerEffect = 'hazard' | 'burst' | 'bomb' | 'rain' | 'dash'
+
+/**
+ * SLOT 2: the hero power, one per hero, usable only in the powered form.
+ *
+ * The same shape for all five, like `HeroSkillDef`, with zeros where a power
+ * does not use a field — so a reader can see what Seismic does NOT do, and a
+ * new power cannot half-declare itself and read `undefined` as 0 somewhere
+ * downstream. `effect: null` is still legal and still means reserved.
+ */
 export interface HeroPowerDef {
   name: string
   icon: string
-  effect: null
+  effect: HeroPowerEffect | null
+  /** Seconds. The same for all five, and reset by the transformation. */
+  cooldown: number
+  /** Whether it needs a point on the map. All five do today; the field is here
+   *  so an instant power does not have to be a special case in the scene. */
+  targeted: boolean
+  /** How far from the hero the point may be. The targeting overlay draws it. */
+  castRadius: number
+  /** The effect's own radius: the blast, the scatter, or the dash corridor's
+   *  half-width. */
+  radius: number
+  damage: number
+  ignoresArmor: boolean
+  /** `rain` only: how many small strikes. 1 elsewhere, 0 where damage is per
+   *  tick rather than per hit. */
+  hits: number
+  /** Seconds between those strikes. */
+  gapSeconds: number
+  /** `hazard`: how long the strip lives. `dash`: how long the run takes. */
+  durationSeconds: number
+  /** `hazard` only: how often it charges what is standing in it. */
+  tickSeconds: number
+  /** Multiplier on enemy speed. 1 is no slow. */
+  slowFactor: number
+  slowSeconds: number
+  knockbackPixels: number
+  stunSeconds: number
+  sound: string
 }
 
 
@@ -535,6 +576,18 @@ export interface HeroDef {
    */
   poweredSprite?: string | null
   portraitSprite: string
+  /**
+   * Which way this hero's art is drawn, before any mirroring.
+   *
+   * Cory faces LEFT — every frame, and the SUV. The four heroes added after
+   * him face right. It was a blanket rule in the renderer and it made all four
+   * of them walk backwards; it is a property of the art, so it lives here.
+   */
+  artFacing: 'left' | 'right'
+  /** The hero's own tint. Every placeholder effect either of the two hero
+   *  buttons draws is drawn in it, so a power reads as belonging to whoever
+   *  cast it before any of the art exists. See systems/HeroFx.ts. */
+  colour: number
   /** The sprites the summoned gnomes wear, one per gnome, cycled. Two entries
    *  because the ability summons two: a pair drawn from one sprite reads as
    *  the same gnome printed twice. */

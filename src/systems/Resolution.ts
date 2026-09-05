@@ -33,7 +33,11 @@
 // derives its zoom from the viewport, so a larger viewport simply produces a
 // larger zoom and they get sharper for free.
 
-import Phaser from 'phaser'
+// TYPE-ONLY. Every Phaser name here is the type of something handed in, so
+// importing the engine as a value would give this module a runtime dependency
+// it does not have — and would put the device-ratio latch, which is the part
+// worth testing, out of reach of the unit tests. Same rule as `EdgeDock`.
+import type Phaser from 'phaser'
 
 /**
  * The ceiling on how much we will oversample.
@@ -45,11 +49,58 @@ import Phaser from 'phaser'
  */
 const MAX_SCALE = 3
 
-/** The device pixel ratio actually in use, clamped and never zero. */
-export function deviceScale(): number {
+/**
+ * The ratio LATCHED FOR THIS SESSION, rather than re-read on every call.
+ *
+ * WHY IT IS LATCHED, and it is a bug report rather than a preference. A crash
+ * captured on a phone after two minutes in the background recorded `dpr = 1`.
+ * The phone's ratio is 3. `devicePixelRatio` is not reliable on iOS while a
+ * page is hidden or being restored from the back/forward cache: it can read 1
+ * for a frame or two on the way back in.
+ *
+ * That is not a cosmetic wobble. This number is the exchange rate between the
+ * two coordinate spaces the whole game is written in — `viewW`, the UI
+ * camera's zoom, the camera band, every `pointerToScreen` — and reading it
+ * fresh at each call site means two halves of one calculation can be done in
+ * different spaces within a single frame. Worse, `applyResolution` would size
+ * the canvas to a third of the device's pixels and the compositor would
+ * stretch it back up, which is precisely the fault this module exists to fix.
+ *
+ * So: read once, keep it, and only ever re-read deliberately.
+ */
+let latched: number | null = null
+
+function readRatio(): number {
   const raw = (globalThis as { devicePixelRatio?: number }).devicePixelRatio ?? 1
   if (!Number.isFinite(raw) || raw <= 0) return 1
   return Math.min(MAX_SCALE, Math.max(1, raw))
+}
+
+/** The device pixel ratio actually in use, clamped and never zero. */
+export function deviceScale(): number {
+  if (latched === null) latched = readRatio()
+  return latched
+}
+
+/**
+ * Re-reads the ratio, and says whether it moved.
+ *
+ * Called where a change is actually possible: a rotate, a window dragged to
+ * another monitor, a return from the background. NOT while the page is hidden
+ * — that is the reading that cannot be trusted, and keeping the old value is
+ * strictly better than adopting a wrong one.
+ */
+export function refreshDeviceScale(): boolean {
+  if (globalThis.document?.visibilityState === 'hidden') return false
+  const next = readRatio()
+  if (latched !== null && next === latched) return false
+  latched = next
+  return true
+}
+
+/** For the tests, which have to drive both sides of a change. */
+export function resetDeviceScale(): void {
+  latched = null
 }
 
 /**
@@ -75,6 +126,10 @@ export function viewH(scene: Phaser.Scene): number {
  * canvas taller than the box it sits in.
  */
 export function applyResolution(game: Phaser.Game): void {
+  // The one place a ratio change is acted on. Everything else in the game
+  // reads the latched value, so a transient reading cannot resize the canvas
+  // out from under a frame that is half-measured.
+  refreshDeviceScale()
   const dpr = deviceScale()
   const parent = game.scale.parent as unknown as HTMLElement | null
   const box = parent?.getBoundingClientRect?.()

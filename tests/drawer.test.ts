@@ -278,8 +278,8 @@ test('six towers make three rows of two', () => {
 
 test('how far each viewport has to scroll, measured', () => {
   /*
-   * MEASURED, AND IT HAS MOVED TWICE. 198px of tiles is the content at every
-   * size; what varies is the grid it is seen through.
+   * MEASURED, AND IT HAS MOVED THREE TIMES. 198px of tiles is the content at
+   * every size; what varies is the grid it is seen through.
    *
    * First: moving CANCEL out of the bottom-right corner into the HUD band
    * cost `panelArea` eighteen pixels, so the 844x390 grid went from 202 to
@@ -290,35 +290,29 @@ test('how far each viewport has to scroll, measured', () => {
    * grid, and a pinned detail strip. The chrome costs 96px at 844x390 and
    * 75px at 568x320, and every one of those pixels comes out of the grid.
    *
-   *   844x390   inner 184 -> grid 76   content 198   maxScroll 122
-   *   568x320   inner 114 -> grid 36   content 198   maxScroll 162
+   * Third, and it goes the other way for once: CANCEL went BACK to the bottom
+   * corner, because a player who taps an ability by accident has to be able to
+   * find the way out and could not. So `panelArea` gets the eighteen pixels
+   * back at the top — and, at 568x320, twenty-seven more at the bottom, where
+   * the bound is now `min(abilities.y, cancel.y)` and CANCEL is the taller of
+   * the two once the icons have shrunk.
    *
-   * THE NARROW CASE IS THE ONE TO LOOK AT. A 62px tile does not fit in a 36px
-   * grid at all, so at 568x320 no tile can ever be shown whole — and 36 is
-   * only 58% of a tile, against the 50% the pick path requires, so the margin
-   * there is eight pixels. See the
-   * reachability test below, which now asserts the weaker thing that is true
-   * rather than the stronger thing that is not.
+   *   844x390   inner 218 -> grid 94   content 198   maxScroll 104
+   *   568x320   inner 149 -> grid 55   content 198   maxScroll 143
    *
-   * The levers, in order of least damage:
-   *   1. let the drawer run below `panelArea`'s bottom at this width. The
-   *      ability strip is centred and does not reach the drawer's x range at
-   *      568, so the collision the bound exists to prevent is not there.
-   *   2. a `tileHeight` per breakpoint, which undoes the 62px thumb target
-   *      deliberately chosen for this grid.
-   *   3. drop the detail strip's reserved height when nothing is selected,
-   *      which re-flows the grid under the finger at the moment a tile has
-   *      just been tapped.
-   * None is taken here: the brief said placement does not change, and which
-   * of the three is right is a judgement about a real thumb.
+   * THE NARROW CASE IS THE ONE TO LOOK AT, and it is no longer alarming. A
+   * 62px tile still does not FIT in a 55px grid, so nothing at 568x320 is
+   * shown whole — but 55 is 89% of a tile against the 50% the pick path
+   * requires, where it used to be 58%. The margin went from eight pixels to
+   * twenty-four, and a tile that is 89% visible is one a thumb can find.
    */
   const wide = drawerLayout(844, area(844, 390), 6, 0, CFG)
   const narrow = drawerLayout(568, area(568, 320), 6, 0, CFG)
   const desk = drawerLayout(1280, area(1280, 720), 6, 0, CFG)
-  assert.equal(Math.round(wide.grid.height), 76, '844x390 grid height moved')
-  assert.equal(Math.round(narrow.grid.height), 36, '568x320 grid height moved')
-  assert.equal(Math.round(wide.maxScroll), 122, '844x390 no longer scrolls by 122')
-  assert.equal(Math.round(narrow.maxScroll), 162, '568x320 no longer scrolls by 162')
+  assert.equal(Math.round(wide.grid.height), 94, '844x390 grid height moved')
+  assert.equal(Math.round(narrow.grid.height), 55, '568x320 grid height moved')
+  assert.equal(Math.round(wide.maxScroll), 104, '844x390 no longer scrolls by 104')
+  assert.equal(Math.round(narrow.maxScroll), 143, '568x320 no longer scrolls by 143')
   // THE MARGIN, pinned. A grid under half a tile makes every tile untappable,
   // and the narrow screen is eight pixels above that line.
   assert.ok(narrow.grid.height > CFG.tileHeight * 0.5,

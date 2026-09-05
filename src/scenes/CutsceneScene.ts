@@ -1,9 +1,12 @@
 import Phaser from 'phaser'
 import { COLOR, faceFor, uiSize } from '../ui/Theme.ts'
-import { viewH, viewW } from '../systems/Resolution.ts'
+import { fitUiCamera, viewH, viewW } from '../systems/Resolution.ts'
 import { onSceneResize, sceneIsLive } from '../systems/SceneEvents.ts'
 import { logEvent } from '../systems/Diagnostics.ts'
 import { markSeen, panelKey, panelUrl, panelsFor } from '../systems/Cutscenes.ts'
+import { cutsceneLayout, type CutsceneLayout } from '../systems/CutsceneLayout.ts'
+import { safeAreaInsets } from '../systems/SafeArea.ts'
+import { PRESENTATION } from '../systems/Presentation.ts'
 
 /**
  * The comic that plays before a level.
@@ -23,6 +26,21 @@ import { markSeen, panelKey, panelUrl, panelsFor } from '../systems/Cutscenes.ts
  * the corner of a panel IS the panel. Contain-fit puts the whole thing on
  * screen: on a portrait phone that means full width, centred vertically, with
  * the game's own dark chrome above and below.
+ *
+ * THE CAMERA IS FITTED, and this is the line whose absence produced the bug.
+ * Every layout in this game is written in CSS pixels and the canvas is measured
+ * in PHYSICAL ones; `fitUiCamera` is what reconciles the two. Without it this
+ * scene computed a perfectly good contain-fit in CSS pixels and drew it through
+ * an untransformed camera over a canvas three times larger, which is a panel at
+ * a third of its size with its centre a sixth of the way across -- a small
+ * comic pinned to the top-left, exactly as reported. At devicePixelRatio 1 the
+ * two spaces are the same number and it looked right, which is how it shipped.
+ *
+ * Every other screen in the game already does this: the menus through
+ * `fitCameraToDesign`, GameScene through its own `uiCam`. This one did not.
+ *
+ * WHERE THINGS GO is `systems/CutsceneLayout.ts`, which is Phaser-free so the
+ * viewports in the brief can be checked without a canvas.
  */
 export interface CutsceneRequest {
   levelId: string
@@ -30,10 +48,13 @@ export interface CutsceneRequest {
   then: string
 }
 
-/** Where the SKIP control sits, and how big its tap target is. */
-const SKIP_MARGIN = 18
-const SKIP_W = 108
-const SKIP_H = 44
+/** The panel source size. Every panel in the game is 1672x941; read off the
+ *  texture at draw time rather than assumed, and this is only the fallback for
+ *  the frame before one has loaded. */
+const PANEL_W = 1672
+const PANEL_H = 941
+
+const CFG = PRESENTATION.cutscene
 
 export class CutsceneScene extends Phaser.Scene {
   private levelId = ''
@@ -43,6 +64,9 @@ export class CutsceneScene extends Phaser.Scene {
   private image?: Phaser.GameObjects.Image
   private skipParts: Phaser.GameObjects.GameObject[] = []
   private counter?: Phaser.GameObjects.Text
+  /** The last layout computed, for the harness and for the tests that ask
+   *  where things ended up rather than how they got there. */
+  placement?: CutsceneLayout
   /** Guards the hand-over: a fast double tap on the last panel would otherwise
    *  start the next scene twice. */
   private finished = false
@@ -67,7 +91,10 @@ export class CutsceneScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.cameras.main.setBackgroundColor(0x10161d)
+    // FIRST, before anything is measured or placed. See the note above: this
+    // is the line whose absence was the bug.
+    fitUiCamera(this)
+    this.cameras.main.setBackgroundColor(CFG.background)
 
     // Nothing to show. Not an error: a level with no entry in cutscenes.json
     // simply starts, and this is the path that makes that true.
@@ -86,8 +113,14 @@ export class CutsceneScene extends Phaser.Scene {
     zone.setInteractive({ useHandCursor: true })
     zone.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => this.advance())
     zone.setDepth(-1)
+    // RESIZE AND ROTATE, not just the first render. The camera has to be
+    // re-fitted as well as the panel re-placed: its centre is derived from the
+    // viewport, so a rotate that only moved the sprites would leave the whole
+    // scene offset by half the difference.
     onSceneResize(this, () => {
       if (!sceneIsLive(this)) return
+      fitUiCamera(this)
+      zone.setPosition(0, 0)
       zone.setSize(viewW(this), viewH(this))
       this.layout()
     })
@@ -141,35 +174,54 @@ export class CutsceneScene extends Phaser.Scene {
   }
 
   /**
-   * Contain-fit, recomputed on every resize.
+   * THE ONE LAYOUT PATH.
    *
-   * `Math.min` of the two ratios is what makes it a fit rather than a fill: the
-   * axis that runs out first decides, and the other one gets the chrome. On a
-   * portrait phone the width runs out first, which is the case the brief names.
+   * Called by `drawPanel` — so the first panel, every later panel, and the
+   * redraw when a panel's texture arrives late all go through it — and by the
+   * resize handler. There is deliberately no second placement anywhere: the
+   * scene reads its answer out of `cutsceneLayout` and applies it, and a
+   * viewport that changes is the same call again.
+   *
+   * The panel's SOURCE size is read off the texture rather than assumed, so a
+   * panel that is not 1672x941 is fitted correctly rather than stretched.
    */
   private layout(): void {
-    const w = viewW(this)
-    const h = viewH(this)
+    const src = this.image
+      ? this.textures.get(this.image.texture.key).getSourceImage() as { width: number; height: number }
+      : { width: PANEL_W, height: PANEL_H }
+    const at = cutsceneLayout({
+      width: viewW(this),
+      height: viewH(this),
+      insets: safeAreaInsets(),
+      panelWidth: src.width || PANEL_W,
+      panelHeight: src.height || PANEL_H,
+    }, CFG)
+    this.placement = at
+
     if (this.image) {
-      const src = this.textures.get(this.image.texture.key).getSourceImage()
-      const sw = (src as { width: number }).width
-      const sh = (src as { height: number }).height
-      const scale = Math.min(w / sw, h / sh)
-      this.image.setDisplaySize(sw * scale, sh * scale)
-      this.image.setPosition(w / 2, h / 2)
+      this.image.setDisplaySize(at.panel.width, at.panel.height)
+      this.image.setPosition(at.panel.x + at.panel.width / 2, at.panel.y + at.panel.height / 2)
     }
-    this.placeSkip()
+    for (const p of this.skipParts) {
+      (p as Phaser.GameObjects.Image).setPosition(
+        at.skip.x + at.skip.width / 2, at.skip.y + at.skip.height / 2,
+      )
+    }
+    this.counter?.setPosition(
+      at.counter.x + at.counter.width / 2, at.counter.y + at.counter.height / 2,
+    )
   }
 
   private drawSkip(): void {
     const label = this.add.text(0, 0, 'SKIP', {
-      fontFamily: faceFor(uiSize(20)),
-      fontSize: `${uiSize(20)}px`,
+      fontFamily: faceFor(uiSize(CFG.skipLabelSize)),
+      fontSize: `${uiSize(CFG.skipLabelSize)}px`,
       color: COLOR.ink,
     }).setOrigin(0.5, 0.5).setDepth(11)
-    const plate = this.add.rectangle(0, 0, SKIP_W, SKIP_H, 0x000000, 0.55)
+    const plate = this.add
+      .rectangle(0, 0, CFG.skipWidth, CFG.skipHeight, CFG.skipFill, CFG.skipFillAlpha)
       .setOrigin(0.5, 0.5).setDepth(10)
-      .setStrokeStyle(2, 0xf6ecd9, 0.5)
+      .setStrokeStyle(2, CFG.skipEdge, CFG.skipEdgeAlpha)
     plate.setInteractive({ useHandCursor: true })
     // `pointerup` on the plate, and the plate is above the full-screen zone, so
     // a tap on SKIP does not also count as an advance.
@@ -180,23 +232,17 @@ export class CutsceneScene extends Phaser.Scene {
       })
 
     this.counter = this.add.text(0, 0, '', {
-      fontFamily: faceFor(uiSize(16)),
-      fontSize: `${uiSize(16)}px`,
+      fontFamily: faceFor(uiSize(CFG.counterSize)),
+      fontSize: `${uiSize(CFG.counterSize)}px`,
       color: COLOR.ink,
-    }).setOrigin(0.5, 0.5).setAlpha(0.65).setDepth(11)
+    }).setOrigin(0.5, 0.5).setAlpha(CFG.counterAlpha).setDepth(11)
 
     this.skipParts = [plate, label]
-    this.placeSkip()
+    // Placed by `layout`, like everything else. There is no second placement:
+    // a control positioned in its own function is a control that gets left
+    // behind by the next resize.
+    this.layout()
     this.updateCounter()
-  }
-
-  private placeSkip(): void {
-    const w = viewW(this)
-    const h = viewH(this)
-    const x = w - SKIP_MARGIN - SKIP_W / 2
-    const y = SKIP_MARGIN + SKIP_H / 2
-    for (const p of this.skipParts) (p as Phaser.GameObjects.Image).setPosition(x, y)
-    this.counter?.setPosition(w / 2, h - SKIP_MARGIN - 12)
   }
 
   private updateCounter(): void {

@@ -62,6 +62,20 @@
     "haymakerIntensity": 0.016
   },
   "hud": {
+    "cancel": {
+      "_note": "CANCEL's own colours. It is the way out of a mode the player may have entered by accident, so it is the loudest control on the screen rather than the quietest: a warm red slab with a cream glyph and label, not the grey wash it was. The wash read as disabled chrome, which is most of why playtesting reported it as unfindable before it was reported as dead.",
+      "fill": 12621611,
+      "outline": 856086,
+      "outlineWidth": 3,
+      "radius": 10,
+      "label": "CANCEL",
+      "labelSize": 13,
+      "glyphSize": 15,
+      "glyphWidth": 4,
+      "labelColour": 16182489,
+      "glyphColour": 16182489,
+      "pressedFill": 10040347
+    },
     "plateHeight": 44,
     "plateGap": 8,
     "marginX": 12,
@@ -84,7 +98,8 @@
       "cornerButton": 40,
       "startWidth": 240,
       "startMinWidth": 150,
-      "cancelWidth": 100
+      "cancelWidth": 116,
+      "cancelHeight": 48
     },
     "heroBar": {
       "_note": "Cory's name and health, top-left under the counters. OPAQUE, because it lives over a full-bleed painted map and there is no screen position a HUD element can occupy that the camera cannot put painted art under — measured: 0 of 82,290 screen cells at 844x390 are unreachable by painted content at some camera position. So the answer is not a safer corner, it is a proper plate. It was a 55% black wash, which let the tavern's painted signboard show through the bar and the bar show through the signboard.",
@@ -208,9 +223,8 @@
     "_buttonPadX": "Inside a button, either side of its label. Both buttons take the width the WIDER label needs, so the row is symmetrical.",
     "buttonMinWidth": 200,
     "rowShares": {
-      "hero": 0.4,
-      "towers": 0.32,
-      "specials": 0.28
+      "towers": 0.53,
+      "specials": 0.47
     },
     "frameInsetShare": 0.58,
     "bodySizes": [
@@ -218,15 +232,39 @@
       20,
       18
     ],
-    "heroNameSize": 26,
     "cardIconColumnShare": 0.23,
     "cardIconColumnMin": 62,
     "cardIconColumnMax": 92,
-    "_rowShares": "THE HERO ROW IS THE BIGGEST NOW, and it was the smallest. It used to hold one dealt hero and needed room for a portrait and three lines; it holds five cards the player chooses between, so it is the decision on this screen and the towers and specials -- which are still dealt -- give it the space.",
-    "heroCardGap": 7,
-    "heroPortrait": 58,
-    "heroNameMin": 15,
-    "_heroNameMin": "The smallest a picker tile's name may get. The tile steps down from the bottom rung of bodySizes only as far as it needs: COURTLAND is nine characters and the panel narrows to minContentWidth on a small viewport, which is a 98px tile, and at 18px that name wraps to two lines and eats the portrait."
+    "_rowShares": "HOW THE TWO DEALT ROWS SPLIT WHAT THE HERO BLOCK DID NOT TAKE. There used to be a third share here, for the hero, and it was the biggest -- a fixed 40% whether the content wanted it or not. The picker inside absorbed the difference by subtraction and went negative on a short screen, which threw the portraits out of the card and over the heading. The hero block is sized to its content now, under `heroSectionMaxShare`, so it has no share to hold.",
+    "heroCard": {
+      "_note": "One hero's plate in the picker. It had none: the tiles were bare portraits on the panel, which is why the row read as a filmstrip rather than as five cards. Selection is the plate lightening AND a ring AND a tick, three signals, because this is the one control on the screen that changes what the run is.",
+      "fill": 1778732,
+      "fillSelected": 2894148,
+      "fillAlpha": 0.92,
+      "edge": 3559248,
+      "edgeSelected": 15771696,
+      "edgeWidth": 2,
+      "ringWidth": 3,
+      "radius": 9
+    },
+    "heroRow": {
+      "_note": "THE HERO PICKER, as a row of proper cards. It was a strip of tiles whose height was whatever was left after the description had taken 42% of the panel -- which went negative on a short screen and threw the portraits out of the card and over the heading. The row is sized to its content now and the section is sized to the row; see systems/HeroRow.ts. minPortrait is a HARD floor with a consequence: below it the row wraps to two lines rather than shrinking, because five 24px smudges are not a picker.",
+      "gap": 8,
+      "pad": 7,
+      "nameGap": 6,
+      "minPortrait": 66,
+      "maxPortrait": 96
+    },
+    "heroDescription": {
+      "_note": "The blurb beside the hero's two buttons. The panel used to be three lines at the top of a tall empty box; the space is used now.",
+      "chipColumn": 0.36,
+      "gap": 8,
+      "iconGap": 8,
+      "iconSize": 28,
+      "chipNameSize": 17
+    },
+    "heroSectionMaxShare": 0.62,
+    "_heroSectionMaxShare": "The ceiling on what the hero block may take out of the three-row budget before the towers and the specials get theirs. The block asks for what its content needs; this is what stops a long blurb starving the two rows underneath it."
   },
   "scratchCard": {
     "cardHeight": 260,
@@ -379,6 +417,51 @@
     "_width": "Clamped to the viewport, so on a 568x320 screen it is the screen minus its margins rather than 420. minWidth is where the label, the track and the percentage stop fitting on one line.",
     "labelColumn": 154,
     "_labelColumn": "Room reserved for a row's name, so the three tracks start in one column whatever the words are. Measured against SOUND EFFECTS, the longest, at labelSize with its letter spacing: it was 118 and the words ran under the track."
+  },
+  "cutscene": {
+    "_note": "The comic's layout. A band is RESERVED out of the safe area for SKIP and the panel counter, and the panel is contain-fitted into what is left -- so the controls are never on the art, which a corner placement cannot promise at 16:9 where there is no letterbox band to sit in. Which edge the band comes off is measured rather than chosen: both are fitted and the larger panel wins. skipWidth/skipHeight are POINTS and 44 is the floor; a test holds them there.",
+    "margin": 14,
+    "gap": 14,
+    "skipWidth": 76,
+    "skipHeight": 44,
+    "counterWidth": 72,
+    "counterHeight": 22,
+    "background": 1054237,
+    "skipFill": 0,
+    "skipFillAlpha": 0.55,
+    "skipEdge": 16182489,
+    "skipEdgeAlpha": 0.5,
+    "skipLabelSize": 20,
+    "counterSize": 16,
+    "counterAlpha": 0.65
+  },
+  "heroFx": {
+    "_note": "PLACEHOLDER effect art for the five hero powers, in numbers rather than in pictures. None of the five has art yet and waiting for it would mean shipping abilities nobody can judge -- the question a first balance pass has to answer is whether a radius is right, and that is a question about a shape on the board. Every shape is tinted to the hero (heroes.json `colour`) and sized to the power's real radius, so what the player sees is what the rule uses. See systems/HeroFx.ts; when the art lands, that file and this block go together.",
+    "ringMs": 480,
+    "ringWidth": 3,
+    "fillAlpha": 0.34,
+    "sweepMs": 420,
+    "rainRingMs": 700,
+    "strikeMs": 260,
+    "strikeLength": 26,
+    "strikeWidth": 3,
+    "hazardThickness": 0.32,
+    "hazardTeeth": 9,
+    "hazardToothHeight": 6,
+    "hazardPulseMs": 1100
+  },
+  "targeting": {
+    "_note": "What the board looks like while it is waiting for a tap. On a touch device there is no hover, so a targeting mode that only draws under the pointer draws NOTHING until the player has already committed — which is how a mode with no visible state came to be reported as a soft-lock. These numbers are the standing affordance: a breathing wash over the area a tap is legal in, drawn from the moment the mode is entered.",
+    "pulseMs": 900,
+    "washAlpha": 0.1,
+    "washAlphaPeak": 0.2,
+    "edgeAlpha": 0.55,
+    "edgeWidth": 3,
+    "laneColour": 16095834,
+    "areaColour": 16095834,
+    "rallyColour": 15771696,
+    "step": 12,
+    "laneRadius": 22
   },
   "castCursor": {
     "_note": "Where a summon will land, drawn under the pointer instead of as an outline down both edges of the whole lane. The band described the RULE; the cursor answers the QUESTION, which is 'can I drop it here?'. Kingdom Rush draws nothing on the map.",

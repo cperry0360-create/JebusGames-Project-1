@@ -2,7 +2,8 @@ import Phaser from 'phaser'
 import type { ScratchOutcome } from '../systems/Scratch.ts'
 import { NukeEarnedOverlay, NukeLaunchOverlay } from '../ui/NukeOverlays.ts'
 import type {
-  AbilityDef, DraftDef, EnemyDef, HeroDef, HeroSkillDef, RulesDef, TowerDef, TowerSpec, WavesDef,
+  AbilityDef, DraftDef, EnemyDef, HeroDef, HeroPowerDef, HeroSkillDef, RulesDef, TowerDef,
+  TowerSpec, WavesDef,
 } from '../types.ts'
 import displayData from '../data/display.json'
 import rulesData from '../data/rules.json'
@@ -10,7 +11,7 @@ import towersData from '../data/towers.json'
 import enemiesData from '../data/enemies.json'
 import { DEFAULT_HERO_ID, heroDef as heroDef_, resolveHeroId } from '../systems/Heroes.ts'
 import {
-  SLOT1, SLOT2, heroSlotDefs, isAreaSkill, isHeroSlot, slot2Usable, slotContents,
+  SLOT1, SLOT2, heroSlotDefs, isAreaSkill, isHeroSlot, slotContents,
 } from '../systems/HeroSkills.ts'
 import abilitiesData from '../data/abilities.json'
 import draftData from '../data/draft.json'
@@ -44,7 +45,7 @@ import { Soldier } from '../entities/Soldier.ts'
 import { defaultRally, rallyFromTap, soldierStations, type RallySpot } from '../systems/Rally.ts'
 import { Projectile } from '../entities/Projectile.ts'
 import { ScratchCard } from '../ui/ScratchCard.ts'
-import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
+import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI, hexColour } from '../ui/Theme.ts'
 import { platePanel, plateButton, type PlateButton } from '../ui/Plate.ts'
 import { dockedSlab } from '../ui/EdgeDock.ts'
 import { SignBribe } from '../ui/SignBribe.ts'
@@ -68,7 +69,15 @@ import { waveOutcome } from '../systems/Wave.ts'
 import { clearRun, saveRun, type SavedRun } from '../systems/RunSave.ts'
 import { logEvent, provideState } from '../systems/Diagnostics.ts'
 import { heartbeat, setRunActive } from '../systems/Watchdog.ts'
-import { hudLayout, hudTakesPress, NO_INSETS, type HudLayout } from '../systems/HudLayout.ts'
+import {
+  hudBlocksGesture, hudLayout, NO_INSETS, type HudLayout, type Rect,
+} from '../systems/HudLayout.ts'
+import { TargetingMode, type ExitReason } from '../systems/TargetingMode.ts'
+import {
+  hazardExpired, makeHazard, powerRefusal, rainPoints, tickHazard,
+  withinCastRange, withinDash, type Hazard, type PowerRefusal,
+} from '../systems/HeroPowers.ts'
+import { expandingRing, hazardBand, lineSweep, strike, type HazardArt } from '../systems/HeroFx.ts'
 import { cameraAcceptsGestures, LAYER } from '../systems/Layers.ts'
 import { barWidth, regions, slotDefs, type BarMetrics } from '../systems/AbilityBar.ts'
 import { safeAreaInsets } from '../systems/SafeArea.ts'
@@ -164,7 +173,8 @@ const HERO_START: readonly [number, number] = [displayData.width / 2, displayDat
  * -- a button with no cooldown behind it is a button the bar cannot render the
  * same way as its neighbours. Nothing starts it yet.
  */
-const HERO_POWER_COOLDOWN = 30
+/** Live Spike Strips, with the art each one owns. See `tickHazards`. */
+interface LiveHazard { state: Hazard; art: HazardArt }
 
 /** One blue for both hero markers: they are two halves of one idea, and two
  *  blues would read as two systems. */
@@ -198,6 +208,25 @@ export class GameScene extends Phaser.Scene {
   /** The docked slab CANCEL is drawn on. Its own object, because the painted
    *  button plate cannot have a square corner. */
   private cancelSlab!: Phaser.GameObjects.Graphics
+  /** The X, drawn rather than loaded: there is no cancel glyph in the packs
+   *  and a letter would read as a letter. Same reasoning as the settings gear. */
+  private cancelGlyph!: Phaser.GameObjects.Graphics
+  /**
+   * WHAT THE BOARD IS WAITING FOR, if anything.
+   *
+   * The one owner of the mode. `status.mode` and `status.pendingAbility` are
+   * mirrors of it, written in `syncTargeting` and nowhere else, because the HUD
+   * and the save format read those and neither should have to know about this
+   * class. Public so the harness can drive the escapes it is here to guarantee.
+   */
+  readonly targeting = new TargetingMode()
+  /** Spike Strips on the board. Plain data plus its art, ticked in `update`
+   *  rather than on a timer each: a timer outlives the run that made it. */
+  private readonly hazards: LiveHazard[] = []
+  /** The standing highlight over the area a tap is legal in. See
+   *  `drawTargetArea`: on a touch device this is the ONLY thing that says the
+   *  game is waiting, because there is no pointer to draw a cursor under. */
+  private targetArea!: Phaser.GameObjects.Graphics
   private dialog?: Dialog
   /** The tower panel. Non-modal and anchored beside its tower, so the range
    *  ring it is asking about stays visible behind it. */
@@ -527,6 +556,11 @@ export class GameScene extends Phaser.Scene {
       stroke: '#0d1016', strokeThickness: 5,
     }).setOrigin(0.5).setDepth(GROUND_DEPTH + 7).setVisible(false)
     this.laneWash = this.add.graphics().setDepth(GROUND_DEPTH + 4)
+    // A WORLD object: it marks part of the map, so it pans and zooms with it.
+    // Above the lane wash, because both can be up at once — an Ima Dummy Tower
+    // is selected, its covered lane is painted, and now its rally area is being
+    // asked for on top of that.
+    this.targetArea = this.add.graphics().setDepth(GROUND_DEPTH + 5)
     this.rangeRing = this.add.graphics().setDepth(OVERLAY_DEPTH)
     this.targetRing = this.add.graphics().setDepth(OVERLAY_DEPTH + 1)
 
@@ -555,6 +589,14 @@ export class GameScene extends Phaser.Scene {
       play(this, 'last-stand', 0.85)
       logEvent('hero', 'DAD MODE transformation complete')
     })
+    // THE TRANSFORMATION HANDS THE POWER BACK. Slot 2 is gated on the powered
+    // form, so a hero who changes with the clock half-run has a button that
+    // has just become usable and is not usable yet — which reads as the gate
+    // being broken rather than as a cooldown. Changing IS the recharge.
+    this.hero.on('powered', () => {
+      this.cooldowns.reset(SLOT2)
+      logEvent('hero-power', `${heroDef.slot2.name} ready: ${heroDef.name} powered up`)
+    })
 
     // A floor rather than a constant: the opening instruction is to build a
     // tower, so the purse has to cover the cheapest one this run actually drew.
@@ -568,7 +610,9 @@ export class GameScene extends Phaser.Scene {
     this.status.kills = 0
     this.status.peanutsEarned = 0
     this.status.phase = 'ready'
-    this.status.mode = 'normal'
+    // The mode, not the mirror. `syncTargeting` further down writes
+    // `status.mode`, and it is the only thing that does.
+    this.targeting.cancel('replaced')
     this.status.waveCount = this.level.waveTable.waves.length
     this.status.waveName = this.level.waveTable.waves[0].name
     this.status.enemiesLeft = 0
@@ -610,49 +654,76 @@ export class GameScene extends Phaser.Scene {
     for (const id of this.status.abilities) this.cooldowns.register(id, ABILITIES[id].cooldown)
     this.cooldowns.register(RULES.serverNuke.abilityId, ABILITIES[RULES.serverNuke.abilityId].cooldown)
     this.cooldowns.register(SLOT1, heroDef.slot1.cooldown)
-    // Registered even though nothing fires it yet, so the slot draws like a
-    // slot rather than like a hole with no clock behind it.
-    this.cooldowns.register(SLOT2, HERO_POWER_COOLDOWN)
+    // The hero's own number, not a constant in here. All five are 12.5s; the
+    // point is that changing it is a data edit.
+    this.cooldowns.register(SLOT2, heroDef.slot2.cooldown)
 
-    // Arming an ability used to be escapable only with ESC or
-    // a right-click, neither of which exists on a touch device: once armed, the
-    // player was stuck casting. This is the way out.
+    // THE WAY OUT OF EVERY MODE THE BOARD CAN BE IN.
     //
-    // IT LIVES IN THE HUD NOW, in the bottom-right corner the settings gear
-    // vacated, and the layout reserves that rectangle whether or not the
-    // button is showing. It used to be drawn at `viewW / 2` just above the
-    // ability icons — which is over the BOARD, and the board is exactly where
-    // the player is being asked to tap. A button floating over the play area
-    // is one the eye has to route around while aiming.
-    // DRAWN, NOT PLATED. The painted button plate has four rounded corners
-    // baked into it, and CANCEL is docked to the display's right edge now — an
-    // edge with nothing behind it takes no rounded corner and no outline. So
-    // it is the same slab the drawer's handle uses, by the same rule, and the
-    // two pieces of edge-docked chrome finally look like they belong to one
-    // game. See `EdgeDock`.
+    // Arming an ability used to be escapable only with ESC or a right-click,
+    // neither of which exists on a touch device. This button was added as the
+    // touch route, and then playtesting found it DEAD — a tap on it did
+    // nothing at all — and the mode it was the only exit from was a soft-lock.
+    //
+    // WHY IT WAS DEAD, because the shape of the mistake is worth keeping. The
+    // loop below used to run over `cancelBtn.parts`, and `parts` is every
+    // piece of the button INCLUDING ITS HIT RECTANGLE. Hiding the painted
+    // plate art therefore hid the hit rectangle too, and Phaser's
+    // `inputCandidate` excludes anything that would not render from the hit
+    // test — so the rectangle was in the input list, its handler was wired,
+    // its `input.enabled` flag was being set correctly by `setCancelVisible`,
+    // and it could never be hit. The three usual suspects were all innocent:
+    // nothing was on top of it, the handler was attached, and the flag was
+    // right. It was `setVisible(false)` on the target itself.
+    //
+    // So the plates are named now (`plates`) and the loop cannot reach the
+    // rectangle or the label by accident. See `plateButton`.
+    //
+    // WHERE IT IS. Bottom-right, on the ability row's own line, docked to the
+    // display's right edge — see `HudLayout.cancel` for why it left the HUD
+    // band it had been tidied into. DRAWN, NOT PLATED: the painted button
+    // plate carries four rounded corners and a docked edge takes none, so it
+    // wears the drawer's slab like the drawer's handle does. See `EdgeDock`.
     const cb = this.layout.cancel
+    const CN = PRESENTATION.hud.cancel
     this.cancelSlab = this.add.graphics().setDepth(OVERLAY_DEPTH + 5)
-    const D = PRESENTATION.drawer
     dockedSlab(this.cancelSlab, cb, 'right', {
-      fill: D.slab, outline: D.outline, outlineWidth: D.outlineWidth, radius: D.tileRadius,
+      fill: CN.fill, outline: CN.outline, outlineWidth: CN.outlineWidth, radius: CN.radius,
     })
+    // Built centred on the slab, so its hit rectangle covers the slab exactly.
+    // The LABEL is then nudged right to make room for the glyph; the target is
+    // not, because a target that is 15px off its own button is the next bug.
     this.cancelBtn = plateButton(this, cb.x + cb.width / 2, cb.y + cb.height / 2,
-      cb.width, cb.height, 'CANCEL', () => this.clearSelection(), 14, 'secondary')
+      cb.width, cb.height, CN.label,
+      () => this.clearSelection('button'), CN.labelSize, 'secondary')
+    this.cancelBtn.text.setX(cb.x + cb.width / 2 + CN.glyphSize)
     // The painted plate art goes for good — the slab is the button's surface
-    // now — and the label rides on top of it.
-    for (const part of this.cancelBtn.parts) {
-      (part as Phaser.GameObjects.Image).setVisible?.(false)
-      ;(part as Phaser.GameObjects.Image).setDepth?.(OVERLAY_DEPTH + 6)
+    // now. `plates` and not `parts`: see above.
+    for (const plate of this.cancelBtn.plates) {
+      (plate as Phaser.GameObjects.Image).setVisible(false)
     }
-    this.cancelBtn.text.setDepth(OVERLAY_DEPTH + 6)
-    this.asScreenSpace([this.cancelSlab, ...this.cancelBtn.parts])
-    this.refreshCancel()
+    for (const part of this.cancelBtn.parts) {
+      (part as Phaser.GameObjects.Image).setDepth?.(OVERLAY_DEPTH + 6)
+    }
+    this.cancelBtn.text.setDepth(OVERLAY_DEPTH + 6).setColor(hexColour(CN.labelColour))
+    // An X beside the word. A cancel that is only a word has to be read; a
+    // cancel with a glyph is recognised, which is the difference between
+    // finding the way out in a hurry and hunting for it.
+    this.cancelGlyph = this.add.graphics().setDepth(OVERLAY_DEPTH + 6)
+    this.drawCancelGlyph(cb, CN)
+    this.asScreenSpace([this.cancelSlab, this.cancelGlyph, ...this.cancelBtn.parts])
+    this.syncTargeting()
 
     // The camera goes on last, so bounds are set against a world that is
     // fully built. The world stays 1280x720; only the view moves.
     // Gestures belong to the run and die with it, so nothing can pan or zoom
     // on a menu after the scene stops.
-    this.events.once('shutdown', () => this.rig?.destroy())
+    this.events.once('shutdown', () => {
+      this.rig?.destroy()
+      // A Spike Strip is scene state with a Graphics behind it; the scene is
+      // restarted rather than rebuilt, so anything left here outlives the run.
+      this.clearHazards()
+    })
     // WHERE THE RUN OPENS: the whole board, not the hero.
     //
     // It used to open at the design zoom centred on the hero's start, which
@@ -697,6 +768,9 @@ export class GameScene extends Phaser.Scene {
       zoomLambda: displayData.camera.zoomLambda,
       momentumDecay: displayData.camera.momentumDecay,
       momentumMinSpeed: displayData.camera.momentumMinSpeed,
+      // The gate. See `chromeUnderPointer` for why the rig has to ask rather
+      // than each overlay having to remember to switch the rig off.
+      claims: (p, over) => this.chromeUnderPointer(p, over),
     })
 
     this.refreshMenuOptions()
@@ -1399,6 +1473,65 @@ export class GameScene extends Phaser.Scene {
   private refreshMenuOptions(): void {
   }
 
+  /**
+   * DOES THIS POINTER BELONG TO CHROME RATHER THAN TO THE BOARD?
+   *
+   * ONE QUESTION, TWO ASKERS, and that is the whole of the fix for the drawer
+   * panning the map. The board asks it to decide whether a tap is its to act
+   * on; the camera rig asks it to decide whether a drag is its to pan with.
+   * They used to be different questions with different answers:
+   *
+   *   - the board asked a hand-written list of overlays plus `hudTakesPress`;
+   *   - the rig asked `cameraAcceptsGestures(modalOpen)`, i.e. "is a MODAL
+   *     up?" — and nothing else.
+   *
+   * So every non-modal overlay leaked. The drawer is not a modal. Neither is
+   * the ability bar, the settings gear, the counter plates or a tower ring.
+   * The earlier fix for this — the one the scratch card got — added the modal
+   * gate, which is why it held for exactly one overlay and no others: it was
+   * never a general answer, it was the answer for the thing in front of it.
+   *
+   * Three sources, and between them they cover everything that is drawn:
+   *
+   *   1. `screenSpace` — every object this scene draws as chrome. Registration
+   *      is `asScreenSpace`, which an overlay must already call or it would
+   *      pan and zoom with the map, so a NEW overlay is covered the day it is
+   *      written and cannot forget.
+   *   2. The drawer, which resolves against its own laid-out rectangles rather
+   *      than through the hit list — see `ControlDrawer.press`.
+   *   3. `hudBlocksGesture`, for HudScene. A different scene's objects are
+   *      never in this scene's hit list, so no amount of hit-testing here can
+   *      see the ability bar. Its geometry is the only handle we have on it.
+   *
+   * `over` is Phaser's own hit list for the event, passed through rather than
+   * recomputed, so the answer is resolved against the same objects the engine
+   * used to dispatch it.
+   */
+  chromeUnderPointer(p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[] = []): boolean {
+    // A modal owns the entire screen by definition, including the parts of it
+    // that are not drawn on.
+    if (this.modalOpen || this.hudModalOpen) return true
+    const ui = pointerToScreen(this, p, this.uiCam)
+    if (hudBlocksGesture(this.layout, ui.x, ui.y)) return true
+    if (this.drawer?.ownsPress(ui.x, ui.y) === true) return true
+    const hits = over.length > 0 ? over : this.input.hitTestPointer(p)
+    for (const o of hits) if (this.screenSpace.includes(o)) return true
+    return false
+  }
+
+  /**
+   * Whether the HUD has a dialog of its own up — the pause and settings panels.
+   *
+   * Asked structurally rather than through an import: HudScene imports this
+   * file for the world it draws, and importing it back would be a cycle. What
+   * is needed is one boolean, and a scene that does not answer is a scene with
+   * no modal.
+   */
+  private get hudModalOpen(): boolean {
+    const hud = this.scene.get('Hud') as unknown as { modalOpen?: boolean } | null
+    return hud?.modalOpen === true
+  }
+
   private setupInput(): void {
     this.input.mouse?.disableContextMenu()
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.updateHover(p))
@@ -1417,25 +1550,20 @@ export class GameScene extends Phaser.Scene {
       // the map ignored it. Converted through the UI camera, which is the
       // camera those rectangles are drawn by.
       const ui = pointerToScreen(this, p, this.uiCam)
+      // The drawer is asked FIRST and asked with `claimsPress`, which consumes
+      // its record of the press. The drawer has ALREADY handled this press by
+      // the time we get here and may have collapsed the panel the tap landed
+      // in, so `owns` asked afterwards answers about a panel that is gone. The
+      // camera rig asked the same question a moment ago through `ownsPress`,
+      // which does not consume; exactly one reader consumes, and it is this one.
       this.pressTakenByUi =
-        // The drawer is drawn by GameScene but positioned in CSS pixels like
-        // the HUD, so it is asked in the same space rather than through the
-        // hit list. `claimsPress` rather than `owns`, because the drawer has
-        // ALREADY handled this press by the time we get here and may have
-        // collapsed the panel the tap landed in.
-        this.drawer.claimsPress(ui.x, ui.y) ||
-        (this.ring?.active === true && this.ring.owns(over))
+        this.drawer.claimsPress(ui.x, ui.y)
+        || (this.ring?.active === true && this.ring.owns(over))
         || (this.ticket?.active === true && this.ticket.owns(over))
         || this.dialog?.owns(over) === true
-        // The HUD is a different scene, so none of its objects are ever in
-        // `over` and the checks above cannot see them. Without this a tap on
-        // the ability bar also lands on the board: arming one ability and then
-        // tapping a second one cast the first at the bar's own position, which
-        // is how a Server Nuke could be spent without the player ever touching
-        // the lane.
         || this.nukeEarned?.owns(over) === true
         || this.nukeLaunch?.owns(over) === true
-        || hudTakesPress(this.layout, ui.x, ui.y)
+        || this.chromeUnderPointer(p, over)
     })
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
       if (this.pressTakenByUi) return
@@ -1444,7 +1572,7 @@ export class GameScene extends Phaser.Scene {
       if (this.rig.consumedGesture) return
       this.onClick(p)
     })
-    this.input.keyboard?.on('keydown-ESC', () => this.clearSelection())
+    this.input.keyboard?.on('keydown-ESC', () => this.clearSelection('key'))
     this.input.keyboard?.on('keydown-SPACE', () => this.startWave())
     this.input.keyboard?.on('keydown-Q', () => this.armAbility(this.status.abilities[0]))
     this.input.keyboard?.on('keydown-W', () => this.armAbility(this.status.abilities[1]))
@@ -1464,8 +1592,44 @@ export class GameScene extends Phaser.Scene {
     if (this.status.phase === 'won' || this.status.phase === 'lost') return
     const w = this.worldAt(p)
 
-    if (this.status.mode === 'targeting' && this.status.pendingAbility) {
-      this.fireAbility(this.status.pendingAbility, w.x, w.y)
+    // AN ARMED ABILITY OWNS THE NEXT TAP, wherever it lands on the board.
+    //
+    // A legal point casts it. Anything else LEAVES the mode rather than
+    // refusing and staying in it: refusing was the behaviour that made a
+    // mistaken arm feel like a soft-lock, because the only thing any tap could
+    // do was keep the player where they were. Nothing is spent either way, so
+    // backing out costs the ability nothing.
+    const pending = this.targeting.request
+    if (pending?.kind === 'power') {
+      const p = this.hero.def.slot2
+      const tap = this.targeting.resolveTap(
+        withinCastRange(p, { x: this.hero.x, y: this.hero.y }, w.x, w.y),
+      )
+      if (tap?.reason === 'commit') {
+        this.syncTargeting()
+        this.firePower(w.x, w.y)
+        return
+      }
+      this.clearSelection('outside')
+      this.status.message = `${p.name} only reaches so far. Still ready — tap the medallion again.`
+      play(this, 'error')
+      return
+    }
+    if (pending?.kind === 'ability') {
+      const def = ABILITIES[pending.id]
+      const tap = this.targeting.resolveTap(
+        def !== undefined && this.validCastPoint(def, w.x, w.y),
+      )
+      if (tap?.reason === 'commit') {
+        this.syncTargeting()
+        this.fireAbility(pending.id, w.x, w.y)
+        return
+      }
+      this.clearSelection('outside')
+      this.status.message = def?.pathOnlyWithin !== undefined
+        ? `${def.name} goes on the road. Still ready — tap the icon to try again.`
+        : `${def?.name ?? 'That'} cancelled. Still ready.`
+      play(this, 'error')
       return
     }
 
@@ -1884,9 +2048,41 @@ export class GameScene extends Phaser.Scene {
     this.projectedRing.clear()
     this.laneWash.clear()
     this.drawRallyMark(null)
+    // A rally order belongs to the tower that is selected. Losing the
+    // selection without saying so left CANCEL lit for a tower that was no
+    // longer there — the exact class of bug `refreshCancel` was written to
+    // stop, reappearing through a second piece of state it did not know about.
+    this.syncTargeting()
+  }
+
+  /**
+   * A tower's key, for the targeting mode's request.
+   *
+   * Its position. Towers have no id — they are objects in an array and the
+   * array is spliced on a sell — and an index would name a different tower
+   * after one is sold. A pad holds one tower and a tower does not move, so its
+   * rounded position is stable for as long as it exists, which is exactly as
+   * long as the request can be armed.
+   */
+  private towerKey(tower: Tower): string {
+    return `${Math.round(tower.x)},${Math.round(tower.y)}`
   }
 
   private selectTower(tower: Tower): void {
+    // AN IMA DUMMY TOWER'S RALLY ORDER IS A TARGETING MODE, and it is the same
+    // one. The board is waiting for a tap on a place, exactly as it is for a
+    // summon — so it gets the same CANCEL button, the same ESC key, the same
+    // second-press-to-back-out, and the same highlight over where a tap is
+    // legal. It had none of those: the mode was two booleans and a comment.
+    if (tower.isDeployer) {
+      const armed = this.targeting.arm({ kind: 'rally', id: this.towerKey(tower) })
+      if (armed === 'toggled') {
+        this.clearSelection('toggle')
+        return
+      }
+    } else {
+      this.targeting.cancel('replaced')
+    }
     this.clearGhost()
     this.ring?.close()
     this.drawSpots()
@@ -1901,11 +2097,13 @@ export class GameScene extends Phaser.Scene {
     if (tower.isDeployer) {
       const g = this.garrisons.find((q) => q.tower === tower)
       this.drawRallyMark(g?.rally ?? null)
-      this.status.message = `${tower.def.name}, tier ${tower.tier}. Tap the road to move the lads.`
+      this.status.message =
+        `${tower.def.name}, tier ${tower.tier}. Tap the highlighted road to move the lads, or CANCEL.`
     } else {
       this.drawRallyMark(null)
       this.status.message = `${tower.def.name}, tier ${tower.tier}${bonus}`
     }
+    this.syncTargeting()
     this.openTowerRing(tower)
   }
 
@@ -2187,7 +2385,10 @@ export class GameScene extends Phaser.Scene {
     this.build.release(tower.spot)
     this.towers = this.towers.filter((t) => t !== tower)
     tower.destroy()
-    if (this.selected === tower) this.selected = null
+    if (this.selected === tower) {
+      this.selected = null
+      this.syncTargeting()
+    }
     this.onBoardChanged()
     this.refreshMenuOptions()
     this.rangeRing.clear()
@@ -2219,7 +2420,7 @@ export class GameScene extends Phaser.Scene {
    */
   private refreshCancel(): void {
     this.setCancelVisible(
-      this.status.mode === 'targeting'
+      this.targeting.active
       || this.drawerPick !== null
       || this.pendingSpot !== null,
     )
@@ -2228,6 +2429,7 @@ export class GameScene extends Phaser.Scene {
   private setCancelVisible(on: boolean): void {
     this.cancelVisible = on
     this.cancelSlab.setVisible(on)
+    this.cancelGlyph.setVisible(on)
     // THE LABEL, NAMED. `PlateButton` exposes its text, so ask for it rather
     // than sifting `parts` — the first version told the label from the plate
     // images by testing whether each had a `setTexture` method, which is
@@ -2235,10 +2437,58 @@ export class GameScene extends Phaser.Scene {
     // to resolve locally. CI's real typings called it out as TS2774, which is
     // exactly the hole `tools/tsdiff.sh` says it cannot cover.
     this.cancelBtn.text.setVisible(on)
+    // BOTH, and in this order. The rectangle has to be VISIBLE to be
+    // hit-tested at all — Phaser's `inputCandidate` runs `willRender` — which
+    // is the whole of why this button was dead, so it is set here rather than
+    // left to whatever the plate art happened to do to it. Setting the flag as
+    // well means a hidden CANCEL has two independent reasons it cannot be
+    // pressed rather than one that has to be right every time.
+    this.cancelBtn.hit.setVisible(on)
     this.cancelBtn.hit.input!.enabled = on
   }
 
-  private clearSelection(): void {
+  /**
+   * The X, drawn to the left of the label.
+   *
+   * Graphics rather than a font glyph: the UI face has no multiplication sign
+   * that reads at 15px, and the letter x reads as a letter.
+   */
+  private drawCancelGlyph(cb: Rect, cn: typeof PRESENTATION.hud.cancel): void {
+    const g = this.cancelGlyph
+    g.clear()
+    const r = cn.glyphSize / 2
+    // Left of centre by the same amount the label was pushed right, so the
+    // pair reads as one control rather than as a glyph and a button.
+    const cx = cb.x + cb.width / 2 - Math.max(18, cb.width * 0.22)
+    const cy = cb.y + cb.height / 2
+    g.lineStyle(cn.glyphWidth, cn.glyphColour, 1)
+    g.beginPath()
+    g.moveTo(cx - r, cy - r)
+    g.lineTo(cx + r, cy + r)
+    g.moveTo(cx + r, cy - r)
+    g.lineTo(cx - r, cy + r)
+    g.strokePath()
+  }
+
+  /**
+   * Everything the board can be in the middle of, undone.
+   *
+   * ONE FUNCTION, and every way out lands here: the CANCEL button, the ESC
+   * key, tapping the armed ability a second time, a tap outside the legal
+   * area, a modal opening on top. `reason` is passed through to the log rather
+   * than used to branch, because the moment one exit does something the others
+   * do not, the game has an escape that half works — which is what it had.
+   *
+   * NOTHING IS SPENT HERE. It clears state and draws; it does not start a
+   * cooldown, consume a rare drop, or move a soldier. `fireAbility` and
+   * `orderRally` are the only places that can, and both are reached only from
+   * a tap that resolved to `commit`.
+   */
+  private clearSelection(reason: Exclude<ExitReason, 'commit'> = 'replaced'): void {
+    const dropped = this.targeting.cancel(reason)
+    if (dropped) {
+      logEvent('targeting-cancelled', `${dropped.request.kind}:${dropped.request.id} via ${reason}`)
+    }
     this.clearGhost()
     this.ring?.close()
     this.selected = null
@@ -2246,21 +2496,42 @@ export class GameScene extends Phaser.Scene {
     this.heroSelected = false
     // Both markers fade the same way rather than being cut.
     this.markers.cancel()
-    this.status.mode = 'normal'
-    this.status.pendingAbility = null
     // The drawer's pick is one of the things CANCEL cancels, and this is
     // where CANCEL and ESC both land. Closing the drawer clears the pick on
     // its own side; this is the other direction.
     this.drawerPick = null
     this.pendingSpot = null
     this.drawer?.select(null)
-    this.refreshCancel()
+    this.syncTargeting()
     this.rangeRing.clear()
     this.targetRing.clear()
     this.castCursor.hide()
     this.laneWash.clear()
     this.drawSpots()
     this.status.message = this.idleHint()
+  }
+
+  /**
+   * The mirrors, written HERE and nowhere else.
+   *
+   * `status.mode` and `status.pendingAbility` are read by the HUD, by the save
+   * format and by the harness. They used to be *assigned* by every method that
+   * entered or left a mode, and the pair drifting apart is the failure this
+   * whole change is about. One writer, called from one place per transition.
+   */
+  private syncTargeting(): void {
+    // A rally request cannot outlive the selection that owns it. Derived here
+    // rather than cleared at each of the five places the selection is dropped,
+    // which is the pattern that let CANCEL outlive its mode in the first place.
+    const req = this.targeting.request
+    if (req?.kind === 'rally'
+      && (this.selected?.isDeployer !== true || this.towerKey(this.selected) !== req.id)) {
+      this.targeting.cancel('replaced')
+    }
+    this.status.mode = this.targeting.active ? 'targeting' : 'normal'
+    this.status.pendingAbility = this.targeting.pendingAbility
+    this.refreshCancel()
+    this.drawTargetArea()
   }
 
   /** Takes a Tower or a bare TowerDef: a built tower reports the range its
@@ -2279,8 +2550,23 @@ export class GameScene extends Phaser.Scene {
 
   private updateHover(p: Phaser.Input.Pointer): void {
     const w = this.worldAt(p)
-    if (this.status.mode === 'targeting' && this.status.pendingAbility) {
-      const def = ABILITIES[this.status.pendingAbility]
+    // THE REQUEST, not the mirror. `status.pendingAbility` carries the hero
+    // power's SLOT id as well as an ability's, because the bar lights its
+    // medallion from it — and that id is not in `ABILITIES`, so reading the
+    // table off the mirror would hand back undefined and take the frame down
+    // on the first mouse move after arming a power.
+    const armed = this.targeting.request
+    if (armed?.kind === 'power') {
+      // No cursor and no radius ring: the power's affordance is the disc
+      // around the hero, which `drawTargetArea` has already painted and which
+      // does not move with the pointer.
+      this.targetRing.clear()
+      this.castCursor.hide()
+      return
+    }
+    if (armed?.kind === 'ability') {
+      const def = ABILITIES[armed.id]
+      if (!def) return
       this.targetRing.clear()
       const ok = this.validCastPoint(def, w.x, w.y)
       // Green where the cast will land, red where it will be refused, so the
@@ -2376,15 +2662,107 @@ export class GameScene extends Phaser.Scene {
       this.fireAbility(id, 0, 0)
       return
     }
+    // THE SECOND PRESS IS THE WAY OUT. The button that armed this is under the
+    // player's thumb already, so pressing it again is the cheapest escape
+    // there is — cheaper than finding CANCEL, and the one a player reaches for
+    // without being told. Nothing is spent: the ability is still ready.
+    const armed = this.targeting.arm({ kind: 'ability', id })
+    if (armed === 'toggled') {
+      this.clearSelection('toggle')
+      play(this, 'click')
+      return
+    }
     this.clearGhost()
     this.ring?.close()
-    this.status.mode = 'targeting'
-    this.status.pendingAbility = id
-    this.refreshCancel()
+    this.selected = null
+    this.heroSelected = false
+    this.syncTargeting()
     const within = ABILITIES[id].pathOnlyWithin
     this.status.message = within !== undefined
-      ? `${ABILITIES[id].name}: drop it on the road. The cursor says where.`
-      : `${ABILITIES[id].name}: tap where you want it.`
+      ? `${ABILITIES[id].name}: tap the highlighted road. Tap anywhere else, or CANCEL, to back out.`
+      : `${ABILITIES[id].name}: tap the board. Tap the icon again, or CANCEL, to back out.`
+  }
+
+  /**
+   * THE BOARD, SAYING IT IS WAITING.
+   *
+   * The mode used to draw nothing at all until the pointer moved. That is
+   * fine on a desktop and useless on a phone, where there IS no pointer until
+   * the finger lands — so on the device the game is built for, a mode that
+   * takes over the next tap announced itself with one line of small text in
+   * the corner and a grey button that did not work. "It is easy to miss" was
+   * not a matter of contrast.
+   *
+   * So the legal area is painted from the moment the mode is entered, in the
+   * world, under the entities, and it breathes: `pulseTargetArea` moves the
+   * alpha every frame. Motion is what the eye picks up in peripheral vision,
+   * which is where this is while the player is looking at their thumb.
+   *
+   * Three shapes, one for each thing the mode can be waiting for:
+   *   - a summon restricted to the road   -> the road, as far as it is legal
+   *   - an unrestricted ability           -> the whole board, edged
+   *   - a rally order                     -> the lane inside the tower's ring
+   */
+  private drawTargetArea(): void {
+    const g = this.targetArea
+    g.clear()
+    const req = this.targeting.request
+    if (!req) return
+    const T = PRESENTATION.targeting
+    if (req.kind === 'rally') {
+      const tower = this.selected
+      if (!tower) return
+      this.washLane(T.rallyColour, (p) => Math.hypot(p.x - tower.x, p.y - tower.y) <= tower.range)
+      g.lineStyle(T.edgeWidth, T.rallyColour, T.edgeAlpha)
+      g.strokeCircle(tower.x, tower.y, tower.range)
+      return
+    }
+    if (req.kind === 'power') {
+      // The disc the power reaches, centred on the hero. It is his reach, so
+      // it is drawn around him rather than under the finger.
+      const p = this.hero.def.slot2
+      g.fillStyle(this.hero.def.colour, T.washAlpha)
+      g.fillCircle(this.hero.x, this.hero.y, p.castRadius)
+      g.lineStyle(T.edgeWidth, this.hero.def.colour, T.edgeAlpha)
+      g.strokeCircle(this.hero.x, this.hero.y, p.castRadius)
+      return
+    }
+    const def = ABILITIES[req.id]
+    if (!def) return
+    const within = def.pathOnlyWithin
+    if (within !== undefined) {
+      this.washLane(T.laneColour, () => true)
+      return
+    }
+    // Unrestricted: everywhere is legal, so what is drawn is the EDGE of
+    // everywhere. A wash over the whole board would hide the board, which is
+    // the thing the player is being asked to read.
+    g.lineStyle(T.edgeWidth * 2, T.areaColour, T.edgeAlpha)
+    g.strokeRect(2, 2, displayData.width - 4, displayData.height - 4)
+  }
+
+  /** The road, painted as a run of overlapping dots. Same technique as
+   *  `drawCoveredLane`, which is the same question asked about a tower. */
+  private washLane(colour: number, keep: (p: { x: number; y: number }) => boolean): void {
+    const T = PRESENTATION.targeting
+    this.targetArea.fillStyle(colour, T.washAlpha)
+    for (let d = 0; d <= this.lane.totalLength; d += T.step) {
+      const pt = this.lane.pointAt(d)
+      if (!keep(pt)) continue
+      this.targetArea.fillCircle(pt.x, pt.y, T.laneRadius)
+    }
+  }
+
+  /**
+   * The breathing. Alpha only: the geometry is redrawn on a transition and
+   * never per frame, because painting a hundred circles sixty times a second
+   * to make them fade is a lot of Graphics for one sine wave.
+   */
+  private pulseTargetArea(): void {
+    if (!this.targeting.active) return
+    const T = PRESENTATION.targeting
+    const phase = (Math.sin((this.time.now / T.pulseMs) * Math.PI * 2) + 1) / 2
+    this.targetArea.setAlpha(0.55 + phase * 0.45)
   }
 
   /** True where this ability may be cast. Only summons are restricted. */
@@ -2426,8 +2804,10 @@ export class GameScene extends Phaser.Scene {
       slowDiminish: RULES.combat.slowDiminish,
       overlayDepth: OVERLAY_DEPTH,
     })
-    this.status.mode = 'normal'
-    this.status.pendingAbility = null
+    // The tap that got here already resolved the mode; this covers the other
+    // caller, an `instant` ability fired straight off its icon.
+    this.targeting.cancel('replaced')
+    this.syncTargeting()
     this.targetRing.clear()
     logEvent('ability-done', id)
     this.status.message = `${def.name}!`
@@ -2592,18 +2972,215 @@ export class GameScene extends Phaser.Scene {
    * spends nothing, so nothing is lost by pressing it while the effect is
    * being written.
    */
+  /**
+   * SLOT 2: the hero power.
+   *
+   * One mechanic for all five — powered form only, one cooldown, and a point
+   * tapped on the map inside `castRadius` of the hero. The placement goes
+   * through the SAME targeting mode the Ima Dummy rally point uses, so it
+   * inherits all four ways out of it: the CANCEL control, pressing the
+   * medallion again, ESC, and a tap outside the disc. A power the player armed
+   * by accident costs nothing to put down.
+   */
   castHeroSlot2(): void {
     const p = this.hero.def.slot2
-    if (this.hero.down) {
-      this.refuse(`${this.hero.def.name} is down.`)
+    const why = powerRefusal(
+      p, this.hero.powered, this.hero.down, this.cooldowns.ready(SLOT2),
+    )
+    if (why !== null) {
+      this.refuse(this.powerRefusalText(p, why))
+      logEvent('hero-power', `${p.name} refused: ${why}`)
       return
     }
-    if (!slot2Usable(this.hero.powered, this.hero.down)) {
-      this.refuse(`${p.name} needs ${this.hero.def.name} at half health or less.`)
+    // An UNTARGETED power would land on the hero and be done. None of the five
+    // is one today; the branch is here rather than the field being ignored,
+    // because a config field nothing reads is a field that quietly stops being
+    // true — this repo has two dead ones on record.
+    if (!p.targeted) {
+      this.firePower(this.hero.x, this.hero.y)
       return
     }
-    logEvent('hero-power', `${p.name} pressed, no effect implemented`)
-    this.refuse(`${p.name} is not wired up yet.`)
+    // The second press is the way out, exactly as it is for a drafted active.
+    const armed = this.targeting.arm({ kind: 'power', id: SLOT2 })
+    if (armed === 'toggled') {
+      this.clearSelection('toggle')
+      play(this, 'click')
+      return
+    }
+    this.clearGhost()
+    this.ring?.close()
+    this.selected = null
+    this.heroSelected = false
+    this.syncTargeting()
+    this.status.message =
+      `${p.name}: tap inside the ring. Tap outside it, or CANCEL, to back out.`
+  }
+
+  /** Why the button did nothing, in words the player can act on. */
+  private powerRefusalText(p: HeroPowerDef, why: PowerRefusal): string {
+    const who = this.hero.def.name
+    if (why === 'unbuilt') return `${p.name} is not wired up yet.`
+    if (why === 'down') return `${who} is down.`
+    if (why === 'base-form') return `${p.name} needs ${who} at half health or less.`
+    return `${p.name} is still recharging.`
+  }
+
+  /**
+   * The power lands.
+   *
+   * Reached only from a tap that resolved to `commit`, which is the one exit
+   * from targeting that spends anything. The cooldown starts HERE and nowhere
+   * else, so every way of backing out is free by construction.
+   */
+  private firePower(x: number, y: number): void {
+    const p = this.hero.def.slot2
+    if (p.effect === null) return
+    this.cooldowns.start(SLOT2)
+    play(this, p.sound)
+    logEvent('hero-power', `${p.name} at ${Math.round(x)},${Math.round(y)}`)
+    switch (p.effect) {
+      case 'hazard': this.powerHazard(p, x, y); break
+      case 'burst': this.powerBurst(p, x, y); break
+      case 'bomb': this.powerBurst(p, x, y); break
+      case 'rain': this.powerRain(p, x, y); break
+      case 'dash': this.powerDash(p, x, y); break
+    }
+    this.status.message = `${p.name}!`
+  }
+
+  /**
+   * Seismic and Fireball: one ring of damage at the point.
+   *
+   * ONE METHOD FOR TWO EFFECTS, because they are the same effect with
+   * different numbers — a wide, light, stunning one and a narrow, heavy one.
+   * Splitting them would be two copies of four lines, drifting.
+   */
+  private powerBurst(p: HeroPowerDef, x: number, y: number): void {
+    const s = PRESENTATION.shake
+    expandingRing(this, x, y, p.radius, this.hero.def.colour, OVERLAY_DEPTH)
+    this.cameras.main.shake(s.haymakerMs * 0.8, s.haymakerIntensity * 0.8)
+    for (const e of this.enemiesNear(x, y, p.radius)) {
+      this.damageEnemy(e, p.damage, p.ignoresArmor, 0, false)
+      floatingDamage(this, e.x, e.centreY, p.damage, true)
+      if (p.stunSeconds > 0) {
+        e.applyStun(p.stunSeconds, RULES.combat.stunLockoutMultiple, RULES.combat.stunDiminish)
+      }
+      if (p.knockbackPixels > 0) e.knockBack(p.knockbackPixels)
+    }
+  }
+
+  /**
+   * Star Rain: many small hits scattered over the area.
+   *
+   * Each strike is resolved WHERE AND WHEN it lands rather than all at once at
+   * the start: a strike three quarters of a second in should miss something
+   * that has walked out of the patch, and hit something that has walked into
+   * it. Resolving them up front would make the spread cosmetic.
+   */
+  private powerRain(p: HeroPowerDef, x: number, y: number): void {
+    const points = rainPoints(p, { x, y }, () => Math.random())
+    expandingRing(this, x, y, p.radius, this.hero.def.colour, OVERLAY_DEPTH,
+      PRESENTATION.heroFx.rainRingMs)
+    points.forEach((pt, i) => {
+      const land = (): void => {
+        strike(this, pt.x, pt.y, this.hero.def.colour, OVERLAY_DEPTH + 1)
+        // A small blast per strike, so a scatter over a crowd spreads its
+        // damage instead of all of it landing on one unlucky enemy.
+        for (const e of this.enemiesNear(pt.x, pt.y, PRESENTATION.heroFx.strikeLength)) {
+          this.damageEnemy(e, p.damage, p.ignoresArmor, 0, false)
+          floatingDamage(this, e.x, e.centreY, p.damage, false)
+        }
+      }
+      if (i === 0) land()
+      else this.time.delayedCall(p.gapSeconds * 1000 * i, land)
+    })
+  }
+
+  /**
+   * Zoomies: she runs the line and knocks over what she goes through.
+   *
+   * The damage is resolved along the CORRIDOR, up front, from where she is to
+   * where she is going — not at the destination. What the power is is the run;
+   * a blast at the far end would be Seismic with a walk animation.
+   *
+   * She is moved by her rally point rather than by writing her position, so
+   * she arrives under her own rules, keeps facing the way she went, and does
+   * not teleport through anything she is blocking.
+   */
+  private powerDash(p: HeroPowerDef, x: number, y: number): void {
+    const from = { x: this.hero.x, y: this.hero.y }
+    const to = { x, y }
+    lineSweep(this, from, to, p.radius, this.hero.def.colour, OVERLAY_DEPTH)
+    for (const e of this.enemies.filter((q) => q.alive && withinDash({ x: q.x, y: q.y }, from, to, p.radius))) {
+      this.damageEnemy(e, p.damage, p.ignoresArmor, 0, false)
+      floatingDamage(this, e.x, e.centreY, p.damage, true)
+      e.knockBack(p.knockbackPixels)
+    }
+    this.hero.setRally(x, y)
+    this.markers.orderTo(x, y)
+    this.cameras.main.shake(PRESENTATION.shake.haymakerMs * 0.5,
+      PRESENTATION.shake.haymakerIntensity * 0.5)
+  }
+
+  /**
+   * Live enemies within `r` of a point, STILL TYPED AS ENEMIES.
+   *
+   * `withinRadius` is generic over `Targetable`, and without node_modules the
+   * `Enemy` class loses its Phaser base and does not satisfy that constraint —
+   * so the generic collapses and every `Enemy` member used on the result reads
+   * as an error locally whether or not it is one. CLAUDE.md's note on tsdiff
+   * is about exactly this. Four lines of filter keep the type and cost
+   * nothing; the shared helper is still what the towers and the abilities use,
+   * where the results are not walked for hero-specific members.
+   */
+  private enemiesNear(x: number, y: number, r: number): Enemy[] {
+    return this.enemies.filter((e) => e.alive && Math.hypot(e.x - x, e.y - y) <= r)
+  }
+
+  /** Spike Strip: the only one that stays. See `tickHazards`. */
+  private powerHazard(p: HeroPowerDef, x: number, y: number): void {
+    this.hazards.push({
+      state: makeHazard(p, x, y),
+      // Under the entities, like the lane wash: it is painted on the road.
+      art: hazardBand(this, x, y, p.radius, this.hero.def.colour, GROUND_DEPTH + 3),
+    })
+  }
+
+  /**
+   * Every live Spike Strip, one frame on.
+   *
+   * On the SCALED clock, with the rest of the simulation: a strip that lasted
+   * eight real seconds while the world ran at double speed would last four
+   * waves' worth of walking at one speed and two at another.
+   *
+   * Ticks are a COUNT, not a boolean, so a long frame charges twice rather
+   * than dropping one — a hazard whose damage depends on the frame rate is a
+   * hazard that cannot be balanced.
+   */
+  private tickHazards(dt: number): void {
+    for (let i = this.hazards.length - 1; i >= 0; i--) {
+      const h = this.hazards[i]!
+      const ticks = tickHazard(h.state, dt)
+      for (let t = 0; t < ticks; t++) {
+        for (const e of this.enemiesNear(h.state.x, h.state.y, h.state.radius)) {
+          this.damageEnemy(e, h.state.def.damage, h.state.def.ignoresArmor, 0, false)
+          floatingDamage(this, e.x, e.centreY, h.state.def.damage, false)
+          e.applySlow(h.state.def.slowFactor, h.state.def.slowSeconds, RULES.combat.slowDiminish)
+        }
+      }
+      h.art.update(h.state.left / Math.max(0.0001, h.state.def.durationSeconds))
+      if (hazardExpired(h.state)) {
+        h.art.destroy()
+        this.hazards.splice(i, 1)
+      }
+    }
+  }
+
+  /** Takes every strip off the board. A run ending must not leave one behind
+   *  for the next one, and the scene is restarted rather than rebuilt. */
+  private clearHazards(): void {
+    for (const h of this.hazards) h.art.destroy()
+    this.hazards.length = 0
   }
 
   /**
@@ -2668,6 +3245,10 @@ export class GameScene extends Phaser.Scene {
         left -= 1
         if (!target.alive || left < 0) { tick.remove(); return }
         this.damageEnemy(target, k.burnPerSecond, k.ignoresArmor, 0, false)
+        // The burn is most of Ember's damage and it was silent: a blast puff
+        // with no number reads as decoration rather than as the ability still
+        // working.
+        floatingDamage(this, target.x, target.centreY, k.burnPerSecond, false)
         playEffect(this, ART.fx.blast, target.x, target.centreY, {
           size: 34, depth: target.y + 8, durationMs: EFFECT_MS.hitSparkMs,
         })
@@ -2686,22 +3267,36 @@ export class GameScene extends Phaser.Scene {
     // absent the Enemy class loses its Phaser base and satisfies neither form,
     // and this is how every other call site in this file reads. See CLAUDE.md
     // on tsdiff -- AbilityRunner has carried the identical artifact for months.
-    for (const e of withinRadius(this.enemies, this.hero.x, this.hero.y, k.radius)) {
+    for (const e of this.enemiesNear(this.hero.x, this.hero.y, k.radius)) {
       this.damageEnemy(e, k.damage, k.ignoresArmor, 0, false)
+      // It was the only slot 1 that dealt damage and printed no number, so a
+      // Shockwave into a crowd read as a flash with nothing behind it.
+      floatingDamage(this, e.x, e.centreY, k.damage, false)
       e.applyStun(k.stunSeconds, RULES.combat.stunLockoutMultiple, RULES.combat.stunDiminish)
     }
   }
 
-  /** Bark: no damage at all, and everything nearby slows down. */
+  /**
+   * Bark: no damage at all, and everything nearby slows down.
+   *
+   * THE ONE SKILL WITH NOTHING TO SHOW FOR ITSELF, which is why playtesting
+   * reported it as doing nothing. Every other slot 1 lands a damage number, a
+   * spark or a blast; Bark deals zero by design, so the only feedback it had
+   * was a 3px cream ring at 0.8 alpha that faded in under half a second — over
+   * a painted map, at gameplay zoom, next to a hero who is mid-swing.
+   *
+   * It gets the shared placeholder ring now, tinted to Bailey and drawn at the
+   * radius the rule actually uses, plus a mark on each enemy it caught. A slow
+   * that nothing acknowledges is indistinguishable from a slow that missed.
+   */
   private skillHowl(k: HeroSkillDef): void {
-    const ring = this.add.graphics().setDepth(OVERLAY_DEPTH)
-    ring.lineStyle(3, 0xf6ecd9, 0.8).strokeCircle(this.hero.x, this.hero.y, k.radius)
-    this.tweens.add({
-      targets: ring, alpha: 0, duration: 420, ease: 'Quad.easeOut',
-      onComplete: () => ring.destroy(),
-    })
-    for (const e of withinRadius(this.enemies, this.hero.x, this.hero.y, k.radius)) {
+    expandingRing(this, this.hero.x, this.hero.y, k.radius, this.hero.def.colour, OVERLAY_DEPTH)
+    play(this, 'hero-hit', 0.4)
+    for (const e of this.enemiesNear(this.hero.x, this.hero.y, k.radius)) {
       e.applySlow(k.slowFactor, k.slowSeconds, RULES.combat.slowDiminish)
+      // Named rather than numbered: there is no damage to print, and a "0"
+      // floating off an enemy reads as the skill failing.
+      floatingDamage(this, e.x, e.centreY, 0, false, 'SLOW')
     }
   }
 
@@ -3081,6 +3676,13 @@ export class GameScene extends Phaser.Scene {
     // The camera runs on real time. It is feel, not simulation, and a camera
     // that eased 40% faster would read as twitchy rather than as brisk.
     this.rig.update(real)
+
+    // Real time as well, and for the same reason: it is the board saying it is
+    // waiting for a tap, and it has to keep saying so while the world is held
+    // still for a hit pause or a wind-up.
+    this.pulseTargetArea()
+    // The scaled clock, with the rest of the simulation.
+    this.tickHazards(dt)
 
     if (this.status.phase === 'won' || this.status.phase === 'lost') return
 
@@ -3563,18 +4165,34 @@ export class GameScene extends Phaser.Scene {
     const g = this.garrisons.find((q) => q.tower === tower)
     if (!g) return
     const { spot, refused } = rallyFromTap(this.lanes, { x: tower.x, y: tower.y }, tower.range, x, y)
+    // THE TWO REFUSALS ARE NOT THE SAME REFUSAL, and they get different
+    // answers. `out-of-range` is the right idea at the wrong distance -- the
+    // ring is small and the lane wanders in and out of it -- so it keeps the
+    // tower selected and flashes the ring, which is what makes a second try
+    // one tap rather than three. `no-lane` is a tap at nothing, which is the
+    // player leaving; it exits the mode, like a tap off the legal area for an
+    // ability. Both are said out loud either way: a control used with a thumb
+    // on a moving board that silently does nothing reads as broken.
     if (!spot) {
-      this.status.message = refused === 'out-of-range'
-        ? 'Too far. The lads stay inside the ring.'
-        : 'Nothing to guard there.'
-      // The ring flashes with the words, so the refusal has a shape as well as
-      // a sentence -- the reason is "outside THAT", and that is the ring.
-      this.flashRange(tower)
+      if (refused === 'out-of-range') {
+        this.status.message = 'Too far. The lads stay inside the ring — tap closer, or CANCEL.'
+        this.flashRange(tower)
+        play(this, 'error')
+        return
+      }
+      this.clearSelection('outside')
+      this.status.message = 'Nothing to guard there.'
+      play(this, 'error')
       return
     }
+    // The request is NOT resolved here, deliberately. An accepted rally order
+    // does not end the mode: the tower is still selected, the lads can still
+    // be moved again, and CANCEL is still the way out of that. The mode ends
+    // when the selection does, which `syncTargeting` derives.
     g.rally = spot
     this.manGarrison(g)
     this.drawRallyMark(spot)
+    this.syncTargeting()
     this.status.message = `${tower.def.name}: holding the ${spot.laneId} lane.`
   }
 

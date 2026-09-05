@@ -105,3 +105,15 @@ export function label(scene: Phaser.Scene, x: number, y: number, text: string, s
     .text(x, y, text, { fontFamily: FONT_UI, fontSize: `${uiSize(size)}px`, color })
     .setOrigin(0.5)
 }
+
+/**
+ * A Phaser colour number as the CSS string a Text style wants.
+ *
+ * Colours live in presentation.json as numbers, because that is what every
+ * Graphics call takes; text is the one consumer that needs a string, and the
+ * four-term conversion was being written out by hand at each call site. One of
+ * those copies forgot the pad and produced `#f6ecd` for a five-digit value.
+ */
+export function hexColour(n: number): string {
+  return `#${Math.max(0, Math.round(n)).toString(16).padStart(6, '0')}`
+}

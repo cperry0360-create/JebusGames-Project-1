@@ -553,7 +553,7 @@ test('Haymaker is a real burst with knockback', () => {
   assert.ok(c.slot1.cooldown > 0)
 })
 
-test('every hero declares a whole slot 1, and slot 2 is honestly empty', () => {
+test('every hero declares a whole slot 1 and a whole slot 2', () => {
   // ONE BLOCK OF FIELDS FOR ALL FIVE. Every skill declares every field, zeros
   // included, so a reader can see what Bark does NOT do and a new hero cannot
   // half-declare itself and read `undefined` as 0 at some later call site.
@@ -561,6 +561,10 @@ test('every hero declares a whole slot 1, and slot 2 is honestly empty', () => {
     'ignoresArmor', 'knockbackPixels', 'stunSeconds', 'slowFactor', 'slowSeconds',
     'burnPerSecond', 'burnSeconds', 'hits', 'gapSeconds', 'sound', 'voice']
   const EFFECTS = ['punch', 'burst', 'burn', 'double', 'howl']
+  const POWER_FIELDS = ['name', 'icon', 'effect', 'cooldown', 'targeted', 'castRadius',
+    'radius', 'damage', 'ignoresArmor', 'hits', 'gapSeconds', 'durationSeconds',
+    'tickSeconds', 'slowFactor', 'slowSeconds', 'knockbackPixels', 'stunSeconds', 'sound']
+  const POWER_EFFECTS = ['hazard', 'burst', 'bomb', 'rain', 'dash']
   const cues = Object.keys(read('audio').cues)
   const names = new Set<string>()
   for (const [id, h] of heroEntries()) {
@@ -580,12 +584,37 @@ test('every hero declares a whole slot 1, and slot 2 is honestly empty', () => {
       assert.ok(cues.includes(h.slot1.voice), `${id}'s voice line "${h.slot1.voice}" is not a cue`)
     }
 
-    // SLOT 2 IS RESERVED, NOT BUILT. `effect: null` is the whole of what says
-    // so, and it is checked here so that filling it in later cannot be done
-    // half way -- the day it gains an effect, this test is what asks whether
-    // everything else about it was finished too.
-    assert.deepEqual(Object.keys(h.slot2), ['name', 'icon', 'effect'])
-    assert.equal(h.slot2.effect, null, `${id}'s slot 2 claims an effect it does not have`)
+    // SLOT 2 IS BUILT NOW, and this is the test that said it had to be
+    // finished all the way if it was ever filled in. The same shape for all
+    // five, the same rule for all five, and every field declared with zeros
+    // where a power does not use one.
+    assert.deepEqual(Object.keys(h.slot2), POWER_FIELDS, `${id}'s slot 2 is not the shared shape`)
+    assert.ok(POWER_EFFECTS.includes(h.slot2.effect), `${id}'s slot 2 has no known effect`)
+    assert.equal(h.slot2.cooldown, 12.5, `${id}'s power does not carry the shared cooldown`)
+    assert.equal(h.slot2.targeted, true, `${id}'s power is not placed on the map`)
+    assert.ok(h.slot2.castRadius > 0, `${id}'s power has no reach from the hero`)
+    assert.ok(h.slot2.radius > 0, `${id}'s power has no size`)
+    assert.ok(h.slot2.damage > 0, `${id}'s power does nothing`)
+    assert.ok(cues.includes(h.slot2.sound), `${id}'s power plays "${h.slot2.sound}", not a cue`)
+    // The one that persists is the one that says how long for, and it is the
+    // only one: `durationSeconds` on a burst would be a field nothing reads.
+    if (h.slot2.effect === 'hazard') {
+      assert.ok(h.slot2.durationSeconds > 0, `${id}'s hazard does not last`)
+      assert.ok(h.slot2.tickSeconds > 0, `${id}'s hazard never charges anything`)
+      assert.ok(h.slot2.slowFactor < 1, `${id}'s hazard does not slow`)
+    }
+    if (h.slot2.effect === 'rain') {
+      assert.ok(h.slot2.hits > 1, 'a rain of one is a bomb')
+      assert.ok(h.slot2.gapSeconds > 0, 'a rain with no gap lands all at once')
+    }
+    if (h.slot2.effect === 'dash') {
+      assert.ok(h.slot2.knockbackPixels > 0, 'a dash that knocks nothing back is a walk')
+    }
+    // The hero's own tint, used by every placeholder effect either button
+    // draws. On the hero, not on the power: it is a fact about the character.
+    assert.equal(typeof h.colour, 'number', `${id} has no colour`)
+    assert.equal(typeof h.artFacing, 'string', `${id} does not say which way its art faces`)
+    assert.ok(['left', 'right'].includes(h.artFacing), `${id}'s artFacing is not a side`)
 
     // Distinct names, or the bar has two buttons the player cannot tell apart.
     for (const n of [h.slot1.name, h.slot2.name]) {

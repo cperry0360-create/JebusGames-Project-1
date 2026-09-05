@@ -136,7 +136,14 @@ The game is a serious tower defense wrapped in a silly world. Mechanics are hone
 ## Heroes
 
 Heroes are named after the developer's family. Get the names and spellings right:
-Cory, Courtland, Elijah, Han (full name Hsiaohan), and Bailey the dog.
+Cory, Courtland, Eli, Han (full name Hsiaohan), and Bailey the dog.
+
+**Eli, in the game. Elijah, the person.** The roster shipped calling him ELIJAH
+on the loadout picker and Eli everywhere else. The hero is Eli — `heroes.json`
+is the one place that decides it, and every UI string reads from there.
+`ATTRIBUTIONS.md` and the notes in `audio.json` credit Elijah by his full name,
+because those are about a person who recorded three lines rather than about a
+character.
 
 Cory works in **tax**, not audit. This matters.
 
