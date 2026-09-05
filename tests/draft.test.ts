@@ -14,10 +14,17 @@ const pool = Object.entries(towers).map(([id, t]: [string, any]) => ({
 }))
 
 test('every tower has a draw weight and every weight names a real tower', () => {
+  // A weight may be the shared pool's or a single level's. The Ima Dummy Tower
+  // is level 1's only, so it has no entry in draft.json and must still have a
+  // weight somewhere -- a tower nothing can draw is a tower nobody will see.
+  const levels = read('levels').levels
+  const extras: Record<string, number> = {}
+  for (const l of levels) Object.assign(extras, l.extraTowerWeights ?? {})
+  const everyWeight = { ...draft.towerWeights, ...extras }
   for (const id of Object.keys(towers)) {
-    assert.ok(draft.towerWeights[id] > 0, `${id} has no draw weight`)
+    assert.ok(everyWeight[id] > 0, `${id} has no draw weight in draft.json or on any level`)
   }
-  for (const id of Object.keys(draft.towerWeights)) {
+  for (const id of Object.keys(everyWeight)) {
     assert.ok(towers[id], `weight refers to unknown tower ${id}`)
   }
 })

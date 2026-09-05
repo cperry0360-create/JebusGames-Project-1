@@ -83,12 +83,19 @@ test('slow reduces speed only while applied', () => {
 
 // ------------------------------------------------------------------ towers
 
-test('there are six towers and every one is distinct', () => {
-  assert.equal(towerList.length, 6)
+test('there are seven towers and every one is distinct', () => {
+  assert.equal(towerList.length, 7)
+  // The Ima Dummy Tower is left out of the damage comparison for the same
+  // reason the support tower is: it has no damage and no fire interval, so
+  // "shares a fire interval with another tower" is true of it and means
+  // nothing. Its cost and range are still held apart from everyone else's.
+  const shooters = towerList.filter(([, t]) => t.archetype !== 'support' && t.damage > 0)
   for (const field of ['range', 'damage', 'fireInterval', 'cost'] as const) {
-    const values = towerList.filter(([, t]) => t.archetype !== 'support').map(([, t]) => t[field])
+    const values = shooters.map(([, t]) => t[field])
     assert.equal(new Set(values).size, values.length, `two towers share the same ${field}`)
   }
+  const costs = towerList.map(([, t]) => t.cost)
+  assert.equal(new Set(costs).size, costs.length, 'two towers cost the same')
 })
 
 test('towers cover the archetypes that matter against ground enemies', () => {
@@ -104,9 +111,12 @@ test('every tower places instantly at tier 1, and no higher tier is instant', ()
   // two specializations rather than a step, so both have to cost time too.
   for (const [id, t] of towerList) {
     assert.equal(t.buildTime, undefined, `${id} still carries the dead buildTime field`)
-    assert.equal(t.tiers.length, 1, `${id} should have exactly one linear tier above the first`)
+    // At least one linear tier, then the branch. The Ima Dummy Tower has two,
+    // which puts its choice at tier 4 -- the mechanism was always generic and
+    // "exactly one" was a fact about the six towers that existed.
+    assert.ok(t.tiers.length >= 1, `${id} should have at least one linear tier above the first`)
     assert.equal(t.specializations.length, 2,
-      `${id} needs two mutually exclusive tier-3 specializations`)
+      `${id} needs two mutually exclusive specializations at its top tier`)
     for (const step of [...t.tiers, ...t.specializations]) {
       assert.ok(step.buildSeconds > 0, `${id}: "${step.name ?? 'tier 2'}" would be instant`)
     }
@@ -131,12 +141,17 @@ test('upgrades cost more than the tower and get stronger each tier', () => {
       // A specialization is allowed one deliberate trade-off — a slower gun
       // that hits far harder, a tighter blast that hurts more — so it only has
       // to be a net gain, not better at everything.
-      const better = gains.filter(([k, v]) => (k === 'fireInterval' ? (v as number) < 1 : (v as number) > 1))
+      const better = gains.filter(([k, v]) => (k === 'fireInterval' || k === 'soldierInterval'
+        ? (v as number) < 1 : (v as number) > 1))
       assert.ok(better.length > 0, `${id} tier ${i + 2} improves nothing`)
       if (i === 0) {
         for (const [k, v] of gains) {
-          if (k === 'fireInterval') assert.ok(v < 1, `${id} tier 2 fires slower, not faster`)
-          else assert.ok(v > 1, `${id} tier 2 makes ${k} worse`)
+          // An INTERVAL is better when it is smaller, whether it is the gun's
+          // or a soldier's. Only the gun's was special-cased, so the dummy
+          // tower's faster lads read as a downgrade.
+          if (k === 'fireInterval' || k === 'soldierInterval') {
+            assert.ok(v < 1, `${id} tier 2 makes ${k} slower, not faster`)
+          } else assert.ok(v > 1, `${id} tier 2 makes ${k} worse`)
         }
       }
     }

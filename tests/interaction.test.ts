@@ -155,9 +155,14 @@ const towerList = Object.entries(towers) as [string, any][]
 test('tier 1 is what you build and every tier above it costs time', () => {
   for (const [id, def] of towerList) {
     assert.equal(BASE_TIER, 1)
-    assert.equal(maxTier(def), 3, `${id} should top out at tier 3`)
-    // Tier 3 is a choice, so nextStep runs out one tier early by design.
-    assert.ok(atSpecChoice(def, 2), `${id} tier 3 should be a specialization choice`)
+    // DERIVED, not fixed at 3. The branch has always been generic -- maxTier is
+    // one above the linear steps -- and the Ima Dummy Tower is the first tower
+    // to use it, with two linear tiers and its choice at tier 4. Hardcoding 3
+    // was a fact about the six towers that existed, not about the mechanism.
+    const top = BASE_TIER + def.tiers.length + 1
+    assert.equal(maxTier(def), top, `${id} should top out at tier ${top}`)
+    // The top tier is a choice, so nextStep runs out one tier early by design.
+    assert.ok(atSpecChoice(def, top - 1), `${id} tier ${top} should be a specialization choice`)
     assert.equal(nextStep(def, maxTier(def)), null, `${id} offers an upgrade past its top tier`)
     assert.ok(isMaxed(def, maxTier(def)))
     assert.ok(!isMaxed(def, BASE_TIER))
@@ -173,16 +178,31 @@ test('a tier actually makes the tower better', () => {
     // Every specialization has to be a real step up on the tier it comes from.
     for (const spec of def.specializations) {
       const gains = def.supportRadius > 0
-        ? [['supportDamageBonus', 'supportRadius']]
-        : [['damage', 'range', 'fireInterval', 'splashRadius', 'slowSeconds', 'armorPierce']]
-      const better = gains[0].some((k) => {
-        const at2 = statAt(def, 2, k as never)
-        const at3 = statAt(def, 3, k as never, spec.id)
-        return k === 'fireInterval' ? at3 < at2 : at3 > at2
+        ? ['supportDamageBonus', 'supportRadius']
+        : (def.soldierCount ?? 0) > 0
+          ? ['soldierCount', 'soldierHealth', 'soldierDamage', 'soldierInterval']
+          : ['damage', 'range', 'fireInterval', 'splashRadius', 'slowSeconds', 'armorPierce']
+      // The branch is compared against the tier it comes FROM, which is one
+      // below the top rather than always tier 2.
+      const from = maxTier(def) - 1
+      const lowerIsBetter = (k: string) => k === 'fireInterval' || k === 'soldierInterval'
+      const better = gains.some((k) => {
+        const below = statAt(def, from, k as never)
+        const at = statAt(def, from + 1, k as never, spec.id)
+        return lowerIsBetter(k) ? at < below : at > below
       })
-      assert.ok(better, `${id}'s ${spec.name} is not better than tier 2 at anything`)
+      // A branch that changes BEHAVIOUR rather than a number is a real step up
+      // too -- Rage is exactly that, and the numbers it changes live on the
+      // soldier at runtime rather than in the stat table.
+      const behaves = spec.rageBelowHealth !== undefined
+      assert.ok(better || behaves, `${id}'s ${spec.name} is not better than tier ${from} at anything`)
     }
     if (def.supportRadius > 0) continue
+    if ((def.soldierCount ?? 0) > 0) {
+      assert.ok(statAt(def, 2, 'soldierHealth' as never) > statAt(def, 1, 'soldierHealth' as never),
+        `${id} tier 2 is not stronger`)
+      continue
+    }
     assert.ok(statAt(def, 2, 'damage') > statAt(def, 1, 'damage'), `${id} tier 2 is not stronger`)
   }
 })

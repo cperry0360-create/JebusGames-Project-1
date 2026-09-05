@@ -24,7 +24,7 @@ import { boardBounds, coverZoom, openingView } from '../systems/CameraMath.ts'
 import { distanceAtX, type EmergeConfig } from '../systems/Gateway.ts'
 import { makeRng } from '../systems/Draft.ts'
 import { dashArcs, HeroMarkers, type MarkersDef } from '../systems/HeroMarkers.ts'
-import { ART, applyRender, fitContentHeight, fitContentWidth } from '../systems/Art.ts'
+import { ART, applyRender, fitContentHeight, fitContentWidth, soldierSprite } from '../systems/Art.ts'
 import { EFFECT_MS, playEffect, sizeForRadius } from '../systems/Effects.ts'
 import { Cooldowns } from '../systems/Cooldowns.ts'
 import { unlockedTowerCount } from '../systems/Draft.ts'
@@ -37,6 +37,8 @@ import type { Blocker } from '../entities/Enemy.ts'
 import { Tower } from '../entities/Tower.ts'
 import { Hero } from '../entities/Hero.ts'
 import { Fighter } from '../entities/Fighter.ts'
+import { Soldier } from '../entities/Soldier.ts'
+import { defaultRally, rallyFromTap, soldierStations, type RallySpot } from '../systems/Rally.ts'
 import { Projectile } from '../entities/Projectile.ts'
 import { ScratchCard } from '../ui/ScratchCard.ts'
 import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
@@ -217,6 +219,16 @@ export class GameScene extends Phaser.Scene {
   private towers: Tower[] = []
   private shots: Projectile[] = []
   private fighters: Fighter[] = []
+  /**
+   * One per Ima Dummy Tower: its lads, and the point they hold.
+   *
+   * Kept beside the towers rather than on them because a Tower is a display
+   * object for a building, and these are display objects for people standing
+   * somewhere else entirely.
+   */
+  private garrisons: Array<{ tower: Tower; rally: RallySpot | null; soldiers: Soldier[] }> = []
+  /** The marker under the selected tower's rally point. */
+  private rallyMark?: Phaser.GameObjects.Graphics
 
   /** One marker per build spot, created once and then shown or hidden. */
   private pads: Phaser.GameObjects.Image[] = []
@@ -353,6 +365,7 @@ export class GameScene extends Phaser.Scene {
     this.towers = []
     this.shots = []
     this.fighters = []
+    this.garrisons = []
     this.hoverSpot = null
     this.selected = null
     this.restructuring = null
@@ -1489,6 +1502,15 @@ export class GameScene extends Phaser.Scene {
       return
     }
 
+    // Bare ground with an Ima Dummy Tower selected: post the lads there. Read
+    // AFTER the pad and tower checks above, so selecting the next tower or
+    // building on the next pad still works while one is selected -- only a tap
+    // that would otherwise have deselected becomes an order.
+    if (this.selected?.isDeployer) {
+      this.orderRally(this.selected, w.x, w.y)
+      return
+    }
+
     // Bare ground. It is only an order when the hero is actually selected,
     // so a misjudged tap cannot walk him off his post.
     if (this.heroSelected) {
@@ -1815,6 +1837,7 @@ export class GameScene extends Phaser.Scene {
     this.build.occupy(spot.index)
     const tower = new Tower(this, spot.x, spot.y, id, def, spot.index)
     tower.distanceToExit = this.roadLeftFrom(spot.x, spot.y)
+    this.raiseGarrison(tower)
     // A finished tier changes the board, so it is saved like any other change
     // to it — and it is the moment an upgrade becomes real, since the tier
     // number only moves when the work completes.
@@ -1836,6 +1859,7 @@ export class GameScene extends Phaser.Scene {
     this.selected = null
     this.projectedRing.clear()
     this.laneWash.clear()
+    this.drawRallyMark(null)
   }
 
   private selectTower(tower: Tower): void {
@@ -1850,7 +1874,14 @@ export class GameScene extends Phaser.Scene {
     // grass does not answer it on its own.
     this.drawCoveredLane(tower)
     const bonus = tower.supportBonus > 0 ? `  ·  +${Math.round(tower.supportBonus * 100)}% lit` : ''
-    this.status.message = `${tower.def.name}, tier ${tower.tier}${bonus}`
+    if (tower.isDeployer) {
+      const g = this.garrisons.find((q) => q.tower === tower)
+      this.drawRallyMark(g?.rally ?? null)
+      this.status.message = `${tower.def.name}, tier ${tower.tier}. Tap the road to move the lads.`
+    } else {
+      this.drawRallyMark(null)
+      this.status.message = `${tower.def.name}, tier ${tower.tier}${bonus}`
+    }
     this.openTowerRing(tower)
   }
 
@@ -2695,6 +2726,7 @@ export class GameScene extends Phaser.Scene {
       const tower = new Tower(this, spot.x, spot.y, t.id, def, t.spot)
       tower.distanceToExit = this.roadLeftFrom(spot.x, spot.y)
       tower.restoreTier(t.tier, t.spec)
+      this.raiseGarrison(tower)
       tower.on('tierup', () => this.onBoardChanged())
       this.towers.push(tower)
     }
@@ -3077,6 +3109,7 @@ export class GameScene extends Phaser.Scene {
     this.tickTax(dt)
     this.tickSummons(dt)
     this.tickTowerDisable(dt)
+    this.tickGarrisons(dt)
     this.trackBoss()
 
     this.tickEngagement()
@@ -3410,6 +3443,130 @@ export class GameScene extends Phaser.Scene {
     this.status.message = `${boss.def.name} is here. He does not attack — he taxes. Spend your peanuts.`
   }
 
+  /**
+   * Stands up an Ima Dummy Tower's lads, at the nearest lane point in range.
+   *
+   * THE DEFAULT IS A REAL DEFAULT, not a placeholder: a tower built beside the
+   * road is immediately useful, and the rally point is something a player moves
+   * when they want to rather than something they must set before the tower does
+   * anything.
+   */
+  private raiseGarrison(tower: Tower): void {
+    if (!tower.isDeployer) return
+    const rally = defaultRally(this.lanes, { x: tower.x, y: tower.y }, tower.range)
+    const g = { tower, rally, soldiers: [] as Soldier[] }
+    this.garrisons.push(g)
+    this.manGarrison(g)
+  }
+
+  /**
+   * Brings a garrison up to the strength its tier calls for, and posts everyone.
+   *
+   * Called on every tier change as well as at build time, because `Need a
+   * Friend?` is exactly a change in this number -- the third lad walks on when
+   * the branch finishes, at the same rally point as the other two.
+   */
+  private manGarrison(g: { tower: Tower; rally: RallySpot | null; soldiers: Soldier[] }): void {
+    const want = g.tower.soldierCount
+    const art = soldierSprite(g.tower.def.sprite, g.tower.tier)
+    const stations = g.rally
+      ? soldierStations(this.lanes, g.rally, want)
+      : Array.from({ length: want }, () => ({ x: g.tower.x, y: g.tower.y }))
+    while (g.soldiers.length < want) {
+      const at = stations[g.soldiers.length]!
+      const s = new Soldier(this, at.x, at.y, g.tower.soldierHealth, art)
+      // A lad who arrives mid-wave walks on rather than appearing in a fight.
+      g.soldiers.push(s)
+    }
+    for (const [i, s] of g.soldiers.entries()) {
+      const at = stations[i] ?? stations[0]!
+      s.postTo(at.x, at.y)
+      // A tier raises the living as well as the newly arrived: the numbers are
+      // the tower's, not a snapshot taken when the soldier was made.
+      const full = g.tower.soldierHealth
+      if (full !== s.maxHealth) {
+        const share = s.maxHealth > 0 ? s.health / s.maxHealth : 1
+        s.maxHealth = full
+        s.health = Math.max(1, Math.round(full * share))
+      }
+    }
+  }
+
+  /** Every garrison, one frame: respawns, orders and swings. */
+  private tickGarrisons(dt: number): void {
+    // Who is holding whom, read off the enemies rather than tracked twice.
+    const held = new Map<Soldier, Enemy>()
+    for (const e of this.enemies) {
+      if (e.blocker instanceof Soldier) held.set(e.blocker, e)
+    }
+    for (const g of this.garrisons) {
+      if (g.soldiers.length !== g.tower.soldierCount) this.manGarrison(g)
+      const rage = g.tower.rage
+      for (const s of g.soldiers) {
+        // RAGE IS STICKY FOR THE LIFE, and checked before the swing so the
+        // hit that takes a soldier under the line is not itself enraged --
+        // "below 35%" is a state it enters, not a bonus on the blow.
+        if (rage && !s.enraged && s.health > 0 && s.health / s.maxHealth < rage.below) {
+          s.enraged = true
+        }
+        const damage = g.tower.soldierDamage * (s.enraged && rage ? rage.damage : 1)
+        const interval = g.tower.soldierInterval * (s.enraged && rage ? rage.interval : 1)
+        s.tick(dt, held.get(s) ?? null, g.tower.soldierRespawn, damage, interval,
+          (enemy, dmg) => this.damageEnemy(enemy, dmg, false, 0))
+      }
+    }
+  }
+
+  /**
+   * A tap on the map while an Ima Dummy Tower is selected.
+   *
+   * REFUSALS ARE SAID OUT LOUD. A control used with a thumb on a moving board
+   * that silently does nothing is indistinguishable from one that is broken,
+   * and this one is refused often by design -- the ring is small and the lane
+   * wanders in and out of it.
+   */
+  private orderRally(tower: Tower, x: number, y: number): void {
+    const g = this.garrisons.find((q) => q.tower === tower)
+    if (!g) return
+    const { spot, refused } = rallyFromTap(this.lanes, { x: tower.x, y: tower.y }, tower.range, x, y)
+    if (!spot) {
+      this.status.message = refused === 'out-of-range'
+        ? 'Too far. The lads stay inside the ring.'
+        : 'Nothing to guard there.'
+      // The ring flashes with the words, so the refusal has a shape as well as
+      // a sentence -- the reason is "outside THAT", and that is the ring.
+      this.flashRange(tower)
+      return
+    }
+    g.rally = spot
+    this.manGarrison(g)
+    this.drawRallyMark(spot)
+    this.status.message = `${tower.def.name}: holding the ${spot.laneId} lane.`
+  }
+
+  /** A quick pulse of the selected tower's range ring, for a refused order. */
+  private flashRange(tower: Tower): void {
+    const ring = this.add.graphics()
+    ring.lineStyle(4, 0xff6b6b, 0.9).strokeCircle(tower.x, tower.y, tower.range)
+    ring.setDepth(tower.y - 2)
+    this.tweens.add({
+      targets: ring, alpha: 0, duration: 480, ease: 'Quad.easeOut',
+      onComplete: () => ring.destroy(),
+    })
+  }
+
+  /** Where the lads have been told to stand. */
+  private drawRallyMark(spot: RallySpot | null): void {
+    this.rallyMark?.destroy()
+    this.rallyMark = undefined
+    if (!spot) return
+    const g = this.add.graphics()
+    g.lineStyle(3, 0xf0a830, 0.95).strokeCircle(spot.x, spot.y, 14)
+    g.lineStyle(2, 0xf0a830, 0.6).strokeCircle(spot.x, spot.y, 22)
+    g.setDepth(spot.y - 3)
+    this.rallyMark = g
+  }
+
   /** The hero and any summoned fighters hold enemies up. Whoever is closest
    *  to the exit gets held first, since they are the real threat. */
   private tickEngagement(): void {
@@ -3419,6 +3576,15 @@ export class GameScene extends Phaser.Scene {
     }
     for (const f of this.fighters) {
       if (f.alive) holders.push({ who: f, range: this.hero.def.blockRange, capacity: 1 })
+    }
+    // The Ima Dummy Tower's lads, on exactly the same terms. This is why the
+    // feature was mostly data: blocking already existed for the hero and the
+    // gnomes, and a soldier is a Blocker like they are -- ONE enemy each, and
+    // an enemy with no free blocker keeps walking.
+    for (const g of this.garrisons) {
+      for (const s of g.soldiers) {
+        if (s.alive) holders.push({ who: s, range: g.tower.soldierBlockRange, capacity: 1 })
+      }
     }
     const live = new Map(holders.map((h) => [h.who, h]))
 

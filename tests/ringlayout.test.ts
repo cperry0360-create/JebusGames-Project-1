@@ -5,6 +5,7 @@ import {
   type Rect, contains, fitRingAndPanel, overlap, panelPlacement, ringPlacement, usableArea,
 } from '../src/systems/RingLayout.ts'
 import { hudLayout } from '../src/systems/HudLayout.ts'
+import DRAFT from '../src/data/draft.json' with { type: 'json' }
 
 const url = (p: string) => new URL(p, import.meta.url)
 const read = (n: string) => JSON.parse(readFileSync(url(`../src/data/${n}.json`), 'utf8'))
@@ -48,8 +49,14 @@ const INSETS = [
 /** How many options each menu can offer. */
 function optionCounts(): number[] {
   const counts = new Set<number>()
-  // Build: one per unlocked tower, from one up to every tower in the game.
-  for (let n = 1; n <= Object.keys(TOWERS).length; n++) counts.add(n)
+  // Build: one per UNLOCKED tower, from one up to the cap on how many types a
+  // run can hold at once. It used to sweep to every tower in the game, which
+  // was the same number until a seventh tower existed -- and a seventh cell is
+  // a ring the smallest supported screen genuinely cannot fit. The run can
+  // never offer more than `unlockedTypeCap`, so sweeping past it was testing a
+  // menu the game cannot produce.
+  const cap = Math.min(DRAFT.unlockedTypeCap, Object.keys(TOWERS).length)
+  for (let n = 1; n <= cap; n++) counts.add(n)
   // Upgrade: sell alone, upgrade + sell, or both branches + sell.
   counts.add(1)
   counts.add(2)
@@ -330,7 +337,10 @@ test('every ring button is near the pad it belongs to', () => {
     for (const insets of INSETS) {
       const area = areaFor(vw, vh, insets)
       const ph = tallestPanel(area)
-      for (let n = 1; n <= Object.keys(TOWERS).length; n++) {
+      // Bounded by the cap on tower types a run can hold, for the same reason
+      // `optionCounts` is: the build ring cannot offer more cells than that,
+      // so sweeping past it measures a menu the game never shows.
+      for (let n = 1; n <= Math.min(DRAFT.unlockedTypeCap, Object.keys(TOWERS).length); n++) {
         for (let fx = 0; fx <= 1; fx += 0.125) {
           for (let fy = 0; fy <= 1; fy += 0.125) {
             const px = area.x + area.width * fx
@@ -418,7 +428,10 @@ test('the panel narrows rather than sitting on the ring, and never below its flo
     for (const insets of INSETS) {
       const area = areaFor(vw, vh, insets)
       const ph = tallestPanel(area)
-      for (let n = 1; n <= Object.keys(TOWERS).length; n++) {
+      // Bounded by the cap on tower types a run can hold, for the same reason
+      // `optionCounts` is: the build ring cannot offer more cells than that,
+      // so sweeping past it measures a menu the game never shows.
+      for (let n = 1; n <= Math.min(DRAFT.unlockedTypeCap, Object.keys(TOWERS).length); n++) {
         for (let fx = 0; fx <= 1; fx += 0.125) {
           for (let fy = 0; fy <= 1; fy += 0.25) {
             const px = area.x + area.width * fx

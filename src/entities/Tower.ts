@@ -234,6 +234,55 @@ export class Tower extends Phaser.GameObjects.Container {
     return investedIn(this.def, this.tier, this.spec)
   }
 
+  /**
+   * True for a tower that deploys soldiers instead of shooting.
+   *
+   * Asked the same way `isSupport` is, and used the same way: `tick` returns
+   * before it aims. The Ima Dummy Tower has a RANGE -- it is the leash its
+   * rally point is checked against -- so "has a range" stopped being the same
+   * question as "shoots at things", and this is the difference.
+   */
+  get isDeployer(): boolean {
+    return (this.def.soldierCount ?? 0) > 0
+  }
+
+  /** How many lads this tower fields at its current tier. `Need a Friend?`
+   *  multiplies it, which is the whole of that branch. */
+  get soldierCount(): number {
+    return Math.round(statAt(this.def, this.tier, 'soldierCount' as never, this.spec))
+  }
+
+  get soldierHealth(): number {
+    return statAt(this.def, this.tier, 'soldierHealth' as never, this.spec)
+  }
+
+  get soldierDamage(): number {
+    return statAt(this.def, this.tier, 'soldierDamage' as never, this.spec)
+  }
+
+  get soldierInterval(): number {
+    return statAt(this.def, this.tier, 'soldierInterval' as never, this.spec)
+  }
+
+  get soldierRespawn(): number {
+    return this.def.soldierRespawn ?? 10
+  }
+
+  get soldierBlockRange(): number {
+    return this.def.soldierBlockRange ?? 46
+  }
+
+  /** The Rage branch's numbers, or null on any other tower or branch. */
+  get rage(): { below: number; damage: number; interval: number } | null {
+    const spec = specById(this.def, this.spec)
+    if (!spec?.rageBelowHealth) return null
+    return {
+      below: spec.rageBelowHealth,
+      damage: spec.rageDamage ?? 1,
+      interval: spec.rageInterval ?? 1,
+    }
+  }
+
   get isSupport(): boolean {
     return this.def.supportRadius > 0
   }
@@ -401,7 +450,10 @@ export class Tower extends Phaser.GameObjects.Container {
       }
       return
     }
-    if (this.isSupport) return
+    // A tower that deploys has nothing to aim: its lads are ticked by the
+    // scene, which is the only thing that knows where the enemies are AND
+    // which soldier the engagement rule gave each of them.
+    if (this.isSupport || this.isDeployer) return
 
     this.cooldown -= dt
     if (this.cooldown > 0) return

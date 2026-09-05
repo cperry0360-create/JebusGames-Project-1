@@ -98,7 +98,13 @@
     "map-level3": "maps/map_level3.webp",
     "fx-boss-bolt": "effects/boss_projectile.png",
     "fx-stunned": "effects/fx_stunned.png",
-    "card-level3": "ui/card_level3.webp"
+    "card-level3": "ui/card_level3.webp",
+    "turret-dummy": "towers/tower_dummy_1.png",
+    "turret-dummy-t2": "towers/tower_dummy_2.png",
+    "turret-dummy-t3": "towers/tower_dummy_3.png",
+    "unit-dummy-1": "towers/soldier_dummy_1.png",
+    "unit-dummy-2": "towers/soldier_dummy_2.png",
+    "unit-dummy-3": "towers/soldier_dummy_3.png"
   },
   "render": {
     "turret-escalation": {
@@ -636,6 +642,54 @@
         "frameHeight": 499,
         "frames": 6
       }
+    },
+    "turret-dummy": {
+      "anchorX": 0.5015,
+      "anchorY": 1.0,
+      "displayHeight": 87.1,
+      "shadowWidth": 62.6,
+      "contentWidth": 647,
+      "contentHeight": 900
+    },
+    "turret-dummy-t2": {
+      "anchorX": 0.5068,
+      "anchorY": 1.0,
+      "displayHeight": 101.0,
+      "shadowWidth": 66.2,
+      "contentWidth": 590,
+      "contentHeight": 900
+    },
+    "turret-dummy-t3": {
+      "anchorX": 0.5095,
+      "anchorY": 1.0,
+      "displayHeight": 117.0,
+      "shadowWidth": 68.5,
+      "contentWidth": 527,
+      "contentHeight": 900
+    },
+    "unit-dummy-1": {
+      "anchorX": 0.5344,
+      "anchorY": 1.0,
+      "displayHeight": 52.0,
+      "shadowWidth": 19.0,
+      "contentWidth": 524,
+      "contentHeight": 600
+    },
+    "unit-dummy-2": {
+      "anchorX": 0.4731,
+      "anchorY": 1.0,
+      "displayHeight": 52.0,
+      "shadowWidth": 17.5,
+      "contentWidth": 483,
+      "contentHeight": 600
+    },
+    "unit-dummy-3": {
+      "anchorX": 0.4611,
+      "anchorY": 1.0,
+      "displayHeight": 52.0,
+      "shadowWidth": 13.2,
+      "contentWidth": 398,
+      "contentHeight": 600
     }
   },
   "map": {
@@ -733,6 +787,11 @@
       "turret-ledger",
       "turret-ledger-t2",
       "turret-ledger-t3"
+    ],
+    "turret-dummy": [
+      "turret-dummy",
+      "turret-dummy-t2",
+      "turret-dummy-t3"
     ]
   },
   "optional": [
@@ -778,5 +837,12 @@
       "level2": "card-level2",
       "level3": "card-level3"
     }
+  },
+  "soldierTiers": {
+    "turret-dummy": [
+      "unit-dummy-1",
+      "unit-dummy-2",
+      "unit-dummy-3"
+    ]
   }
 }

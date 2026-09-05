@@ -148,6 +148,17 @@ export function specPoints(spec: TowerSpec): string[] {
   if (spec.splashSlowSeconds) parts.push(`splash also slows for ${spec.splashSlowSeconds}s`)
   if (spec.bonusVsArmored) parts.push(`${pct(spec.bonusVsArmored)} damage to armoured`)
   if (spec.stunSeconds) parts.push(`stops the target for ${spec.stunSeconds}s`)
+  // The Ima Dummy Tower's tier-4 branch. Both options are stated in full
+  // BEFORE either is bought -- a choice locked for the run has to be readable
+  // in the panel that offers it, not discovered afterwards.
+  if (spec.rageBelowHealth) {
+    // Two points, not one sentence: the card sets each on its own line, and a
+    // line long enough to wrap is what used to push the button off the panel.
+    parts.push(`under ${Math.round(spec.rageBelowHealth * 100)}% health a lad rages`)
+    parts.push(`raging: ${pct(spec.rageDamage ?? 1)} damage, ` +
+      `${Math.round((1 - (spec.rageInterval ?? 1)) * 100)}% faster, until it dies`)
+  }
+  if (spec.soldierCount) parts.push(`a third lad on the same rally point`)
   if (spec.supportRangeBonus) {
     parts.push(`neighbours also gain ${pct(1 + spec.supportRangeBonus)} range`)
   }

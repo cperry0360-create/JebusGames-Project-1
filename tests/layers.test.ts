@@ -44,10 +44,15 @@ test('every existing enemy is on the ground, so levels 1 to 3 are unchanged', ()
   }
 })
 
-test('every tower that shoots can hit air; the one that does not shoot cannot', () => {
+test('every tower that shoots can hit air; the ones that do not shoot cannot', () => {
+  // "HAS A RANGE" STOPPED BEING "SHOOTS". The Ima Dummy Tower has a range of
+  // 150 because that is the leash its rally point is checked against, and it
+  // deals nothing at all -- so the question is now asked of the gun rather
+  // than of the ring.
   for (const [id, def] of Object.entries(T)) {
     if (!def || typeof def !== 'object' || !('targets' in def)) continue
-    const shoots = (def.range ?? 0) > 0 && !(def.supportRadius ?? 0)
+    const d = def as { damage?: number; fireInterval?: number }
+    const shoots = (d.damage ?? 0) > 0 && (d.fireInterval ?? 0) > 0
     assert.equal(hitsAir(def as never), shoots,
       `${id} ${shoots ? 'shoots but cannot hit air' : 'does not shoot but claims air'}`)
   }

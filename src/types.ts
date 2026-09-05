@@ -245,6 +245,22 @@ export interface TowerDef {
    *  towers do not, which is what keeps armoured units threatening to a
    *  player who brought only AOE. */
   armorPierce: number
+  /**
+   * The Ima Dummy Tower's soldiers. Absent on every tower that shoots.
+   *
+   * ORDINARY STATS, not a nested block, so the tier multipliers in `tiers`
+   * carry them exactly the way they carry `damage` everywhere else -- a
+   * soldier gets tougher because its tier says x1.89, not because a second
+   * mechanism was written for it.
+   */
+  soldierCount?: number
+  soldierHealth?: number
+  soldierDamage?: number
+  soldierInterval?: number
+  /** Seconds a dead soldier takes to come back, mid-wave. */
+  soldierRespawn?: number
+  /** How far a soldier reaches to hold an enemy up. */
+  soldierBlockRange?: number
   /** 0 means no slow. 0.45 means targets move at 45% speed. */
   slowFactor: number
   slowSeconds: number
@@ -282,6 +298,15 @@ export interface TowerSpec extends TowerTier {
   rampMax?: number
   /** Splash also slows for this long. */
   splashSlowSeconds?: number
+  /**
+   * RAGE, the Ima Dummy Tower's first tier-4 branch. A soldier that drops
+   * below `rageBelowHealth` of its maximum keeps `rageDamage` and
+   * `rageInterval` for the rest of that life, and loses them the moment it
+   * respawns at full health.
+   */
+  rageBelowHealth?: number
+  rageDamage?: number
+  rageInterval?: number
   /** Damage multiplier against anything with armour left. */
   bonusVsArmored?: number
   /** Freezes the target outright for this long. */
@@ -310,6 +335,11 @@ export interface TowerTier {
   armorPierce?: number
   supportRadius?: number
   supportDamageBonus?: number
+  /** The Ima Dummy Tower's soldiers, multiplied like every other stat. */
+  soldierCount?: number
+  soldierHealth?: number
+  soldierDamage?: number
+  soldierInterval?: number
 }
 
 export interface TowerUpgradeDef {
@@ -801,4 +831,7 @@ export interface ArtDef {
    *  with no entry keeps one sprite at every tier, which is the default and
    *  needs nothing here. */
   towerTiers?: Record<string, string[]>
+  /** Which soldier art a deploying tower fields at each tier. Same shape and
+   *  same clamp as `towerTiers`. */
+  soldierTiers?: Record<string, string[]>
 }

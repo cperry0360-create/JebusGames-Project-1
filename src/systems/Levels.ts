@@ -42,6 +42,14 @@ export interface LevelDef {
    *  placed from it and the trail between them is generated from it, so
    *  moving a level is one edit in levels.json. */
   mapPosition: [number, number]
+  /**
+   * Towers this level can draw that the shared pool does not offer, with their
+   * draft weights. Absent on every level that draws only the shared pool.
+   *
+   * Additive rather than a replacement so a new tower is one line on one level
+   * -- and so levels 2 and 3 keep drawing exactly what they were tuned against.
+   */
+  extraTowerWeights?: Record<string, number>
 }
 
 /** A level with its data attached, which is what a scene actually wants. */
@@ -81,6 +89,15 @@ export const LEVELS: LevelDef[] = (levelsData as unknown as { levels: LevelDef[]
  *  not a hardcoded 'level1', so reordering levels.json cannot silently
  *  disagree with the code. */
 export const DEFAULT_LEVEL_ID: string = LEVELS[0]!.id
+
+/**
+ * The draft weights for a run on this level: the shared pool plus whatever the
+ * level adds. The one place the two are combined, so the loadout screen and the
+ * soak cannot disagree about what a level can draw.
+ */
+export function towerWeightsFor(id: string, shared: Record<string, number>): Record<string, number> {
+  return { ...shared, ...(levelDef(id)?.extraTowerWeights ?? {}) }
+}
 
 export function levelDef(id: string): LevelDef | null {
   return LEVELS.find((l) => l.id === id) ?? null

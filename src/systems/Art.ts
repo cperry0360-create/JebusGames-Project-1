@@ -55,6 +55,7 @@ export const ART = {
    * entries, three render entries and one line in `towerTiers` — no code.
    */
   towerTiers: art.towerTiers ?? {},
+  soldierTiers: art.soldierTiers ?? {},
 }
 
 /**
@@ -65,6 +66,18 @@ export const ART = {
  */
 export function tierSprite(baseKey: string, tier: number): string {
   const set = (art.towerTiers ?? {})[baseKey]
+  if (!set || set.length === 0) return baseKey
+  return set[Phaser.Math.Clamp(tier - 1, 0, set.length - 1)] ?? baseKey
+}
+
+/**
+ * The soldier art a deploying tower fields at a given tier.
+ *
+ * Same clamp as `tierSprite`, and for the same reason: a tower with four tiers
+ * and three pictures keeps the last one rather than falling off the end.
+ */
+export function soldierSprite(baseKey: string, tier: number): string {
+  const set = (art.soldierTiers ?? {})[baseKey]
   if (!set || set.length === 0) return baseKey
   return set[Phaser.Math.Clamp(tier - 1, 0, set.length - 1)] ?? baseKey
 }

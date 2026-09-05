@@ -26,9 +26,10 @@ import heroesData from '../../src/data/heroes.json' with { type: 'json' }
 import rulesData from '../../src/data/rules.json' with { type: 'json' }
 import draftData from '../../src/data/draft.json' with { type: 'json' }
 
-import { DEFAULT_LEVEL_ID, loadLevel } from '../../src/systems/Levels.ts'
+import { DEFAULT_LEVEL_ID, loadLevel, towerWeightsFor } from '../../src/systems/Levels.ts'
 import { Path } from '../../src/systems/Path.ts'
 import { LaneNetwork, MAIN_LANE, advance, type Walker } from '../../src/systems/Lanes.ts'
+import { defaultRally, soldierStations } from '../../src/systems/Rally.ts'
 import { Disabler } from '../../src/systems/TowerDisable.ts'
 import { BuildSystem } from '../../src/systems/BuildSystem.ts'
 import { WaveSpawner } from '../../src/systems/WaveSpawner.ts'
@@ -116,7 +117,10 @@ interface SimEnemy {
   sinceStun: number
   armorShred: number
   attackTimer: number
-  blocked: boolean
+  /** What is holding this enemy up: the hero, one of the Ima Dummy Tower's
+   *  soldiers, or nothing. A blocked enemy does not move and trades blows with
+   *  whatever is holding it. */
+  blockedBy: 'hero' | SimSoldier | null
   /** The summoner that called this one in, or null for a scripted spawn. A
    *  wave ends when its SCRIPTED spawns are gone, so this is what the
    *  wave-over check filters on. */
@@ -127,6 +131,20 @@ interface SimEnemy {
    *  Held on the enemy so a boss killed mid-windup takes its half-finished
    *  cast with it, as it does in the scene. */
   disabler: Disabler | null
+}
+
+/** One of the Ima Dummy Tower's lads. */
+interface SimSoldier {
+  tower: SimTower
+  x: number
+  y: number
+  health: number
+  maxHealth: number
+  attackTimer: number
+  /** Counts down while dead; 0 means it is on the board. */
+  respawnIn: number
+  /** Sticky for this life, cleared when it comes back at full health. */
+  enraged: boolean
 }
 
 interface SimTower {
@@ -146,6 +164,10 @@ interface SimTower {
   distanceToExit: number
   /** Peanuts sunk into it, kept up to date as tiers are paid for. */
   value: number
+  /** The lads, for an Ima Dummy Tower. Empty for everything that shoots. */
+  soldiers: SimSoldier[]
+  /** Where they stand. Null when no lane comes inside the tower's range. */
+  rally: { x: number; y: number } | null
 }
 
 /**
@@ -183,9 +205,13 @@ export function simulate(
   const hero = HEROES[heroId]
   const pool = Object.keys(ABILITIES).filter((id) => ABILITIES[id].draftable)
   const abilities = draftAbilities(pool, DRAFT.abilitiesDrawn, rng)
-  const towerPool = Object.entries(TOWERS).map(([id, t]: [string, any]) => ({
-    id, weight: DRAFT.towerWeights[id], archetype: t.archetype,
-  }))
+  // The shared pool plus whatever this level adds. The Ima Dummy Tower is
+  // level 1's only, so levels 2 and 3 draw exactly what they were tuned
+  // against and the weight is a fact about the level rather than the tower.
+  const weights = towerWeightsFor(levelId, DRAFT.towerWeights)
+  const towerPool = Object.entries(TOWERS)
+    .filter(([id]) => weights[id] !== undefined)
+    .map(([id, t]: [string, any]) => ({ id, weight: weights[id]!, archetype: t.archetype }))
   let opening = draftOpeningTowers(towerPool, DRAFT, rng)
   let reserve = reserveTowers(towerPool, opening, rng)
   // Every third seed ignores the weighted draft and takes a uniform random
@@ -193,7 +219,12 @@ export function simulate(
   // and leaving coverage to them means the rarely-drafted towers are barely
   // soaked at all.
   if (seed % 3 === 0) {
-    const ids = rng.shuffled(Object.keys(TOWERS))
+    // FROM THE LEVEL'S POOL, not the whole table. This drew from every tower in
+    // towers.json, which was the same thing right up until a tower existed that
+    // only one level can draw -- and then every third seed on levels 2 and 3
+    // was handing the player an Ima Dummy Tower they could never have had. It
+    // moved level 2 from 7/60 to 6/60 before it was noticed.
+    const ids = rng.shuffled(towerPool.map((t) => t.id))
     opening = ids.slice(0, DRAFT.towersAtStart)
     reserve = ids.slice(DRAFT.towersAtStart)
   }
@@ -265,7 +296,7 @@ export function simulate(
       laneId: on.id, laneDistance: laneAt, x: p.x, y: p.y, alive: true,
       slowFactor: 0, slowRemaining: 0, slowStacks: 0, sinceSlow: 99,
       stunRemaining: 0, stunLockout: 0, stunStacks: 0, sinceStun: 99,
-      armorShred: 0, attackTimer: 0, blocked: false,
+      armorShred: 0, attackTimer: 0, blockedBy: null,
       summonedBy,
       // The first burst waits a full interval, so a boss does not arrive with
       // a crowd already around it.
@@ -399,12 +430,20 @@ export function simulate(
       const id = rng.pick(affordable)
       peanuts -= TOWERS[id].cost
       build.occupy(spot.index)
-      towers.push({
+      const t: SimTower = {
         id, def: TOWERS[id], spot: spot.index, x: spot.x, y: spot.y,
         tier: BASE_TIER, spec: null, cooldown: 0, buildLeft: 0,
         disabledFor: 0, distanceToExit: padToExit[spot.index] ?? Infinity,
-        value: TOWERS[id].cost,
-      })
+        value: TOWERS[id].cost, soldiers: [], rally: null,
+      }
+      towers.push(t)
+      // The lads, at the nearest lane point inside the tower's range -- the
+      // same default the scene uses, so the soak is measuring the board a
+      // player who never touched the rally point would actually have.
+      if ((TOWERS[id].soldierCount ?? 0) > 0) {
+        t.rally = defaultRally(net, { x: t.x, y: t.y }, TOWERS[id].range)
+        manGarrison(t)
+      }
     }
     for (const t of towers) {
       if (t.buildLeft > 0 || isMaxed(t.def, t.tier)) continue
@@ -419,6 +458,105 @@ export function simulate(
       // going up already counts -- the peanuts are gone either way.
       t.value += choice.cost
       if (atSpecChoice(t.def, t.tier)) t.spec = choice.id
+      // The lads are raised with the tower, and `Need a Friend?` is exactly a
+      // third of them walking on.
+      if (t.soldiers.length > 0) manGarrison(t)
+    }
+  }
+
+  /**
+   * Gives each free soldier one enemy to hold.
+   *
+   * ONE EACH, and a grip is kept while it is possible -- the same rule the
+   * scene's engagement pass uses. An enemy with no free blocker keeps walking,
+   * which is what makes two soldiers a speed bump rather than a wall, and an
+   * enemy flagged not blockable is never picked at all.
+   */
+  const assignSoldierBlocks = (): void => {
+    const taken = new Set(enemies.map((e) => e.blockedBy).filter((b) => b && b !== 'hero'))
+    for (const t of towers) {
+      const range = t.def.soldierBlockRange ?? 46
+      for (const sd of t.soldiers) {
+        if (sd.respawnIn > 0 || sd.health <= 0) continue
+        if (taken.has(sd)) continue
+        const near = enemies
+          .filter((e) => e.alive && e.def.blockable && e.blockedBy === null
+            && Math.hypot(e.x - sd.x, e.y - sd.y) <= range)
+          .sort((a, b) => b.distance - a.distance)
+        const pick = near[0]
+        if (!pick) continue
+        pick.blockedBy = sd
+        taken.add(sd)
+      }
+    }
+  }
+
+  /** Brings a tower's garrison up to the strength its tier calls for, and
+   *  posts everyone. Called at build time and after every tier, because `Need
+   *  a Friend?` IS a change in this number. */
+  const manGarrison = (t: SimTower): void => {
+    const want = Math.round(statOf(t, 'soldierCount'))
+    const full = statOf(t, 'soldierHealth')
+    const stations = t.rally
+      ? soldierStations(net, t.rally as never, want)
+      : Array.from({ length: want }, () => ({ x: t.x, y: t.y }))
+    while (t.soldiers.length < want) {
+      const at = stations[t.soldiers.length] ?? { x: t.x, y: t.y }
+      t.soldiers.push({
+        tower: t, x: at.x, y: at.y, health: full, maxHealth: full,
+        attackTimer: 0, respawnIn: 0, enraged: false,
+      })
+    }
+    for (const [i, sd] of t.soldiers.entries()) {
+      const at = stations[i] ?? stations[0] ?? { x: t.x, y: t.y }
+      sd.x = at.x
+      sd.y = at.y
+      if (sd.maxHealth !== full) {
+        const share = sd.maxHealth > 0 ? sd.health / sd.maxHealth : 1
+        sd.maxHealth = full
+        sd.health = Math.max(1, full * share)
+      }
+    }
+  }
+
+  /**
+   * The Ima Dummy Tower's lads, one frame.
+   *
+   * Modelled rather than skipped for the reason the Reaper's ability was: level
+   * 1's win rate is measured off this file, and a soak in which two soldiers
+   * held nothing would report a level that does not exist.
+   */
+  const tickGarrisons = (dt: number): void => {
+    for (const t of towers) {
+      if (t.soldiers.length === 0) continue
+      if (t.soldiers.length !== Math.round(statOf(t, 'soldierCount'))) manGarrison(t)
+      const spec = (specById(t.def, t.spec) ?? {}) as any
+      for (const sd of t.soldiers) {
+        if (sd.respawnIn > 0) {
+          sd.respawnIn -= dt
+          if (sd.respawnIn <= 0) {
+            // Back at full health, and Rage forgotten with the wound that
+            // caused it.
+            sd.respawnIn = 0
+            sd.health = sd.maxHealth
+            sd.enraged = false
+            sd.attackTimer = 0
+          }
+          continue
+        }
+        if (sd.health <= 0) { sd.respawnIn = t.def.soldierRespawn ?? 10; continue }
+
+        if (spec.rageBelowHealth && !sd.enraged && sd.health / sd.maxHealth < spec.rageBelowHealth) {
+          sd.enraged = true
+        }
+        const held = enemies.find((e) => e.alive && e.blockedBy === sd)
+        if (!held) { sd.attackTimer -= dt; continue }
+        sd.attackTimer -= dt
+        if (sd.attackTimer > 0) continue
+        sd.attackTimer = Math.max(0.05,
+          statOf(t, 'soldierInterval') * (sd.enraged ? (spec.rageInterval ?? 1) : 1))
+        hurtEnemy(held, statOf(t, 'soldierDamage') * (sd.enraged ? (spec.rageDamage ?? 1) : 1), false)
+      }
     }
   }
 
@@ -530,6 +668,7 @@ export function simulate(
       for (const sp of spawner.update(DT)) spawn(sp.enemy, 0, null, sp.lane ?? MAIN_LANE, 0)
       tickSummons(DT)
       tickTowerDisable(DT)
+      tickGarrisons(DT)
       cooldowns.tick(DT)
 
       // Towers.
@@ -585,16 +724,20 @@ export function simulate(
           heroState.health = hero.maxHealth
           heroState.reviveIn = 0
         }
+        // The lads do not stop because Cory did.
+        for (const e of enemies) if (e.blockedBy === 'hero') e.blockedBy = null
+        assignSoldierBlocks()
       } else {
         if (heroState.invulnerable > 0) heroState.invulnerable -= DT
         const blockRange = hero.blockRange * (heroState.lastStand ? hero.lastStand.blockRangeMultiplier : 1)
         const near = withinRadius(
           enemies.filter((e) => e.alive && e.def.blockable) as any, heroState.x, heroState.y, blockRange,
         ) as SimEnemy[]
-        for (const e of enemies) e.blocked = false
+        for (const e of enemies) e.blockedBy = null
         const held = near.sort((a, b) => b.distance - a.distance).slice(0, hero.blockCapacity)
-        for (const e of held) e.blocked = true
+        for (const e of held) e.blockedBy = 'hero'
         heroState.blocking = held.length
+        assignSoldierBlocks()
 
         heroState.attackTimer -= DT
         if (heroState.attackTimer <= 0) {
@@ -626,7 +769,22 @@ export function simulate(
         e.sinceStun += DT
         if (e.stunRemaining > 0) continue
 
-        if (e.blocked && !heroState.down) {
+        // Held by a soldier: they trade blows on their own intervals, and the
+        // enemy does not advance a pixel while it lasts.
+        if (e.blockedBy && e.blockedBy !== 'hero') {
+          const sd = e.blockedBy
+          e.attackTimer -= DT
+          if (e.attackTimer <= 0) {
+            e.attackTimer = e.def.attackInterval
+            sd.health -= e.def.damage
+            // The moment its blocker falls the enemy is free again -- next
+            // frame, once the assignment has run.
+            if (sd.health <= 0) e.blockedBy = null
+          }
+          continue
+        }
+
+        if (e.blockedBy === 'hero' && !heroState.down) {
           e.attackTimer -= DT
           if (e.attackTimer <= 0) {
             e.attackTimer = e.def.attackInterval

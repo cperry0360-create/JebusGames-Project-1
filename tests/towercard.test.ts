@@ -51,7 +51,7 @@ test('every trait phrase exists and is within its limit', () => {
 test('a trait phrase is one line: no newline, no wrap point it must break at', () => {
   const all = Object.values(TOWERS).flatMap(
     (d) => [d.trait, ...d.specializations.map((s) => s.trait)])
-  assert.equal(all.length, 18, 'eighteen phrases: six towers, two branches each')
+  assert.equal(all.length, 21, 'twenty-one phrases: seven towers, two branches each')
   for (const t of all) {
     assert.doesNotMatch(t, /\n/, `"${t}" carries a newline`)
     assert.equal(t.trim(), t, `"${t}" has padding that will look like a layout fault`)

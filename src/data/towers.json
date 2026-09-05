@@ -334,5 +334,69 @@
     "targets": [
       "ground"
     ]
+  },
+  "imaDummy": {
+    "name": "Ima Dummy",
+    "trait": "Posts two lads",
+    "archetype": "control",
+    "sprite": "turret-dummy",
+    "cost": 130,
+    "range": 150,
+    "damage": 0,
+    "fireInterval": 0,
+    "projectileSpeed": 0,
+    "splashRadius": 0,
+    "ignoresArmor": false,
+    "slowFactor": 0,
+    "slowSeconds": 0,
+    "supportRadius": 0,
+    "supportDamageBonus": 0,
+    "armorPierce": 0,
+    "soldierCount": 2,
+    "soldierHealth": 90,
+    "soldierDamage": 8,
+    "soldierInterval": 1.0,
+    "soldierRespawn": 10,
+    "soldierBlockRange": 46,
+    "tiers": [
+      {
+        "cost": 182,
+        "buildSeconds": 4.0,
+        "soldierHealth": 1.8888888888888888,
+        "soldierDamage": 1.875,
+        "soldierInterval": 0.9
+      },
+      {
+        "cost": 255,
+        "buildSeconds": 6.0,
+        "soldierHealth": 1.7647058823529411,
+        "soldierDamage": 1.7333333333333334,
+        "soldierInterval": 0.8888888888888888
+      }
+    ],
+    "specializations": [
+      {
+        "id": "rage",
+        "name": "Rage",
+        "trait": "Hurt lads hit hard",
+        "cost": 520,
+        "buildSeconds": 9.0,
+        "rageBelowHealth": 0.35,
+        "rageDamage": 1.6,
+        "rageInterval": 0.8
+      },
+      {
+        "id": "friend",
+        "name": "Need a Pal?",
+        "trait": "A third lad",
+        "cost": 520,
+        "buildSeconds": 9.0,
+        "soldierCount": 1.5
+      }
+    ],
+    "blurb": "Hits nothing, ever. Two lads stand where you point and refuse to move.",
+    "targets": [
+      "ground"
+    ]
   }
 }

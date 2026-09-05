@@ -12,7 +12,10 @@
       "mapPosition": [
         0.3,
         0.62
-      ]
+      ],
+      "extraTowerWeights": {
+        "imaDummy": 4
+      }
     },
     {
       "id": "level2",
@@ -37,5 +40,6 @@
       ]
     }
   ],
-  "_mapPosition": "WHERE A LEVEL SITS ON THE WORLD MAP, normalised 0-1 against the world's own bounds, and the ONLY place that position lives. WorldMapScene multiplies it by the world size; the trail between the cards is generated from these numbers rather than drawn, so moving a card moves the trail with it. Adding a level means a row here with a mapPosition and a card in art.json's worldMap.cards — a test fails the build if either is missing."
+  "_mapPosition": "WHERE A LEVEL SITS ON THE WORLD MAP, normalised 0-1 against the world's own bounds, and the ONLY place that position lives. WorldMapScene multiplies it by the world size; the trail between the cards is generated from these numbers rather than drawn, so moving a card moves the trail with it. Adding a level means a row here with a mapPosition and a card in art.json's worldMap.cards — a test fails the build if either is missing.",
+  "_towers": "WHICH TOWERS A LEVEL CAN DRAW, beyond draft.json's shared pool. draft.json's towerWeights is every level's pool; extraTowerWeights adds to it for one level and is absent everywhere else. The Ima Dummy Tower is level 1's only for now, which is what the brief asked for and also what keeps levels 2 and 3 comparable to the numbers they were tuned against."
 }

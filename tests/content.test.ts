@@ -633,14 +633,22 @@ test('the retired tower-base placeholder is gone from the manifest', () => {
 
 /* ------------------------------------------------- every tower does something */
 
-test('every tower either shoots or supports, and none is inert', () => {
+test('every tower shoots, supports or deploys, and none is inert', () => {
+  // THREE KINDS NOW. The Ima Dummy Tower does neither of the first two: it
+  // deals nothing at all and buffs nothing, and what it does instead is put
+  // two men in the road. "Inert" is still the thing being caught -- a tower
+  // that does none of the three -- and a tower that does two of them is still
+  // a tower that has not decided what it is.
   for (const [id, t] of Object.entries(towers) as [string, any][]) {
     const shoots = t.damage > 0 && t.range > 0 && t.fireInterval > 0
     const supports = t.supportRadius > 0 && t.supportDamageBonus > 0
-    assert.ok(shoots || supports,
-      `${id} neither shoots (dmg ${t.damage}, range ${t.range}) nor supports ` +
-      `(radius ${t.supportRadius}, bonus ${t.supportDamageBonus}) — it is 100% inert`)
-    assert.ok(!(shoots && supports), `${id} is both a turret and a support tower; pick one`)
+    const deploys = (t.soldierCount ?? 0) > 0 && (t.soldierHealth ?? 0) > 0
+    const kinds = [shoots, supports, deploys].filter(Boolean).length
+    assert.ok(kinds > 0,
+      `${id} neither shoots (dmg ${t.damage}, range ${t.range}), supports ` +
+      `(radius ${t.supportRadius}, bonus ${t.supportDamageBonus}) nor deploys ` +
+      `(${t.soldierCount ?? 0} soldiers) — it is 100% inert`)
+    assert.equal(kinds, 1, `${id} is more than one kind of tower; pick one`)
   }
 })
 
@@ -684,6 +692,9 @@ test('every specialization changes behaviour, not just a percentage', () => {
     'ignoresArmor', 'chainTargets', 'executeBelowPercent', 'rampPerShot',
     'splashSlowSeconds', 'bonusVsArmored', 'stunSeconds',
     'supportRangeBonus', 'grantsPierce',
+    // The Ima Dummy Tower's tier-4 pair: one changes how a hurt soldier
+    // fights, the other changes how many there are.
+    'rageBelowHealth', 'soldierCount',
   ]
   for (const [id, t] of Object.entries(towers) as [string, any][]) {
     for (const spec of t.specializations ?? []) {
@@ -699,6 +710,9 @@ test('the two specializations of a tower do different things', () => {
     'ignoresArmor', 'chainTargets', 'executeBelowPercent', 'rampPerShot',
     'splashSlowSeconds', 'bonusVsArmored', 'stunSeconds',
     'supportRangeBonus', 'grantsPierce',
+    // The Ima Dummy Tower's tier-4 pair: one changes how a hurt soldier
+    // fights, the other changes how many there are.
+    'rageBelowHealth', 'soldierCount',
   ]
   for (const [id, t] of Object.entries(towers) as [string, any][]) {
     const specs = t.specializations ?? []
@@ -716,7 +730,7 @@ test('a specialization explains itself in mechanics, not in jokes', () => {
       const line = specSummary(spec)
       assert.notEqual(line, 'No change', `${id}/${spec.id} summarises to nothing at all`)
       // It has to name a real effect, not just read as prose.
-      assert.match(line, /%|armour|enemy|enemies|health|slows|stops|pierce/,
+      assert.match(line, /%|armour|enemy|enemies|health|slows|stops|pierce|lad/,
         `${id}/${spec.id} summarises as "${line}", which tells the player nothing`)
     }
   }

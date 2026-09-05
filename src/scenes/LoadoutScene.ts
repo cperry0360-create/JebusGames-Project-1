@@ -8,6 +8,7 @@ import draftData from '../data/draft.json'
 import { draftAbilities, draftOpeningTowers, makeRng, reserveTowers } from '../systems/Draft.ts'
 import { runState, setRunState } from '../systems/RunState.ts'
 import { shouldPlay } from '../systems/Cutscenes.ts'
+import { towerWeightsFor } from '../systems/Levels.ts'
 import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI, uiSize } from '../ui/Theme.ts'
 import { panelInset, plateButton, platePanel, type PlateButton } from '../ui/Plate.ts'
 import { buttonRow } from '../systems/ButtonRow.ts'
@@ -112,9 +113,13 @@ export class LoadoutScene extends Phaser.Scene {
     // Server Nuke is a mid-run drop, never a starting hand.
     const pool = Object.keys(ABILITIES).filter((id) => ABILITIES[id].draftable)
     const abilities = draftAbilities(pool, DRAFT.abilitiesDrawn, rng)
-    const towerPool = Object.entries(TOWERS).map(([id, t]) => ({
-      id, weight: DRAFT.towerWeights[id], archetype: t.archetype,
-    }))
+    // The shared pool plus whatever this level adds. The Ima Dummy Tower is
+    // level 1's only, so levels 2 and 3 draw exactly what they were tuned
+    // against and the weight is a fact about the level rather than the tower.
+    const weights = towerWeightsFor(runState().levelId, DRAFT.towerWeights)
+    const towerPool = Object.entries(TOWERS)
+      .filter(([id]) => weights[id] !== undefined)
+      .map(([id, t]) => ({ id, weight: weights[id]!, archetype: t.archetype }))
     const opening = draftOpeningTowers(towerPool, DRAFT, rng)
     const reserve = reserveTowers(towerPool, opening, rng)
     setRunState({ heroId, abilities, openingTowers: opening, reserveTowers: reserve })

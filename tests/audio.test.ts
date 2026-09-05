@@ -27,8 +27,11 @@ test('every cue is mixed and voice-capped', () => {
 })
 
 test('every firing tower has its own distinct sound', () => {
-  const firing = Object.entries(towers as Record<string, { supportRadius: number }>)
-    .filter(([, t]) => t.supportRadius === 0)
+  // "does not support" stopped being the same as "fires" when the Ima Dummy
+  // Tower arrived: it has a range, because that is the leash its rally point
+  // is checked against, and it never shoots anything.
+  const firing = Object.entries(towers as Record<string, { damage: number; fireInterval: number }>)
+    .filter(([, t]) => t.damage > 0 && t.fireInterval > 0)
     .map(([id]) => id)
   assert.ok(firing.length >= 5, 'expected several firing towers')
   const files = new Set<string>()
