@@ -38,16 +38,27 @@ branch.
 | 9 | [`5206dff`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/5206dff) | Report: the cutscene camera | ✅ ✅ ([run 33996636912](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33996636912)) |
 | 10 | [`f73cd6d`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/f73cd6d) | Close that report's CI table | ✅ ✅ ([run 33996668714](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33996668714)) |
 | 11 | [`3f37a72`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/3f37a72) | This report | ✅ ✅ ([run 33997081003](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33997081003)) |
-| 12 | [`4ed669c`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/4ed669c) | Closing row 11's CI, and this row | not recorded — it changes this table and nothing else, and a report cannot carry its own run |
+| 12 | [`4ed669c`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/4ed669c) | Closing row 11's CI | **cancelled** — superseded by 13 ([run 33997114356](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33997114356)) |
+| 13 | [`53d5dc6`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/53d5dc6) | Name the commit that closed the table; drop the stale count | ✅ ✅ ([run 33997129631](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33997129631)) |
+| 14 | this correction | — | not recorded: it edits this table and nothing else, and a report cannot carry its own run |
 
 Two columns of ✅ are `test` and `typecheck`; `deploy` is skipped on every run.
 
-**Two rows want explaining rather than glossing.** Commits 1–3 have no run of
-their own: they were pushed together with commit 4, and `checks.yml` runs per
-push. Each was left green locally — `npm test` and `sh tools/tsdiff.sh 46f1f72`
-before every one — but CI has verified the *tree*, not each step of it. Commit 6
-was **cancelled** by the concurrency group when commit 7 was pushed 15 seconds
-later; commit 7 contains it and is green.
+**Three things in that column want explaining rather than glossing.**
+
+Commits 1–3 have no run of their own: they were pushed together with commit 4,
+and `checks.yml` runs per push. Each was left green locally — `npm test` and
+`sh tools/tsdiff.sh 46f1f72` before every one — but CI has verified the *tree*,
+not each step of it.
+
+Commits 6 and 12 were **cancelled** by the concurrency group when the next
+commit was pushed seconds behind them. Neither is a failure and neither is
+unverified: 7 contains 6, 13 contains 12, and both successors are green. It
+happened twice for the same reason — a docs-only fix pushed immediately after
+the commit it corrects.
+
+Row 14 is the terminating one. A report cannot carry its own CI result, so the
+last edit to this table is always unrecorded; it changes nothing but the table.
 
 ## The count
 
@@ -130,8 +141,10 @@ has backgrounded a real phone against this build**.
 
 ## Where this leaves the repository
 
-**In flight:** the commits above, CI green on every run, a clean fast-forward to
-`main`. Merging is the one remaining step.
+**In flight:** the commits above, a clean fast-forward to `main`. **CI is green
+on the branch tip and on every run that completed**; two runs were cancelled by
+the push that superseded them, as the note above the count explains. Merging is
+the one remaining step.
 
 **Waiting on a decision — Cory's, not urgent:**
 
