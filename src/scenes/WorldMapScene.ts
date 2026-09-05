@@ -23,6 +23,7 @@ import {
   LEVELS, furthestUnlocked, isLevelCleared, isLevelUnlocked, type LevelDef,
 } from '../systems/Levels.ts'
 import { loadSave } from '../systems/Save.ts'
+import { hasSeen, panelsFor } from '../systems/Cutscenes.ts'
 import { clearRun, loadRun } from '../systems/RunSave.ts'
 import { setRunState } from '../systems/RunState.ts'
 import { ART, icon } from '../systems/Art.ts'
@@ -222,6 +223,36 @@ export class WorldMapScene extends Phaser.Scene {
       frame.setStrokeStyle(3, done ? 0x6fbf73 : current ? 0xf0a830 : 0x5a4630)
     })
     hit.on('pointerdown', () => this.startLevel(level.id))
+
+    this.drawReplay(level, x, y)
+  }
+
+  /**
+   * The replay badge: watch this level's comic again without playing the level.
+   *
+   * Only on a level that HAS a comic and has already seen it -- before that the
+   * badge would be offering to spoil an intro the player is about to get
+   * anyway. It sits ON the card and takes its taps before the card's own hit
+   * rectangle, which is why its depth is above it.
+   */
+  private drawReplay(level: LevelDef, x: number, y: number): void {
+    if (panelsFor(level.id).length === 0 || !hasSeen(level.id)) return
+    const bx = x - CARD_W / 2 + 22
+    const by = y - CARD_H / 2 + 20
+    const badge = this.add.circle(bx, by, 17, 0x000000, 0.55).setDepth(5)
+      .setStrokeStyle(2, 0xf6ecd9, 0.6)
+    this.add.text(bx, by, '↻', {
+      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.ink,
+    }).setOrigin(0.5, 0.5).setDepth(6)
+    badge.setInteractive({ useHandCursor: true })
+    badge.on('pointerdown', (_p: unknown, _x: unknown, _y: unknown,
+                            ev: { stopPropagation?: () => void }) => {
+      ev?.stopPropagation?.()
+      logEvent('scene', `WorldMap -> Cutscene (replay ${level.id})`)
+      // Straight back here afterwards: this is watching the comic, not
+      // starting the level. Starting it is the card.
+      this.scene.start('Cutscene', { levelId: level.id, then: 'WorldMap' })
+    })
   }
 
   /** The title, the resume offer and the way back. */

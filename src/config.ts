@@ -6,6 +6,7 @@ import { TitleScene } from './scenes/TitleScene.ts'
 import { CreditsScene } from './scenes/CreditsScene.ts'
 import { WorldMapScene } from './scenes/WorldMapScene.ts'
 import { LoadoutScene } from './scenes/LoadoutScene.ts'
+import { CutsceneScene } from './scenes/CutsceneScene.ts'
 import { GameScene } from './scenes/GameScene.ts'
 import { HudScene } from './scenes/HudScene.ts'
 import { DiagnosticsScene } from './scenes/DiagnosticsScene.ts'
@@ -47,6 +48,6 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   input: { activePointers: 3 },
   scene: [
     BootScene, SplashScene, TitleScene, CreditsScene, WorldMapScene, LoadoutScene,
-    GameScene, HudScene, DiagnosticsScene,
+    CutsceneScene, GameScene, HudScene, DiagnosticsScene,
   ],
 }

@@ -1,0 +1,16 @@
+{
+  "_note": "WHICH COMIC PLAYS BEFORE WHICH LEVEL, and nothing more. Keys are level ids from levels.json and a level with no entry here simply has no cutscene — that is the default, not an omission, and tests/cutscenes.test.ts holds level 3 to it. Values are ordered panel paths relative to art.json's assetRoot, so they read the same way art.json's `files` do. An id that is not a level fails cutsceneProblems() and a test, rather than being discovered at runtime by a player.",
+  "_panels": "Every panel is 1672x941, which is 16:9. They are drawn to fit rather than to fill: on a phone in portrait a panel fills the width and centres vertically with the game's own dark chrome above and below it. Cropping a comic is not an option — a speech bubble in the corner of a panel is the panel.",
+  "levels": {
+    "level1": [
+      "cutscenes/cutscene_L1_01.webp",
+      "cutscenes/cutscene_L1_02.webp",
+      "cutscenes/cutscene_L1_03.webp"
+    ],
+    "level2": [
+      "cutscenes/cutscene_L2_01.webp",
+      "cutscenes/cutscene_L2_02.webp",
+      "cutscenes/cutscene_L2_03.webp"
+    ]
+  }
+}

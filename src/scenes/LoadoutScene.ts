@@ -7,6 +7,7 @@ import abilitiesData from '../data/abilities.json'
 import draftData from '../data/draft.json'
 import { draftAbilities, draftOpeningTowers, makeRng, reserveTowers } from '../systems/Draft.ts'
 import { runState, setRunState } from '../systems/RunState.ts'
+import { shouldPlay } from '../systems/Cutscenes.ts'
 import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI, uiSize } from '../ui/Theme.ts'
 import { panelInset, plateButton, platePanel, type PlateButton } from '../ui/Plate.ts'
 import { buttonRow } from '../systems/ButtonRow.ts'
@@ -357,6 +358,16 @@ export class LoadoutScene extends Phaser.Scene {
         // The HUD is not launched here any more; GameScene starts its own.
         // Two callers had to remember and only this one did, which left every
         // resumed run without a HUD. See GameScene.create.
+        //
+        // THE COMIC GOES HERE, not on the resume path. This is where a run
+        // BEGINS; TitleScene and WorldMapScene both hand back to 'Game'
+        // directly when they resume a saved one, and a comic in front of a
+        // run already under way would be showing the opening twice.
+        const level = runState().levelId
+        if (shouldPlay(level)) {
+          this.scene.start('Cutscene', { levelId: level, then: 'Game' })
+          return
+        }
         this.scene.start('Game')
       }, 24)
     // Spent, it stays on the screen greyed rather than disappearing: a button

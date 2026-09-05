@@ -39,8 +39,20 @@ test('the loadout screen shows the whole hand in three sections', () => {
   // information twice and never showed them the whole hand at once, so there
   // is exactly one button that leaves this screen. The reroll button is not
   // one: it redeals and stays put.
-  const starts = s.match(/scene\.start\(/g) ?? []
-  assert.equal(starts.length, 1, `${starts.length} ways off the loadout screen; there should be one`)
+  //
+  // Counting `scene.start(` was the proxy for that and stopped being one when
+  // BEGIN gained a comic to play first: it is still ONE BUTTON and one way
+  // forward, choosing between two doors that both open into the run. So what
+  // is counted now is the exits themselves -- every start must be inside the
+  // single BEGIN handler, and every destination must lead into the run.
+  const destinations = [...s.matchAll(/scene\.start\('(\w+)'/g)].map((m) => m[1])
+  assert.deepEqual([...new Set(destinations)].sort(), ['Cutscene', 'Game'],
+    `the loadout screen leaves to ${destinations.join(', ')}; both doors should open into the run`)
+  const begin = s.slice(s.indexOf('beginLabel, () => {'), s.indexOf('// Spent, it stays'))
+  for (const d of destinations) {
+    assert.ok(begin.includes(`scene.start('${d}'`),
+      `something other than BEGIN leaves the loadout screen, to ${d}`)
+  }
   assert.match(s, /platePanel\(/, 'the cards are not on the dialog plate')
 })
 

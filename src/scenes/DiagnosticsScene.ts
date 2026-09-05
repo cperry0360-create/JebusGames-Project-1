@@ -5,6 +5,7 @@ import {
   buildReport, currentState, formatReport, lastReport, recentEvents, safeString,
 } from '../systems/Diagnostics.ts'
 import { copyText } from '../systems/ErrorPanel.ts'
+import { forgetAllCutscenes } from '../systems/Cutscenes.ts'
 import { clearStoredReport, storedReport } from '../systems/Save.ts'
 import { VERSION_LABEL } from '../systems/Build.ts'
 import { fitUiCamera, viewH, viewW } from '../systems/Resolution.ts'
@@ -82,11 +83,15 @@ export class DiagnosticsScene extends Phaser.Scene {
     // fixed positions put BACK on top of CLEAR.
     const y = H - 34
     const gap = 12
-    const bw = Math.min(220, (W - 32 - gap * 2) / 3)
-    const total = bw * 3 + gap * 2
+    const bw = Math.min(220, (W - 32 - gap * 3) / 4)
+    const total = bw * 4 + gap * 3
     const buttons: Array<[string, () => void, 'primary' | 'secondary']> = [
       ['COPY REPORT', () => this.copy(), 'primary'],
       ['CLEAR', () => this.clear(), 'secondary'],
+      // The developer way to make every comic play again. It lives here rather
+      // than anywhere a player would find it: forgetting what you have watched
+      // is a testing need, not a feature.
+      ['REPLAY INTROS', () => this.forgetCutscenes(), 'secondary'],
       ['BACK', () => this.scene.start('Title'), 'secondary'],
     ]
     buttons.forEach(([text, fn, weight], i) => {
@@ -136,6 +141,13 @@ export class DiagnosticsScene extends Phaser.Scene {
   private clear(): void {
     clearStoredReport()
     this.flash('STORED REPORT CLEARED')
+  }
+
+  /** Forgets every seen-cutscene flag, so every level's comic plays again on
+   *  its next run. Nothing in normal play calls this. */
+  private forgetCutscenes(): void {
+    forgetAllCutscenes()
+    this.flash('EVERY INTRO WILL PLAY AGAIN')
   }
 
   private flash(text: string): void {

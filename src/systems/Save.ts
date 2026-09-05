@@ -67,12 +67,21 @@ export interface SaveData {
    * reload — and because a build-time flag cannot be compared minutes apart.
    */
   controlDrawer: boolean
+  /**
+   * Level ids whose opening comic has been watched or skipped.
+   *
+   * A list rather than a count, because "have I seen level 2's" is the
+   * question and a number cannot answer it. It lives here beside
+   * `runsCleared` for the same reason that does: it is a fact about the
+   * player rather than about a run, and it has to survive one.
+   */
+  seenCutscenes: string[]
 }
 
 export const DEFAULT_SAVE: SaveData = {
   volume: 0.7, musicVolume: 1, voiceVolume: 1,
   muted: false, runsCleared: 0, bannerPoints: 0, lastReport: '',
-  controlDrawer: false,
+  controlDrawer: false, seenCutscenes: [],
 }
 
 /** localStorage is small and shared; a report is truncated rather than
@@ -111,6 +120,13 @@ export function loadSave(): SaveData {
       // `=== true` rather than a truthy check: a save written before the flag
       // existed has `undefined` here, and the default is OFF.
       controlDrawer: parsed.controlDrawer === true,
+      // Validated element by element, not trusted for being an array. A save
+      // hand-edited or written by an older build can hold anything here, and a
+      // non-string in the list would compare false against every level id
+      // forever -- a comic that silently never plays again.
+      seenCutscenes: Array.isArray(parsed.seenCutscenes)
+        ? [...new Set(parsed.seenCutscenes.filter((v): v is string => typeof v === 'string'))]
+        : [],
     }
   } catch {
     // Unreadable, unparseable or unavailable: start fresh rather than fail.
