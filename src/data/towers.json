@@ -50,7 +50,11 @@
         "chainFalloff": 0.6
       }
     ],
-    "blurb": "Quick, cheap and always shooting. It will not finish anything, and it never stops."
+    "blurb": "Quick, cheap and always shooting. It will not finish anything, and it never stops.",
+    "targets": [
+      "ground",
+      "air"
+    ]
   },
   "writeoff": {
     "name": "Grinder",
@@ -102,7 +106,11 @@
         "rampMax": 1.1
       }
     ],
-    "blurb": "Slow, heavy, single shots. Picks the biggest thing in range and takes it apart."
+    "blurb": "Slow, heavy, single shots. Picks the biggest thing in range and takes it apart.",
+    "targets": [
+      "ground",
+      "air"
+    ]
   },
   "rounding": {
     "name": "Mortar",
@@ -154,7 +162,11 @@
         "bonusVsArmored": 1.9
       }
     ],
-    "blurb": "Lobs one shell into a crowd. Small numbers, applied to everyone standing near."
+    "blurb": "Lobs one shell into a crowd. Small numbers, applied to everyone standing near.",
+    "targets": [
+      "ground",
+      "air"
+    ]
   },
   "escalation": {
     "name": "Longshot",
@@ -208,7 +220,11 @@
         "chainFalloff": 0.5
       }
     ],
-    "blurb": "Reaches further than anything else, and hits harder the longer it keeps firing."
+    "blurb": "Reaches further than anything else, and hits harder the longer it keeps firing.",
+    "targets": [
+      "ground",
+      "air"
+    ]
   },
   "extension": {
     "name": "Bramble",
@@ -262,7 +278,11 @@
         "stunSeconds": 0.6
       }
     ],
-    "blurb": "Snags everything in range and holds it there. It barely hurts; it barely has to."
+    "blurb": "Snags everything in range and holds it there. It barely hurts; it barely has to.",
+    "targets": [
+      "ground",
+      "air"
+    ]
   },
   "shelter": {
     "name": "Beacon",
@@ -310,6 +330,9 @@
         "grantsPierce": 5
       }
     ],
-    "blurb": "Fires at nothing. Everything it covers hits harder, which beats a sixth gun."
+    "blurb": "Fires at nothing. Everything it covers hits harder, which beats a sixth gun.",
+    "targets": [
+      "ground"
+    ]
   }
 }

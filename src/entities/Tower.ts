@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import type { TowerDef, TowerSpec } from '../types.ts'
 import { ySort } from '../systems/DepthSort.ts'
-import { pickFirst } from '../systems/Targeting.ts'
+import { GROUND_ONLY, pickFirst } from '../systems/Targeting.ts'
 import { boostedDamage } from '../systems/Combat.ts'
 import { deathPuff, makeShadow, muzzleFlash, PRESENTATION } from '../systems/Presentation.ts'
 import { applyRender, hasTierArt, tierSprite } from '../systems/Art.ts'
@@ -247,6 +247,17 @@ export class Tower extends Phaser.GameObjects.Container {
     return statAt(this.def, this.tier, 'armorPierce', this.spec) + this.grantedPierce
   }
 
+  /**
+   * The movement layers this tower may shoot, from towers.json.
+   *
+   * Ground only when the tower does not say, which is the safe direction for a
+   * default to fail in: a new tower that forgets the field cannot silently
+   * gain the ability to shoot air.
+   */
+  get targets(): readonly string[] {
+    return this.def.targets ?? GROUND_ONLY
+  }
+
   get splashRadius(): number {
     return statAt(this.def, this.tier, 'splashRadius', this.spec)
   }
@@ -367,7 +378,12 @@ export class Tower extends Phaser.GameObjects.Container {
     this.cooldown -= dt
     if (this.cooldown > 0) return
 
-    const target = pickFirst(enemies, this.x, this.y, this.range)
+    // Nothing this tower can shoot is the same as nothing in range: it does
+    // not fire, and — because the cooldown is only set BELOW, after a target
+    // is found — it does not spend its cooldown waiting either. A tower that
+    // burned its reload on an untargetable flyer would then be caught reloading
+    // when something it CAN hit walks in.
+    const target = pickFirst(enemies, this.x, this.y, this.range, this.targets)
     if (!target) return
 
     this.cooldown = this.fireInterval

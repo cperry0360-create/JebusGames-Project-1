@@ -208,6 +208,12 @@ export interface BannerDef {
 export interface TowerDef {
   name: string
   /**
+   * The movement layers this tower can shoot. Absent means ground only, which
+   * is the safe default: a tower that forgets to declare itself cannot
+   * silently gain the ability to hit air.
+   */
+  targets?: string[]
+  /**
    * The one phrase the ledger card shows, at most `LIMITS.trait` characters
    * and never wrapping.
    *
@@ -347,6 +353,16 @@ export interface EnemyDef {
   /** Flat damage subtracted per hit, unless the attacker ignores armour. */
   armor: number
   speed: number
+  /**
+   * What this thing moves through: "ground" or "air". Absent means ground,
+   * which is what every enemy written before this existed means — so no enemy
+   * needed editing and levels 1 to 3 play identically.
+   *
+   * The layer changes NOTHING about movement. An air enemy walks the same lane
+   * waypoints at the same speed; the layer only decides what is allowed to
+   * shoot at it.
+   */
+  layer?: string
   peanutReward: number
   livesCost: number
   damage: number
