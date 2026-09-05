@@ -169,20 +169,6 @@ test('unlockedLevels grows with cleared runs and never reorders', () => {
   }
 })
 
-test('level 2 is out of reach while it cannot be won', () => {
-  // Deliberate, not a typo. Level 2 wins 0 of 60 soaked runs: its pads sit
-  // 117-185 px from the road where level 1's sit 87-119, so nine of fifteen
-  // are out of range of the two shortest towers, and its waves carry 18.5%
-  // more health. See reports/2026-09-04-level2-playable.md. The unlock count
-  // is the stopgap that stops a player reaching a level they cannot beat.
-  // DELETE THIS TEST when level 2 is tuned and the count comes back down.
-  const l2 = LEVELS.find((l) => l.id === 'level2')
-  assert.ok(l2, 'level 2 has gone from the registry')
-  assert.equal(l2!.runsClearedToUnlock, 99,
-    'level 2 is reachable again; it was put out of reach because it cannot be won')
-  assert.ok(!isLevelUnlocked('level2', 50), 'fifty cleared runs should not be enough')
-})
-
 test('the title screen gates the start rather than only greying the button', () => {
   // A disabled plate is a drawing. The enforcement has to be where the run
   // actually begins, or a stale selection walks straight past it.
