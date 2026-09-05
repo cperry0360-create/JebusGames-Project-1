@@ -1,7 +1,9 @@
-# Session summary: five playtest briefs, ten commits, one thing said five times
+# Session summary: five playtest briefs, and one thing said five times
 
 An index for the session of 2026-09-05. Five briefs arrived, four of them while
-the first was still being worked. The detail is in two companion reports; this
+the first was still being worked. The commit count is in the table rather than
+in this sentence: a count written in prose goes stale the moment the report is
+committed, which happened once already this session. The detail is in two companion reports; this
 one is the map, the ledger, and the honest account of what is and is not
 verified.
 
@@ -36,7 +38,7 @@ branch.
 | 9 | [`5206dff`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/5206dff) | Report: the cutscene camera | ✅ ✅ ([run 33996636912](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33996636912)) |
 | 10 | [`f73cd6d`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/f73cd6d) | Close that report's CI table | ✅ ✅ ([run 33996668714](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33996668714)) |
 | 11 | [`3f37a72`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/3f37a72) | This report | ✅ ✅ ([run 33997081003](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33997081003)) |
-| 12 | [`` ``] closing this table | — | the row a report cannot fill in for itself |
+| 12 | [`4ed669c`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/4ed669c) | Closing row 11's CI, and this row | not recorded — it changes this table and nothing else, and a report cannot carry its own run |
 
 Two columns of ✅ are `test` and `typecheck`; `deploy` is skipped on every run.
 
