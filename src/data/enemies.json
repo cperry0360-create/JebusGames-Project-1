@@ -122,6 +122,12 @@
     "livesCost": 12,
     "damage": 0,
     "attackInterval": 99,
-    "blockable": false
+    "blockable": false,
+    "summons": {
+      "enemy": "directReport",
+      "count": 1,
+      "interval": 5,
+      "cap": 6
+    }
   }
 }

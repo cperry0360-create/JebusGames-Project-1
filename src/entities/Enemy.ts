@@ -59,6 +59,18 @@ export class Enemy extends Phaser.GameObjects.Container {
   shreddingFor = 0
   /** Counts down to the next tax. Only The Politician uses it. */
   private taxTimer = 0
+  /**
+   * The enemy that called this one in, or null for a scripted spawn.
+   *
+   * Load-bearing in two places: a wave is over when its SCRIPTED spawns are
+   * gone, so this is what `checkWaveOver` filters on; and a summoner's cap
+   * counts the children still pointing at it. It is deliberately NOT cleared
+   * when the parent dies — the children stay, and they stay ITS children, so
+   * a dead summoner's brood cannot be miscounted against a live one.
+   */
+  readonly summonedBy: Enemy | null
+  /** Counts down to the next burst. Only a summoner uses it. */
+  private summonTimer = 0
 
   private lane: Path
   private readonly lanes: LaneNetwork | null
@@ -139,13 +151,28 @@ export class Enemy extends Phaser.GameObjects.Container {
     /** The map's lanes, and which one this enemy walks in on. Omitted on a
      *  single-lane map, where there is nothing to transfer to and `lane` is
      *  the whole route. */
-    network?: { lanes: LaneNetwork; laneId: string },
+    network?: {
+      lanes: LaneNetwork
+      laneId: string
+      /** Where to appear, for a summoned child: its parent's own place on the
+       *  lane and its parent's progress, so it carries on from there rather
+       *  than from the gate. */
+      startAt?: { laneDistance: number; distance: number }
+      /** The summoner that called this one in. */
+      summonedBy?: Enemy
+    },
   ) {
     super(scene, 0, 0)
     this.def = def
     this.lane = network ? network.lanes.lane(network.laneId).path : lane
     this.lanes = network?.lanes ?? null
     this.laneId = network?.laneId ?? MAIN_LANE
+    this.summonedBy = network?.summonedBy ?? null
+    this.laneDistance = network?.startAt?.laneDistance ?? 0
+    this.distance = network?.startAt?.distance ?? 0
+    // A summoner's first burst waits a full interval, so a boss does not
+    // arrive with a crowd already around it.
+    this.summonTimer = def.summons?.interval ?? 0
     this.maxHealth = def.maxHealth
     this.health = def.maxHealth
 
@@ -173,7 +200,7 @@ export class Enemy extends Phaser.GameObjects.Container {
     this.laneOffset = (Math.random() * 2 - 1) * room
     // Behind the arch and invisible, not at its mouth at full opacity.
     this.sinceMouth = -1
-    const p = this.lane.pointAt(0)
+    const p = this.lane.pointAt(this.laneDistance)
     this.setPosition(p.x, p.y)
     scene.add.existing(this)
     this.applyEmergence(0)
@@ -389,6 +416,44 @@ export class Enemy extends Phaser.GameObjects.Container {
   private leaked(): boolean {
     if (this.lanes && this.lanes.transferFrom(this.laneId)) return false
     return this.laneDistance >= this.stopDistance
+  }
+
+  /** True for anything that was called in rather than scripted by the wave. */
+  get summoned(): boolean {
+    return this.summonedBy !== null
+  }
+
+  /**
+   * How many children are due right now, advancing the burst timer.
+   *
+   * The scene does the spawning, not this: a child needs the lane network, the
+   * gateway and a place on the scene's enemy list, and an entity that reached
+   * back for all three would be a second spawner. This only answers "how
+   * many", and only while the summoner is alive and walking.
+   *
+   * The CAP is applied by the caller, because only the scene can count how
+   * many of this summoner's children are still on the field.
+   */
+  dueSummons(dt: number): number {
+    const s = this.def.summons
+    // The game's own notion of alive, not Phaser's `active`: a corpse mid
+    // death-animation is still an object on the display list, and it must not
+    // keep calling in help.
+    if (!s || !this.alive) return 0
+    this.summonTimer -= dt
+    let due = 0
+    // A long frame can owe more than one burst; pay them all out, the way the
+    // wave spawner does.
+    while (this.summonTimer <= 0) {
+      due += s.count
+      this.summonTimer += s.interval
+    }
+    return due
+  }
+
+  /** Where a child should start: this summoner's own place on its own lane. */
+  get summonPoint(): { laneId: string; laneDistance: number; distance: number } {
+    return { laneId: this.laneId, laneDistance: this.laneDistance, distance: this.distance }
   }
 
   /** Haymaker knockback: shoved back along the lane it came from. */

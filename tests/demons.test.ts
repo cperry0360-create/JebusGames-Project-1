@@ -95,14 +95,23 @@ test('the demons carry enough source pixels for the zoom they are drawn at', () 
   }
 })
 
-test('The Devil is a plain boss: no tax, no ability, nothing to spawn', () => {
-  // "No new mechanics" was explicit. A boss that quietly grew one would show
-  // up here first.
-  const d = enemies.theDevil
+test('The Devil summons, and has grown nothing else', () => {
+  // This used to assert he had NO mechanic at all, because "no new mechanics"
+  // was the brief when he was added. Summoning was asked for later and
+  // explicitly — cap 6, one directReport every 5 seconds — so the assertion
+  // that survives is the one still worth making: he has the mechanic he was
+  // given and none he was not.
+  const d = enemies.theDevil as any
   assert.equal(d.tax, undefined, 'The Devil has grown a tax')
   for (const field of ['spawns', 'summon', 'ability', 'phases', 'aura', 'shield']) {
-    assert.equal((d as any)[field], undefined, `The Devil has grown a "${field}" mechanic`)
+    assert.equal(d[field], undefined, `The Devil has grown a "${field}" mechanic`)
   }
-  assert.deepEqual(Object.keys(d).sort(), Object.keys(BRIEF.theDevil).sort().concat('flavor').sort(),
+  assert.deepEqual(d.summons, { enemy: 'directReport', count: 1, interval: 5, cap: 6 },
+    'The Devil no longer summons what he was asked to')
+  assert.ok(enemies[d.summons.enemy], 'The Devil summons an enemy that does not exist')
+
+  // The field list, plus the one field that was added on purpose.
+  assert.deepEqual(Object.keys(d).sort(),
+    [...Object.keys(BRIEF.theDevil), 'flavor', 'summons'].sort(),
     'The Devil carries fields nobody asked for')
 })

@@ -2788,7 +2788,11 @@ export class GameScene extends Phaser.Scene {
    */
   private checkWaveOver(): void {
     if (this.status.phase !== 'wave') return
-    if (!this.spawner.done || this.enemies.length > 0) return
+    // Scripted spawns only. A wave ends when what it SENT is dead; anything a
+    // boss called in is not the wave's to account for, and a summoner that
+    // kept bursting until the last child died would hold the wave open for as
+    // long as it could keep summoning.
+    if (!this.spawner.done || this.enemies.some((e) => !e.summoned)) return
 
     const escaped = this.escapedThisWave
     const last = this.status.wave + 1 >= this.level.waveTable.waves.length
@@ -3069,6 +3073,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.tickTax(dt)
+    this.tickSummons(dt)
     this.trackBoss()
 
     this.tickEngagement()
@@ -3134,6 +3139,55 @@ export class GameScene extends Phaser.Scene {
       play(this, 'taxed', 0.7)
       this.cameras.main.shake(140, 0.004)
       this.status.message = `${e.def.name} taxed you ${take} peanuts. Spend it or lose it.`
+    }
+  }
+
+  /**
+   * Bosses calling in help.
+   *
+   * The child appears at the summoner's OWN place on the summoner's OWN lane,
+   * with the summoner's progress, so it carries on toward the exit from there
+   * rather than walking in from a gate the boss left long ago. On a branching
+   * map that also means it inherits the branch, and merges where its parent
+   * would have.
+   *
+   * The CAP is counted here rather than on the enemy, because only the scene
+   * knows what is still on the field. It counts children still pointing at
+   * THIS summoner, so two bosses do not share an allowance and a dead one's
+   * brood is not charged against a live one.
+   *
+   * Summoned children are ordinary enemies in every other respect: they can be
+   * shot, blocked, slowed and taxed, and they pay their normal bounty. The one
+   * difference is that `checkWaveOver` does not wait for them.
+   */
+  private tickSummons(dt: number): void {
+    if (this.status.phase !== 'wave') return
+    // A copy, because spawning appends to the list being walked.
+    for (const parent of [...this.enemies]) {
+      const spec = parent.def.summons
+      if (!spec) continue
+      let due = parent.dueSummons(dt)
+      if (due <= 0) continue
+
+      const def = ENEMIES[spec.enemy]
+      if (!def) continue
+      if (spec.cap !== undefined) {
+        const alive = this.enemies.filter((e) => e.summonedBy === parent).length
+        due = Math.min(due, Math.max(0, spec.cap - alive))
+      }
+
+      for (let i = 0; i < due; i++) {
+        const at = parent.summonPoint
+        const lane = this.lanes.lane(at.laneId)
+        const child = new Enemy(this, def, lane.path, this.gateway, {
+          lanes: this.lanes,
+          laneId: at.laneId,
+          startAt: { laneDistance: at.laneDistance, distance: at.distance },
+          summonedBy: parent,
+        })
+        this.enemies.push(child)
+        logEvent('summon', `${parent.def.name} -> ${def.name} lane=${at.laneId} at=${at.distance.toFixed(0)}`)
+      }
     }
   }
 

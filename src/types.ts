@@ -335,6 +335,20 @@ export interface TaxDef {
   minimumTake: number
 }
 
+/** An enemy's summoning behaviour. See EnemyDef.summons. */
+export interface SummonsDef {
+  /** The enemy id to call in. */
+  enemy: string
+  /** How many arrive per burst. */
+  count: number
+  /** Seconds between bursts. */
+  interval: number
+  /** How many of this summoner's children may be alive at once. Absent means
+   *  no limit, which is a thing to think twice about: an uncapped summoner on
+   *  a long wave is an unbounded number of bodies on the field. */
+  cap?: number
+}
+
 export interface EnemyDef {
   name: string
   flavor: string
@@ -363,6 +377,14 @@ export interface EnemyDef {
    * shoot at it.
    */
   layer?: string
+  /**
+   * What this enemy calls in while it walks, if anything.
+   *
+   * Reusable across bosses rather than written into one of them: the block is
+   * data, and any enemy that carries it summons. Children appear at the
+   * summoner's own place on its own lane and carry on from there.
+   */
+  summons?: SummonsDef
   peanutReward: number
   livesCost: number
   damage: number

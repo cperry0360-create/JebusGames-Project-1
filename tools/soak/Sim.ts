@@ -109,6 +109,12 @@ interface SimEnemy {
   armorShred: number
   attackTimer: number
   blocked: boolean
+  /** The summoner that called this one in, or null for a scripted spawn. A
+   *  wave ends when its SCRIPTED spawns are gone, so this is what the
+   *  wave-over check filters on. */
+  summonedBy: SimEnemy | null
+  /** Counts down to the next burst. Only a summoner uses it. */
+  summonTimer: number
 }
 
 interface SimTower {
@@ -219,16 +225,41 @@ export function simulate(
   const statOf = (t: SimTower, key: string): number =>
     finite(`${t.id}.${key}`, statAt(t.def, t.tier, key as any, t.spec))
 
-  const spawn = (id: string): void => {
+  const spawn = (id: string, at = 0, summonedBy: SimEnemy | null = null): void => {
     const def = ENEMIES[id]
     if (!def) { note('missing-data', `wave names unknown enemy "${id}"`); return }
-    const p = lane.pointAt(0)
+    const p = lane.pointAt(at)
     enemies.push({
-      id, def, health: def.maxHealth, distance: 0, x: p.x, y: p.y, alive: true,
+      id, def, health: def.maxHealth, distance: at, x: p.x, y: p.y, alive: true,
       slowFactor: 0, slowRemaining: 0, slowStacks: 0, sinceSlow: 99,
       stunRemaining: 0, stunLockout: 0, stunStacks: 0, sinceStun: 99,
       armorShred: 0, attackTimer: 0, blocked: false,
+      summonedBy,
+      // The first burst waits a full interval, so a boss does not arrive with
+      // a crowd already around it.
+      summonTimer: def.summons?.interval ?? 0,
     })
+  }
+
+  /**
+   * Bosses calling in help, modelled the way the scene does it: at the
+   * summoner's own distance, capped by how many of ITS children are still
+   * alive, and not counted toward the wave being over.
+   */
+  const tickSummons = (dt: number): void => {
+    for (const parent of [...enemies]) {
+      const spec = parent.def.summons
+      if (!spec || !parent.alive) continue
+      parent.summonTimer -= dt
+      let due = 0
+      while (parent.summonTimer <= 0) { due += spec.count; parent.summonTimer += spec.interval }
+      if (due <= 0) continue
+      if (spec.cap !== undefined) {
+        const alive = enemies.filter((e) => e.alive && e.summonedBy === parent).length
+        due = Math.min(due, Math.max(0, spec.cap - alive))
+      }
+      for (let i = 0; i < due; i++) spawn(spec.enemy, parent.distance, parent)
+    }
   }
 
   const hurtEnemy = (e: SimEnemy, damage: number, ignoresArmor: boolean, pierce = 0): void => {
@@ -405,6 +436,7 @@ export function simulate(
       // length, so a soak of one would need a lane per enemy here too; that is
       // a change to make when a branching level exists to soak.
       for (const sp of spawner.update(DT)) spawn(sp.enemy)
+      tickSummons(DT)
       cooldowns.tick(DT)
 
       // Towers.
@@ -533,7 +565,9 @@ export function simulate(
       for (let i = enemies.length - 1; i >= 0; i--) if (!enemies[i]!.alive) enemies.splice(i, 1)
 
       if (lives <= 0) { outcome = 'lost'; break runLoop }
-      if (spawner.done && enemies.length === 0) break
+      // Scripted spawns only, as in the scene: a summoner that kept bursting
+      // would otherwise hold the wave open for as long as it could summon.
+      if (spawner.done && !enemies.some((e) => e.summonedBy === null)) break
     }
 
     const last = waveIndex + 1 >= WAVES.length
