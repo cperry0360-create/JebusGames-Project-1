@@ -30,7 +30,6 @@ const SPOTS = MAP.buildSpots
 const q = new URLSearchParams(location.search)
 const GAME_SPEED = 1.4
 const scenario = q.get('s') || 'game'
-const P_BAILEY = (await import('./js/data/presentation.json', { with: { type: 'json' } })).default.bailey
 /** Optional scenario argument, e.g. ?s=heroblock&arg=7 */
 const arg = q.get('arg')
 // The window is sized by --window-size, and the canvas follows it through
@@ -4279,7 +4278,7 @@ async function run() {
       '  (NEAREST=' + (gl ? gl.NEAREST : '?') + ', LINEAR=' + (gl ? gl.LINEAR : '?') +
       ', LINEAR_MIPMAP_LINEAR=' + (gl ? gl.LINEAR_MIPMAP_LINEAR : '?') + ')')
     const sample = ['hero-cory', 'turret-ledger', 'enemy-filer', 'map-level1',
-      'prop-bailey-peek', 'ui-plate-wide']
+      'prop-pad-flagstone', 'ui-plate-wide']
     for (const k of sample) {
       if (!game.textures.exists(k)) { note('  ' + k + ': NOT LOADED'); continue }
       const src = game.textures.get(k).source[0]
@@ -5497,102 +5496,6 @@ async function run() {
     const lo = Math.min(...samples), hi = Math.max(...samples)
     note('pulse over one cycle at node 0: peak delta ranges ' + lo + '..' + hi +
       '  (swing ' + (hi - lo) + ')')
-
-    note(problems.length ? 'PROBLEMS: ' + problems.length : 'no problems found')
-    for (const m of problems) note('  - ' + m)
-    return
-  }
-
-  if (scenario === 'bailey') {
-    // BAILEY, AT THE OPENING ZOOM — what a player actually sees.
-    //
-    // The first run of this framed each spot at max zoom, which answered
-    // "is she drawn correctly" and not "can anyone find her". The camera is
-    // left where the run opens now, and her position is reported in screen
-    // pixels so there is somewhere to look.
-    const MAPD = (await import('./js/data/map.json', { with: { type: 'json' } })).default
-    const DISP = (await import('./js/data/display.json', { with: { type: 'json' } })).default
-    const A = (await import('./js/data/art.json', { with: { type: 'json' } })).default
-    const RES = await import('./js/systems/Resolution.js')
-    const B = P_BAILEY
-    const problems = []
-    const push = (m) => { problems.push(m); note('   *** ' + m) }
-
-    const key = A.prop.baileyPeek
-    note('art ' + key + ' -> ' + A.files[key] +
-      '   texture present: ' + g.textures.exists(key) +
-      '   bailey armed: ' + g.bailey.armed)
-    if (!g.bailey.armed) {
-      push('SHE DOES NOT APPEAR: the texture is missing, so the optional hook ' +
-        'is doing what it is for and she is absent')
-      note(problems.length ? 'PROBLEMS: ' + problems.length : '')
-      return
-    }
-    const src = g.textures.get(key).getSourceImage()
-    const cam = g.cameras.main
-    const dpr = window.devicePixelRatio || 1
-    note('source ' + src.width + 'x' + src.height +
-      '  aspect ' + (src.width / src.height).toFixed(3))
-    note('camera at the OPENING zoom ' + cam.zoom.toFixed(4) +
-      ' device px per world unit (' + (cam.zoom / dpr).toFixed(4) + ' css)' +
-      '   world view x ' + cam.worldView.x.toFixed(0) + '..' + cam.worldView.right.toFixed(0) +
-      ' y ' + cam.worldView.y.toFixed(0) + '..' + cam.worldView.bottom.toFixed(0))
-
-    const only = q.get('bailey')
-    const spots = MAPD.baileySpots.spots
-    for (let i = 0; i < spots.length; i++) {
-      if (only !== null && Number(only) !== i) continue
-      const s = spots[i]
-      g.bailey.forcePeek(g.time.now, i)
-      await sleep(B.riseMs + B.holdMs * 0.4)
-      const d = g.bailey.debug
-      const img = g.children.list.find((o) => o.texture && o.texture.key === key)
-      const shownWorld = s.canopyY - d.y
-      const shownCss = shownWorld * cam.zoom / dpr
-      const at = RES.worldToScreen(g, s.x, s.canopyY)
-      const top = RES.worldToScreen(g, s.x, d.y)
-      note('spot ' + i + ' (world ' + s.x + ',' + s.canopyY + '): ' +
-        (s._note || 'no clump recorded'))
-      note('   ON SCREEN at ' + at.x.toFixed(0) + ',' + at.y.toFixed(0) +
-        ' css px — her canopy line. Her head runs up from there to ' +
-        top.x.toFixed(0) + ',' + top.y.toFixed(0))
-      // NO 44px TARGET HERE ANY MORE. It was carried over from a brief written
-      // against the old design zoom, and it fights the only thing that makes
-      // her read: she has to be narrow enough for a painted clump to hide, and
-      // the widest clump on this plate outside the HUD band is about 50 world
-      // px. That caps her height, and peakVisible decides how much of it shows.
-      //
-      // WHAT SHOWS IS PRINTED, NOT DESCRIBED. This used to say "the ears and
-      // the top of the head" in the same breath as the live percentage, and it
-      // went on saying it after the percentage went from 33 to 60 — so the
-      // output described a state the build had left, and that stale sentence
-      // is what a later reading of this went on to quote back. The landmarks
-      // are named instead, measured off the 872px source: eye band 349-470,
-      // nose leather 505-585, collar 569 and down. Same rows as the bounds in
-      // tests/bailey.test.ts, so the two cannot drift apart.
-      const pv = 100 * B.peakVisible
-      const reads = pv < 40 ? 'EYES UNDER THE LINE: two ears'
-        : pv < 55 ? 'EYES CUT IN HALF: a severed sprite'
-        : pv < 65 ? 'eyes clear, foliage across the muzzle'
-        : 'COLLAR SHOWING: a dog sitting on a bush'
-      note('   visible ' + shownWorld.toFixed(1) + ' world px = ' +
-        shownCss.toFixed(1) + ' CSS px = ' +
-        (shownWorld * cam.zoom).toFixed(0) + ' px in this capture  (' +
-        pv.toFixed(0) + '% of her -> ' + reads + ')')
-      note('   full sprite ' + (img ? img.displayWidth.toFixed(1) : '?') + ' x ' +
-        (img ? img.displayHeight.toFixed(1) : '?') + ' world px; ' +
-        (100 * B.peakVisible).toFixed(0) + '% of her clears the line')
-      if (shownCss < 8) push('spot ' + i + ' shows only ' + shownCss.toFixed(1) +
-        ' CSS px, which nobody will ever notice')
-      // NOTHING BELOW THE LINE. The mask is a world-space rectangle ending at
-      // canopyY, so the check is that her drawn bottom is at or above it.
-      if (img && img.y + img.displayHeight < s.canopyY - 0.5) {
-        push('spot ' + i + ': she is entirely above the canopy, so she is not behind anything')
-      }
-      await shot('bailey-spot' + i)
-      await sleep(B.holdMs * 0.6 + B.dropMs + 150)
-      if (g.bailey.debug.visible) push('spot ' + i + ': she never went back down')
-    }
 
     note(problems.length ? 'PROBLEMS: ' + problems.length : 'no problems found')
     for (const m of problems) note('  - ' + m)

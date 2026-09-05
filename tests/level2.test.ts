@@ -23,8 +23,8 @@ const W = display.width, H = display.height
 test('level 2 is the same shape of map as level 1', () => {
   for (const key of Object.keys(L1)) {
     // Level 1 carries painted furniture level 2 has none of: an arch, a gate,
-    // a tavern sign, an innkeeper, two clumps for Bailey.
-    if (['signs', 'innkeeper', 'entrance', 'exit', 'baileySpots'].includes(key)) continue
+    // a tavern sign, an innkeeper.
+    if (['signs', 'innkeeper', 'entrance', 'exit'].includes(key)) continue
     assert.ok(key in L2, `map_level2.json is missing "${key}"`)
   }
   assert.equal(typeof L2.roadWidth, 'number')

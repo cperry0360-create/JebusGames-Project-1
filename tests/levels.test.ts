@@ -103,31 +103,29 @@ test('an unknown level id falls back rather than throwing', () => {
 /* ------------------------------------------------------- optional furniture */
 
 test('level 1 has its arch, gate and signs, and level 2 has none of them', () => {
-  // Not a wish: these four fields are optional on MapDef precisely because
+  // Not a wish: these three fields are optional on MapDef precisely because
   // level 2's lane runs off both edges of its plate and there is nothing to
   // animate at either end. If level 1 ever loses one, the guards in GameScene
   // start silently skipping scenery that is supposed to be there.
   const l1 = loadLevel('level1').map
-  for (const k of ['entrance', 'exit', 'signs', 'baileySpots'] as const) {
+  for (const k of ['entrance', 'exit', 'signs'] as const) {
     assert.ok(l1[k], `level 1 lost its ${k}`)
   }
   const l2 = loadLevel('level2').map
-  for (const k of ['entrance', 'exit', 'signs', 'baileySpots'] as const) {
+  for (const k of ['entrance', 'exit', 'signs'] as const) {
     assert.equal(l2[k], undefined, `level 2 grew a ${k}; the map was traced without one`)
   }
 })
 
 test('the scene builds the optional furniture only where the map declares it', () => {
   const game = src('scenes/GameScene.ts')
-  // Each of the four is behind a check on the map, not assumed present.
+  // Each is behind a check on the map, not assumed present.
   assert.match(game, /if \(!entrance\) return/, 'the arch occluders assume an entrance')
   assert.match(game, /if \(map\.signs\) \{/, 'the signs are built unconditionally')
-  assert.match(game, /if \(map\.baileySpots\) \{/, 'Bailey is built unconditionally')
   assert.match(game, /map\.entrance \? distanceAtX/, 'the arch mouth assumes an entrance')
   assert.match(game, /map\.exit \? distanceAtX/, 'the gate assumes an exit')
   // And the taps that reach them tolerate their absence.
   assert.match(game, /this\.sign\?\.owns/, 'a tap would throw on a level with no sign')
-  assert.match(game, /this\.bailey\?\.update/, 'the frame would throw on a level with no Bailey')
   // The arch is cropped out of the LEVEL'S plate, not level 1's by name.
   assert.ok(!/ART\.map\.level1/.test(game), 'the scene still names level 1\'s plate directly')
 })

@@ -42,7 +42,6 @@ import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { platePanel, plateButton, type PlateButton } from '../ui/Plate.ts'
 import { dockedSlab } from '../ui/EdgeDock.ts'
 import { SignBribe } from '../ui/SignBribe.ts'
-import { Bailey } from '../entities/Bailey.ts'
 import { fitAspect, placeSign } from '../systems/SignPlacement.ts'
 import { CameraRig } from '../systems/CameraRig.ts'
 import { Dialog, type DialogOptions } from '../ui/Dialog.ts'
@@ -165,10 +164,6 @@ export class GameScene extends Phaser.Scene {
   /** Public so the probe can drive the bribe through the real swap. Undefined
    *  on a level whose map declares no signs — see `buildSign`. */
   sign?: SignBribe
-  /** The dog behind the trees. Does nothing, and is allowed to be absent:
-   *  her art is an optional hook, and without it she never appears. Undefined
-   *  as well on a level with no tree line to put her head through. */
-  bailey?: Bailey
   private cancelBtn!: PlateButton
   /** The docked slab CANCEL is drawn on. Its own object, because the painted
    *  button plate cannot have a square corner. */
@@ -748,11 +743,10 @@ export class GameScene extends Phaser.Scene {
     const h = displayData.height
     const map = this.level.map
 
-    // All three are scenery a level either has or does not. Level 2 is a
-    // corridor with no village in it: no boards to letter and no tree line for
-    // the dog to look through. Each is built only where the map declares it,
-    // and `sign` and `bailey` stay undefined otherwise — the taps and the
-    // per-frame update below both check.
+    // Signs are scenery a level either has or does not. Level 2 is a corridor
+    // with no village in it and no boards to letter, so they are built only
+    // where the map declares them and `sign` stays undefined otherwise — the
+    // tap path checks.
     if (map.signs) {
       this.sign = new SignBribe(this, map.signs.held, w, h, RULES.signBribe)
       this.sign.setDepth(this.sign.depthY)
@@ -764,15 +758,6 @@ export class GameScene extends Phaser.Scene {
         .setDisplaySize(tavern.width, tavern.height)
         .setRotation(tavern.rotationRad)
         .setDepth(tavern.footY)
-    }
-
-    if (map.baileySpots) {
-      // Loaded with the level's other props, not added to the boot path.
-      const b = PRESENTATION.bailey
-      this.bailey = new Bailey(this, ART.prop.baileyPeek, map.baileySpots.spots, b,
-        b.worldHeight, GROUND_DEPTH + 1)
-      const dog = this.bailey
-      this.events.once('shutdown', () => dog.destroy())
     }
   }
 
@@ -2998,11 +2983,6 @@ export class GameScene extends Phaser.Scene {
     // The camera runs on real time. It is feel, not simulation, and a camera
     // that eased 40% faster would read as twitchy rather than as brisk.
     this.rig.update(real)
-
-    // Real time as well: she is scenery, and a game-speed setting should not
-    // make the dog frantic. Build phase only — an easter egg that moves while
-    // a wave walks in is competing with the thing the player has to watch.
-    this.bailey?.update(_time, this.status.phase === 'ready' && !this.modalOpen)
 
     if (this.status.phase === 'won' || this.status.phase === 'lost') return
 

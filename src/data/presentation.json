@@ -527,17 +527,5 @@
   "safeArea": {
     "housingAtAngle90": "left",
     "_housingAtAngle90": "Which horizontal edge the sensor housing lands on at screen.orientation.angle 90, which is landscape-primary. That is iOS landscapeLeft \u2014 home indicator on the right, device top edge on the left \u2014 so the housing is on the left, and 270 is the mirror of it. THIS IS THE ONE VALUE HERE NOT VERIFIED ON HARDWARE: it comes from the orientation conventions, not from a notched phone. Both branches are tested and both viewports are asserted; if the inset ever shows up on the wrong edge, flip this string and change nothing else."
-  },
-  "bailey": {
-    "minGapMs": 60000,
-    "maxGapMs": 150000,
-    "_gap": "Re-rolled inside this band after every appearance, so she is never on a schedule anyone can learn. The floor is the \"at most once a minute\" rule; the ceiling is far enough out that two in a row rarely feel related.",
-    "riseMs": 400,
-    "holdMs": 1200,
-    "dropMs": 400,
-    "peakVisible": 0.6,
-    "_peakVisible": "How much of her clears the canopy at the top of the rise, measured against HER OWN ART rather than picked. On the 872px source: ear tips at 1%, the eyes span 40-54%, the nose 60-66%, the collar 69% and down. 0.60 puts the foliage across her muzzle with both eyes fully clear and no collar or chest showing, which is the whole test \u2014 without the eyes she reads as two ears rather than a dog looking at you. It has been wrong in both directions: 0.5 gave ears, forehead and both eyes half-cut, which read as a severed sprite; 0.33 was the correction and went too far, giving ears and a sliver of forehead with the eyes under the line.",
-    "worldHeight": 67,
-    "_worldHeight": "Her full height in WORLD pixels; `peakVisible` of it clears the canopy. THE \"44px\" IS AMBIGUOUS AND THE TWO READINGS ARE NOW IN TENSION, so this is left at the first one and the numbers are on the record: 67 world px is 44 CSS px of dog at the OPENING zoom (0.659 css per world unit at 844x390), of which 22 CSS px clears the trees. Making the VISIBLE part 44 CSS px instead needs 134 world px \u2014 and that makes her visible head as tall as Cory is whole, because the opening zoom is 2.6x further out than the design zoom the original 44 was written against. Whichever is meant, she is behind the HUD at the opening zoom on this map; see reports/2026-09-03-sign-fit-and-bailey.md."
   }
 }

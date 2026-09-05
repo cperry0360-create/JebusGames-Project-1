@@ -47,7 +47,7 @@ export interface Level extends LevelDef {
  * Map data by level id.
  *
  * Level 2's cast is looser than level 1's because its map has no entrance,
- * exit, signs or Bailey spots — those fields are optional on `MapDef` now, and
+ * exit or signs — those fields are optional on `MapDef` now, and
  * a JSON import types them as absent rather than optional.
  */
 const MAPS: Record<string, MapDef> = {

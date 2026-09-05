@@ -52,9 +52,6 @@ export interface MapDef {
     /** The board the innkeeper holds. The bribe swaps its texture. */
     held: SignBoard
   }
-  /** Gaps in the tree line Bailey can put her head up through. Optional: a
-   *  level with no tree line simply never shows her. */
-  baileySpots?: { spots: Array<{ x: number; canopyY: number }> }
   /** The stone archway enemies walk out of, measured off the painted plate.
    *  Optional: without one, enemies are at full opacity from their first
    *  frame because there is nothing for them to walk out from behind. */
@@ -645,10 +642,6 @@ export interface ArtDef {
     signBribed: string
     /** The tavern's lettering. Static: no state, no swap. */
     signTavern: string
-    /** Bailey's head, for the easter egg. OPTIONAL art: she never appears
-     *  while the file is absent, which for something that does nothing is the
-     *  right fallback and needs no placeholder. */
-    baileyPeek?: string
     /** The DO NOT BUILD HERE sign. Exactly one spot on the map carries it. */
     buildPad: string
     /** The painted flagstone every other free spot carries. */
