@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { abilityLine, towerLine, towerStats } from '../src/systems/AbilityText.ts'
+import { fitHeroRow, heroDescription, heroRow, overlaps } from '../src/systems/HeroRow.ts'
 
 const url = (p: string) => new URL(p, import.meta.url)
 const src = (p: string) => readFileSync(url(`../src/${p}`), 'utf8')
@@ -81,14 +82,17 @@ test('the loadout is built so cards can be dealt face down later', () => {
     assert.ok(!body.includes('platePanel('),
       `${section} draws its own plate instead of going through card()`)
   }
-  // The hero row's picker tiles go INSIDE that card rather than beside it: a
-  // tile that built its own plate would be a sixth card in a three-card
-  // screen, and the reveal would not know about it.
-  const tile = s.slice(s.indexOf('private heroTile('), s.indexOf('private pickHero('))
+  // The hero row's cards go INSIDE that card rather than beside it: a hero
+  // card that built its own `card()` would be a sixth card in a three-card
+  // screen, and the reveal would not know about it. They wear a plate of their
+  // own — drawn straight into the face container — because a bare portrait in
+  // a row reads as a filmstrip rather than as five things to choose between.
+  const tile = s.slice(s.indexOf('private heroCard('), s.indexOf('private pickHero('))
   assert.ok(tile.length > 0, 'the hero picker is gone')
   assert.ok(!/this\.(card|cardRow|platePanel)\(/.test(tile),
-    'a hero tile builds a card of its own instead of sitting on the hero card')
-  assert.match(s, /c\.face\.add\(this\.heroTile\(/, 'the tiles are not on the card face')
+    'a hero card builds a scene card of its own instead of sitting on the hero card')
+  assert.match(s, /c\.face\.add\(this\.heroCard\(/, 'the hero cards are not on the card face')
+  assert.match(s, /c\.face\.add\(this\.heroBlurb\(/, 'the description is not on the card face')
   assert.match(s, /c\.face\.add\(/, 'nothing puts content on a card face at all')
 })
 
@@ -211,11 +215,27 @@ test('the screen is laid out from the viewport, not from the content', () => {
     'the buttons are placed after the cards, so a tall card can still push them off')
   assert.match(render, /const budget = \(by - LO\.buttonHeight \/ 2 - LO\.buttonGap\) - top/,
     'the card area is not the space left over after the buttons')
-  // And every row is GIVEN its height rather than growing to fit.
-  for (const section of ['heroSection', 'towerSection', 'abilitySection']) {
+  // The two DEALT rows are given their height. They hold whatever the draft
+  // handed over and must fit it into the space that is left.
+  for (const section of ['towerSection', 'abilitySection']) {
     assert.match(s, new RegExp(`private ${section}\\([^)]*height: number`),
       `${section} decides its own height, which is how the row grew off the screen`)
   }
+  // THE HERO BLOCK IS THE EXCEPTION, and it is capped rather than allocated.
+  // It used to take a fixed 40% whether that was too much or too little, and
+  // the picker inside it absorbed the difference by subtraction — which went
+  // negative on a short screen and threw the portraits out of the card. It
+  // asks for what its content needs now, under a ceiling that comes out of the
+  // same budget, so it still cannot push the buttons off.
+  assert.match(s, /private heroSection\([^)]*cap: number/,
+    'the hero block is back on a fixed share of the budget')
+  assert.match(render, /Math\.floor\(budget \* LO\.heroSectionMaxShare\)/,
+    'the hero block has no ceiling, so a long blurb can push the towers off')
+  assert.match(render, /const rest = Math\.max\(0, budget - heroUsed\)/,
+    'what the hero block did not use is not handed to the rows below it')
+  const P0 = read('presentation') as any
+  assert.ok(P0.loadout.heroSectionMaxShare > 0 && P0.loadout.heroSectionMaxShare < 1,
+    'the hero ceiling is not a fraction of the budget')
   const row = s.slice(s.indexOf('private cardRow('))
   assert.match(row.slice(0, 900), /return y \+ height/,
     'the card row still reports a height it measured rather than the one it was given')
@@ -241,11 +261,15 @@ test('the loadout fits the design box with room for the buttons', () => {
   // The plate's chrome hangs below its box, so the gap has to clear it.
   assert.ok(LO.buttonGap >= 20, `a ${LO.buttonGap}px gap lets the buttons touch the last card`)
 
+  // TWO shares, not three. The hero block is sized to its content under its
+  // own ceiling, so it has no share to hold; these split what it leaves.
   const shares = LO.rowShares
-  const total = shares.hero + shares.towers + shares.specials
-  assert.ok(Math.abs(total - 1) < 1e-9, `the row shares sum to ${total}, not 1`)
+  assert.equal((shares as Record<string, number>).hero, undefined,
+    'the hero row is back on a fixed share of the budget')
+  const total = shares.towers + shares.specials
+  assert.ok(Math.abs(total - 1) < 1e-9, `the dealt-row shares sum to ${total}, not 1`)
   for (const [name, v] of Object.entries(shares) as [string, number][]) {
-    assert.ok(v > 0.15 && v < 0.5, `the ${name} row takes ${v} of the card area`)
+    assert.ok(v > 0.3 && v < 0.7, `the ${name} row takes ${v} of what is left`)
   }
   // A type ladder that bottoms out too low is unreadable on a phone; one that
   // bottoms out too high cannot fit the longest copy.
@@ -256,38 +280,103 @@ test('the loadout fits the design box with room for the buttons', () => {
     'the ladder bottoms out below 18px, which is not readable on a phone')
 })
 
-test('the hero picker fits five heroes even in the narrow column', () => {
-  // Arithmetic, since CI has no renderer. The row is ONE card with five
-  // picker tiles in it, and the tile is what the numbers have to clear: at
-  // the narrowest the panel ever gets, a tile still has to hold a portrait
-  // and a name at the bottom rung of the type ladder.
-  const P = read('presentation') as any
-  const LO = P.loadout
+test('every hero card holds a recognisable character, at every column width', () => {
+  /*
+   * Arithmetic, since CI has no renderer — but arithmetic against the SAME
+   * module the scene lays the row out with, rather than a second opinion about
+   * it. The tile sizing this replaces was exactly that second opinion: it
+   * asserted a 58px portrait fits a 98px tile, which was true, while the scene
+   * was drawing a 24px one because the strip it drew into had negative height.
+   */
   const roster = Object.keys(read('heroes')).filter((id) => !id.startsWith('_'))
   assert.equal(roster.length, 5, 'the roster changed size; these numbers were measured for five')
+  const cfg = (read('presentation') as any).loadout.heroRow
 
-  const tile = Math.floor((LO.minContentWidth - LO.heroCardGap * (roster.length - 1)) / roster.length)
-  assert.ok(tile >= 90, `a ${tile}px tile cannot hold a portrait and a name`)
-  assert.ok(tile >= LO.heroPortrait + 8,
-    `a ${LO.heroPortrait}px portrait does not fit a ${tile}px tile with its frame`)
+  // The column runs from the narrowest the panel is ever clamped to, to the
+  // widest, less the card padding either side.
+  for (let width = 460; width <= 700; width += 20) {
+    for (const nameHeight of [20, 24, 30]) {
+      const row = heroRow({ width, count: roster.length, nameHeight }, cfg)
+      assert.equal(row.cards.length, 5)
+      assert.ok(row.portrait >= cfg.minPortrait,
+        `at ${width}px the portrait is ${row.portrait}px, under the ${cfg.minPortrait}px floor`)
+      assert.ok(row.portrait <= cfg.maxPortrait)
+      // Every card is inside the column, and the row is inside its own height.
+      for (const c of row.cards) {
+        assert.ok(c.x >= -0.001 && c.x + c.width <= width + 0.001,
+          `at ${width}px a card runs from ${c.x} to ${c.x + c.width}`)
+        assert.ok(c.y >= 0 && c.y + c.height <= row.height + 0.001,
+          'a card runs past the height the row reported')
+      }
+    }
+  }
+})
 
-  // The longest NAME has to sit on one line in that tile at the bottom rung
-  // of the ladder, or the picker labels wrap and the strip grows. 0.62em is a
-  // conservative average for a bold uppercase UI sans.
-  // The tile steps the name down from the bottom rung to `heroNameMin`, and
-  // the FLOOR is what has to fit: below it the label stops shrinking and
-  // wraps instead. 0.62em is a conservative average for a bold uppercase UI
-  // sans.
-  const longest = Math.max(...roster.map((id) => (read('heroes') as any)[id].name.length))
-  assert.ok(longest * LO.heroNameMin * 0.62 <= tile,
-    `the longest hero name needs ${Math.ceil(longest * LO.heroNameMin * 0.62)}px in a ${tile}px tile`)
-  assert.ok(LO.heroNameMin >= 15, `a ${LO.heroNameMin}px picker label is not readable on a phone`)
-  assert.ok(LO.heroNameMin <= LO.bodySizes[LO.bodySizes.length - 1],
-    'the name floor is above the ladder it steps down from, so it can never be reached')
+test('nothing in the hero row overlaps anything else in it', () => {
+  // THE FOUR REPORTED FAULTS, as one property. Portraits over the heading,
+  // names over portraits, a highlight that framed neither: all of them were a
+  // strip whose height had gone negative. Rectangles that are built by ADDING
+  // heights cannot do that, and this is the proof at every width the panel
+  // reaches and every text height the font can hand back.
+  const cfg = (read('presentation') as any).loadout.heroRow
+  for (let width = 460; width <= 700; width += 10) {
+    for (const nameHeight of [18, 22, 26, 34]) {
+      const row = heroRow({ width, count: 5, nameHeight }, cfg)
+      const all: Array<[string, any]> = []
+      row.cards.forEach((r, i) => all.push([`card ${i}`, r]))
+      for (let i = 0; i < row.cards.length; i++) {
+        // Inside its own card, with clear air between the two.
+        const c = row.cards[i]!, p = row.portraits[i]!, n = row.names[i]!
+        assert.ok(!overlaps(p, n), `${width}/${nameHeight}: portrait ${i} runs into its name`)
+        assert.ok(n.y - (p.y + p.height) >= cfg.nameGap - 0.001,
+          `${width}/${nameHeight}: name ${i} has no clear separation from its portrait`)
+        for (const [what, r] of [['portrait', p], ['name', n]] as const) {
+          assert.ok(r.x >= c.x - 0.001 && r.x + r.width <= c.x + c.width + 0.001
+            && r.y >= c.y - 0.001 && r.y + r.height <= c.y + c.height + 0.001,
+            `${width}/${nameHeight}: the ${what} on card ${i} is outside its own card`)
+        }
+      }
+      // And no two cards touch.
+      for (let i = 0; i < all.length; i++) {
+        for (let j = i + 1; j < all.length; j++) {
+          assert.ok(!overlaps(all[i]![1], all[j]![1]),
+            `${width}/${nameHeight}: ${all[i]![0]} overlaps ${all[j]![0]}`)
+        }
+      }
+    }
+  }
+})
 
-  // And the strip has to leave the description a readable share of the row.
-  assert.ok(LO.rowShares.hero >= LO.rowShares.towers,
-    'the hero row is now the picker and the description; it cannot be the shortest row')
+test('the row wraps rather than shrinking past the point of recognition', () => {
+  // The fallback the brief asked for, and the reason `minPortrait` is a hard
+  // floor: five cards that will not fit across become two rows, not five
+  // smudges. It never fires at the widths this game actually uses, which is
+  // the point — it is what makes the floor safe to enforce.
+  const cfg = (read('presentation') as any).loadout.heroRow
+  const wide = heroRow({ width: 700, count: 5, nameHeight: 24 }, cfg)
+  assert.equal(wide.rows, 1, 'the full-width column is wrapping when it need not')
+  const narrow = heroRow({ width: 260, count: 5, nameHeight: 24 }, cfg)
+  assert.equal(narrow.rows, 2, 'a column too narrow for five shrank them instead of wrapping')
+  assert.ok(narrow.portrait >= cfg.minPortrait, 'the wrapped row is still below the floor')
+  assert.ok(narrow.height > wide.height, 'two rows are not taller than one')
+})
+
+test('the description block uses its space instead of leaving it empty', () => {
+  // It was three lines at the top of a tall empty box. Both ability chips sit
+  // beside the blurb now, and the block is as tall as the taller side rather
+  // than as tall as whatever was left over.
+  const d = (read('presentation') as any).loadout.heroDescription
+  const tall = heroDescription({ width: 600, blurbHeight: 90, chipHeight: 34, chips: 2 }, d)
+  assert.equal(tall.height, 90, 'a tall blurb does not set the block height')
+  assert.equal(tall.chips.length, 2, 'both hero buttons are not shown')
+  assert.ok(!overlaps(tall.blurb, tall.chips[0]!), 'the blurb runs under the chips')
+  assert.ok(!overlaps(tall.chips[0]!, tall.chips[1]!), 'the two chips overlap')
+
+  const short = heroDescription({ width: 600, blurbHeight: 20, chipHeight: 34, chips: 2 }, d)
+  assert.equal(short.height, 34 * 2 + d.gap, 'a short blurb does not let the chips set the height')
+  assert.ok(short.blurb.width > 0 && short.chips[0]!.width > 0)
+  assert.equal(short.blurb.x + short.blurb.width + d.gap, short.chips[0]!.x,
+    'the blurb column and the chip column do not tile the width')
 })
 
 test('every hero, tower and special is covered, and none is too long to fit', () => {
@@ -330,4 +419,148 @@ test('every hero, tower and special is covered, and none is too long to fit', ()
     * Object.keys(abilities).length, 'not every combination was enumerated')
   assert.deepEqual([...new Set(tooLong)], [],
     'a card body is longer than the longest one measured to fit')
+})
+
+/* ------------------------------------------------------------ hero naming */
+
+test('every hero and every hero button is called one thing, everywhere', () => {
+  /*
+   * The roster shipped calling Elijah "ELIJAH" on the picker and "Eli"
+   * everywhere else, and three of the five second buttons carried a name from
+   * an older design: Cory's read "Loophole", which is a TOWER branch, and
+   * Bailey's read "Fetch", which is Eli's old active. A stale name on a button
+   * that does nothing yet is indistinguishable from a broken button.
+   */
+  const heroes = read('heroes') as Record<string, any>
+  const expected: Record<string, [string, string, string]> = {
+    cory: ['Cory', 'Haymaker', 'Spike Strip'],
+    courtland: ['Courtland', 'Shockwave', 'Seismic'],
+    han: ['Han', 'Ember', 'Fireball'],
+    eli: ['Eli', 'Quick Cut', 'Star Rain'],
+    bailey: ['Bailey', 'Bark', 'Zoomies'],
+  }
+  const ids = Object.keys(heroes).filter((k) => !k.startsWith('_'))
+  assert.deepEqual(ids.sort(), Object.keys(expected).sort(), 'the roster changed')
+  for (const [id, [name, one, two]] of Object.entries(expected)) {
+    assert.equal(heroes[id].name, name, `${id} is not called ${name}`)
+    assert.equal(heroes[id].slot1.name, one, `${id}'s first button is not ${one}`)
+    assert.equal(heroes[id].slot2.name, two, `${id}'s second button is not ${two}`)
+  }
+
+  // And no retired name survives anywhere the player or the log can see it.
+  // Elijah is excluded: he is a real person credited by name in ATTRIBUTIONS
+  // and in audio.json's notes, which is a different thing from the hero's name.
+  const retired = ['Loophole', 'Overclock', 'Firestorm', 'Bedrock', 'Fetch']
+  const heroesRaw = readFileSync(url('../src/data/heroes.json'), 'utf8')
+  for (const dead of retired) {
+    assert.ok(!heroesRaw.includes(`"${dead}"`), `${dead} is still a name in heroes.json`)
+  }
+  // Comments stripped: the scenes explain these bugs by name, and a note about
+  // a retired string is the opposite of a retired string still in use.
+  for (const scene of ['LoadoutScene', 'GameScene', 'HudScene', 'TitleScene']) {
+    const body = src(`scenes/${scene}.ts`)
+      .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+    for (const dead of [...retired, 'Elijah']) {
+      assert.ok(!body.includes(dead), `${scene} still hardcodes ${dead}`)
+    }
+  }
+
+  // The names the UI shows come from the data, never from a literal, so there
+  // is one place to change and nowhere for a second copy to go stale.
+  const loadout = src('scenes/LoadoutScene.ts')
+  assert.match(loadout, /hero\.name\.toUpperCase\(\)/, 'the picker label is not read from the data')
+  assert.match(loadout, /slot\.name/, 'the ability chips do not read their names from the data')
+})
+
+test('a reserved hero power reads as coming rather than as broken', () => {
+  // Slot 2 is gated on the powered form and not implemented. It showed only a
+  // name, so a stale one was indistinguishable from a live ability.
+  const loadout = src('scenes/LoadoutScene.ts')
+  assert.match(loadout, /const ready = slot\.effect !== null/,
+    'the chip does not know whether its ability exists yet')
+  assert.match(loadout, /\$\{slot\.name\} \(soon\)/,
+    'an unimplemented hero power does not say so')
+  assert.match(loadout, /if \(!ready\) icon\.setAlpha/,
+    'a reserved power draws at full strength, like a live one')
+})
+
+test('every hero card draws that hero, and Bailey is the dog', () => {
+  // A picker whose cards share art is a picker with one option. Each card
+  // renders `portraitSprite` off its own hero, and every one of those is a
+  // distinct key pointing at a distinct file.
+  const heroes = read('heroes') as Record<string, any>
+  const art = read('art') as any
+  const ids = Object.keys(heroes).filter((k) => !k.startsWith('_'))
+  const keys = ids.map((id) => heroes[id].portraitSprite)
+  assert.equal(new Set(keys).size, ids.length, 'two heroes share a portrait key')
+  const files = keys.map((k) => {
+    const path = art.files[k]
+    assert.ok(path, `${k} is not in art.json`)
+    return path
+  })
+  assert.equal(new Set(files).size, files.length, 'two portrait keys point at one file')
+  assert.match(heroes.bailey.portraitSprite, /bailey/, "Bailey's card is not Bailey's art")
+  assert.match(String(files[ids.indexOf('bailey')]), /bailey/,
+    "Bailey's portrait key does not resolve to Bailey's file")
+
+  const loadout = src('scenes/LoadoutScene.ts')
+  assert.match(loadout, /hero\.portraitSprite/, 'the card does not draw the hero it is for')
+})
+
+test('the three rows all fit the design box, with the hero block capped', () => {
+  /*
+   * The whole screen's vertical arithmetic, reproduced against the real
+   * config. CI has no renderer, so the measured heights — the title, the
+   * subtitle, a heading, a name, an ability chip — are SWEPT across the range
+   * a UI sans can plausibly hand back rather than pinned to one number. What
+   * is asserted is the property: the hero block never exceeds its ceiling, and
+   * the two dealt rows are never squeezed to nothing.
+   */
+  const P = read('presentation') as any
+  const LO = P.loadout
+  const H = (read('display') as any).height
+
+  for (const lead of [0.9, 1.2, 1.5]) {         // px of height per px of size
+    const th = (size: number) => Math.round(size * lead) + 6
+    const top = 8 + th(44) + th(22) + 10
+    const by = H - LO.buttonMargin - LO.buttonHeight / 2
+    const headingH = th(22) + LO.headingGap
+    const budget = (by - LO.buttonHeight / 2 - LO.buttonGap) - top - headingH * 3
+      - LO.sectionGap * 2
+    assert.ok(budget > 120, `a lead of ${lead} leaves only ${budget} for three rows`)
+
+    const cap = Math.floor(budget * LO.heroSectionMaxShare)
+    const pad = 14                              // the painted frame's inset
+    const D = LO.heroDescription
+    const chipH = Math.max(D.iconSize, th(D.chipNameSize))
+    const chipsH = chipH * 2 + D.gap
+    // The description's floor: two chips, or the blurb at the bottom of the
+    // ladder, whichever is taller. Reserved BEFORE the row is fitted, so the
+    // row is the part that gives ground.
+    const innerW = LO.maxContentWidth - pad * 2
+    const descFloor = Math.max(chipsH, th(18) * 2)
+    const row = fitHeroRow(
+      { width: innerW, count: 5, nameHeight: th(18) },
+      LO.heroRow,
+      cap - pad * 2 - LO.sectionGap - descFloor,
+    )
+    const desc = heroDescription(
+      { width: innerW, blurbHeight: descFloor, chipHeight: chipH, chips: 2 }, D,
+    )
+    const used = pad * 2 + row.height + LO.sectionGap + desc.height
+
+    assert.ok(used <= cap + 0.001,
+      `at a lead of ${lead} the hero block wants ${used} against a ${cap} ceiling`)
+    // THE POINT OF ALL OF IT: the character is big enough to recognise. The
+    // version this replaces drew 24px portraits here.
+    assert.ok(row.portrait >= LO.heroRow.minPortrait,
+      `the portrait came out at ${row.portrait}px`)
+    assert.ok(row.rows === 1, 'the full-width column should not need to wrap')
+
+    // And the two dealt rows still have room to be cards.
+    const rest = budget - used
+    const towers = Math.floor(rest * (LO.rowShares.towers / (LO.rowShares.towers + LO.rowShares.specials)))
+    assert.ok(towers >= 70, `the tower row is left ${towers}px`)
+    assert.ok(rest - towers >= 60, `the specials row is left ${rest - towers}px`)
+  }
 })

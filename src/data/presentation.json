@@ -223,9 +223,8 @@
     "_buttonPadX": "Inside a button, either side of its label. Both buttons take the width the WIDER label needs, so the row is symmetrical.",
     "buttonMinWidth": 200,
     "rowShares": {
-      "hero": 0.4,
-      "towers": 0.32,
-      "specials": 0.28
+      "towers": 0.53,
+      "specials": 0.47
     },
     "frameInsetShare": 0.58,
     "bodySizes": [
@@ -233,15 +232,39 @@
       20,
       18
     ],
-    "heroNameSize": 26,
     "cardIconColumnShare": 0.23,
     "cardIconColumnMin": 62,
     "cardIconColumnMax": 92,
-    "_rowShares": "THE HERO ROW IS THE BIGGEST NOW, and it was the smallest. It used to hold one dealt hero and needed room for a portrait and three lines; it holds five cards the player chooses between, so it is the decision on this screen and the towers and specials -- which are still dealt -- give it the space.",
-    "heroCardGap": 7,
-    "heroPortrait": 58,
-    "heroNameMin": 15,
-    "_heroNameMin": "The smallest a picker tile's name may get. The tile steps down from the bottom rung of bodySizes only as far as it needs: COURTLAND is nine characters and the panel narrows to minContentWidth on a small viewport, which is a 98px tile, and at 18px that name wraps to two lines and eats the portrait."
+    "_rowShares": "HOW THE TWO DEALT ROWS SPLIT WHAT THE HERO BLOCK DID NOT TAKE. There used to be a third share here, for the hero, and it was the biggest -- a fixed 40% whether the content wanted it or not. The picker inside absorbed the difference by subtraction and went negative on a short screen, which threw the portraits out of the card and over the heading. The hero block is sized to its content now, under `heroSectionMaxShare`, so it has no share to hold.",
+    "heroCard": {
+      "_note": "One hero's plate in the picker. It had none: the tiles were bare portraits on the panel, which is why the row read as a filmstrip rather than as five cards. Selection is the plate lightening AND a ring AND a tick, three signals, because this is the one control on the screen that changes what the run is.",
+      "fill": 1778732,
+      "fillSelected": 2894148,
+      "fillAlpha": 0.92,
+      "edge": 3559248,
+      "edgeSelected": 15771696,
+      "edgeWidth": 2,
+      "ringWidth": 3,
+      "radius": 9
+    },
+    "heroRow": {
+      "_note": "THE HERO PICKER, as a row of proper cards. It was a strip of tiles whose height was whatever was left after the description had taken 42% of the panel -- which went negative on a short screen and threw the portraits out of the card and over the heading. The row is sized to its content now and the section is sized to the row; see systems/HeroRow.ts. minPortrait is a HARD floor with a consequence: below it the row wraps to two lines rather than shrinking, because five 24px smudges are not a picker.",
+      "gap": 8,
+      "pad": 7,
+      "nameGap": 6,
+      "minPortrait": 66,
+      "maxPortrait": 96
+    },
+    "heroDescription": {
+      "_note": "The blurb beside the hero's two buttons. The panel used to be three lines at the top of a tall empty box; the space is used now.",
+      "chipColumn": 0.36,
+      "gap": 8,
+      "iconGap": 8,
+      "iconSize": 28,
+      "chipNameSize": 17
+    },
+    "heroSectionMaxShare": 0.62,
+    "_heroSectionMaxShare": "The ceiling on what the hero block may take out of the three-row budget before the towers and the specials get theirs. The block asks for what its content needs; this is what stops a long blurb starving the two rows underneath it."
   },
   "scratchCard": {
     "cardHeight": 260,

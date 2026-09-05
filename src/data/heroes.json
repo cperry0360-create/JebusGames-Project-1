@@ -47,7 +47,7 @@
     },
     "_slot1": "Unchanged, down to the last number. Cory's Haymaker is what every other slot 1 is modelled on and it is the one the game was tuned against, so it keeps its own icon -- real art rather than the marked placeholder in ability_cory_1.png.",
     "slot2": {
-      "name": "Loophole",
+      "name": "Spike Strip",
       "icon": "ability-cory-2",
       "effect": null
     },
@@ -126,7 +126,7 @@
     },
     "_slot1": "A burst around him rather than a punch in front: no target to pick, so it is the one slot 1 that always lands. Damage is a third of Haymaker for a third of the wait, and the 0.7s stun is the point of it.",
     "slot2": {
-      "name": "Overclock",
+      "name": "Seismic",
       "icon": "ability-courtland-2",
       "effect": null
     },
@@ -203,7 +203,7 @@
     },
     "_slot1": "Reaches furthest and hurts longest. 22 on the hit and 14/s for four seconds is 78 in total, but it arrives over four seconds rather than at once, so it opens a fight rather than finishing one.",
     "slot2": {
-      "name": "Firestorm",
+      "name": "Fireball",
       "icon": "ability-han-2",
       "effect": null
     },
@@ -231,7 +231,7 @@
     ]
   },
   "eli": {
-    "name": "Elijah",
+    "name": "Eli",
     "title": "The Wall",
     "blurb": "Immovable. Holds four at once and never complains.",
     "bodySprite": "hero-eli",
@@ -280,7 +280,7 @@
     },
     "_slot1": "Two hits of 38 in a fifth of a second. Half of Haymaker in two thirds of its cooldown, and it is the only slot 1 that can be interrupted mid-cast -- the second hit is skipped if the target dies to the first.",
     "slot2": {
-      "name": "Bedrock",
+      "name": "Star Rain",
       "icon": "ability-eli-2",
       "effect": null
     },
@@ -357,7 +357,7 @@
     },
     "_slot1": "NO DAMAGE AT ALL, deliberately: Bailey is the fastest hero and the weakest, and a slow is worth more to her than a small hit would be. 45% off everything within 112px for 2.5 seconds, on the shortest cooldown on the roster.",
     "slot2": {
-      "name": "Fetch",
+      "name": "Zoomies",
       "icon": "ability-bailey-2",
       "effect": null
     },
@@ -385,6 +385,6 @@
     ]
   },
   "_note": "THE FIVE HEROES. Cory is first and is the default: a save with no choice in it preselects him, so a player who never touches the row plays exactly the game that was tuned. `poweredSprite` is the form a hero wears once its health has been below half; CORY'S IS NULL ON PURPOSE -- he has no powered art, and `ultimateSprite` is already his DAD MODE look, so giving the powered form that art would spend Last Stand's only visual before Last Stand arrives. He transforms with the burst and the damage reduction and keeps his own picture.",
-  "_stats": "DAMAGE PER SECOND IS DELIBERATELY FLAT across the roster: 19 to 24 against Cory's 21.2, a spread of about 12%. Level 1 is tuned to 45 of 60 with Cory, and a hero twice as strong would throw that away the first time anyone picked him. What differs is everything else -- Elijah holds four enemies where Bailey holds two, Han reaches 122 where Bailey reaches 70, Bailey moves at 142 where Elijah moves at 90 -- so the choice is about how you want to play rather than about which hero is better.",
+  "_stats": "DAMAGE PER SECOND IS DELIBERATELY FLAT across the roster: 19 to 24 against Cory's 21.2, a spread of about 12%. Level 1 is tuned to 45 of 60 with Cory, and a hero twice as strong would throw that away the first time anyone picked him. What differs is everything else -- Eli holds four enemies where Bailey holds two, Han reaches 122 where Bailey reaches 70, Bailey moves at 142 where Eli moves at 90 -- so the choice is about how you want to play rather than about which hero is better.",
   "_slots": "TWO BUTTONS PER HERO, in the two hero slots the ability bar has always reserved. SLOT 1 is always available and is a short-range active on a low cooldown, one per hero, all modelled on Haymaker's shape: the same block of fields with a different `effect`, so a new hero is data rather than code. Every skill declares EVERY field, with zeros where it does not use one -- Bark's `damage: 0` is a statement rather than an omission. SLOT 2 is the hero power, gated on the powered form and not yet implemented. The five effects: `punch` hits the nearest enemy hard and throws it back; `burst` damages and briefly stuns everything around the hero; `burn` hits one target and sets it alight for a few seconds; `double` lands two fast hits on the nearest enemy; `howl` damages nothing and slows everything nearby."
 }

@@ -13,6 +13,8 @@ import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI, uiSize } from '../ui/Theme.
 import { panelInset, plateButton, platePanel, type PlateButton } from '../ui/Plate.ts'
 import { buttonRow } from '../systems/ButtonRow.ts'
 import { fitInBox } from '../systems/Art.ts'
+import { fitHeroRow, heroDescription, type DescriptionLayout } from '../systems/HeroRow.ts'
+import type { Rect } from '../systems/HudLayout.ts'
 import { fitCameraToDesign } from '../ui/FitCamera.ts'
 import { abilityLine, towerLine, towerStats } from '../systems/AbilityText.ts'
 import { ART, renderFor } from '../systems/Art.ts'
@@ -283,17 +285,28 @@ export class LoadoutScene extends Phaser.Scene {
     const budget = (by - LO.buttonHeight / 2 - LO.buttonGap) - top
       - headingH * 3 - LO.sectionGap * 2
 
+    // THE HERO BLOCK IS SIZED TO ITS CONTENT, and the two dealt rows share
+    // what is left in the proportion they always had.
+    //
+    // It used to take a fixed 40% share whether that was too much or too
+    // little, and the row inside it absorbed the difference by subtraction —
+    // which is how the portraits ended up at a 24px floor inside a strip of
+    // negative height. A block that asks for what it needs cannot do that.
+    // `heroSectionMaxShare` is the ceiling, so a long blurb can never starve
+    // the towers.
     const share = LO.rowShares
-    const heights = {
-      hero: Math.floor(budget * share.hero),
-      towers: Math.floor(budget * share.towers),
-      specials: Math.floor(budget * share.specials),
-    }
-
     let y = top
-    y = this.heroSection(run.heroId, y, heights.hero) + LO.sectionGap
-    y = this.towerSection(run.openingTowers, y, heights.towers) + LO.sectionGap
-    this.abilitySection(run.abilities, y, heights.specials)
+    const heroBottom = this.heroSection(
+      run.heroId, y, Math.floor(budget * LO.heroSectionMaxShare),
+    )
+    const heroUsed = heroBottom - y - headingH
+    const rest = Math.max(0, budget - heroUsed)
+    const dealt = share.towers + share.specials
+    const towersH = Math.floor(rest * (share.towers / dealt))
+
+    y = heroBottom + LO.sectionGap
+    y = this.towerSection(run.openingTowers, y, towersH) + LO.sectionGap
+    this.abilitySection(run.abilities, y, rest - towersH)
 
     // Every card is face-up for now. The reveal lands here.
     for (const c of this.cards) c.reveal()
@@ -429,7 +442,7 @@ export class LoadoutScene extends Phaser.Scene {
   }
 
   /**
-   * The HERO row: every hero on one card, one tap, and the choice remembered.
+   * The HERO row: every hero on its own card, one tap, and the pick remembered.
    *
    * NOT A DEAL. It used to be one card showing whatever the draft handed you,
    * which was indistinguishable from a constant while there was one hero. With
@@ -437,124 +450,238 @@ export class LoadoutScene extends Phaser.Scene {
    * the pick is a tap, and REROLL -- which redeals the towers and the specials
    * -- leaves it alone.
    *
-   * ONE CARD WITH A PICKER STRIP, not five cards. Five cards across the 720px
-   * content column is 130px each, and a 63-character description in a 114px
-   * text column needs six lines: it only fits at about 11px, and this screen's
-   * own floor is 18px because the whole design box is fitted down to the
-   * viewport. So the portraits and the names sit in a strip -- every hero
-   * visible, tappable and highlighted -- and the selected hero's description
-   * and ability names are written underneath at full width, where they are
-   * read at the same size as every other card's body.
+   * IT WAS A STRIP OF TILES AND IT IS A ROW OF CARDS. The tiles were sized by
+   * subtraction: the description took 42% of the panel and the portraits took
+   * whatever was left. On a short screen "whatever was left" went negative,
+   * and every one of the four faults playtesting reported came out of that one
+   * number -- portraits drawn above the card and over the heading, portraits
+   * at the 24px floor, names on top of them, and a selection ring stroking a
+   * rectangle of negative height. `systems/HeroRow.ts` solves the row instead,
+   * and this section is sized to what the row needs rather than to a share of
+   * a budget.
+   *
+   * `cap` is a ceiling, not an allocation: the block takes what its content
+   * needs and the caller gives the remainder to the two dealt rows.
    */
-  private heroSection(selectedId: string, top: number, height: number): number {
+  private heroSection(selectedId: string, top: number, cap: number): number {
     const y = this.heading('HERO', top)
     const w = this.contentWidth
-    const c = this.card(W / 2 - w / 2, y, w, height)
-    const frame = this.frameInsetFor(w, height)
+    const frame = this.frameInsetFor(w, cap)
     const pad = Math.max(LO.cardPad, Math.ceil(Math.max(frame.left, frame.right)))
     const padT = Math.max(LO.cardPad, Math.ceil(frame.top))
     const padB = Math.max(LO.cardPad, Math.ceil(frame.bottom))
     const innerW = w - pad * 2
-    const innerH = height - padT - padB
 
     const roster = heroList()
     const selected = roster.find((h) => h.id === selectedId) ?? roster[0]!
 
-    // The blurb and the kit, at the largest size on the shared ladder that
-    // fits the third of the card they are allowed. Built first, because what
-    // is left over is what the portraits get.
-    const textRoom = Math.floor(innerH * 0.42)
-    let text: { parts: Phaser.GameObjects.Text[]; total: number } | null = null
-    for (const size of LO.bodySizes) {
-      text?.parts.forEach((p) => p.destroy())
-      const blurb = this.add.text(0, 0, selected.def.blurb, {
-        fontFamily: FONT_UI, fontSize: `${size}px`, color: COLOR.dim, ...BODY_SPACING,
-        align: 'center', wordWrap: { width: innerW },
-      }).setOrigin(0.5, 0)
-      // BOTH BUTTONS, in bar order. It used to read "Haymaker · DAD MODE",
-      // which was the slot-1 name beside the Last Stand name -- and every hero
-      // carried both of those strings verbatim, so the line said the same
-      // thing on all five cards.
-      const kit = this.add.text(0, 0,
-        `${selected.def.slot1.name} · ${selected.def.slot2.name}`, {
-          fontFamily: FONT_UI, fontSize: `${size}px`, color: COLOR.good,
-          align: 'center', wordWrap: { width: innerW },
-        }).setOrigin(0.5, 0)
-      text = { parts: [blurb, kit], total: blurb.height + 2 + kit.height }
-      if (text.total <= textRoom) break
-    }
-    const t = text as NonNullable<typeof text>
+    // MEASURED, not assumed: how tall a name renders is a font question and
+    // this is the only place that can ask one. Every card gets the same
+    // height, from the tallest label, so five cards are five equal cards.
+    const nameSize = LO.bodySizes[LO.bodySizes.length - 1]!
+    const nameHeight = Math.max(...roster.map((h) => {
+      const probe = this.add.text(0, 0, h.def.name.toUpperCase(), {
+        fontFamily: FONT_UI, fontSize: `${nameSize}px`, fontStyle: 'bold',
+      })
+      const t = probe.height
+      probe.destroy()
+      return t
+    }))
 
-    const gap = LO.heroCardGap
-    const tileW = Math.floor((innerW - gap * (roster.length - 1)) / roster.length)
-    const stripH = innerH - t.total - 6
+    // THE ORDER HERE IS THE GUARANTEE, and the order is: measure what cannot
+    // shrink, take it off the ceiling, and give what is left to the thing that
+    // can. The row is the elastic part; the description is not — two ability
+    // chips do not wrap, and a blurb at the bottom of the type ladder is as
+    // small as the blurb gets.
+    //
+    // Nothing here is computed by subtracting one guess from another, which is
+    // the arithmetic that went negative and threw the portraits over the
+    // heading.
+    const descCfg = LO.heroDescription
+    // ONE LINE PER CHIP. Two lines each made the pair 124px tall at a generous
+    // font lead — half the block, for two short strings — and squeezed the row
+    // that the block exists to show. The state a reserved power is in goes in
+    // the name's own string instead; see `heroBlurb`.
+    const chipH = Math.max(descCfg.iconSize, this.probeHeight(descCfg.chipNameSize))
+    const chipsH = chipH * 2 + descCfg.gap
+    // The blurb's column, which the ladder never changes: it is a fraction of
+    // the width, so the smallest size gives the shortest possible block.
+    const blurbW = heroDescription(
+      { width: innerW, blurbHeight: 0, chipHeight: chipH, chips: 2 }, descCfg,
+    ).blurb.width
+    const sizes = LO.bodySizes
+    const blurbHeightAt = (size: number): number => {
+      const probe = this.add.text(0, 0, selected.def.blurb, {
+        fontFamily: FONT_UI, fontSize: `${size}px`, ...BODY_SPACING,
+        wordWrap: { width: Math.max(40, blurbW) },
+      })
+      const h = probe.height
+      probe.destroy()
+      return h
+    }
+    const descFloor = Math.max(chipsH, blurbHeightAt(sizes[sizes.length - 1]!))
+
+    const rowCfg = LO.heroRow
+    const row = fitHeroRow(
+      { width: innerW, count: roster.length, nameHeight }, rowCfg,
+      cap - padT - padB - LO.sectionGap - descFloor,
+    )
+
+    // The blurb then takes the largest size on the ladder that still fits what
+    // the row left behind. The smallest always fits, because the room was
+    // reserved from it.
+    const roomForText = cap - padT - padB - row.height - LO.sectionGap
+    let bodySize = sizes[sizes.length - 1]!
+    let desc = heroDescription(
+      { width: innerW, blurbHeight: descFloor, chipHeight: chipH, chips: 2 }, descCfg,
+    )
+    for (const size of sizes) {
+      const next = heroDescription(
+        { width: innerW, blurbHeight: blurbHeightAt(size), chipHeight: chipH, chips: 2 }, descCfg,
+      )
+      bodySize = size
+      desc = next
+      if (next.height <= roomForText) break
+    }
+
+    const height = padT + row.height + LO.sectionGap + desc.height + padB
+    const c = this.card(W / 2 - w / 2, y, w, height)
     const left = -w / 2 + pad
+    const rowTop = -height / 2 + padT
 
     for (const [i, { id, def }] of roster.entries()) {
-      const cx = left + i * (tileW + gap) + tileW / 2
-      c.face.add(this.heroTile(def, id, id === selected.id, cx, -height / 2 + padT, tileW, stripH))
+      c.face.add(this.heroCard(
+        def, id, id === selected.id,
+        { x: left + row.cards[i]!.x, y: rowTop + row.cards[i]!.y },
+        row.cards[i]!, row.portraits[i]!, row.names[i]!,
+      ))
     }
 
-    let ty = height / 2 - padB - t.total
-    for (const [i, p] of t.parts.entries()) {
-      p.setY(ty)
-      ty += p.height + (i === 0 ? 2 : 0)
-    }
-    c.face.add(t.parts)
+    const descTop = rowTop + row.height + LO.sectionGap
+    c.face.add(this.heroBlurb(selected.def, left, descTop, desc, bodySize))
     return y + height
   }
 
+  /** One rendered text height at a size, for the layout to add up. */
+  private probeHeight(size: number): number {
+    const probe = this.add.text(0, 0, 'Hg', { fontFamily: FONT_UI, fontSize: `${size}px` })
+    const h = probe.height
+    probe.destroy()
+    return h
+  }
+
   /**
-   * One hero in the picker strip: a portrait, a name, and a tap.
+   * One hero card: a plate, the character on it, and the name under them.
    *
-   * The name stays on the bottom rung of the shared type ladder rather than
-   * being shrunk to fit a tile -- a label nobody can read is not a picker.
+   * THE CARD IS THE TARGET AND THE CARD IS THE HIGHLIGHT. The ring used to be
+   * stroked around a strip whose height could be negative, which is why it
+   * read as framing only the portrait. It is stroked around the card's own
+   * rectangle now -- the same rectangle the hit area uses and the same one the
+   * layout returned -- so the three cannot disagree.
    */
-  private heroTile(
+  private heroCard(
     hero: HeroDef, id: string, selected: boolean,
-    cx: number, top: number, w: number, h: number,
+    at: { x: number; y: number },
+    card: Rect, portrait: Rect, name: Rect,
   ): Phaser.GameObjects.Container {
-    const tile = this.add.container(cx, top + h / 2)
-    // The bottom rung of the shared ladder, stepped down only as far as this
-    // tile needs. MEASURED rather than assumed: a name's width is a font
-    // question, and this is the one place that can ask it.
-    const rung = LO.bodySizes[LO.bodySizes.length - 1]!
-    let name!: Phaser.GameObjects.Text
-    for (let size = rung; size >= LO.heroNameMin; size--) {
-      name?.destroy()
-      name = this.add.text(0, 0, hero.name.toUpperCase(), {
-        fontFamily: FONT_UI, fontSize: `${size}px`, fontStyle: 'bold',
-        color: selected ? COLOR.amber : COLOR.ink, align: 'center',
-        wordWrap: { width: w },
-      }).setOrigin(0.5, 1)
-      if (name.width <= w - 4 || size === LO.heroNameMin) break
-    }
-    name.setY(h / 2 - 2)
+    // Positioned at the card's top-left; everything inside is an offset from
+    // the rectangles the layout handed down, so nothing is placed twice.
+    const g = this.add.container(at.x, at.y)
+    const dx = card.x
+    const dy = card.y
 
-    const box = Math.max(24, Math.min(LO.heroPortrait, Math.min(w - 8, h - name.height - 6)))
-    const portrait = this.add.image(0, -h / 2 + box / 2 + 2, hero.portraitSprite)
-    fitInBox(portrait, hero.portraitSprite, box)
-    tile.add([portrait, name])
+    // A PLATE PER CARD, so a hero card carries the same visual weight as a
+    // tower card. The strip it replaces drew nothing behind a tile at all,
+    // which is most of why five portraits in a row read as a filmstrip rather
+    // than as five things to choose between.
+    const P = LO.heroCard
+    const plate = this.add.graphics()
+    plate.fillStyle(selected ? P.fillSelected : P.fill, P.fillAlpha)
+    plate.fillRoundedRect(0, 0, card.width, card.height, P.radius)
+    plate.lineStyle(P.edgeWidth, selected ? P.edgeSelected : P.edge, 1)
+    plate.strokeRoundedRect(0.5, 0.5, card.width - 1, card.height - 1, P.radius)
+    g.add(plate)
 
-    // THE HIGHLIGHT IS A RING PLUS A COLOUR PLUS A TICK, deliberately three
-    // things: a border alone is easy to miss on a phone at arm's length, and
-    // this is the one control on the screen that changes what the run is.
+    const img = this.add.image(
+      portrait.x - dx + portrait.width / 2,
+      portrait.y - dy + portrait.height / 2,
+      hero.portraitSprite,
+    )
+    fitInBox(img, hero.portraitSprite, portrait.width)
+
+    const label = this.add.text(
+      name.x - dx + name.width / 2, name.y - dy, hero.name.toUpperCase(), {
+        fontFamily: FONT_UI, fontSize: `${LO.bodySizes[LO.bodySizes.length - 1]!}px`,
+        fontStyle: 'bold', color: selected ? COLOR.amber : COLOR.ink, align: 'center',
+      }).setOrigin(0.5, 0)
+    g.add([img, label])
+
     if (selected) {
       const ring = this.add.graphics()
-      ring.lineStyle(3, 0xf0a830, 1).strokeRoundedRect(-w / 2, -h / 2, w, h, 8)
-      const tick = this.add.text(w / 2 - 4, -h / 2, '\u2713', {
-        fontFamily: FONT_UI, fontSize: `${rung}px`, fontStyle: 'bold', color: COLOR.amber,
+      ring.lineStyle(LO.heroCard.ringWidth, LO.heroCard.edgeSelected, 1)
+        .strokeRoundedRect(0, 0, card.width, card.height, LO.heroCard.radius)
+      const tick = this.add.text(card.width - 4, 2, '\u2713', {
+        fontFamily: FONT_UI, fontSize: `${LO.bodySizes[LO.bodySizes.length - 1]!}px`,
+        fontStyle: 'bold', color: COLOR.amber,
       }).setOrigin(1, 0)
-      tile.add([ring, tick])
+      g.add([ring, tick])
     } else {
-      tile.setAlpha(0.72)
+      g.setAlpha(0.72)
     }
 
-    const hit = this.add.rectangle(0, 0, w, h, 0xffffff, 0.001)
+    const hit = this.add.rectangle(card.width / 2, card.height / 2,
+      card.width, card.height, 0xffffff, 0.001)
       .setInteractive({ useHandCursor: true })
     hit.on('pointerdown', () => this.pickHero(id))
-    tile.add(hit)
-    return tile
+    g.add(hit)
+    return g
+  }
+
+
+  /**
+   * The description block: the blurb, and the hero's two buttons beside it.
+   *
+   * It was three lines at the top of a box that was mostly empty. The space is
+   * used now -- both ability icons with their names, which is the thing a
+   * player actually chooses between once they have looked at the pictures.
+   */
+  private heroBlurb(
+    hero: HeroDef, left: number, top: number, desc: DescriptionLayout, size: number,
+  ): Phaser.GameObjects.GameObject[] {
+    const D = LO.heroDescription
+    const out: Phaser.GameObjects.GameObject[] = []
+    out.push(this.add.text(
+      left + desc.blurb.x, top + desc.blurb.y, hero.blurb, {
+        fontFamily: FONT_UI, fontSize: `${size}px`, color: COLOR.dim, ...BODY_SPACING,
+        wordWrap: { width: desc.blurb.width },
+      }).setOrigin(0, 0))
+
+    const slots = [hero.slot1, hero.slot2]
+    for (const [i, slot] of slots.entries()) {
+      const box = desc.chips[i]!
+      const x = left + box.x
+      const y = top + box.y
+      // A SLOT THAT IS RESERVED SAYS SO. Cory's second button read "Loophole"
+      // for a whole build -- a name from a tower branch, on an ability that
+      // does not exist yet. The name is the real one now and the STATE is
+      // beside it, so an unimplemented power reads as coming rather than as
+      // broken.
+      const ready = slot.effect !== null
+      if (this.textures.exists(slot.icon)) {
+        const icon = this.add.image(x + D.iconSize / 2, y + box.height / 2, slot.icon)
+        fitInBox(icon, slot.icon, D.iconSize)
+        if (!ready) icon.setAlpha(0.5)
+        out.push(icon)
+      }
+      const tx = x + D.iconSize + D.iconGap
+      out.push(this.add.text(
+        tx, y + (box.height - this.probeHeight(D.chipNameSize)) / 2,
+        i === 1 && !ready ? `${slot.name} (soon)` : slot.name, {
+          fontFamily: FONT_UI, fontSize: `${D.chipNameSize}px`, fontStyle: 'bold',
+          color: ready ? COLOR.good : COLOR.dim,
+        }).setOrigin(0, 0))
+    }
+    return out
   }
 
   /**
@@ -571,9 +698,6 @@ export class LoadoutScene extends Phaser.Scene {
     setRunState({ heroId: id })
     this.render()
   }
-
-
-
 
   /**
    * One card face, for every card in both rows.
