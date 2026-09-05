@@ -4,7 +4,14 @@
 
 | commit | what | CI |
 | --- | --- | --- |
-| _(pending)_ | Record the deployment status review | _(pending)_ |
+| `af29583` | Record why nothing has deployed since 11:06 | ❌ asset budget only — inherited from `main` |
+
+`af29583` is a documentation-only commit on
+`claude/deployment-status-review-a661d6`. It is red for the same single reason
+every commit since `c9ea190a` is red, and its run
+([33988899244](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33988899244))
+is the cleanest evidence in this report: `npm test` **failure**, `npx tsc
+--noEmit` **skipped**, `deploy` **skipped**.
 
 This is a read-only review of today's pushes. Nothing in the game changed.
 
@@ -49,6 +56,8 @@ Every red run since `c9ea190a` fails on this one assertion and nothing else.
 
 `npm test` runs **before** `npx tsc --noEmit` in the checks job, and a failing
 test exits the job. So **the typechecker has not run in CI since `0c3abc1f`**.
+This is not inference: in run 33988899244 the `npx tsc --noEmit` step is
+recorded with conclusion `skipped`.
 Thirteen new source files have landed since — `Lanes.ts`, `AirCover.ts`,
 `Rally.ts`, `TowerDisable.ts`, `Heroes.ts`, `Transform.ts`, `HeroSkills.ts`,
 `Cutscenes.ts`, `Soldier.ts`, `CutsceneScene.ts` and three data files — and none
