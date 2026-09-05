@@ -419,7 +419,7 @@ test('no Restructure code or data remains', () => {
   assert.doesNotMatch(code(LOADOUT), /[Rr]estructure/)
   assert.doesNotThrow(() => readFileSync(new URL('../src/data/heroes.json', import.meta.url)))
   assert.throws(
-    () => readFileSync(new URL('../public/assets/abilities/ability_restructure.png', import.meta.url)),
+    () => readFileSync(new URL('../public/assets/abilities/ability_restructure.webp', import.meta.url)),
     'the Restructure icon is still in the build',
   )
 })

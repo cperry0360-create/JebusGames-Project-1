@@ -45,17 +45,20 @@ test('there is no generated scatter, and no way for one to come back quietly', (
   assert.equal(MAP.scatterExclude, undefined,
     'map.json still carries the keep-out rects the scatter used')
 
-  // The art goes with it. Fourteen prop PNGs nothing draws are fourteen files
-  // every player downloads for nothing, which is the same rule that took 282
-  // pack tiles and a 10.9MB plate out of the deploy.
+  // The art goes with it. Fourteen prop sprites nothing draws are fourteen
+  // files every player downloads for nothing, which is the same rule that took
+  // 282 pack tiles and a 10.9MB plate out of the deploy. Matched without an
+  // extension: the deploy is WebP now, and a resurrected prop would come back
+  // in whichever container the re-export happened to use.
   const named = Object.keys(art.files as Record<string, string>)
   assert.deepEqual(named.filter((k) => k.startsWith('scatter-')), [],
     'the manifest still names scatter props')
   const shipped = readdirSync(url('../public/assets/props'))
-  for (const f of ['rock_small.png', 'rock_medium.png', 'rock_large.png', 'grass_tall.png',
-    'pebbles.png', 'stump.png', 'branch_large.png', 'branch_small.png', 'mushrooms.png',
-    'flowers_white.png', 'flowers_yellow.png', 'dirt_cracked.png', 'puddle.png',
-    'tire_ruts.png']) {
+    .map((f) => f.replace(/\.[^.]+$/, ''))
+  for (const f of ['rock_small', 'rock_medium', 'rock_large', 'grass_tall',
+    'pebbles', 'stump', 'branch_large', 'branch_small', 'mushrooms',
+    'flowers_white', 'flowers_yellow', 'dirt_cracked', 'puddle',
+    'tire_ruts']) {
     assert.ok(!shipped.includes(f), `public/assets/props/${f} still ships and nothing draws it`)
   }
 })

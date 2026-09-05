@@ -238,14 +238,16 @@ event log.
 `ui-nuke-up`, `ui-nuke-down`.
 
 **Filenames on disk** (renaming the file means editing `art.json` too):
-`towers/tower_withholding_t1..t3.png`, `tower_writeoff.png`,
-`tower_rounding.png`, `tower_escalation.png`, `tower_filing.png`,
-`tower_tax.png`, `enemies/enemy_soldier.png`, `enemy_scout.png`,
-`enemy_brute.png`, `enemy_boss_politician.png`, `hero/hero_cory.png`,
-`hero/hero_cory_ultimate.png`, `units/gnome_trowel.png`, `gnome_rake.png`,
-`abilities/ability_*.png` (all nine), `props/sign_moes.png`,
-`props/sign_courjahan.png`, `props/sign_tavern.png`. **Note the drift already in
-here:** the Filing Extension's file is `tower_filing.png` but its key is `turret-extension`, and
+`towers/tower_withholding_t1..t3.webp`, `tower_writeoff.webp`,
+`tower_rounding.webp`, `tower_escalation.webp`, `tower_filing.webp`,
+`tower_tax.webp`, `enemies/enemy_soldier.webp`, `enemy_scout.webp`,
+`enemy_brute.webp`, `enemy_boss_politician.webp`, `hero/hero_cory.webp`,
+`hero/hero_cory_ultimate.webp`, `units/gnome_trowel.webp`, `gnome_rake.webp`,
+`abilities/ability_*.webp` (all nine), `props/sign_moes.webp`,
+`props/sign_courjahan.webp`, `props/sign_tavern.webp`. **Every one of them is
+`.webp`**: the deploy carries no PNG, so a `.png` in `art.json` is a typo, not
+a format choice. **Note the drift already in
+here:** the Filing Extension's file is `tower_filing.webp` but its key is `turret-extension`, and
 the Withholding Tower's key is `turret-ledger`.
 
 **Class and type names in code** — `Mode = 'normal' | 'targeting' |

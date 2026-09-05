@@ -120,8 +120,11 @@ question again. That is a plate-authoring job as much as a code one, and it was
 not worth building for an easter egg that does nothing.
 
 **Her art is deliberately still in the repo** at
-`public/assets/props/prop_bailey_peek.png`, unreferenced by `art.json`. It is
-kept for that return, not by accident.
+`art-source/props/prop_bailey_peek.png`, unreferenced by `art.json`. It is kept
+for that return, not by accident. It moved out of `public/` on 2026-09-05:
+everything under `public/` is deployed whether or not anything references it,
+so a 623KB PNG nothing draws was 623KB every player downloaded. `art-source/`
+is where art that is kept but not shipped lives.
 
 ## Swapping art
 
@@ -129,8 +132,8 @@ kept for that return, not by accident.
 the work:
 
 - **`files`** maps a key to a path under `assetRoot`, so a second art directory
-  is just a different prefix — `"towers/tower_withholding.png"` sits beside
-  `"kenney/towerDefense_tile203.png"` with no code change.
+  is just a different prefix — `"towers/tower_withholding.webp"` sits beside
+  `"kenney/towerDefense_tile203.webp"` with no code change.
 - **`render`** gives a key its anchor, on-screen height and shadow width, so art
   authored at 512px lands beside art authored at 64px. `anchorY: 1` puts the
   art's bottom edge on its build spot's ground line, which is what stops a tall

@@ -674,8 +674,10 @@ test('the retired tower-base placeholder is gone from the manifest', () => {
 
   // And the file itself. Kenney's projectiles, effects and decor stay — they
   // are used and credited — but this one tile is not art, it is a leftover.
-  assert.equal(existsSync(new URL('../public/assets/kenney/towerDefense_tile181.png', import.meta.url)),
-    false, 'the placeholder tile is still on disk')
+  for (const ext of ['png', 'webp']) {
+    assert.equal(existsSync(new URL(`../public/assets/kenney/towerDefense_tile181.${ext}`, import.meta.url)),
+      false, 'the placeholder tile is still on disk')
+  }
 })
 
 /* ------------------------------------------------- every tower does something */
@@ -889,9 +891,9 @@ test('the hero abilities point at their own icons, not at borrowed ones', () => 
   // placeholder tile. Both then spent a while pointing at other abilities'
   // icons as stand-ins, which is better but still borrowed.
   //
-  // They are per-hero now: ten icons, ability_<hero>_<slot>.png, one scheme for
+  // They are per-hero now: ten icons, ability_<hero>_<slot>.webp, one scheme for
   // the whole bar. Cory's Haymaker moved onto it with everybody else rather
-  // than keeping ability_haymaker.png -- one hero's finished art beside four
+  // than keeping ability_haymaker.webp -- one hero's finished art beside four
   // marked placeholders would have read as four bugs.
   const art = JSON.parse(readFileSync(new URL('../src/data/art.json', import.meta.url), 'utf8'))
   const optional: string[] = art.optional ?? []
@@ -900,7 +902,7 @@ test('the hero abilities point at their own icons, not at borrowed ones', () => 
       const key = h[slot].icon
       assert.equal(key, `ability-${id}-${n}`, `${id}'s ${slot} does not use its own icon`)
       assert.ok(art.files[key], `${key} is not in the manifest`)
-      assert.equal(art.files[key], `abilities/ability_${id}_${n}.png`,
+      assert.equal(art.files[key], `abilities/ability_${id}_${n}.webp`,
         `${key} points at the wrong file`)
       assert.ok(art.render[key], `${key} has no render entry, so it cannot be fitted`)
       // On disk, unless it is one of the two the upload did not include -- and
@@ -1141,8 +1143,10 @@ test('the projectile pack tiles are gone', () => {
   for (const [key, path] of Object.entries(art.files) as [string, string][]) {
     assert.ok(!/towerDefense_tile25[12]/.test(path), `${key} still points at a pack rocket`)
   }
-  for (const f of ['towerDefense_tile251.png', 'towerDefense_tile252.png']) {
-    assert.ok(!existsSync(url(`../public/assets/kenney/${f}`)), `${f} still ships`)
+  for (const f of ['towerDefense_tile251', 'towerDefense_tile252']) {
+    for (const ext of ['png', 'webp']) {
+      assert.ok(!existsSync(url(`../public/assets/kenney/${f}.${ext}`)), `${f}.${ext} still ships`)
+    }
   }
 })
 
@@ -1179,8 +1183,10 @@ test('the blast throws no separate embers, because its own frames do', () => {
   for (const path of Object.values(art.files) as string[]) {
     assert.ok(!/towerDefense_tile295/.test(path), 'the ember tile is still in the manifest')
   }
-  assert.ok(!existsSync(url('../public/assets/kenney/towerDefense_tile295.png')),
-    'the ember tile still ships')
+  for (const ext of ['png', 'webp']) {
+    assert.ok(!existsSync(url(`../public/assets/kenney/towerDefense_tile295.${ext}`)),
+      'the ember tile still ships')
+  }
 })
 
 test('the deploy stays small enough to open on a phone', () => {

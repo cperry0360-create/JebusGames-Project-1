@@ -252,9 +252,24 @@ WebP's support floor is Safari 14 / iOS 14 (2020), Chrome 32, Firefox 65. No
 JPEG fallback ships; a second copy of the plate would give back a third of what
 the format saved, for browsers this game does not otherwise run on.
 
-**Still on PNG and worth the same treatment:** `ui/title_bg.png` (2.56MB) and
-`ui/loadout_bg.png` (2.45MB), both full-screen backdrops with no transparency.
-Together they are now the two largest images in the deploy.
+**Nothing is on PNG any more.** The backdrops went first, and on 2026-09-05
+the rest of the cast followed: every image under `public/assets/` is WebP q95,
+which took the deploy from 58.0MB to 23.8MB. Alpha survived the trip bit-exact
+on all 111 files -- libwebp compresses the alpha plane losslessly by default,
+so the soft edges and glow effects that a quantized PNG would have wrecked came
+through untouched. The measured saving was 71.6% overall.
+
+The encoder is Chromium, driven by `tools/towebp/`, for the reason
+`tools/reencode/` already gives: this environment has no cwebp, no
+ImageMagick and no PIL, and every package registry answers 403. The one
+thing the browser does not expose is libwebp's `method` knob, so a
+`cwebp -m 6` pass would be a few percent smaller at the same quality --
+never a different picture.
+
+Eight small ability icons came out LARGER as WebP than as PNG (90KB more
+across all eight): flat, few-colour 256px badges are what PNG is good at.
+They were converted anyway, so that "no PNG under public/assets" is a rule
+with no exceptions to remember.
 
 ### 4. Mipmaps: recommended against, for now
 

@@ -246,7 +246,7 @@ of that shape.
 | Path | Size | Why |
 |---|---|---|
 | `public/assets/kenney/` — 282 of 298 PNGs | **622 KB** | The whole pack is committed and copied into the deploy; the manifest names 17 of them, of which 14 are ever drawn. The unused 282 are tower tiles, road tiles, enemy sprites and HUD numbers from the era before the painted art. Keep `License.txt` and the files the manifest names; the rest is deploy weight nobody downloads. |
-| `public/assets/units/_gnome_scale.png` | 196 KB | The artist's scale reference sheet — the two gnomes beside the goblin, Cory and the brute. Genuinely useful to keep in the repo, but it should not be under `public/`, where it is copied into the build. |
+| `art-source/enemies/scale_check.png` | 136 KB | The artist's scale reference sheet — the two gnomes beside the goblin, Cory and the brute. Genuinely useful to keep in the repo, but it should not be under `public/`, where it is copied into the build. **Resolved 2026-09-05:** moved to `art-source/`, which is exactly that — kept in git, out of the deploy. |
 
 **Done.** 286 pack PNGs (631 KB), two fonts (58 KB) and every `_`-prefixed art
 reference sheet under `public/` (1128 KB — there were more than the gnome one)

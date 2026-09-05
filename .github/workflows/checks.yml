@@ -3,8 +3,15 @@
 # main used to be excluded here (`branches-ignore: [main]`), which meant a
 # commit pushed straight to main ran no checks at all and went to Pages
 # unverified. Now main runs the same two checks as every other branch, and the
-# Pages deploy hangs off them: the deploy job below only starts once `checks`
-# has passed, so a red build publishes nothing.
+# Pages deploy hangs off them: the deploy job below only starts once both have
+# passed, so a red build publishes nothing.
+#
+# THE TWO CHECKS ARE SEPARATE JOBS, deliberately. They used to be two steps in
+# one job with `npm test` first, and a step that fails ends the job — so for a
+# full day, twice, a failing test meant `npx tsc --noEmit` never ran at all and
+# the typechecker looked green when nobody had asked it anything. Reordering
+# would only have swapped which one hides the other. As separate jobs both
+# always run, and a red build says everything that is wrong with it in one go.
 name: Checks
 
 on:
@@ -13,7 +20,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  checks:
+  test:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -24,12 +31,23 @@ jobs:
           node-version: '24'
       - run: npm install --no-audit --no-fund
       - run: npm test
+
+  typecheck:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-audit --no-fund
       - run: npx tsc --noEmit
 
-  # The gate. `needs: checks` means a failed or cancelled checks job leaves
-  # this skipped, and Pages keeps serving whatever it served before.
+  # The gate. `needs` means a failed or cancelled check leaves this skipped,
+  # and Pages keeps serving whatever it served before.
   deploy:
-    needs: checks
+    needs: [test, typecheck]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     permissions:
       contents: read

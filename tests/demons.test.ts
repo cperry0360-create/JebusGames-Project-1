@@ -45,9 +45,9 @@ test('the three demons are in enemies.json exactly as they were specified', () =
 
 test('each demon is registered under the sprite key it was asked for', () => {
   const EXPECTED: Record<string, string> = {
-    'enemy-demon-junior': 'enemies/demon_direct_report.png',
-    'enemy-demon-manager': 'enemies/demon_middle_manager.png',
-    'enemy-devil': 'enemies/demon_the_devil.png',
+    'enemy-demon-junior': 'enemies/demon_direct_report.webp',
+    'enemy-demon-manager': 'enemies/demon_middle_manager.webp',
+    'enemy-devil': 'enemies/demon_the_devil.webp',
   }
   for (const [key, path] of Object.entries(EXPECTED)) {
     assert.equal(art.files[key], path, `${key} does not point at ${path}`)

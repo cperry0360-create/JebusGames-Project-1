@@ -19,7 +19,7 @@ a percent, keep what is in art.json. It is the size the game was tuned at.
 
 import sys, glob, os, json
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import png
+import img
 
 ALPHA = 16
 # All six are drawn at one consistent scale inside a 512-tall frame, so a
@@ -34,17 +34,17 @@ MEDIAN_BASE_ON_SCREEN = 73.0
 KEY = {
     # Tier 1 is the Withholding Tower's base sprite; t2 and t3 are measured
     # separately and are not part of the six-tower scale.
-    'tower_withholding_t1.png': 'turret-ledger',
-    'tower_writeoff.png':    'turret-writeoff',
-    'tower_rounding.png':    'turret-rounding',
-    'tower_escalation.png':  'turret-escalation',
-    'tower_filing.png':      'turret-extension',
-    'tower_tax.png':         'turret-shelter',
+    'tower_withholding_t1.webp': 'turret-ledger',
+    'tower_writeoff.webp':    'turret-writeoff',
+    'tower_rounding.webp':    'turret-rounding',
+    'tower_escalation.webp':  'turret-escalation',
+    'tower_filing.webp':      'turret-extension',
+    'tower_tax.webp':         'turret-shelter',
 }
 
 def base_width(path):
     """The stone base: the widest opaque row in the bottom third of the art."""
-    w, h, px = png.read(path)
+    w, h, px = img.read(path)
     spans = []
     for y in range(h):
         lo, hi, b = w, -1, y * w * 4
@@ -79,7 +79,7 @@ print(f'median {median}px -> uniform scale {SCALE:.4f} '
 rows_out, files, render = [], {}, {}
 for f in tower_art:
     name = os.path.basename(f)
-    w, h, px = png.read(f)
+    w, h, px = img.read(f)
     spans = []
     for y in range(h):
         lo, hi, b = w, -1, y * w * 4
@@ -144,13 +144,13 @@ json.dump({'files': files, 'render': render}, open('/tmp/towerpatch.json', 'w'),
 # to 2x, and a hardcoded source height silently rescales the whole cast the
 # next time that happens.
 BRUTE_ON_SCREEN = 66.0
-BRUTE_SOURCE = 'public/assets/enemies/enemy_brute.png'
+BRUTE_SOURCE = 'public/assets/enemies/enemy_brute.webp'
 
 ENEMY_KEY = {
-    'enemy_brute.png':           ('enemy-notice',   0.90, None),
-    'enemy_soldier.png':         ('enemy-filer',    0.87, None),
-    'enemy_scout.png':           ('enemy-shredder', 0.84, None),
-    'enemy_boss_politician.png': ('enemy-politician', 0.80, None),
+    'enemy_brute.webp':           ('enemy-notice',   0.90, None),
+    'enemy_soldier.webp':         ('enemy-filer',    0.87, None),
+    'enemy_scout.webp':           ('enemy-shredder', 0.84, None),
+    'enemy_boss_politician.webp': ('enemy-politician', 0.80, None),
     # The level 3 cast. THE THIRD VALUE IS AN EXPLICIT ON-SCREEN HEIGHT, and
     # these four and the boss need one: the uniform brute scale below exists to
     # hold the Kenney-derived cast at one consistent size relative to each
@@ -161,14 +161,14 @@ ENEMY_KEY = {
     # mascots inside 60-85 so they read as a set, the boss at 140 so he towers
     # over them, and neither the catcher nor the zamboni under 85, because
     # below that the two silhouettes stop being tellable apart.
-    'enemy_pompom.png':          ('enemy-pompom',   0.90,  66.0),
-    'enemy_longsnap.png':        ('enemy-longsnap', 0.90,  74.0),
-    'enemy_catcher.png':         ('enemy-catcher',  0.90,  85.0),
+    'enemy_pompom.webp':          ('enemy-pompom',   0.90,  66.0),
+    'enemy_longsnap.webp':        ('enemy-longsnap', 0.90,  74.0),
+    'enemy_catcher.webp':         ('enemy-catcher',  0.90,  85.0),
     # A vehicle shadows under its whole body rather than its wheels, the same
     # rule the tower section applies -- so the zamboni's foot band is only used
     # for the anchor, and its shadow spans the art.
-    'enemy_zamboni.png':         ('enemy-zamboni',  0.94,  85.0),
-    'boss_unicorn.png':          ('enemy-unicorn',  0.90, 140.0),
+    'enemy_zamboni.webp':         ('enemy-zamboni',  0.94,  85.0),
+    'boss_unicorn.webp':          ('enemy-unicorn',  0.90, 140.0),
 }
 # Enemies whose shadow is cast by the whole body, not by the feet.
 ENEMY_BODY_SHADOW = {'enemy-zamboni'}
@@ -207,11 +207,11 @@ def foot_groups(low, cut):
 
 print('\n\nenemies')
 efiles, erender = {}, {}
-brute_source_h = png.read(BRUTE_SOURCE)[1]
+brute_source_h = img.read(BRUTE_SOURCE)[1]
 escale = BRUTE_ON_SCREEN / brute_source_h
 print(f'uniform scale {escale:.4f} (brute {brute_source_h}px -> {BRUTE_ON_SCREEN}px on screen)\n')
-for f in sorted(glob.glob('public/assets/enemies/enemy_*.png')
-                + glob.glob('public/assets/enemies/boss_*.png')):
+for f in sorted(glob.glob('public/assets/enemies/enemy_*.webp')
+                + glob.glob('public/assets/enemies/boss_*.webp')):
     name = os.path.basename(f)
     if name not in ENEMY_KEY:
         # Art that is in the folder but not in the manifest — the beetle was
@@ -220,7 +220,7 @@ for f in sorted(glob.glob('public/assets/enemies/enemy_*.png')
         print(f'{name:20s} not in ENEMY_KEY; skipped')
         continue
     key, band, fixed_h = ENEMY_KEY[name]
-    w, h, px = png.read(f)
+    w, h, px = img.read(f)
     low = ground_silhouette(w, h, px)
     bot = max(low)
     groups = foot_groups(low, int(h * band))
@@ -260,8 +260,8 @@ json.dump({'files': efiles, 'render': erender}, open('/tmp/enemypatch.json', 'w'
 ULTIMATE_WIDTH_MULTIPLE = 2.2
 
 HERO_KEY = {
-    'hero_cory.png':          ('hero-cory', 0.80, None),
-    'hero_cory_ultimate.png': ('hero-cory-ultimate', 0.82, 'body'),
+    'hero_cory.webp':          ('hero-cory', 0.80, None),
+    'hero_cory_ultimate.webp': ('hero-cory-ultimate', 0.82, 'body'),
 }
 # The Politician is an entourage, not a figure: two aides trail him carrying
 # the briefcase. His band reaches high enough to catch their feet too, so the
@@ -299,16 +299,16 @@ def footprint(w, h, px, band, rule):
 
 print('\n\nhero')
 hfiles, hrender = {}, {}
-bw, bh, bpx = png.read('public/assets/hero/hero_cory.png')
+bw, bh, bpx = img.read('public/assets/hero/hero_cory.webp')
 base_on_screen_w = bw * escale
 print(f'base hero: {bw}x{bh} -> {round(bw * escale, 1)}x{round(bh * escale, 1)} at the enemy scale {escale:.4f}')
 
-for name in ('hero_cory.png', 'hero_cory_ultimate.png'):
+for name in ('hero_cory.webp', 'hero_cory_ultimate.webp'):
     key, band, rule = HERO_KEY[name]
     path = f'public/assets/hero/{name}'
-    w, h, px = png.read(path)
+    w, h, px = img.read(path)
     (lo, hi), (slo, shi), groups = footprint(w, h, px, band, rule)
-    scale = escale if name == 'hero_cory.png' else (base_on_screen_w * ULTIMATE_WIDTH_MULTIPLE) / w
+    scale = escale if name == 'hero_cory.webp' else (base_on_screen_w * ULTIMATE_WIDTH_MULTIPLE) / w
     bot = max(ground_silhouette(w, h, px))
 
     hfiles[key] = f'hero/{name}'
@@ -363,11 +363,11 @@ def dark_field(w, h, px):
 print('\n\nHUD plates')
 pfiles, prender = {}, {}
 for name in ('peanuts', 'lives', 'wave'):
-    path = f'public/assets/ui/hud_{name}.png'
-    w, h, px = png.read(path)
+    path = f'public/assets/ui/hud_{name}.webp'
+    w, h, px = img.read(path)
     left, right, top, bot = dark_field(w, h, px)
     key = f'hud-{name}'
-    pfiles[key] = f'ui/hud_{name}.png'
+    pfiles[key] = f'ui/hud_{name}.webp'
     prender[key] = {
         'contentWidth': w,
         'contentHeight': h,
@@ -428,11 +428,11 @@ print('\n\nButton plates')
 bfiles, brender = {}, {}
 for name in ('btn_primary', 'btn_secondary', 'btn_disabled', 'btn_icon',
              'btn_icon_active', 'panel_dialog'):
-    path = f'public/assets/ui/{name}.png'
-    w, h, px = png.read(path)
+    path = f'public/assets/ui/{name}.webp'
+    w, h, px = img.read(path)
     left, right, top, bot = slice_insets(w, h, px)
     key = 'ui-' + name.replace('_', '-')
-    bfiles[key] = f'ui/{name}.png'
+    bfiles[key] = f'ui/{name}.webp'
     brender[key] = {
         'contentWidth': w,
         'contentHeight': h,
@@ -478,8 +478,8 @@ print('\n\nSignboards')
 # match the board's rectangle, or the words stretch. That is asserted in
 # tests/sign.test.ts against map.json, which is where the rectangle lives.
 for name in ('sign_moes', 'sign_courjahan', 'sign_tavern'):
-    path = f'public/assets/props/{name}.png'
-    w, h, _ = png.read(path)
+    path = f'public/assets/props/{name}.webp'
+    w, h, _ = img.read(path)
     print(f'  prop-{name.replace("_", "-")}: {w}x{h}, aspect {w / h:.4f} '
           f'(no render config: the plate rectangle places it)')
 
@@ -495,15 +495,15 @@ for name in ('sign_moes', 'sign_courjahan', 'sign_tavern'):
 # between the gnome's boots, and a shallower cut reads it as a third foot and
 # drags the anchor sideways.
 GNOME_KEY = {
-    'gnome_trowel.png': ('unit-gnome-trowel', 0.90),
-    'gnome_rake.png':   ('unit-gnome-rake', 0.90),
+    'gnome_trowel.webp': ('unit-gnome-trowel', 0.90),
+    'gnome_rake.webp':   ('unit-gnome-rake', 0.90),
 }
 
 print('\n\ngnomes')
 gfiles, grender = {}, {}
 for name, (key, band) in sorted(GNOME_KEY.items()):
     path = f'public/assets/units/{name}'
-    w, h, px = png.read(path)
+    w, h, px = img.read(path)
     low = ground_silhouette(w, h, px)
     bot = max(low)
     groups = foot_groups(low, int(h * band))
@@ -551,9 +551,9 @@ json.dump({'files': gfiles, 'render': grender}, open('/tmp/gnomepatch.json', 'w'
 # taller than the MANAGER instead, change the one number below to 70.0 and
 # re-run; nothing else moves.
 DEMON_ON_SCREEN = {
-    'demon_direct_report.png': ('enemy-demon-junior',  33.4, 0.90),
-    'demon_middle_manager.png': ('enemy-demon-manager', 66.0, 0.90),
-    'demon_the_devil.png':     ('enemy-devil',         37.0, 0.90),
+    'demon_direct_report.webp': ('enemy-demon-junior',  33.4, 0.90),
+    'demon_middle_manager.webp': ('enemy-demon-manager', 66.0, 0.90),
+    'demon_the_devil.webp':     ('enemy-devil',         37.0, 0.90),
 }
 # The third value is the foot band, as for the enemies above. 0.90 is the
 # deepest cut that still catches both feet on all three: the Underling stands
@@ -564,7 +564,7 @@ print('\n\ndemons')
 dfiles, drender = {}, {}
 for name, (key, on_screen, band) in DEMON_ON_SCREEN.items():
     path = f'public/assets/enemies/{name}'
-    w, h, px = png.read(path)
+    w, h, px = img.read(path)
     low = ground_silhouette(w, h, px)
     bot = max(low)
     groups = foot_groups(low, int(h * band))

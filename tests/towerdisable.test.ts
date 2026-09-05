@@ -254,8 +254,8 @@ test('the scene and the sim both drive the one rule module', () => {
 
 test('the art is registered as the sheets it actually is', () => {
   const art = JSON.parse(src('src/data/art.json'))
-  assert.equal(art.files[art.fx.bossBolt], 'effects/boss_projectile.png')
-  assert.equal(art.files[art.fx.stunned], 'effects/fx_stunned.png')
+  assert.equal(art.files[art.fx.bossBolt], 'effects/boss_projectile.webp')
+  assert.equal(art.files[art.fx.stunned], 'effects/fx_stunned.webp')
   assert.deepEqual(art.render[art.fx.bossBolt].sheet, { frameWidth: 482, frameHeight: 412, frames: 8 })
   assert.deepEqual(art.render[art.fx.stunned].sheet, { frameWidth: 617, frameHeight: 499, frames: 6 })
 

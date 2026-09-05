@@ -23,13 +23,18 @@ import type { Enemy } from './Enemy.ts'
  * mostly data: blocking already existed, it just had nothing permanent in it.
  */
 export class Soldier extends Phaser.GameObjects.Container {
-  // `x` and `y` come from Container and are what makes a Soldier a `Blocker`.
-  // Declared so the local typecheck can see them: without node_modules the
-  // Phaser base class is `any`, so the structural match against Blocker fails
-  // on exactly the two members the base class provides.
-  declare x: number
-  declare y: number
-  declare setDepth: (value: number) => unknown
+  // `x`, `y` and `setDepth` come from Container, and they are what make a
+  // Soldier a `Blocker` and a `Sortable`. They are NOT redeclared here.
+  //
+  // They were, briefly, to quiet the local typecheck -- without node_modules
+  // the Phaser base class is `any`, so the structural matches fail on exactly
+  // the members the base provides. It bought nothing and cost a red build:
+  // `declare setDepth: (value: number) => unknown` is a NARROWER type than
+  // Container's `setDepth(value: number): this`, and against the real typings
+  // TypeScript rejects a derived member that is not assignable to the base one.
+  // Enemy and Fighter extend the same class, satisfy the same two interfaces
+  // and declare nothing, which is the shape to copy. The local cascade in this
+  // file is noise; see CLAUDE.md on tsdiff.
   health: number
   maxHealth: number
   /** Where it stands when nothing is in front of it. Moved by the rally point. */

@@ -34,3 +34,14 @@ tools/reencode/profile/
 # reproducible with `sh tools/decode/run.sh`.
 tools/decode/out/
 tools/decode/profile/
+
+# tools/img.py decodes the shipped WebP art through Chromium so the measuring
+# tools can still read pixels; the decodes are reproducible with
+# `python3 tools/img.py` and are large.
+tools/.imgcache/
+
+# tools/towebp writes its browser profile and its per-file report here. The
+# .webp files it produces belong in public/; these do not.
+tools/towebp/profile/
+tools/towebp/browser.log
+tools/towebp/report.json

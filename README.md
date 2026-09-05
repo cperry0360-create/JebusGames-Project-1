@@ -107,7 +107,8 @@ section of DESIGN.md.
 
 ## The map
 
-`public/assets/maps/map_level1.png` is one hand-painted 1672x941 image. There
+`public/assets/maps/map_level1_v2.webp` is one hand-painted 3840x2160 image.
+There
 is no tile grid: the lane and the buildable spots were traced out of the
 artwork itself by `tools/trace_map.py`, which classifies every pixel as road,
 grass or blocked, walks the road from the arch on the left edge to the gate on
@@ -189,7 +190,7 @@ effects and scenery:
 
 ```json
 "assetRoot": "assets/",
-"files":     { "turret-ledger": "kenney/towerDefense_tile203.png" },
+"files":     { "turret-ledger": "towers/tower_withholding_t1.webp" },
 "render":    { "turret-ledger": { "anchorY": 1, "displayHeight": 92 } },
 "map":       { "level1": "map-level1" },
 "fx":        { "blast": "fx-flame", "spark": "fx-spark", ... }

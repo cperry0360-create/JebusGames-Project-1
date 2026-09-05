@@ -79,7 +79,7 @@ test('the checker fails an unknown level id rather than leaving it to runtime', 
   assert.deepEqual(check(CUTSCENES.levels), [], 'the shipped file does not pass its own rules')
   assert.match(check({ level9: ['cutscenes/a.webp'] })[0]!, /unknown level "level9"/)
   assert.match(check({ level1: [] })[0]!, /level1 empty/)
-  assert.match(check({ level1: ['towers/tower_dummy_1.png'] })[0]!, /level1 bad path/)
+  assert.match(check({ level1: ['towers/tower_dummy_1.webp'] })[0]!, /level1 bad path/)
   assert.match(check({ level1: ['cutscenes/a.webp', 'cutscenes/a.webp'] })[0]!, /level1 duplicate/)
 
   // And the shipped validator agrees about the shipped file, which is the

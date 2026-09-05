@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
+import { imageSize } from './imagesize.ts'
 
 const url = (p: string) => new URL(p, import.meta.url)
 const art = JSON.parse(readFileSync(url('../src/data/art.json'), 'utf8'))
@@ -233,7 +234,7 @@ test('a ground shadow covers the footprint and not the whole sprite', () => {
     // stopped being enough to tell the two apart. It shadows under its whole
     // body, which is the rule tools/measure_art.py applies to it by name.
     const BODY_SHADOWED = new Set(['enemy-zamboni'])
-    const isCharacter = /^enemies\/|^hero\/hero_cory\.png$/.test(art.files[key])
+    const isCharacter = /^enemies\/|^hero\/hero_cory\.webp$/.test(art.files[key])
       && !BODY_SHADOWED.has(key)
     if (isCharacter) {
       characters++
@@ -379,13 +380,18 @@ test('the image size reader actually reads sizes, in both containers', () => {
   // The containment check above passes trivially if the reader returns
   // something enormous, so the reader itself needs pinning. These four are
   // known: two WebP (one 4K plate, one backdrop) and two PNG.
+  //
+  // The deploy carries no PNG any more -- everything under public/assets/ is
+  // WebP -- so the PNG rows come from art-source/, which is where the sources
+  // that are kept but not shipped live. The reader still has to read PNG:
+  // that is the container art arrives in before it is re-encoded.
   for (const [path, w, h] of [
-    ['maps/map_level1_v2.webp', 3840, 2160],
-    ['ui/loadout_bg.webp', 1920, 1080],
-    ['props/pad_flagstone.png', 358, 274],
-    ['props/pad_donotbuild.png', 320, 290],
+    ['public/assets/maps/map_level1_v2.webp', 3840, 2160],
+    ['public/assets/ui/loadout_bg.webp', 1920, 1080],
+    ['art-source/props/prop_bailey_peek.png', 643, 872],
+    ['art-source/nodes/node_rest.png', 395, 445],
   ] as Array<[string, number, number]>) {
-    const file = url(`../public/${art.assetRoot}${path}`)
+    const file = url(`../${path}`)
     assert.ok(existsSync(file), `${path} is missing`)
     assert.deepEqual(imageSize(readFileSync(file), path), [w, h],
       `the size reader misread ${path}`)
@@ -426,44 +432,3 @@ test('every recorded content box fits inside the file it describes', () => {
   }
   assert.ok(checked > 20, `only ${checked} content boxes were checked`)
 })
-
-/**
- * Width and height of a manifest image, PNG or WebP.
- *
- * This read a PNG's IHDR and asserted the signature, which is exactly right
- * until an asset changes format — the map plate and both full-screen backdrops
- * are WebP now, and the assertion fired on a file that was perfectly valid.
- * A size reader that only understands one container silently stops covering
- * whatever moves to another, so it understands both.
- */
-function imageSize(buf: Buffer, path: string): [number, number] {
-  if (buf.readUInt32BE(0) === 0x89504e47) {
-    // PNG: IHDR is always the first chunk, width and height at 16 and 20.
-    return [buf.readUInt32BE(16), buf.readUInt32BE(20)]
-  }
-  assert.equal(buf.toString('ascii', 0, 4), 'RIFF', `${path} is neither PNG nor WebP`)
-  assert.equal(buf.toString('ascii', 8, 12), 'WEBP', `${path} is a RIFF but not a WebP`)
-  // Walk the chunks rather than assuming the first one carries the size: an
-  // encoder is free to put ICC or EXIF ahead of the image data.
-  let at = 12
-  while (at + 8 <= buf.length) {
-    const tag = buf.toString('ascii', at, at + 4)
-    const size = buf.readUInt32LE(at + 4)
-    const body = at + 8
-    if (tag === 'VP8X') {
-      // Extended: canvas size as two 24-bit little-endian values, minus one.
-      return [buf.readUIntLE(body + 4, 3) + 1, buf.readUIntLE(body + 7, 3) + 1]
-    }
-    if (tag === 'VP8 ') {
-      // Lossy: a 3-byte frame tag, a 3-byte start code, then 14-bit w and h.
-      return [buf.readUInt16LE(body + 6) & 0x3fff, buf.readUInt16LE(body + 8) & 0x3fff]
-    }
-    if (tag === 'VP8L') {
-      // Lossless: 1-byte signature, then 14 bits of w-1 and 14 bits of h-1.
-      const bits = buf.readUInt32LE(body + 1)
-      return [(bits & 0x3fff) + 1, ((bits >> 14) & 0x3fff) + 1]
-    }
-    at = body + size + (size % 2)
-  }
-  throw new Error(`${path} is a WebP with no image chunk`)
-}

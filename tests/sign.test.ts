@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, existsSync } from 'node:fs'
 import { boardRect, fitAspect, placeSign } from '../src/systems/SignPlacement.ts'
+import { imageSize } from './imagesize.ts'
 
 const url = (p: string) => new URL(p, import.meta.url)
 const read = (n: string) => JSON.parse(readFileSync(url(`../src/data/${n}.json`), 'utf8'))
@@ -9,12 +10,9 @@ const art = read('art'), map = read('map'), rules = read('rules'), display = rea
 
 const ROLES = ['signDefault', 'signBribed', 'signTavern'] as const
 
-/** Width and height of a PNG, from its IHDR. */
-function pngSize(path: string): [number, number] {
-  const b = readFileSync(path)
-  assert.equal(b.readUInt32BE(0), 0x89504e47, `${path} is not a PNG`)
-  return [b.readUInt32BE(16), b.readUInt32BE(20)]
-}
+/** Width and height of an overlay, whichever container it ships in. */
+const pngSize = (path: string): [number, number] =>
+  imageSize(readFileSync(path), String(path))
 
 test('all three lettering overlays are in the manifest and on disk', () => {
   for (const role of ROLES) {

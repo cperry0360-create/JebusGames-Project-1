@@ -47,7 +47,7 @@ const missingFiles = Object.entries(art.files)
 // Files on disk that the manifest never names.
 const assetRoot = `public/${art.assetRoot}`.replace(/\/$/, '')
 const named = new Set(Object.values(art.files) as string[])
-const onDisk = walk(assetRoot, '.png').map((p) => p.slice(assetRoot.length + 1))
+const onDisk = walk(assetRoot, '.webp').map((p) => p.slice(assetRoot.length + 1))
 const unreferencedFiles = onDisk.filter((p) => !named.has(p))
 const unreferencedBytes = unreferencedFiles.reduce(
   (n, p) => n + statSync(new URL(`${assetRoot}/${p}`, root)).size, 0)
