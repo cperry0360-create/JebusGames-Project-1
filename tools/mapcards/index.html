@@ -1,0 +1,307 @@
+<!doctype html><meta charset="utf-8"><title>mapcards</title><body><script type="module">
+// Cuts the world-map region cards out of the level plates, and draws the
+// tiling background the map screen sits on.
+//
+// Chromium is the image pipeline here for the same reason tools/reencode uses
+// it: this environment has no ImageMagick, no PIL and no cwebp, and the plates
+// are .webp. The browser's own libwebp decodes them, a canvas crops, and the
+// same canvas encodes the PNG that comes back out.
+//
+//   ?mode=preview   downscaled whole plates, so a person can choose the crop
+//   ?mode=cards     the real 300x200 cards, from the crops named below
+//   ?mode=bg        the seamless tiling background
+const q = new URLSearchParams(location.search)
+const mode = q.get('mode') || 'preview'
+const log = (m) => fetch('/log', { method: 'POST', body: String(m) })
+const save = (name, blob) => fetch('/save/' + name, { method: 'POST', body: blob })
+
+const PLATES = {
+  level1: 'public/assets/maps/map_level1_v2.webp',
+  level2: 'public/assets/maps/map_level2.webp',
+}
+
+async function load(path) {
+  const img = new Image()
+  img.src = '/' + path
+  await img.decode()
+  return img
+}
+
+/** Crops as fractions of the plate: [x, y, w, h] in 0-1. Chosen by eye off
+ *  the previews this same tool emits — see reports for which frame. */
+const CROPS = {
+  // The village: the tavern, its lit windows, the innkeeper and his signboard,
+  // top-right of the plate. The only part of level 1 that reads as a PLACE at
+  // card size; the road alone is just a yellow squiggle.
+  level1: [0.67, 0.02, 0.33, 0.39],
+  // The volcano, top-centre-right, mid-eruption with lava either side. Same
+  // test: it has to say "where" in 300x200.
+  level2: [0.52, 0.00, 0.33, 0.39],
+}
+
+const CARD_W = 300, CARD_H = 200
+
+async function preview() {
+  for (const [id, path] of Object.entries(PLATES)) {
+    const img = await load(path)
+    await log(`${id} ${img.naturalWidth}x${img.naturalHeight}`)
+    // Big enough to judge a crop from, small enough to read as an image.
+    const w = 640, h = Math.round(640 * img.naturalHeight / img.naturalWidth)
+    const cv = new OffscreenCanvas(w, h)
+    const ctx = cv.getContext('2d')
+    ctx.drawImage(img, 0, 0, w, h)
+    // A thirds grid, so a crop can be named off the picture rather than guessed.
+    ctx.strokeStyle = 'rgba(255,0,255,0.55)'; ctx.lineWidth = 1
+    ctx.font = '11px monospace'; ctx.fillStyle = 'rgba(255,0,255,0.9)'
+    for (let i = 1; i < 10; i++) {
+      const x = Math.round(w * i / 10), y = Math.round(h * i / 10)
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke()
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke()
+      ctx.fillText(String(i / 10), x + 2, 11)
+      ctx.fillText(String(i / 10), 2, y - 2)
+    }
+    await save(`preview_${id}.png`, await cv.convertToBlob({ type: 'image/png' }))
+  }
+}
+
+async function cards() {
+  for (const [id, path] of Object.entries(PLATES)) {
+    const img = await load(path)
+    const W = img.naturalWidth, H = img.naturalHeight
+    const [fx, fy, fw, fh] = CROPS[id]
+    const sx = Math.round(fx * W), sy = Math.round(fy * H)
+    const sw = Math.round(fw * W), sh = Math.round(fh * H)
+    await log(`${id} crop ${sx},${sy} ${sw}x${sh} from ${W}x${H} -> ${CARD_W}x${CARD_H}`)
+
+    const cv = new OffscreenCanvas(CARD_W, CARD_H)
+    const ctx = cv.getContext('2d')
+    ctx.imageSmoothingQuality = 'high'
+    // Cover: fill the card, centre-crop whatever aspect is left over, so a
+    // crop rectangle that is not exactly 3:2 does not letterbox.
+    const scale = Math.max(CARD_W / sw, CARD_H / sh)
+    const dw = sw * scale, dh = sh * scale
+    ctx.drawImage(img, sx, sy, sw, sh, (CARD_W - dw) / 2, (CARD_H - dh) / 2, dw, dh)
+    await save(`card_${id}.png`, await cv.convertToBlob({ type: 'image/png' }))
+    // WebP is what ships. At 300x200 the PNG came out at 2.9 bytes per pixel —
+    // essentially uncompressed — and these are pictures, not UI chrome with
+    // hard edges to preserve. The PNG stays as the lossless master.
+    const wb = await cv.convertToBlob({ type: 'image/webp', quality: 0.95 })
+    await log(`${id} card webp ${wb.size} bytes`)
+    await save(`card_${id}.webp`, wb)
+  }
+}
+
+/**
+ * The tiling background: aged parchment.
+ *
+ * SEAMLESS BY CONSTRUCTION, not by luck. Every mark is drawn nine times — at
+ * its own position and at all eight one-tile offsets — so anything crossing an
+ * edge is drawn again on the opposite edge. That makes the wrap exact rather
+ * than something to be checked by eye afterwards.
+ */
+async function background() {
+  const S = 1254
+  const cv = new OffscreenCanvas(S, S)
+  const ctx = cv.getContext('2d')
+
+  // A seeded generator, so re-running this produces the same texture and the
+  // asset does not churn in git for no reason.
+  let seed = 20260905
+  const rnd = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0
+    return seed / 4294967296
+  }
+
+  ctx.fillStyle = '#c9ad7f'
+  ctx.fillRect(0, 0, S, S)
+
+  /** Runs `draw` at nine offsets so a mark near an edge wraps to the far side. */
+  const wrapped = (draw) => {
+    for (let ox = -1; ox <= 1; ox++) {
+      for (let oy = -1; oy <= 1; oy++) {
+        ctx.save(); ctx.translate(ox * S, oy * S); draw(); ctx.restore()
+      }
+    }
+  }
+
+  // Broad tonal blotches: the uneven wash of old paper.
+  for (let i = 0; i < 55; i++) {
+    const x = rnd() * S, y = rnd() * S, r = 240 + rnd() * 380
+    const dark = rnd() < 0.5
+    wrapped(() => {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r)
+      g.addColorStop(0, dark ? 'rgba(120,92,54,0.055)' : 'rgba(240,225,190,0.06)')
+      g.addColorStop(1, 'rgba(0,0,0,0)')
+      ctx.fillStyle = g
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill()
+    })
+  }
+
+  // Fibres, for grain at close range.
+  for (let i = 0; i < 420; i++) {
+    const x = rnd() * S, y = rnd() * S
+    const a = rnd() * Math.PI, len = 6 + rnd() * 26
+    const light = rnd() < 0.5
+    wrapped(() => {
+      ctx.strokeStyle = light ? 'rgba(245,232,200,0.10)' : 'rgba(122,94,58,0.10)'
+      ctx.lineWidth = 0.7 + rnd() * 0.9
+      ctx.beginPath()
+      ctx.moveTo(x, y)
+      ctx.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len)
+      ctx.stroke()
+    })
+  }
+
+  // Speckle.
+  for (let i = 0; i < 700; i++) {
+    const x = rnd() * S, y = rnd() * S, r = 0.5 + rnd() * 1.6
+    wrapped(() => {
+      ctx.fillStyle = rnd() < 0.5 ? 'rgba(90,68,40,0.07)' : 'rgba(255,246,222,0.07)'
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill()
+    })
+  }
+
+  // QUANTISE BEFORE ENCODING. The canvas dithers its gradients, which puts a
+  // one-or-two-level wobble on every pixel of a 1254x1254 tile — and noise
+  // everywhere is exactly what a PNG cannot compress. The first version came
+  // out at 3.2MB, which is not a thing to ship to a phone as a BACKGROUND.
+  // Snapping each channel to a step of 6 collapses that wobble into flat
+  // runs. On parchment this narrow it is invisible; the tonal shape is all in
+  // the blotches, which are far wider than one step.
+  const px = ctx.getImageData(0, 0, S, S)
+  const d = px.data
+  const STEP = 10
+  for (let i = 0; i < d.length; i += 4) {
+    d[i] = Math.round(d[i] / STEP) * STEP
+    d[i + 1] = Math.round(d[i + 1] / STEP) * STEP
+    d[i + 2] = Math.round(d[i + 2] / STEP) * STEP
+  }
+  ctx.putImageData(px, 0, 0)
+
+  await log(`background ${S}x${S}`)
+  await save('map_background.png', await cv.convertToBlob({ type: 'image/png' }))
+  // The same tile as WebP, to have the number rather than assume it. A
+  // background is the one asset where format matters most: it ships to every
+  // device and nobody looks at it directly.
+  const wb = await cv.convertToBlob({ type: 'image/webp', quality: 0.92 })
+  await log(`webp ${wb.size} bytes vs png`)
+  await save('map_background.webp', wb)
+
+  // THE SEAM CHECK. Two by two at quarter size: if the wrap is wrong the
+  // joins show as a cross through the middle, and no amount of squinting at a
+  // single tile would have found it.
+  const t = new OffscreenCanvas(S, S)
+  const tx = t.getContext('2d')
+  const half = S / 2
+  for (let i = 0; i < 2; i++) {
+    for (let j = 0; j < 2; j++) tx.drawImage(cv, i * half, j * half, half, half)
+  }
+  // A marker on the join, so the eye knows where to look rather than hunting.
+  tx.strokeStyle = 'rgba(255,0,255,0.5)'; tx.lineWidth = 1
+  tx.beginPath(); tx.moveTo(half, 0); tx.lineTo(half, S); tx.stroke()
+  tx.beginPath(); tx.moveTo(0, half); tx.lineTo(S, half); tx.stroke()
+  await save('tiling_check.png', await t.convertToBlob({ type: 'image/png' }))
+}
+
+
+/**
+ * The composed map screen at real device sizes.
+ *
+ * Mirrors WorldMapScene's constants and fitCameraToDesign's transform — fit
+ * the 1280x720 design box into the viewport with one uniform scale, centred —
+ * so what comes out is what the camera puts on the glass. It is a check on
+ * the GEOMETRY and on how the tiling reads at each size; it is not the scene
+ * itself, and the numbers are duplicated here on purpose so a change to the
+ * scene that this does not follow shows up as a difference between the two.
+ */
+async function layout() {
+  const WORLD_W = 1280, WORLD_H = 720
+  const CARD_W = 264, CARD_H = 176
+  const TOP_MARGIN = 150, BOTTOM_MARGIN = 150
+  const POS = { level1: [0.30, 0.62], level2: [0.70, 0.34] }
+
+  const bg = await load('public/assets/ui/map_background.webp')
+  const cards = {
+    level1: await load('public/assets/ui/card_level1.webp'),
+    level2: await load('public/assets/ui/card_level2.webp'),
+  }
+  const centre = (id) => {
+    const [fx, fy] = POS[id]
+    const top = TOP_MARGIN + CARD_H / 2
+    const bot = WORLD_H - BOTTOM_MARGIN - CARD_H / 2
+    return { x: CARD_W / 2 + fx * (WORLD_W - CARD_W), y: top + fy * (bot - top) }
+  }
+
+  for (const [vw, vh, name] of [[844, 390, 'iphone_844x390'],
+                                [568, 320, 'small_568x320'],
+                                [1024, 768, 'ipad_1024x768']]) {
+    const cv = new OffscreenCanvas(vw, vh)
+    const c = cv.getContext('2d')
+    // The camera's own clear colour, so any un-covered margin shows up.
+    c.fillStyle = '#10161d'; c.fillRect(0, 0, vw, vh)
+
+    const zoom = Math.min(vw / WORLD_W, vh / WORLD_H)
+    c.save()
+    c.translate(vw / 2, vh / 2); c.scale(zoom, zoom); c.translate(-WORLD_W / 2, -WORLD_H / 2)
+
+    // Background: tiled across three design boxes, as the scene does.
+    const p = c.createPattern(bg, 'repeat')
+    c.save(); c.fillStyle = p
+    c.translate(-WORLD_W, -WORLD_H); c.fillRect(0, 0, WORLD_W * 3, WORLD_H * 3); c.restore()
+    c.fillStyle = 'rgba(26,18,8,0.18)'
+    c.fillRect(-WORLD_W, -WORLD_H, WORLD_W * 3, WORLD_H * 3)
+
+    // Trail.
+    const a = centre('level1'), b = centre('level2')
+    const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy)
+    const clear = Math.min(CARD_W, CARD_H) * 0.55
+    for (let d = clear; d <= len - clear; d += 26) {
+      const t = d / len, x = a.x + dx * t, y = a.y + dy * t
+      c.fillStyle = 'rgba(29,20,9,0.35)'; c.beginPath(); c.arc(x + 2, y + 2, 4.5, 0, 7); c.fill()
+      c.fillStyle = 'rgba(240,224,184,0.92)'; c.beginPath(); c.arc(x, y, 4.5, 0, 7); c.fill()
+    }
+
+    // Cards: level 1 unlocked (amber), level 2 locked (desaturated) — the
+    // state a new player sees, which is the one with the most on screen.
+    for (const id of ['level1', 'level2']) {
+      const { x, y } = centre(id)
+      const locked = id === 'level2'
+      c.fillStyle = '#2a1d0e'
+      c.fillRect(x - CARD_W / 2 - 5, y - CARD_H / 2 - 5, CARD_W + 10, CARD_H + 10)
+      c.strokeStyle = locked ? '#5a4630' : '#f0a830'; c.lineWidth = 3
+      c.strokeRect(x - CARD_W / 2 - 5, y - CARD_H / 2 - 5, CARD_W + 10, CARD_H + 10)
+      c.globalAlpha = locked ? 0.55 : 1
+      c.drawImage(cards[id], x - CARD_W / 2, y - CARD_H / 2, CARD_W, CARD_H)
+      c.globalAlpha = 1
+      c.fillStyle = locked ? '#9aa4ad' : '#f0a830'
+      c.font = 'bold 22px sans-serif'; c.textAlign = 'center'
+      c.fillText(id === 'level1' ? 'COURJAHAN VILLAGE' : 'HEAD OFFICE', x, y + CARD_H / 2 + 38)
+      if (locked) {
+        c.fillStyle = '#9aa4ad'; c.font = '22px sans-serif'
+        c.fillText('Clear a run to unlock', x, y + CARD_H / 2 + 64)
+      }
+    }
+
+    // Title and the button row, as boxes: this is a geometry check.
+    c.fillStyle = '#e8e2d0'; c.font = 'bold 46px serif'; c.textAlign = 'center'
+    c.fillText('CHOOSE YOUR BATTLE', WORLD_W / 2, 68)
+    c.strokeStyle = 'rgba(255,0,255,0.9)'; c.lineWidth = 2
+    c.strokeRect(WORLD_W / 2 - 100, WORLD_H - 58 - 27, 200, 54)
+
+    // The design box itself, so any card crossing it is obvious.
+    c.strokeStyle = 'rgba(0,255,255,0.8)'; c.lineWidth = 2
+    c.strokeRect(0, 0, WORLD_W, WORLD_H)
+    c.restore()
+
+    await log(`${name} zoom ${zoom.toFixed(3)}`)
+    await save(`layout_${name}.png`, await cv.convertToBlob({ type: 'image/png' }))
+  }
+}
+
+if (mode === 'preview') await preview()
+else if (mode === 'layout') await layout()
+else if (mode === 'cards') await cards()
+else await background()
+
+await fetch('/done', { method: 'POST', body: JSON.stringify({ mode }) })
+</script>

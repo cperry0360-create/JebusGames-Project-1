@@ -35,6 +35,11 @@ export interface LevelDef {
   laneLengthPx: number
   /** Cleared runs needed before this level can be picked. 0 = open always. */
   runsClearedToUnlock: number
+  /** Where this level sits on the world map, normalised 0-1 against the
+   *  world's bounds. The ONLY place a level's position lives: the cards are
+   *  placed from it and the trail between them is generated from it, so
+   *  moving a level is one edit in levels.json. */
+  mapPosition: [number, number]
 }
 
 /** A level with its data attached, which is what a scene actually wants. */
@@ -61,7 +66,10 @@ const WAVE_TABLES: Record<string, WavesDef> = {
   'waves.level2.json': wavesLevel2 as WavesDef,
 }
 
-export const LEVELS: LevelDef[] = (levelsData as { levels: LevelDef[] }).levels
+// `as unknown as` because a JSON import types mapPosition as number[], and the
+// interface wants the [x, y] pair it actually is. The shape is held by tests,
+// not by this cast.
+export const LEVELS: LevelDef[] = (levelsData as unknown as { levels: LevelDef[] }).levels
 
 /** The level a run plays when nothing has said otherwise. First in the file,
  *  not a hardcoded 'level1', so reordering levels.json cannot silently
@@ -107,4 +115,36 @@ export function isLevelUnlocked(id: string, runsCleared: number): boolean {
 /** The levels a player with this many cleared runs may pick, in file order. */
 export function unlockedLevels(runsCleared: number): LevelDef[] {
   return LEVELS.filter((l) => runsCleared >= l.runsClearedToUnlock)
+}
+
+/** The furthest level open to this player: what START RUN begins, and the one
+ *  the map screen marks as the current objective. Never null — the first level
+ *  costs nothing, so there is always at least one. */
+export function furthestUnlocked(runsCleared: number): LevelDef {
+  const open = unlockedLevels(runsCleared)
+  return open[open.length - 1] ?? LEVELS[0]!
+}
+
+/**
+ * Whether this level has been beaten, as far as the save can tell.
+ *
+ * DERIVED, NOT RECORDED, and that is a real limitation rather than a detail.
+ * The save counts cleared RUNS, not which levels they were on, and this reuses
+ * that count rather than adding a second thing to keep in step: a level counts
+ * as cleared once the player has cleared enough runs to have opened the level
+ * AFTER it, since opening the next one is what beating this one does.
+ *
+ * Where that is wrong: clearing level 1 twice also marks level 2 cleared,
+ * because two cleared runs is two cleared runs however they were spent. Fixing
+ * it properly means recording beaten levels in the save, which is a new field
+ * and a migration, and is not this change.
+ */
+export function isLevelCleared(id: string, runsCleared: number): boolean {
+  const i = LEVELS.findIndex((l) => l.id === id)
+  if (i < 0) return false
+  const next = LEVELS[i + 1]
+  // The last level has nothing after it to have opened, so it needs one more
+  // cleared run than it cost to reach.
+  const needed = next ? next.runsClearedToUnlock : LEVELS[i]!.runsClearedToUnlock + 1
+  return runsCleared >= needed
 }

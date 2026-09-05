@@ -86,7 +86,10 @@
     "hero-cory-attack-1": "hero/hero_cory_attack_1.png",
     "hero-cory-attack-2": "hero/hero_cory_attack_2.png",
     "hero-cory-attack-3": "hero/hero_cory_attack_3.png",
-    "hero-cory-attack-4": "hero/hero_cory_attack_4.png"
+    "hero-cory-attack-4": "hero/hero_cory_attack_4.png",
+    "map-bg": "ui/map_background.webp",
+    "card-level1": "ui/card_level1.webp",
+    "card-level2": "ui/card_level2.webp"
   },
   "render": {
     "turret-escalation": {
@@ -558,6 +561,18 @@
       "contentWidth": 356,
       "contentHeight": 272,
       "groundY": 0.518
+    },
+    "card-level1": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 300,
+      "contentHeight": 200
+    },
+    "card-level2": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 300,
+      "contentHeight": 200
     }
   },
   "map": {
@@ -688,5 +703,13 @@
       "hero-cory-attack-4"
     ],
     "attackImpactFrame": 3
+  },
+  "worldMap": {
+    "_note": "The world map screen, COMPOSED rather than painted. One tiling background reused at every size, one small card cropped from each level's own plate, and a trail drawn in code from the levels' mapPositions. Adding a level is a row in levels.json and one card here; no art is regenerated.",
+    "background": "map-bg",
+    "cards": {
+      "level1": "card-level1",
+      "level2": "card-level2"
+    }
   }
 }

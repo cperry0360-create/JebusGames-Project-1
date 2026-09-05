@@ -66,7 +66,7 @@ export type LayerName = keyof typeof LAYER
  * ability bar, and why `hudInteractive` exists.
  */
 export const SCENE_ORDER = [
-  'Boot', 'Splash', 'Title', 'Credits', 'Loadout', 'Game', 'Hud', 'Diagnostics',
+  'Boot', 'Splash', 'Title', 'Credits', 'WorldMap', 'Loadout', 'Game', 'Hud', 'Diagnostics',
 ] as const
 
 /** True when scene `a` draws underneath scene `b`. */

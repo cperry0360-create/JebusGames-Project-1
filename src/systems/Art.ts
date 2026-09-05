@@ -23,6 +23,10 @@ export const ART = {
   /** Logical key -> path under assetRoot. Only the loader should need this. */
   files: art.files,
   map: art.map,
+  /** The world map screen: one tiling background and one card per level. The
+   *  cards are keyed by level id, so adding a level adds one entry here and
+   *  nothing else. */
+  worldMap: art.worldMap,
   ui: art.ui,
   /** Named UI icons. Read through `icon()`, never directly, so a missing file
    *  resolves to the visible stand-in instead of an empty texture key. */

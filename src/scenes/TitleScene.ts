@@ -4,7 +4,7 @@ import displayData from '../data/display.json'
 import brandingData from '../data/branding.json'
 import { setRunState } from '../systems/RunState.ts'
 import { clearRun, loadRun } from '../systems/RunSave.ts'
-import { DEFAULT_LEVEL_ID, LEVELS, isLevelUnlocked, resolveLevelId } from '../systems/Levels.ts'
+import { LEVELS, furthestUnlocked, resolveLevelId } from '../systems/Levels.ts'
 import { loadSave } from '../systems/Save.ts'
 import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { plateButton } from '../ui/Plate.ts'
@@ -22,9 +22,6 @@ const BRANDING = brandingData as BrandingDef
 /** Title, hero selection, and the only place a run can begin. */
 export class TitleScene extends Phaser.Scene {
   private selectedHero = 'cory'
-  /** Which level START RUN begins. Always a level that is actually open —
-   *  the default level's unlock count is 0, and `start` re-checks anyway. */
-  private selectedLevel = DEFAULT_LEVEL_ID
 
   constructor() {
     super('Title')
@@ -85,10 +82,10 @@ export class TitleScene extends Phaser.Scene {
     // stale one from a scene that has gone returns without touching anything.
     onMusicProblem(sayMusic)
 
-    // The select takes a row and a line of explanation, so the buttons below
-    // move down to make room for it. Zero when there is nothing to choose
-    // between, which is what keeps a single-level build's layout identical.
-    const shift = this.buildLevelSelect(W, 300)
+    // The level select row that used to sit here is now a screen of its own:
+    // a world map with a card per level. This is the way in. Only drawn when
+    // there is more than one level, so a single-level build is unchanged.
+    const shift = this.buildMapButton(W, 300)
 
     // A run left in progress is offered back before anything else.
     //
@@ -164,65 +161,20 @@ export class TitleScene extends Phaser.Scene {
   }
 
   /**
-   * Which level a new run plays.
+   * The way to the world map.
    *
-   * Drawn only when there is more than one level to choose between, so a
-   * single-level build — and the screen as it looked before level 2 existed —
-   * is untouched. A level the player has not earned is DRAWN, disabled, with
-   * what it costs written under the row: a lock you can see is an invitation,
-   * and a level select that hides everything locked just looks empty.
+   * This replaced a row of level buttons. The row worked, but it could only
+   * ever be a row — it had nowhere to say where a place IS, and "Head Office"
+   * beside "Courjahan Village" is two words, not a journey. The map screen
+   * carries the same choice with the geography attached.
    *
-   * The selection is shown by tinting the label and moving an underline
-   * rather than by rebuilding the buttons, because a plate's weight is fixed
-   * when it is made.
+   * Returns how far to push the buttons below it, so a build with one level
+   * and nothing to choose between keeps the old layout exactly.
    */
-  private buildLevelSelect(W: number, y: number): number {
+  private buildMapButton(W: number, y: number): number {
     if (LEVELS.length < 2) return 0
-
-    const cleared = loadSave().runsCleared
-    const width = 240
-    const gap = 16
-    const span = LEVELS.length * width + (LEVELS.length - 1) * gap
-    const left = W / 2 - span / 2 + width / 2
-
-    const underline = this.add.rectangle(0, y + 30, width - 70, 4, 0xf0a830).setOrigin(0.5)
-    const labels: Phaser.GameObjects.Text[] = []
-    const centres: number[] = []
-
-    const show = (): void => {
-      LEVELS.forEach((l, i) => {
-        const on = l.id === this.selectedLevel
-        labels[i]?.setColor(on ? COLOR.amber : COLOR.ink)
-        if (on) underline.setX(centres[i]!)
-      })
-    }
-
-    const stillLocked: typeof LEVELS = []
-    LEVELS.forEach((l, i) => {
-      const x = left + i * (width + gap)
-      centres.push(x)
-      const open = isLevelUnlocked(l.id, cleared)
-      const btn = plateButton(this, x, y, width, 46, l.name.toUpperCase(), () => {
-        this.selectedLevel = l.id
-        show()
-      }, 20, 'secondary')
-      labels.push(btn.text)
-      if (!open) {
-        btn.setEnabled(false)
-        stillLocked.push(l)
-      }
-    })
-
-    if (stillLocked.length > 0) {
-      const need = Math.min(...stillLocked.map((l) => l.runsClearedToUnlock))
-      const runs = need === 1 ? 'a run' : `${need} runs`
-      this.add.text(W / 2, y + 46, `Clear ${runs} to unlock ${stillLocked.map((l) => l.name).join(', ')}.`, {
-        fontFamily: FONT_UI, fontSize: '22px', color: COLOR.dim,
-        stroke: '#0d1016', strokeThickness: 3,
-      }).setOrigin(0.5)
-    }
-
-    show()
+    plateButton(this, W / 2, y, 320, 54, 'WORLD MAP',
+      () => this.scene.start('WorldMap'), 24, 'secondary')
     return 30
   }
 
@@ -322,10 +274,11 @@ export class TitleScene extends Phaser.Scene {
     // Re-checked here rather than trusted to the button being disabled. The
     // enforcement has to live where the run actually starts: the row above is
     // a drawing, and a drawing is not a gate.
-    const cleared = loadSave().runsCleared
-    const levelId = isLevelUnlocked(this.selectedLevel, cleared)
-      ? this.selectedLevel
-      : DEFAULT_LEVEL_ID
+    // The furthest level open to this player, which is where a player who
+    // presses START RUN rather than picking off the map means to be. One
+    // definition, in Levels.ts, shared with the map screen's "current
+    // objective" ring.
+    const levelId = furthestUnlocked(loadSave().runsCleared).id
     setRunState({
       heroId: this.selectedHero, seed: Date.now() >>> 0, levelId,
       openingTowers: [], abilities: [], reserveTowers: [], resumeFrom: null,

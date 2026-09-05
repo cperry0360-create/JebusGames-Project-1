@@ -167,14 +167,25 @@ test('unlockedLevels grows with cleared runs and never reorders', () => {
   }
 })
 
-test('the title screen gates the start rather than only greying the button', () => {
-  // A disabled plate is a drawing. The enforcement has to be where the run
-  // actually begins, or a stale selection walks straight past it.
+test('a run can only ever begin on a level the player has unlocked', () => {
+  // A drawn lock is a drawing. This asserts the two places a run can actually
+  // start, because that is where the enforcement has to be.
+  //
+  // START RUN cannot pick a locked level BY CONSTRUCTION now: it asks for the
+  // furthest unlocked one rather than choosing and then checking.
   const title = src('scenes/TitleScene.ts')
-  assert.match(title, /isLevelUnlocked\(this\.selectedLevel, cleared\)/,
-    'START RUN does not re-check that the chosen level is unlocked')
-  assert.match(title, /levelId,/, 'the chosen level is never handed to the run')
-  assert.match(title, /setEnabled\(false\)/, 'a locked level is still clickable')
+  assert.match(title, /furthestUnlocked\(loadSave\(\)\.runsCleared\)/,
+    'START RUN no longer starts the furthest unlocked level')
+
+  // The map's cards re-check on the way into the run, so a card that somehow
+  // kept a handler cannot start a level the save does not allow.
+  const map = src('scenes/WorldMapScene.ts')
+  assert.match(map, /if \(!isLevelUnlocked\(id, cleared\)\) return/,
+    'the map starts a level without re-checking that it is unlocked')
+  // And a locked card is given no handler at all: the early return in drawCard
+  // happens before any interactive object is made.
+  assert.match(map, /if \(!open\) \{[\s\S]*?return\n {4}\}/,
+    'a locked card falls through to the tappable path')
 })
 
 test('a resume goes back to the level it was saved on', () => {
@@ -187,6 +198,69 @@ test('a resume goes back to the level it was saved on', () => {
   // And the save writes what is being played, not a literal.
   assert.match(game, /level: this\.level\.id/, 'the save still hardcodes a level')
   assert.ok(!/level: 'level1'/.test(game), 'the save still writes level1 unconditionally')
+})
+
+/* ------------------------------------------------------------- the world map */
+
+test('every level has a place on the world map and a card to draw there', () => {
+  // THE POINT OF THE MAP BEING COMPOSED. Adding a level is a row in
+  // levels.json plus one card in art.json, and this is what makes forgetting
+  // either a failed build rather than a gap on the screen — a card with no
+  // position draws at 0,0 under the title, and a position with no card throws
+  // on a missing texture key.
+  const art = JSON.parse(src('data/art.json'))
+  const cards = art.worldMap.cards as Record<string, string>
+
+  for (const l of LEVELS) {
+    const pos = (l as any).mapPosition
+    assert.ok(Array.isArray(pos) && pos.length === 2,
+      `${l.id} has no mapPosition; it would draw in the corner of the world map`)
+    for (const [i, n] of pos.entries()) {
+      assert.equal(typeof n, 'number', `${l.id}'s mapPosition[${i}] is not a number`)
+      assert.ok(n >= 0 && n <= 1,
+        `${l.id}'s mapPosition[${i}] is ${n}; it is normalised 0-1 against the world bounds`)
+    }
+
+    const key = cards[l.id]
+    assert.ok(key, `art.json's worldMap.cards has no card for ${l.id}`)
+    assert.ok(art.files[key],
+      `${l.id}'s card is "${key}", which is not a file in the manifest`)
+  }
+
+  // And no card for a level that does not exist, which would be a file
+  // shipping for nothing.
+  for (const id of Object.keys(cards)) {
+    assert.ok(LEVELS.some((l) => l.id === id),
+      `worldMap.cards has a card for "${id}", which is not a level`)
+  }
+})
+
+test('two levels never share a spot on the map', () => {
+  // Two cards at the same place is one card as far as the player is concerned,
+  // and the trail between them is a dot.
+  const seen = new Map<string, string>()
+  for (const l of LEVELS) {
+    const key = (l as any).mapPosition.join(',')
+    const other = seen.get(key)
+    assert.ok(!other, `${l.id} and ${other} are both at ${key} on the world map`)
+    seen.set(key, l.id)
+  }
+})
+
+test('the map screen reads a level\'s position and picture from the data only', () => {
+  // The whole claim of "composed": no coordinate and no texture key for a
+  // level may be written into the scene.
+  const map = src('scenes/WorldMapScene.ts')
+  assert.match(map, /level\.mapPosition/, 'the map screen does not read mapPosition')
+  assert.match(map, /ART\.worldMap\.cards\[level\.id\]/,
+    'the map screen does not look its cards up by level id')
+  for (const l of LEVELS) {
+    assert.ok(!map.includes(`'${l.id}'`),
+      `WorldMapScene names "${l.id}" directly; levels must come from the registry`)
+  }
+  // The trail is generated from the same positions, not drawn as art.
+  assert.match(map, /cardCentre\(LEVELS\[i\]!\)/,
+    'the trail is not generated from the cards own positions')
 })
 
 /* ------------------------------------------------------------ the same shape */

@@ -603,6 +603,11 @@ export interface SpriteRender {
  * touches a .ts file.
  */
 export interface ArtDef {
+  /** The world map screen: one tiling background, one card per level id. */
+  worldMap: {
+    background: string
+    cards: Record<string, string>
+  }
   assetRoot: string
   credit: string
   note: string

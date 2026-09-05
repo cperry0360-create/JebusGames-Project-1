@@ -317,7 +317,7 @@ test('every file in the manifest is bound to something that draws it', () => {
   const claimed = new Set<string>()
   const claim = (k: unknown) => { if (typeof k === 'string') claimed.add(k) }
 
-  for (const section of ['map', 'ui', 'fx', 'prop', 'brand'] as const) {
+  for (const section of ['map', 'ui', 'fx', 'prop', 'brand', 'worldMap'] as const) {
     for (const v of Object.values(art[section] ?? {})) {
       if (v && typeof v === 'object') Object.values(v as Record<string, string>).forEach(claim)
       else claim(v)
