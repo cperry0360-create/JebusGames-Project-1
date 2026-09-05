@@ -11,7 +11,6 @@ import { iconPlate } from '../ui/Plate.ts'
 import { SettingsPanel } from '../ui/SettingsPanel.ts'
 import { Dialog } from '../ui/Dialog.ts'
 import { play, resumeAudio } from '../systems/Audio.ts'
-import { realSeconds } from '../systems/GameTime.ts'
 import { hudLayout, NO_INSETS, type HudLayout, type Rect } from '../systems/HudLayout.ts'
 import { safeAreaInsets } from '../systems/SafeArea.ts'
 import { hudInteractive } from '../systems/Layers.ts'
@@ -62,8 +61,6 @@ export class HudScene extends Phaser.Scene {
   private peanutsText!: Phaser.GameObjects.Text
   private livesText!: Phaser.GameObjects.Text
   private waveText!: Phaser.GameObjects.Text
-  private message!: Phaser.GameObjects.Text
-  private heroLabel!: Phaser.GameObjects.Text
   private heroBar!: Phaser.GameObjects.Graphics
   /** Every element's rectangle. Disjoint by construction, checked by a test. */
   private layout: HudLayout = hudLayout(
@@ -77,8 +74,6 @@ export class HudScene extends Phaser.Scene {
   private livesField = 999
   private waveField = 999
   private bossBar!: Phaser.GameObjects.Graphics
-  /** The backing under the wave message. See where it is built. */
-  private messagePlate!: Phaser.GameObjects.Graphics
   private bossLabel!: Phaser.GameObjects.Text
   private startBtn!: PlateButton
   private panel?: Dialog
@@ -145,39 +140,30 @@ export class HudScene extends Phaser.Scene {
     // Top-right: the start-wave button.
     this.buildStartButton(L.startButton)
 
-    // Under the counters: the wave message, or the boss bar while one is up.
-    // Never both — they share the rectangle and take turns.
-    // A PLATE UNDER THE MESSAGE, drawn before the text so the text is on top.
+    // Under the counters: the boss bar, and nothing else.
     //
-    // The line used to be stroked text and nothing else, over a full-bleed
-    // painted map — and the map's top edge is where the tavern, its signboard
-    // and the arch stonework are. A 4px stroke is not a background: over
-    // painted detail the sentence that tells the player what to do next was
-    // the least readable thing on the screen. Sized to the TEXT rather than to
-    // the row, so it is a label and not a bar parked across the top.
-    this.messagePlate = this.add.graphics()
-    this.message = this.add.text(L.messageRow.x, L.messageRow.y, '', {
-      fontFamily: FONT_UI, fontSize: '15px', color: COLOR.ink,
-      stroke: '#0d1016', strokeThickness: 4,
-      // One line: a wrapped sentence would grow down into the board.
-      wordWrap: { width: L.messageRow.width },
-      maxLines: 1,
-    })
+    // THE WHITE INSTRUCTION BAR IS GONE. It carried one line of guidance --
+    // "Tap a build pad to place a tower, then START WAVE.", "Wave cleared, +35
+    // peanuts. Build or reposition..." -- permanently, across the top of the
+    // board, on a phone screen. Everything it said that a player still needs
+    // at the moment it happens goes through `toast` instead, which appears
+    // under their own thumb and then leaves; everything it said that was
+    // teaching waits for a tutorial. The rectangle stays, because the boss bar
+    // uses it for one wave in thirteen.
     this.bossBar = this.add.graphics()
     this.bossLabel = this.add.text(0, 0, '', {
       fontFamily: FONT_UI, fontSize: '15px', color: COLOR.ink,
       fontStyle: 'bold', stroke: '#0d1016', strokeThickness: 4, letterSpacing: 1,
     }).setOrigin(0.5, 0.5)
 
-    // Under the start button: the hero's name and health. The bar is created
-    // first so the name draws on top of it — Phaser orders by creation, not by
-    // which draw method ran last, and at full health the fill covered the name
-    // completely.
+    // Under the start button: the hero's health. The NAME AND MODE LABEL that
+    // used to sit beside it are gone -- it read "Cory · DAD MODE" and the mode
+    // half was wrong for four heroes out of five, because `lastStand.name` is
+    // the string "DAD MODE" in all five entries of heroes.json. The player
+    // chose the hero one screen ago and there is only ever one on the board,
+    // so the name was telling them something they already knew, and the label
+    // was telling them something untrue.
     this.heroBar = this.add.graphics()
-    this.heroLabel = this.add.text(0, 0, '', {
-      fontFamily: FONT_UI, fontSize: '15px', color: COLOR.ink,
-      stroke: '#0d1016', strokeThickness: 4,
-    }).setOrigin(1, 0.5)
 
     // Bottom corners and centre.
     this.buildSettingsButton(L.settings)
@@ -254,6 +240,23 @@ export class HudScene extends Phaser.Scene {
 
       const plate = this.add.image(x, top, key).setOrigin(0, 0)
       plate.setScale(scale)
+
+      // THE REAL PEANUT, OVER THE PLATE'S PAINTED ONE. The counter plate is a
+      // single 232x96 image with a peanut drawn into its left end, and that
+      // painted peanut is a plain white outline -- it is what the HUD has been
+      // showing all along. The game's own peanut art has been sitting in
+      // public/assets/ui_icons/ the whole time, unnamed by art.json.
+      //
+      // Drawn OVER the plate's end rather than replacing the plate, because
+      // the plate is also the frame and the number field. `fieldLeft` is where
+      // the dark number field begins, so everything left of it is the peanut's
+      // end -- which makes it exactly the box to fit into, measured rather
+      // than guessed.
+      if (name === 'peanuts' && this.textures.exists(ART.ui.peanut)) {
+        const end = (cfg.fieldLeft ?? 0.3) * plateW
+        const peanut = this.add.image(x + end / 2, top + plate.displayHeight / 2, ART.ui.peanut)
+        fitInBox(peanut, ART.ui.peanut, Math.min(end, plate.displayHeight) * 0.74)
+      }
 
       // Defaults only matter for a plate whose field was never measured; the
       // three real ones all carry theirs.
@@ -562,9 +565,6 @@ export class HudScene extends Phaser.Scene {
     this.lastPeanuts = s.peanuts
     this.lastLives = s.lives
     this.setCounter(this.waveText, `${Math.min(s.wave + 1, s.waveCount)}/${s.waveCount}`, this.waveField)
-    this.message.setText(s.message)
-    this.drawMessagePlate()
-
     this.drawBossBar(s)
     this.drawStartButton(s)
     this.drawSlots(s)
@@ -585,9 +585,8 @@ export class HudScene extends Phaser.Scene {
   private drawBossBar(s: GameScene['status']): void {
     this.bossBar.clear()
     const boss = Boolean(s.bossName)
-    // One region, one occupant.
-    this.message.setVisible(!boss)
-    this.messagePlate.setVisible(!boss)
+    // One region, one occupant -- and since the instruction bar went, the boss
+    // bar is the region's only occupant. Nothing to hide any more.
     if (!boss) {
       this.bossLabel.setText('')
       return
@@ -679,20 +678,20 @@ export class HudScene extends Phaser.Scene {
 
     if (s.phase === 'ready') {
       const n = Math.min(s.wave + 1, s.waveCount)
-      // The clock is on the button because the button is the thing it is
-      // counting down to, and the bonus is beside it because that is the whole
-      // argument for pressing it now rather than letting it run out.
-      const left = Math.ceil(s.readyCountdown)
-      if (left > 0) {
-        const bonus = Math.floor(s.readyCountdown) * RULES.pacing.earlyStartPeanutsPerSecond
-        // Three things on one plate. Separated by middots rather than double
-        // spaces so the line is as short as it can be and still parse.
-        this.startBtn.setLabel(`WAVE ${n} · ${left}s${bonus > 0 ? ` · +${bonus}` : ''}`)
-      } else {
-        this.startBtn.setLabel(`START WAVE ${n}`)
-      }
+      // TWO THINGS, NOT THREE. It read `WAVE 2 · 3s · +4`, and the seconds were
+      // the least useful of the three: a countdown the player cannot change,
+      // next to the number that says what changing it is worth. The bonus is
+      // the whole argument for pressing now rather than waiting, so the bonus
+      // is what stays.
+      const bonus = Math.floor(s.readyCountdown) * RULES.pacing.earlyStartPeanutsPerSecond
+      this.startBtn.setLabel(bonus > 0 ? `WAVE ${n} · +${bonus}` : `START WAVE ${n}`)
     }
-    else if (s.phase === 'wave') this.startBtn.setLabel(`${s.waveName} · ${s.enemiesLeft} left`)
+    // NO WAVE NAME. It read `The Gathering · 6 left`, and the name was a
+    // flavour string in waves.json that told the player nothing they could act
+    // on while it took the width that the count needed.
+    else if (s.phase === 'wave') {
+      this.startBtn.setLabel(`WAVE ${Math.min(s.wave + 1, s.waveCount)} · ${s.enemiesLeft} left`)
+    }
     else this.startBtn.setLabel(s.phase === 'won' ? 'CLEARED' : 'OVERRUN')
   }
 
@@ -823,35 +822,14 @@ export class HudScene extends Phaser.Scene {
   }
 
   /**
-   * The plate under the wave message, sized to the words that are on it.
+   * The hero's health, in the left region of the second row.
    *
-   * Not to `messageRow.width`: that is the space the line MAY use, and a plate
-   * drawn to it is a permanent bar across two thirds of the screen for the
-   * sake of a six-word sentence. The row still bounds it — the text wraps to
-   * `messageRow.width` and is capped at one line — so this can never be wider
-   * than the rectangle the layout guarantees is free.
-   */
-  private drawMessagePlate(): void {
-    const bar = HUD.heroBar
-    const r = this.layout.messageRow
-    this.messagePlate.clear()
-    if (!this.message.text) return
-    const pad = 6
-    const w = Math.min(r.width, this.message.width + pad * 2)
-    const h = Math.max(r.height, this.message.height + 2)
-    const y = r.y + (r.height - h) / 2
-    this.messagePlate.fillStyle(bar.backing, bar.backingAlpha)
-    this.messagePlate.fillRoundedRect(r.x - pad, y, w + pad, h, bar.radius)
-    this.messagePlate.lineStyle(bar.edgeWidth, bar.edge, 1)
-    this.messagePlate.strokeRoundedRect(r.x - pad, y, w + pad, h, bar.radius)
-  }
-
-  /**
-   * The hero's name and health, in the right region of the second row.
-   *
-   * Name on the bar rather than above it, for the same reason the boss's is:
-   * a second line is a taller band, and on a phone the band is taken out of
-   * the board.
+   * NO NAME AND NO MODE LABEL. It read "Cory · DAD MODE" -- and it read DAD
+   * MODE for Courtland, Han, Eli and Bailey too, because `lastStand.name` is
+   * that literal string in all five entries of heroes.json. The name told the
+   * player something they chose one screen ago about the only hero on the
+   * board; the mode told four of them something false. A hero who is down
+   * still needs the countdown, so that is what is left, on the bar itself.
    */
   private drawHeroBar(s: GameScene['status']): void {
     const region = this.layout.heroRow
@@ -859,19 +837,6 @@ export class HudScene extends Phaser.Scene {
     const w = region.width
     const h = region.height - 2
     const y = region.y
-
-    let state = ''
-    // The countdown belongs on the bar as well as on the ground: the player
-    // is watching the lane, not the patch of grass he comes back to.
-    // Real seconds. `heroReviveIn` is in game seconds, which run 1.4x faster
-    // than the player's watch — a 25-game-second lockout is 17.9 of theirs,
-    // and a countdown that disagrees with a stopwatch reads as broken.
-    if (s.heroDown) state = ` · BACK IN ${Math.max(0, Math.ceil(realSeconds(s.heroReviveIn, 1)))}s`
-    else if (s.lastStand) state = ' · DAD MODE'
-    this.heroLabel.setText(`${s.heroName}${state}`)
-    this.heroLabel.setColor(s.lastStand ? COLOR.fire : COLOR.ink)
-    this.heroLabel.setPosition(x + w - 4, y + h / 2)
-    this.heroLabel.setOrigin(1, 0.5)
 
     const ratio = Phaser.Math.Clamp(s.heroHealth / Math.max(s.heroMax, 1), 0, 1)
     const bar = HUD.heroBar
@@ -888,8 +853,13 @@ export class HudScene extends Phaser.Scene {
     this.heroBar.strokeRoundedRect(x, y, w, h, bar.radius)
     this.heroBar.fillStyle(s.heroDown ? 0x5a5a5a : s.lastStand ? 0xff5a3c : 0x4fa3e3, 1)
     this.heroBar.fillRoundedRect(x + 2, y + 2, Math.max(0, (w - 4) * ratio), h - 4, 4)
-    // The 25% mark, so the Last Stand threshold is legible before it fires.
-    const markX = x + 2 + (w - 4) * 0.25
-    this.heroBar.lineStyle(1, COLOR.panelEdge, 0.9).lineBetween(markX, y, markX, y + h)
+    // BOTH THRESHOLDS, from `status.heroMarks`, which is data both ways.
+    // There was one tick here at a hardcoded 0.25 -- the LAST STAND threshold,
+    // still live -- and the transformation at 0.5, which is the bigger moment
+    // of the two, had no mark at all.
+    for (const mark of s.heroMarks) {
+      const markX = x + 2 + (w - 4) * mark
+      this.heroBar.lineStyle(1, COLOR.panelEdge, 0.9).lineBetween(markX, y, markX, y + h)
+    }
   }
 }

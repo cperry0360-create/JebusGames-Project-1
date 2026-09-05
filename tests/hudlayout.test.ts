@@ -263,8 +263,10 @@ test('what was right about the bands survived the revert', () => {
     'the boss bar sizes itself from its container again')
   assert.equal((presentation.hud as Record<string, unknown>).bossBarTop, undefined,
     'bossBarTop is back, and nothing reads it')
-  assert.match(boss[0], /this\.message\.setVisible\(!boss\)/,
-    'the boss bar and the wave message can be up at once, in the same place')
+  // The message that used to share this rectangle is gone, so there is
+  // nothing left to take turns with -- the boss bar is the region's only
+  // occupant now.
+  assert.ok(!/this\.message\b/.test(hud), 'the wave message is back in the boss bar\'s region')
 })
 
 test('a press on the HUD is not also a press on the board', () => {

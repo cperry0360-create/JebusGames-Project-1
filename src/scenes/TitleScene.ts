@@ -136,8 +136,15 @@ export class TitleScene extends Phaser.Scene {
     let taps = 0
     let lastTap = 0
     const hit = this.add.rectangle(stamp.x - stamp.width / 2, stamp.y - stamp.height / 2,
-      stamp.width + 40, stamp.height + 26, 0xffffff, 0.001)
+      stamp.width + 36, stamp.height + 26, 0xffffff, 0.001)
       .setOrigin(0.5)
+      // NAMED, AND DELIBERATELY UNDER 44pt. The screen audit reports every
+      // live rectangle smaller than a fingertip, and this one is meant to be:
+      // it is a hidden developer door behind five deliberate taps on a version
+      // stamp, not a control a player is meant to find. The name is what lets
+      // the audit's output say that rather than leaving the next reader to
+      // work out which unlabelled rectangle it was.
+      .setName('title:version-stamp (hidden dev door, not a tap target)')
       .setInteractive({ useHandCursor: false })
     hit.on('pointerdown', () => {
       const now = this.time.now

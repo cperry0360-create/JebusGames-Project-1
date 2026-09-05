@@ -48,6 +48,8 @@ const WORLD_H = DESIGN_HEIGHT
  *  two sit comfortably with the trail visible between them. */
 const CARD_W = 264
 const CARD_H = 176
+/** The painted border around a card, which is what actually has to fit. */
+const FRAME_PAD = 10
 
 /** The band the cards live in, so they clear the title and the buttons. */
 const TOP_MARGIN = 150
@@ -80,10 +82,13 @@ export class WorldMapScene extends Phaser.Scene {
     const [fx, fy] = level.mapPosition
     const top = TOP_MARGIN + CARD_H / 2
     const bottom = WORLD_H - BOTTOM_MARGIN - CARD_H / 2
+    // Inset by half the FRAME, not half the card. The painted frame and the
+    // hit rectangle are both `CARD_W + FRAME_PAD` wide, so insetting by half a
+    // card left the rightmost level's frame 5 units past the edge of the
+    // design box at every viewport -- with its hit area going with it.
+    const half = (CARD_W + FRAME_PAD) / 2
     return {
-      // Inset by half a card so a position of 0 or 1 still draws a whole card
-      // rather than half of one off the edge.
-      x: CARD_W / 2 + fx * (WORLD_W - CARD_W),
+      x: half + fx * (WORLD_W - half * 2),
       y: top + fy * (bottom - top),
     }
   }
@@ -164,7 +169,7 @@ export class WorldMapScene extends Phaser.Scene {
 
     // The frame, drawn under the picture and a little larger, so every card
     // has a border without the art needing one baked in.
-    const frame = this.add.rectangle(x, y, CARD_W + 10, CARD_H + 10, 0x2a1d0e)
+    const frame = this.add.rectangle(x, y, CARD_W + FRAME_PAD, CARD_H + FRAME_PAD, 0x2a1d0e)
     frame.setStrokeStyle(3, done ? 0x6fbf73 : current ? 0xf0a830 : 0x5a4630)
     frame.setDepth(0)
 
@@ -178,10 +183,14 @@ export class WorldMapScene extends Phaser.Scene {
       card.setAlpha(0.55)
     }
 
+    // WRAPPED TO THE CARD. "SPORTS COMPLEX AT DUSK" sets 313 units wide
+    // against a 264-unit card, so on the rightmost level it ran off the design
+    // box entirely -- the longest name on the card nearest the edge.
     const label = this.add.text(x, y + CARD_H / 2 + 18, level.name.toUpperCase(), {
       fontFamily: FONT_UI, fontSize: '22px', fontStyle: 'bold',
       color: open ? COLOR.ink : COLOR.dim,
       stroke: '#0d1016', strokeThickness: 4,
+      wordWrap: { width: CARD_W }, align: 'center',
     }).setOrigin(0.5, 0).setDepth(2)
 
     if (!open) {
@@ -192,7 +201,11 @@ export class WorldMapScene extends Phaser.Scene {
       const src = this.textures.get(icon(this, 'locked')).getSourceImage()
       lock.setDisplaySize(h * (src.width / src.height), h)
       const need = level.runsClearedToUnlock
-      this.add.text(x, y + CARD_H / 2 + 44,
+      // UNDER THE TITLE, MEASURED. It was a fixed 44 below the card, which is
+      // one line of title plus a gap -- and the longest level name wraps to
+      // two now that it is held to the card's width, so the fixed offset put
+      // this line through the second one.
+      this.add.text(x, label.y + label.height + 6,
         `Clear ${need === 1 ? 'a run' : `${need} runs`} to unlock`, {
           fontFamily: FONT_UI, fontSize: '22px', color: COLOR.dim,
           stroke: '#0d1016', strokeThickness: 3,
@@ -214,7 +227,7 @@ export class WorldMapScene extends Phaser.Scene {
       label.setColor(COLOR.amber)
     }
 
-    const hit = this.add.rectangle(x, y, CARD_W + 10, CARD_H + 10, 0xffffff, 0.001)
+    const hit = this.add.rectangle(x, y, CARD_W + FRAME_PAD, CARD_H + FRAME_PAD, 0xffffff, 0.001)
       .setInteractive({ useHandCursor: true })
       .setDepth(4)
     hit.on('pointerover', () => frame.setStrokeStyle(3, 0xffffff))

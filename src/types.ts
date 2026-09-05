@@ -838,6 +838,9 @@ export interface ArtDef {
   /** Painted level plates, one per level. */
   map: Record<string, string>
   ui: {
+    /** The painted peanut, for every place the currency is shown: the sell
+     *  button, the drawer's prices, and the counter plate's own end. */
+    peanut: string
     /** null once towers ship as one sprite carrying their own base. */
     /** The painted title illustration. null falls back to a flat panel. */
     titleBackdrop: string | null
@@ -917,10 +920,6 @@ export interface ArtDef {
     groundShadow: string
     buildGlow: string
     iconMissing: string
-    /** The peanut, cut out of the counter plate at boot. The pack has no
-     *  peanut icon, and the sell button used to wear a cash symbol for a
-     *  currency this game does not have. */
-    peanutIcon: string
   }
   /** Per-tier tower sprites, keyed by the tower's base sprite key. A tower
    *  with no entry keeps one sprite at every tier, which is the default and

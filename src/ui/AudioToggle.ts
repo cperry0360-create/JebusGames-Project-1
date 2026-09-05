@@ -3,6 +3,7 @@ import { isMuted, nudgeAllVolumes, overallVolume, play, toggleMuted } from '../s
 import { iconPlate } from './Plate.ts'
 import { COLOR, FONT_UI } from './Theme.ts'
 import { viewH } from '../systems/Resolution.ts'
+import { tapFloor } from '../systems/Layout.ts'
 
 /**
  * The title screen's audio control: mute, and a volume that steps rather than
@@ -41,9 +42,23 @@ export class AudioToggle {
     size = 40,
     bottomLimit = viewH(scene),
   ) {
+    // THE PLATE IS THE ART; THE TAP TARGET IS BIGGER THAN THE ART.
+    //
+    // This screen is composed against the design box and fitted, so at 844x390
+    // the whole box renders at 54% and this 40-unit plate is 22 CSS pixels --
+    // half the 44pt minimum. The two step glyphs were worse: they were bare
+    // Text objects made interactive, so their hit area was the ink of a single
+    // character, 9x16.
+    //
+    // Growing the plate would change the screen's look for a rule about
+    // fingers, so the painted plate keeps `size` and an invisible rectangle
+    // around it carries the touch. `tapFloor` only grows it where the fit is
+    // small, so a desktop window is untouched.
+    const tap = tapFloor(scene, size)
     this.plate = iconPlate(scene, x, y, size, size)
     this.glyph = scene.add.graphics()
-    const hit = scene.add.rectangle(x, y, size, size, 0xffffff, 0.001)
+    const hit = scene.add.rectangle(x, y, tap, tap, 0xffffff, 0.001)
+      .setName('audio:mute')
       .setInteractive({ useHandCursor: true })
     hit.on('pointerdown', () => {
       const muted = toggleMuted()
@@ -59,8 +74,12 @@ export class AudioToggle {
       const t = scene.add.text(x + dx, y, label, {
         fontFamily: FONT_UI, fontSize: '22px', color: COLOR.ink,
         fontStyle: 'bold', stroke: '#0d1016', strokeThickness: 4,
-      }).setOrigin(0.5).setInteractive({ useHandCursor: true })
-      t.on('pointerdown', () => {
+      }).setOrigin(0.5)
+      // The glyph draws; a rectangle the size of a fingertip takes the tap.
+      const box = scene.add.rectangle(x + dx, y, tap, tap, 0xffffff, 0.001)
+        .setName(`audio:${delta < 0 ? 'down' : 'up'}`)
+        .setInteractive({ useHandCursor: true })
+      box.on('pointerdown', () => {
         // ALL THREE CHANNELS. This used to call setVolume, whose default
         // channel is `sfx`, so turning the volume down here left the music and
         // the recorded lines untouched — with the soundtrack playing over the
@@ -71,13 +90,17 @@ export class AudioToggle {
       })
       return t
     }
-    const down = step(size * 0.78, '−', -0.1)
-    const up = step(size * 1.32, '+', 0.1)
+    // SPACED BY THE TAP TARGET, not by the plate. At `size * 0.78` and
+    // `size * 1.32` the three hit rectangles would sit 0.54 of a plate apart
+    // and overlap each other completely once each is 44pt wide, so a tap on
+    // "louder" would land on "quieter".
+    const down = step(tap * 1.0, '−', -0.1)
+    const up = step(tap * 2.0, '+', 0.1)
 
     // On the same line as the two step buttons rather than under them. Below
     // them it ran into the minus sign at small plate sizes, and cost a second
     // row of height in a band that does not have one.
-    this.readout = scene.add.text(x + size * 1.72, y, '', {
+    this.readout = scene.add.text(x + tap * 3.0, y, '', {
       fontFamily: FONT_UI, fontSize: '15px', color: COLOR.dim,
       stroke: '#0d1016', strokeThickness: 3,
     }).setOrigin(0, 0.5)

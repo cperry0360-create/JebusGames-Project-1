@@ -512,6 +512,10 @@ async function run() {
       const items = []
       const visit = (o) => {
         if (o.visible === false || (o.alpha ?? 1) <= 0.02) return
+        // An empty Text still reports bounds and draws no ink. Measuring one
+        // is measuring a placeholder -- the boss name's label sits at 0,0 with
+        // an empty string for twelve waves out of thirteen.
+        if (o.text !== undefined && String(o.text).trim() === '') return
         const r = rectOf(sc, o)
         const live = !!(o.input && o.input.enabled)
         // A container's own bounds are the union of its children, which would
@@ -529,12 +533,16 @@ async function run() {
       return items
     }
 
-    // 3px of slack in each axis. Phaser's text bounds carry the face's ascent
-    // and descent, so a heading and the line under it routinely report one or
-    // two pixels of contact with nothing visibly touching. Three is enough to
-    // clear that and still catch a real collision, which starts at five.
-    const hit = (a, b) => a.x < b.x + b.w - 3 && b.x < a.x + a.w - 3
-                       && a.y < b.y + b.h - 3 && b.y < a.y + a.h - 3
+    // SLACK, and it is different for the two groups. Phaser's text bounds
+    // carry the face's full ascent and descent, so the display face reports
+    // four pixels of contact between COURJAHAN and DEFENSE with a clear band
+    // of background visible between them -- verified on the frame. Six clears
+    // that. Real text collisions on this game's screens have been 7px (a cost
+    // badge on a heading) and 65px (five hero cards on a title), so nothing
+    // that matters hides under it. Controls are rectangles rather than glyphs
+    // and get the tighter 3.
+    const hit = (a, b, slack) => a.x < b.x + b.w - slack && b.x < a.x + a.w - slack
+                              && a.y < b.y + b.h - slack && b.y < a.y + a.h - slack
     const fmt = (r) => Math.round(r.x) + ',' + Math.round(r.y) + ' '
                      + Math.round(r.w) + 'x' + Math.round(r.h)
 
@@ -578,12 +586,22 @@ async function run() {
       // a fault, which is why the two groups are compared separately.
       // A full-viewport zone overlaps everything by design -- the cutscene's
       // tap-to-advance surface is the whole screen, and Skip sits on it.
-      for (const group of [items.filter((i) => i.txt && !covers(i.r)),
-                           items.filter((i) => i.live && !covers(i.r))]) {
+      // Text slack is PROPORTIONAL, because the bounds padding is: it is the
+      // face's ascent and descent, so it scales with the type. A fixed 6 that
+      // cleared COURJAHAN/DEFENSE at 844x390 flagged the same pair at 1400x820
+      // where the same gap is 7 pixels. 14% of the shorter box clears the
+      // padding at every size and still catches the two real collisions this
+      // game has had -- a badge 50% into a heading, and five cards 120% into a
+      // title.
+      for (const [group, slack] of [[items.filter((i) => i.txt && !covers(i.r)), 'text'],
+                                    [items.filter((i) => i.live && !covers(i.r)), 3]]) {
         for (let i = 0; i < group.length; i++) {
           for (let j = i + 1; j < group.length; j++) {
             if (group[i].scene !== group[j].scene) continue
-            if (!hit(group[i].r, group[j].r)) continue
+            const s2 = slack === 'text'
+              ? Math.max(3, Math.max(group[i].r.h, group[j].r.h) * 0.14)
+              : slack
+            if (!hit(group[i].r, group[j].r, s2)) continue
             faults.push('OVER  ' + group[i].scene + ' ' + group[i].name + ' @ ' + fmt(group[i].r)
               + '  <>  ' + group[j].name + ' @ ' + fmt(group[j].r))
           }

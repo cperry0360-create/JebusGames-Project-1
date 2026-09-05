@@ -526,13 +526,18 @@ test('the margin leaves room to do something after the first tower', () => {
   assert.ok(rules.startingPeanutsMargin < 2, 'more than double is not a margin, it is a second tower')
 })
 
-test('the guidance line never tells the player to do something they cannot', () => {
+test('there is no guidance line to contradict the game state', () => {
+  // `idleHint()` produced one line of advice -- "Tap a build pad to place a
+  // tower, then START WAVE." -- and this test used to check it never advised
+  // something the player could not afford. The whole bar is gone, so the
+  // failure mode is gone with it. What is checked now is that it did not come
+  // back under another name.
   const game = src('scenes/GameScene.ts')
-  assert.match(game, /canAffordAny\(/, 'the hint never checks whether anything is buyable')
-  // The opening message must come from the same function as every later one,
-  // or it can contradict the state it is describing.
-  assert.match(game, /this\.status\.message = this\.idleHint\(\)/,
-    'the opening message is hardcoded rather than derived from the game state')
+  assert.ok(!/idleHint/.test(game.split('\n').filter((l) => !/^\s*(\/\/|\*)/.test(l)).join('\n')),
+    'the guidance line is back')
+  assert.ok(!/status\.message/.test(game), 'the status still carries a guidance line')
+  const hud = src('scenes/HudScene.ts')
+  assert.ok(!/this\.message\b/.test(hud), 'the HUD still draws a guidance line')
 })
 
 /* ------------------------------------------------------------ pacing */

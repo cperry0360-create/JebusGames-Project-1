@@ -96,8 +96,9 @@
       "rowHeight": 22,
       "iconHeight": 64,
       "cornerButton": 40,
-      "startWidth": 240,
-      "startMinWidth": 150,
+      "_startWidth": "THE WAVE BANNER, and it is much smaller than it was. At 240x44 it carried `WAVE 2 · 3s · +4` and, mid-wave, `The Gathering · 6 left` -- a wave name that told the player nothing they could act on and a countdown they could not change. With the name and the seconds gone the longest string it ever has to hold is `START WAVE 13`, so the plate is sized to that. 44 stays as the height because it is the minimum tap target and this is a button.",
+      "startWidth": 168,
+      "startMinWidth": 116,
       "cancelWidth": 116,
       "cancelHeight": 48
     },

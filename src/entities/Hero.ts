@@ -10,7 +10,7 @@ import { facesLeft, mirroredFor } from '../systems/Facing.ts'
 import presentationData from '../data/presentation.json'
 import { attackFramesFor, heroSprite, walkFramesFor } from '../systems/Heroes.ts'
 import {
-  TRANSFORM_INVULNERABLE_SECONDS, damageToHero, shouldTransform,
+  TRANSFORM_BELOW, TRANSFORM_INVULNERABLE_SECONDS, damageToHero, shouldTransform,
 } from '../systems/Transform.ts'
 import { Enemy } from './Enemy.ts'
 
@@ -781,9 +781,13 @@ export class Hero extends Phaser.GameObjects.Container {
     this.bar.clear()
     this.bar.fillStyle(0x14181f, 0.9).fillRect(-w / 2 - 1, y - 1, w + 2, 7)
     this.bar.fillStyle(this.lastStandActive ? 0xff5a3c : 0x4fa3e3, 1).fillRect(-w / 2, y, w * ratio, 5)
-    // The 25% mark, so the Last Stand threshold is legible before it fires.
-    const markX = -w / 2 + w * this.def.lastStand.healthThreshold
-    this.bar.lineStyle(1, 0xf6ecd9, 0.7).lineBetween(markX, y, markX, y + 5)
+    // BOTH THRESHOLDS. Last Stand from this hero's own entry, the
+    // transformation from rules.json -- the second one had no mark at all, and
+    // it is the one that fires first and matters more.
+    for (const mark of [this.def.lastStand.healthThreshold, TRANSFORM_BELOW]) {
+      const markX = -w / 2 + w * mark
+      this.bar.lineStyle(1, 0xf6ecd9, 0.7).lineBetween(markX, y, markX, y + 5)
+    }
 
     // How many of his hands are full.
     //
@@ -796,15 +800,23 @@ export class Hero extends Phaser.GameObjects.Container {
     const cap = this.def.blockCapacity
     if (cap > 0 && !this.down) {
       const full = this.blocking >= cap
-      const pipW = 5
-      const pipGap = 3
+      // BIGGER, AND ON A PLATE. They were 5x4 world pixels with no backing,
+      // which at the zoom a run opens at is about two device pixels of unlit
+      // dark-on-dark -- a playtester reported them as "small dots above his
+      // head that seem to fill up", which is exactly what an illegible readout
+      // looks like. Same information, at a size that can carry it.
+      const pipW = 9
+      const pipGap = 4
+      const pipH = 6
       const totalW = cap * pipW + (cap - 1) * pipGap
-      const py = y - 7
+      const py = y - pipH - 4
+      this.bar.fillStyle(0x14181f, 0.9)
+      this.bar.fillRect(-totalW / 2 - 2, py - 2, totalW + 4, pipH + 4)
       for (let i = 0; i < cap; i++) {
         const px = -totalW / 2 + i * (pipW + pipGap)
         const held = i < this.blocking
-        this.bar.fillStyle(held ? (full ? 0xf2a03c : 0xf6ecd9) : 0x14181f, held ? 1 : 0.75)
-        this.bar.fillRect(px, py, pipW, 4)
+        this.bar.fillStyle(held ? (full ? 0xf2a03c : 0xf6ecd9) : 0x323a46, 1)
+        this.bar.fillRect(px, py, pipW, pipH)
       }
     }
   }
