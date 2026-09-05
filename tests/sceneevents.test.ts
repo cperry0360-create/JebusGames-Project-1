@@ -293,3 +293,63 @@ test('every resize handler that reads a camera guards itself', () => {
   assert.match(fn.slice(0, fn.indexOf('\n  }')), /if \(!sceneIsLive\(this\.scene\)\) return/,
     'CameraRig.onResize does not check the scene is alive')
 })
+
+/* ------------------------------------------------- the run brings its HUD */
+
+test('every way into a run brings the HUD with it', () => {
+  // THE RESUME BUG. The HUD used to be launched by whoever started GameScene,
+  // and only one of the two callers did it: LoadoutScene launched it after
+  // start('Game'), TitleScene's resume path did not. A resumed run played with
+  // no HudScene at all — no counters, no start-wave button, no settings, no
+  // ability bar — while the world underneath restored perfectly, so it read as
+  // a broken UI rather than as a missing scene.
+  //
+  // The fix is ownership, not a second call site: GameScene launches its own
+  // HUD, because there is no way into a run that does not go through its
+  // create(). This asserts the ownership rather than the call, so adding a
+  // third entry point cannot reintroduce the divergence.
+  const files = readdirSync(url('../src/scenes')).filter((n) => n.endsWith('.ts'))
+  const launchers = files.filter((n) => /launch\(['"]Hud['"]\)/.test(code(`scenes/${n}`)))
+  assert.deepEqual(launchers, ['GameScene.ts'],
+    'the HUD is launched from somewhere other than the scene that owns it; ' +
+    'two call sites is how the resume path came to have no HUD')
+
+  // And it is launched from create(), not from a handler that only some runs
+  // reach — a wave starting, a first tap, a resume that took a branch.
+  const game = code('scenes/GameScene.ts')
+  const create = game.slice(game.indexOf('  create(): void {'), game.indexOf('\n  // ------'))
+  assert.match(create, /launch\(['"]Hud['"]\)/,
+    'GameScene does not launch the HUD in create(); a run can start without one')
+
+  // Guarded, so restarting the scene does not stack a second HUD on the first.
+  assert.match(create, /isActive\(['"]Hud['"]\)/,
+    'the HUD launch is unguarded; a scene restart would run two of them')
+
+  // Both entry paths still go through GameScene, which is what makes the
+  // ownership above sufficient.
+  assert.match(code('scenes/TitleScene.ts'), /scene\.start\(['"]Game['"]\)/,
+    'the resume path no longer starts GameScene')
+  assert.match(code('scenes/LoadoutScene.ts'), /scene\.start\(['"]Game['"]\)/,
+    'the fresh path no longer starts GameScene')
+})
+
+test('the HUD draws no counter whose art the manifest cannot resolve', () => {
+  // The other half of "missing icons": a counter plate is drawn straight from
+  // ART.ui.counters, so a name that resolves to nothing draws nothing at all
+  // and the counter is simply absent — which is what a HUD missing its lives
+  // and wave pills looks like. The three names HudScene asks for are hardcoded
+  // in buildCounters, so they are hardcoded here too, on purpose.
+  const art = JSON.parse(src('data/art.json'))
+  const counters = art.ui.counters as Record<string, string>
+  for (const name of ['peanuts', 'lives', 'wave']) {
+    const key = counters[name]
+    assert.ok(key, `art.json names no counter plate for "${name}"; HudScene would draw nothing`)
+    assert.ok(art.files[key],
+      `the ${name} counter points at "${key}", which is not a file in the manifest`)
+  }
+  // HudScene must keep asking for exactly these three, or the check above is
+  // guarding names nothing reads.
+  const hud = code('scenes/HudScene.ts')
+  assert.match(hud, /\['peanuts', 'lives', 'wave'\]/,
+    'HudScene no longer builds its counters from those three names')
+})

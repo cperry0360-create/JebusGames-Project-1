@@ -354,8 +354,10 @@ export class LoadoutScene extends Phaser.Scene {
       rerollLabel, () => this.reroll(), 22)
     const begin = plateButton(this, row.centres[1]!, by, row.width, LO.buttonHeight,
       beginLabel, () => {
+        // The HUD is not launched here any more; GameScene starts its own.
+        // Two callers had to remember and only this one did, which left every
+        // resumed run without a HUD. See GameScene.create.
         this.scene.start('Game')
-        this.scene.launch('Hud')
       }, 24)
     // Spent, it stays on the screen greyed rather than disappearing: a button
     // that vanishes takes the knowledge that the option existed with it.

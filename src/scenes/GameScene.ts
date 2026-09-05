@@ -702,6 +702,21 @@ export class GameScene extends Phaser.Scene {
       zoomCeilingDesign: displayData.camera.maxZoom,
       escapedThisWave: this.escapedThisWave,
     }))
+    // THE HUD BELONGS TO THE RUN, so the run starts it.
+    //
+    // It used to be launched by whoever started this scene, and only one of
+    // the two callers did it: LoadoutScene launched it after `start('Game')`
+    // and TitleScene's resume path did not. A resumed run therefore played
+    // with no HudScene at all — no counters, no start-wave button, no
+    // settings, no ability bar — while the world underneath it restored
+    // perfectly, which is why it read as "the UI is broken" rather than as
+    // "a scene is missing".
+    //
+    // Owned here instead, because there is no path into a run that does not
+    // come through this create(). Guarded so a scene restart does not launch a
+    // second copy over the first.
+    if (!this.scene.isActive('Hud')) this.scene.launch('Hud')
+
     setRunActive(true)
     logEvent('scene', 'Game started')
     // A paused run is not a frozen one. The loop legitimately stops beating
