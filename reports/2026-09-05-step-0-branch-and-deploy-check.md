@@ -9,7 +9,11 @@ things that have to be true before steps 1–9 can start.
 
 | commit | what | CI |
 |---|---|---|
-| this report | the Step 0 check | not run — see "where this leaves the repository" |
+| [`2c5cffa`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/2c5cffa) | this report | ✅ `test` ✅ `typecheck`, `deploy` skipped ([run 33997375057](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33997375057)) |
+| the commit closing this table | fills in the row above | not recorded — a report cannot carry its own CI result |
+
+`deploy` is skipped rather than failed: it is gated on `main`, and this is a
+branch. That is the same gate this whole report is about.
 
 No code was changed. Nothing was fixed, vendored, converted or tuned; the gate
 failed on the first check and the brief says to stop there.
