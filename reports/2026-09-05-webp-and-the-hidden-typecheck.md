@@ -13,6 +13,7 @@ caps `public/assets/` at 40MB and the tree was **58.0MB**, so `checks` was red,
 | [`32da169`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/32da169) | Re-encode to WebP, split the checks job — **landed only half of itself** | `test` FAILED, `typecheck` never ran, deploy skipped ([run 33991423268](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33991423268)) |
 | [`140fd0b`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/140fd0b) | The other half: the 111 PNG deletions, the manifest, the tests, the workflow, the docs | `test` ✅, `typecheck` ❌ (one real error), deploy skipped ([run 33991511551](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33991511551)) |
 | [`1fb01b4`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/1fb01b4) | Fix that error — `Hero.ts` tween annotation | `test` ✅, `typecheck` ✅, **deploy ✅** ([run 33991606431](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33991606431)) |
+| [`6c68665`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/6c68665) | This report | `test` ✅, `typecheck` ✅, deploy ✅ ([run 33991814335](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33991814335)), Pages deployment `6285767126` at 21:02:42Z |
 
 **`32da169` is a mistake worth naming.** A `git stash` / `git stash pop` run
 between `git add -A` and `git commit` put the changes back in the working tree
@@ -22,6 +23,10 @@ held **both** containers and main was heavier than before. The working tree was
 correct throughout and `140fd0b` is exactly the missing half; nothing was
 re-derived. The lesson is narrow and cheap: do not stash between staging and
 committing, and read `git show --stat` before pushing rather than after.
+
+The row for `6c68665` is filled in by the commit after it, which is the only
+way a report can carry its own CI result. That commit changes this table and
+nothing else.
 
 **Deployment confirmed** through the GitHub API, not by eye — see *What was not
 checked*. Pages deployment `6285726862`, sha `1fb01b4`, state `success` at
@@ -319,7 +324,8 @@ PNG is still the container art *arrives* in.
 
 ## Where this leaves the repository
 
-**In flight:** nothing. main is green, the deploy published at 20:58:31Z, and
+**In flight:** nothing. main is green on every job, the game published at
+20:58:31Z (`1fb01b4`) and this report at 21:02:42Z (`6c68665`), and
 `public/assets/` is 23.8MB against a 40MB cap.
 
 **Waiting on a decision (Cory's, not urgent):**
