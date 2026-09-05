@@ -20,9 +20,11 @@ branch and nothing needs rebasing.
 | [`9bbe0a7`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/9bbe0a7) | The loadout hero row, and the hero names | not run alone — see below |
 | [`463e494`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/463e494) | Hero facing, the slot 1 audit, the five hero powers | not run alone — see below |
 | [`cff2285`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/cff2285) | Surviving a lost graphics context; the latched device ratio | `test` ✅, `typecheck` ✅, `deploy` skipped ([run 33995885148](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33995885148)) |
+| [`2590e40`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/2590e40) | This report | `test` ✅, `typecheck` ✅, `deploy` skipped ([run 33996026729](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/33996026729)) |
 
-**Only the tip has a CI run**, because all four commits were pushed together and
-`checks.yml` runs per push rather than per commit. `deploy` is correctly skipped:
+**Only the two pushes have CI runs**, because the first four commits went up
+together and `checks.yml` runs per push rather than per commit. Both runs are
+green on every job. `deploy` is correctly skipped:
 it is gated on `main`. Locally every commit was left green — `npm test` and
 `sh tools/tsdiff.sh 46f1f72` were run before each one — but the honest statement
 is that CI has verified the *tree*, not each step of it. **810 tests pass**,
@@ -475,8 +477,8 @@ fourteen strikes.
 
 ## Where this leaves the repository
 
-**In flight:** the four commits above, on
-`claude/targeting-drawer-input-bugs-lb5184`, CI green at the tip, `deploy`
+**In flight:** the five commits above, on
+`claude/targeting-drawer-input-bugs-lb5184`, CI green on both pushes, `deploy`
 correctly skipped because the branch is not `main`. **Merging to `main` is the
 one remaining step** and it is a fast-forward.
 
