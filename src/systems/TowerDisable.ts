@@ -1,4 +1,5 @@
-// A boss that switches the board off, one tower at a time.
+// A boss that switches the board off, one tower at a time -- and a bug that
+// takes one away for good.
 //
 // The Rainbow Reaper does no damage and cannot be blocked. What it does is
 // reach out every few seconds and stop the single most expensive thing the
@@ -13,6 +14,13 @@
 // it is why the target is chosen at the START of the windup and not at the end
 // — the player must be able to trust what the telegraph points at.
 //
+// TWO ENEMIES USE IT AND THEY DIFFER BY ONE FIELD. The Reaper switches a tower
+// off for three and a half seconds; the Glitch Bug destroys it. Everything up
+// to the moment the cast lands -- the cooldown, the choice of target, the
+// windup that makes the choice visible, the rule that a caster killed mid-cast
+// lands nothing -- is the same rule and is not written twice. `destroys` is
+// the whole difference, and the scene and the sim each branch on it once.
+//
 // Phaser-free, like the other systems modules: which tower is picked, when a
 // cast is allowed and how long the lights stay off is arithmetic, and the tests
 // drive it directly rather than through a scene.
@@ -23,10 +31,23 @@ export interface DisableDef {
   cooldown: number
   /** Seconds the telegraph runs before the disable lands. */
   windup: number
-  /** Seconds the tower stays off. */
+  /** Seconds the tower stays off. Not read when `destroys` is set -- there is
+   *  nothing to come back on -- and written as 0 there to say so. */
   duration: number
   /** How far the caster can reach, in world pixels. */
   range: number
+  /**
+   * The tower is DESTROYED rather than switched off, and its pad goes free.
+   *
+   * The Glitch Bug only. A coin flip that deletes a fully upgraded tower with
+   * no warning reads as the game cheating, so it is deliberately the same cast
+   * the Reaper makes: a target locked at the start, a second and a half of
+   * telegraph pointing straight at it, and only then the loss. The player
+   * cannot stop the cast once it starts, but can see which tower it is for and
+   * can kill the bug before it lands -- which is the answer the fight is
+   * asking for, and the reason the bug is worth 90 peanuts.
+   */
+  destroys?: boolean
 }
 
 /** What the picker needs to know about a tower. */
@@ -61,13 +82,18 @@ export interface DisableCandidate {
  * boss would spend every cast on the same tower and the rest of the board would
  * never be touched — the ability would look like it was firing and doing
  * nothing.
+ *
+ * `skipDisabled` is off for a cast that DESTROYS, because the reasoning above
+ * does not carry: a dark tower is still the most expensive thing on the board
+ * and taking it away is not a wasted cast. It also cannot loop -- the tower is
+ * gone afterwards.
  */
 export function pickDisableTarget<T extends DisableCandidate>(
-  candidates: readonly T[], x: number, y: number, range: number,
+  candidates: readonly T[], x: number, y: number, range: number, skipDisabled = true,
 ): T | null {
   let best: T | null = null
   for (const c of candidates) {
-    if (c.disabledFor > 0) continue
+    if (skipDisabled && c.disabledFor > 0) continue
     const dx = c.x - x
     const dy = c.y - y
     if (dx * dx + dy * dy > range * range) continue
@@ -118,6 +144,12 @@ export class Disabler {
     return this.windupLeft > 0
   }
 
+  /** True when a landed cast takes the tower away rather than switching it
+   *  off. Read by the scene and the sim, which each branch on it once. */
+  get destroys(): boolean {
+    return this.def.destroys === true
+  }
+
   /** The tower the telegraph is pointing at, for whatever draws it. */
   get target(): DisableCandidate | null {
     return this.locked
@@ -156,7 +188,7 @@ export class Disabler {
     this.cooldown -= dt
     if (this.cooldown > 0) return null
 
-    const target = pickDisableTarget(candidates, x, y, this.def.range)
+    const target = pickDisableTarget(candidates, x, y, this.def.range, !this.def.destroys)
     // Nothing in reach: try again next tick rather than burning the cooldown,
     // the same rule a tower with no target follows.
     if (!target) return null

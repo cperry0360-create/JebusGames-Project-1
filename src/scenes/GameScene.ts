@@ -3985,10 +3985,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * The Rainbow Reaper switching the board off, one tower at a time.
+   * The Rainbow Reaper switching the board off, one tower at a time -- and the
+   * Glitch Bug taking one away for good.
    *
    * The rule is in systems/TowerDisable.ts and is Phaser-free; this is the
-   * scene half -- who the candidates are, and what the player sees.
+   * scene half -- who the candidates are, and what the player sees. ONE
+   * BRANCH separates the two casters, on `destroys`, and it is here: the
+   * cooldown, the target, the windup and the rule that a caster killed
+   * mid-cast lands nothing are the same code for both.
    *
    * THE BOLT IS THE TELEGRAPH. It launches when the windup starts and lands
    * exactly when the disable does, so what the player sees pointing at a tower
@@ -4013,15 +4017,25 @@ export class GameScene extends Phaser.Scene {
       const ev = d.tick(dt, e.alive, e.x, e.y, candidates)
       if (!ev) continue
       if (ev.kind === 'windup') {
-        this.telegraphDisable(e, ev.target.tower, e.def.towerDisable!.windup)
+        this.telegraphDisable(e, ev.target.tower, e.def.towerDisable!.windup, d.destroys)
+      } else if (d.destroys) {
+        this.destroyTower(ev.target.tower, e)
       } else {
         this.landDisable(ev.target.tower, e.def.towerDisable!.duration)
       }
     }
   }
 
-  /** The bolt on its way, and a ring on what it is going to hit. */
-  private telegraphDisable(from: Enemy, tower: Tower, windupSeconds: number): void {
+  /**
+   * The bolt on its way, and a ring on what it is going to hit.
+   *
+   * RED FOR A KILL, PINK FOR A STUN, and the ring is thicker and pulses rather
+   * than closing once. The two casts cost the player very different things and
+   * a player who has learned the Reaper's telegraph must not read the Glitch
+   * Bug's as the same thing arriving.
+   */
+  private telegraphDisable(from: Enemy, tower: Tower, windupSeconds: number,
+                           destroys = false): void {
     const ms = windupSeconds * 1000
     // World space, which is the default here: `syncCameras` re-splits the
     // scene every time it runs, so an effect born mid-frame is picked up by
@@ -4045,7 +4059,7 @@ export class GameScene extends Phaser.Scene {
     // And a ring on the target, so the answer to "which one" does not depend on
     // following a fast-moving sprite across the board.
     const ring = this.add.graphics()
-    ring.lineStyle(3, 0xff5ce0, 0.9)
+    ring.lineStyle(destroys ? 5 : 3, destroys ? 0xff3b30 : 0xff5ce0, 0.9)
     ring.strokeCircle(0, 0, 34)
     ring.setPosition(tower.x, tower.y)
     ring.setDepth(tower.y - 1)
@@ -4056,7 +4070,47 @@ export class GameScene extends Phaser.Scene {
       duration: ms,
       onComplete: () => ring.destroy(),
     })
-    logEvent('disable-windup', `${from.def.name} -> ${tower.def.name} in ${windupSeconds}s`)
+    if (destroys) {
+      logEvent('destroy-windup', `${from.def.name} -> ${tower.def.name} in ${windupSeconds}s`)
+      this.status.alert = `${from.def.name} has locked on to your ${tower.def.name}.`
+    } else {
+      logEvent('disable-windup', `${from.def.name} -> ${tower.def.name} in ${windupSeconds}s`)
+    }
+  }
+
+  /**
+   * The tower is gone, and its pad is free again.
+   *
+   * GONE, NOT DARK. A destroyed tower does not come back and is not refunded:
+   * what the player gets back is the pad, which is worth something -- the
+   * peanuts to rebuild are the price of not having killed the bug in time.
+   * Every step here is `sellTower`'s minus the refund, and for the same
+   * reasons: the pad has to be released or nothing can ever be built there
+   * again, and the selection has to be dropped or the ring keeps pointing at
+   * an object that no longer exists.
+   */
+  private destroyTower(tower: Tower, by: Enemy): void {
+    this.build.release(tower.spot)
+    this.towers = this.towers.filter((t) => t !== tower)
+    const [x, y] = [tower.x, tower.y]
+    tower.destroy()
+    if (this.selected === tower) {
+      this.selected = null
+      this.syncTargeting()
+    }
+    // A Shelter taken away stops lifting its neighbours, the same as one
+    // switched off does -- except permanently.
+    this.refreshSupport()
+    this.onBoardChanged()
+    this.refreshMenuOptions()
+    this.rangeRing.clear()
+    this.drawSpots()
+
+    this.blast(x, y, 70)
+    this.cameras.main.shake(180, 0.006)
+    play(this, 'death')
+    logEvent('tower-destroyed', `${by.def.name} took ${tower.def.name}`)
+    this.status.alert = `${tower.def.name} destroyed. The pad is free.`
   }
 
   /** The lights go out. */

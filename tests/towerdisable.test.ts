@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { Disabler, pickDisableTarget, type DisableCandidate } from '../src/systems/TowerDisable.ts'
+import { BuildSystem } from '../src/systems/BuildSystem.ts'
 import { investedIn } from '../src/systems/Upgrades.ts'
 import enemies from '../src/data/enemies.json' with { type: 'json' }
 import towers from '../src/data/towers.json' with { type: 'json' }
@@ -9,6 +10,7 @@ import towers from '../src/data/towers.json' with { type: 'json' }
 const src = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
 const E = enemies as Record<string, any>
 const DEF = E.unicornBoss.towerDisable
+const KILL = E.glitchBug.towerDisable
 
 /** A tower on the board, as the picker sees one. */
 const tower = (over: Partial<DisableCandidate> & { name?: string } = {}) => ({
@@ -17,11 +19,16 @@ const tower = (over: Partial<DisableCandidate> & { name?: string } = {}) => ({
 
 /* --------------------------------------------------------------- the data */
 
-test('the Rainbow Reaper carries the ability, and nothing else does', () => {
+test('two enemies carry the ability, and they differ by one field', () => {
   assert.deepEqual(DEF, { cooldown: 7, windup: 1, duration: 3.5, range: 260 })
   const casters = Object.entries(E).filter(([, v]) => v.towerDisable).map(([k]) => k)
-  assert.deepEqual(casters, ['unicornBoss'],
-    'something other than the Reaper gained a tower-disable; levels 1 and 2 would change')
+  assert.deepEqual(casters, ['unicornBoss', 'glitchBug'],
+    'the set of tower-attackers changed; levels 1 and 2 must not gain one')
+  // The Reaper switches a tower off. The Glitch Bug takes it away. Everything
+  // before the cast lands is the same rule and is not written twice.
+  assert.ok(!DEF.destroys, 'the Reaper started destroying towers')
+  assert.equal(KILL.destroys, true, 'the Glitch Bug only switches towers off')
+  assert.equal(KILL.duration, 0, 'a destroyed tower has a duration, which means nothing')
   // The windup has to fit inside the cooldown, or casts would overlap.
   assert.ok(DEF.windup < DEF.cooldown)
   // And the disable has to end before the next one lands, or a single tower
@@ -250,6 +257,126 @@ test('the scene and the sim both drive the one rule module', () => {
   assert.match(sim, /t\.disabledFor > 0/, 'the sim ignores a disabled tower')
   assert.match(sim, /ev\.target\.disabledFor = e\.def\.towerDisable\.duration/,
     'the sim never actually switches a tower off')
+})
+
+/* ------------------------------------------- the Glitch Bug, which destroys */
+
+test('the bug takes exactly one tower per cycle, after a full windup', () => {
+  const a = tower({ x: 10, value: 300, name: 'a' })
+  const b = tower({ x: 20, value: 100, name: 'b' })
+  const d = new Disabler(KILL)
+  const landed: string[] = []
+  const wound: string[] = []
+  // Twenty seconds at 60fps: two full 8-second cycles and change.
+  for (let i = 0; i < 1200; i++) {
+    const ev = d.tick(1 / 60, true, 0, 0, [a, b])
+    if (ev?.kind === 'windup') wound.push(ev.target.name!)
+    if (ev?.kind === 'land') landed.push(ev.target.name!)
+  }
+  assert.equal(landed.length, 2, `${landed.length} towers taken in 20s at an 8s cooldown`)
+  assert.equal(wound.length, 2, 'a windup started that never landed, or one landed unannounced')
+  // And every landing was announced first, pointing at the tower it took.
+  assert.deepEqual(landed, wound, 'the telegraph pointed at a tower the cast did not take')
+})
+
+test('the bug takes the most valuable tower in range, upgrades counted', () => {
+  const T = towers as Record<string, any>
+  const cheapButUpgraded = investedIn(T.withholding, 3, null)   // 80 -> 192
+  const dearButBase = T.writeoff.cost                          // 150
+  assert.ok(cheapButUpgraded > dearButBase, 'this test needs the upgraded one to cost more')
+
+  const got = pickDisableTarget([
+    tower({ x: 10, value: dearButBase, name: 'dear, tier 1' }),
+    tower({ x: 20, value: cheapButUpgraded, name: 'cheap, tier 3' }),
+    tower({ x: 900, value: 100000, name: 'out of range' }),
+  ], 0, 0, KILL.range)
+  assert.equal(got?.name, 'cheap, tier 3',
+    'the bug does not measure a tower by the peanuts sunk into it')
+})
+
+test('killing the bug during the windup saves the tower', () => {
+  // THE ANSWER THE FIGHT IS ASKING FOR. The cast cannot be interrupted once it
+  // starts -- but the caster can, and a second and a half is enough time to do
+  // something about it if the board can reach the air at all.
+  const t = tower({ x: 10, value: 400, name: 'the good one' })
+  const d = new Disabler(KILL)
+  let started = false
+  for (let i = 0; i < 600 && !started; i++) {
+    started = d.tick(1 / 60, true, 0, 0, [t])?.kind === 'windup'
+  }
+  assert.ok(started, 'the bug never began a cast')
+  assert.ok(d.casting, 'the telegraph is not running')
+
+  // Shot down half a second into the windup.
+  for (let i = 0; i < 30; i++) {
+    const ev = d.tick(1 / 60, false, 0, 0, [t])
+    assert.equal(ev, null, 'a dead bug landed a cast it had started')
+  }
+  assert.ok(!d.casting, 'the telegraph is still pointing at a tower after the bug died')
+})
+
+test('no windup starts once the bug is dead, however long the board waits', () => {
+  const t = tower({ x: 10, value: 400, name: 'the good one' })
+  const d = new Disabler(KILL)
+  for (let i = 0; i < 3600; i++) {
+    assert.equal(d.tick(1 / 60, false, 0, 0, [t]), null, 'a dead bug cast something')
+  }
+  assert.ok(!d.casting)
+})
+
+test('a dark tower is still worth taking, unlike one worth disabling', () => {
+  // The two casts want different things from the same picker. Re-disabling a
+  // tower that is already off is a wasted cast and the Reaper skips it; taking
+  // it away is not wasted at all, and cannot loop -- it is gone afterwards.
+  const dark = tower({ x: 10, value: 500, disabledFor: 2, name: 'dark but dear' })
+  const lit = tower({ x: 20, value: 200, name: 'lit and cheap' })
+  assert.equal(pickDisableTarget([dark, lit], 0, 0, 260)?.name, 'lit and cheap',
+    'the Reaper re-picked a tower that was already off')
+  assert.equal(pickDisableTarget([dark, lit], 0, 0, 260, false)?.name, 'dark but dear',
+    'the bug passed over the most expensive tower on the board because it was off')
+})
+
+test('the pad a destroyed tower stood on goes free, and can be built on again', () => {
+  // The scene and the sim both have to release it, or the loss is permanent in
+  // a way nothing in the design says it should be: what the player gets back
+  // is the pad, and the peanuts to rebuild are the price of not killing the
+  // bug in time.
+  const build = new BuildSystem([[100, 100], [400, 400]], 34)
+  build.occupy(0)
+  assert.equal(build.isFree(0), false)
+  build.release(0)
+  assert.equal(build.isFree(0), true, 'a released pad is not free')
+  assert.equal(build.freeSpots().length, 2)
+
+  const scene = src('src/scenes/GameScene.ts')
+  const destroy = scene.slice(scene.indexOf('private destroyTower(tower: Tower, by: Enemy)'),
+                              scene.indexOf('/** The lights go out. */'))
+  assert.ok(destroy.length > 0, 'GameScene has no destroyTower')
+  assert.match(destroy, /this\.build\.release\(tower\.spot\)/,
+    'the destroyed tower keeps its pad, so nothing can ever be built there again')
+  assert.match(destroy, /this\.towers = this\.towers\.filter\(\(t\) => t !== tower\)/,
+    'the destroyed tower is still on the board')
+  assert.match(destroy, /tower\.destroy\(\)/, 'the sprite outlives the tower')
+  assert.match(destroy, /this\.refreshSupport\(\)/,
+    'a destroyed Shelter goes on lifting its neighbours')
+  assert.doesNotMatch(destroy, /setPeanuts|earn\(/,
+    'a destroyed tower is refunded, which is not what destroyed means')
+})
+
+test('the scene and the sim both branch on destroys, and only there', () => {
+  const scene = src('src/scenes/GameScene.ts')
+  const sim = src('tools/soak/Sim.ts')
+  // One branch each. Everything before the cast lands is the shared rule.
+  assert.match(scene, /\} else if \(d\.destroys\) \{\n\s*this\.destroyTower\(/,
+    'GameScene does not destroy on a destroying cast')
+  assert.match(sim, /if \(e\.disabler\.destroys\) \{/, 'the sim does not model the destroy')
+  assert.match(sim, /towers\.splice\(i, 1\)/, 'the sim leaves the destroyed tower shooting')
+  assert.match(sim, /build\.release\(ev\.target\.spot\)/,
+    'the sim never gives the pad back, so a soaked run cannot rebuild')
+  // And the telegraph tells the two casts apart, since they cost very
+  // different things.
+  assert.match(scene, /destroys \? 0xff3b30 : 0xff5ce0/,
+    'the kill and the stun telegraph identically')
 })
 
 test('the art is registered as the sheets it actually is', () => {

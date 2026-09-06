@@ -607,13 +607,40 @@ export function simulate(
     }
   }
 
-  /** The boss switching a tower off. Same rule module as the scene uses, so
-   *  the two cannot drift; the sim only supplies the candidates. */
+  /**
+   * The boss switching a tower off, and the Glitch Bug taking one away. Same
+   * rule module as the scene uses, so the two cannot drift; the sim only
+   * supplies the candidates and applies the outcome.
+   *
+   * THE DESTROY HAS TO BE MODELLED OR THE WIN RATE IS A FICTION -- the same
+   * reason the disable is. A bug that walked past a board it never touched
+   * would make level 4 read easier here than it plays, and level 4 is the
+   * level being tuned against this number.
+   */
+  let towerLost = false
   const tickTowerDisable = (dt: number): void => {
     for (const e of enemies) {
       if (!e.disabler) continue
       const ev = e.disabler.tick(dt, e.alive, e.x, e.y, towers)
-      if (ev?.kind === 'land') ev.target.disabledFor = e.def.towerDisable.duration
+      if (ev?.kind !== 'land') continue
+      if (e.disabler.destroys) {
+        const i = towers.indexOf(ev.target)
+        if (i >= 0) {
+          towers.splice(i, 1)
+          build.release(ev.target.spot)
+          // ONCE PER RUN, not once per cast. It is worth knowing that the bug
+          // is eating boards and roughly when it starts, and it is not worth
+          // burning a run's forty-finding budget on the ten or so casts a
+          // level 4 run can carry -- or making this the loudest kind in a
+          // 500-run report, ahead of the findings that are actually faults.
+          if (!towerLost) {
+            towerLost = true
+            note('tower-destroyed', `${e.def.name} took ${ev.target.def.name}; more may follow`)
+          }
+        }
+      } else {
+        ev.target.disabledFor = e.def.towerDisable.duration
+      }
     }
   }
 

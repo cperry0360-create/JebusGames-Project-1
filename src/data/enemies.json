@@ -319,6 +319,13 @@
     "attackInterval": 99,
     "blockable": false,
     "slowable": true,
+    "towerDisable": {
+      "cooldown": 8,
+      "windup": 1.5,
+      "duration": 0,
+      "range": 200,
+      "destroys": true
+    },
     "artFacing": "right"
   },
   "glitchBugBeta": {
