@@ -71,6 +71,27 @@ export function report(cause: string, message: string, stack = ''): CrashReport 
   return r
 }
 
+/**
+ * A report with no panel over the game.
+ *
+ * For faults the game RECOVERS from. A soft lock used to produce no report at
+ * all — a stopped board carries no exception, so nothing in the diagnostics
+ * fired — and the tester was left describing a screenshot. It has to be
+ * recorded. But it is also now recovered from automatically, and burying a
+ * child's screen in red monospace to tell them about a problem that has
+ * already fixed itself would be its own bug.
+ *
+ * So this records and remembers exactly as `report` does, and stops short of
+ * the panel. The report is on the diagnostics screen and in the copied text
+ * like any other.
+ */
+export function reportQuietly(cause: string, message: string, stack = ''): CrashReport {
+  const r = recordError(cause, message, stack)
+  rememberReport(formatReport(r))
+  logEvent('diagnostics', `recorded quietly: ${cause}`)
+  return r
+}
+
 export function show(r: CrashReport): void {
   const doc = globalThis.document
   if (!doc?.body) return

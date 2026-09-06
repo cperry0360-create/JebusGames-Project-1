@@ -18,7 +18,6 @@ import type { Rect } from './HudLayout.ts'
 export interface DrawerStep {
   minViewW: number
   width: number
-  /** The currency readout's row. */
   /** TOWERS / ACTIVE / PASSIVE. */
   tabBarHeight: number
   /** The pinned strip, which reserves its height whether or not it has
@@ -61,7 +60,6 @@ export interface DrawerConfig {
 export interface DrawerLayout {
   /** The always-visible tab, docked to the right edge. */
   tab: Rect
-  /** The currency readout's row, at the top of the panel's inner area. */
   /** The whole TOWERS / ACTIVE / PASSIVE bar. */
   tabBar: Rect
   /** One rectangle per tab, left to right, in the order of `cfg.tabLabels`. */
@@ -175,13 +173,19 @@ export function drawerLayout(
   /*
    * THE PANEL IS THREE STACKED SECTIONS, and only one of them scrolls.
    *
-   * IT WAS FOUR. The first was a header carrying the peanut count, on the
-   * reasoning that the player is spending the whole time the panel is open.
-   * It is gone: the number it drew was refreshed only when a tile's
-   * AFFORDABILITY flipped, so between those moments it sat at a stale figure
-   * while the HUD counter beside it ticked -- two counters on one screen
-   * disagreeing, which is worse than one counter further away. The HUD's is
-   * the only one now, and the grid gets the 30 pixels back.
+   * IT WAS FOUR. The first was a peanut counter, on the reasoning that the
+   * player is spending the whole time this is open so the number belongs where
+   * the prices are. It was a SECOND counter, and a screenshot from a level 3
+   * playtest caught it reading 404 while the HUD read 408.
+   *
+   * WHY THEY DISAGREED, since a stale number means one of them was not
+   * updating: the drawer takes its tiles as a function, so `refresh()` re-reads
+   * everything -- but the only thing that calls it is GameScene's
+   * `refreshAffordability`, and that fires only when a tile's AFFORDABLE FLAG
+   * FLIPS. Earning four peanuts flips nothing, so the drawer's number sat at
+   * whatever it read when the panel was last rebuilt while the HUD counter
+   * beside it ticked. One number in two places is one number too many; the
+   * grid gets the height back.
    *
    *   tabBar   TOWERS / ACTIVE / PASSIVE, so each group gets the full height
    *            rather than a third of it when the other two are filled

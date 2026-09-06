@@ -42,33 +42,41 @@ export function fitCameraToDesign(
     // green the world camera clears to.
     cam.setBackgroundColor(0x10161d)
 
-    // THE BOX IS FITTED INTO THE SAFE AREA, NOT INTO THE CANVAS.
+    // THE CAMERA COVERS THE WHOLE CANVAS; THE CONTENT RESPECTS THE HARDWARE.
     //
-    // It used to be the whole canvas, and menus were the one part of the game
-    // that never heard about the hardware: the HUD asks `safeAreaInsets()` in
-    // four places and the fixed-design screens asked nowhere. Measured on a
-    // notched phone in landscape (844x390, insets 47/21/47), the title's
-    // volume controls, the level select's BACK button and the loadout's REROLL
-    // and BEGIN THE RUN all sat inside the home-indicator band -- three
-    // screens, five controls, all under the hardware.
+    // Those are two different things and the first attempt at this conflated
+    // them. Insetting the camera's VIEWPORT by the safe area did keep the
+    // controls clear of the notch -- and it also stopped the painted backdrop
+    // reaching the edges of the screen, so the inset strip showed whatever the
+    // canvas clears to. That was grass green, and it read as a rendering
+    // fault: a green band around a dark game.
     //
-    // Insetting the CAMERA'S VIEWPORT rather than shrinking the design box is
-    // what keeps this a one-place change: every scene keeps composing against
-    // 1280x720 and none of them has to know a notch exists. The inset strip
-    // shows the camera's own background, which is the game's dark ground.
+    // So the viewport stays full-bleed. What the insets do instead is shrink
+    // the BOX THE DESIGN IS FITTED INTO and move its centre onto the centre of
+    // the safe area. Everything composed against the design box lands inside
+    // the hardware; everything drawn beyond it -- the room, the map, the
+    // painted ground -- runs off the edges the way a background should.
     const dpr = deviceScale()
     const insets = safeAreaInsets()
-    const w = Math.max(1, scene.scale.width - (insets.left + insets.right) * dpr)
-    const h = Math.max(1, scene.scale.height - (insets.top + insets.bottom) * dpr)
-    cam.setViewport(insets.left * dpr, insets.top * dpr, w, h)
+    cam.setViewport(0, 0, scene.scale.width, scene.scale.height)
+    const safeW = Math.max(1, scene.scale.width - (insets.left + insets.right) * dpr)
+    const safeH = Math.max(1, scene.scale.height - (insets.top + insets.bottom) * dpr)
 
     // Physical pixels on purpose. Everything else in the game measures in CSS
     // pixels via `viewW`/`viewH`, but this fits a fixed design box to whatever
     // the canvas actually is -- which is why the menus came out at full
     // resolution with no other change when the canvas did.
-    cam.setZoom(fitScale(w, h, designW, designH))
-    // Centre the design box in what is left.
-    cam.centerOn(designW / 2, designH / 2)
+    const zoom = fitScale(safeW, safeH, designW, designH)
+    cam.setZoom(zoom)
+
+    // Centre the design box on the middle of the SAFE area rather than the
+    // middle of the canvas, so an inset on one side only (a notch in landscape)
+    // pushes the content away from it instead of splitting the difference.
+    const safeMidX = (insets.left * dpr + (scene.scale.width - insets.right * dpr)) / 2
+    const safeMidY = (insets.top * dpr + (scene.scale.height - insets.bottom * dpr)) / 2
+    const offX = (safeMidX - scene.scale.width / 2) / zoom
+    const offY = (safeMidY - scene.scale.height / 2) / zoom
+    cam.centerOn(designW / 2 - offX, designH / 2 - offY)
   }
   apply()
   // SHUTDOWN and DESTROY both, and guarded: a resize already in flight when

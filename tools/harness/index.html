@@ -100,6 +100,12 @@ window.lifecycle = installLifecycle(game)
 const { installOrientationGate, isPortrait } = await import('./js/systems/Orientation.js')
 installOrientationGate(game)
 window.isPortrait = isPortrait
+// The safety net that notices a run nobody is holding. Installed here for the
+// same reason the gate and the lifecycle are: a guard that only existed on
+// main.ts's boot path would be a guard no scenario could exercise, and the
+// point of a safety net is that it has been dropped on.
+const { installGameStuckGuard } = await import('./js/systems/StuckWatch.js')
+installGameStuckGuard(game)
 note('visibilityState at boot: ' + document.visibilityState)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const scene = (k) => game.scene.getScene(k)
@@ -464,6 +470,22 @@ async function run() {
     // the game is paused behind it.
     const gate = document.getElementById('rotate-gate')
     const gateUp = !!gate && getComputedStyle(gate).display !== 'none'
+    // HOW MUCH OF THE SCREEN IS THE DESIGN BOX, and how much is bar. The
+    // design box is a fixed aspect and a phone is not, so there is always
+    // some; the question is how much, and whether anything is painted into it.
+    {
+      const DES = (await import('./js/data/display.json', { with: { type: 'json' } })).default
+      const da = DES.width / DES.height
+      const va = VP.w / VP.h
+      const fit = Math.min(VP.w / DES.width, VP.h / DES.height)
+      const boxW = DES.width * fit, boxH = DES.height * fit
+      const covered = (boxW * boxH) / (VP.w * VP.h)
+      note('design ' + DES.width + 'x' + DES.height + ' (' + da.toFixed(3) + ':1)'
+        + '  viewport ' + VP.w + 'x' + VP.h + ' (' + va.toFixed(3) + ':1)')
+      note('  the design box covers ' + (covered * 100).toFixed(1) + '% of the screen; '
+        + (100 - covered * 100).toFixed(1) + '% is bar '
+        + (va > da ? '(down the sides)' : va < da ? '(top and bottom)' : '(none: same aspect)'))
+    }
     note('portrait=' + (VP.h > VP.w) + '  rotate gate showing=' + gateUp
       + '  window=' + window.innerWidth + 'x' + window.innerHeight
       + '  media(portrait)=' + window.matchMedia('(orientation: portrait)').matches)
@@ -518,7 +540,11 @@ async function run() {
     }
     const collect = (sc) => {
       const items = []
-      const visit = (o) => {
+      // `masked` marks the children of a container the scene clips -- the
+      // loadout's scrolling stack. Their bounds are reported in full whether
+      // they are on screen or not, so only these get clipped to the band.
+      const visit = (o, masked = false) => {
+        if (sc.stack && o === sc.stack) masked = true
         if (o.visible === false || (o.alpha ?? 1) <= 0.02) return
         // An empty Text still reports bounds and draws no ink. Measuring one
         // is measuring a placeholder -- the boss name's label sits at 0,0 with
@@ -537,12 +563,12 @@ async function run() {
           const c = camFor(sc, o)
           items.push({
             r, live, txt: o.text !== undefined, name: label(o),
-            scene: sc.scene.key, chrome: screenSpace(sc, o),
+            scene: sc.scene.key, chrome: screenSpace(sc, o), masked,
             vp: { x: c.x / dprNow, y: c.y / dprNow,
                   w: c.width / dprNow, h: c.height / dprNow },
           })
         }
-        if (o.list) for (const c of o.list) visit(c)
+        if (o.list) for (const ch of o.list) visit(ch, masked)
       }
       for (const o of sc.children.list) visit(o)
       return items
@@ -564,10 +590,74 @@ async function run() {
     const audit = async (name) => {
       await sleep(750)
       await shot('screens-' + name + '-' + VP.w + 'x' + VP.h)
+      // THE BARS THEMSELVES, off the pixels. Sampling the whole frame does not
+      // answer this: the loadout's card panels are #121820 against a #10161d
+      // ground and no tolerance separates those reliably. So this looks only
+      // at the strip OUTSIDE the fitted design box -- which is the letterbox --
+      // and asks how much of it carries paint.
+      try {
+        const DES2 = (await import('./js/data/display.json', { with: { type: 'json' } })).default
+        const fit2 = Math.min(VP.w / DES2.width, VP.h / DES2.height)
+        const bw = DES2.width * fit2, bh = DES2.height * fit2
+        const barX = Math.max(0, (VP.w - bw) / 2), barY = Math.max(0, (VP.h - bh) / 2)
+        const c = game.canvas
+        const S = 220
+        const g2 = document.createElement('canvas')
+        g2.width = S; g2.height = Math.round(S * VP.h / VP.w)
+        const cx = g2.getContext('2d')
+        cx.drawImage(c, 0, 0, g2.width, g2.height)
+        const px = cx.getImageData(0, 0, g2.width, g2.height).data
+        const sx = g2.width / VP.w, sy = g2.height / VP.h
+        const inBox = (x, y) => x >= barX * sx && x <= (VP.w - barX) * sx
+                             && y >= barY * sy && y <= (VP.h - barY) * sy
+        let bar = 0, barPainted = 0
+        for (let y = 0; y < g2.height; y++) {
+          for (let x = 0; x < g2.width; x++) {
+            if (inBox(x, y)) continue
+            bar++
+            const i = (y * g2.width + x) * 4
+            // Anything that is not the dark ground is paint reaching the edge.
+            if (Math.abs(px[i] - 0x10) > 6 || Math.abs(px[i + 1] - 0x16) > 6
+                || Math.abs(px[i + 2] - 0x1d) > 6) barPainted++
+          }
+        }
+        const pct = (barX * 2 * VP.h + barY * 2 * (VP.w - barX * 2)) / (VP.w * VP.h)
+        note('  ' + name + ': letterbox is ' + (pct * 100).toFixed(1) + '% of the screen; '
+          + (bar === 0 ? 'none to sample'
+            : ((barPainted / bar) * 100).toFixed(0) + '% of it carries paint'))
+      } catch (e) { note('  (could not sample the frame: ' + e.message + ')') }
       const items = []
       for (const sc of game.scene.scenes) {
         if (!game.scene.isActive(sc.scene.key)) continue
         for (const it of collect(sc)) items.push(it)
+      }
+      // A MASKED CONTAINER'S CHILDREN STILL REPORT THEIR FULL BOUNDS, so a
+      // card clipped away by the loadout's scroll band looks, to a rectangle
+      // comparison, exactly like a card overlapping the buttons. It is not on
+      // the screen at all. Anything outside the band is dropped.
+      // IN CSS PIXELS. `stackPlan.band` is in DESIGN units and every rectangle
+      // here is in CSS pixels; comparing the two directly happens to be nearly
+      // right at 1440x900, where the fit is 1.125, and is wrong everywhere
+      // else. At 667x375 it is out by a factor of two.
+      const lo = scene('Loadout')
+      let band = null
+      if (lo?.stackPlan?.band && game.scene.isActive('Loadout')) {
+        const c = lo.cameras.main
+        const a = RESM.worldToScreen(lo, 0, lo.stackPlan.band.top, c)
+        const z = RESM.worldToScreen(lo, 0, lo.stackPlan.band.top + lo.stackPlan.band.height, c)
+        band = { top: a.y, height: z.y - a.y }
+      }
+      if (band) {
+        for (let i = items.length - 1; i >= 0; i--) {
+          const it = items[i]
+          if (!it.masked) continue
+          const r = it.r
+          if (r.y + r.h <= band.top || r.y >= band.top + band.height) { items.splice(i, 1); continue }
+          // Partly clipped: measure only the part that is actually drawn.
+          const y0 = Math.max(r.y, band.top)
+          const y1 = Math.min(r.y + r.h, band.top + band.height)
+          if (y1 - y0 < r.h) { it.r = { x: r.x, y: y0, w: r.w, h: y1 - y0 } }
+        }
       }
       const vw = VP.w, vh = VP.h
       // A thing that CONTAINS the whole viewport is a backdrop, a scrim or a
@@ -661,7 +751,29 @@ async function run() {
     else note('WORLDMAP: *** did not build ***')
 
     scene('WorldMap').scene.start('Loadout')
-    if (await until(() => running('Loadout'), 8000)) total += await audit('3-loadout')
+    if (await until(() => running('Loadout'), 8000)) {
+      total += await audit('3-loadout')
+      const lp = scene('Loadout').stackPlan
+      if (lp) {
+        note('  loadout stack: available=' + Math.round(lp.available)
+          + ' headings=' + Math.round(lp.headingH) + ' cardW=' + Math.round(lp.cardW))
+        note('    wants   hero=' + Math.round(lp.heroWant) + '/' + Math.round(lp.heroFloor)
+          + '  towers=' + Math.round(lp.towerWant) + '/' + Math.round(lp.towerFloor)
+          + '  specials=' + Math.round(lp.specialWant) + '/' + Math.round(lp.specialFloor)
+          + '   (natural/floor)')
+        note('    granted hero=' + Math.round(lp.granted.hero)
+          + '  towers=' + Math.round(lp.granted.towers)
+          + '  specials=' + Math.round(lp.granted.specials)
+          + '  overflow=' + Math.round(lp.overflow))
+        const short = []
+        // Squeezed BELOW THE FLOOR is the fault. Below `natural` is the stack
+        // doing its job -- the ladder shrinks the type and it still fits.
+        if (lp.granted.towers < lp.towerFloor - 1) short.push('towers by ' + Math.round(lp.towerFloor - lp.granted.towers))
+        if (lp.granted.specials < lp.specialFloor - 1) short.push('specials by ' + Math.round(lp.specialFloor - lp.granted.specials))
+        if (lp.granted.hero < lp.heroFloor - 1) short.push('hero by ' + Math.round(lp.heroFloor - lp.granted.hero))
+        if (short.length) note('    *** squeezed BELOW the content floor: ' + short.join(', '))
+      }
+    }
     else note('LOADOUT: *** did not build ***')
 
     // Straight into the comic, the way BEGIN does it, so this is the real
@@ -833,6 +945,183 @@ async function run() {
     return
   }
   g = await startRun()
+
+  if (scenario === 'softlock') {
+    // THE iOS ROTATION TRANSIENT, REPRODUCED.
+    //
+    // Orientation.ts's own comments record that iOS "reports the old viewport
+    // for a frame or two either side of a rotation". The gate reads that
+    // viewport EVERY FRAME through POST_STEP and pauses on portrait, but only
+    // RESUMES from sync(), which runs on resize/orientationchange. A single
+    // stale frame landing after the last settle() therefore has nothing to
+    // undo it.
+    //
+    // Faked by shadowing innerWidth/innerHeight for one frame while touching
+    // neither the DOM nor the CSS, because that is exactly what the device
+    // does: the media query has already flipped to landscape, so the overlay
+    // is hidden, while window.inner* still describes the portrait viewport.
+    const OWN_W = Object.getOwnPropertyDescriptor(window, 'innerWidth')
+    const OWN_H = Object.getOwnPropertyDescriptor(window, 'innerHeight')
+    const shadow = (w, h) => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: w })
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: h })
+    }
+    // Put the REAL accessors back, or isPortrait() reads undefined > undefined
+    // afterwards and the result proves nothing about a landscape viewport.
+    const unshadow = () => {
+      Object.defineProperty(window, 'innerWidth', OWN_W)
+      Object.defineProperty(window, 'innerHeight', OWN_H)
+    }
+    const gateEl = () => document.getElementById('rotate-gate')
+    const overlay = () => (gateEl() ? getComputedStyle(gateEl()).display : 'absent')
+    const state = (label) => {
+      note(label + ': Game ' + (game.scene.isPaused('Game') ? 'PAUSED' : 'running') +
+        ' | Hud ' + (game.scene.isPaused('Hud') ? 'PAUSED' : 'running') +
+        ' | overlay ' + overlay() +
+        ' | isPortrait() ' + window.isPortrait() +
+        ' | window ' + window.innerWidth + 'x' + window.innerHeight)
+      // The other two candidates, read at the moment of the lock rather than
+      // argued about: a targeting mode that never exited, and a latched modal.
+      const h = scene('Hud')
+      note(label + ' gates: mode ' + g.status.mode +
+        ' | pendingAbility ' + g.status.pendingAbility +
+        ' | hud.paused ' + (h && h.paused) +
+        ' | hud.panel ' + (h && h.panel !== undefined) +
+        ' | hud.settings ' + (h && !!h.settings))
+    }
+    const positions = () => (g.enemies || []).map((e) => Math.round(e.x) + ',' + Math.round(e.y))
+    const drift = (a, b) => a.filter((p, i) => b[i] !== undefined && b[i] !== p).length
+
+    await sleep(600)
+    state('before')
+
+    // A wave moving, so "enemies frozen mid-lane" is observed rather than
+    // inferred. Wave 1 waits for input, so it is started explicitly.
+    g.startWave()
+    await until(() => (g.enemies || []).length > 0, 8000)
+    await sleep(1200)
+
+    // CONTROL: prove the thing being measured can move, before reporting that
+    // it did not. Three of four faults the input harness first found were
+    // bugs in the harness, each looking exactly like the product bug.
+    const c0 = positions()
+    await sleep(900)
+    const c1 = positions()
+    note('CONTROL enemies moved while running: ' + drift(c0, c1) + ' of ' + c0.length)
+    await shot('01-running')
+
+    // ONE stale frame. No resize event, no DOM change, no CSS change.
+    shadow(390, 844)
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+    unshadow()
+    note('stale frame delivered; window is back to ' + window.innerWidth + 'x' + window.innerHeight)
+
+    // Well past every settle() timeout (0, rAF, 60, 180, 400ms). Nothing
+    // fired one, because nothing fired an event.
+    await sleep(1800)
+    state('after')
+
+    const f0 = positions()
+    await sleep(900)
+    const f1 = positions()
+    note('enemies moved after the stale frame: ' + drift(f0, f1) + ' of ' + f0.length)
+
+    // THE VERDICT IS TAKEN HERE, before anything is clicked. Probing input
+    // means opening the settings panel, and that legitimately pauses
+    // GameScene -- reading isPaused afterwards reports the probe, not the bug.
+    const locked = game.scene.isPaused('Game')
+    note('VERDICT ' + (locked
+      ? 'SOFT LOCK: the run is paused, the overlay is ' + overlay() +
+        ', isPortrait() is ' + window.isPortrait() + ', and nothing is scheduled to resume it'
+      : 'NO LOCK: the gate handed the run back'))
+    await shot('02-after-stale-frame')
+
+    // And a board tap, which should at minimum open a build ring on a pad.
+    const ringBefore = !!g.ring
+    const [bx, by] = toScreen(SPOTS[0].x, SPOTS[0].y)
+    if (Number.isFinite(bx) && Number.isFinite(by)) {
+      await click(bx, by)
+      note('INPUT board tap: ring before ' + ringBefore + ' after ' + !!g.ring)
+    } else {
+      note('INPUT board tap skipped: worldView is ' + bx + ',' + by +
+        ' -- a paused camera stops updating it')
+    }
+
+    // Then prove input either way. The settings gear is HUD chrome, built to
+    // keep working while GameScene is paused -- so if even that does nothing,
+    // the whole UI is gone rather than just the board.
+    const hud = scene('Hud')
+    const gear = hud.layout?.settings
+    const hadPanel = !!hud.settings
+    if (gear) await click(gear.x + gear.width / 2, gear.y + gear.height / 2)
+    note('INPUT settings gear: panel before ' + hadPanel + ' after ' + !!hud.settings)
+    if (hud.settings) { await key('Escape'); await sleep(300) }
+    return
+  }
+
+  if (scenario === 'stuckguard') {
+    // AN UNOWNED PAUSE, put there from outside so it stands for any of them:
+    // the rotate gate's stale frame, a modal that closed without resuming, a
+    // future path nobody has written yet. The guard must not care which.
+    const { recentEvents } = await import('./js/systems/Diagnostics.js')
+    const { openGates, gateSummary } = await import('./js/systems/InputGates.js')
+
+    g.startWave()
+    await until(() => (g.enemies || []).length > 0, 8000)
+    await sleep(1200)
+    note('before: Game ' + (game.scene.isPaused('Game') ? 'PAUSED' : 'running') +
+      ' | gates ' + gateSummary())
+    await shot('01-running')
+
+    game.scene.pause('Game')
+    game.scene.pause('Hud')
+    note('locked by hand: Game PAUSED, Hud PAUSED, gates ' + gateSummary() +
+      ' (nothing claims it)')
+    const frozen = (g.enemies || []).map((e) => Math.round(e.x)).join('|')
+
+    // STUCK_MS is 6s and the guard samples at 500ms. Nine seconds is past it
+    // with room for a slow CI box.
+    await sleep(9000)
+
+    const still = (g.enemies || []).map((e) => Math.round(e.x)).join('|')
+    note('after 9s: Game ' + (game.scene.isPaused('Game') ? 'STILL PAUSED' : 'running') +
+      ' | Hud ' + (game.scene.isPaused('Hud') ? 'STILL PAUSED' : 'running') +
+      ' | enemies ' + (still === frozen ? 'still frozen' : 'moving again'))
+
+    const events = recentEvents().filter((e) => e.kind === 'stuck' || e.kind === 'gate')
+    note('event log (' + events.length + ' gate/stuck entries):')
+    for (const e of events.slice(-12)) note('  [' + e.t + 'ms] ' + e.kind + ': ' + e.detail)
+
+    const { lastReport } = await import('./js/systems/Diagnostics.js')
+    const r = lastReport()
+    note('crash report: ' + (r ? r.cause + ' -- ' + r.message : 'NONE'))
+    note('VERDICT ' + (!game.scene.isPaused('Game') && r && r.cause === 'soft lock'
+      ? 'RECOVERED and REPORTED'
+      : 'FAILED: paused=' + game.scene.isPaused('Game') + ' report=' + (r && r.cause)))
+    await shot('02-recovered')
+
+    // THE OTHER HALF, and the one that would make the net worse than nothing:
+    // a settings panel the player opened and walked away from looks identical
+    // from the outside -- paused scene, still board, no input -- and must NOT
+    // be taken off them.
+    const hud = scene('Hud')
+    hud.openSettings()
+    await sleep(600)
+    note('settings opened: gates ' + gateSummary() +
+      ' | Game ' + (game.scene.isPaused('Game') ? 'PAUSED' : 'running'))
+    await sleep(9000)
+    const seized = !game.scene.isPaused('Game') || !hud.settings
+    note('after 9s with settings open: Game ' +
+      (game.scene.isPaused('Game') ? 'still PAUSED (correct)' : 'RESUMED') +
+      ' | panel ' + (hud.settings ? 'still open (correct)' : 'GONE') +
+      ' | gates ' + gateSummary())
+    const owned = recentEvents().filter((e) => e.kind === 'gate').slice(-4)
+    for (const e of owned) note('  gate log: [' + e.t + 'ms] ' + e.detail)
+    note('VERDICT owned gate ' + (seized ? 'SEIZED -- the guard took a panel the player owns'
+      : 'LEFT ALONE, as it must be'))
+    await shot('03-settings-left-alone')
+    return
+  }
 
   if (scenario === 'game') {
     await shot('01-fresh')

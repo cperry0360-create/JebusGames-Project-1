@@ -297,14 +297,23 @@ test('how far each viewport has to scroll, measured', () => {
    * the bound is now `min(abilities.y, cancel.y)` and CANCEL is the taller of
    * the two once the icons have shrunk.
    *
-   * Fourth: the header went. It carried a peanut count that was refreshed only
-   * when a tile's affordability flipped, so it sat stale beside a HUD counter
-   * that did not — two counters disagreeing on one screen. Removing it gives
-   * the grid back 30px at 844x390 and 18px at 568x320, and the narrow screen
-   * crosses the line: its grid is a whole tile tall for the first time.
+   * Fourth, and it is the peanut counter leaving. The panel had its own
+   * wallet in a header row, and a level 3 playtest screenshot caught it
+   * reading 404 while the HUD read 408. WHY THEY DISAGREED: the drawer is
+   * only redrawn by `refreshAffordability`, which fires when a tile's
+   * affordable flag FLIPS, so earning four peanuts redrew nothing and the
+   * drawer's number stayed at whatever the last rebuild read. One number in
+   * two places is one too many, so the header went and the grid got its
+   * height back.
    *
    *   844x390   inner 202 -> grid 118  content 198   maxScroll 80
    *   568x320   inner 133 -> grid 73   content 198   maxScroll 125
+   *
+   * THE NARROW CASE IS THE ONE TO LOOK AT, and it has finally crossed the
+   * line that mattered. A 62px tile now FITS in the 73px grid, so 568x320
+   * shows a whole tile for the first time — it was 55px and 89% of one. The
+   * counter was costing the smallest screen the ability to see any tile
+   * completely.
    */
   const wide = drawerLayout(844, area(844, 390), 6, 0, CFG)
   const narrow = drawerLayout(568, area(568, 320), 6, 0, CFG)
@@ -313,11 +322,11 @@ test('how far each viewport has to scroll, measured', () => {
   assert.equal(Math.round(narrow.grid.height), 73, '568x320 grid height moved')
   assert.equal(Math.round(wide.maxScroll), 80, '844x390 no longer scrolls by 80')
   assert.equal(Math.round(narrow.maxScroll), 125, '568x320 no longer scrolls by 125')
-  // THE MARGIN, pinned. A grid under half a tile makes every tile untappable,
-  // and the narrow screen is eight pixels above that line.
-  assert.ok(narrow.grid.height > CFG.tileHeight * 0.5,
+  // THE MARGIN, pinned. A grid under half a tile makes every tile untappable.
+  // The narrow screen now clears a WHOLE tile, which it never did before.
+  assert.ok(narrow.grid.height >= CFG.tileHeight,
     `568x320's grid is ${narrow.grid.height}px against a ${CFG.tileHeight}px tile; ` +
-    'under half and nothing in the drawer can be tapped')
+    'it used to fit none of one and must not go back')
   assert.equal(desk.maxScroll, 0, 'a 720-tall screen should never need to scroll')
   assert.ok(narrow.maxScroll > wide.maxScroll,
     'the narrow screen must be the worse case, or the widths are the wrong way round')
@@ -330,8 +339,8 @@ test('the panel chrome takes exactly what the breakpoint says, and no more', () 
     const l = drawerLayout(w, area(w, h), 6, 0, CFG)
     const step = l.step
     const inner = l.panel.height - CFG.pad * 2
-    // Three sections now, not four: the header that carried the peanut count
-    // is gone, and with it one of the gaps.
+    // Three sections, so two gaps between them plus one under the grid: the
+    // header that carried the peanut count is gone, and with it one gap.
     const chrome = step.tabBarHeight + step.detailHeight + step.sectionGap * 2
     assert.ok(Math.abs(inner - chrome - l.grid.height) < 0.001,
       `${name}: inner ${inner} minus chrome ${chrome} is not the grid's ${l.grid.height}`)
@@ -404,11 +413,12 @@ test('which viewports can show a whole tile, recorded', () => {
   for (const [name, w, h] of VIEWPORTS) {
     canShowWhole[name] = drawerLayout(w, area(w, h), 6, 0, CFG).grid.height >= CFG.tileHeight
   }
-  // 568x320 CROSSED THE LINE when the peanut header was removed: its grid went
-  // from 55px to 73px against a 62px tile, so every viewport can now show a
-  // whole tile and the two-guarantee split above has no case left to exercise.
-  // The split is kept rather than deleted -- it is one nudge away from
-  // mattering again -- and this record is what would say so.
+  // 568x320 crossed this line when the drawer's duplicate peanut counter was
+  // removed: its grid went from 55px to 73px against a 62px tile, and that
+  // header row was the last thing keeping the smallest screen from ever
+  // showing a tile whole. Every viewport can now, so the two-guarantee split
+  // above has no case left to exercise -- it is kept because it is one height
+  // nudge away from mattering again, and this record is what says so.
   assert.deepEqual(canShowWhole, {
     '844x390': true,
     '568x320': true,

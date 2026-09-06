@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { applyResolution } from './Resolution.ts'
+import { type GateHost, OrientationGate } from './OrientationGate.ts'
 
 /**
  * The orientation gate.
@@ -26,8 +27,27 @@ import { applyResolution } from './Resolution.ts'
 
 const OVERLAY_ID = 'rotate-gate'
 
-/** True when the viewport is taller than it is wide. */
+/**
+ * True when the viewport is taller than it is wide.
+ *
+ * THE SAME QUESTION THE OVERLAY ASKS, asked the same way. The overlay's
+ * visibility is `@media (orientation: portrait)`; this used to be
+ * `innerHeight > innerWidth`, which is a DIFFERENT predicate that agrees with
+ * the media query almost always and disagrees exactly when it matters. iOS
+ * reports a stale `window.inner*` for a frame or two around a rotation while
+ * the media query has already flipped, so the two could report opposite
+ * answers — and the failure that produced was the worst possible pairing: the
+ * script pausing the game while the CSS hid the overlay that would have
+ * explained why. A frozen board and no message.
+ *
+ * `matchMedia` is the media query itself, so the overlay and the pause can no
+ * longer disagree about anything. The comparison is kept as a fallback for a
+ * environment without `matchMedia` (jsdom, an old WebView), where it is still
+ * the right shape of question.
+ */
 export function isPortrait(): boolean {
+  const mq = window.matchMedia?.('(orientation: portrait)')
+  if (mq) return mq.matches
   return window.innerHeight > window.innerWidth
 }
 
@@ -122,55 +142,83 @@ function build(): HTMLElement {
 }
 
 /**
+ * The gate behind each game, so something outside can ask whether the gate is
+ * the thing holding a frozen run — and take the hold off if it is.
+ *
+ * A WeakMap rather than a module-level variable because `recreate()` builds a
+ * second game while the first is being torn down, and a single slot would have
+ * the new game's guard reaching into the old game's scene manager.
+ */
+const gates = new WeakMap<Phaser.Game, { gate: OrientationGate; host: GateHost }>()
+
+/** Which scenes the rotate gate is currently holding paused. Empty is the
+ *  normal answer; anything else while the overlay is down is a bug. */
+export function gateHolding(game: Phaser.Game): string[] {
+  return gates.get(game)?.gate.holding ?? []
+}
+
+/** Hands every held scene back. The recovery path, for the stuck guard. */
+export function releaseGate(game: Phaser.Game): string[] {
+  const g = gates.get(game)
+  return g ? g.gate.forceRelease(g.host) : []
+}
+
+/**
+ * Whether the rotate overlay is actually on screen.
+ *
+ * Read from the DOM rather than from our own state, because the overlay is
+ * shown by CSS and the whole class of bug here is the script and the
+ * stylesheet disagreeing. Asking the element is asking the player's eyes.
+ */
+export function overlayVisible(): boolean {
+  try {
+    const el = globalThis.document?.getElementById(OVERLAY_ID)
+    if (!el) return false
+    return getComputedStyle(el).display !== 'none'
+  } catch {
+    return false
+  }
+}
+
+/**
  * Installs the gate. Returns nothing to hold: it lives for the page's life.
  */
 export function installOrientationGate(game: Phaser.Game): void {
   build()
 
   /**
-   * Which scenes *this* paused, so turning back to landscape resumes those and
-   * only those. The game pauses GameScene itself while the pause dialog is up,
-   * and a gate that resumed everything it found would quietly un-pause a run
-   * the player had deliberately stopped.
+   * The pause/resume decision lives in OrientationGate, which is Phaser-free
+   * and therefore testable. Everything here is the wiring: what a scene is,
+   * and what to do on the edges.
    */
-  const gatePaused = new Set<string>()
-
-  /** Pauses everything currently running, remembering what we paused. */
-  const pauseRunning = (): void => {
-    // `getScenes(true)` is the running ones only, so a scene the game has
-    // already paused is never picked up here and never resumed below. Once
-    // they are all paused this returns nothing and the loop costs nothing.
-    for (const scene of game.scene.getScenes(true)) {
-      const key = scene.scene.key
-      // Boot is the loader. Pausing a scene mid-preload stalls it; better the
-      // art and audio keep downloading behind the overlay so the game is ready
-      // the moment the phone turns.
-      if (key === 'Boot') continue
-      gatePaused.add(key)
-      try {
-        game.scene.pause(key)
-      } catch {
-        gatePaused.delete(key)
-      }
-    }
+  const gate = new OrientationGate()
+  const host: GateHost = {
+    // The RUNNING ones only, so a scene the game has already paused for its
+    // own reasons is never picked up here and never resumed out from under it.
+    running: () => game.scene.getScenes(true).map((s: Phaser.Scene) => s.scene.key),
+    isPaused: (key) => game.scene.isPaused(key),
+    pause: (key) => game.scene.pause(key),
+    resume: (key) => game.scene.resume(key),
   }
+  gates.set(game, { gate, host })
 
+  /**
+   * ONE READING, ONE ANSWER, on every frame.
+   *
+   * This used to be two code paths on two different clocks: a per-frame hook
+   * that could only pause, and a resize listener that could resume. A single
+   * frame of stale portrait — which is what iOS serves either side of a
+   * rotation — latched a pause with nothing scheduled to undo it, and the run
+   * froze behind an overlay the CSS had already hidden.
+   *
+   * Now the same call both raises and lowers the gate, so whatever a frame
+   * does the next frame can undo.
+   */
   const sync = (): void => {
-    const portrait = isPortrait()
-    if (portrait) {
-      pauseRunning()
-    } else {
-      for (const key of gatePaused) {
-        try {
-          if (game.scene.isPaused(key)) game.scene.resume(key)
-        } catch {
-          // The scene shut down while the phone was on its side.
-        }
-      }
-      gatePaused.clear()
-    }
+    const change = gate.sync(isPortrait(), host)
+    if (change === null) return
     try {
-      if (portrait) game.sound.pauseAll()
+      if (change === 'raised') game.sound.pauseAll()
       else game.sound.resumeAll()
     } catch {
       // The sound system may not exist yet on the very first measurement.
@@ -185,13 +233,13 @@ export function installOrientationGate(game: Phaser.Game): void {
    * for each scene's create event does not work either, because at the moment
    * the gate installs the scene manager has only *queued* the scenes from the
    * config — `game.scene.scenes` is still empty, so there is nothing to listen
-   * to. Checking each frame has no such ordering assumption, and it only does
-   * work while the phone is upright, which is exactly when it is needed and
-   * when nothing else is going on.
+   * to. Checking each frame has no such ordering assumption.
+   *
+   * It runs the WHOLE decision, not just the pausing half. A hook that could
+   * only ever pause is what froze a run on a device that mis-reported its
+   * viewport for one frame.
    */
-  game.events.on(Phaser.Core.Events.POST_STEP, () => {
-    if (isPortrait()) pauseRunning()
-  })
+  game.events.on(Phaser.Core.Events.POST_STEP, sync)
 
   /**
    * iOS reports the old viewport for a frame or two either side of a rotation,

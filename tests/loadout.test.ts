@@ -128,11 +128,18 @@ test('both card rows are built by the same component', () => {
     // No section lays out its own text: that is how the two drifted apart.
     assert.ok(!/this\.add\.text\(/.test(body), `${name} still positions its own text`)
   }
-  // And the shared face keeps the icon and the words in separate columns.
-  const face = s.slice(s.indexOf('private cardFace'), s.indexOf('private towerSection'))
-  assert.match(face, /const tx = -cw \/ 2 \+ pad \+ col/, 'the text column is not offset past the icon')
-  assert.match(face, /this\.frameInsetFor\(cw, ch\)/,
+  // And ONE piece of arithmetic decides where the columns are, used by both
+  // the face that draws a card and the measurer that says how tall the row
+  // has to be. Two copies is how a row gets sized against one layout and
+  // filled with another, which is a card's last line under the next heading.
+  const geom = s.slice(s.indexOf('private cardGeometry('), s.indexOf('private cardNeeds('))
+  assert.match(geom, /tx: -cw \/ 2 \+ pad \+ col/, 'the text column is not offset past the icon')
+  assert.match(geom, /this\.frameInsetFor\(cw, ch\)/,
     'the card pads against its box rather than its frame')
+  const face = s.slice(s.indexOf('private cardFace'), s.indexOf('private towerSection'))
+  assert.match(face, /this\.cardGeometry\(cw, ch\)/, 'the face lays its own columns out again')
+  assert.match(s.slice(s.indexOf('private cardNeeds(')), /this\.cardGeometry\(/,
+    'the measurer lays the columns out again rather than asking')
   assert.match(face, /wordWrap: \{ width: tw \}/, 'body text is not wrapped to the text column')
 })
 
@@ -199,60 +206,107 @@ test('the loadout says the hand was dealt, not chosen', () => {
  * Pixel verification is the harness's `everyloadout` scenario, which renders
  * all fourteen entries at both viewports.
  */
-test('the screen is laid out from the viewport, not from the content', () => {
-  // The outage. The layout ran top to bottom and put the buttons wherever the
-  // content finished; on a 568x320 phone the content finished at y=931 in a
-  // 720-unit box, so BEGIN THE RUN was 227px below the screen and no run could
-  // be started at all. The buttons are placed from H now, before a single card
-  // is measured, and the cards are fitted into what is left.
+test('the screen is a stack that flows, and the buttons are placed first', () => {
+  /*
+   * TWO OUTAGES, ONE TEST.
+   *
+   * The first: the layout ran top to bottom and put the buttons wherever the
+   * content finished. On a 568x320 phone that was y=931 in a 720-unit box, so
+   * BEGIN THE RUN was 227px below the screen and no run could be started.
+   *
+   * The second: the fix for that handed each section a SHARE of what was left
+   * -- 62% to the hero block at most, then 53/47 to the towers and specials --
+   * and a section whose content needed more than its share drew past its own
+   * edge and over the heading below it, because nothing downstream was
+   * listening. Four collisions on one screen.
+   *
+   * So: the buttons are placed first, from H, and the sections are stacked
+   * from what they MEASURE rather than from a share of a budget.
+   */
   const s = src('scenes/LoadoutScene.ts')
   const render = s.slice(s.indexOf('private render(): void {'), s.indexOf('private headingHeight'))
 
   assert.match(render, /const by = H - LO\.buttonMargin - buttonH \/ 2/,
     'the button row is not anchored to the bottom of the viewport')
-  // AND IT RESERVES WHAT IT ACTUALLY TAKES. `plateButton` applies the 44pt tap
-  // floor, so on a phone a 48-unit button is 81 units tall. Reserving the
-  // requested height rather than the floored one left the cards a budget 33
-  // units too generous, and the specials' description ran into BEGIN THE RUN.
   assert.match(render, /const buttonH = tapFloor\(this, LO\.buttonHeight\)/,
     'the button row reserves its requested height rather than the height it gets')
-  // Placed before the cards exist, so nothing measured later can move them.
-  assert.ok(render.indexOf('this.buildButtons(by, buttonH)') < render.indexOf('this.heroSection('),
-    'the buttons are placed after the cards, so a tall card can still push them off')
-  assert.match(render, /const budget = \(by - buttonH \/ 2 - LO\.buttonGap\) - top/,
-    'the card area is not the space left over after the buttons')
-  // The two DEALT rows are given their height. They hold whatever the draft
-  // handed over and must fit it into the space that is left.
+  assert.ok(render.indexOf('this.buildButtons(by, buttonH)') < render.indexOf('stackSections('),
+    'the buttons are placed after the sections, so a tall card can still push them off')
+
+  // NO SHARES. Every one of these is the old machinery, and any of them coming
+  // back brings the collisions with it.
+  for (const gone of ['rowShares', 'heroSectionMaxShare', 'budget *', 'const rest =']) {
+    assert.ok(!render.includes(gone), `the share-of-a-budget layout is back: ${gone}`)
+  }
+
+  // The stack is fed what each section MEASURED, with a floor it may be
+  // squeezed to and no further.
+  assert.match(render, /const laid = stackSections\(\[/, 'the sections are not stacked')
+  assert.match(render, /natural: heroWant, min: Math\.min\(heroWant, heroFloor\)/,
+    'the hero block has no measured floor')
+  assert.match(render, /natural: towerWant, min: Math\.min\(towerWant, towerFloor\)/,
+    'the tower row has no measured floor')
+  assert.match(render, /natural: specialWant, min: Math\.min\(specialWant, specialFloor\)/,
+    'the specials row has no measured floor')
+  // The floors come from the SMALLEST size on the type ladder, so a floor is
+  // what the content genuinely needs rather than a number somebody picked.
+  assert.match(render, /const small = LO\.bodySizes\[LO\.bodySizes\.length - 1\]!/,
+    'the floors are not taken from the bottom of the type ladder')
+  assert.match(render, /this\.heroPlan\(run\.heroId, 0\)/,
+    "the hero block's floor is a chosen number rather than what it solves to")
+
+  // THE HEADINGS ARE SECTIONS. That is what stops a label being overlapped
+  // from either side: it owns a band of the stack rather than sitting in a gap
+  // between two things that were sized independently.
+  const headings = [...render.matchAll(/\{ natural: headingH/g)]
+  assert.equal(headings.length, 3, 'the three section labels are not part of the stack')
+
+  // Every section is placed at a top the stack computed, never at a literal.
+  for (const call of ['this.heading(\'HERO\', heroLabel!)',
+                      'this.heroSection(run.heroId, heroAt!, heroH!)',
+                      'this.heading(\'TOWERS\', towerLabel!)',
+                      'this.towerSection(run.openingTowers, towerAt!, towerH!)',
+                      'this.heading(\'SPECIALS\', specialLabel!)',
+                      'this.abilitySection(run.abilities, specialAt!, specialH!)']) {
+    assert.ok(render.includes(call), `the stack does not place: ${call}`)
+  }
+
+  // The rows are still told their height rather than deciding it.
   for (const section of ['towerSection', 'abilitySection']) {
     assert.match(s, new RegExp(`private ${section}\\([^)]*height: number`),
       `${section} decides its own height, which is how the row grew off the screen`)
   }
-  // THE HERO BLOCK IS THE EXCEPTION, and it is capped rather than allocated.
-  // It used to take a fixed 40% whether that was too much or too little, and
-  // the picker inside it absorbed the difference by subtraction — which went
-  // negative on a short screen and threw the portraits out of the card. It
-  // asks for what its content needs now, under a ceiling that comes out of the
-  // same budget, so it still cannot push the buttons off.
-  assert.match(s, /private heroSection\([^)]*cap: number/,
-    'the hero block is back on a fixed share of the budget')
-  assert.match(render, /Math\.floor\(budget \* LO\.heroSectionMaxShare\)/,
-    'the hero block has no ceiling, so a long blurb can push the towers off')
-  assert.match(render, /const rest = Math\.max\(0, budget - heroUsed\)/,
-    'what the hero block did not use is not handed to the rows below it')
-  const P0 = read('presentation') as any
-  assert.ok(P0.loadout.heroSectionMaxShare > 0 && P0.loadout.heroSectionMaxShare < 1,
-    'the hero ceiling is not a fraction of the budget')
   const row = s.slice(s.indexOf('private cardRow('))
   assert.match(row.slice(0, 900), /return y \+ height/,
     'the card row still reports a height it measured rather than the one it was given')
 
   const face = s.slice(s.indexOf('private cardFace'), s.indexOf('private towerSection'))
-  assert.match(face, /this\.frameInsetFor\(cw, ch\)/,
-    'the card pads against its box rather than its frame')
   // One size for the whole card, chosen so name, stats and body all fit.
   assert.match(face, /for \(const size of LO\.bodySizes\)/,
     'the card cannot shrink its type, so long copy has nowhere to go but out')
   assert.match(face, /if \(total <= room\) break/, 'the type ladder does not check it fits')
+})
+
+test('an overflowing stack scrolls, and takes only the content with it', () => {
+  // A stack that does not fit after every section is at its floor must scroll
+  // rather than let sections draw through each other -- and the FIRST attempt
+  // at that masked the whole layer, which took the title, the subtitle and
+  // both buttons off the screen with it. Worse than the bug it fixed.
+  const s = src('scenes/LoadoutScene.ts')
+  const scroll = s.slice(s.indexOf('private installScroll('),
+    s.indexOf('/** How far the stack can be dragged'))
+  assert.match(scroll, /if \(this\.scrollMax <= 0\) return/,
+    'the scroll installs itself even when everything fits')
+  assert.match(scroll, /this\.stack\.setMask\(/, 'the mask is not on the content container')
+  assert.ok(!/this\.layer\.setMask\(/.test(scroll),
+    'the mask is on the whole layer, which hides the title and the buttons')
+  assert.ok(!/this\.layer\.y =/.test(scroll),
+    'scrolling moves the fixed chrome as well as the content')
+
+  // The split is real: sections draw into `stack`, chrome into `layer`.
+  const render = s.slice(s.indexOf('private render(): void {'), s.indexOf('private headingHeight'))
+  assert.match(render, /this\.target = this\.stack/, 'the sections do not draw into the scrolling container')
+  assert.match(render, /this\.target = this\.layer/, 'the chrome is left drawing into the scrolling container')
 })
 
 test('the loadout fits the design box with room for the buttons', () => {

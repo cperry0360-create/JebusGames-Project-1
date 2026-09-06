@@ -21,6 +21,7 @@ import {
 import { SLOT2, heroSlotDefs, slot2Usable } from '../systems/HeroSkills.ts'
 import { onSceneResize, sceneIsLive } from '../systems/SceneEvents.ts'
 import { fitUiCamera, viewH, viewW } from '../systems/Resolution.ts'
+import { enterGate, leaveGate, noteInputAccepted } from '../systems/InputGates.ts'
 
 /**
  * A placed slot's Phaser objects, and the region they were all built from.
@@ -116,6 +117,11 @@ export class HudScene extends Phaser.Scene {
     // removed outright never emits SHUTDOWN, and the hand-rolled pair here
     // only listened for that one.
     onSceneResize(this, () => { if (sceneIsLive(this)) this.relayout() })
+
+    // Any press this scene dispatched. The HUD keeps working while GameScene
+    // is paused, so it is the better witness of the two: if even this stops
+    // hearing taps, the whole UI has gone, not just the board.
+    this.input.on('pointerdown', () => noteInputAccepted())
 
     // The HUD is laid out in CSS pixels — typography floors, plate sizes and
     // the safe-area insets are all in them — and drawn at device resolution.
@@ -362,6 +368,10 @@ export class HudScene extends Phaser.Scene {
     if (this.paused && this.settings) return
     this.paused = true
     play(this, 'open')
+    // ANNOUNCED, because this pauses GameScene. A pause nothing claims is
+    // indistinguishable from a soft lock; a pause with an owner is the
+    // player's to close, and the stuck guard leaves it alone.
+    enterGate('settings', { wave: this.world.status.wave, mode: this.world.status.mode })
     this.scene.pause('Game')
     this.settings?.close()
     this.settings = new SettingsPanel(this, 90000, {
@@ -378,6 +388,7 @@ export class HudScene extends Phaser.Scene {
   private closeSettings(): void {
     this.settings?.close()
     this.settings = undefined
+    leaveGate('settings')
   }
 
   /**
@@ -395,11 +406,16 @@ export class HudScene extends Phaser.Scene {
   private showPanel(opts: ConstructorParameters<typeof Dialog>[4]): void {
     this.panel?.close()
     this.panel = new Dialog(this, viewW(this) / 2, viewH(this) / 2, 90000, opts)
-    this.panel.onClosed(() => { this.panel = undefined })
+    enterGate('dialog', { title: opts.title ?? '?' })
+    this.panel.onClosed(() => {
+      this.panel = undefined
+      leaveGate('dialog')
+    })
   }
 
   private resumeGame(): void {
     this.paused = false
+    leaveGate('settings')
     // A tap is a user gesture, which is the only thing that can start an audio
     // device the browser suspended while the tab was away. Resuming here means
     // a player who backgrounds the game and hits RESUME gets its sound back.

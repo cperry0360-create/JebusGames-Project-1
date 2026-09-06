@@ -5,6 +5,7 @@ import { applyResolution } from './systems/Resolution.ts'
 import { installErrorPanel, report, setReloadHandler } from './systems/ErrorPanel.ts'
 import { logEvent, setBuildLabel } from './systems/Diagnostics.ts'
 import { installWatchdog } from './systems/Watchdog.ts'
+import { installGameStuckGuard } from './systems/StuckWatch.ts'
 import { guardAudioPromises } from './systems/Audio.ts'
 import { installLifecycle } from './systems/Lifecycle.ts'
 import { disableMusic, installMusicGesture, refreshMusicVolume, unlockMusic } from './systems/Music.ts'
@@ -96,6 +97,7 @@ function boot(): Phaser.Game {
   // than a rotated canvas: rotating would put pointer coordinates in a
   // different frame from the one the browser reports them in.
   installOrientationGate(game)
+  installGameStuckGuard(game)
   return game
 }
 
