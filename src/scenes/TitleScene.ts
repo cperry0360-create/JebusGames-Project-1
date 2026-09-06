@@ -13,6 +13,7 @@ import { unlockAudio } from '../systems/Audio.ts'
 import { VERSION_LABEL } from '../systems/Build.ts'
 import { logEvent } from '../systems/Diagnostics.ts'
 import { ART } from '../systems/Art.ts'
+import { visibleDesignBox } from '../systems/Layout.ts'
 import { fitCameraToDesign } from '../ui/FitCamera.ts'
 import { musicForScene, musicProblem, onMusicProblem } from '../systems/Music.ts'
 import { sceneIsLive } from '../systems/SceneEvents.ts'
@@ -195,17 +196,24 @@ export class TitleScene extends Phaser.Scene {
    * title screen that fails to draw is worse than a plain one.
    */
   private drawBackdrop(W: number, H: number): void {
+    // COVERS WHAT THE CAMERA SEES, NOT THE DESIGN BOX. The box is a fixed
+    // 16:9 and a screen is not, so a backdrop drawn to W x H stops at the
+    // box's edges and the bars beyond it show the canvas's clear colour --
+    // measured, 62% of the letterbox at 1440x900 was bare. A background is the
+    // one thing that should run off the edges.
+    const vis = visibleDesignBox(this)
     const key = ART.ui.titleBackdrop
     if (key === null || !this.textures.exists(key)) {
-      this.add.rectangle(0, 0, W, H, 0x10161d).setOrigin(0, 0)
+      this.add.rectangle(W / 2, H / 2, vis.width, vis.height, 0x10161d).setOrigin(0.5)
       this.decorateBackdrop()
       return
     }
     const bg = this.add.image(W / 2, H / 2, key)
-    // Cover, not fit: fill the canvas and let the overflow crop.
-    const scale = Math.max(W / bg.width, H / bg.height)
+    // Cover, not fit: fill the visible area and let the overflow crop.
+    const scale = Math.max(vis.width / bg.width, vis.height / bg.height)
     bg.setScale(scale)
-    this.add.rectangle(0, 0, W, H, 0x0b0e13, BRANDING.titleBackdropDim).setOrigin(0, 0)
+    this.add.rectangle(W / 2, H / 2, vis.width, vis.height, 0x0b0e13, BRANDING.titleBackdropDim)
+      .setOrigin(0.5)
 
     // The flat wash alone leaves the smaller copy fighting the village behind
     // it. A soft column behind the middle settles that without dimming the

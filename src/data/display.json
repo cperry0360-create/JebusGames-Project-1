@@ -2,7 +2,8 @@
   "width": 1280,
   "height": 720,
   "hudHeight": 62,
-  "backgroundColor": "#2f7d3f",
+  "_backgroundColor": "THE CANVAS CLEAR COLOUR, and it is the game's dark ground rather than grass. It was #2f7d3f, a grass green left from when the map was tiles and the world camera cleared to the field. Nothing has relied on it since the map became a painted plate -- and every pixel a camera does not paint is this colour, so a green one turns any letterbox or safe-area strip into what looks like a rendering fault. It matches html/body in index.html and the theme-color meta tag; a mismatch between the three shows as a band on iOS.",
+  "backgroundColor": "#10161d",
   "camera": {
     "defaultZoom": 1.72,
     "maxZoom": 2.37,

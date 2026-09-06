@@ -7,6 +7,15 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
     <!--
+      THE SAME DARK GROUND IN THREE PLACES, and it has to be the same in all
+      three. html/body below paints the page, display.json's backgroundColor is
+      what the canvas CLEARS to, and this is what iOS paints behind a notch and
+      under the home indicator. A mismatch between any two of them shows as a
+      band down the edge of the screen -- which is exactly what a grass-green
+      clear colour was doing against a dark page.
+    -->
+    <meta name="theme-color" content="#10161d" />
+    <!--
       GitHub Pages will not let us set Cache-Control, so these are best effort:
       some browsers honour them for the document, many ignore them. The real
       mechanism is the version check at the bottom of this file.

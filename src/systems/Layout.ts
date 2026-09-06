@@ -73,9 +73,17 @@ export function designFit(scene: Phaser.Scene): number {
  */
 export function visibleDesignBox(scene: Phaser.Scene): { width: number; height: number } {
   const fit = designFit(scene) || 1
+  // THE INSETS ARE ADDED, not subtracted. `fitCameraToDesign` centres the
+  // design box on the middle of the SAFE area, so with a bottom inset the box
+  // sits above the middle of the canvas -- and a backdrop sized to exactly
+  // what the camera sees, but drawn at the design box's own centre, then falls
+  // short on the inset side. Measured: a 21px bottom inset left the last 10px
+  // of the screen unpainted. Allowing for the whole inset span covers it from
+  // wherever the box ended up.
+  const insets = safeAreaInsets()
   return {
-    width: Math.max(DESIGN.width, viewW(scene) / fit),
-    height: Math.max(DESIGN.height, viewH(scene) / fit),
+    width: Math.max(DESIGN.width, (viewW(scene) + insets.left + insets.right) / fit),
+    height: Math.max(DESIGN.height, (viewH(scene) + insets.top + insets.bottom) / fit),
   }
 }
 
@@ -167,6 +175,93 @@ export function safeBox(
     y,
     width: Math.max(0, viewW(scene) - insets.left - insets.right - pad * 2),
     height: Math.max(0, viewH(scene) - insets.top - insets.bottom - pad * 2),
+  }
+}
+
+/* ---------------------------------------------------------------- stacks */
+
+export interface StackSection {
+  /** What the section needs when nothing is squeezing it. */
+  natural: number
+  /** The least it can be squeezed to. Defaults to `natural` -- a section that
+   *  does not say it can shrink will not be shrunk. */
+  min?: number
+  /** Space after this section. Not applied after the last one. */
+  gapAfter?: number
+}
+
+export interface Stacked {
+  /** The y each section starts at, in the same order they were given. */
+  tops: number[]
+  /** The height each section actually got. */
+  heights: number[]
+  /** Where the stack ends. */
+  bottom: number
+  /** How much taller than the box it still is after squeezing. 0 when it
+   *  fits, and the amount a scroll has to cover when it does not. */
+  overflow: number
+}
+
+/**
+ * A VERTICAL STACK THAT FLOWS: each section starts at the bottom of the one
+ * above it, never at a hardcoded y.
+ *
+ * THE FAILURE THIS REPLACES. The loadout screen allocated its sections from a
+ * BUDGET -- 53% of what is left to the towers, 47% to the specials -- and each
+ * one then drew whatever it had into the height it was handed. Content that
+ * needed more than its share did not push the next section down, because
+ * nothing downstream was listening: it simply drew past its own edge and over
+ * the heading underneath. Four collisions on one screen, all of them the same
+ * mistake, and a share is what makes them possible.
+ *
+ * So heights come from CONTENT here. `natural` is what a section measured
+ * itself at; squeezing happens only when the total does not fit, only down to
+ * each section's own `min`, and proportionally to how much slack each one
+ * offered -- so a section with no give keeps its size and a roomy one pays.
+ *
+ * `overflow` is what is left when everything has been squeezed to its floor.
+ * A caller that can scroll scrolls by it; a caller that cannot at least knows
+ * the number rather than discovering it as an overlap.
+ *
+ * Pure arithmetic and no scene, so the tests drive it directly.
+ */
+export function stackSections(
+  sections: StackSection[], top: number, available: number,
+): Stacked {
+  const gaps = sections.map((s, i) => (i === sections.length - 1 ? 0 : Math.max(0, s.gapAfter ?? 0)))
+  const gapTotal = gaps.reduce((a, b) => a + b, 0)
+  const natural = sections.map((s) => Math.max(0, s.natural))
+  const min = sections.map((s, i) => Math.min(natural[i]!, Math.max(0, s.min ?? s.natural)))
+  const wanted = natural.reduce((a, b) => a + b, 0) + gapTotal
+  const room = Math.max(0, available - gapTotal)
+
+  const heights = natural.slice()
+  const over = wanted - available
+  if (over > 0) {
+    // Squeeze in proportion to the slack each section offered, so a section
+    // that said it cannot shrink is not shrunk at all.
+    const slack = natural.map((n, i) => n - min[i]!)
+    const slackTotal = slack.reduce((a, b) => a + b, 0)
+    if (slackTotal > 0) {
+      const take = Math.min(over, slackTotal)
+      for (let i = 0; i < heights.length; i++) {
+        heights[i] = Math.max(min[i]!, natural[i]! - (slack[i]! / slackTotal) * take)
+      }
+    }
+  }
+
+  const tops: number[] = []
+  let y = top
+  for (let i = 0; i < heights.length; i++) {
+    tops.push(y)
+    y += heights[i]! + gaps[i]!
+  }
+  const used = heights.reduce((a, b) => a + b, 0)
+  return {
+    tops,
+    heights,
+    bottom: top + used + gapTotal,
+    overflow: Math.max(0, used - room),
   }
 }
 

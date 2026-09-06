@@ -21,7 +21,8 @@ import { ART, renderFor } from '../systems/Art.ts'
 import presentationData from '../data/presentation.json'
 import { play } from '../systems/Audio.ts'
 import { musicForScene } from '../systems/Music.ts'
-import { tapFloor, visibleDesignBox } from '../systems/Layout.ts'
+import { logEvent } from '../systems/Diagnostics.ts'
+import { stackSections, tapFloor, visibleDesignBox } from '../systems/Layout.ts'
 
 const TOWERS = towersData as Record<string, TowerDef>
 const ABILITIES = abilitiesData as Record<string, AbilityDef>
@@ -30,6 +31,10 @@ const DRAFT = draftData as DraftDef
 const W = displayData.width
 const H = displayData.height
 const LO = presentationData.loadout
+
+/** Between two cards in a row. Named because the measurers need the same
+ *  number the drawer uses to work out how wide one card gets. */
+const CARD_GAP = 22
 
 /**
  * One card on the loadout screen.
@@ -74,6 +79,17 @@ interface Card {
  */
 export class LoadoutScene extends Phaser.Scene {
   private layer!: Phaser.GameObjects.Container
+  /**
+   * The three content sections, separate from the fixed chrome.
+   *
+   * THE TITLE, THE SUBTITLE AND THE BUTTONS DO NOT SCROLL, and they must not
+   * be masked either -- masking `layer` to the content band took all three off
+   * the screen, which is a worse bug than the one the scroll was added to fix.
+   * `target` is what `heading` and `card` draw into, so the split costs those
+   * two nothing.
+   */
+  private stack!: Phaser.GameObjects.Container
+  private target!: Phaser.GameObjects.Container
   private cards: Card[] = []
 
   constructor() {
@@ -281,7 +297,10 @@ export class LoadoutScene extends Phaser.Scene {
    */
   private render(): void {
     this.layer?.destroy(true)
+    this.stack?.destroy(true)
     this.layer = this.add.container(0, 0)
+    this.stack = this.add.container(0, 0)
+    this.target = this.layer
     this.cards = []
     const run = runState()
 
@@ -311,34 +330,83 @@ export class LoadoutScene extends Phaser.Scene {
     const by = H - LO.buttonMargin - buttonH / 2
     this.buildButtons(by, buttonH)
 
-    // What is left, after the heading each section carries.
+    /*
+     * THE SCREEN IS A STACK THAT FLOWS, and every section is measured before
+     * anything is placed.
+     *
+     * WHAT THIS REPLACES, because the shape of the mistake is the point. The
+     * three content sections were handed SHARES of a budget -- 62% of it to the
+     * hero block at most, then 53/47 of the remainder to the towers and the
+     * specials -- and each one drew whatever it had into the height it was
+     * given. A card whose text needed more than its share did not push the
+     * next section down, because nothing downstream was listening: it drew
+     * past its own edge and over the heading below it. Four collisions on one
+     * screen, and a share is what makes every one of them possible.
+     *
+     * Now each section says what it NEEDS, `stackSections` reconciles those
+     * against the room available, and each one is placed at the bottom of the
+     * one above. The headings are sections too -- that is what stops a label
+     * being overlapped from either side, because it owns a band of the stack
+     * rather than sitting in a gap between two things that were sized
+     * independently.
+     */
     const top = drawn.y + drawn.height + 10
+    const available = (by - buttonH / 2 - LO.buttonGap) - top
     const headingH = this.headingHeight()
-    const budget = (by - buttonH / 2 - LO.buttonGap) - top
-      - headingH * 3 - LO.sectionGap * 2
+    const cardW = this.cardWidthFor(2)
 
-    // THE HERO BLOCK IS SIZED TO ITS CONTENT, and the two dealt rows share
-    // what is left in the proportion they always had.
-    //
-    // It used to take a fixed 40% share whether that was too much or too
-    // little, and the row inside it absorbed the difference by subtraction —
-    // which is how the portraits ended up at a 24px floor inside a strip of
-    // negative height. A block that asks for what it needs cannot do that.
-    // `heroSectionMaxShare` is the ceiling, so a long blurb can never starve
-    // the towers.
-    const share = LO.rowShares
-    let y = top
-    const heroBottom = this.heroSection(
-      run.heroId, y, Math.floor(budget * LO.heroSectionMaxShare),
-    )
-    const heroUsed = heroBottom - y - headingH
-    const rest = Math.max(0, budget - heroUsed)
-    const dealt = share.towers + share.specials
-    const towersH = Math.floor(rest * (share.towers / dealt))
+    // What each block wants. The hero block is solved against a generous
+    // ceiling so `natural` is what it would take if nothing else needed room;
+    // its floor is what it takes when squeezed as hard as it can be.
+    const small = LO.bodySizes[LO.bodySizes.length - 1]!
+    const heroWant = this.heroPlan(run.heroId, available).height
+    // Solved against a ceiling of nothing, which is what makes it the block's
+    // true floor rather than a number somebody picked.
+    const heroFloor = this.heroPlan(run.heroId, 0).height
+    const towerWant = this.towerNeeds(run.openingTowers, cardW)
+    const towerFloor = this.towerNeeds(run.openingTowers, cardW, small)
+    const specialWant = this.abilityNeeds(run.abilities, cardW)
+    const specialFloor = this.abilityNeeds(run.abilities, cardW, small)
 
-    y = heroBottom + LO.sectionGap
-    y = this.towerSection(run.openingTowers, y, towersH) + LO.sectionGap
-    this.abilitySection(run.abilities, y, rest - towersH)
+    const laid = stackSections([
+      { natural: headingH, gapAfter: 0 },
+      { natural: heroWant, min: Math.min(heroWant, heroFloor), gapAfter: LO.sectionGap },
+      { natural: headingH, gapAfter: 0 },
+      { natural: towerWant, min: Math.min(towerWant, towerFloor), gapAfter: LO.sectionGap },
+      { natural: headingH, gapAfter: 0 },
+      { natural: specialWant, min: Math.min(specialWant, specialFloor) },
+    ], top, available)
+
+    const [heroLabel, heroAt, towerLabel, towerAt, specialLabel, specialAt] = laid.tops
+    const [, heroH, , towerH, , specialH] = laid.heights
+
+    this.target = this.stack
+    this.heading('HERO', heroLabel!)
+    this.heroSection(run.heroId, heroAt!, heroH!)
+    this.heading('TOWERS', towerLabel!)
+    this.towerSection(run.openingTowers, towerAt!, towerH!)
+    this.heading('SPECIALS', specialLabel!)
+    this.abilitySection(run.abilities, specialAt!, specialH!)
+    this.target = this.layer
+
+    // A stack that still does not fit after every section has been squeezed to
+    // its floor SCROLLS. It is reported as well as handled: a screen that has
+    // to scroll on a phone is a design problem, and one that scrolls silently
+    // is a design problem nobody knows about.
+    // Published for the harness, which checks that what a section was GIVEN
+    // covers what it ASKED FOR -- a card drawing past its own frame is a
+    // number, and this is the number.
+    this.stackPlan = {
+      available, headingH, cardW,
+      heroWant, heroFloor, towerWant, towerFloor, specialWant, specialFloor,
+      granted: { hero: heroH!, towers: towerH!, specials: specialH! },
+      overflow: laid.overflow,
+      // The band the content is clipped to, so the harness can tell a card
+      // that is masked away from a card that is overlapping something.
+      band: { top, height: available },
+    }
+
+    this.installScroll(laid.overflow, top, available)
 
     // Every card is face-up for now. The reveal lands here.
     for (const c of this.cards) c.reveal()
@@ -434,7 +502,7 @@ export class LoadoutScene extends Phaser.Scene {
       fontFamily: FONT_UI, fontSize: '22px', color: COLOR.amber, letterSpacing: 3,
       stroke: '#0d1016', strokeThickness: 4,
     }).setOrigin(0.5, 0)
-    this.layer.add(t)
+    this.target.add(t)
     return y + t.height + LO.headingGap
   }
 
@@ -453,7 +521,7 @@ export class LoadoutScene extends Phaser.Scene {
     // filled from its top) and it is the reason `inner` exists.
     const face = this.add.container(x + w / 2, y)
     const parts: Phaser.GameObjects.GameObject[] = [backing, ...plate, face]
-    this.layer.add(parts)
+    this.target.add(parts)
     const index = this.cards.length
     const c: Card = {
       parts,
@@ -499,8 +567,22 @@ export class LoadoutScene extends Phaser.Scene {
    * `cap` is a ceiling, not an allocation: the block takes what its content
    * needs and the caller gives the remainder to the two dealt rows.
    */
-  private heroSection(selectedId: string, top: number, cap: number): number {
-    const y = this.heading('HERO', top)
+  /**
+   * SOLVES the hero block for a given ceiling, and draws nothing.
+   *
+   * Split out of `heroSection` so the stack can ask what this block NEEDS
+   * before deciding where anything goes. Every number the drawer uses comes
+   * back from here, so the block that is measured and the block that is drawn
+   * cannot be two different blocks.
+   */
+  private heroPlan(selectedId: string, cap: number): {
+    height: number; pad: number; padT: number
+    row: ReturnType<typeof fitHeroRow>
+    desc: ReturnType<typeof heroDescription>
+    bodySize: number
+    roster: ReturnType<typeof heroList>
+    selected: ReturnType<typeof heroList>[number]
+  } {
     const w = this.contentWidth
     const frame = this.frameInsetFor(w, cap)
     const pad = Math.max(LO.cardPad, Math.ceil(Math.max(frame.left, frame.right)))
@@ -581,7 +663,32 @@ export class LoadoutScene extends Phaser.Scene {
     }
 
     const height = padT + row.height + LO.sectionGap + desc.height + padB
-    const c = this.card(W / 2 - w / 2, y, w, height)
+    return { height, pad, padT, row, desc, bodySize, roster, selected }
+  }
+
+  /**
+   * The HERO row: every hero on its own card, the pick remembered, and the
+   * chosen hero described under it.
+   *
+   * Draws the plan `heroPlan` solved. `height` is given rather than decided
+   * here, because the stack has already reconciled it with everything else on
+   * the screen.
+   */
+  private heroSection(selectedId: string, top: number, height: number): number {
+    const w = this.contentWidth
+    // SOLVED AT THE HEIGHT IT ACTUALLY GOT, and re-solved at the tightest
+    // possible ceiling if that still wants more room than it was given.
+    //
+    // The floor was measured with `heroPlan(id, 0)` and the block is drawn
+    // with `heroPlan(id, granted)` -- two different ceilings, so two different
+    // splits between the portrait row and the description. When the stack
+    // granted exactly the floor, the drawing solve came back wanting a taller
+    // block than the card it was about to be drawn into, and the last line of
+    // the blurb was cut off by the panel's own edge.
+    let plan = this.heroPlan(selectedId, height)
+    if (plan.height > height) plan = this.heroPlan(selectedId, 0)
+    const { pad, padT, row, desc, bodySize, roster, selected } = plan
+    const c = this.card(W / 2 - w / 2, top, w, Math.max(height, plan.height))
     // BOTH OFFSETS COME FROM THE CARD, not from w and h. `left` was derived
     // correctly and `rowTop` was derived as `-height / 2 + padT` -- right for a
     // centred anchor, and half the block too high for this one. That put the
@@ -600,7 +707,84 @@ export class LoadoutScene extends Phaser.Scene {
 
     const descTop = rowTop + row.height + LO.sectionGap
     c.face.add(this.heroBlurb(selected.def, left, descTop, desc, bodySize))
-    return y + height
+    return top + height
+  }
+
+  /**
+   * Lets the content stack be dragged when it is taller than the room it has.
+   *
+   * ONLY WHEN IT OVERFLOWS. `overflow` is zero on every viewport measured so
+   * far, so this installs nothing and the screen behaves exactly as it did;
+   * it exists so that the failure mode of a stack that does not fit is
+   * SCROLLING rather than sections drawing through each other, which is what
+   * the shares used to do.
+   *
+   * The layer is dragged rather than a camera scrolled: the camera is the
+   * fitted design box and moving it would move the title, the buttons and the
+   * painted room with the cards.
+   */
+  private installScroll(overflow: number, top: number, available: number): void {
+    this.scrollMax = Math.max(0, Math.ceil(overflow))
+    this.scrollAt = 0
+    if (this.scrollMax <= 0) return
+    logEvent('loadout', `content overflows by ${this.scrollMax}px; the screen scrolls`)
+
+    // Clipped to the band between the subtitle and the buttons, so a dragged
+    // card never appears over either.
+    const mask = this.add.graphics().setVisible(false)
+    mask.fillStyle(0xffffff).fillRect(0, top, W, available)
+    this.stack.setMask(mask.createGeometryMask())
+
+    // AND IT SAYS SO. A card clipped in half by an invisible edge reads as a
+    // broken screen, not as a screen with more on it -- the player has no
+    // reason to try dragging something that looks like a rendering fault. A
+    // soft fade along the bottom of the band is the affordance: content that
+    // dissolves rather than content that is cut.
+    // BANDS, NOT A GRADIENT. `fillGradientStyle` varies the COLOUR across a
+    // shape and leaves the alpha alone, so a transparent-to-opaque fade drawn
+    // that way renders as nothing at all -- which is what it did here. Six
+    // strips of rising alpha is the same picture and always draws.
+    const fadeH = LO.scrollFadeHeight
+    const fade = this.add.graphics()
+    const steps = 6
+    for (let i = 0; i < steps; i++) {
+      fade.fillStyle(0x10161d, ((i + 1) / steps) * LO.scrollFadeAlpha)
+      fade.fillRect(0, top + available - fadeH + (i * fadeH) / steps, W, fadeH / steps + 1)
+    }
+    this.layer.add(fade)
+
+    let from = 0
+    let at = 0
+    const move = (dy: number): void => {
+      this.scrollAt = Phaser.Math.Clamp(this.scrollAt + dy, -this.scrollMax, 0)
+      this.stack.y = this.scrollAt
+    }
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { at = p.y; from = this.scrollAt })
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      if (!p.isDown) return
+      const cam = this.cameras.main
+      this.scrollAt = Phaser.Math.Clamp(from + (p.y - at) / cam.zoom, -this.scrollMax, 0)
+      this.stack.y = this.scrollAt
+    })
+    this.input.on('wheel', (_p: unknown, _o: unknown, _dx: number, dy: number) => {
+      move(dy > 0 ? -LO.scrollStep : LO.scrollStep)
+    })
+  }
+
+  /** How far the stack can be dragged, and where it currently is. Both zero
+   *  when everything fits, which is every viewport measured so far. */
+  private scrollMax = 0
+  private scrollAt = 0
+
+  /** What the stack asked for and what it got. For the harness. */
+  stackPlan?: {
+    available: number; headingH: number; cardW: number
+    heroWant: number; heroFloor: number
+    towerWant: number; towerFloor: number
+    specialWant: number; specialFloor: number
+    granted: { hero: number; towers: number; specials: number }
+    overflow: number
+    band: { top: number; height: number }
   }
 
   /** One rendered text height at a size, for the layout to add up. */
@@ -756,20 +940,25 @@ export class LoadoutScene extends Phaser.Scene {
    * card cannot overflow because no text is ever given a width the card does
    * not have.
    */
-  private cardFace(
-    cw: number,
-    ch: number,
-    icon: (cx: number, cy: number, box: number) => Phaser.GameObjects.GameObject[],
-    name: string,
-    cost: string | null,
-    stats: string | null,
-    body: string,
-  ): { parts: Phaser.GameObjects.GameObject[] } {
-    // Padded against the painted frame, not the box — but only against the
-    // part of it that is a rail. The nine-slice's corner bracket reaches 144px
-    // into the source art, and padding by all of it threw away a tenth of a
-    // small card on each side, which is what made the cards tall enough to
-    // push the buttons off the screen.
+  /**
+   * A card's inner geometry: where the text column starts, how wide it is, and
+   * how much vertical room the content has.
+   *
+   * SHARED BY THE MEASURER AND THE DRAWER, and that is the whole point. The
+   * height a row needs and the height a face draws into have to be answers to
+   * the same arithmetic, or the row is sized against one layout and filled
+   * with another -- which is how a card's last line ended up under the heading
+   * of the section below it.
+   *
+   * Padded against the painted frame, not the box -- but only against the part
+   * of it that is a rail. The nine-slice's corner bracket reaches 144px into
+   * the source art, and padding by all of it threw away a tenth of a small
+   * card on each side.
+   */
+  private cardGeometry(cw: number, ch: number): {
+    pad: number; padR: number; padT: number; padB: number
+    col: number; tx: number; tw: number; room: number
+  } {
     const frame = this.frameInsetFor(cw, ch)
     const pad = Math.max(LO.cardPad, Math.ceil(frame.left))
     const padR = Math.max(LO.cardPad, Math.ceil(frame.right))
@@ -781,9 +970,61 @@ export class LoadoutScene extends Phaser.Scene {
     // text. Bounded at both ends so it can do neither.
     const col = Math.round(Math.max(LO.cardIconColumnMin,
       Math.min(LO.cardIconColumnMax, cw * LO.cardIconColumnShare)))
-    const tx = -cw / 2 + pad + col
-    const tw = cw - pad - col - padR
-    const room = ch - padT - padB
+    return {
+      pad, padR, padT, padB, col,
+      tx: -cw / 2 + pad + col,
+      tw: cw - pad - col - padR,
+      room: ch - padT - padB,
+    }
+  }
+
+  /**
+   * The height this card needs to hold its content at the LARGEST size on the
+   * ladder -- which is what the row asks for before anything squeezes it.
+   *
+   * Measured off the same probes `cardFace` uses and the same geometry, so a
+   * row sized by this and filled by that agree. The icon column counts too: a
+   * card shorter than its own icon is a card with art hanging out of it.
+   */
+  private cardNeeds(
+    cw: number, name: string, cost: string | null, stats: string | null, body: string,
+    size: number = LO.bodySizes[0]!,
+  ): number {
+    // A nominal height for the frame inset, which barely varies with it; the
+    // answer is re-derived from the real height when the card is drawn.
+    const g = this.cardGeometry(cw, LO.cardProbeHeight)
+    const wrap = { width: Math.max(20, g.tw) }
+    const probe = (text: string, extra: object = {}): number => {
+      const t = this.add.text(0, 0, text, {
+        fontFamily: FONT_UI, fontSize: `${size}px`, wordWrap: wrap, ...extra,
+      })
+      const h = t.height
+      t.destroy()
+      return h
+    }
+    const textH = probe(name.toUpperCase(), { fontStyle: 'bold' })
+      + 4 + (stats === null ? 0 : probe(stats) + 3)
+      + probe(body, BODY_SPACING)
+    // THE TEXT DECIDES THE HEIGHT, NOT THE ICON. The icon is a square of the
+    // column's width, and the column is a SHARE of the card's width -- so on a
+    // wide screen a card 338 units across wanted a 118-unit icon and therefore
+    // a 181-unit card, for eleven words of text. That is the icon dictating
+    // the layout of the screen. It is clamped to whatever room the card ends
+    // up with instead (see `cardFace`), so it never asks for height here.
+    void cost
+    return Math.ceil(g.padT + textH + g.padB)
+  }
+
+  private cardFace(
+    cw: number,
+    ch: number,
+    icon: (cx: number, cy: number, box: number) => Phaser.GameObjects.GameObject[],
+    name: string,
+    cost: string | null,
+    stats: string | null,
+    body: string,
+  ): { parts: Phaser.GameObjects.GameObject[] } {
+    const { pad, padT, col, tx, tw, room } = this.cardGeometry(cw, ch)
 
     // ONE size for the whole card, chosen so the name, the stats and the body
     // all fit together. Fitting only the body was not enough: on a narrow
@@ -850,7 +1091,10 @@ export class LoadoutScene extends Phaser.Scene {
     // on a short card drew it below the card entirely and put it on the
     // SPECIALS heading underneath.
     const iconCx = -cw / 2 + pad + col / 2
-    const box = col - 8
+    // CLAMPED TO THE ROOM. The box was `col - 8` outright, so on a card
+    // shorter than its own icon column the art was drawn taller than the card
+    // and hung out of the bottom of it.
+    const box = Math.max(12, Math.min(col - 8, room - (cost === null ? 0 : 26)))
     const iconCy = padT + room / 2
     const costText = cost === null ? null : this.add.text(
       iconCx, padT + room, cost, {
@@ -897,9 +1141,16 @@ export class LoadoutScene extends Phaser.Scene {
   /**
    * The two opening towers, described to the same depth as the specials.
    */
+  /** What one tower card needs to hold its content. */
+  private towerNeeds(ids: string[], cw: number, size?: number): number {
+    return Math.max(...ids.map((id) => {
+      const def = TOWERS[id]!
+      return this.cardNeeds(cw, def.name, `${def.cost}`, towerStats(def), towerLine(def), size)
+    }))
+  }
+
   private towerSection(ids: string[], top: number, height: number): number {
-    const y = this.heading('TOWERS', top)
-    return this.cardRow(ids, y, height, (id, cw, ch) => {
+    return this.cardRow(ids, top, height, (id, cw, ch) => {
       const def = TOWERS[id]!
       return this.cardFace(
         cw, ch,
@@ -915,9 +1166,16 @@ export class LoadoutScene extends Phaser.Scene {
     })
   }
 
+  /** What one special card needs to hold its content. */
+  private abilityNeeds(ids: string[], cw: number, size?: number): number {
+    return Math.max(...ids.map((id) => {
+      const def = ABILITIES[id]!
+      return this.cardNeeds(cw, def.name, null, null, abilityLine(def), size)
+    }))
+  }
+
   private abilitySection(ids: string[], top: number, height: number): number {
-    const y = this.heading('SPECIALS', top)
-    return this.cardRow(ids, y, height, (id, cw, ch) => {
+    return this.cardRow(ids, top, height, (id, cw, ch) => {
       const def = ABILITIES[id]!
       return this.cardFace(
         cw, ch,
@@ -934,19 +1192,24 @@ export class LoadoutScene extends Phaser.Scene {
    * is how the row grew until the buttons left the screen; now the row is told
    * what it has and each face fits itself into it.
    */
+  /** The width one card gets in a row of `n`. The measurers need it before a
+   *  single card exists. */
+  private cardWidthFor(n: number): number {
+    return Math.floor((this.contentWidth - CARD_GAP * (Math.max(1, n) - 1)) / Math.max(1, n))
+  }
+
   private cardRow(
     ids: string[],
     y: number,
     height: number,
     build: (id: string, cw: number, ch: number) => { parts: Phaser.GameObjects.GameObject[] },
   ): number {
-    const gap = 22
     const n = Math.max(1, ids.length)
-    const cw = Math.floor((this.contentWidth - gap * (n - 1)) / n)
-    const total = n * cw + (n - 1) * gap
+    const cw = this.cardWidthFor(n)
+    const total = n * cw + (n - 1) * CARD_GAP
 
     ids.forEach((id, i) => {
-      const x = W / 2 - total / 2 + i * (cw + gap)
+      const x = W / 2 - total / 2 + i * (cw + CARD_GAP)
       const c = this.card(x, y, cw, height)
       c.face.add(build(id, cw, height).parts)
     })
