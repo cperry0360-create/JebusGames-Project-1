@@ -3403,12 +3403,22 @@ export class GameScene extends Phaser.Scene {
    * countdown runs on real seconds rather than the scaled game clock, because
    * "15 seconds" should mean fifteen seconds however fast the game is set to
    * run.
+   *
+   * WAVE 1 IS THE EXCEPTION AND IT HAS NO CLOCK AT ALL. A player arriving on a
+   * level they have never seen is reading the map, not deferring a decision --
+   * the pressure this countdown exists to create is pressure to hurry through
+   * the one moment that should be unhurried. `armReadyCountdown` gives wave 1
+   * a zero, and a zero is already the "nothing is counting" case here, so the
+   * guard below is what stops it: it returns before the clock can reach zero
+   * and call `startWave`. Wave 1 starts when the player says so.
    */
   private tickReadyCountdown(realDt: number): void {
     if (this.status.phase !== 'ready') {
       this.status.readyCountdown = 0
       return
     }
+    // Zero means nothing is counting, which is both "the clock ran out" and,
+    // on wave 1, "there was never a clock". Neither auto-starts from here.
     if (this.status.readyCountdown <= 0) return
     this.status.readyCountdown = Math.max(0, this.status.readyCountdown - realDt)
     if (this.status.readyCountdown === 0) this.startWave()
@@ -3507,10 +3517,27 @@ export class GameScene extends Phaser.Scene {
     this.saveProgress()
   }
 
-  /** Restarts the clock for the wave that is now pending. */
+  /**
+   * Restarts the clock for the wave that is now pending -- except before wave
+   * 1, which has no clock.
+   *
+   * THE ONE PLACE THE RULE LIVES, and everything else falls out of it:
+   *
+   *   * `tickReadyCountdown` returns early on a zero, so nothing auto-starts.
+   *   * `startWave` pays `floor(readyCountdown) * earlyStartPeanutsPerSecond`,
+   *     so a zero clock pays a zero bonus -- there is no timer to beat, so
+   *     there is nothing to be rewarded for beating.
+   *   * The HUD's banner falls through to `START WAVE 1` rather than a
+   *     countdown, because it shows the bonus and the bonus is zero.
+   *   * A run resumed before wave 1 gets the same answer, because `create`
+   *     calls this AFTER `restoreRun` has put the saved wave back.
+   *
+   * Wave 1 used to get `firstReadySeconds`, 30s, twice the gap between later
+   * waves -- an acknowledgement that the first wave needs longer, made in the
+   * currency of a countdown. It needs longer than any number.
+   */
   private armReadyCountdown(): void {
-    const p = RULES.pacing
-    this.status.readyCountdown = this.status.wave === 0 ? p.firstReadySeconds : p.readySeconds
+    this.status.readyCountdown = this.status.wave === 0 ? 0 : RULES.pacing.readySeconds
   }
 
   startWave(): void {

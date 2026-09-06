@@ -594,23 +594,81 @@ test('the game clock is faster than real time but still a game', () => {
   assert.ok(p.gameSpeed <= 2, `${p.gameSpeed}x is a fast-forward button, not a pace`)
 })
 
-test('a wave always starts on its own, and starting it early pays', () => {
+test('waves 2 onward start on their own, and starting one early pays', () => {
   const p = rules.pacing
   assert.ok(p.readySeconds > 0, 'without a countdown the player can sit in the build phase forever')
   assert.ok(p.readySeconds >= 8 && p.readySeconds <= 30,
     `${p.readySeconds}s between waves is either panic or a nap`)
-  // The opening is the one place nothing is built and the screen is still new.
-  assert.ok(p.firstReadySeconds >= p.readySeconds,
-    'the first wave should not arrive sooner than every later one')
   assert.ok(p.earlyStartPeanutsPerSecond > 0, 'starting early has to be worth something')
 
   const game = src('scenes/GameScene.ts')
   assert.match(game, /tickReadyCountdown/, 'nothing counts down')
   assert.match(game, /armReadyCountdown\(\)/, 'the countdown is never started')
   // The bonus has to fall out of the clock rather than out of who called
-  // startWave, or an auto-started wave pays out too.
+  // startWave, or an auto-started wave pays out too -- and it is also what
+  // makes wave 1 pay nothing without a second rule saying so.
   assert.match(game, /Math\.floor\(this\.status\.readyCountdown\)/,
     'the early-start bonus is not derived from the time actually saved')
+})
+
+test('wave 1 has no clock, and does not start without the player', () => {
+  /*
+   * The pressure a countdown creates is pressure to hurry, and the one moment
+   * that should be unhurried is a level the player has never seen. Wave 1 waits
+   * for the banner; waves 2 onward are unchanged.
+   */
+  const p = rules.pacing
+  assert.equal((p as Record<string, unknown>).firstReadySeconds, undefined,
+    'the first wave has a countdown length again')
+  assert.equal(typeof (p as Record<string, unknown>)._firstWave, 'string',
+    'nothing in the data says what happens before wave 1')
+
+  const game = src('scenes/GameScene.ts')
+  // ONE PLACE DECIDES IT. Everything else -- no auto-start, no bonus, and the
+  // banner reading as a prompt -- falls out of the zero.
+  assert.match(game,
+    /this\.status\.readyCountdown = this\.status\.wave === 0 \? 0 : RULES\.pacing\.readySeconds/,
+    'wave 1 is not given a zero clock')
+
+  // And the zero cannot auto-start: the tick returns before it could fire.
+  const tick = /private tickReadyCountdown\([\s\S]*?\n  \}/.exec(game)
+  assert.ok(tick, 'tickReadyCountdown is gone')
+  assert.match(tick[0], /if \(this\.status\.readyCountdown <= 0\) return/,
+    'a zero clock falls through to startWave')
+  assert.ok(tick[0].indexOf('<= 0) return') < tick[0].indexOf('startWave()'),
+    'the zero guard runs after the auto-start, so wave 1 would begin by itself')
+})
+
+test('no early bonus is paid for wave 1', () => {
+  // Walked as arithmetic rather than asserted from the source: the bonus is
+  // whatever is left on the clock, and wave 1's clock is zero.
+  const p = rules.pacing
+  const armed = (wave: number): number => (wave === 0 ? 0 : p.readySeconds)
+  const bonusFor = (wave: number, spentSeconds: number): number =>
+    Math.floor(Math.max(0, armed(wave) - spentSeconds)) * p.earlyStartPeanutsPerSecond
+
+  // However fast the player presses it, wave 1 pays nothing.
+  for (const spent of [0, 0.5, 3, 14, 30, 600]) {
+    assert.equal(bonusFor(0, spent), 0, `wave 1 paid a bonus after ${spent}s`)
+  }
+  // Wave 2 is untouched: press it instantly and it pays the full clock.
+  assert.equal(bonusFor(1, 0), p.readySeconds * p.earlyStartPeanutsPerSecond)
+  assert.equal(bonusFor(1, p.readySeconds), 0, 'an auto-started wave 2 still paid out')
+  assert.ok(bonusFor(1, 5) > 0, 'starting wave 2 early stopped paying')
+})
+
+test('resuming before wave 1 still waits for the player', () => {
+  // `create` restores the saved run and THEN arms the clock, so a save taken
+  // at wave 0 is handed the same zero a fresh run is. Order is the whole of
+  // it: arming first would give the restored wave the previous wave's clock.
+  const game = src('scenes/GameScene.ts')
+  const create = game.slice(game.indexOf('create(): void {'), game.indexOf('private deal('))
+  const restore = create.indexOf('this.restoreRun(saved)')
+  const arm = create.indexOf('this.armReadyCountdown()')
+  assert.ok(restore > 0, 'the resume path is gone from create()')
+  assert.ok(arm > 0, 'the countdown is not armed in create()')
+  assert.ok(restore < arm,
+    'the clock is armed before the saved wave is restored, so a resumed wave 1 would count down')
 })
 
 test('the countdown runs on real seconds, not the scaled clock', () => {

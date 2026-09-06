@@ -28,6 +28,13 @@ const hist = new Map<number, number>()
 for (const w of lostOn) hist.set(w, (hist.get(w) ?? 0) + 1)
 console.log(`${LEVEL}: ${wins}/${RUNS} wins  (${((wins / RUNS) * 100).toFixed(0)}%)`
   + (stuck ? `  ${stuck} stuck` : ''))
+// SAID EVERY RUN, so nobody compares these to the game without knowing it.
+// Wave 1 waits for the player and pays no early bonus -- which is what a
+// simulator with no ready phase already does, so that rule change moved
+// nothing here. Waves 2 onward are modelled without their early-start bonus,
+// so every number this prints is a floor. See the header of Sim.ts.
+console.log('  waves: wave 1 player-started and unpaid (matches the game); '
+  + 'waves 2+ auto-start unmodelled, so no early bonus is banked -- these are floors')
 console.log('  lost after wave: ' + ([...hist.entries()].sort((a, b) => a[0] - b[0])
   .map(([w, n]) => `w${w}x${n}`).join(' ') || '(none)'))
 if (wins) console.log(`  average lives left on a win: ${(livesLeft / wins).toFixed(1)}`)

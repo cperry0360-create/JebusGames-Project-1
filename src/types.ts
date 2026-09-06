@@ -155,8 +155,9 @@ export interface RulesDef {
   peanutsPerWaveCleared: number
   pacing: {
     gameSpeed: number
+    /** The gap before waves 2 onward. Wave 1 has no clock: see `_firstWave`
+     *  in rules.json and `GameScene.armReadyCountdown`. */
     readySeconds: number
-    firstReadySeconds: number
     earlyStartPeanutsPerSecond: number
   }
   combat: {

@@ -4699,6 +4699,123 @@ async function run() {
     return
   }
 
+  // WAVE 1 WAITS FOR THE PLAYER, AND WAVE 2 DOES NOT.
+  //
+  // The claim is a negative -- "it does not start on its own" -- so it is
+  // tested by WAITING LONGER THAN THE CLOCK IT USED TO HAVE. `firstReadySeconds`
+  // was 30 real seconds, so this sits on the opening board for 35 and checks
+  // nothing happened. Then it presses the banner, plays wave 1 out, and checks
+  // that wave 2 arms a real countdown and arrives without being asked.
+  if (scenario === 'wave1') {
+    for (const k of ['Title', 'Splash', 'Credits', 'Boot', 'Loadout']) game.scene.stop(k)
+    const RS = await import('./js/systems/RunState.js')
+    RS.setRunState({ heroId: 'cory', openingTowers: ['withholding', 'rounding'],
+      abilities: ['molotov', 'glacier'], reserveTowers: [] })
+    game.scene.start('Game')
+    await until(() => running('Game'), 12000)
+    await until(() => running('Hud'), 12000)
+    await sleep(900)
+    const g = scene('Game'), hud = scene('Hud')
+    let bad = 0
+    // The claim is written as what SHOULD be true, and the line says whether it
+    // is. Phrasing them as failures made a clean run read like a broken one.
+    const say = (ok, claim) => {
+      if (!ok) bad++
+      note('    ' + (ok ? 'ok  ' : 'FAIL') + '  ' + claim)
+    }
+
+    note('on arrival: phase=' + g.status.phase + ' wave=' + (g.status.wave + 1)
+      + ' countdown=' + g.status.readyCountdown.toFixed(2)
+      + ' banner=' + JSON.stringify(hud.startBtn.text.text))
+    say(g.status.phase === 'ready', 'opens in the build phase')
+    say(g.status.wave === 0, 'opens on wave 1')
+    say(g.status.readyCountdown === 0, 'wave 1 carries no countdown')
+    say(/^START WAVE/.test(String(hud.startBtn.text.text)),
+      'the banner is a prompt, not a countdown')
+    await shot('wave1-01-waiting-' + VP.w + 'x' + VP.h)
+
+    // THIRTY-FIVE SECONDS. Longer than the 30s clock wave 1 used to carry, so
+    // "it did not start" is a measurement rather than an impression.
+    const peanutsBefore = g.status.peanuts
+    for (let i = 0; i < 7; i++) {
+      await sleep(5000)
+      if (g.status.phase !== 'ready') break
+    }
+    note('after 35s: phase=' + g.status.phase + ' wave=' + (g.status.wave + 1)
+      + ' enemies=' + g.enemies.length + ' countdown=' + g.status.readyCountdown.toFixed(2))
+    say(g.status.phase === 'ready', 'still waiting after 35s -- longer than the 30s clock it used to have')
+    say(g.enemies.length === 0, 'nothing has spawned')
+    say(g.status.peanuts === peanutsBefore, 'the purse has not moved')
+
+    // THE PRESS. Through the real button, at its real position.
+    const btn = hud.layout.startButton
+    await click(btn.x + btn.width / 2, btn.y + btn.height / 2)
+    await until(() => g.status.phase === 'wave', 6000)
+    note('after the press: phase=' + g.status.phase + ' peanuts='
+      + g.status.peanuts + ' (was ' + peanutsBefore + ')')
+    say(g.status.phase === 'wave', 'pressing the banner starts wave 1')
+    say(g.status.peanuts === peanutsBefore,
+      'wave 1 paid no early bonus -- there was no timer to beat')
+    await shot('wave1-02-started-' + VP.w + 'x' + VP.h)
+
+    // PLAY IT OUT, then look at wave 2.
+    const ok = await until(() => g.status.phase === 'ready' && g.status.wave === 1, 90000)
+    if (!ok) { note('  *** wave 1 never finished, so wave 2 was not reached ***'); bad++ }
+    else {
+      // A frame, so the banner has actually redrawn. Reading it the instant
+      // the phase flipped caught the previous wave's label still on the plate.
+      await sleep(250)
+      note('wave 2 armed: countdown=' + g.status.readyCountdown.toFixed(2)
+        + ' banner=' + JSON.stringify(hud.startBtn.text.text))
+      say(g.status.readyCountdown > 0, 'wave 2 arms a real countdown')
+      // And it arrives WITHOUT being pressed.
+      const started = await until(() => g.status.phase === 'wave', 40000)
+      say(started, 'wave 2 arrives without being pressed')
+      note('wave 2 started by itself: ' + started)
+    }
+
+    // AND THE SAME RULE ON A RESUME. A run saved at wave 0 is handed the same
+    // zero a fresh one is, because `create` restores the saved wave and THEN
+    // arms the clock. Driven through the real resume path rather than asserted
+    // from the source.
+    note('--- resuming a run saved before wave 1 ---')
+    game.scene.stop('Hud')
+    game.scene.stop('Game')
+    await sleep(400)
+    RS.setRunState({
+      heroId: 'cory', abilities: ['molotov', 'glacier'],
+      openingTowers: ['withholding', 'rounding'], reserveTowers: [], seed: 7,
+      resumeFrom: {
+        version: 1, level: 'level1', wave: 0, lives: 20, peanuts: 300, towers: [],
+        heroId: 'cory', abilities: ['molotov', 'glacier'],
+        openingTowers: ['withholding', 'rounding'], reserveTowers: [],
+        unlockedTowers: ['withholding', 'rounding'], seed: 7,
+      },
+    })
+    game.scene.start('Game')
+    await until(() => running('Game'), 12000)
+    await until(() => running('Hud'), 12000)
+    await sleep(1200)
+    const g2 = scene('Game'), hud2 = scene('Hud')
+    note('resumed: phase=' + g2.status.phase + ' wave=' + (g2.status.wave + 1)
+      + ' countdown=' + g2.status.readyCountdown.toFixed(2)
+      + ' peanuts=' + g2.status.peanuts
+      + ' banner=' + JSON.stringify(hud2.startBtn.text.text))
+    say(g2.status.wave === 0, 'the resume came back on wave 1')
+    say(g2.status.readyCountdown === 0, 'the resumed wave 1 carries no countdown')
+    // Ten seconds is well inside the 15s a later wave would have used.
+    await sleep(10000)
+    say(g2.status.phase === 'ready', 'still waiting 10s after the resume')
+    say(g2.enemies.length === 0, 'nothing has spawned since the resume')
+    await shot('wave1-03-resumed-' + VP.w + 'x' + VP.h)
+
+    note('RESULT ' + (bad === 0
+      ? 'wave 1 waits for the player and pays nothing, on a fresh run and on a resume; '
+        + 'wave 2 is unchanged'
+      : '*** ' + bad + ' check(s) failed ***'))
+    return
+  }
+
   if (scenario === 'pauseresume') {
     // THE REPORTED FAILURE, end to end and through real input: start a run,
     // start a wave, tap PAUSE, tap RESUME, and check the wave actually moves
