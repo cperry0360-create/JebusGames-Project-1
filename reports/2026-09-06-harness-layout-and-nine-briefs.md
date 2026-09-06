@@ -22,7 +22,9 @@ by looking at a picture, not by reading the source.**
 | 10 | [`c8f4b72`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/c8f4b72) | Menus inside the safe area; CLAUDE.md rules | ✅ ✅ ([run 34002023291](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34002023291)) |
 | 11 | [`b24a175`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/b24a175) | This report | ✅ ✅ ([run 34002101271](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34002101271)) |
 | 12 | [`0c6d4ee`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/0c6d4ee) | The Reaper retuned from 4200; reward 900; the boss test | ✅ ✅ ([run 34002399553](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34002399553)) |
-| 13 | the commit closing this table | — | not recorded: a report cannot carry its own run |
+| 13 | [`e0edc98`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/e0edc98) | Close that table | covered by run 114 |
+| 14 | [`391e578`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/391e578) | Wave 1 waits for the player | ✅ ✅ ([run 34032008391](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34032008391)) |
+| 15 | the commit closing this table | — | not recorded: a report cannot carry its own run |
 
 Two columns of ✅ are `test` and `typecheck`; `deploy` is skipped on every run,
 correctly — it is gated on `main`.
@@ -125,6 +127,50 @@ reset control are gone; old saves carrying `seenCutscenes` load unchanged.
 **The boss**: 9800 → 2100 health, slow-immune, reward 1800 → 900. Started from
 4200 on Cory's reasoning and swept down; see below.
 
+## Wave 1 waits for the player
+
+A countdown creates pressure to hurry, and the one moment that should be
+unhurried is a level nobody has seen before. Wave 1 has no clock now; waves 2
+onward are untouched.
+
+**One line decides it**, and the rest falls out of the zero: the tick already
+returned early on a zero clock so nothing auto-starts, the bonus is already
+`floor(readyCountdown) × earlyStartPeanutsPerSecond` so a zero clock pays zero,
+the banner already shows the bonus so it falls through to `START WAVE 1`, and
+`create` already restores the saved wave before arming, so a resume gets the
+same answer. No second rule had to be written for any of them.
+
+`firstReadySeconds` (30, twice the later gap) is retired. It was an
+acknowledgement that the first wave needs longer, made in the currency of a
+countdown; it needs longer than any number. `_firstWave` in rules.json says so
+where the number used to be.
+
+**Measured on a live run** — `run.sh wave1 250 844x390` sits on the opening
+board for 35 seconds, longer than the clock wave 1 used to carry:
+
+| | |
+|---|---|
+| on arrival | `phase=ready wave=1 countdown=0.00 banner="START WAVE 1"` |
+| after 35s | `phase=ready wave=1 enemies=0` — purse unmoved |
+| the press | `phase=wave`, peanuts 104 → 104, no bonus |
+| wave 2 | `countdown=14.69 banner="WAVE 2 · +28"`, arrived unpressed |
+| resumed at wave 0 | `countdown=0.00`, still waiting 10s later, nothing spawned |
+
+**The soak did not move, and the reason is structural rather than lucky.**
+`Sim.ts` does not model the ready phase at all — no countdown, no auto-start,
+no early bonus, and zero references to `readySeconds` or
+`earlyStartPeanutsPerSecond`. A simulator with no ready phase is already doing
+what the game now does on wave 1, and unlimited build time buys nothing extra
+because the opening purse covers one tower and no time passes there. Level 3
+is 80/120 either side, level 1 45/60, level 2 10/60.
+
+That gap cuts the other way for waves 2 onward, and it is now written into
+`Sim.ts` and printed on every soak run: a player who starts each later wave
+immediately banks 15 × 2 = 30 peanuts a wave, roughly 360 over a run, that the
+simulated player never sees. **Every win rate this tool has ever reported is a
+floor rather than an estimate.** Closing that would move every number in every
+previous report, so it is recorded rather than done quietly.
+
 ## The numbers
 
 | | before | after |
@@ -135,7 +181,7 @@ reset control are gone; old saves carrying `seenCutscenes` load unchanged.
 | with a notch (47/21/47) | 9 | 0 (+1) |
 | level 3 win rate | **0/60** | **80/120 (67%)** |
 | level 1 / level 2 | 45/60, 10/60 | unchanged |
-| tests | 818 | **823** |
+| tests | 818 | **826** |
 
 The named exception is the version stamp's hidden five-tap door, which is under
 44pt deliberately and now says so in its own name.
@@ -238,6 +284,9 @@ regressions. The rule is now in CLAUDE.md.
 * **The soak is a simulator, not the game.** `tools/soak/level.ts` drives
   `Sim.ts`. The slow-immunity flag is modelled in both, which is why the
   numbers mean anything, but a simulator is not a playthrough.
+* **The simulator does not model the ready phase**, so every win rate it
+  reports is a floor — roughly 360 peanuts a run of unbanked early-start bonus.
+  Documented, not fixed; fixing it moves every historical number.
 * **`run.ts` plays level 1 only.** The 350-run whole-game soak (140 won, 0
   stuck, 0 crashes, 0 console hits, 0 findings) says nothing about level 3.
 * **Hero attack facing.** The pre-existing `facing` scenario reports 5 of 10
@@ -257,7 +306,10 @@ could not push to `main`; merging is the one remaining step.
 1. **The Politician is deliberately still slowable.** He is unblockable for the
    same reason the Reaper is, so "bosses resist crowd control" generalises to
    him — but levels 1 and 2 are tuned around him as he is.
-4. **No boss payout is ever spendable**, because every boss is on its level's
+4. **Closing the soak's ready-phase gap** would make its win rates estimates
+   rather than floors, at the cost of invalidating every number in every
+   previous report. Worth doing once, deliberately, with a re-baseline.
+5. **No boss payout is ever spendable**, because every boss is on its level's
    last wave. The "worth racing for" convention describes a race that cannot
    happen. Either the bosses want to arrive a wave early, or the convention is
    decoration; both are design calls.
