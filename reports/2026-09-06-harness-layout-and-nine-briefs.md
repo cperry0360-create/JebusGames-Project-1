@@ -20,7 +20,9 @@ by looking at a picture, not by reading the source.**
 | 8 | [`f51769a`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/f51769a) | The counters panned the map | covered by run 110 |
 | 9 | [`fd3b076`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/fd3b076) | The Rainbow Reaper retuned | covered by run 110 |
 | 10 | [`c8f4b72`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/c8f4b72) | Menus inside the safe area; CLAUDE.md rules | ✅ ✅ ([run 34002023291](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34002023291)) |
-| 11 | this report | — | not recorded: a report cannot carry its own run |
+| 11 | [`b24a175`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/b24a175) | This report | covered by run 111 |
+| 12 | the boss retune from 4200 | health 2100, reward 900, the boss test | ⏳ |
+| 13 | the commit closing this table | — | not recorded: a report cannot carry its own run |
 
 Two columns of ✅ are `test` and `typecheck`; `deploy` is skipped on every run,
 correctly — it is gated on `main`.
@@ -120,7 +122,8 @@ was 240×150, wave names gone everywhere, real peanut art wired and
 this level have a comic". The save field, the replay badge and the developer
 reset control are gone; old saves carrying `seenCutscenes` load unchanged.
 
-**The boss**: 9800 → 2000 health and slow-immune. Swept, not guessed.
+**The boss**: 9800 → 2100 health, slow-immune, reward 1800 → 900. Started from
+4200 on Cory's reasoning and swept down; see below.
 
 ## The numbers
 
@@ -130,18 +133,77 @@ reset control are gone; old saves carrying `seenCutscenes` load unchanged.
 | layout faults at 667×375 | 26 | 0 (+1) |
 | layout faults at 1400×820 | — | 0 |
 | with a notch (47/21/47) | 9 | 0 (+1) |
-| level 3 win rate | **0/60** | **86/120 (72%)** |
+| level 3 win rate | **0/60** | **80/120 (67%)** |
 | level 1 / level 2 | 45/60, 10/60 | unchanged |
 | tests | 818 | **822** |
 
 The named exception is the version stamp's hidden five-tap door, which is under
 44pt deliberately and now says so in its own name.
 
-Boss health sweep, 60 seeds each: 9800→0, 6000→0, 4500→0, 3500→1, 2500→23,
-2200→34, **2000→42**, 1800→45. Between 2,500 and 1,800 — a 28% change in one
-number — the level goes from 38% to 75%. That cliff is worth knowing about.
-The ceiling is not 60: twelve runs in sixty were already lost before the boss
-wave, so a free boss would still only be 48/60.
+### The boss, and why 4200 was not enough
+
+Cory playtested it, barely dented the boss, and proposed 4200 as the starting
+point — reasoning that level 2's Devil is 6,200hp on a 1,955px lane while
+level 3's branches are much shorter, so a level 3 boss should sit BELOW the
+level 2 boss rather than above it.
+
+The reasoning is right and the number is not, and measuring the lane says why.
+Level 3's full path is 888px of branch plus 672px of shared trunk = **1,560px**
+against level 2's 1,955 — 20% shorter, not 30%. But **the boss also walks it
+faster**, and that is the part the lane length alone misses:
+
+| | The Devil (L2) | The Rainbow Reaper (L3) |
+|---|---|---|
+| health | 6,200 | 4,200 (the proposal) |
+| path | 1,955px | 1,560px |
+| speed | 26 | 30 |
+| **time on the field** | **75.2s** | **52.0s — 31% less** |
+| armour | 4 | 6 |
+| slowable | yes | **no**, as of this session |
+| tower disable | none | the best tower, 3.5s in every 8s |
+
+Four things compound: less time, more armour, no way to buy time back with a
+slow, and a rolling disable on the single most expensive tower on the board.
+
+**At 4200 the level soaks 1/60**, with 47 of the 59 losses still on the boss
+wave. That is the effect of that one change on its own, before anything else
+moved: 0/60 → 1/60.
+
+The sweep down from there, 60 seeds each, same seeds every time:
+
+| health | 4200 | 3600 | 3000 | 2600 | 2400 | 2300 | 2200 | **2100** | 2000 |
+|---|---|---|---|---|---|---|---|---|---|
+| wins /60 | 1 | 1 | 7 | 18 | 27 | 32 | 34 | **38** | 42 |
+
+**2,100 ships**, confirmed at 120 seeds: **80/120 (67%)**, which is 40/60 —
+the centre of the 35–45 band. Levels 1 and 2 are unmoved at 45/60 and 10/60.
+
+The losses spread rather than piling on the boss: w9×4, w10×6, w11×13,
+w12×17. The boss wave is still the hardest single wave, which is what a boss
+should be, but it is no longer a wall. The ceiling is not 120: twenty-three
+runs were already lost before the boss wave, so a free boss would be 97/120.
+
+### The reward
+
+**1800 → 900**, and it is a cosmetic change, stated as one. Every boss is on
+its level's LAST wave, so no boss payout is ever spent, and `bannerPointsFor`
+takes waves reached, the clear bonus and lives remaining — never peanuts. The
+number reaches the results screen and nothing else.
+
+It still wanted fixing, because it had been left behind by the health change.
+Reward per 1,000hp: the Politician 196, The Devil 194, and the Reaper **857**
+— 4.4× the norm, entirely because 1800 was sized against 9,800 health. At 900
+it is 429, which is as close to the norm as the payout convention allows: a
+boss payout must clear ten times the best ordinary enemy (480) and three times
+the dearest tower (660), and 2,100 × 0.194 is 407, below both floors. The
+convention wins, because it is about a lump sum feeling like one.
+
+That convention was also being checked on ONE boss. `Object.values(enemies)
+.find(tier === 'boss')` returns whichever is first in the file — the
+Politician — so two of the three were never examined, and its assertion that
+"the boss has no armour by design" is false for both of them: The Devil has 4
+and the Reaper has 6. The test walks all three now, and armour is asserted per
+boss rather than as a rule.
 
 ## Three of the four faults the input harness first "found" were its own
 
@@ -192,15 +254,16 @@ could not push to `main`; merging is the one remaining step.
 
 **New, and worth a decision:**
 
-1. **`unicornBoss.peanutReward` is still 1800** against a boss that now has
-   2000 health. It is the final wave and nothing is spent after it, so it
-   measures as nothing — but it is a strange-looking number now.
-2. **The Politician is deliberately still slowable.** He is unblockable for the
+1. **The Politician is deliberately still slowable.** He is unblockable for the
    same reason the Reaper is, so "bosses resist crowd control" generalises to
    him — but levels 1 and 2 are tuned around him as he is.
-3. **Level 2 is 10/60**, well under the 35–45 band, and nothing in this session
+4. **No boss payout is ever spendable**, because every boss is on its level's
+   last wave. The "worth racing for" convention describes a race that cannot
+   happen. Either the bosses want to arrive a wave early, or the convention is
+   decoration; both are design calls.
+2. **Level 2 is 10/60**, well under the 35–45 band, and nothing in this session
    touched it.
-4. **Vendoring `types/phaser.d.ts`** would give this environment a real
+3. **Vendoring `types/phaser.d.ts`** would give this environment a real
    `tsc --noEmit` and retire `tools/tsdiff.sh` and its documented blind spots.
    Out of scope for the brief that added `vendor/`; cheap, and a real
    improvement.

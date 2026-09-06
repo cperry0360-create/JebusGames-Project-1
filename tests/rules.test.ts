@@ -397,15 +397,61 @@ test('the tax escalates as the boss is worn down, and always bites', () => {
   assert.ok(boss.tax.minimumTake > 0, 'a broke player should still feel it')
 })
 
-test('killing the boss pays enough to be worth racing for', () => {
-  const boss = Object.values(enemies).find((e: any) => e.tier === 'boss') as any
+test('every boss pays a lump sum, and the rule is checked on every boss', () => {
+  /*
+   * THIS USED TO CHECK ONE BOSS -- `Object.values(enemies).find(tier === 'boss')`
+   * takes whichever appears FIRST in the file, which is the Politician. So two
+   * of the three bosses were never examined, and one of its assertions --
+   * "the boss has no armour by design" -- is simply false for the other two:
+   * The Devil has 4 and the Rainbow Reaper has 6. It passed for four months by
+   * only ever looking at the one boss it happened to be true of.
+   */
+  const bosses = Object.entries(enemies).filter(([, e]: [string, any]) => e.tier === 'boss')
+  assert.equal(bosses.length, 3, 'the roster gained or lost a boss')
   const dearest = Math.max(...Object.values(towers).map((t: any) => t.cost))
   const bestOther = Math.max(...Object.values(enemies)
     .filter((e: any) => e.tier !== 'boss').map((e: any) => e.peanutReward))
-  assert.ok(boss.peanutReward > bestOther * 10, 'the payout is not a lump sum')
-  assert.ok(boss.peanutReward >= dearest * 3, 'the payout should buy a real answer')
-  assert.ok(boss.livesCost > 1, 'letting a boss through should hurt')
-  assert.equal(boss.armor, 0, 'the boss has no armour by design')
+
+  for (const [id, boss] of bosses as [string, any][]) {
+    assert.ok(boss.peanutReward > bestOther * 10, `${id}'s payout is not a lump sum`)
+    assert.ok(boss.peanutReward >= dearest * 3, `${id}'s payout should buy a real answer`)
+    assert.ok(boss.livesCost > 1, `letting ${id} through should not be cheap`)
+  }
+
+  // ARMOUR IS PER BOSS, not a design rule. The Politician has none because his
+  // mechanic is the tax rather than a fight; the other two are fights.
+  assert.equal((enemies as any).politician.armor, 0,
+    'the Politician has no armour by design -- his mechanic is the tax')
+  for (const id of ['theDevil', 'unicornBoss']) {
+    assert.ok((enemies as any)[id].armor > 0, `${id} is a fight and should carry armour`)
+  }
+})
+
+test('a boss payout is a trophy, not an economy', () => {
+  // EVERY BOSS IS ON ITS LEVEL'S LAST WAVE, so no boss payout is ever spent --
+  // and Banner Points come from waves reached, the clear bonus and lives
+  // remaining, never from peanuts. The number is the one on the results
+  // screen and nothing else, which is worth knowing before anyone tunes it.
+  for (const [file, level] of [['waves.json', 'level1'], ['waves.level2.json', 'level2'],
+                               ['waves.level3.json', 'level3']] as const) {
+    const table = JSON.parse(
+      readFileSync(new URL(`../src/data/${file}`, import.meta.url), 'utf8'))
+    const last = table.waves[table.waves.length - 1]
+    assert.ok(last.boss, `${level}'s last wave is not the boss wave`)
+  }
+  const banner = readFileSync(new URL('../src/systems/Banner.ts', import.meta.url), 'utf8')
+  const fn = /export function bannerPointsFor[\s\S]*?\n\}/.exec(banner)![0]
+  assert.ok(!/peanut/i.test(fn), 'Banner Points now depend on peanuts, so a boss payout is spendable value')
+
+  // And it is sized against its OWN boss rather than left behind by a health
+  // change. The Rainbow Reaper's 1800 was set against 9,800 health; at 2,100
+  // it was paying 857 peanuts per 1000hp against a 194 norm for the other two.
+  const perThousand = (e: any): number => (e.peanutReward / e.maxHealth) * 1000
+  const reaper = perThousand((enemies as any).unicornBoss)
+  const devil = perThousand((enemies as any).theDevil)
+  assert.ok(reaper < devil * 3,
+    `the Reaper pays ${reaper.toFixed(0)} per 1000hp against The Devil's ${devil.toFixed(0)}; `
+    + 'its reward was sized against a health value it no longer has')
 })
 
 // ------------------------------------------------------------------ economy
