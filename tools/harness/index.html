@@ -464,13 +464,20 @@ async function run() {
     // the game is paused behind it.
     const gate = document.getElementById('rotate-gate')
     const gateUp = !!gate && getComputedStyle(gate).display !== 'none'
-    note('portrait=' + (VP.h > VP.w) + '  rotate gate showing=' + gateUp)
+    note('portrait=' + (VP.h > VP.w) + '  rotate gate showing=' + gateUp
+      + '  window=' + window.innerWidth + 'x' + window.innerHeight
+      + '  media(portrait)=' + window.matchMedia('(orientation: portrait)').matches)
     if (VP.h > VP.w) {
+      // Measured against the WINDOW, which is what the overlay is fixed to and
+      // what the media query reads -- not against the #game element, which is
+      // sized to the viewport under test and can be smaller than the window
+      // Chromium was willing to open.
       const r = gate ? gate.getBoundingClientRect() : null
+      const W = window.innerWidth, H = window.innerHeight
       note('  gate covers ' + (r ? Math.round(r.width) + 'x' + Math.round(r.height) : 'nothing')
-        + ' of ' + VP.w + 'x' + VP.h)
+        + ' of a ' + W + 'x' + H + ' window')
       await shot('screens-0-portrait-gate-' + VP.w + 'x' + VP.h)
-      note('RESULT ' + (gateUp && r && r.width >= VP.w && r.height >= VP.h
+      note('RESULT ' + (gateUp && r && r.width >= W - 1 && r.height >= H - 1
         ? 'portrait is gated; the screens behind it are not a player-facing layout'
         : '*** PORTRAIT IS NOT GATED -- the letterboxed menus are reachable ***'))
       return
@@ -480,6 +487,7 @@ async function run() {
     // out with `cameraFilter`, so this is the engine's own answer rather than
     // a guess -- which matters in GameScene, where the map is on one camera
     // and the chrome is on another and the two have different zooms.
+    const dprNow = RESM.deviceScale()
     const camFor = (sc, o) => {
       for (const c of sc.cameras.cameras) if (((o.cameraFilter || 0) & c.id) === 0) return c
       return sc.cameras.main
@@ -522,9 +530,16 @@ async function run() {
         // collide with everything inside it; only leaves and live controls are
         // measured.
         if (r && (live || !o.list || o.list.length === 0)) {
+          // The camera's own viewport in CSS pixels. A backdrop covers the
+          // area ITS CAMERA can see, which since the menus were fitted into
+          // the safe area is not the whole screen: the inset strip is the
+          // home indicator's, and nothing is supposed to be painted into it.
+          const c = camFor(sc, o)
           items.push({
             r, live, txt: o.text !== undefined, name: label(o),
             scene: sc.scene.key, chrome: screenSpace(sc, o),
+            vp: { x: c.x / dprNow, y: c.y / dprNow,
+                  w: c.width / dprNow, h: c.height / dprNow },
           })
         }
         if (o.list) for (const c of o.list) visit(c)
@@ -558,12 +573,17 @@ async function run() {
       // A thing that CONTAINS the whole viewport is a backdrop, a scrim or a
       // full-screen tap zone, and running past the edges is its job. Only
       // something partly outside is content the player cannot see.
-      const covers = (r) => r.x <= 1 && r.y <= 1 && r.x + r.w >= vw - 1 && r.y + r.h >= vh - 1
+      const covers = (it) => {
+        const v = it.vp ?? { x: 0, y: 0, w: vw, h: vh }
+        const r = it.r ?? it
+        return r.x <= v.x + 1 && r.y <= v.y + 1
+          && r.x + r.w >= v.x + v.w - 1 && r.y + r.h >= v.y + v.h - 1
+      }
       const faults = []
       for (const it of items) {
         const r = it.r
         const outside = r.x < -1 || r.y < -1 || r.x + r.w > vw + 1 || r.y + r.h > vh + 1
-        if (it.chrome && outside && !covers(r)) {
+        if (it.chrome && outside && !covers(it)) {
           faults.push('OFF   ' + it.scene + ' ' + it.name + ' @ ' + fmt(r))
         }
         // SMALL IS A CHROME RULE. A build pad's hit area is in world space and
@@ -574,9 +594,13 @@ async function run() {
           // 43.5 rather than 44: these are floats off a camera transform and a
           // control that lands on 43.98 is a rounding artifact, not a fault.
           if (r.w < 43.5 || r.h < 43.5) faults.push('SMALL ' + it.scene + ' ' + it.name + ' @ ' + fmt(r))
+          // A full-viewport surface is exempt for the same reason it is exempt
+          // from OFF and OVER: the cutscene's tap-to-advance zone IS the
+          // screen, and "part of it is behind the notch" is not a fault -- you
+          // cannot miss it.
           const band = r.x < insets.left || r.y < insets.top
             || r.x + r.w > vw - insets.right || r.y + r.h > vh - insets.bottom
-          if (band && (insets.left || insets.right || insets.top || insets.bottom)) {
+          if (band && !covers(it) && (insets.left || insets.right || insets.top || insets.bottom)) {
             faults.push('NOTCH ' + it.scene + ' ' + it.name + ' @ ' + fmt(r))
           }
         }
@@ -593,8 +617,8 @@ async function run() {
       // padding at every size and still catches the two real collisions this
       // game has had -- a badge 50% into a heading, and five cards 120% into a
       // title.
-      for (const [group, slack] of [[items.filter((i) => i.txt && !covers(i.r)), 'text'],
-                                    [items.filter((i) => i.live && !covers(i.r)), 3]]) {
+      for (const [group, slack] of [[items.filter((i) => i.txt && !covers(i)), 'text'],
+                                    [items.filter((i) => i.live && !covers(i)), 3]]) {
         for (let i = 0; i < group.length; i++) {
           for (let j = i + 1; j < group.length; j++) {
             if (group[i].scene !== group[j].scene) continue

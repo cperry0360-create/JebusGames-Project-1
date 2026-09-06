@@ -35,8 +35,36 @@ sleep 1
 # DPR=1 sh run.sh ... to go back, and both.sh runs a scenario at 1 AND 3 and
 # fails if the two disagree about anything in screen space.
 DPRFLAG="--force-device-scale-factor=${DPR:-3}"
+# THE WINDOW IS THE VIEWPORT, when one is asked for.
+#
+# It used to be a fixed 1400x900 with the #game element resized inside it, and
+# that is fine for everything measured in CSS pixels -- but not for anything
+# the BROWSER decides. The rotate gate is a `@media (orientation: portrait)`
+# rule, and orientation is a property of the window, not of a div: at
+# vp=375x667 inside a 1400x900 window the page is portrait and the window is
+# landscape, so the gate never showed and the harness reported the game as
+# ungated in portrait. It is gated; the harness was asking the wrong window.
+WIN="1400,900"
+if [ -n "$VP" ]; then
+  # CHROMIUM WILL NOT MAKE A WINDOW NARROWER THAN 500px in this build, so a
+  # requested 375x667 comes back as 500x475 -- LANDSCAPE, which is the opposite
+  # of what was asked for, and the rotate gate correctly refuses to show. The
+  # window is scaled up to the 500 floor keeping the requested ASPECT, so the
+  # orientation the media query sees is the orientation under test. The #game
+  # element is still sized to the exact viewport, so every layout measured
+  # inside it is measured at the real size.
+  WIN="$(python3 - "$VP" <<'PYEOF'
+import sys
+w, h = (int(v) for v in sys.argv[1].split('x'))
+if w < 500:
+    h = round(h * 500 / w)
+    w = 500
+print('%d,%d' % (w, h))
+PYEOF
+)"
+fi
 "${CHROMIUM:-/opt/pw-browsers/chromium}" --headless=new --disable-gpu --no-sandbox --hide-scrollbars --autoplay-policy=no-user-gesture-required \
-  --window-size=1400,900 --enable-logging=stderr --v=0 $DPRFLAG \
+  --window-size="$WIN" --enable-logging=stderr --v=0 $DPRFLAG \
   --user-data-dir="$H/profile" \
   "http://127.0.0.1:8899/index.html?s=$S$QS" > "$H/shots/$S.err" 2>&1 &
 CHROME=$!
