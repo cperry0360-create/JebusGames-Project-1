@@ -375,9 +375,22 @@ test('a downed hero comes back, and says where and when', () => {
   // label when the name and "DAD MODE" were removed. The ground marker is the
   // better of the two anyway: it is where the player is already looking, and
   // it is where he comes back.
+  //
+  // THE NAME IS BACK AND THE MODE IS NOT. Taking both off left a blue bar in
+  // the top left with nothing on it, which was reported as an unlabelled bar
+  // nobody could name -- so the half that was never untrue came back. What
+  // must not come back is the mode label, which said DAD MODE for all five
+  // heroes, and the second countdown.
   const hud = src('scenes/HudScene.ts')
   assert.ok(!/BACK IN/.test(hud), 'the hero bar carries a second countdown again')
-  assert.ok(!/heroLabel/.test(hud), 'the hero name and mode label are back on the HUD')
+  assert.ok(/heroLabel/.test(hud), 'the hero bar is unlabelled again')
+  assert.match(hud, /this\.heroLabel\.setText\(s\.heroName\.toUpperCase\(\)\)/,
+    'the hero bar label is not the hero name')
+  // Comments stripped: the reasoning above is written into HudScene too, and
+  // it has to be allowed to name the string it is explaining.
+  const hudCode = hud.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+  assert.ok(!/lastStand\.name|DAD MODE/.test(hudCode),
+    'the mode label is back, and it is wrong for four heroes out of five')
   // In REAL seconds. reviveIn is in game seconds and gameSpeed is 1.4, so a 25
   // in the data is 17.9 on the player's watch — and a countdown that disagrees
   // with a stopwatch reads as broken.

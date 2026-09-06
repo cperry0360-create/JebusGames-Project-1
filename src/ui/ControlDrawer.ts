@@ -8,7 +8,6 @@ import {
   type DrawerConfig, type DrawerLayout, drawerLayout, inRect, scrollToShow,
   tabLabelFits, tileVisible,
 } from '../systems/DrawerLayout.ts'
-import { ART } from '../systems/Art.ts'
 import type { Rect } from '../systems/HudLayout.ts'
 
 const CFG = presentationData.drawer as unknown as DrawerConfig & {
@@ -34,8 +33,6 @@ const CFG = presentationData.drawer as unknown as DrawerConfig & {
   tabFillIdle: number
   tabLabelActive: number
   tabLabelIdle: number
-  headerSize: number
-  headerIcon: number
   detailNameSize: number
   detailStatSize: number
   detailTraitSize: number
@@ -108,9 +105,6 @@ export interface ControlDrawerOptions {
    */
   camera: () => Phaser.Cameras.Scene2D.Camera
   tiles: () => DrawerTile[]
-  /** The wallet, for the header. The player is spending the whole time this is
-   *  open, so the number belongs where the prices are. */
-  peanuts: () => number
   /** What the selected tile is, for the pinned strip. Null when nothing is
    *  selected, which draws an empty strip rather than removing it. */
   detailFor: (id: string) => DrawerDetail | null
@@ -129,8 +123,8 @@ export class ControlDrawer {
   /** The scroll hint, on its own layer ABOVE the grid. Drawn on `panelG` it
    *  was underneath the tiles, which cover the grid's right edge entirely. */
   private readonly scrollG: Phaser.GameObjects.Graphics
-  /** The header, the tab bar and the detail strip: everything in the panel
-   *  that is NOT the scrolling grid, and so is not under the grid's mask. */
+  /** The tab bar and the detail strip: everything in the panel that is NOT
+   *  the scrolling grid, and so is not under the grid's mask. */
   private readonly chromeG: Phaser.GameObjects.Graphics
   private readonly chromeLayer: Phaser.GameObjects.Container
   private readonly hit: Phaser.GameObjects.Rectangle
@@ -365,7 +359,6 @@ export class ControlDrawer {
     if (inRect(this.layout.tabBar, x, y)) return
     // Same for the pinned strip: it is a readout, not a control.
     if (inRect(this.layout.detail, x, y)) return
-    if (inRect(this.layout.header, x, y)) return
 
     // A drag only ever starts inside the grid, which is the only thing that
     // scrolls.
@@ -476,7 +469,6 @@ export class ControlDrawer {
       this.maskG.fillRect(grid.x, grid.y, grid.width, grid.height)
       for (const [i, tile] of this.tiles.entries()) this.drawTile(tile, this.layout.tiles[i]!)
       this.scrollbar(grid)
-      this.drawHeader()
       this.drawTabs()
       this.drawDetail()
     }
@@ -502,31 +494,6 @@ export class ControlDrawer {
   }
 
   /* ------------------------------------------------ the three new sections */
-
-  /**
-   * The wallet, in the drawer's own header.
-   *
-   * The player is spending the entire time this panel is open and every tile
-   * carries a price, so the number they are spending belongs beside them
-   * rather than only in the corner counter their thumb is covering.
-   */
-  private drawHeader(): void {
-    const s = this.scene
-    const r = this.layout.header
-    const icon = ART.ui.peanut
-    let x = r.x
-    if (s.textures.exists(icon)) {
-      const img = s.add.image(r.x + CFG.headerIcon / 2, r.y + r.height / 2, icon)
-      img.setDisplaySize(CFG.headerIcon, CFG.headerIcon)
-      this.chromeLayer.add(img)
-      x += CFG.headerIcon + 4
-    }
-    const t = s.add.text(x, r.y + r.height / 2, String(this.opts.peanuts()), {
-      fontFamily: FONT_UI, fontSize: `${uiSize(CFG.headerSize)}px`, fontStyle: 'bold',
-      color: COLOR.amber, stroke: '#120d09', strokeThickness: 3,
-    }).setOrigin(0, 0.5)
-    this.chromeLayer.add(t)
-  }
 
   /**
    * TOWERS / ACTIVE / PASSIVE.

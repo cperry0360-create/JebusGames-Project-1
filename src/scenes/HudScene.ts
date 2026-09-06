@@ -62,6 +62,8 @@ export class HudScene extends Phaser.Scene {
   private livesText!: Phaser.GameObjects.Text
   private waveText!: Phaser.GameObjects.Text
   private heroBar!: Phaser.GameObjects.Graphics
+  /** The hero's name, on the bar. See the note where it is created. */
+  private heroLabel!: Phaser.GameObjects.Text
   /** Every element's rectangle. Disjoint by construction, checked by a test. */
   /**
    * Where every HUD element sits, MEASURED.
@@ -168,14 +170,29 @@ export class HudScene extends Phaser.Scene {
       fontStyle: 'bold', stroke: '#0d1016', strokeThickness: 4, letterSpacing: 1,
     }).setOrigin(0.5, 0.5)
 
-    // Under the start button: the hero's health. The NAME AND MODE LABEL that
-    // used to sit beside it are gone -- it read "Cory · DAD MODE" and the mode
-    // half was wrong for four heroes out of five, because `lastStand.name` is
-    // the string "DAD MODE" in all five entries of heroes.json. The player
-    // chose the hero one screen ago and there is only ever one on the board,
-    // so the name was telling them something they already knew, and the label
-    // was telling them something untrue.
+    // Under the start button: the hero's health.
+    //
+    // THE MODE LABEL IS GONE AND THE NAME IS BACK, which is not where this
+    // ended up the first time. It read "Cory · DAD MODE" and the mode half was
+    // wrong for four heroes out of five -- `lastStand.name` is the string
+    // "DAD MODE" in all five entries of heroes.json -- so both halves were
+    // taken off together. That left a blue segmented bar in the top left with
+    // nothing on it at all, and it was reported as exactly that: an
+    // unlabelled bar nobody could name. A bar with no label is not more honest
+    // than a bar with a wrong one, it is only quieter.
+    //
+    // So the name comes back and the mode does not. The name was never the
+    // untrue half, and "you already chose him" is an argument about the
+    // loadout screen rather than about a bar the player looks at mid-wave with
+    // a boss on the board. The two ticks across it are the two thresholds --
+    // the transformation at half and Last Stand at a quarter -- and they are
+    // what makes it look segmented; with the name on it they read as marks on
+    // a health bar rather than as three mystery cells.
     this.heroBar = this.add.graphics()
+    this.heroLabel = this.add.text(0, 0, '', {
+      fontFamily: FONT_UI, fontSize: '15px', color: COLOR.ink, fontStyle: 'bold',
+      stroke: '#0d1016', strokeThickness: 4, letterSpacing: 1,
+    }).setOrigin(0, 0.5)
 
     // Bottom corners and centre.
     this.buildSettingsButton(L.settings)
@@ -873,5 +890,10 @@ export class HudScene extends Phaser.Scene {
       const markX = x + 2 + (w - 4) * mark
       this.heroBar.lineStyle(1, COLOR.panelEdge, 0.9).lineBetween(markX, y, markX, y + h)
     }
+    // OVER THE FILL, not beside the bar: there is no room beside it at
+    // 568x320, and the stroke is what keeps it readable over the blue, the
+    // grey of a hero who is down and the red of Last Stand alike.
+    this.heroLabel.setText(s.heroName.toUpperCase())
+    this.heroLabel.setPosition(x + 8, y + h / 2)
   }
 }

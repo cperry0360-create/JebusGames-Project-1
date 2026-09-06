@@ -562,7 +562,6 @@ export class GameScene extends Phaser.Scene {
       // screen. `panelArea` insets by six for chrome that floats inside it.
       dockRight: () => viewW(this) - safeAreaInsets().right,
       tiles: () => this.drawerTiles(),
-      peanuts: () => this.status.peanuts,
       detailFor: (id) => this.drawerDetail(id),
       onSelect: (id) => {
         this.drawerPick = id
@@ -4849,7 +4848,19 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Recomputed whenever the tower set changes, rather than every frame. */
+  /**
+   * Recomputed whenever the tower set changes, rather than every frame.
+   *
+   * A DARK BEACON LIFTS NOTHING, and it did until this line was written.
+   * `landDisable` has called this since the Rainbow Reaper shipped, with a
+   * comment saying "a disabled Shelter's aura goes dark with it" -- and this
+   * loop never asked, so the boss could switch a Beacon off and every gun it
+   * covered kept the 30% (or a specialised 90%) as if nothing had happened.
+   * The comment described the intent and the code did the other thing for as
+   * long as both have existed. The Glitch Bug made it matter more: it takes
+   * the Beacon away entirely, and the difference between "gone" and "off"
+   * should not be that only one of them is felt.
+   */
   private refreshSupport(): void {
     for (const t of this.towers) {
       if (t.isSupport) continue
@@ -4857,7 +4868,7 @@ export class GameScene extends Phaser.Scene {
       let range = 0
       let pierce = 0
       for (const s of this.towers) {
-        if (!s.isSupport || s === t) continue
+        if (!s.isSupport || s === t || s.disabledFor > 0) continue
         if (Phaser.Math.Distance.Between(s.x, s.y, t.x, t.y) <= s.supportRadius) {
           bonus += s.supportDamageBonus
           // A specialized Shelter gives its neighbours something beyond raw
