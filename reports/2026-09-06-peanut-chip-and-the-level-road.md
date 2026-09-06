@@ -6,7 +6,7 @@ against computed layout values.
 | commit | on | CI |
 |---|---|---|
 | `2a8e3d2` Two peanuts became one, and the level select became a road | `main` | **green** — [run 140](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34061613717), typecheck, 893 tests and the gated Pages deploy |
-| `PENDING` this report | `main` | — |
+| `0f917f8` Write up the peanut chip and the level-select road | `main` | **green** — [run 141](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34061729910) |
 
 ---
 
