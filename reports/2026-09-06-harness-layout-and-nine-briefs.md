@@ -20,8 +20,8 @@ by looking at a picture, not by reading the source.**
 | 8 | [`f51769a`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/f51769a) | The counters panned the map | covered by run 110 |
 | 9 | [`fd3b076`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/fd3b076) | The Rainbow Reaper retuned | covered by run 110 |
 | 10 | [`c8f4b72`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/c8f4b72) | Menus inside the safe area; CLAUDE.md rules | ✅ ✅ ([run 34002023291](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34002023291)) |
-| 11 | [`b24a175`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/b24a175) | This report | covered by run 111 |
-| 12 | the boss retune from 4200 | health 2100, reward 900, the boss test | ⏳ |
+| 11 | [`b24a175`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/b24a175) | This report | ✅ ✅ ([run 34002101271](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34002101271)) |
+| 12 | [`0c6d4ee`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/0c6d4ee) | The Reaper retuned from 4200; reward 900; the boss test | ✅ ✅ ([run 34002399553](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34002399553)) |
 | 13 | the commit closing this table | — | not recorded: a report cannot carry its own run |
 
 Two columns of ✅ are `test` and `typecheck`; `deploy` is skipped on every run,
@@ -135,7 +135,7 @@ reset control are gone; old saves carrying `seenCutscenes` load unchanged.
 | with a notch (47/21/47) | 9 | 0 (+1) |
 | level 3 win rate | **0/60** | **80/120 (67%)** |
 | level 1 / level 2 | 45/60, 10/60 | unchanged |
-| tests | 818 | **822** |
+| tests | 818 | **823** |
 
 The named exception is the version stamp's hidden five-tap door, which is under
 44pt deliberately and now says so in its own name.
