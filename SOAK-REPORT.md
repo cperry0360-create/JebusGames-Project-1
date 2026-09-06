@@ -4,6 +4,80 @@ Newest first.
 
 ---
 
+## 2026-09-06 — the support aura, modelled, and every level re-baselined
+
+### What changed
+
+**The soak did not model support towers at all.** No aura, no damage bonus, no
+granted range, no granted pierce. A board that drafted and built a Beacon was
+scored as a board that had spent 140 peanuts and a pad on a tower that did
+nothing. That gap was item 5 of the 2026-09-01 report below and item 4 of
+`reports/2026-09-06-level-4-and-elis-abilities.md`; it is closed.
+
+The rule lived inside `GameScene.refreshSupport`, where a headless simulator
+cannot reach it. It is `src/systems/Support.ts` now — Phaser-free, one
+`auraAt(x, y, sources)` — and the scene and `tools/soak/Sim.ts` both read it,
+so the two cannot drift apart again. Damage goes through the same
+`boostedDamage` the tower does, range is the tower's own times `1 + granted`,
+and pierce is flat on top.
+
+### Every level, before and after, 120 seeds
+
+`node --experimental-strip-types tools/soak/level.ts 120 <level>`, seeds 1..120,
+`normal` mode, nothing else touched.
+
+| level | before | after | change |
+|---|---|---|---|
+| level 1 | 90/120 (75%) | **95/120 (79%)** | +5 runs |
+| level 2 | 20/120 (17%) | **25/120 (21%)** | +5 runs |
+| level 3 | 80/120 (67%) | **90/120 (75%)** | +10 runs |
+| level 4 | 46/120 (38%) | **63/120 (53%)** | +17 runs |
+
+Per seed, the two simulators agree except where a Beacon was on the board:
+39 runs flipped to a win and 2 to a loss (level 4 seeds 16 and 80, where a
+stronger board changes the shape of the run rather than only its result).
+
+At 480 seeds the two levels with the most Beacons hold: level 3 316/480 (66%)
+→ 343/480 (71%), level 4 193/480 (40%) → 255/480 (53%).
+
+### Why the levels move by different amounts
+
+Because they draw Beacons at different rates. Measured over the same 120 seeds
+with a probe copy of the simulator that notes every Beacon built:
+
+| level | runs with a Beacon | Beacons built | what the boss does to one |
+|---|---|---|---|
+| level 1 | 29/120 | 49 | nothing; no caster on this level |
+| level 2 | 58/120 | 146 | nothing; no caster on this level |
+| level 3 | 72/120 | 140 | 60 disable casts landed on one, over 25 runs |
+| level 4 | 68/120 | 161 | 43 eaten outright by the Glitch Bug |
+
+### The disable case is modelled and, at this sample size, free
+
+A Beacon switched off stops lifting, in the game and in the soak, out of the
+same `dark` flag. Isolated by running the corrected simulator against a probe
+copy with the dark check removed:
+
+    level 1  95/120 both      level 3  90/120 both  (343/480 both)
+    level 2  25/120 both      level 4  63/120 both  (255/480 both)
+
+**Not one outcome differs**, on any level, at 120 or 480 seeds. On level 3, 12
+of 120 runs differ in kills, seconds or lives without changing the result, and
+the total lives across all runs is identical. The Rainbow Reaper's 3.5 seconds
+on one Beacon are real and they are not decisive. The rule is right because
+the game does it, not because it moved a number.
+
+### What this does NOT change
+
+- Every win rate is still a **floor**. Waves 2 onward auto-start in the game
+  and pay an early-start bonus the simulator never banks; see the header of
+  `Sim.ts`.
+- `supportonly` mode still loses nearly every run, and still should: those
+  boards buff a board with no guns on it.
+- Nothing was retuned. These are the same levels, measured properly.
+
+---
+
 ## 2026-09-01 — headless rule-layer soak, 2,100 runs
 
 ### The honest headline
@@ -141,7 +215,8 @@ nuke's cast path is the one ability the soak never exercises. Closing it means
 letting the soak force the drop, which needs the RNG injection in step 3
 above.
 
-**5. The soak does not model the Tax Shelter's buff. GAP, NOT FIXED.**
+**5. The soak does not model the Tax Shelter's buff. GAP — CLOSED 2026-09-06,
+see the section at the top of this file.**
 `supportDamageBonus` and `refreshSupport` are in `GameScene`, not in a rule
 module, so the soak cannot use them. Support towers therefore contribute
 nothing in `supportonly` mode, which is why that mode loses almost every run.
