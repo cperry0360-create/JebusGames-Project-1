@@ -24,7 +24,9 @@ by looking at a picture, not by reading the source.**
 | 12 | [`0c6d4ee`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/0c6d4ee) | The Reaper retuned from 4200; reward 900; the boss test | ✅ ✅ ([run 34002399553](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34002399553)) |
 | 13 | [`e0edc98`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/e0edc98) | Close that table | covered by run 114 |
 | 14 | [`391e578`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/391e578) | Wave 1 waits for the player | ✅ ✅ ([run 34032008391](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34032008391)) |
-| 15 | the commit closing this table | — | not recorded: a report cannot carry its own run |
+| 15 | [`c1ebd82`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/c1ebd82) | Close that table | covered by run 118 |
+| 16 | [`3ef5466`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/3ef5466) | The loadout stack; the letterbox | ✅ ✅ ([run 34033965367](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34033965367)) |
+| 17 | the commit closing this table | — | not recorded: a report cannot carry its own run |
 
 Two columns of ✅ are `test` and `typecheck`; `deploy` is skipped on every run,
 correctly — it is gated on `main`.
@@ -171,6 +173,88 @@ simulated player never sees. **Every win rate this tool has ever reported is a
 floor rather than an estimate.** Closing that would move every number in every
 previous report, so it is recorded rather than done quietly.
 
+## The loadout, converted; and the letterbox
+
+**Three of the four collisions reported against this screen are `main`, not
+this branch.** Rendered main's Loadout through the same harness to be certain:
+the hero row over the title, the empty description panel cutting the name
+labels, and the tight TOWERS label are all present at `d1ac5f0` and all fixed
+here since `d53bff4`. The branch is unmerged; that is the whole difference.
+
+**The fourth was real, and the screen had NOT been converted.** It used
+`tapFloor` and `visibleDesignBox` and nothing else — the section stack was
+still shares of a budget: at most 62% to the hero block, then 53/47 to the
+towers and the specials. A section whose content needed more than its share did
+not push the next one down, because nothing downstream was listening. It drew
+past its own edge.
+
+`stackSections` replaces that. Sections declare what they **need** and the
+least they can be squeezed to; the stack reconciles them against the room and
+squeezes in proportion to the slack each offered. **The headings are sections
+too** — that is what stops a label being overlapped from either side.
+
+Four measurements had to become honest before the stack could work, and three
+of them were mistakes I made on the first pass:
+
+1. `cardGeometry` is now shared by the face that *draws* a card and the
+   measurer that says how tall the row must be. Two copies is how a row gets
+   sized against one layout and filled with another.
+2. A card's height comes from its **text**. The icon is a square of its column,
+   and the column is a share of the card's width — so a 338-unit card demanded
+   a 118-unit icon and therefore a 181-unit card, for eleven words.
+3. Floors come from the bottom of the type ladder, and the hero block's from
+   solving it at a ceiling of zero. My first pass used 86 and 150, numbers I
+   picked, which squeezed cards below their own content — the exact fault
+   being fixed.
+4. The hero block is solved at the height it was *granted*. Measuring the floor
+   at one ceiling and drawing at another split the row and blurb differently
+   and cut the last line off with the panel's own edge.
+
+A stack that still does not fit **scrolls**, with a fade so a clipped card
+reads as more content. The first attempt masked the whole layer and took the
+title, subtitle and both buttons off the screen — worse than the bug it fixed;
+the content is its own container now.
+
+### The green bar was mine
+
+The Phaser clear colour was `#2f7d3f`, grass green, left from when the map was
+tiles. Nothing has depended on it since the map became a painted plate — but
+every pixel a camera does not paint is that colour, and the safe-area **camera
+viewport** I added in `c8f4b72` exposed it. It is `#10161d` now, matching
+`html`/`body` and a new `theme-color` meta tag.
+
+The viewport inset is gone with it. It kept controls off the notch and also
+stopped backdrops reaching the screen edges. The camera covers the whole canvas
+again; the insets shrink **the box the design is fitted into**, centred on the
+safe area. Content clears the hardware, backgrounds bleed.
+
+### Letterbox, measured off the bar's own pixels
+
+Sampling the whole frame does not answer this — the loadout's `#121820` panels
+are indistinguishable from the `#10161d` ground at any usable tolerance. So the
+probe samples only the strip outside the fitted design box.
+
+| viewport | aspect | bar | painted |
+|---|---|---|---|
+| 1440x900 | 1.600:1 | **10.0%**, top and bottom | 100% |
+| 844x390 | 2.164:1 | **17.9%**, down the sides | 100% |
+| 1280x720 | 1.778:1 | none | — |
+| 667x375 | 1.779:1 | none (same aspect) | — |
+
+Design box is 1280x720, **1.778:1**. 100% painted on Title, WorldMap, Loadout
+and Game at every size. The Cutscene is 1–5% and stays that way deliberately: a
+comic panel is contain-fitted because a speech bubble in the corner of a panel
+*is* the panel.
+
+Title needed the same fix Loadout had — it covered the design box, so 62% of
+its bar was bare. And `visibleDesignBox` now adds the inset span rather than
+ignoring it: a backdrop sized to what the camera sees but drawn at the design
+box's centre falls short on the inset side, measured at 10px of a 21px bottom
+inset.
+
+**HUD anchoring needed nothing.** HudScene is laid out 1:1 against the live
+viewport through `safeAreaInsets()`, never against the letterboxed box.
+
 ## The numbers
 
 | | before | after |
@@ -181,7 +265,7 @@ previous report, so it is recorded rather than done quietly.
 | with a notch (47/21/47) | 9 | 0 (+1) |
 | level 3 win rate | **0/60** | **80/120 (67%)** |
 | level 1 / level 2 | 45/60, 10/60 | unchanged |
-| tests | 818 | **826** |
+| tests | 818 | **827** |
 
 The named exception is the version stamp's hidden five-tap door, which is under
 44pt deliberately and now says so in its own name.
@@ -306,10 +390,15 @@ could not push to `main`; merging is the one remaining step.
 1. **The Politician is deliberately still slowable.** He is unblockable for the
    same reason the Reaper is, so "bosses resist crowd control" generalises to
    him — but levels 1 and 2 are tuned around him as he is.
-4. **Closing the soak's ready-phase gap** would make its win rates estimates
+4. **The loadout is over-full on a short landscape phone.** At 667x375 the
+   stack overflows by 87 design units even with every section at its floor, so
+   the specials row scrolls. It is handled and it is signposted, but a menu
+   that scrolls is a design smell. The levers are the three section headings
+   (87 units between them), the hero blurb, and dropping the HERO label.
+5. **Closing the soak's ready-phase gap** would make its win rates estimates
    rather than floors, at the cost of invalidating every number in every
    previous report. Worth doing once, deliberately, with a re-baseline.
-5. **No boss payout is ever spendable**, because every boss is on its level's
+6. **No boss payout is ever spendable**, because every boss is on its level's
    last wave. The "worth racing for" convention describes a race that cannot
    happen. Either the bosses want to arrive a wave early, or the convention is
    decoration; both are design calls.
