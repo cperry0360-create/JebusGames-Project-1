@@ -1,10 +1,11 @@
 {
   "_note": "LEVEL 4, THE CONUNDRUM. Thirteen waves across two gates, and the first level whose boss is fought twice. HAND-AUTHORED, unlike level 3's, which tools/gen_waves3.py generates: level 4's shape is not a curve with a mix poured into it. Wave 4 has to be a single harmless flyer, wave 7 has to be the boss, wave 9 is where the flyer stops being harmless, and waves 8 to 12 have to climb past wave 7. Those are positions, not a distribution, so the table says what it means and tests/level4.test.ts holds the properties rather than a generator holding the shape.",
-  "_health": "Total enemy health is 37955 against level 3's 28470, +33% across the run -- and the two bosses are 13000 of it, against level 3's single 2100. The eleven ordinary waves carry 24955, which is BELOW level 3's 26370 over one fewer wave. Read the level as a slightly lighter trickle around two much larger fights. THE LANE IS SHORTER AGAIN: 1479 px gate to exit against level 3's 1560 and level 1's 1977, so a point of health here is worth more than a point on any level before it. AND THE BOARD REACHES LESS OF IT: only 45.3% of the shared tail is inside any pad's range, so the last 41% of the route is nearly free road. Neither of those is in the health number and both make the run harder than it looks. The run pays 0.1449 peanuts per point of health, over the 0.13 floor.",
-  "_curve": "THE BOSS ARRIVES IN THE MIDDLE, which no level before this one does, and it changes how the curve has to be read. Measured on raw wave health, wave 7 is 267% heavier than wave 6 and wave 8 is 66% lighter than wave 7 -- a cliff and a collapse, on a level that plays as neither. What actually happens is that ONE 5200-point enemy walks on. So the curve is read on the rank and file with the boss's own pool excluded, and across a boss wave the comparison carries over to the last ordinary wave: 285, 380, 570, 880, 1195, 1520, then 1910, 2635, 3260, 3890, 5910. Every step is inside the 55% cap and every one is upward. content.test.ts's cliff test measures it that way for every level, and levels 1 to 3 read exactly as they did. THE BOSSES THEMSELVES ARE THE SOAK'S PROBLEM, which is what that test already says about level 3's.",
-  "_lanes": "EVERY GROUP NAMES ITS LANE. Wave 1 is upper only and wave 2 lower only, so the gates are taught one at a time, exactly as level 3 does it. THE HEAVIER SIDE ALTERNATES -- upper, lower, upper, lower, upper, even, upper, upper, lower, upper, upper, lower, upper -- and wave 6 is dead even, which is the worst case for a board committed to one gate. It bites here for the reason it bites on level 3: both routes walk 1479.0 px gate to exit (arranged rather than lucky -- see map_level4.json's _lanes), so groups released from both gates on the same delay ARRIVE TOGETHER and a split wave is a two-front problem rather than a queue.",
-  "_boss": "THE GLITCH LICH KING IS FOUGHT TWICE, at wave 7 and at wave 13, and the wave 7 fight does not kill him. `glitchLich` carries `retreatsWhenDefeated`, so beating him at wave 7 pays the player and ends the wave but sends him off the board rather than killing him; `glitchLichReturn` is the wave 13 form, with 50% more health (7800 against 5200) and a summon burst every 4 seconds instead of every 6. They are two entries in enemies.json rather than one entry and a multiplier because five things read that file and none of them would want to learn a new shape; level4.test.ts asserts the 1.5x and the shorter interval so the pair cannot drift. WAVES 8 TO 12 CLIMB PAST HIS FIRST APPEARANCE -- 1910, 2635, 3260, 3890, 5910 against wave 7's 5580 total -- because a level whose middle is its peak deflates for five waves and then asks the player to care again.",
-  "_air": "THE FLYER IS TAUGHT BEFORE IT MATTERS. Wave 4 sends ONE `glitchBugBeta`: the same artwork, 120 health, one life, and none of what makes the real one dangerous. It is there to be shot at, and to be the moment a player discovers that a board of ground-only towers cannot touch it. The real `glitchBug` arrives at wave 9 and again at 10, 12 and 13. A player CANNOT be caught without an answer -- systems/AirCover.ts checks the guaranteed property rather than the lucky one, and level4.test.ts runs it over this table: six towers in the shared pool, one of them ground-only, two in hand from wave 1, so an all-ground hand is impossible from the first wave on.",
+  "_health": "Total enemy health is 20240 against level 3's 28470, -29% across the run, and the two bosses are only 3000 of it. DO NOT READ THAT AS AN EASIER LEVEL. It soaks at 38% against level 3's 63% and level 1's 75%, measured over 120 seeds with `node --experimental-strip-types tools/soak/level.ts 120 level4`. Three things outside the health number are why. THE LANE IS THE SHORTEST IN THE GAME: 1479 px gate to exit against level 3's 1560 and level 1's 1977, so a point of health here buys more than a point anywhere else. THE BOARD REACHES LESS OF IT: only 45.3% of the shared tail is inside any pad's range, so the last 41% of the route is nearly free road. AND THE ARMOUR IS HEAVY EARLY: the Overpacker's 10 is more than the per-shot damage of three of the six towers, so a board without a heavy hitter cannot scratch him. The run pays 0.235 peanuts per point of health, well over the 0.13 floor -- it has to, because a board that cannot reach the tail leaks and leaked enemies pay nothing.",
+  "_curve": "THE BOSS ARRIVES IN THE MIDDLE, which no level before this one does, and it changes how the curve has to be read. Measured on raw wave health, wave 7 is a spike and wave 8 a collapse, on a level that plays as neither: what actually happens is that one large enemy walks on and then walks off. So the curve is read on the rank and file with the boss's own pool excluded, and across a boss wave the comparison carries over to the last ordinary wave: 285, 380, 475, 595, 855, 950, then 1220, 1695, 2190, 2745, 3615. Every step is inside the 55% cap and every one is upward. content.test.ts measures it that way for every level, and levels 1 to 3 read exactly as they did.",
+  "_lanes": "EVERY GROUP NAMES ITS LANE. Wave 1 is upper only and wave 2 lower only, so the gates are taught one at a time, exactly as level 3 does it. THE HEAVIER SIDE ALTERNATES -- upper, lower, upper, lower, upper, even, upper, upper, lower, upper, lower, upper, upper -- and wave 6 is dead even, which is the worst case for a board committed to one gate. It bites here for the reason it bites on level 3: both routes walk 1479.0 px gate to exit (arranged rather than lucky -- see map_level4.json's _lanes), so groups released from both gates on the same delay ARRIVE TOGETHER and a split wave is a two-front problem rather than a queue.",
+  "_boss": "THE GLITCH LICH KING IS FOUGHT TWICE, at wave 7 and at wave 13, and the wave 7 fight does not kill him. `glitchLich` carries `retreatsWhenDefeated`, so beating him at wave 7 pays the player and ends the wave but sends him off the board rather than killing him; `glitchLichReturn` is the wave 13 form, with 50% more health (1800 against 1200) and a summon burst every 4 seconds instead of every 6. They are two entries in enemies.json rather than one entry and a multiplier because five things read that file and none of them would want to learn a new shape; level4.test.ts asserts the 1.5x and the shorter interval so the pair cannot drift. HIS 1500 PEANUTS ARE THE FIRST BOSS PAYOUT IN THIS GAME THAT CAN BE SPENT -- every other boss is on its level's last wave -- and the level is built around that: the board that beats waves 8 to 13 is the one his purse paid for. It is also why the wave 7 fight decides the run. Soaked at 120 seeds, 36 losses come at wave 7 and 35 at wave 13, which is the shape wanted: the mid-level boss and the finale each take about half of what the level takes. HIS HEALTH AND SPEED ARE NOT THE BRIEF'S, and reports/2026-09-06-level-4-and-elis-abilities.md carries the measurements. The brief asked for 5200 and 7800 at speed 32; at those numbers the level soaks at 0/60 and no board in the game can kill him -- not with more pads, not slower, not unarmoured, not at a later wave. WAVES 8 TO 12 CLIMB PAST THE ORDINARY WAVES BEFORE HIM -- 1220, 1695, 2190, 2745, 3615 against wave 6's 950 -- because a level whose middle is its peak deflates for five waves and then asks the player to care again.",
+  "_air": "THE FLYER IS TAUGHT BEFORE IT MATTERS. Wave 4 sends ONE `glitchBugBeta`: the same artwork, 120 health, one life, and none of what makes the real one dangerous -- no tower kill at all. It is there to be shot at, and to be the moment a player discovers that a board of ground-only towers cannot touch it. The real `glitchBug` arrives at wave 9 and again at 10, 12 and 13, and it destroys a tower every eight seconds it is alive. A player CANNOT be caught without an answer -- systems/AirCover.ts checks the guaranteed property rather than the lucky one, and level4.test.ts runs it over this table: six towers in the shared pool, one of them ground-only, two in hand from wave 1, so an all-ground hand is impossible from the first wave on.",
+  "_armour": "THE OVERPACKER DOES NOT ARRIVE UNTIL WAVE 8, and that is tuning rather than pacing. He carries armour 10, which is more than the per-shot damage of the Extension (8), the Rounding (9) and about equal to the Withholding's 11 -- so a wave-5 board that drew the wrong two towers cannot hurt him at all. He was on wave 5 and wave 6 in the first draft and the level soaked at 0%; moving him to wave 8, where a third tower type has been drawn, is most of what took it to 38%.",
   "waves": [
     {
       "name": "Off the Coach",
@@ -35,7 +36,7 @@
       "spawns": [
         {
           "enemy": "touristSmall",
-          "count": 4,
+          "count": 3,
           "interval": 0.9,
           "delay": 0,
           "lane": "upper"
@@ -61,41 +62,48 @@
         },
         {
           "enemy": "touristSmall",
-          "count": 4,
+          "count": 1,
           "interval": 0.9,
           "delay": 0,
-          "lane": "lower"
+          "lane": "upper"
         },
         {
           "enemy": "touristMid",
           "count": 2,
           "interval": 1.6,
-          "delay": 3,
+          "delay": 2,
           "lane": "lower"
         }
       ]
     },
     {
-      "name": "The Overpackers",
+      "name": "Coach Party",
       "spawns": [
         {
-          "enemy": "touristBig",
-          "count": 1,
-          "interval": 2,
-          "delay": 1,
-          "lane": "upper"
-        },
-        {
-          "enemy": "touristSmall",
-          "count": 3,
-          "interval": 0.9,
+          "enemy": "touristMid",
+          "count": 2,
+          "interval": 1.4,
           "delay": 0,
           "lane": "upper"
         },
         {
+          "enemy": "touristSmall",
+          "count": 2,
+          "interval": 0.9,
+          "delay": 2,
+          "lane": "upper"
+        },
+        {
           "enemy": "touristMid",
-          "count": 3,
+          "count": 1,
           "interval": 1.4,
+          "delay": 0,
+          "lane": "lower"
+        },
+        {
+          "enemy": "touristSmall",
+          "count": 1,
+          "interval": 0.9,
           "delay": 2,
           "lane": "lower"
         }
@@ -113,7 +121,7 @@
         },
         {
           "enemy": "touristSmall",
-          "count": 4,
+          "count": 1,
           "interval": 0.8,
           "delay": 2,
           "lane": "upper"
@@ -127,7 +135,7 @@
         },
         {
           "enemy": "touristSmall",
-          "count": 4,
+          "count": 1,
           "interval": 0.8,
           "delay": 2,
           "lane": "lower"
@@ -147,7 +155,7 @@
         },
         {
           "enemy": "touristSmall",
-          "count": 4,
+          "count": 3,
           "interval": 1,
           "delay": 4,
           "lane": "lower"
@@ -155,7 +163,7 @@
       ]
     },
     {
-      "name": "Aftershock",
+      "name": "The Overpackers",
       "spawns": [
         {
           "enemy": "touristBig",
@@ -166,23 +174,23 @@
         },
         {
           "enemy": "touristMid",
-          "count": 4,
+          "count": 2,
           "interval": 1.3,
           "delay": 2,
           "lane": "upper"
         },
         {
           "enemy": "touristSmall",
-          "count": 6,
+          "count": 4,
           "interval": 0.7,
           "delay": 0,
           "lane": "lower"
         },
         {
           "enemy": "tinyGlitch",
-          "count": 4,
+          "count": 2,
           "interval": 0.6,
-          "delay": 5,
+          "delay": 4,
           "lane": "lower"
         }
       ]
@@ -199,14 +207,14 @@
         },
         {
           "enemy": "touristSmall",
-          "count": 5,
+          "count": 3,
           "interval": 0.8,
           "delay": 2,
           "lane": "upper"
         },
         {
           "enemy": "tinyGlitch",
-          "count": 6,
+          "count": 3,
           "interval": 0.6,
           "delay": 4,
           "lane": "upper"
@@ -220,9 +228,9 @@
         },
         {
           "enemy": "touristMid",
-          "count": 4,
+          "count": 1,
           "interval": 1.3,
-          "delay": 2,
+          "delay": 3,
           "lane": "lower"
         }
       ]
@@ -239,16 +247,16 @@
         },
         {
           "enemy": "touristSmall",
-          "count": 8,
+          "count": 4,
           "interval": 0.7,
           "delay": 2,
           "lane": "upper"
         },
         {
           "enemy": "tinyGlitch",
-          "count": 6,
+          "count": 4,
           "interval": 0.6,
-          "delay": 6,
+          "delay": 5,
           "lane": "upper"
         },
         {
@@ -260,7 +268,7 @@
         },
         {
           "enemy": "touristMid",
-          "count": 4,
+          "count": 1,
           "interval": 1.3,
           "delay": 3,
           "lane": "lower"
@@ -272,37 +280,30 @@
       "spawns": [
         {
           "enemy": "touristBig",
-          "count": 3,
+          "count": 2,
           "interval": 1.8,
           "delay": 0,
           "lane": "upper"
         },
         {
           "enemy": "touristMid",
-          "count": 5,
+          "count": 3,
           "interval": 1.3,
           "delay": 3,
           "lane": "upper"
         },
         {
           "enemy": "touristBig",
-          "count": 2,
+          "count": 3,
           "interval": 1.8,
           "delay": 0,
           "lane": "lower"
         },
         {
           "enemy": "touristSmall",
-          "count": 8,
+          "count": 5,
           "interval": 0.7,
           "delay": 2,
-          "lane": "lower"
-        },
-        {
-          "enemy": "tinyGlitch",
-          "count": 8,
-          "interval": 0.5,
-          "delay": 5,
           "lane": "lower"
         }
       ]
@@ -319,14 +320,14 @@
         },
         {
           "enemy": "touristBig",
-          "count": 3,
+          "count": 2,
           "interval": 1.7,
           "delay": 1,
           "lane": "upper"
         },
         {
           "enemy": "touristMid",
-          "count": 5,
+          "count": 3,
           "interval": 1.2,
           "delay": 3,
           "lane": "upper"
@@ -340,23 +341,16 @@
         },
         {
           "enemy": "touristBig",
-          "count": 3,
+          "count": 2,
           "interval": 1.7,
           "delay": 1,
           "lane": "lower"
         },
         {
-          "enemy": "touristMid",
-          "count": 5,
-          "interval": 1.2,
-          "delay": 3,
-          "lane": "lower"
-        },
-        {
           "enemy": "touristSmall",
-          "count": 6,
+          "count": 3,
           "interval": 0.7,
-          "delay": 5,
+          "delay": 4,
           "lane": "lower"
         }
       ]
@@ -388,7 +382,7 @@
         },
         {
           "enemy": "touristMid",
-          "count": 4,
+          "count": 3,
           "interval": 1.2,
           "delay": 4,
           "lane": "lower"
