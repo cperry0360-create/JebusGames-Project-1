@@ -249,6 +249,11 @@ export class GameScene extends Phaser.Scene {
   /** True while the upgrade button is hovered or held, which brightens the
    *  projected range ring. */
   private previewingUpgrade = false
+  /** How to re-price the open ring. Set with it, cleared when it closes. */
+  private ringOptions?: () => RingOption[]
+  /** Last known affordability of the open drawer's tiles, so a rebuild only
+   *  happens when one of them actually flipped. */
+  private drawerAfford: boolean[] = []
   /** Public so a harness run can read the camera's state. */
   rig!: CameraRig
   /** Everything drawn in screen space rather than on the map. The main
@@ -614,11 +619,11 @@ export class GameScene extends Phaser.Scene {
 
     // A floor rather than a constant: the opening instruction is to build a
     // tower, so the purse has to cover the cheapest one this run actually drew.
-    this.status.peanuts = openingPurse(
+    this.setPeanuts(openingPurse(
       RULES.startingPeanuts,
       RULES.startingPeanutsMargin,
       run.openingTowers.map((id) => TOWERS[id].cost),
-    )
+    ))
     this.status.lives = RULES.startingLives
     this.status.wave = 0
     this.status.kills = 0
@@ -957,7 +962,7 @@ export class GameScene extends Phaser.Scene {
             this.status.alert = cfg.brokeToast
             return
           }
-          this.status.peanuts -= cfg.cost
+          this.setPeanuts(this.status.peanuts - cfg.cost)
           sign.pay()
           play(this, 'peanuts', 0.9)
           this.status.alert = cfg.paidToast
@@ -1082,9 +1087,57 @@ export class GameScene extends Phaser.Scene {
    * refunding your own money is not earning.
    */
   private earn(amount: number): void {
-    this.status.peanuts += amount
+    this.setPeanuts(this.status.peanuts + amount)
     this.status.peanutsEarned += amount
     logEvent('peanuts', `+${amount} -> ${this.status.peanuts}`)
+  }
+
+  /**
+   * THE ONE PLACE THE BALANCE CHANGES.
+   *
+   * It was nine places, and every one of them wrote the field directly. That
+   * is why an open build panel went stale: the panels priced themselves once,
+   * when they were built, and nothing told them the number had moved. A player
+   * who opened a tower one peanut short and then earned three watched the
+   * BUILD button stay dead until they closed the panel and opened it again.
+   *
+   * So the write is a method, and re-pricing hangs off it. Same shape as the
+   * mode mirrors: one writer, called from one place per transition.
+   */
+  private setPeanuts(next: number): void {
+    const value = Math.max(0, Math.round(next))
+    if (value === this.status.peanuts) return
+    this.status.peanuts = value
+    this.refreshAffordability()
+  }
+
+  /**
+   * Re-prices whatever panel is open, and ONLY when the answer changed.
+   *
+   * Peanuts arrive on every kill, so this runs dozens of times a wave;
+   * rebuilding a ring each time to redraw exactly the same thing would be its
+   * own bug. The affordability flags are compared first and the rebuild is
+   * skipped unless one of them flipped -- which is a handful of times a run.
+   */
+  private refreshAffordability(): void {
+    if (this.ring?.active && this.ringOptions) {
+      const next = this.ringOptions()
+      const now = this.ring.affordability
+      const moved = next.length !== now.length
+        || next.some((o, i) => now[i]?.id !== o.id || now[i]?.affordable !== o.affordable)
+      if (moved) this.ring.refreshOptions(next)
+    }
+    if (this.drawer?.open === true) {
+      const next = this.drawerTiles()
+      // The drawer already takes its tiles as a FUNCTION, so `refresh()`
+      // re-reads them; it was simply never called when the balance moved.
+      const moved = next.length !== this.drawerAfford.length
+        || next.some((t, i) => this.drawerAfford[i] !== t.affordable)
+      if (moved) {
+        this.drawerAfford = next.map((t) => t.affordable)
+        this.drawer.refresh()
+      }
+    }
   }
 
   /**
@@ -1785,12 +1838,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * The ring on an empty pad: what can be built here, and for how much.
+   * What the build ring offers on this pad, PRICED AGAINST THE BALANCE NOW.
    *
-   * Public for the harness, which measures every button against the viewport.
+   * A function rather than an array because affordability is not a property of
+   * the pad, it is a property of the moment -- and the moment moves while the
+   * panel is open. `refreshAffordability` calls this again when the balance
+   * changes and the answer differs.
    */
-  openPadRing(spot: BuildSpot): void {
-    this.deselectTower()
+  private padRingOptions(spot: BuildSpot): RingOption[] {
     const options: RingOption[] = this.status.unlockedTowers.map((id) => {
       const def = TOWERS[id]
       const short = def.cost - this.status.peanuts
@@ -1811,7 +1866,17 @@ export class GameScene extends Phaser.Scene {
         onConfirm: () => this.place(id, spot),
       }
     })
-    this.openRing(options, () => this.padAnchor(spot), (id) => {
+    return options
+  }
+
+  /**
+   * The ring on an empty pad: what can be built here, and for how much.
+   *
+   * Public for the harness, which measures every button against the viewport.
+   */
+  openPadRing(spot: BuildSpot): void {
+    this.deselectTower()
+    this.openRing(() => this.padRingOptions(spot), () => this.padAnchor(spot), (id) => {
       if (id) {
         this.showTowerRange(spot.x, spot.y, TOWERS[id])
         this.showGhost(id, spot)
@@ -1963,7 +2028,8 @@ export class GameScene extends Phaser.Scene {
    * place.
    */
   private openRing(
-    options: RingOption[],
+    /** RE-CALLABLE, not a snapshot. See `refreshAffordability`. */
+    build: () => RingOption[],
     anchor: () => { x: number; y: number } | null,
     onPreview: (id: string | null) => void,
     /** Reserved slots, when the caller wants the geometry fixed across
@@ -1971,7 +2037,9 @@ export class GameScene extends Phaser.Scene {
     slots?: number,
   ): void {
     this.ring?.close()
+    const options = build()
     if (options.length === 0) return
+    this.ringOptions = build
     this.ring = new TowerRing(this, TICKET_DEPTH, {
       options,
       anchor,
@@ -1993,6 +2061,7 @@ export class GameScene extends Phaser.Scene {
       },
       onClose: () => {
         this.ring = undefined
+        this.ringOptions = undefined
         this.rangeRing.clear()
         this.clearGhost()
         this.drawSpots()
@@ -2040,7 +2109,7 @@ export class GameScene extends Phaser.Scene {
       return
     }
 
-    this.status.peanuts -= def.cost
+    this.setPeanuts(this.status.peanuts - def.cost)
     this.build.occupy(spot.index)
     const tower = new Tower(this, spot.x, spot.y, id, def, spot.index)
     tower.distanceToExit = this.roadLeftFrom(spot.x, spot.y)
@@ -2190,7 +2259,14 @@ export class GameScene extends Phaser.Scene {
    *
    * Public for the harness, which measures every button against the viewport.
    */
-  openTowerRing(tower: Tower): void {
+  /**
+   * What a built tower's ring offers, PRICED AGAINST THE BALANCE NOW.
+   *
+   * Extracted from `openTowerRing` for one reason: affordability is a function
+   * of the moment, and the moment moves while the panel is open. See
+   * `refreshAffordability`.
+   */
+  private towerRingOptions(tower: Tower): RingOption[] {
     const def = tower.def
     const step = nextStep(def, tower.tier)
     const refund = sellValue(def, tower.tier + (tower.upgrading ? 1 : 0),
@@ -2317,9 +2393,12 @@ export class GameScene extends Phaser.Scene {
       confirmLabel: 'Sell',
       onConfirm: () => this.confirmSell(tower, refund),
     })
+    return options
+  }
 
+  openTowerRing(tower: Tower): void {
     // THREE, always: see the slot note above.
-    this.openRing(options, () => this.towerAnchor(tower), (id) => {
+    this.openRing(() => this.towerRingOptions(tower), () => this.towerAnchor(tower), (id) => {
       this.previewingUpgrade = id !== null && id !== 'sell'
       if (this.selected) this.drawSelectedRange(this.selected)
     }, 3)
@@ -2343,7 +2422,7 @@ export class GameScene extends Phaser.Scene {
         `${spec.name} costs ${spec.cost} peanuts — ${spec.cost - this.status.peanuts} short.`
       return
     }
-    this.status.peanuts -= spec.cost
+    this.setPeanuts(this.status.peanuts - spec.cost)
     tower.beginUpgrade(specId)
     this.saveProgress()
     play(this, 'upgrade')
@@ -2359,7 +2438,7 @@ export class GameScene extends Phaser.Scene {
       this.status.alert = `Tier ${tower.tier + 1} costs ${step.cost} peanuts — ${step.cost - this.status.peanuts} short.`
       return
     }
-    this.status.peanuts -= step.cost
+    this.setPeanuts(this.status.peanuts - step.cost)
     logEvent('tower-upgraded', `${tower.def.name} tier ${tower.tier + 1} cost=${step.cost}`)
     tower.beginUpgrade()
     // The peanuts are spent now and the tier arrives later. Saving here books
@@ -2400,7 +2479,7 @@ export class GameScene extends Phaser.Scene {
     // the upgrade the player just bought.
     const paidTier = tower.tier + (tower.upgrading ? 1 : 0)
     const refund = sellValue(tower.def, paidTier, RULES.towerUpgrades.sellRefund, tower.spec)
-    this.status.peanuts += refund
+    this.setPeanuts(this.status.peanuts + refund)
     this.build.release(tower.spot)
     this.towers = this.towers.filter((t) => t !== tower)
     tower.destroy()
@@ -3328,7 +3407,7 @@ export class GameScene extends Phaser.Scene {
     // read an undefined wave and take the board down with it.
     this.status.wave = Math.min(saved.wave, this.level.waveTable.waves.length - 1)
     this.status.lives = saved.lives
-    this.status.peanuts = saved.peanuts
+    this.setPeanuts(saved.peanuts)
     // Unlocks are re-derived rather than trusted, then reconciled with what
     // was saved: the wave count is what earns them, so a saved list that
     // disagrees with the wave — a file edited by hand, or a draft that changed
@@ -3789,7 +3868,7 @@ export class GameScene extends Phaser.Scene {
     for (const e of this.enemies) {
       const take = e.tickTax(dt, this.status.peanuts)
       if (take <= 0) continue
-      this.status.peanuts = Math.max(0, this.status.peanuts - take)
+      this.setPeanuts(this.status.peanuts - take)
       logEvent('taxed', `${e.def.name} -${take} -> ${this.status.peanuts}`)
       floatingDamage(this, e.x, e.centreY, take, true, `-${take} PEANUTS`)
       play(this, 'taxed', 0.7)

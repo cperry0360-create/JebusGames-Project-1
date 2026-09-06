@@ -551,8 +551,18 @@ test('reopening the menu does not pile up live objects', () => {
   // container is destroyed — so a new menu is a new object rather than an
   // append to an old one.
   const ring = src('ui/TowerRing.ts')
-  assert.match(ring, /private readonly buttons: ButtonParts\[\] = \[\]/,
+  assert.match(ring, /private buttons: ButtonParts\[\] = \[\]/,
     'the button list is not per-instance')
+  // It lost `readonly` so a live re-price can rebuild the ring in place. That
+  // is only safe if the rebuild DESTROYS what it replaces and starts from a
+  // fresh array rather than appending -- which is the exact failure this test
+  // was written about.
+  const refresh = /refreshOptions\([\s\S]*?\n  \}/.exec(ring)
+  assert.ok(refresh, 'refreshOptions is gone')
+  assert.match(refresh[0], /this\.ringLayer\.removeAll\(true\)/,
+    'a re-price leaves the old buttons alive')
+  assert.match(refresh[0], /this\.buttons = \[\]/,
+    'a re-price appends to the old button list instead of replacing it')
   assert.doesNotMatch(ring, /buttons\.length = 0/,
     'the button list is being reset in place, which means it outlives an open')
   assert.match(ring, /onComplete: \(\) => ring\.destroy\(true\)/,

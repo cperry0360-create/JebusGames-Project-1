@@ -117,11 +117,19 @@ test('peanuts earned counts income, not refunds', () => {
   const sell = /private sellTower\([\s\S]*?\n  \}/.exec(scene)
   assert.ok(sell, 'sellTower is gone')
   assert.doesNotMatch(sell[0], /this\.earn\(/, 'a sale is counted as income')
-  assert.match(sell[0], /status\.peanuts \+= refund/, 'a sale no longer refunds')
-  // And every other income route goes through the one counter.
-  const stray = scene.match(/this\.status\.peanuts \+= /g) ?? []
-  assert.equal(stray.length, 2,
-    `${stray.length} places add peanuts directly; only earn() and the sell refund may`)
+  assert.match(sell[0], /setPeanuts\(this\.status\.peanuts \+ refund\)/,
+    'a sale no longer refunds')
+
+  // AND THERE IS EXACTLY ONE WRITER. This used to count direct `+=` sites and
+  // allow two; the balance is now written in one method, because an open build
+  // panel has to be re-priced when it moves and nine scattered writes had
+  // nowhere to hang that off. Anything assigning the field outside
+  // `setPeanuts` is the stale-panel bug coming back.
+  const writes = [...scene.matchAll(/this\.status\.peanuts\s*(?:=|\+=|-=)[^=]/g)]
+  assert.equal(writes.length, 1,
+    `${writes.length} places write the balance; only setPeanuts may`)
+  assert.match(scene, /private setPeanuts\(next: number\): void \{[\s\S]{0,260}this\.refreshAffordability\(\)/,
+    'the one writer does not re-price the open panel')
 })
 
 test('Banner Points persist, and nothing else in the save can wipe them', () => {

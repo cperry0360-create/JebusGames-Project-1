@@ -4363,6 +4363,74 @@ async function run() {
     return
   }
 
+  // THE STALE PANEL, END TO END.
+  //
+  // Open a build ring one peanut short, earn some WITHOUT touching the panel,
+  // and see whether the control comes alive. This is the whole of step 7 and
+  // it is measured off the ring's own state and its confirm button, not off
+  // the balance.
+  if (scenario === 'afford') {
+    for (const k of ['Title', 'Splash', 'Credits', 'Boot', 'Loadout']) game.scene.stop(k)
+    const RS = await import('./js/systems/RunState.js')
+    RS.setRunState({ heroId: 'cory', openingTowers: ['withholding', 'rounding'],
+      abilities: ['molotov', 'glacier'], reserveTowers: [] })
+    game.scene.start('Game')
+    await until(() => running('Game'), 12000)
+    await until(() => running('Hud'), 12000)
+    await sleep(700)
+    const g = scene('Game')
+
+    // Broke, deliberately. Straight onto the field rather than through
+    // `setPeanuts`, because there is no panel open yet to re-price.
+    g.status.peanuts = 0
+    const spot = g.build.freeSpots()[0]
+    g.openPadRing(spot)
+    await sleep(500)
+    const ring = () => g.ring
+    if (!ring()) { note('RESULT *** the ring did not open ***'); return }
+    const before = ring().affordability
+    note('peanuts=' + g.status.peanuts + '  affordable: '
+      + JSON.stringify(before.map((a) => a.id + '=' + a.affordable)))
+    if (before.some((a) => a.affordable)) {
+      note('RESULT *** setup failed: something was affordable at 0 peanuts ***'); return
+    }
+
+    // Open the panel for the first option, so the CONFIRM button exists and
+    // its enabled state is what the player would actually press.
+    const first = ring().hitBoxes.find((h) => !h.id.startsWith('ring:'))
+    await click(first.rect.x + first.rect.width / 2, first.rect.y + first.rect.height / 2)
+    await sleep(350)
+    const confirmBefore = ring().hitBoxes.find((h) => h.id === 'ring:confirm')
+    note('confirm present while broke: ' + !!confirmBefore)
+    await shot('afford-1-broke-' + VP.w + 'x' + VP.h)
+
+    // NOW EARN, WITHOUT TOUCHING THE PANEL. This is the exact thing the player
+    // does: they leave the panel open and a wave pays out.
+    g.earn(500)
+    await sleep(450)
+    const after = ring() ? ring().affordability : []
+    note('peanuts=' + g.status.peanuts + '  affordable: '
+      + JSON.stringify(after.map((a) => a.id + '=' + a.affordable)))
+    await shot('afford-2-rich-' + VP.w + 'x' + VP.h)
+
+    const flipped = after.filter((a) => a.affordable).length
+    // And the panel is still open, on the same option, with a live confirm.
+    const stillOpen = !!ring() && !!ring().hitBoxes.find((h) => h.id === 'ring:confirm')
+    note('panel still open on the same option, with a confirm: ' + stillOpen)
+
+    // Finally, spend it back down and check it goes dead again -- a one-way
+    // refresh would pass the test above and still be wrong.
+    g.setPeanuts(0)
+    await sleep(400)
+    const broke = ring() ? ring().affordability.filter((a) => a.affordable).length : -1
+    note('after spending back to 0, affordable count: ' + broke)
+
+    note('RESULT ' + (flipped > 0 && stillOpen && broke === 0
+      ? 'the open panel re-prices in both directions'
+      : '*** flipped=' + flipped + ' stillOpen=' + stillOpen + ' backToBroke=' + broke + ' ***'))
+    return
+  }
+
   if (scenario === 'pauseresume') {
     // THE REPORTED FAILURE, end to end and through real input: start a run,
     // start a wave, tap PAUSE, tap RESUME, and check the wave actually moves
