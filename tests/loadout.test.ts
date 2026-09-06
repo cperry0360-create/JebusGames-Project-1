@@ -436,13 +436,17 @@ test('every hero and every hero button is called one thing, everywhere', () => {
    * an older design: Cory's read "Loophole", which is a TOWER branch, and
    * Bailey's read "Fetch", which is Eli's old active. A stale name on a button
    * that does nothing yet is indistinguishable from a broken button.
+   *
+   * ELI'S TWO MOVED TOGETHER. Star Rain was his slot 2 while slot 2 was a
+   * reserved, greyed-out button; it is his slot 1 now and it replaces Quick
+   * Cut, which is gone from the game. Slot 2 is Ice Beam, which is new.
    */
   const heroes = read('heroes') as Record<string, any>
   const expected: Record<string, [string, string, string]> = {
     cory: ['Cory', 'Haymaker', 'Spike Strip'],
     courtland: ['Courtland', 'Shockwave', 'Seismic'],
     han: ['Han', 'Ember', 'Fireball'],
-    eli: ['Eli', 'Quick Cut', 'Star Rain'],
+    eli: ['Eli', 'Star Rain', 'Ice Beam'],
     bailey: ['Bailey', 'Bark', 'Zoomies'],
   }
   const ids = Object.keys(heroes).filter((k) => !k.startsWith('_'))

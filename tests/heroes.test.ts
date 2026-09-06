@@ -330,7 +330,7 @@ test('each slot 1 ability fires and respects its cooldown', () => {
   // And the five are five different things rather than five copies of the
   // punch, which is what they were before this.
   const effects = HERO_IDS.map((id) => slot1Of(id).effect)
-  assert.deepEqual(effects, ['punch', 'burst', 'burn', 'double', 'howl'])
+  assert.deepEqual(effects, ['punch', 'burst', 'burn', 'rain', 'howl'])
   assert.equal(new Set(HERO_IDS.map((id) => slot1Of(id).name)).size, 5)
   // Cory's is unchanged, which is what the rest of the game was tuned against.
   assert.equal(skillDamage(slot1Of('cory')), 130)

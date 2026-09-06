@@ -105,6 +105,10 @@ export function withinDash(p: Point, from: Point, to: Point, radius: number): bo
 /**
  * Where each of Star Rain's strikes lands.
  *
+ * TAKES THE TWO FIELDS IT READS rather than a whole power def, because Star
+ * Rain is a slot 1 SKILL now and a skill def is a different shape. The scatter
+ * is the same scatter either way.
+ *
  * Scattered inside the disc rather than on a ring or a grid: a ring reads as a
  * summoning circle and a grid reads as a bug. `sqrt` on the radius is what
  * makes the scatter EVEN across the area — without it the strikes bunch in the
@@ -114,7 +118,7 @@ export function withinDash(p: Point, from: Point, to: Point, radius: number): bo
  * known scatter and a soak run is reproducible from its seed.
  */
 export function rainPoints(
-  def: HeroPowerDef, at: Point, rng: () => number,
+  def: { hits: number; radius: number }, at: Point, rng: () => number,
 ): Point[] {
   const out: Point[] = []
   for (let i = 0; i < def.hits; i++) {

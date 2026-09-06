@@ -61,11 +61,13 @@ test('an optional key is a short deliberate list, and every one has a fallback',
   const FAMILIES: Array<{ match: RegExp; fallback: string }> = [
     { match: /^icon-/, fallback: 'the generated icon stand-in' },
     { match: /^hero-cory-(walk|attack)-\d$/, fallback: 'the static idle sprite' },
-    // The two hero slot-1 icons that were not in the art upload. Every other
-    // ability_<hero>_<slot>.png is present; these two fall back to the same
-    // generated stand-in the UI icons use, through GameScene.abilityIcon,
+    // The hero ability icons with no file behind them. Two were never in the
+    // art upload; Eli's second was deleted deliberately when his abilities
+    // changed, because the placeholder it held read STAR / LOCKED and slot 2
+    // is Ice Beam now -- see art.json's _optional. All three fall back to the
+    // same generated stand-in the UI icons use, through GameScene.abilityIcon,
     // which checks the texture rather than trusting the manifest.
-    { match: /^ability-(bailey|eli)-1$/, fallback: 'the generated icon stand-in' },
+    { match: /^ability-(bailey-1|eli-[12])$/, fallback: 'the generated icon stand-in' },
   ]
   assert.ok(FAMILIES.length <= 6,
     `${FAMILIES.length} families of optional art; this list is for art being drawn`)

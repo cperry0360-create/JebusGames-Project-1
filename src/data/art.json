@@ -1004,7 +1004,8 @@
     "hero-cory-attack-3",
     "hero-cory-attack-4",
     "ability-bailey-1",
-    "ability-eli-1"
+    "ability-eli-1",
+    "ability-eli-2"
   ],
   "hero": {
     "_note": "Frame lists for the hero animations. Anchors and displayHeight are per SET, not shared: walk is 557x704 and attack is 787x720, their feet sit at different fractions of their canvases, and their figures are 677 and 690 source px tall. One anchor for both would step the hero sideways on every swing. Frame 1 of each set is the registration reference; frames 2-4 move relative to it, which is the animation.",
@@ -1083,6 +1084,6 @@
       "unit-dummy-3"
     ]
   },
-  "_optional": "Art that may legitimately be absent. A key here is skipped by the loader with a console warning rather than a missing-texture error, and every one belongs to a family with a named fallback -- tests/boot.test.ts enforces that. ability-bailey-1 and ability-eli-1 are the two hero slot-1 icons that were not in the upload; every other ability_<hero>_<slot>.webp is present. They fall back to the generated missing-icon stand-in, and dropping the real files in later needs no code change.",
+  "_optional": "Art that may legitimately be absent. A key here is skipped by the loader with a console warning rather than a missing-texture error, and every one belongs to a family with a named fallback -- tests/boot.test.ts enforces that. ability-bailey-1 and ability-eli-1 are the two hero slot-1 icons that were not in the upload. ability-eli-2 joined them deliberately: the file WAS present, a hatched stand-in reading STAR / LOCKED, and it was deleted when Star Rain moved to slot 1 and Ice Beam took slot 2 -- a placeholder naming the wrong ability and calling it locked is worse than the neutral stand-in. Every other ability_<hero>_<slot>.webp is present. They fall back to the generated missing-icon stand-in, and dropping the real files in later needs no code change.",
   "_haymakerIcon": "abilities/ability_haymaker.webp is still in the repo and is no longer bound to anything. The ten ability_<hero>_<slot>.webp icons replaced it: every hero's two buttons now draw their own icon, Cory's included, so the whole bar is one scheme rather than one hero's real art beside four placeholders. The placeholders are marked as such and are to be replaced by files with the same names, at which point Cory's button improves with everyone else's. Re-binding the old icon is one line here plus one in heroes.json."
 }

@@ -6,8 +6,10 @@ import {
   rainPoints, tickHazard, withinCastRange, withinDash,
 } from '../src/systems/HeroPowers.ts'
 import { facesLeft, mirroredFor } from '../src/systems/Facing.ts'
+import { isAreaSkill } from '../src/systems/HeroSkills.ts'
+import { withinRadius } from '../src/systems/Targeting.ts'
 import { Cooldowns } from '../src/systems/Cooldowns.ts'
-import type { HeroPowerDef } from '../src/types.ts'
+import type { HeroPowerDef, HeroSkillDef } from '../src/types.ts'
 
 const url = (p: string) => new URL(p, import.meta.url)
 const src = (p: string) => readFileSync(url(`../src/${p}`), 'utf8')
@@ -16,6 +18,7 @@ const code = (p: string) =>
 const HEROES = JSON.parse(readFileSync(url('../src/data/heroes.json'), 'utf8'))
 const IDS = Object.keys(HEROES).filter((k) => !k.startsWith('_'))
 const power = (id: string): HeroPowerDef => HEROES[id].slot2
+const skill = (id: string): HeroSkillDef => HEROES[id].slot1
 
 /* --------------------------------------------------------------- facing */
 
@@ -185,7 +188,10 @@ test('Zoomies hurts what she runs through, not what is at the end', () => {
 })
 
 test('Star Rain scatters evenly over its area, and lands over time', () => {
-  const p = power('eli')
+  // ELI'S SLOT 1 NOW, not his slot 2 -- so the def under test is the skill.
+  // `rainPoints` takes the two fields it reads rather than a whole power def
+  // for exactly this reason: the scatter is the same scatter either way.
+  const p = skill('eli')
   // A known scatter: the rng is passed in, so the test drives it.
   let n = 0
   const seq = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
@@ -206,9 +212,145 @@ test('Star Rain scatters evenly over its area, and lands over time', () => {
 
   // Spread over time, and resolved where each one lands rather than all at once.
   const game = code('scenes/GameScene.ts')
-  const rain = game.slice(game.indexOf('private powerRain('))
+  const rain = game.slice(game.indexOf('private rainOver('))
   assert.match(rain.slice(0, rain.indexOf('\n  }')), /delayedCall\(p\.gapSeconds \* 1000 \* i/,
     'every strike lands on the same frame')
+  // And it is centred on the hero when it is cast from slot 1, which is what
+  // makes it a skill rather than a placed power.
+  assert.match(game, /case 'rain': this\.rainOver\(this\.hero\.x, this\.hero\.y, k\)/,
+    'the slot 1 rain is not dropped on the hero')
+})
+
+/* ------------------------------------------------------------ Eli's two */
+
+test('Star Rain is Eli\'s slot 1, centred on him, on a slot 1 cooldown', () => {
+  // It replaces Quick Cut, which is gone from the game entirely.
+  const k = skill('eli')
+  assert.equal(k.name, 'Star Rain')
+  assert.equal(k.effect, 'rain')
+  assert.ok(isAreaSkill(k), 'Star Rain is aimed at somebody rather than dropped around Eli')
+  assert.equal(k.range, 0, 'an area skill declares a radius, not a range')
+  assert.ok(k.radius > 0)
+  assert.ok(k.hits > 1, 'a rain of one star is a punch')
+
+  // A SLOT 1 COOLDOWN, which is what "short" means here: inside the band the
+  // other four sit in, and nowhere near a slot 2's 12.5.
+  const others = ['cory', 'courtland', 'han', 'bailey'].map((id) => skill(id).cooldown)
+  assert.ok(k.cooldown >= Math.min(...others) && k.cooldown <= Math.max(...others),
+    `Star Rain's ${k.cooldown}s is outside the ${Math.min(...others)}-${Math.max(...others)}s band the other slot 1s sit in`)
+  assert.ok(k.cooldown < power('eli').cooldown, 'the slot 1 is slower than the slot 2')
+
+  // And nothing anywhere still calls it Quick Cut.
+  for (const [id, h] of Object.entries(HEROES)) {
+    assert.notEqual(h.slot1?.name, 'Quick Cut', `${id} still carries Quick Cut`)
+    assert.notEqual(h.slot2?.name, 'Quick Cut', `${id} still carries Quick Cut`)
+  }
+  assert.equal(skill('eli').effect === 'double', false, 'the double-hit effect is still in use')
+})
+
+test('Ice Beam is powered-form only and resets with the transformation', () => {
+  const p = power('eli')
+  assert.equal(p.name, 'Ice Beam')
+  assert.equal(p.effect, 'beam')
+  assert.equal(p.targeted, true, 'Ice Beam does not ask for a point')
+  assert.equal(p.cooldown, 12.5, 'Ice Beam is not on the shared slot 2 cooldown')
+  assert.ok(p.castRadius > 0, 'Ice Beam can be dropped anywhere on the board')
+
+  assert.equal(powerRefusal(p, false, false, true), 'base-form', 'Ice Beam fires in base form')
+  assert.equal(powerRefusal(p, true, false, true), null, 'Ice Beam is refused in powered form')
+
+  // The transformation IS the recharge, the same as the other four.
+  const cd = new Cooldowns()
+  cd.register('heroSlot2', p.cooldown)
+  cd.start('heroSlot2')
+  assert.equal(powerRefusal(p, true, false, cd.ready('heroSlot2')), 'cooling')
+  cd.reset('heroSlot2')
+  assert.equal(powerRefusal(p, true, false, cd.ready('heroSlot2')), null)
+})
+
+test('Ice Beam hits the area it is aimed at, and nothing on the way there', () => {
+  // THE BEAM IS SCENERY. This is the property that separates it from Zoomies,
+  // which is the same shape on screen and a corridor underneath.
+  const p = power('eli')
+  const hero = { x: 100, y: 300 }
+  const at = { x: 100 + p.castRadius, y: 300 }
+  const mob = (x: number, y: number, name: string) =>
+    ({ x, y, distance: 0, alive: true, name })
+
+  const inArea = mob(at.x + p.radius - 4, at.y, 'in the area')
+  const onEdge = mob(at.x, at.y + p.radius + 6, 'just outside the area')
+  const between = mob((hero.x + at.x) / 2, hero.y, 'standing in the beam')
+  const behindHero = mob(hero.x - 40, hero.y, 'behind Eli')
+
+  const caught = withinRadius([inArea, onEdge, between, behindHero], at.x, at.y, p.radius)
+  assert.deepEqual(caught.map((c) => c.name), ['in the area'],
+    'Ice Beam caught something outside the area at the point it was aimed at')
+
+  // And the scene resolves it that way: an area at the target, never a
+  // corridor from the hero.
+  const game = code('scenes/GameScene.ts')
+  const beam = game.slice(game.indexOf('private powerBeam('))
+  const body = beam.slice(0, beam.indexOf('\n  }'))
+  assert.match(body, /this\.enemiesNear\(x, y, p\.radius\)/,
+    'Ice Beam does not resolve on an area at the point tapped')
+  assert.doesNotMatch(body, /withinDash|distanceToSegment/,
+    'Ice Beam damages the line it is drawn along, which makes it a dash')
+  assert.match(body, /lineSweep\(this, \{ x: this\.hero\.x/,
+    'nothing is drawn from Eli to the point, so it is not a beam at all')
+  assert.match(body, /applySlow\(p\.slowFactor, p\.slowSeconds/, 'Ice Beam does not slow')
+})
+
+test('Ice Beam\'s slow is an ultimate, and a boss that resists it still takes the hit', () => {
+  const p = power('eli')
+  const bramble = (JSON.parse(src('data/towers.json')) as Record<string, any>).extension
+  assert.ok(bramble.slowFactor > 0, 'this test needs Bramble to be the tower that slows')
+
+  // CONSIDERABLY STRONGER AND BRIEFER, both measured against the tower slow
+  // the player already knows. Stronger: a smaller factor is a bigger slow.
+  assert.ok(p.slowFactor < bramble.slowFactor * 0.6,
+    `Ice Beam slows to ${p.slowFactor} against Bramble's ${bramble.slowFactor}, which is not considerably stronger`)
+  // Briefer, in the way that matters: Bramble re-applies every shot for as
+  // long as the enemy is in range, so its 1.6s is a condition rather than a
+  // window. Ice Beam is one application and then it is over.
+  assert.ok(p.slowSeconds > 0 && p.slowSeconds <= 4,
+    `${p.slowSeconds}s is a state, not a window`)
+  assert.ok(p.damage > 0, 'Ice Beam only slows, so it is a tower effect with a cutscene')
+
+  // A boss that resists crowd control takes the damage and keeps walking. The
+  // rule is Enemy.applySlow's and the scene does not know about it, which is
+  // exactly why it cannot drift from the towers' version of the same rule.
+  const enemies = JSON.parse(src('data/enemies.json')) as Record<string, any>
+  const immune = Object.entries(enemies).filter(([, e]) => e.slowable === false).map(([id]) => id)
+  assert.ok(immune.length > 0, 'nothing in the game resists crowd control any more')
+  const enemyTs = code('entities/Enemy.ts')
+  const applySlow = enemyTs.slice(enemyTs.indexOf('applySlow(factor: number'))
+  assert.match(applySlow.slice(0, applySlow.indexOf('\n  }')), /if \(!this\.def\.slowable\) return/,
+    'applySlow no longer refuses on the flag, so Ice Beam would freeze a boss')
+  const game = code('scenes/GameScene.ts')
+  const beam = game.slice(game.indexOf('private powerBeam('))
+  const body = beam.slice(0, beam.indexOf('\n  }'))
+  assert.doesNotMatch(body, /slowable/,
+    'powerBeam checks the flag itself, which is a second copy of the rule')
+  assert.match(body, /this\.damageEnemy\(e, p\.damage/,
+    'the damage is conditional on something; a resisting boss must still take it')
+})
+
+test('Ice Beam can be backed out of without being spent', () => {
+  // The cooldown starts in firePower and nowhere else, so every way out of the
+  // targeting mode -- CANCEL, a second press, a tap outside the radius, the
+  // wave ending -- is free by construction. This is that construction, checked
+  // rather than assumed, and it is shared with the other four powers.
+  const game = code('scenes/GameScene.ts')
+  const fire = game.slice(game.indexOf('private firePower('))
+  const body = fire.slice(0, fire.indexOf('\n  }'))
+  assert.match(body, /this\.cooldowns\.start\(SLOT2\)/, 'firePower does not spend the cooldown')
+  const armed = game.slice(game.indexOf("this.targeting.arm({ kind: 'power', id: SLOT2 })") - 900,
+                           game.indexOf("this.targeting.arm({ kind: 'power', id: SLOT2 })"))
+  assert.doesNotMatch(armed, /cooldowns\.start\(SLOT2\)/,
+    'arming the targeting mode already spends the power')
+  // And Ice Beam goes through that shared path rather than a private one.
+  assert.match(game, /case 'beam': this\.powerBeam\(p, x, y\); break/,
+    'Ice Beam is not dispatched from firePower')
 })
 
 test('a Spike Strip persists, charges on a clock, and expires', () => {

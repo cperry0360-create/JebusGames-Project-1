@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { specPoints, specSummary } from '../src/systems/Upgrades.ts'
+import { isAreaSkill } from '../src/systems/HeroSkills.ts'
 
 const url = (p: string) => new URL(p, import.meta.url)
 const read = (n: string) => JSON.parse(readFileSync(url(`../src/data/${n}.json`), 'utf8'))
@@ -574,11 +575,11 @@ test('every hero declares a whole slot 1 and a whole slot 2', () => {
   const FIELDS = ['name', 'icon', 'effect', 'cooldown', 'range', 'radius', 'damage',
     'ignoresArmor', 'knockbackPixels', 'stunSeconds', 'slowFactor', 'slowSeconds',
     'burnPerSecond', 'burnSeconds', 'hits', 'gapSeconds', 'sound', 'voice']
-  const EFFECTS = ['punch', 'burst', 'burn', 'double', 'howl']
+  const EFFECTS = ['punch', 'burst', 'burn', 'double', 'howl', 'rain']
   const POWER_FIELDS = ['name', 'icon', 'effect', 'cooldown', 'targeted', 'castRadius',
     'radius', 'damage', 'ignoresArmor', 'hits', 'gapSeconds', 'durationSeconds',
     'tickSeconds', 'slowFactor', 'slowSeconds', 'knockbackPixels', 'stunSeconds', 'sound']
-  const POWER_EFFECTS = ['hazard', 'burst', 'bomb', 'rain', 'dash']
+  const POWER_EFFECTS = ['hazard', 'burst', 'bomb', 'rain', 'dash', 'beam']
   const cues = Object.keys(read('audio').cues)
   const names = new Set<string>()
   for (const [id, h] of heroEntries()) {
@@ -587,7 +588,16 @@ test('every hero declares a whole slot 1 and a whole slot 2', () => {
     assert.ok(h.slot1.cooldown > 0, `${id}'s slot 1 has no cooldown`)
     // Reach in ONE of the two fields, never both and never neither: an area
     // skill lands where the hero stands and a targeted one needs a target.
+    // `rain` joins the area effects: Star Rain is a volley dropped around the
+    // hero, so it declares a radius and no range, exactly as a burst does.
+    // systems/HeroSkills.ts's isAreaSkill is the one that decides at runtime;
+    // this list has to agree with it, and a third copy of the rule would be
+    // the thing to avoid rather than this second one -- so the import below
+    // checks them against each other.
     const area = h.slot1.effect === 'burst' || h.slot1.effect === 'howl'
+      || h.slot1.effect === 'rain'
+    assert.equal(area, isAreaSkill(h.slot1 as never),
+      `${id}'s slot 1: this test and isAreaSkill disagree about whether it is an area skill`)
     assert.ok(area ? h.slot1.radius > 0 && h.slot1.range === 0
                    : h.slot1.range > 0 && h.slot1.radius === 0,
       `${id}'s slot 1 declares its reach in the wrong field for a ${h.slot1.effect}`)
@@ -961,10 +971,18 @@ test('the hero abilities point at their own icons, not at borrowed ones', () => 
         `${key} is still a borrowed icon`)
     }
   }
-  // The two that are missing, named so that the day they land is a data change
-  // and nothing else. If this list is ever empty, drop them from `optional`.
+  // The three that are missing, named so that the day they land is a data
+  // change and nothing else. If this list is ever empty, drop them from
+  // `optional`.
+  //
+  // ability-eli-2 was added to it deliberately rather than by neglect. Its
+  // file existed -- a hatched stand-in reading STAR / LOCKED -- and it was
+  // drawn for Star Rain while Star Rain was Eli's locked slot 2. Star Rain is
+  // his slot 1 now and slot 2 is Ice Beam, so that placeholder named the wrong
+  // ability AND called it locked. It was deleted: the generated stand-in says
+  // nothing, which is better than a picture that says something false.
   assert.deepEqual(optional.filter((k: string) => k.startsWith('ability-')).sort(),
-    ['ability-bailey-1', 'ability-eli-1'])
+    ['ability-bailey-1', 'ability-eli-1', 'ability-eli-2'])
 })
 
 test('the hero medallions are round and the drafted plates are not', () => {

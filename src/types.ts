@@ -521,7 +521,7 @@ export interface PassiveDef {
  * would move the same decision into the type system and cost a code change
  * every time a hero is added.
  */
-export type HeroSkillEffect = 'punch' | 'burst' | 'burn' | 'double' | 'howl'
+export type HeroSkillEffect = 'punch' | 'burst' | 'burn' | 'double' | 'howl' | 'rain'
 
 export interface HeroSkillDef {
   name: string
@@ -541,7 +541,8 @@ export interface HeroSkillDef {
   slowSeconds: number
   burnPerSecond: number
   burnSeconds: number
-  /** How many times it lands. 1 for everything but Quick Cut. */
+  /** How many times it lands. 1 for a single blow; 12 for Star Rain, which
+   *  is that many separate small strikes scattered over its radius. */
   hits: number
   /** Seconds between those hits. */
   gapSeconds: number
@@ -559,7 +560,7 @@ export interface HeroSkillDef {
  * What a hero power does. All five are placed by tapping the button and then
  * tapping the map; only `hazard` leaves anything behind.
  */
-export type HeroPowerEffect = 'hazard' | 'burst' | 'bomb' | 'rain' | 'dash'
+export type HeroPowerEffect = 'hazard' | 'burst' | 'bomb' | 'rain' | 'dash' | 'beam'
 
 /**
  * SLOT 2: the hero power, one per hero, usable only in the powered form.

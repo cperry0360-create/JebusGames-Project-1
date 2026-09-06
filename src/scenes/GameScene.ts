@@ -3051,6 +3051,7 @@ export class GameScene extends Phaser.Scene {
       case 'burn': this.skillBurn(k, target!); break
       case 'burst': this.skillBurst(k); break
       case 'howl': this.skillHowl(k); break
+      case 'rain': this.rainOver(this.hero.x, this.hero.y, k); break
     }
     logEvent('hero-skill', `${k.effect} ${k.name}`)
     this.status.alert = `${k.name}!`
@@ -3137,6 +3138,7 @@ export class GameScene extends Phaser.Scene {
       case 'bomb': this.powerBurst(p, x, y); break
       case 'rain': this.powerRain(p, x, y); break
       case 'dash': this.powerDash(p, x, y); break
+      case 'beam': this.powerBeam(p, x, y); break
     }
     this.status.alert = `${p.name}!`
   }
@@ -3171,6 +3173,22 @@ export class GameScene extends Phaser.Scene {
    * it. Resolving them up front would make the spread cosmetic.
    */
   private powerRain(p: HeroPowerDef, x: number, y: number): void {
+    this.rainOver(x, y, p)
+  }
+
+  /**
+   * A scatter of small strikes over a disc, wherever the disc is.
+   *
+   * ONE METHOD, TWO CALLERS, because Star Rain is the same volley whether it
+   * is thrown at a point or dropped around the hero -- it is Eli's slot 1 now
+   * and it was somebody's slot 2 shape before that. Only `hits`, `radius`,
+   * `damage`, `gapSeconds` and `ignoresArmor` are read, which both def shapes
+   * carry.
+   */
+  private rainOver(
+    x: number, y: number,
+    p: { hits: number; radius: number; damage: number; gapSeconds: number; ignoresArmor: boolean },
+  ): void {
     const points = rainPoints(p, { x, y }, () => Math.random())
     expandingRing(this, x, y, p.radius, this.hero.def.colour, OVERLAY_DEPTH,
       PRESENTATION.heroFx.rainRingMs)
@@ -3187,6 +3205,37 @@ export class GameScene extends Phaser.Scene {
       if (i === 0) land()
       else this.time.delayedCall(p.gapSeconds * 1000 * i, land)
     })
+  }
+
+  /**
+   * Ice Beam: a line drawn from Eli, and an area that freezes at the far end.
+   *
+   * THE BEAM IS SCENERY AND THE AREA IS THE POWER. What the player sees is a
+   * beam, so one is drawn -- but nothing standing between Eli and the point is
+   * touched by it, and a test says so. A beam that hurt what it crossed would
+   * be Zoomies in a different colour, and it would make where the hero stands
+   * decide who gets hit, which is not the decision this power is asking for.
+   *
+   * The slow is applied through `Enemy.applySlow`, which refuses on `slowable`
+   * -- so a boss that resists crowd control takes the damage and keeps walking
+   * without this method knowing anything about bosses.
+   */
+  private powerBeam(p: HeroPowerDef, x: number, y: number): void {
+    const colour = this.hero.def.colour
+    // Narrow, because it is a beam rather than a corridor: the width says "a
+    // line was drawn here", not "this much of the board was caught".
+    // From his feet rather than from his chest: Hero has no mid-body accessor,
+    // and everything else on this board -- the cast circle, the rally line,
+    // the targeting overlay -- is measured at ground level too.
+    lineSweep(this, { x: this.hero.x, y: this.hero.y }, { x, y }, 5, colour, OVERLAY_DEPTH)
+    expandingRing(this, x, y, p.radius, colour, OVERLAY_DEPTH + 1)
+    for (const e of this.enemiesNear(x, y, p.radius)) {
+      this.damageEnemy(e, p.damage, p.ignoresArmor, 0, false)
+      floatingDamage(this, e.x, e.centreY, p.damage, true)
+      if (p.slowSeconds > 0) {
+        e.applySlow(p.slowFactor, p.slowSeconds, RULES.combat.slowDiminish)
+      }
+    }
   }
 
   /**

@@ -48,6 +48,7 @@ import enemiesData from '../../src/data/enemies.json' with { type: 'json' }
 import abilitiesData from '../../src/data/abilities.json' with { type: 'json' }
 import heroesData from '../../src/data/heroes.json' with { type: 'json' }
 import rulesData from '../../src/data/rules.json' with { type: 'json' }
+import presentationData from '../../src/data/presentation.json' with { type: 'json' }
 import draftData from '../../src/data/draft.json' with { type: 'json' }
 
 import { DEFAULT_LEVEL_ID, loadLevel, towerWeightsFor } from '../../src/systems/Levels.ts'
@@ -61,6 +62,7 @@ import { LaneNetwork, MAIN_LANE, advance, type Walker } from '../../src/systems/
 import { defaultRally, soldierStations } from '../../src/systems/Rally.ts'
 import { Disabler } from '../../src/systems/TowerDisable.ts'
 import { BuildSystem } from '../../src/systems/BuildSystem.ts'
+import { rainPoints } from '../../src/systems/HeroPowers.ts'
 import { WaveSpawner } from '../../src/systems/WaveSpawner.ts'
 import { Cooldowns } from '../../src/systems/Cooldowns.ts'
 import { waveOutcome } from '../../src/systems/Wave.ts'
@@ -708,8 +710,27 @@ export function simulate(
             target.laneDistance -= back
           }
         }
+        if (k.effect === 'rain') {
+          // A SCATTER, MODELLED AS A SCATTER. Star Rain drops `hits` separate
+          // small strikes over its disc and each one only hurts what is within
+          // strikeLength of where it lands, so a lone enemy in the disc takes
+          // two or three of fourteen rather than all fourteen. Applying
+          // `k.damage` once to everything caught -- which is what the shared
+          // branch below does, and what it did while this was a burst -- would
+          // report a skill a fifth of its real strength on a crowd and five
+          // times it on one target. The same rainPoints the scene calls, off
+          // the run's own rng so a seed still reproduces.
+          const strike = (presentationData as { heroFx: { strikeLength: number } }).heroFx.strikeLength
+          for (const pt of rainPoints(k, { x: heroState.x, y: heroState.y }, rng)) {
+            for (const e of caught) {
+              if (!e.alive) continue
+              if (Math.hypot(e.x - pt.x, e.y - pt.y) > strike) continue
+              hurtEnemy(e, k.damage, k.ignoresArmor)
+            }
+          }
+        }
         for (const e of caught) {
-          if (k.damage > 0) hurtEnemy(e, k.damage, k.ignoresArmor)
+          if (k.damage > 0 && k.effect !== 'rain') hurtEnemy(e, k.damage, k.ignoresArmor)
           if (k.stunSeconds > 0) applyStun(e, k.stunSeconds)
           if (k.slowSeconds > 0) applySlow(e, k.slowFactor, k.slowSeconds)
         }

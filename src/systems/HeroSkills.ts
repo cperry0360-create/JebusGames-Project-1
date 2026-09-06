@@ -61,8 +61,13 @@ export function slot1Usable(heroDown: boolean): boolean {
  * Total damage a skill deals to a single target it hits, over its whole life.
  *
  * The soak needs this and so does any comparison between heroes: Ember's 22 is
- * not comparable with Quick Cut's 38 until the burn and the second hit are in
- * the same number.
+ * not comparable with Star Rain's 15 until the burn and the twelve strikes are
+ * in the same number.
+ *
+ * IT IS A CEILING FOR A SCATTER. Star Rain's twelve strikes land over an area
+ * and one enemy standing in it takes only the ones that land near it, so this
+ * number is what the whole volley is worth rather than what any one enemy
+ * takes -- which is the honest way to compare it against a single blow.
  */
 export function skillDamage(s: HeroSkillDef): number {
   return s.damage * s.hits + s.burnPerSecond * s.burnSeconds
@@ -70,7 +75,7 @@ export function skillDamage(s: HeroSkillDef): number {
 
 /** True when the skill is centred on the hero rather than aimed at somebody. */
 export function isAreaSkill(s: HeroSkillDef): boolean {
-  return s.effect === 'burst' || s.effect === 'howl'
+  return s.effect === 'burst' || s.effect === 'howl' || s.effect === 'rain'
 }
 
 /** The reach that matters for this skill, whichever field carries it. */
