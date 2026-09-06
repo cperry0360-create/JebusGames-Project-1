@@ -93,6 +93,13 @@ const { applyResolution } = await import('./js/systems/Resolution.js')
 applyResolution(game)
 const { installLifecycle } = await import('./js/systems/Lifecycle.js')
 window.lifecycle = installLifecycle(game)
+// THE GAME IS LANDSCAPE-ONLY and main.ts installs a gate that covers a
+// portrait viewport with a rotate prompt and pauses behind it. Without this
+// the harness audits screens at 375x667 that a player never sees, and reports
+// the letterboxed 30%-scale menus behind the overlay as faults.
+const { installOrientationGate, isPortrait } = await import('./js/systems/Orientation.js')
+installOrientationGate(game)
+window.isPortrait = isPortrait
 note('visibilityState at boot: ' + document.visibilityState)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const scene = (k) => game.scene.getScene(k)
@@ -427,6 +434,262 @@ async function run() {
     return
   }
 
+
+  // EVERY SCREEN, MEASURED AND PHOTOGRAPHED, at whatever ?vp= says.
+  //
+  // This is the scenario the VERIFY rule in CLAUDE.md is written against.
+  // It walks Title -> WorldMap -> Loadout -> Cutscene -> Game, shoots each
+  // one, and reports the geometry of what is on it -- because a screenshot
+  // shows a collision and a number says which two things collided.
+  //
+  // Four faults, all of which have shipped at least once:
+  //   OFF    something extends past the edge of the viewport
+  //   NOTCH  a control sits inside a safe-area inset
+  //   SMALL  a control is under 44x44, the minimum tap target
+  //   OVER   two texts, or two controls, overlap each other
+  if (scenario === 'screens') {
+    const RESM = await import('./js/systems/Resolution.js')
+    const SA = await import('./js/systems/SafeArea.js')
+    const DUMP = {}
+    window.__screensDump = DUMP
+    const insets = SA.safeAreaInsets()
+    const raw = SA.rawSafeAreaInsets()
+    note('viewport ' + VP.w + 'x' + VP.h + '  dpr=' + RESM.deviceScale())
+    note('insets raw ' + JSON.stringify(raw) + ' resolved ' + JSON.stringify(insets))
+
+    // PORTRAIT IS NOT A SCREEN. The game is landscape-only and the gate covers
+    // the viewport with a rotate prompt, so auditing the letterboxed menus
+    // behind it would be measuring something no player can touch. The gate
+    // itself is checked instead -- that it is there, that it covers, and that
+    // the game is paused behind it.
+    const gate = document.getElementById('rotate-gate')
+    const gateUp = !!gate && getComputedStyle(gate).display !== 'none'
+    note('portrait=' + (VP.h > VP.w) + '  rotate gate showing=' + gateUp
+      + '  window=' + window.innerWidth + 'x' + window.innerHeight
+      + '  media(portrait)=' + window.matchMedia('(orientation: portrait)').matches)
+    if (VP.h > VP.w) {
+      // Measured against the WINDOW, which is what the overlay is fixed to and
+      // what the media query reads -- not against the #game element, which is
+      // sized to the viewport under test and can be smaller than the window
+      // Chromium was willing to open.
+      const r = gate ? gate.getBoundingClientRect() : null
+      const W = window.innerWidth, H = window.innerHeight
+      note('  gate covers ' + (r ? Math.round(r.width) + 'x' + Math.round(r.height) : 'nothing')
+        + ' of a ' + W + 'x' + H + ' window')
+      await shot('screens-0-portrait-gate-' + VP.w + 'x' + VP.h)
+      note('RESULT ' + (gateUp && r && r.width >= W - 1 && r.height >= H - 1
+        ? 'portrait is gated; the screens behind it are not a player-facing layout'
+        : '*** PORTRAIT IS NOT GATED -- the letterboxed menus are reachable ***'))
+      return
+    }
+
+    // The camera a given object is actually drawn by. Phaser masks a camera
+    // out with `cameraFilter`, so this is the engine's own answer rather than
+    // a guess -- which matters in GameScene, where the map is on one camera
+    // and the chrome is on another and the two have different zooms.
+    const dprNow = RESM.deviceScale()
+    const camFor = (sc, o) => {
+      for (const c of sc.cameras.cameras) if (((o.cameraFilter || 0) & c.id) === 0) return c
+      return sc.cameras.main
+    }
+    // A screen rectangle in CSS pixels, which is the space every layout in the
+    // game is written in and the space the insets are reported in.
+    const rectOf = (sc, o) => {
+      let b
+      try { b = o.getBounds ? o.getBounds() : null } catch { b = null }
+      if (!b || !(b.width > 0) || !(b.height > 0)) return null
+      const c = camFor(sc, o)
+      const a = RESM.worldToScreen(sc, b.x, b.y, c)
+      const z = RESM.worldToScreen(sc, b.right, b.bottom, c)
+      return { x: a.x, y: a.y, w: z.x - a.x, h: z.y - a.y }
+    }
+    const label = (o) => (o.name ? '[' + o.name + '] ' : '') + (o.text !== undefined
+      ? 'TEXT ' + JSON.stringify(String(o.text).replace(/\n/g, ' ').slice(0, 34))
+      : (o.texture && o.texture.key ? 'IMG ' + o.texture.key : o.type))
+
+    // Screen space or world space. A map plate is SUPPOSED to run off the
+    // edges -- that is what panning is -- so only chrome is held to the
+    // viewport. GameScene's uiCam is the screen-space camera; every other
+    // scene draws its chrome on the main one.
+    const screenSpace = (sc, o) => {
+      if (sc.scene.key !== 'Game') return true
+      const c = camFor(sc, o)
+      return !!(sc.uiCam && c === sc.uiCam)
+    }
+    const collect = (sc) => {
+      const items = []
+      const visit = (o) => {
+        if (o.visible === false || (o.alpha ?? 1) <= 0.02) return
+        // An empty Text still reports bounds and draws no ink. Measuring one
+        // is measuring a placeholder -- the boss name's label sits at 0,0 with
+        // an empty string for twelve waves out of thirteen.
+        if (o.text !== undefined && String(o.text).trim() === '') return
+        const r = rectOf(sc, o)
+        const live = !!(o.input && o.input.enabled)
+        // A container's own bounds are the union of its children, which would
+        // collide with everything inside it; only leaves and live controls are
+        // measured.
+        if (r && (live || !o.list || o.list.length === 0)) {
+          // The camera's own viewport in CSS pixels. A backdrop covers the
+          // area ITS CAMERA can see, which since the menus were fitted into
+          // the safe area is not the whole screen: the inset strip is the
+          // home indicator's, and nothing is supposed to be painted into it.
+          const c = camFor(sc, o)
+          items.push({
+            r, live, txt: o.text !== undefined, name: label(o),
+            scene: sc.scene.key, chrome: screenSpace(sc, o),
+            vp: { x: c.x / dprNow, y: c.y / dprNow,
+                  w: c.width / dprNow, h: c.height / dprNow },
+          })
+        }
+        if (o.list) for (const c of o.list) visit(c)
+      }
+      for (const o of sc.children.list) visit(o)
+      return items
+    }
+
+    // SLACK, and it is different for the two groups. Phaser's text bounds
+    // carry the face's full ascent and descent, so the display face reports
+    // four pixels of contact between COURJAHAN and DEFENSE with a clear band
+    // of background visible between them -- verified on the frame. Six clears
+    // that. Real text collisions on this game's screens have been 7px (a cost
+    // badge on a heading) and 65px (five hero cards on a title), so nothing
+    // that matters hides under it. Controls are rectangles rather than glyphs
+    // and get the tighter 3.
+    const hit = (a, b, slack) => a.x < b.x + b.w - slack && b.x < a.x + a.w - slack
+                              && a.y < b.y + b.h - slack && b.y < a.y + a.h - slack
+    const fmt = (r) => Math.round(r.x) + ',' + Math.round(r.y) + ' '
+                     + Math.round(r.w) + 'x' + Math.round(r.h)
+
+    const audit = async (name) => {
+      await sleep(750)
+      await shot('screens-' + name + '-' + VP.w + 'x' + VP.h)
+      const items = []
+      for (const sc of game.scene.scenes) {
+        if (!game.scene.isActive(sc.scene.key)) continue
+        for (const it of collect(sc)) items.push(it)
+      }
+      const vw = VP.w, vh = VP.h
+      // A thing that CONTAINS the whole viewport is a backdrop, a scrim or a
+      // full-screen tap zone, and running past the edges is its job. Only
+      // something partly outside is content the player cannot see.
+      const covers = (it) => {
+        const v = it.vp ?? { x: 0, y: 0, w: vw, h: vh }
+        const r = it.r ?? it
+        return r.x <= v.x + 1 && r.y <= v.y + 1
+          && r.x + r.w >= v.x + v.w - 1 && r.y + r.h >= v.y + v.h - 1
+      }
+      const faults = []
+      for (const it of items) {
+        const r = it.r
+        const outside = r.x < -1 || r.y < -1 || r.x + r.w > vw + 1 || r.y + r.h > vh + 1
+        if (it.chrome && outside && !covers(it)) {
+          faults.push('OFF   ' + it.scene + ' ' + it.name + ' @ ' + fmt(r))
+        }
+        // SMALL IS A CHROME RULE. A build pad's hit area is in world space and
+        // the player can zoom the world; a HUD button is 1:1 and they cannot.
+        // Holding a pad to 44 CSS pixels at whatever zoom the run opens at
+        // would be measuring the camera, not the control.
+        if (it.live && it.chrome) {
+          // 43.5 rather than 44: these are floats off a camera transform and a
+          // control that lands on 43.98 is a rounding artifact, not a fault.
+          if (r.w < 43.5 || r.h < 43.5) faults.push('SMALL ' + it.scene + ' ' + it.name + ' @ ' + fmt(r))
+          // A full-viewport surface is exempt for the same reason it is exempt
+          // from OFF and OVER: the cutscene's tap-to-advance zone IS the
+          // screen, and "part of it is behind the notch" is not a fault -- you
+          // cannot miss it.
+          const band = r.x < insets.left || r.y < insets.top
+            || r.x + r.w > vw - insets.right || r.y + r.h > vh - insets.bottom
+          if (band && !covers(it) && (insets.left || insets.right || insets.top || insets.bottom)) {
+            faults.push('NOTCH ' + it.scene + ' ' + it.name + ' @ ' + fmt(r))
+          }
+        }
+      }
+      // Overlap, among peers only: text against text, control against control.
+      // A label sitting on the button it names is the intended case and is not
+      // a fault, which is why the two groups are compared separately.
+      // A full-viewport zone overlaps everything by design -- the cutscene's
+      // tap-to-advance surface is the whole screen, and Skip sits on it.
+      // Text slack is PROPORTIONAL, because the bounds padding is: it is the
+      // face's ascent and descent, so it scales with the type. A fixed 6 that
+      // cleared COURJAHAN/DEFENSE at 844x390 flagged the same pair at 1400x820
+      // where the same gap is 7 pixels. 14% of the shorter box clears the
+      // padding at every size and still catches the two real collisions this
+      // game has had -- a badge 50% into a heading, and five cards 120% into a
+      // title.
+      for (const [group, slack] of [[items.filter((i) => i.txt && !covers(i)), 'text'],
+                                    [items.filter((i) => i.live && !covers(i)), 3]]) {
+        for (let i = 0; i < group.length; i++) {
+          for (let j = i + 1; j < group.length; j++) {
+            if (group[i].scene !== group[j].scene) continue
+            const s2 = slack === 'text'
+              ? Math.max(3, Math.max(group[i].r.h, group[j].r.h) * 0.14)
+              : slack
+            if (!hit(group[i].r, group[j].r, s2)) continue
+            faults.push('OVER  ' + group[i].scene + ' ' + group[i].name + ' @ ' + fmt(group[i].r)
+              + '  <>  ' + group[j].name + ' @ ' + fmt(group[j].r))
+          }
+        }
+      }
+      const uniq = [...new Set(faults)]
+      // The whole measured layout, not only the faults, kept in the report so
+      // a screen can be read after the fact without a second run. `dump` in
+      // report.json is keyed by the same name the screenshot carries.
+      DUMP[name] = items.map((i) => ({
+        scene: i.scene, name: i.name, live: i.live, chrome: i.chrome,
+        x: +i.r.x.toFixed(1), y: +i.r.y.toFixed(1),
+        w: +i.r.w.toFixed(1), h: +i.r.h.toFixed(1),
+      }))
+      // One number that explains a whole screen at once: a fitted menu at 0.30
+      // makes every 54px button 16px, and that is a design-box problem rather
+      // than twenty separate control problems.
+      const live = game.scene.scenes.filter((sc) => game.scene.isActive(sc.scene.key))
+      const fits = live.map((sc) => sc.scene.key + '=' + sc.cameras.main.zoom.toFixed(2)).join(' ')
+      note('  camera zooms: ' + fits + '  (dpr ' + RESM.deviceScale() + ')')
+      note(name.toUpperCase() + ': ' + items.length + ' drawn, '
+        + items.filter((i) => i.live).length + ' live, ' + uniq.length + ' fault(s)')
+      for (const f of uniq.slice(0, 24)) note('  ' + f)
+      if (uniq.length > 24) note('  ... and ' + (uniq.length - 24) + ' more')
+      return uniq.length
+    }
+
+    let total = 0
+    total += await audit('1-title')
+
+    scene('Title').scene.start('WorldMap')
+    if (await until(() => running('WorldMap'), 8000)) total += await audit('2-worldmap')
+    else note('WORLDMAP: *** did not build ***')
+
+    scene('WorldMap').scene.start('Loadout')
+    if (await until(() => running('Loadout'), 8000)) total += await audit('3-loadout')
+    else note('LOADOUT: *** did not build ***')
+
+    // Straight into the comic, the way BEGIN does it, so this is the real
+    // path and not a scene started by hand with different arguments.
+    scene('Loadout').scene.start('Cutscene', { levelId: 'level1', then: 'Game' })
+    if (await until(() => running('Cutscene'), 8000)) {
+      await sleep(900)
+      total += await audit('4-cutscene')
+      const cs = scene('Cutscene')
+      note('CUTSCENE: ' + (cs.panels ? cs.panels.length : 0) + ' panel(s), '
+        + 'textures loaded: ' + (cs.panels || []).filter(
+          (p) => game.textures.exists('cutscene:' + p)).length)
+    } else note('CUTSCENE: *** did not build ***')
+
+    // And out of it the way Skip does, which also proves Skip still lands in
+    // the level rather than nowhere.
+    const cs = scene('Cutscene')
+    if (cs) cs.skip ? cs.skip() : cs.scene.start('Game')
+    if (await until(() => running('Game'), 10000)) {
+      await until(() => running('Hud'), 8000)
+      await sleep(900)
+      total += await audit('5-game')
+    } else note('GAME: *** did not build after Skip ***')
+
+    note('RESULT ' + (total === 0 ? 'no layout faults at ' + VP.w + 'x' + VP.h
+      : '*** ' + total + ' layout fault(s) at ' + VP.w + 'x' + VP.h + ' ***'))
+    return
+  }
 
   if (scenario === 'diag') {
     // The diagnostics, which only matter if they work when everything else
@@ -4063,6 +4326,493 @@ async function run() {
     const L = hud.layout
     note('heroRow ' + JSON.stringify(L.heroRow) + '  messageRow ' + JSON.stringify(L.messageRow))
     await shot('moes-hud-' + VP.w + 'x' + VP.h)
+    return
+  }
+
+  // WHICH WAY EVERY ENEMY IS ACTUALLY DRAWN ON THE BOARD.
+  //
+  // `enemyfacing` with arg `level3` (the default) or `level1` -- `facing` was
+  // taken, by the scenario that checks the HERO's. Spawns one of every
+  // enemy the level uses, walks them, and reports the heading and the flip
+  // together -- plus a screenshot, because "flipX is false" and "he is facing
+  // the way he is walking" are not the same claim and only the picture settles
+  // the second one.
+  if (scenario === 'enemyfacing') {
+    for (const k of ['Title', 'Splash', 'Credits', 'Boot', 'Loadout']) game.scene.stop(k)
+    const RS = await import('./js/systems/RunState.js')
+    const lvl = arg || 'level3'
+    RS.setRunState({ heroId: 'cory', openingTowers: ['withholding', 'rounding'],
+      abilities: ['molotov', 'glacier'], reserveTowers: [], levelId: lvl })
+    game.scene.start('Game')
+    await until(() => running('Game'), 12000)
+    await until(() => running('Hud'), 12000)
+    await sleep(800)
+    const g = scene('Game')
+    note('level ' + lvl + ' at ' + VP.w + 'x' + VP.h)
+
+    // One wave after another until every type this level uses has been seen.
+    const seen = new Map()
+    for (let w = 0; w < 14 && seen.size < 5; w++) {
+      g.status.wave = w
+      g.startWave()
+      const t0 = Date.now()
+      while (Date.now() - t0 < 9000) {
+        for (const e of g.enemies) {
+          if (seen.has(e.def.name)) continue
+          // Heading from the art's own flip and the walk direction, so this is
+          // what the player sees rather than what the data says.
+          seen.set(e.def.name, {
+            drawn: e.def.artFacing,
+            flipped: !!e.art.flipX,
+            // Where the art's nose points, after the flip.
+            shows: (e.def.artFacing === 'left') !== !!e.art.flipX ? 'left' : 'right',
+          })
+        }
+        if (seen.size >= 5) break
+        await sleep(200)
+      }
+      if (seen.size >= 5) break
+    }
+    await sleep(400)
+    await shot('facing-' + lvl + '-' + VP.w + 'x' + VP.h)
+    let wrong = 0
+    for (const [name, v] of seen) {
+      // Every enemy on every level walks from the arch towards the cabinet, so
+      // it should be showing the side it is travelling towards.
+      note('  ' + name.padEnd(18) + ' drawn=' + v.drawn.padEnd(5)
+        + ' flipped=' + String(v.flipped).padEnd(5) + ' shows=' + v.shows)
+    }
+    note('RESULT ' + seen.size + ' enemy type(s) seen on ' + lvl
+      + (wrong ? '  *** ' + wrong + ' backwards ***' : ''))
+    return
+  }
+
+  // THE STALE PANEL, END TO END.
+  //
+  // Open a build ring one peanut short, earn some WITHOUT touching the panel,
+  // and see whether the control comes alive. This is the whole of step 7 and
+  // it is measured off the ring's own state and its confirm button, not off
+  // the balance.
+  if (scenario === 'afford') {
+    for (const k of ['Title', 'Splash', 'Credits', 'Boot', 'Loadout']) game.scene.stop(k)
+    const RS = await import('./js/systems/RunState.js')
+    RS.setRunState({ heroId: 'cory', openingTowers: ['withholding', 'rounding'],
+      abilities: ['molotov', 'glacier'], reserveTowers: [] })
+    game.scene.start('Game')
+    await until(() => running('Game'), 12000)
+    await until(() => running('Hud'), 12000)
+    await sleep(700)
+    const g = scene('Game')
+
+    // Broke, deliberately. Straight onto the field rather than through
+    // `setPeanuts`, because there is no panel open yet to re-price.
+    g.status.peanuts = 0
+    const spot = g.build.freeSpots()[0]
+    g.openPadRing(spot)
+    await sleep(500)
+    const ring = () => g.ring
+    if (!ring()) { note('RESULT *** the ring did not open ***'); return }
+    const before = ring().affordability
+    note('peanuts=' + g.status.peanuts + '  affordable: '
+      + JSON.stringify(before.map((a) => a.id + '=' + a.affordable)))
+    if (before.some((a) => a.affordable)) {
+      note('RESULT *** setup failed: something was affordable at 0 peanuts ***'); return
+    }
+
+    // Open the panel for the first option, so the CONFIRM button exists and
+    // its enabled state is what the player would actually press.
+    const first = ring().hitBoxes.find((h) => !h.id.startsWith('ring:'))
+    await click(first.rect.x + first.rect.width / 2, first.rect.y + first.rect.height / 2)
+    await sleep(350)
+    const confirmBefore = ring().hitBoxes.find((h) => h.id === 'ring:confirm')
+    note('confirm present while broke: ' + !!confirmBefore)
+    await shot('afford-1-broke-' + VP.w + 'x' + VP.h)
+
+    // NOW EARN, WITHOUT TOUCHING THE PANEL. This is the exact thing the player
+    // does: they leave the panel open and a wave pays out.
+    g.earn(500)
+    await sleep(450)
+    const after = ring() ? ring().affordability : []
+    note('peanuts=' + g.status.peanuts + '  affordable: '
+      + JSON.stringify(after.map((a) => a.id + '=' + a.affordable)))
+    await shot('afford-2-rich-' + VP.w + 'x' + VP.h)
+
+    const flipped = after.filter((a) => a.affordable).length
+    // And the panel is still open, on the same option, with a live confirm.
+    const stillOpen = !!ring() && !!ring().hitBoxes.find((h) => h.id === 'ring:confirm')
+    note('panel still open on the same option, with a confirm: ' + stillOpen)
+
+    // Finally, spend it back down and check it goes dead again -- a one-way
+    // refresh would pass the test above and still be wrong.
+    g.setPeanuts(0)
+    await sleep(400)
+    const broke = ring() ? ring().affordability.filter((a) => a.affordable).length : -1
+    note('after spending back to 0, affordable count: ' + broke)
+
+    note('RESULT ' + (flipped > 0 && stillOpen && broke === 0
+      ? 'the open panel re-prices in both directions'
+      : '*** flipped=' + flipped + ' stillOpen=' + stillOpen + ' backToBroke=' + broke + ' ***'))
+    return
+  }
+
+  // DOES CHROME STILL PAN THE MAP?
+  //
+  // Reported fixed twice and regressed twice, so this measures rather than
+  // reads: every surface the brief names -- the drawer, the counters, the
+  // start button, the settings gear, the ability bar, the wave banner, CANCEL
+  // and a modal -- gets a tap, a drag and a pinch, and the camera is read
+  // before and after each one.
+  //
+  // The last case is the control: a drag on the BOARD must still pan. A gate
+  // that stops everything would pass every check above and break the game.
+  if (scenario === 'chromepan') {
+    for (const k of ['Title', 'Splash', 'Credits', 'Boot', 'Loadout']) game.scene.stop(k)
+    const RS = await import('./js/systems/RunState.js')
+    const SAVE = await import('./js/systems/Save.js')
+    RS.setRunState({ heroId: 'cory', openingTowers: ['withholding', 'rounding'],
+      abilities: ['molotov', 'glacier'], reserveTowers: [] })
+    game.scene.start('Game')
+    await until(() => running('Game'), 12000)
+    await until(() => running('Hud'), 12000)
+    await sleep(800)
+    const g = scene('Game'), hud = scene('Hud')
+    g.status.peanuts = 99999
+    await sleep(400)
+    note('viewport ' + VP.w + 'x' + VP.h)
+
+    const cam = () => {
+      const c = g.cameras.main
+      return { x: +c.scrollX.toFixed(2), y: +c.scrollY.toFixed(2), z: +c.zoom.toFixed(4) }
+    }
+    const same = (a, b) => a.x === b.x && a.y === b.y && a.z === b.z
+    const moved = (a, b) =>
+      'dx=' + (b.x - a.x).toFixed(1) + ' dy=' + (b.y - a.y).toFixed(1)
+      + ' dz=' + (b.z - a.z).toFixed(3)
+
+    let bad = 0
+
+    // A drag: press, eight moves, release. Long enough to beat the tap slop.
+    const drag = async (x, y, dx, dy) => {
+      mouse('mousemove', x, y); await sleep(40)
+      mouse('mousedown', x, y); await sleep(60)
+      for (let i = 1; i <= 8; i++) {
+        mouse('mousemove', x + (dx * i) / 8, y + (dy * i) / 8); await sleep(28)
+      }
+      mouse('mouseup', x + dx, y + dy); await sleep(140)
+    }
+
+    // A two-finger pinch, through the touch events the input manager listens
+    // on. Two down, spread apart, two up.
+    const pinch = async (x, y) => {
+      const r = game.canvas.getBoundingClientRect()
+      const t = (cx, cy, id) => ({
+        identifier: id, clientX: r.left + cx, clientY: r.top + cy,
+        pageX: r.left + cx, pageY: r.top + cy, target: game.canvas,
+      })
+      const ev = (type, touches) => {
+        const e = new Event(type, { bubbles: true, cancelable: true })
+        // A synthesised TouchEvent cannot be constructed everywhere, and the
+        // manager only reads these three lists.
+        e.touches = touches; e.changedTouches = touches; e.targetTouches = touches
+        return e
+      }
+      game.canvas.dispatchEvent(ev('touchstart', [t(x - 20, y, 1), t(x + 20, y, 2)]))
+      await sleep(60)
+      for (let i = 1; i <= 6; i++) {
+        game.canvas.dispatchEvent(ev('touchmove',
+          [t(x - 20 - i * 8, y, 1), t(x + 20 + i * 8, y, 2)]))
+        await sleep(30)
+      }
+      game.canvas.dispatchEvent(ev('touchend', [t(x - 68, y, 1), t(x + 68, y, 2)]))
+      await sleep(160)
+    }
+
+    const check = async (label, x, y, expectPan, dx = 90, dy = 40) => {
+      const before = cam()
+      await click(x, y)
+      const afterTap = cam()
+      await drag(x, y, dx, dy)
+      const afterDrag = cam()
+      await pinch(x, y)
+      const afterPinch = cam()
+      const tapOk = same(before, afterTap)
+      const dragOk = expectPan ? !same(afterTap, afterDrag) : same(afterTap, afterDrag)
+      const pinchOk = expectPan ? true : same(afterDrag, afterPinch)
+      const ok = tapOk && dragOk && pinchOk
+      if (!ok) bad++
+      note('  ' + label.padEnd(16) + ' @' + Math.round(x) + ',' + Math.round(y)
+        + '  tap ' + (tapOk ? 'still' : 'MOVED ' + moved(before, afterTap))
+        + ' | drag ' + (dragOk ? (expectPan ? 'panned' : 'still')
+            : (expectPan ? 'DID NOT PAN' : 'MOVED ' + moved(afterTap, afterDrag)))
+        + ' | pinch ' + (pinchOk ? 'still' : 'ZOOMED ' + moved(afterDrag, afterPinch))
+        + (ok ? '' : '   *** ***'))
+      // EVERY CASE CLEANS UP AFTER ITSELF, and this is not housekeeping.
+      // Tapping the settings gear OPENS the settings panel and pauses -- and a
+      // modal correctly reports the whole screen as chrome, so every case
+      // AFTER the gear passed trivially, having tested nothing. Three of the
+      // seven surfaces here were being scored against a dialog.
+      if (hud.modalOpen) {
+        hud.settings?.close?.()
+        hud.panel?.close?.()
+        hud.paused = false
+        // AND RESUME THE GAME SCENE. `openSettings` calls `scene.pause('Game')`,
+        // so clearing the flag alone leaves GameScene paused -- receiving no
+        // pointer events at all. Every later check then reported "the map did
+        // not move" about a scene that could not have moved it, and the board
+        // control read as a swallowed gesture when the rig had simply never
+        // been asked. `claims asked 0 time(s)` is what finally said so.
+        game.scene.resume('Game')
+        await until(() => !hud.modalOpen && game.scene.isActive('Game'), 3000)
+      }
+      await sleep(140)
+    }
+
+    const L = hud.layout
+    const mid = (r) => ({ x: r.x + r.width / 2, y: r.y + r.height / 2 })
+
+    // BASELINE FIRST, with the shipping control scheme and nothing touched:
+    // can the board be panned at all here? Every "chrome did not pan" result
+    // below is worthless if the answer is no.
+    {
+      const b0 = cam()
+      await drag(VP.w * 0.42, VP.h * 0.62, -30, -170)
+      await sleep(500)
+      const a0 = cam()
+      const v0 = g.cameras.main.worldView
+      const room0 = v0.width < 1279 || v0.height < 719
+      note('baseline: a drag on the board with the ring scheme '
+        + (!same(b0, a0) ? 'panned ' + moved(b0, a0)
+          : room0 ? '*** DID NOT PAN ***'
+            : 'had nothing to pan to (whole board on screen at '
+              + Math.round(v0.width) + 'x' + Math.round(v0.height) + ')'))
+      if (same(b0, a0) && room0) bad++
+    }
+
+    SAVE.setControlDrawer(true)
+    g.applyControlScheme()
+    await sleep(400)
+    note('drawer enabled=' + g.drawer.enabled)
+
+    note('--- chrome must NOT pan ---')
+    g.drawer.setOpen(true)
+    g.drawer.refresh()
+    await sleep(350)
+    // WHERE THE DRAWER IS, ASKED RATHER THAN ASSUMED. It resolves presses
+    // against its own laid-out rectangles rather than through the hit list, so
+    // `ownsPress` is the only honest way to find a point inside it -- and it is
+    // the same question the camera gate asks.
+    let drawerAt = null
+    for (let y = VP.h - 4; y > VP.h * 0.3 && !drawerAt; y -= 6) {
+      for (let x = 6; x < VP.w; x += 12) {
+        if (g.drawer.ownsPress(x, y)) { drawerAt = { x, y }; break }
+      }
+    }
+    if (drawerAt) await check('drawer', drawerAt.x, drawerAt.y, false)
+    else { note('  *** the drawer is open and owns no point on the screen ***'); bad++ }
+    await check('counters', mid(L.counters).x, mid(L.counters).y, false)
+    await check('start button', mid(L.startButton).x, mid(L.startButton).y, false)
+    await check('settings gear', mid(L.settings).x, mid(L.settings).y, false)
+    await check('ability bar', mid(L.abilities).x, mid(L.abilities).y, false)
+    await check('wave banner', mid(L.startButton).x, mid(L.startButton).y, false)
+    await check('cancel', mid(L.cancel).x, mid(L.cancel).y, false)
+
+    // THE BOARD CONTROL RUNS BEFORE THE MODAL CASE, deliberately. A modal
+    // reports the whole screen as chrome -- correctly -- so a board check run
+    // after one that did not close reads exactly like an over-broad gate. That
+    // happened here, and it very nearly became a bug report.
+    note('--- and the board still MUST pan ---')
+    const RESD = (await import('./js/systems/Resolution.js')).deviceScale()
+    const ask = (x, y) => g.chromeUnderPointer({ x: x * RESD, y: y * RESD, id: 99 }, [])
+    g.drawer.setOpen(false)
+    await sleep(250)
+    note('  modal flags: game=' + g.modalOpen + ' hud=' + hud.modalOpen)
+    note('  gate says chrome? board=' + ask(VP.w * 0.42, VP.h * 0.62)
+      + '  counters=' + ask(mid(L.counters).x, mid(L.counters).y)
+      + '  abilities=' + ask(mid(L.abilities).x, mid(L.abilities).y))
+    const c0 = g.cameras.main
+    note('  camera zoom=' + c0.zoom.toFixed(3) + ' view=' + Math.round(c0.worldView.width)
+      + 'x' + Math.round(c0.worldView.height))
+    // A BIG drag, and on the axis that has somewhere to go. At the opening
+    // view the board is framed exactly to the width, so X is pinned against
+    // its own limits and a horizontal drag correctly moves nothing -- which
+    // from outside is indistinguishable from a swallowed gesture. The world is
+    // 720 tall against a 591 view, so Y has room.
+    note('  rig: enabled=' + g.rig.enabled + ' mode=' + g.rig.mode
+      + ' pointers=' + g.rig.pointers.length
+      + ' target=' + g.rig.targetCenterX?.toFixed?.(1) + ',' + g.rig.targetCenterY?.toFixed?.(1)
+      + ' cur=' + g.rig.curCenterX?.toFixed?.(1) + ',' + g.rig.curCenterY?.toFixed?.(1)
+      + ' follow=' + JSON.stringify(g.rig.following ?? g.rig.follow ?? null))
+    // INLINE, AND WITHOUT A TAP FIRST. `check` taps before it drags, and a tap
+    // on the board can open a build ring -- after which the drag starts on the
+    // ring and is claimed, correctly. That is the control measuring the tap it
+    // just made rather than the drag it meant to test.
+    // BACK THE OTHER WAY. The baseline drag above already took the camera to
+    // its Y limit -- `target=640,424.3` against a range that ends at 424.5 --
+    // and a second drag in the same direction correctly moves nothing. That is
+    // the camera being where it is allowed to be, not a swallowed gesture, and
+    // reading it as the latter cost a round here.
+    // WRAPPED, so "the rig never saw it" and "the rig saw it and claimed it"
+    // stop being the same observation.
+    const calls = []
+    const realClaims = g.rig.limits.claims
+    g.rig.limits.claims = (p, over) => {
+      const r = realClaims(p, over)
+      calls.push(Math.round(p.x) + ',' + Math.round(p.y) + '=' + r)
+      return r
+    }
+    const bx = VP.w * 0.42, by2 = VP.h * 0.62
+    const panBefore = cam()
+    await drag(bx, by2, 30, 170)
+    await sleep(500)
+    const panAfter = cam()
+    const panned = !same(panBefore, panAfter)
+    // A BOARD WITH NOWHERE TO GO IS NOT A SWALLOWED GESTURE. At 667x375 the
+    // viewport is 16:9 and so is the world, so the fitted camera shows all
+    // 1280x720 of it and is pinned on both axes -- correctly. Reporting that
+    // as a broken gate would be the harness inventing a bug.
+    const v = g.cameras.main.worldView
+    const room = v.width < 1279 || v.height < 719
+    if (!panned && room) bad++
+    g.rig.limits.claims = realClaims
+    note('  claims asked ' + calls.length + ' time(s): ' + JSON.stringify(calls.slice(0, 4)))
+    note('  the board       @' + Math.round(bx) + ',' + Math.round(by2)
+      + '  drag ' + (panned ? 'panned ' + moved(panBefore, panAfter)
+        : room ? 'DID NOT PAN   *** ***'
+          : 'nothing to pan to: the whole ' + Math.round(v.width) + 'x'
+            + Math.round(v.height) + ' board is on screen'))
+    note('  rig after: mode=' + g.rig.mode + ' pointers=' + g.rig.pointers.length
+      + ' target=' + g.rig.targetCenterX?.toFixed?.(1) + ',' + g.rig.targetCenterY?.toFixed?.(1))
+
+    // And LAST, the modal: it owns the whole screen including the parts of it
+    // nothing is drawn on, so the check is a point in the middle of the board.
+    note('--- and a modal owns everything ---')
+    hud.openSettings()
+    await until(() => g.modalOpen || hud.modalOpen, 4000)
+    await sleep(300)
+    note('  modal up: game=' + g.modalOpen + ' hud=' + hud.modalOpen)
+    await check('under a modal', VP.w * 0.5, VP.h * 0.55, false)
+
+    await shot('chromepan-' + VP.w + 'x' + VP.h)
+    note('RESULT ' + (bad === 0
+      ? 'no chrome moves the map, and the map still moves'
+      : '*** ' + bad + ' surface(s) wrong ***'))
+    return
+  }
+
+  // WAVE 1 WAITS FOR THE PLAYER, AND WAVE 2 DOES NOT.
+  //
+  // The claim is a negative -- "it does not start on its own" -- so it is
+  // tested by WAITING LONGER THAN THE CLOCK IT USED TO HAVE. `firstReadySeconds`
+  // was 30 real seconds, so this sits on the opening board for 35 and checks
+  // nothing happened. Then it presses the banner, plays wave 1 out, and checks
+  // that wave 2 arms a real countdown and arrives without being asked.
+  if (scenario === 'wave1') {
+    for (const k of ['Title', 'Splash', 'Credits', 'Boot', 'Loadout']) game.scene.stop(k)
+    const RS = await import('./js/systems/RunState.js')
+    RS.setRunState({ heroId: 'cory', openingTowers: ['withholding', 'rounding'],
+      abilities: ['molotov', 'glacier'], reserveTowers: [] })
+    game.scene.start('Game')
+    await until(() => running('Game'), 12000)
+    await until(() => running('Hud'), 12000)
+    await sleep(900)
+    const g = scene('Game'), hud = scene('Hud')
+    let bad = 0
+    // The claim is written as what SHOULD be true, and the line says whether it
+    // is. Phrasing them as failures made a clean run read like a broken one.
+    const say = (ok, claim) => {
+      if (!ok) bad++
+      note('    ' + (ok ? 'ok  ' : 'FAIL') + '  ' + claim)
+    }
+
+    note('on arrival: phase=' + g.status.phase + ' wave=' + (g.status.wave + 1)
+      + ' countdown=' + g.status.readyCountdown.toFixed(2)
+      + ' banner=' + JSON.stringify(hud.startBtn.text.text))
+    say(g.status.phase === 'ready', 'opens in the build phase')
+    say(g.status.wave === 0, 'opens on wave 1')
+    say(g.status.readyCountdown === 0, 'wave 1 carries no countdown')
+    say(/^START WAVE/.test(String(hud.startBtn.text.text)),
+      'the banner is a prompt, not a countdown')
+    await shot('wave1-01-waiting-' + VP.w + 'x' + VP.h)
+
+    // THIRTY-FIVE SECONDS. Longer than the 30s clock wave 1 used to carry, so
+    // "it did not start" is a measurement rather than an impression.
+    const peanutsBefore = g.status.peanuts
+    for (let i = 0; i < 7; i++) {
+      await sleep(5000)
+      if (g.status.phase !== 'ready') break
+    }
+    note('after 35s: phase=' + g.status.phase + ' wave=' + (g.status.wave + 1)
+      + ' enemies=' + g.enemies.length + ' countdown=' + g.status.readyCountdown.toFixed(2))
+    say(g.status.phase === 'ready', 'still waiting after 35s -- longer than the 30s clock it used to have')
+    say(g.enemies.length === 0, 'nothing has spawned')
+    say(g.status.peanuts === peanutsBefore, 'the purse has not moved')
+
+    // THE PRESS. Through the real button, at its real position.
+    const btn = hud.layout.startButton
+    await click(btn.x + btn.width / 2, btn.y + btn.height / 2)
+    await until(() => g.status.phase === 'wave', 6000)
+    note('after the press: phase=' + g.status.phase + ' peanuts='
+      + g.status.peanuts + ' (was ' + peanutsBefore + ')')
+    say(g.status.phase === 'wave', 'pressing the banner starts wave 1')
+    say(g.status.peanuts === peanutsBefore,
+      'wave 1 paid no early bonus -- there was no timer to beat')
+    await shot('wave1-02-started-' + VP.w + 'x' + VP.h)
+
+    // PLAY IT OUT, then look at wave 2.
+    const ok = await until(() => g.status.phase === 'ready' && g.status.wave === 1, 90000)
+    if (!ok) { note('  *** wave 1 never finished, so wave 2 was not reached ***'); bad++ }
+    else {
+      // A frame, so the banner has actually redrawn. Reading it the instant
+      // the phase flipped caught the previous wave's label still on the plate.
+      await sleep(250)
+      note('wave 2 armed: countdown=' + g.status.readyCountdown.toFixed(2)
+        + ' banner=' + JSON.stringify(hud.startBtn.text.text))
+      say(g.status.readyCountdown > 0, 'wave 2 arms a real countdown')
+      // And it arrives WITHOUT being pressed.
+      const started = await until(() => g.status.phase === 'wave', 40000)
+      say(started, 'wave 2 arrives without being pressed')
+      note('wave 2 started by itself: ' + started)
+    }
+
+    // AND THE SAME RULE ON A RESUME. A run saved at wave 0 is handed the same
+    // zero a fresh one is, because `create` restores the saved wave and THEN
+    // arms the clock. Driven through the real resume path rather than asserted
+    // from the source.
+    note('--- resuming a run saved before wave 1 ---')
+    game.scene.stop('Hud')
+    game.scene.stop('Game')
+    await sleep(400)
+    RS.setRunState({
+      heroId: 'cory', abilities: ['molotov', 'glacier'],
+      openingTowers: ['withholding', 'rounding'], reserveTowers: [], seed: 7,
+      resumeFrom: {
+        version: 1, level: 'level1', wave: 0, lives: 20, peanuts: 300, towers: [],
+        heroId: 'cory', abilities: ['molotov', 'glacier'],
+        openingTowers: ['withholding', 'rounding'], reserveTowers: [],
+        unlockedTowers: ['withholding', 'rounding'], seed: 7,
+      },
+    })
+    game.scene.start('Game')
+    await until(() => running('Game'), 12000)
+    await until(() => running('Hud'), 12000)
+    await sleep(1200)
+    const g2 = scene('Game'), hud2 = scene('Hud')
+    note('resumed: phase=' + g2.status.phase + ' wave=' + (g2.status.wave + 1)
+      + ' countdown=' + g2.status.readyCountdown.toFixed(2)
+      + ' peanuts=' + g2.status.peanuts
+      + ' banner=' + JSON.stringify(hud2.startBtn.text.text))
+    say(g2.status.wave === 0, 'the resume came back on wave 1')
+    say(g2.status.readyCountdown === 0, 'the resumed wave 1 carries no countdown')
+    // Ten seconds is well inside the 15s a later wave would have used.
+    await sleep(10000)
+    say(g2.status.phase === 'ready', 'still waiting 10s after the resume')
+    say(g2.enemies.length === 0, 'nothing has spawned since the resume')
+    await shot('wave1-03-resumed-' + VP.w + 'x' + VP.h)
+
+    note('RESULT ' + (bad === 0
+      ? 'wave 1 waits for the player and pays nothing, on a fresh run and on a resume; '
+        + 'wave 2 is unchanged'
+      : '*** ' + bad + ' check(s) failed ***'))
     return
   }
 
@@ -8280,5 +9030,8 @@ await post('/done', JSON.stringify({
   towers: gs?.towers?.length, enemies: gs?.enemies?.length, spots: SPOTS.length,
   heroAt: gs?.hero ? [Math.round(gs.hero.x), Math.round(gs.hero.y)] : null,
   scenes: dumpScenes(),
+  // Whatever a scenario measured and wants kept. `screens` puts its whole
+  // per-screen geometry here so a layout can be re-read without a second run.
+  ...(window.__screensDump ? { dump: window.__screensDump } : {}),
 }, null, 1))
 </script></body></html>

@@ -18,6 +18,30 @@
 //
 // So a failure here is a real failure in a rule the game depends on, and a
 // clean run here does not prove the entity layer is clean.
+//
+// HOW WAVES START HERE, stated because it is a MODELLING GAP rather than a
+// rule, and because a reader comparing these win rates to the game needs it.
+//
+// The ready phase is not simulated. There is no countdown, no auto-start and
+// no early-start bonus: a wave ends and the next one begins, with the builder
+// spending whatever it can afford in between. `readySeconds` and
+// `earlyStartPeanutsPerSecond` appear nowhere in this file.
+//
+// That has two consequences, and they pull in opposite directions:
+//
+//   * WAVE 1 IS ALREADY RIGHT. The game now waits for the player before wave 1
+//     and pays no bonus for it, which is exactly what a simulator with no
+//     ready phase does. Unlimited build time before wave 1 buys nothing extra
+//     either -- the opening purse covers one tower and no time passes here.
+//     So that change cannot move a number in this file, and it did not:
+//     level 3 is 80/120 either side of it, level 1 45/60, level 2 10/60.
+//
+//   * WAVES 2 ONWARD ARE MODELLED POOR. A player who starts every later wave
+//     the instant it is offered earns 15 x 2 = 30 peanuts a wave, which over
+//     twelve waves is 360 the simulated player never sees. Every win rate this
+//     tool has ever reported is therefore a FLOOR rather than an estimate.
+//     Closing that gap would move every number in every previous report, which
+//     is why it has not been done quietly here; it is written down instead.
 
 import towersData from '../../src/data/towers.json' with { type: 'json' }
 import enemiesData from '../../src/data/enemies.json' with { type: 'json' }
@@ -667,6 +691,9 @@ export function simulate(
   }
 
   const applySlow = (e: SimEnemy, factor: number, seconds: number): void => {
+    // The simulator has to model this or the soak reports a boss the game does
+    // not have. Same flag, same place as Enemy.applySlow.
+    if (!e.def.slowable) return
     const d = RULES.combat.slowDiminish
     e.slowStacks = slowStacksAfter(e.sinceSlow, e.slowStacks, d)
     const dealt = diminishedSeconds(seconds, e.slowStacks, d)

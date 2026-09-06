@@ -132,12 +132,12 @@ test('selection persists across runs', () => {
 
   // Every other field survives a pick -- the save is written whole, and a
   // hero choice that forgot a cleared run would re-lock the Server Nuke.
-  writeSave({ ...DEFAULT_SAVE, runsCleared: 3, seenCutscenes: ['level1'], volume: 0.2 })
+  writeSave({ ...DEFAULT_SAVE, runsCleared: 3, bannerPoints: 90, volume: 0.2 })
   chooseHero('han')
   const after = loadSave()
   assert.equal(after.heroId, 'han')
   assert.equal(after.runsCleared, 3)
-  assert.deepEqual(after.seenCutscenes, ['level1'])
+  assert.equal(after.bannerPoints, 90)
   assert.equal(after.volume, 0.2)
 
   // A save naming a hero that no longer exists plays the default rather than

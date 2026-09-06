@@ -374,3 +374,85 @@ test('spawner pays out backlog on a long frame', () => {
   assert.equal(s.update(10).length, 5)
   assert.ok(s.done)
 })
+
+/* ----------------------------------------------------- which way art faces */
+
+test('every enemy declares which way its art is drawn', () => {
+  // THE BUG THIS LOCKS OUT, and it has now happened twice. Enemy.ts carried a
+  // bare `setFlipX(left)`, which is the statement "every enemy is drawn facing
+  // right". That was true of all seven enemies that existed when it was
+  // written and false of all five added for level 3, so the whole of level 3
+  // walked backwards. The heroes had the identical bug with the identical
+  // shape: a blanket rule in the renderer that was true of the only character
+  // there was when it was written.
+  //
+  // The values were established by DECODING THE SPRITES AND LOOKING AT THEM,
+  // not by reading filenames or trusting a brief -- the brief that reported
+  // this said level 3's five were authored facing right, and they are not.
+  const enemies = JSON.parse(
+    readFileSync(new URL('../src/data/enemies.json', import.meta.url), 'utf8'))
+  const facing: Record<string, string> = {}
+  for (const [id, def] of Object.entries(enemies) as [string, any][]) {
+    assert.ok(def.artFacing === 'left' || def.artFacing === 'right',
+      `${id} does not say which way its art is drawn`)
+    facing[id] = def.artFacing
+  }
+  // Levels 1 and 2 face right; level 3's five face left. Stated rather than
+  // derived, so re-exporting a sprite mirrored fails here.
+  assert.deepEqual(
+    Object.entries(facing).filter(([, v]) => v === 'left').map(([k]) => k).sort(),
+    ['catcher', 'longsnap', 'pompom', 'unicornBoss', 'zamboni'],
+    'the set of left-drawn enemies changed')
+})
+
+test('nothing decides facing with a bare flip any more', () => {
+  // Both renderers ask the same shared function, and both pass the character's
+  // own `artFacing`. A bare `setFlipX(left)` in either is the bug coming back.
+  for (const f of ['entities/Enemy.ts', 'entities/Hero.ts']) {
+    const code = readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8')
+    assert.match(code, /mirroredFor\(/, `${f} does not use the shared facing rule`)
+    // Comments stripped: the note explaining what the old bare flip was would
+    // otherwise fail this test for describing the bug it prevents.
+    const live = code.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n')
+    assert.ok(!/setFlipX\(left\)/.test(live),
+      `${f} flips straight from the heading, ignoring how its art was drawn`)
+  }
+  // And the opening frame counts: `face()` early-returns when the heading has
+  // not changed, so an enemy that spawns walking the way it starts out facing
+  // would never reach it and would stand there mirrored wrongly.
+  const enemy = readFileSync(new URL('../src/entities/Enemy.ts', import.meta.url), 'utf8')
+  assert.match(enemy, /const flip0 = mirroredFor\(this\.facingLeft, def\.artFacing\)/,
+    'the opening flip is never applied')
+})
+
+test('a boss that walks through the line also walks through a slow', () => {
+  // THE RAINBOW REAPER'S FIGHT IS A CLOCK: it disables towers on a cooldown
+  // while it walks, and the player's job is to out-damage that clock. A
+  // permanent 45% slow from one Deferral turns the clock off, which is the
+  // same trick as parking an unblockable boss on a soldier -- and the reason
+  // it is unblockable is that trick.
+  //
+  // Expressed as a flag on the enemy, beside `blockable`, rather than as a
+  // rule about tiers: crowd-control immunity is a property of a character.
+  const enemies = JSON.parse(
+    readFileSync(new URL('../src/data/enemies.json', import.meta.url), 'utf8'))
+  for (const [id, def] of Object.entries(enemies) as [string, any][]) {
+    assert.equal(typeof def.slowable, 'boolean', `${id} does not say whether it can be slowed`)
+  }
+  assert.equal(enemies.unicornBoss.slowable, false, 'the Rainbow Reaper can be slowed')
+  assert.equal(enemies.unicornBoss.blockable, false, 'the Rainbow Reaper can be blocked')
+
+  // THE POLITICIAN IS DELIBERATELY STILL SLOWABLE. He is unblockable for the
+  // same reason, but levels 1 and 2 are tuned around him as he is, and this
+  // was a level 3 change. Stated so that "bosses resist crowd control" is not
+  // quietly generalised into a balance change nobody measured.
+  assert.equal(enemies.politician.slowable, true,
+    'the Politician was made slow-immune, which retunes levels 1 and 2')
+
+  // And BOTH the game and the simulator honour it, or the soak reports a boss
+  // the game does not have.
+  for (const f of ['../src/entities/Enemy.ts', '../tools/soak/Sim.ts']) {
+    const code = readFileSync(new URL(f, import.meta.url), 'utf8')
+    assert.match(code, /slowable\) return/, `${f} applies slows regardless of the flag`)
+  }
+})

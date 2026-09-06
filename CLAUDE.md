@@ -79,6 +79,37 @@ After any re-export, run `python3 tools/measure_art.py` and update
 world pixels and survives a re-export untouched, so leave it alone unless the
 art is meant to change size.
 
+## Verifying a UI change
+
+**Every UI change is verified against a rendered frame from `tools/harness/`
+before it is considered done.** At 375x667, 390x844 and a desktop window, in
+both orientations. Nothing may overlap, nothing may be cut off, nothing may sit
+under a notch, and every interactive control must be at least 44 by 44 points.
+
+```bash
+sh tools/harness/build.sh                     # Phaser is vendored; this just works
+sh tools/harness/run.sh screens 140 844x390   # walks Title, WorldMap, Loadout, Cutscene, Game
+INSETS=0,47,21,47 sh tools/harness/run.sh screens 140 844x390   # with a notch
+python3 tools/harness/shrink.py tools/harness/shots/screens-5-game-844x390.png 950
+```
+
+`screens` reports four faults with numbers — OFF (past the edge), NOTCH (inside
+a safe-area inset), SMALL (a control under 44pt) and OVER (two texts or two
+controls overlapping) — and writes a screenshot per screen. **Read the picture
+as well as the numbers.** The numbers cannot see a sprite drawn behind another
+one, and the picture cannot tell you which two rectangles collided.
+
+Portrait is reported as gated rather than audited: the game is landscape-only
+and a portrait viewport gets a rotate overlay. That is the correct answer for
+portrait, not a skipped check.
+
+**Do not trust a first red result.** Three of the four faults the input harness
+first "found" were bugs in the harness itself, and each looked exactly like the
+product bug being hunted — a modal left open makes every later check pass, a
+paused scene receives no input at all, and a screenshot of a 17MB PNG can be
+captured half-decoded and read as a screen cut off at the bottom. Establish
+that the thing you are measuring can move before you report that it did not.
+
 ## Typechecking
 
 `npm install` fails in the agent environment (the registry returns 403), so
@@ -146,6 +177,18 @@ because those are about a person who recorded three lines rather than about a
 character.
 
 Cory works in **tax**, not audit. This matters.
+
+## Merging
+
+When a session cannot push to `main`, **its final message must begin with the
+branch name and the exact command to merge it.** Not in a report, not at the
+end — the first thing in the reply.
+
+Three sessions in a row ended with correct, green, fast-forwardable work
+sitting on a branch nobody merged, and the session after each of them opened by
+discovering that the previous session's fixes were not in the game. The cost is
+not the merge, it is that every following brief starts by asking whether the
+last one landed.
 
 ## Current phase
 

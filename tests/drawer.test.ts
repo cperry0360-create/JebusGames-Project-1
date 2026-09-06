@@ -487,7 +487,7 @@ test('an empty node with nothing picked opens the drawer on TOWERS', () => {
   assert.doesNotMatch(code, /toggle\(\)/,
     'it toggles, so tapping a second node while the panel is out would shut it')
   assert.match(code, /pendingSpot = spot/, 'the node is not held')
-  assert.match(code, /status\.message/, 'there is no placement instruction')
+  assert.match(code, /status\.alert/, 'there is no placement instruction')
 })
 
 test('TOWERS is the tab a node asks for, at every viewport', () => {

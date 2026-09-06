@@ -498,5 +498,5 @@ test('a ring that cannot fit says so rather than drawing off screen', () => {
   assert.match(ring, /this\.opts\.onProblem\(why\)/, 'the scene is never told')
   const game = readFileSync(url('../src/scenes/GameScene.ts'), 'utf8')
   assert.match(game, /console\.error\(`\[ring\] \$\{why\}`\)/, 'the fault is not logged')
-  assert.match(game, /this\.status\.message = why/, 'the player is never told')
+  assert.match(game, /this\.status\.alert = why/, 'the player is never told')
 })

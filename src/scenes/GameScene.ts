@@ -58,7 +58,7 @@ import { usableArea } from '../systems/RingLayout.ts'
 import {
   BASE_TIER, nextStep, sellValue, specById, specIcon, statAt,
 } from '../systems/Upgrades.ts'
-import { canAffordAny, openingPurse } from '../systems/Economy.ts'
+import { openingPurse } from '../systems/Economy.ts'
 import {
   addBannerPoints, controlDrawerOn, hasClearedARun, recordRunCleared,
 } from '../systems/Save.ts'
@@ -67,6 +67,7 @@ import { waveOutcome } from '../systems/Wave.ts'
 // No loadRun here on purpose: whether to resume is the title screen's
 // question to ask, and it arrives through RunState.resumeFrom.
 import { clearRun, saveRun, type SavedRun } from '../systems/RunSave.ts'
+import { TRANSFORM_BELOW } from '../systems/Transform.ts'
 import { logEvent, provideState } from '../systems/Diagnostics.ts'
 import { heartbeat, setRunActive } from '../systems/Watchdog.ts'
 import {
@@ -95,7 +96,10 @@ const LAYOUT = PRESENTATION.hud.layout
 
 const RULES = rulesData as RulesDef
 const TOWERS = towersData as Record<string, TowerDef>
-const ENEMIES = enemiesData as Record<string, EnemyDef>
+// `as unknown as`, the same way Heroes.ts casts its own roster. `artFacing` is
+// a string literal union in the type and a plain `string` in the JSON, and TS
+// will not bridge that in one step.
+const ENEMIES = enemiesData as unknown as Record<string, EnemyDef>
 const ABILITIES = abilitiesData as Record<string, AbilityDef>
 const DRAFT = draftData as DraftDef
 
@@ -108,7 +112,6 @@ export interface GameStatus {
   lives: number
   wave: number
   waveCount: number
-  waveName: string
   phase: Phase
   mode: Mode
   enemiesLeft: number
@@ -131,13 +134,24 @@ export interface GameStatus {
   /** Whether the hero has transformed. Slot 2 is gated on it, and the HUD
    *  reads it rather than reaching into the hero. */
   heroPowered: boolean
+  /**
+   * The health fractions worth marking on the hero's bar, ascending.
+   *
+   * THERE ARE TWO THRESHOLDS AND THE BAR ONLY EVER SHOWED ONE. The tick was a
+   * hardcoded 0.25, and 0.25 is the LAST STAND threshold from the hero's own
+   * `lastStand.healthThreshold` -- still a live mechanic. The TRANSFORMATION
+   * is a separate rule at 0.5 (`heroTransform.belowHealth` in rules.json) and
+   * had no mark at all, so the more consequential of the two was the invisible
+   * one. Both are marked now, and both come from data: a hero with a different
+   * Last Stand threshold moves its own tick with no code change.
+   */
+  heroMarks: number[]
   /** Seconds until the next wave starts by itself. 0 when nothing is counting. */
   readyCountdown: number
   /** Run totals, for the results screen. Kills counts enemies killed by any
    *  means; earned counts peanuts taken in, not peanuts recovered by selling. */
   kills: number
   peanutsEarned: number
-  message: string
   /**
    * A refusal the player needs to see *now*, raised where their finger is
    * rather than in the guidance line. The HUD shows it once and clears it.
@@ -182,13 +196,13 @@ const MARKER_BLUE = 0x4fa3e3
 
 export class GameScene extends Phaser.Scene {
   readonly status: GameStatus = {
-    peanuts: 0, lives: 0, wave: 0, waveCount: 0, waveName: '',
+    peanuts: 0, lives: 0, wave: 0, waveCount: 0,
     phase: 'ready', mode: 'normal', enemiesLeft: 0,
     heroName: '', heroHealth: 0, heroMax: 0, heroDown: false, heroReviveIn: 0,
     heroPowered: false,
     lastStand: false,
     unlockedTowers: [], abilities: [], rareAbility: null, pendingAbility: null,
-    readyCountdown: 0, message: '',
+    readyCountdown: 0, heroMarks: [],
     kills: 0, peanutsEarned: 0,
     alert: '',
     bossName: '', bossHealth: 0, bossMax: 0,
@@ -235,14 +249,41 @@ export class GameScene extends Phaser.Scene {
   /** True while the upgrade button is hovered or held, which brightens the
    *  projected range ring. */
   private previewingUpgrade = false
+  /** How to re-price the open ring. Set with it, cleared when it closes. */
+  private ringOptions?: () => RingOption[]
+  /** Last known affordability of the open drawer's tiles, so a rebuild only
+   *  happens when one of them actually flipped. */
+  private drawerAfford: boolean[] = []
   /** Public so a harness run can read the camera's state. */
   rig!: CameraRig
   /** Everything drawn in screen space rather than on the map. The main
    *  camera ignores it, so it neither pans nor zooms. */
   private uiCam!: Phaser.Cameras.Scene2D.Camera
-  /** Where the HUD's elements sit. Public so anything the scene draws in
-   *  screen space can keep clear of them without guessing. */
-  layout: HudLayout = hudLayout(
+  /**
+   * Where the HUD's elements sit. Public so anything the scene draws in screen
+   * space can keep clear of them without guessing.
+   *
+   * IT COMES FROM THE HUD, and that is the fix for the counters panning the
+   * map. This scene used to compute its own copy with `countersWidth: 0` and
+   * `abilitiesWidth: 0` -- the widths are MEASURED from the plates and the
+   * icons, and only HudScene has them -- so `layout.counters` here was a
+   * rectangle of zero width. The camera gate then asked "is this press inside
+   * the counters?" of a rectangle nothing can be inside, and a drag starting
+   * on the peanut counter panned the map.
+   *
+   * That is why the previous fix held for the drawer and not for these: the
+   * PREDICATE was unified and the GEOMETRY it consults was not. One layout,
+   * owned by the scene that can measure it.
+   *
+   * `ownLayout` is the fallback for the frames before the HUD exists, and for
+   * the harness scenarios that run GameScene without it.
+   */
+  get layout(): HudLayout {
+    const hud = this.scene?.get('Hud') as unknown as { layout?: HudLayout } | null
+    return hud?.layout ?? this.ownLayout
+  }
+
+  private ownLayout: HudLayout = hudLayout(
     { width: 1280, height: 720, insets: NO_INSETS, countersWidth: 0, abilitiesWidth: 0 },
     LAYOUT,
   )
@@ -575,7 +616,7 @@ export class GameScene extends Phaser.Scene {
     this.hero.on('revived', () => {
       play(this, 'build')
       logEvent('hero', 'revived where he fell')
-      this.status.message = `${heroDef.name} is back up.`
+      this.status.alert = `${heroDef.name} is back up.`
     })
     // The DAD MODE sting, on the frame the SUV appears rather than on the
     // frame he starts changing. Once per run by construction: the
@@ -600,11 +641,11 @@ export class GameScene extends Phaser.Scene {
 
     // A floor rather than a constant: the opening instruction is to build a
     // tower, so the purse has to cover the cheapest one this run actually drew.
-    this.status.peanuts = openingPurse(
+    this.setPeanuts(openingPurse(
       RULES.startingPeanuts,
       RULES.startingPeanutsMargin,
       run.openingTowers.map((id) => TOWERS[id].cost),
-    )
+    ))
     this.status.lives = RULES.startingLives
     this.status.wave = 0
     this.status.kills = 0
@@ -614,13 +655,18 @@ export class GameScene extends Phaser.Scene {
     // `status.mode`, and it is the only thing that does.
     this.targeting.cancel('replaced')
     this.status.waveCount = this.level.waveTable.waves.length
-    this.status.waveName = this.level.waveTable.waves[0].name
     this.status.enemiesLeft = 0
     this.status.heroName = heroDef.name
     this.status.heroMax = heroDef.maxHealth
     this.status.heroHealth = heroDef.maxHealth
     this.status.heroDown = false
     this.status.heroPowered = false
+    // Ascending, so the HUD draws them without knowing what either one means.
+    // Both from data: the transformation from rules.json, Last Stand from this
+    // hero's own entry in heroes.json.
+    this.status.heroMarks = [heroDef.lastStand.healthThreshold, TRANSFORM_BELOW]
+      .filter((v) => v > 0 && v < 1)
+      .sort((a, b) => a - b)
     this.status.heroReviveIn = 0
     this.status.lastStand = false
     this.status.pendingAbility = null
@@ -649,7 +695,6 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.armReadyCountdown()
-    this.status.message = this.idleHint()
 
     for (const id of this.status.abilities) this.cooldowns.register(id, ABILITIES[id].cooldown)
     this.cooldowns.register(RULES.serverNuke.abilityId, ABILITIES[RULES.serverNuke.abilityId].cooldown)
@@ -783,7 +828,6 @@ export class GameScene extends Phaser.Scene {
       scene: 'Game',
       phase: this.status.phase,
       wave: `${this.status.wave + 1}/${this.status.waveCount}`,
-      waveName: this.status.waveName,
       lives: this.status.lives,
       peanuts: this.status.peanuts,
       kills: this.status.kills,
@@ -911,11 +955,11 @@ export class GameScene extends Phaser.Scene {
     const cfg = RULES.signBribe
     switch (sign.tap(this.status.peanuts)) {
       case 'done':
-        this.status.message = cfg.paidToast
+        this.status.alert = cfg.paidToast
         return
       case 'broke':
         play(this, 'broke')
-        this.status.message = cfg.brokeToast
+        this.status.alert = cfg.brokeToast
         return
       default:
         break
@@ -937,13 +981,13 @@ export class GameScene extends Phaser.Scene {
           // dialog was open, since the wave keeps running underneath it.
           if (this.status.peanuts < cfg.cost) {
             play(this, 'broke')
-            this.status.message = cfg.brokeToast
+            this.status.alert = cfg.brokeToast
             return
           }
-          this.status.peanuts -= cfg.cost
+          this.setPeanuts(this.status.peanuts - cfg.cost)
           sign.pay()
           play(this, 'peanuts', 0.9)
-          this.status.message = cfg.paidToast
+          this.status.alert = cfg.paidToast
         },
       },
     })
@@ -974,7 +1018,7 @@ export class GameScene extends Phaser.Scene {
     // retina canvas. The HUD band arithmetic below is a LAYOUT, so it is CSS
     // pixels, like every other layout in the game.
     this.cameras.main.setViewport(0, 0, this.scale.width, this.scale.height)
-    this.layout = hudLayout(
+    this.ownLayout = hudLayout(
       {
         width: viewW(this), height: viewH(this),
         insets: safeAreaInsets(), countersWidth: 0, abilitiesWidth: 0,
@@ -1035,7 +1079,6 @@ export class GameScene extends Phaser.Scene {
    * was received.
    */
   private refuse(text: string): void {
-    this.status.message = text
     this.status.alert = text
     play(this, 'error')
   }
@@ -1066,9 +1109,57 @@ export class GameScene extends Phaser.Scene {
    * refunding your own money is not earning.
    */
   private earn(amount: number): void {
-    this.status.peanuts += amount
+    this.setPeanuts(this.status.peanuts + amount)
     this.status.peanutsEarned += amount
     logEvent('peanuts', `+${amount} -> ${this.status.peanuts}`)
+  }
+
+  /**
+   * THE ONE PLACE THE BALANCE CHANGES.
+   *
+   * It was nine places, and every one of them wrote the field directly. That
+   * is why an open build panel went stale: the panels priced themselves once,
+   * when they were built, and nothing told them the number had moved. A player
+   * who opened a tower one peanut short and then earned three watched the
+   * BUILD button stay dead until they closed the panel and opened it again.
+   *
+   * So the write is a method, and re-pricing hangs off it. Same shape as the
+   * mode mirrors: one writer, called from one place per transition.
+   */
+  private setPeanuts(next: number): void {
+    const value = Math.max(0, Math.round(next))
+    if (value === this.status.peanuts) return
+    this.status.peanuts = value
+    this.refreshAffordability()
+  }
+
+  /**
+   * Re-prices whatever panel is open, and ONLY when the answer changed.
+   *
+   * Peanuts arrive on every kill, so this runs dozens of times a wave;
+   * rebuilding a ring each time to redraw exactly the same thing would be its
+   * own bug. The affordability flags are compared first and the rebuild is
+   * skipped unless one of them flipped -- which is a handful of times a run.
+   */
+  private refreshAffordability(): void {
+    if (this.ring?.active && this.ringOptions) {
+      const next = this.ringOptions()
+      const now = this.ring.affordability
+      const moved = next.length !== now.length
+        || next.some((o, i) => now[i]?.id !== o.id || now[i]?.affordable !== o.affordable)
+      if (moved) this.ring.refreshOptions(next)
+    }
+    if (this.drawer?.open === true) {
+      const next = this.drawerTiles()
+      // The drawer already takes its tiles as a FUNCTION, so `refresh()`
+      // re-reads them; it was simply never called when the balance moved.
+      const moved = next.length !== this.drawerAfford.length
+        || next.some((t, i) => this.drawerAfford[i] !== t.affordable)
+      if (moved) {
+        this.drawerAfford = next.map((t) => t.affordable)
+        this.drawer.refresh()
+      }
+    }
   }
 
   /**
@@ -1611,7 +1702,7 @@ export class GameScene extends Phaser.Scene {
         return
       }
       this.clearSelection('outside')
-      this.status.message = `${p.name} only reaches so far. Still ready — tap the medallion again.`
+      this.status.alert = `${p.name} only reaches so far. Still ready — tap the medallion again.`
       play(this, 'error')
       return
     }
@@ -1626,7 +1717,7 @@ export class GameScene extends Phaser.Scene {
         return
       }
       this.clearSelection('outside')
-      this.status.message = def?.pathOnlyWithin !== undefined
+      this.status.alert = def?.pathOnlyWithin !== undefined
         ? `${def.name} goes on the road. Still ready — tap the icon to try again.`
         : `${def?.name ?? 'That'} cancelled. Still ready.`
       play(this, 'error')
@@ -1711,7 +1802,7 @@ export class GameScene extends Phaser.Scene {
   private selectHero(): void {
     this.deselectTower()
     if (this.hero.down) {
-      this.status.message =
+      this.status.alert =
         `${this.hero.def.name} is down — back in ` +
         `${Math.max(1, Math.ceil(realSeconds(this.hero.reviveIn, 1)))}s.`
       return
@@ -1724,7 +1815,7 @@ export class GameScene extends Phaser.Scene {
     // him is one of the rings the brief calls for gone: state 2 is a ring at
     // his feet and nothing else.
     this.markers.select()
-    this.status.message = `${this.hero.def.name} selected — click where to hold.`
+    this.status.alert = `${this.hero.def.name} selected — click where to hold.`
   }
 
   private orderHero(x: number, y: number): void {
@@ -1745,14 +1836,14 @@ export class GameScene extends Phaser.Scene {
     if (wasFighting) {
       play(this, 'hero-hit', 0.5)
       logEvent('hero', `disengaged to ${Math.round(x)},${Math.round(y)}`)
-      this.status.message =
+      this.status.alert =
         `${this.hero.def.name} breaks off — exposed while pulling out.`
     } else {
       // NO DIRECTION WORD. It said "is moving up" whichever way he went —
       // the word was a constant, not a reading of anywhere he was going, so
       // it was wrong more often than right. "Up" is also the one direction
       // that means two things on a 3/4 map.
-      this.status.message = `${this.hero.def.name} is moving.`
+      this.status.alert = `${this.hero.def.name} is moving.`
     }
   }
 
@@ -1769,12 +1860,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * The ring on an empty pad: what can be built here, and for how much.
+   * What the build ring offers on this pad, PRICED AGAINST THE BALANCE NOW.
    *
-   * Public for the harness, which measures every button against the viewport.
+   * A function rather than an array because affordability is not a property of
+   * the pad, it is a property of the moment -- and the moment moves while the
+   * panel is open. `refreshAffordability` calls this again when the balance
+   * changes and the answer differs.
    */
-  openPadRing(spot: BuildSpot): void {
-    this.deselectTower()
+  private padRingOptions(spot: BuildSpot): RingOption[] {
     const options: RingOption[] = this.status.unlockedTowers.map((id) => {
       const def = TOWERS[id]
       const short = def.cost - this.status.peanuts
@@ -1795,7 +1888,17 @@ export class GameScene extends Phaser.Scene {
         onConfirm: () => this.place(id, spot),
       }
     })
-    this.openRing(options, () => this.padAnchor(spot), (id) => {
+    return options
+  }
+
+  /**
+   * The ring on an empty pad: what can be built here, and for how much.
+   *
+   * Public for the harness, which measures every button against the viewport.
+   */
+  openPadRing(spot: BuildSpot): void {
+    this.deselectTower()
+    this.openRing(() => this.padRingOptions(spot), () => this.padAnchor(spot), (id) => {
       if (id) {
         this.showTowerRange(spot.x, spot.y, TOWERS[id])
         this.showGhost(id, spot)
@@ -1805,7 +1908,6 @@ export class GameScene extends Phaser.Scene {
       }
     })
     this.drawSpots()
-    this.status.message = 'Pick a tower to read about it, then confirm.'
   }
 
   /**
@@ -1915,7 +2017,11 @@ export class GameScene extends Phaser.Scene {
     this.drawer.refresh()
     this.refreshCancel()
     this.drawSpots()
-    this.status.message = 'Node selected — pick a tower to build here.'
+    // A TOAST, NOT A LINE IN A BAR. The instruction bar this used to write to
+    // is gone; a tap that changes what the controls mean still has to say so,
+    // and saying it under the player's thumb for a moment beats saying it
+    // permanently across the top of the board.
+    this.status.alert = 'Node selected — pick a tower to build here.'
   }
 
   /** True when this node would take the drawer's current pick: free, and
@@ -1944,7 +2050,8 @@ export class GameScene extends Phaser.Scene {
    * place.
    */
   private openRing(
-    options: RingOption[],
+    /** RE-CALLABLE, not a snapshot. See `refreshAffordability`. */
+    build: () => RingOption[],
     anchor: () => { x: number; y: number } | null,
     onPreview: (id: string | null) => void,
     /** Reserved slots, when the caller wants the geometry fixed across
@@ -1952,7 +2059,9 @@ export class GameScene extends Phaser.Scene {
     slots?: number,
   ): void {
     this.ring?.close()
+    const options = build()
     if (options.length === 0) return
+    this.ringOptions = build
     this.ring = new TowerRing(this, TICKET_DEPTH, {
       options,
       anchor,
@@ -1970,10 +2079,11 @@ export class GameScene extends Phaser.Scene {
         // living with, so it says so on the message line and in the console
         // rather than quietly drawing a clipped panel.
         console.error(`[ring] ${why}`)
-        this.status.message = why
+        this.status.alert = why
       },
       onClose: () => {
         this.ring = undefined
+        this.ringOptions = undefined
         this.rangeRing.clear()
         this.clearGhost()
         this.drawSpots()
@@ -2016,12 +2126,12 @@ export class GameScene extends Phaser.Scene {
     if (!this.build.isFree(spot.index)) return
     if (this.status.peanuts < def.cost) {
       // Silence here reads as a broken button, so say what is missing.
-      this.status.message = `${def.name} costs ${def.cost} peanuts — ${def.cost - this.status.peanuts} short.`
+      this.status.alert = `${def.name} costs ${def.cost} peanuts — ${def.cost - this.status.peanuts} short.`
       play(this, 'broke')
       return
     }
 
-    this.status.peanuts -= def.cost
+    this.setPeanuts(this.status.peanuts - def.cost)
     this.build.occupy(spot.index)
     const tower = new Tower(this, spot.x, spot.y, id, def, spot.index)
     tower.distanceToExit = this.roadLeftFrom(spot.x, spot.y)
@@ -2038,7 +2148,7 @@ export class GameScene extends Phaser.Scene {
     this.rangeRing.clear()
     this.drawSpots()
     logEvent('tower-built', `${id} spot=${spot.index} cost=${def.cost}`)
-    this.status.message = `${def.name} built.`
+    this.status.alert = `${def.name} built.`
   }
 
   /** Drops the current tower selection and everything drawn for it. */
@@ -2097,11 +2207,11 @@ export class GameScene extends Phaser.Scene {
     if (tower.isDeployer) {
       const g = this.garrisons.find((q) => q.tower === tower)
       this.drawRallyMark(g?.rally ?? null)
-      this.status.message =
+      this.status.alert =
         `${tower.def.name}, tier ${tower.tier}. Tap the highlighted road to move the lads, or CANCEL.`
     } else {
       this.drawRallyMark(null)
-      this.status.message = `${tower.def.name}, tier ${tower.tier}${bonus}`
+      this.status.alert = `${tower.def.name}, tier ${tower.tier}${bonus}`
     }
     this.syncTargeting()
     this.openTowerRing(tower)
@@ -2171,7 +2281,14 @@ export class GameScene extends Phaser.Scene {
    *
    * Public for the harness, which measures every button against the viewport.
    */
-  openTowerRing(tower: Tower): void {
+  /**
+   * What a built tower's ring offers, PRICED AGAINST THE BALANCE NOW.
+   *
+   * Extracted from `openTowerRing` for one reason: affordability is a function
+   * of the moment, and the moment moves while the panel is open. See
+   * `refreshAffordability`.
+   */
+  private towerRingOptions(tower: Tower): RingOption[] {
     const def = tower.def
     const step = nextStep(def, tower.tier)
     const refund = sellValue(def, tower.tier + (tower.upgrading ? 1 : 0),
@@ -2298,9 +2415,12 @@ export class GameScene extends Phaser.Scene {
       confirmLabel: 'Sell',
       onConfirm: () => this.confirmSell(tower, refund),
     })
+    return options
+  }
 
+  openTowerRing(tower: Tower): void {
     // THREE, always: see the slot note above.
-    this.openRing(options, () => this.towerAnchor(tower), (id) => {
+    this.openRing(() => this.towerRingOptions(tower), () => this.towerAnchor(tower), (id) => {
       this.previewingUpgrade = id !== null && id !== 'sell'
       if (this.selected) this.drawSelectedRange(this.selected)
     }, 3)
@@ -2320,16 +2440,16 @@ export class GameScene extends Phaser.Scene {
     if (!spec || tower.upgrading || !tower.atSpecChoice) return
     if (this.status.peanuts < spec.cost) {
       play(this, 'broke')
-      this.status.message =
+      this.status.alert =
         `${spec.name} costs ${spec.cost} peanuts — ${spec.cost - this.status.peanuts} short.`
       return
     }
-    this.status.peanuts -= spec.cost
+    this.setPeanuts(this.status.peanuts - spec.cost)
     tower.beginUpgrade(specId)
     this.saveProgress()
     play(this, 'upgrade')
     logEvent('tower-spec', `${tower.def.name} -> ${spec.id} cost=${spec.cost}`)
-    this.status.message = `${tower.def.name} becoming ${spec.name}.`
+    this.status.alert = `${tower.def.name} becoming ${spec.name}.`
   }
 
   private upgradeTower(tower: Tower): void {
@@ -2337,10 +2457,10 @@ export class GameScene extends Phaser.Scene {
     if (!step || tower.upgrading) return
     if (this.status.peanuts < step.cost) {
       play(this, 'broke')
-      this.status.message = `Tier ${tower.tier + 1} costs ${step.cost} peanuts — ${step.cost - this.status.peanuts} short.`
+      this.status.alert = `Tier ${tower.tier + 1} costs ${step.cost} peanuts — ${step.cost - this.status.peanuts} short.`
       return
     }
-    this.status.peanuts -= step.cost
+    this.setPeanuts(this.status.peanuts - step.cost)
     logEvent('tower-upgraded', `${tower.def.name} tier ${tower.tier + 1} cost=${step.cost}`)
     tower.beginUpgrade()
     // The peanuts are spent now and the tier arrives later. Saving here books
@@ -2348,7 +2468,7 @@ export class GameScene extends Phaser.Scene {
     // between keeps the tower at the tier it had actually finished paying for.
     this.saveProgress()
     play(this, 'upgrade')
-    this.status.message =
+    this.status.alert =
       `${tower.def.name} going to tier ${tower.tier + 1}. ` +
       `It fires slowly for ${realSeconds(step.buildSeconds, 1)}s.`
   }
@@ -2381,7 +2501,7 @@ export class GameScene extends Phaser.Scene {
     // the upgrade the player just bought.
     const paidTier = tower.tier + (tower.upgrading ? 1 : 0)
     const refund = sellValue(tower.def, paidTier, RULES.towerUpgrades.sellRefund, tower.spec)
-    this.status.peanuts += refund
+    this.setPeanuts(this.status.peanuts + refund)
     this.build.release(tower.spot)
     this.towers = this.towers.filter((t) => t !== tower)
     tower.destroy()
@@ -2395,7 +2515,7 @@ export class GameScene extends Phaser.Scene {
     this.drawSpots()
     play(this, 'sell')
     logEvent('tower-sold', `${tower.def.name} +${refund}`)
-    this.status.message = `Sold for ${refund} peanuts.`
+    this.status.alert = `Sold for ${refund} peanuts.`
   }
 
   /** The cancel button only exists while there is something to cancel. */
@@ -2508,7 +2628,6 @@ export class GameScene extends Phaser.Scene {
     this.castCursor.hide()
     this.laneWash.clear()
     this.drawSpots()
-    this.status.message = this.idleHint()
   }
 
   /**
@@ -2601,37 +2720,11 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * The one line of guidance shown when nothing more specific is happening.
-   *
-   * It has to describe the game as it actually is. Telling the player to build
-   * a tower while they cannot afford one is worse than saying nothing: it
-   * reads as the game being broken, and on the opening screen it is the first
-   * thing they are told.
-   */
-  private idleHint(): string {
-    if (this.hero.down && this.status.phase === 'ready') {
-      return `${this.hero.def.name} is out for this encounter. The towers are on their own.`
-    }
-    const affordable = canAffordAny(
-      this.status.peanuts,
-      this.status.unlockedTowers.map((id) => TOWERS[id].cost),
-    )
-    if (this.build.freeSpots().length === 0) {
-      return 'Every pad is built. Tap a tower to upgrade it, or START WAVE.'
-    }
-    if (this.status.phase === 'ready') {
-      if (!affordable) {
-        return this.towers.length === 0
-          ? 'Not enough peanuts to build yet. START WAVE to earn some.'
-          : 'Nothing you can afford yet. START WAVE to earn more peanuts.'
-      }
-      return this.towers.length === 0
-        ? 'Tap a build pad to place a tower, then START WAVE.'
-        : 'Build on another pad, move Cory, or START WAVE when you are ready.'
-    }
-    return affordable ? 'Tap a pad to build. Tap Cory to move him.' : 'Tap Cory to move him.'
-  }
+  // `idleHint()` LIVED HERE, and it was the white instruction bar's whole
+  // reason for existing: one line of guidance, recomputed on every mode change
+  // and on every board change, telling the player to tap a build pad or press
+  // START WAVE. It is gone with the bar it fed. A tutorial replaces it, and a
+  // tutorial can say those things once rather than forever.
 
   // ---------------------------------------------------------------- abilities
 
@@ -2641,7 +2734,7 @@ export class GameScene extends Phaser.Scene {
       // Silent refusal is what made this unreportable: the player taps and
       // nothing at all happens, on the boss, repeatedly.
       play(this, 'error')
-      this.status.message = 'The nuke is still going off. Wait for it.'
+      this.status.alert = 'The nuke is still going off. Wait for it.'
       logEvent('ability-refused', `${id} during cast`)
       return
     }
@@ -2655,7 +2748,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (!this.cooldowns.ready(id)) {
       play(this, 'error')
-      this.status.message = `${ABILITIES[id].name} is still on cooldown.`
+      this.status.alert = `${ABILITIES[id].name} is still on cooldown.`
       return
     }
     if (ABILITIES[id].targeting === 'instant') {
@@ -2678,7 +2771,7 @@ export class GameScene extends Phaser.Scene {
     this.heroSelected = false
     this.syncTargeting()
     const within = ABILITIES[id].pathOnlyWithin
-    this.status.message = within !== undefined
+    this.status.alert = within !== undefined
       ? `${ABILITIES[id].name}: tap the highlighted road. Tap anywhere else, or CANCEL, to back out.`
       : `${ABILITIES[id].name}: tap the board. Tap the icon again, or CANCEL, to back out.`
   }
@@ -2810,7 +2903,7 @@ export class GameScene extends Phaser.Scene {
     this.syncTargeting()
     this.targetRing.clear()
     logEvent('ability-done', id)
-    this.status.message = `${def.name}!`
+    this.status.alert = `${def.name}!`
   }
 
   /**
@@ -2875,12 +2968,12 @@ export class GameScene extends Phaser.Scene {
       onCollect: (amount) => {
         if (amount <= 0) {
           // Losing has to land as an outcome rather than as nothing happening.
-          this.status.message = 'Scratch Ticket: not a winner. Keep your day job.'
+          this.status.alert = 'Scratch Ticket: not a winner. Keep your day job.'
           play(this, 'error')
           return
         }
         this.earn(amount)
-        this.status.message = `Scratch Ticket: ${amount} peanuts.`
+        this.status.alert = `Scratch Ticket: ${amount} peanuts.`
         play(this, 'peanuts')
       },
     })
@@ -2960,7 +3053,7 @@ export class GameScene extends Phaser.Scene {
       case 'howl': this.skillHowl(k); break
     }
     logEvent('hero-skill', `${k.effect} ${k.name}`)
-    this.status.message = `${k.name}!`
+    this.status.alert = `${k.name}!`
   }
 
   /**
@@ -3012,7 +3105,7 @@ export class GameScene extends Phaser.Scene {
     this.selected = null
     this.heroSelected = false
     this.syncTargeting()
-    this.status.message =
+    this.status.alert =
       `${p.name}: tap inside the ring. Tap outside it, or CANCEL, to back out.`
   }
 
@@ -3045,7 +3138,7 @@ export class GameScene extends Phaser.Scene {
       case 'rain': this.powerRain(p, x, y); break
       case 'dash': this.powerDash(p, x, y); break
     }
-    this.status.message = `${p.name}!`
+    this.status.alert = `${p.name}!`
   }
 
   /**
@@ -3310,12 +3403,22 @@ export class GameScene extends Phaser.Scene {
    * countdown runs on real seconds rather than the scaled game clock, because
    * "15 seconds" should mean fifteen seconds however fast the game is set to
    * run.
+   *
+   * WAVE 1 IS THE EXCEPTION AND IT HAS NO CLOCK AT ALL. A player arriving on a
+   * level they have never seen is reading the map, not deferring a decision --
+   * the pressure this countdown exists to create is pressure to hurry through
+   * the one moment that should be unhurried. `armReadyCountdown` gives wave 1
+   * a zero, and a zero is already the "nothing is counting" case here, so the
+   * guard below is what stops it: it returns before the clock can reach zero
+   * and call `startWave`. Wave 1 starts when the player says so.
    */
   private tickReadyCountdown(realDt: number): void {
     if (this.status.phase !== 'ready') {
       this.status.readyCountdown = 0
       return
     }
+    // Zero means nothing is counting, which is both "the clock ran out" and,
+    // on wave 1, "there was never a clock". Neither auto-starts from here.
     if (this.status.readyCountdown <= 0) return
     this.status.readyCountdown = Math.max(0, this.status.readyCountdown - realDt)
     if (this.status.readyCountdown === 0) this.startWave()
@@ -3336,7 +3439,7 @@ export class GameScene extends Phaser.Scene {
     // read an undefined wave and take the board down with it.
     this.status.wave = Math.min(saved.wave, this.level.waveTable.waves.length - 1)
     this.status.lives = saved.lives
-    this.status.peanuts = saved.peanuts
+    this.setPeanuts(saved.peanuts)
     // Unlocks are re-derived rather than trusted, then reconciled with what
     // was saved: the wave count is what earns them, so a saved list that
     // disagrees with the wave — a file edited by hand, or a draft that changed
@@ -3368,7 +3471,6 @@ export class GameScene extends Phaser.Scene {
     // by drawing them, by which time these spots are occupied and the pads
     // under the restored towers are hidden. Drawing them here would be a call
     // against an empty array.
-    this.status.waveName = this.level.waveTable.waves[this.status.wave].name
     logEvent('run-resumed',
       `wave ${this.status.wave + 1} lives=${this.status.lives} peanuts=${this.status.peanuts} ` +
       `towers=${this.towers.length}/${saved.towers.length}`)
@@ -3415,10 +3517,27 @@ export class GameScene extends Phaser.Scene {
     this.saveProgress()
   }
 
-  /** Restarts the clock for the wave that is now pending. */
+  /**
+   * Restarts the clock for the wave that is now pending -- except before wave
+   * 1, which has no clock.
+   *
+   * THE ONE PLACE THE RULE LIVES, and everything else falls out of it:
+   *
+   *   * `tickReadyCountdown` returns early on a zero, so nothing auto-starts.
+   *   * `startWave` pays `floor(readyCountdown) * earlyStartPeanutsPerSecond`,
+   *     so a zero clock pays a zero bonus -- there is no timer to beat, so
+   *     there is nothing to be rewarded for beating.
+   *   * The HUD's banner falls through to `START WAVE 1` rather than a
+   *     countdown, because it shows the bonus and the bonus is zero.
+   *   * A run resumed before wave 1 gets the same answer, because `create`
+   *     calls this AFTER `restoreRun` has put the saved wave back.
+   *
+   * Wave 1 used to get `firstReadySeconds`, 30s, twice the gap between later
+   * waves -- an acknowledgement that the first wave needs longer, made in the
+   * currency of a countdown. It needs longer than any number.
+   */
   private armReadyCountdown(): void {
-    const p = RULES.pacing
-    this.status.readyCountdown = this.status.wave === 0 ? p.firstReadySeconds : p.readySeconds
+    this.status.readyCountdown = this.status.wave === 0 ? 0 : RULES.pacing.readySeconds
   }
 
   startWave(): void {
@@ -3435,13 +3554,9 @@ export class GameScene extends Phaser.Scene {
     logEvent('wave-start', `${this.status.wave + 1} ${this.level.waveTable.waves[this.status.wave].name} bonus=${bonus}`)
     this.status.phase = 'wave'
     play(this, 'wave-start')
-    this.status.waveName = this.level.waveTable.waves[this.status.wave].name
     if (bonus > 0) {
       this.earn(bonus)
       play(this, 'peanuts')
-      this.status.message = `Wave ${this.status.wave + 1}: ${this.status.waveName}  ·  +${bonus} for starting early`
-    } else {
-      this.status.message = `Wave ${this.status.wave + 1}: ${this.status.waveName}`
     }
   }
 
@@ -3484,7 +3599,6 @@ export class GameScene extends Phaser.Scene {
       return
     }
     this.status.phase = 'ready'
-    this.status.waveName = this.level.waveTable.waves[this.status.wave].name
     this.armReadyCountdown()
     // THE MAIN SAVE POINT. A wave boundary is the only place the run is in a
     // state worth restoring: nothing is on the field, nothing is in flight,
@@ -3492,14 +3606,12 @@ export class GameScene extends Phaser.Scene {
     this.saveProgress()
     if (cleared) {
       this.announce('WAVE CLEARED', COLOR.good)
-      this.status.message =
-        `Wave cleared, +${RULES.peanutsPerWaveCleared} peanuts. Build or reposition — the next wave starts on its own.`
     } else {
-      // Not a clear, and it should not sound like one.
+      // Not a clear, and it should not sound like one. The banner is the whole
+      // announcement now: the sentence that used to follow it lived in the
+      // instruction bar, and that bar is gone.
       const n = escaped === 1 ? 'ONE GOT THROUGH' : `${escaped} GOT THROUGH`
       this.announce(n, COLOR.fire)
-      this.status.message =
-        `Wave survived, not cleared: ${escaped} reached the cabinet. No clear bonus.`
     }
   }
 
@@ -3545,7 +3657,7 @@ export class GameScene extends Phaser.Scene {
     }
     const earned = bannerPointsFor(outcome, RULES.banner)
     const total = addBannerPoints(earned)
-    this.status.message = won ? 'The line held.' : 'Overrun.'
+    this.status.alert = won ? 'The line held.' : 'Overrun.'
 
     this.openDialog({
       title: won ? 'HELD THE LINE' : 'OVERRUN',
@@ -3805,12 +3917,12 @@ export class GameScene extends Phaser.Scene {
     for (const e of this.enemies) {
       const take = e.tickTax(dt, this.status.peanuts)
       if (take <= 0) continue
-      this.status.peanuts = Math.max(0, this.status.peanuts - take)
+      this.setPeanuts(this.status.peanuts - take)
       logEvent('taxed', `${e.def.name} -${take} -> ${this.status.peanuts}`)
       floatingDamage(this, e.x, e.centreY, take, true, `-${take} PEANUTS`)
       play(this, 'taxed', 0.7)
       this.cameras.main.shake(140, 0.004)
-      this.status.message = `${e.def.name} taxed you ${take} peanuts. Spend it or lose it.`
+      this.status.alert = `${e.def.name} taxed you ${take} peanuts. Spend it or lose it.`
     }
   }
 
@@ -4076,7 +4188,7 @@ export class GameScene extends Phaser.Scene {
       targets: pieces, alpha: 0, delay: 2200, duration: 700,
       onComplete: () => pieces.forEach((o) => o.destroy()),
     })
-    this.status.message = `${boss.def.name} is here. He does not attack — he taxes. Spend your peanuts.`
+    this.status.alert = `${boss.def.name} is here. He does not attack — he taxes. Spend your peanuts.`
   }
 
   /**
@@ -4175,13 +4287,13 @@ export class GameScene extends Phaser.Scene {
     // on a moving board that silently does nothing reads as broken.
     if (!spot) {
       if (refused === 'out-of-range') {
-        this.status.message = 'Too far. The lads stay inside the ring — tap closer, or CANCEL.'
+        this.status.alert = 'Too far. The lads stay inside the ring — tap closer, or CANCEL.'
         this.flashRange(tower)
         play(this, 'error')
         return
       }
       this.clearSelection('outside')
-      this.status.message = 'Nothing to guard there.'
+      this.status.alert = 'Nothing to guard there.'
       play(this, 'error')
       return
     }
@@ -4193,7 +4305,7 @@ export class GameScene extends Phaser.Scene {
     this.manGarrison(g)
     this.drawRallyMark(spot)
     this.syncTargeting()
-    this.status.message = `${tower.def.name}: holding the ${spot.laneId} lane.`
+    this.status.alert = `${tower.def.name}: holding the ${spot.laneId} lane.`
   }
 
   /** A quick pulse of the selected tower's range ring, for a refused order. */
@@ -4455,7 +4567,7 @@ export class GameScene extends Phaser.Scene {
       },
       () => {
         this.nukeLaunch = null
-        this.status.message = 'Launch aborted. The nuke is still yours.'
+        this.status.alert = 'Launch aborted. The nuke is still yours.'
       },
     )
     this.asScreenSpace(this.nukeLaunch.objects)
@@ -4477,7 +4589,7 @@ export class GameScene extends Phaser.Scene {
       // The drop still happened; it just arrives quietly rather than on top of
       // something else. Better a muted moment than a stolen one.
       this.announce(name.toUpperCase(), '#8fd0ff')
-      this.status.message = `${name} acquired. One use.`
+      this.status.alert = `${name} acquired. One use.`
       play(this, 'cast-servernuke', 0.8)
       return
     }
@@ -4489,7 +4601,7 @@ export class GameScene extends Phaser.Scene {
       slot,
       () => {
         this.nukeEarned = null
-        this.status.message = `${name} acquired. One use. Tap it when you mean it.`
+        this.status.alert = `${name} acquired. One use. Tap it when you mean it.`
       },
     )
     this.nukeEarned.onEffect = (obj) => this.asScreenSpace([obj])
@@ -4552,7 +4664,7 @@ export class GameScene extends Phaser.Scene {
     const result = this.hero.hurt(damage)
     if (result === 'lastStand') this.announceLastStand()
     if (result === 'down') {
-      this.status.message =
+      this.status.alert =
         `${this.hero.def.name} is down. Back on the spot in ${realSeconds(this.hero.def.reviveSeconds)}s.`
       this.cameras.main.shake(240, 0.006)
     }
@@ -4588,7 +4700,7 @@ export class GameScene extends Phaser.Scene {
     // what turns a set of simultaneous effects into a moment.
     hitPause(this, EFFECT_MS.lastStandHoldMs, (on) => { this.hitPaused = on })
     this.announce(ls.name, COLOR.fire)
-    this.status.message =
+    this.status.alert =
       `${ls.name}! Damage doubled, defence gone. He cannot be touched for a moment.`
   }
 

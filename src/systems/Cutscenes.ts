@@ -1,8 +1,17 @@
-// Which comic plays before which level, and whether it has been seen.
+// Which comic plays before which level.
 //
 // Phaser-free on purpose, like the other systems modules: which panels a level
-// has, what counts as seen, and whether the data names a level that exists are
-// all decidable without a scene, and the tests read them directly.
+// has, and whether the data names a level that exists, are both decidable
+// without a scene, and the tests read them directly.
+//
+// A CUTSCENE PLAYS EVERY TIME ITS LEVEL STARTS. It used to play once and then
+// be suppressed by a `seenCutscenes` list in the save, which cost a save field,
+// a replay badge on the level select, a developer control to clear the flags,
+// and a rule about exactly when the flag was written. Skip is one tap, so the
+// replay it was all protecting against costs a player almost nothing -- and
+// the four mechanisms protecting them from it cost more than that to keep
+// correct. `shouldPlay` is now the same question as "does this level have a
+// comic".
 //
 // THE SCENE IS THIN AND THIS IS WHERE THE RULES ARE. CutsceneScene draws panels
 // and counts taps; everything about WHEN a cutscene plays, what order the
@@ -11,7 +20,6 @@
 import cutsceneData from '../data/cutscenes.json' with { type: 'json' }
 import artData from '../data/art.json' with { type: 'json' }
 import { LEVELS } from './Levels.ts'
-import { loadSave, writeSave } from './Save.ts'
 
 const DATA = cutsceneData as unknown as { levels: Record<string, string[]> }
 const ASSET_ROOT = (artData as unknown as { assetRoot: string }).assetRoot
@@ -42,40 +50,17 @@ export function panelKey(path: string): string {
   return `cutscene:${path}`
 }
 
-/** True once this level's comic has been watched or skipped. */
-export function hasSeen(levelId: string): boolean {
-  return loadSave().seenCutscenes.includes(levelId)
-}
-
 /**
  * Whether a run on this level should open with its comic.
  *
- * A level with no entry never has one, and a level whose comic has been seen
- * does not replay it — which is what makes the level select's replay control a
- * separate path rather than a flag on this one.
+ * A level with no entry in cutscenes.json has no comic; every level that has
+ * one plays it on every start. There is deliberately no second condition:
+ * this used to also ask whether the comic had been seen, and that one extra
+ * clause is what the save field, the replay badge and the developer reset
+ * control all existed to serve.
  */
 export function shouldPlay(levelId: string): boolean {
-  return panelsFor(levelId).length > 0 && !hasSeen(levelId)
-}
-
-/**
- * Marks a level's comic seen. Every other save field is preserved.
- *
- * WRITTEN WHEN THE COMIC IS OVER, not when it starts: a player who closed the
- * tab on panel two should get it again, and one who pressed Skip should not.
- * Both of those are the same rule -- the flag records that the comic REACHED
- * ITS END, however it got there.
- */
-export function markSeen(levelId: string): void {
-  const save = loadSave()
-  if (save.seenCutscenes.includes(levelId)) return
-  writeSave({ ...save, seenCutscenes: [...save.seenCutscenes, levelId] })
-}
-
-/** Forgets every seen flag, so every comic plays again. The developer control
- *  on the diagnostics screen; nothing in normal play calls it. */
-export function forgetAllCutscenes(): void {
-  writeSave({ ...loadSave(), seenCutscenes: [] })
+  return panelsFor(levelId).length > 0
 }
 
 /**
@@ -101,7 +86,7 @@ export function cutsceneProblems(): string[] {
       continue
     }
     if (!Array.isArray(panels) || panels.length === 0) {
-      problems.push(`${id}'s cutscene has no panels, so it would be marked seen without playing`)
+      problems.push(`${id}'s cutscene has an empty panel list, so BEGIN would open a comic with nothing in it`)
       continue
     }
     for (const p of panels) {

@@ -21,7 +21,7 @@ import { ART, renderFor } from '../systems/Art.ts'
 import presentationData from '../data/presentation.json'
 import { play } from '../systems/Audio.ts'
 import { musicForScene } from '../systems/Music.ts'
-import { viewH, viewW } from '../systems/Resolution.ts'
+import { tapFloor, visibleDesignBox } from '../systems/Layout.ts'
 
 const TOWERS = towersData as Record<string, TowerDef>
 const ABILITIES = abilitiesData as Record<string, AbilityDef>
@@ -45,6 +45,22 @@ interface Card {
   parts: Phaser.GameObjects.GameObject[]
   /** Just the face, which is what a reveal would uncover. */
   face: Phaser.GameObjects.Container
+  /**
+   * The card's own rectangle IN FACE COORDINATES, which is the only honest way
+   * to place anything inside it.
+   *
+   * `face` has a MIXED ANCHOR -- centred horizontally, top-aligned vertically
+   * -- and that asymmetry cost the loadout screen its layout. `heroSection`
+   * offset its row by `-height / 2 + padT`, correct for a centred anchor and
+   * half a block too high for this one, which put five hero cards on top of
+   * the title, the subtitle and the HERO heading on every viewport. It was
+   * invisible for two sessions because the row's own geometry was right; only
+   * the anchor it was measured from was wrong.
+   *
+   * So the anchor is not something a caller works out any more. `top` is 0 and
+   * `left` is -width / 2, stated rather than derived.
+   */
+  inner: { left: number; top: number; width: number; height: number }
   reveal(): void
 }
 
@@ -207,9 +223,17 @@ export class LoadoutScene extends Phaser.Scene {
     }
 
     // What the camera can see, in design units.
-    const zoom = this.cameras.main.zoom || 1
-    const visW = Math.max(W, viewW(this) / zoom)
-    const visH = Math.max(H, viewH(this) / zoom)
+    //
+    // THIS DIVIDED A CSS-PIXEL VIEWPORT BY A PHYSICAL-PIXEL CAMERA ZOOM, which
+    // are two different spaces, and came out about three times too small -- so
+    // it fell through to the `W`/`H` floor and painted the room to the design
+    // box rather than to the screen. On an 844x390 phone the camera sees 1558
+    // design units of width and the backdrop covered 1280 of them, leaving a
+    // black band down each side of the illustration. `visibleDesignBox` does
+    // the conversion in the one place that owns it.
+    const vis = visibleDesignBox(this)
+    const visW = vis.width
+    const visH = vis.height
 
     const cfg = renderFor(key)
     const srcW = cfg.contentWidth ?? 1920
@@ -276,13 +300,21 @@ export class LoadoutScene extends Phaser.Scene {
 
     // THE BUTTONS GO FIRST, at a fixed distance from the bottom of the design
     // box. Nothing computed after this can move them.
-    const by = H - LO.buttonMargin - LO.buttonHeight / 2
-    this.buildButtons(by)
+    //
+    // AND THEY RESERVE WHAT THEY ACTUALLY TAKE. `plateButton` applies the 44pt
+    // tap floor, which on a phone makes a 48-unit button 81 units tall -- so
+    // reserving `LO.buttonHeight` here left the cards a budget 33 units too
+    // generous and the specials' description ran into BEGIN THE RUN. Asking
+    // `tapFloor` the same question the button will ask is what keeps the two
+    // in step.
+    const buttonH = tapFloor(this, LO.buttonHeight)
+    const by = H - LO.buttonMargin - buttonH / 2
+    this.buildButtons(by, buttonH)
 
     // What is left, after the heading each section carries.
     const top = drawn.y + drawn.height + 10
     const headingH = this.headingHeight()
-    const budget = (by - LO.buttonHeight / 2 - LO.buttonGap) - top
+    const budget = (by - buttonH / 2 - LO.buttonGap) - top
       - headingH * 3 - LO.sectionGap * 2
 
     // THE HERO BLOCK IS SIZED TO ITS CONTENT, and the two dealt rows share
@@ -358,7 +390,7 @@ export class LoadoutScene extends Phaser.Scene {
    * BEGIN THE RUN is not visually smaller than the reroll beside it. See
    * `buttonRow` for what happens when that pair will not fit the column.
    */
-  private buildButtons(by: number): void {
+  private buildButtons(by: number, buttonH: number): void {
     const beginLabel = 'BEGIN THE RUN'
     const left = this.rerollsLeft
     const rerollLabel = `${LO.copy.rerollLabel} (${left} left)`
@@ -370,9 +402,9 @@ export class LoadoutScene extends Phaser.Scene {
       minWidth: LO.buttonMinWidth,
       maxTotal: this.contentWidth,
     })
-    const reroll = plateButton(this, row.centres[0]!, by, row.width, LO.buttonHeight,
+    const reroll = plateButton(this, row.centres[0]!, by, row.width, buttonH,
       rerollLabel, () => this.reroll(), 22)
-    const begin = plateButton(this, row.centres[1]!, by, row.width, LO.buttonHeight,
+    const begin = plateButton(this, row.centres[1]!, by, row.width, buttonH,
       beginLabel, () => {
         // The HUD is not launched here any more; GameScene starts its own.
         // Two callers had to remember and only this one did, which left every
@@ -416,6 +448,9 @@ export class LoadoutScene extends Phaser.Scene {
       .rectangle(x + w / 2, y + h / 2, w - 10, h - 10, 0x121820, LO.panelAlpha)
       .setOrigin(0.5)
     const plate = platePanel(this, x, y, w, h)
+    // Centred horizontally, top-aligned vertically. See `Card.inner`: the
+    // asymmetry is deliberate (a row of cards is laid out from its centre and
+    // filled from its top) and it is the reason `inner` exists.
     const face = this.add.container(x + w / 2, y)
     const parts: Phaser.GameObjects.GameObject[] = [backing, ...plate, face]
     this.layer.add(parts)
@@ -423,6 +458,7 @@ export class LoadoutScene extends Phaser.Scene {
     const c: Card = {
       parts,
       face,
+      inner: { left: -w / 2, top: 0, width: w, height: h },
       // Instant on the opening hand; animated after a reroll, so a redeal is
       // visibly a redeal rather than the same screen with different words on
       // it. When the cards start face-down this becomes the flip, and nothing
@@ -546,8 +582,13 @@ export class LoadoutScene extends Phaser.Scene {
 
     const height = padT + row.height + LO.sectionGap + desc.height + padB
     const c = this.card(W / 2 - w / 2, y, w, height)
-    const left = -w / 2 + pad
-    const rowTop = -height / 2 + padT
+    // BOTH OFFSETS COME FROM THE CARD, not from w and h. `left` was derived
+    // correctly and `rowTop` was derived as `-height / 2 + padT` -- right for a
+    // centred anchor, and half the block too high for this one. That put the
+    // five hero cards over the title, the subtitle and the HERO heading at
+    // every viewport, which is the overlap playtesting kept reporting.
+    const left = c.inner.left + pad
+    const rowTop = c.inner.top + padT
 
     for (const [i, { id, def }] of roster.entries()) {
       c.face.add(this.heroCard(
@@ -771,23 +812,52 @@ export class LoadoutScene extends Phaser.Scene {
     }
     const b = built as NonNullable<typeof built>
 
+    // THE LADDER CAN RUN OUT, and when it did the card kept the smallest size
+    // and simply overflowed: the tower cards' last line ran out under the
+    // SPECIALS heading and the specials' cooldown line was cut off by the
+    // bottom of the screen. The blurb is the elastic part, so it is clipped to
+    // the lines that actually fit rather than allowed to spill onto whatever
+    // is drawn next.
+    if (b.total > room) {
+      const fixed = b.name.height + 4 + (b.stats ? b.stats.height + 3 : 0)
+      const line = b.body.height / Math.max(1, b.body.getWrappedText().length)
+      const lines = Math.max(1, Math.floor((room - fixed) / Math.max(1, line)))
+      b.body.setStyle({ maxLines: lines })
+      b.total = fixed + b.body.height
+    }
+
     // Laid out from the top of the padded area, centred if there is slack.
     let ty = padT + Math.max(0, (room - b.total) / 2)
     b.name.setY(ty); ty += b.name.height + 4
     if (b.stats) { b.stats.setY(ty); ty += b.stats.height + 3 }
     b.body.setY(ty)
 
-    const box = col - 8
-    // Centred in its column, vertically as well as horizontally. The icons
-    // used to sit at a fixed y near the top, which put them against the frame
-    // and made them read as different sizes from card to card.
+    // THE ICON COLUMN IS SOLVED, NOT STACKED. The icon took the full column and
+    // the price hung off its bottom edge at a fixed offset, so on a short card
+    // the badge was drawn below the card entirely; clamping it back inside
+    // then put it on top of the artwork. Both are the same mistake -- two
+    // things sharing a column with only one of them measured.
+    //
+    // So the price is measured first, the icon gets what is left, and the pair
+    // is centred in the padded area together.
+    // The icon keeps the whole column -- these are the only pictures on the
+    // screen and shrinking them to make room for a three-character price is a
+    // bad trade. The price is a TAG ON THE CORNER, sitting on the bottom of
+    // the icon the way a price tag does, and anchored to the padded area's own
+    // bottom edge so it is inside the card at every card height.
+    //
+    // It used to hang off the icon's bottom at a fixed offset instead, which
+    // on a short card drew it below the card entirely and put it on the
+    // SPECIALS heading underneath.
     const iconCx = -cw / 2 + pad + col / 2
-    const iconCy = ch / 2 - (cost === null ? 0 : 10)
+    const box = col - 8
+    const iconCy = padT + room / 2
     const costText = cost === null ? null : this.add.text(
-      iconCx, iconCy + box / 2 + 4, cost, {
+      iconCx, padT + room, cost, {
         fontFamily: FONT_UI, fontSize: '22px', color: COLOR.amber, fontStyle: 'bold',
+        stroke: '#0d1016', strokeThickness: 5,
       },
-    ).setOrigin(0.5, 0)
+    ).setOrigin(0.5, 1)
 
     return {
       parts: [

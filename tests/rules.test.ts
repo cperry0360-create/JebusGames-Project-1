@@ -397,15 +397,61 @@ test('the tax escalates as the boss is worn down, and always bites', () => {
   assert.ok(boss.tax.minimumTake > 0, 'a broke player should still feel it')
 })
 
-test('killing the boss pays enough to be worth racing for', () => {
-  const boss = Object.values(enemies).find((e: any) => e.tier === 'boss') as any
+test('every boss pays a lump sum, and the rule is checked on every boss', () => {
+  /*
+   * THIS USED TO CHECK ONE BOSS -- `Object.values(enemies).find(tier === 'boss')`
+   * takes whichever appears FIRST in the file, which is the Politician. So two
+   * of the three bosses were never examined, and one of its assertions --
+   * "the boss has no armour by design" -- is simply false for the other two:
+   * The Devil has 4 and the Rainbow Reaper has 6. It passed for four months by
+   * only ever looking at the one boss it happened to be true of.
+   */
+  const bosses = Object.entries(enemies).filter(([, e]: [string, any]) => e.tier === 'boss')
+  assert.equal(bosses.length, 3, 'the roster gained or lost a boss')
   const dearest = Math.max(...Object.values(towers).map((t: any) => t.cost))
   const bestOther = Math.max(...Object.values(enemies)
     .filter((e: any) => e.tier !== 'boss').map((e: any) => e.peanutReward))
-  assert.ok(boss.peanutReward > bestOther * 10, 'the payout is not a lump sum')
-  assert.ok(boss.peanutReward >= dearest * 3, 'the payout should buy a real answer')
-  assert.ok(boss.livesCost > 1, 'letting a boss through should hurt')
-  assert.equal(boss.armor, 0, 'the boss has no armour by design')
+
+  for (const [id, boss] of bosses as [string, any][]) {
+    assert.ok(boss.peanutReward > bestOther * 10, `${id}'s payout is not a lump sum`)
+    assert.ok(boss.peanutReward >= dearest * 3, `${id}'s payout should buy a real answer`)
+    assert.ok(boss.livesCost > 1, `letting ${id} through should not be cheap`)
+  }
+
+  // ARMOUR IS PER BOSS, not a design rule. The Politician has none because his
+  // mechanic is the tax rather than a fight; the other two are fights.
+  assert.equal((enemies as any).politician.armor, 0,
+    'the Politician has no armour by design -- his mechanic is the tax')
+  for (const id of ['theDevil', 'unicornBoss']) {
+    assert.ok((enemies as any)[id].armor > 0, `${id} is a fight and should carry armour`)
+  }
+})
+
+test('a boss payout is a trophy, not an economy', () => {
+  // EVERY BOSS IS ON ITS LEVEL'S LAST WAVE, so no boss payout is ever spent --
+  // and Banner Points come from waves reached, the clear bonus and lives
+  // remaining, never from peanuts. The number is the one on the results
+  // screen and nothing else, which is worth knowing before anyone tunes it.
+  for (const [file, level] of [['waves.json', 'level1'], ['waves.level2.json', 'level2'],
+                               ['waves.level3.json', 'level3']] as const) {
+    const table = JSON.parse(
+      readFileSync(new URL(`../src/data/${file}`, import.meta.url), 'utf8'))
+    const last = table.waves[table.waves.length - 1]
+    assert.ok(last.boss, `${level}'s last wave is not the boss wave`)
+  }
+  const banner = readFileSync(new URL('../src/systems/Banner.ts', import.meta.url), 'utf8')
+  const fn = /export function bannerPointsFor[\s\S]*?\n\}/.exec(banner)![0]
+  assert.ok(!/peanut/i.test(fn), 'Banner Points now depend on peanuts, so a boss payout is spendable value')
+
+  // And it is sized against its OWN boss rather than left behind by a health
+  // change. The Rainbow Reaper's 1800 was set against 9,800 health; at 2,100
+  // it was paying 857 peanuts per 1000hp against a 194 norm for the other two.
+  const perThousand = (e: any): number => (e.peanutReward / e.maxHealth) * 1000
+  const reaper = perThousand((enemies as any).unicornBoss)
+  const devil = perThousand((enemies as any).theDevil)
+  assert.ok(reaper < devil * 3,
+    `the Reaper pays ${reaper.toFixed(0)} per 1000hp against The Devil's ${devil.toFixed(0)}; `
+    + 'its reward was sized against a health value it no longer has')
 })
 
 // ------------------------------------------------------------------ economy
@@ -526,13 +572,18 @@ test('the margin leaves room to do something after the first tower', () => {
   assert.ok(rules.startingPeanutsMargin < 2, 'more than double is not a margin, it is a second tower')
 })
 
-test('the guidance line never tells the player to do something they cannot', () => {
+test('there is no guidance line to contradict the game state', () => {
+  // `idleHint()` produced one line of advice -- "Tap a build pad to place a
+  // tower, then START WAVE." -- and this test used to check it never advised
+  // something the player could not afford. The whole bar is gone, so the
+  // failure mode is gone with it. What is checked now is that it did not come
+  // back under another name.
   const game = src('scenes/GameScene.ts')
-  assert.match(game, /canAffordAny\(/, 'the hint never checks whether anything is buyable')
-  // The opening message must come from the same function as every later one,
-  // or it can contradict the state it is describing.
-  assert.match(game, /this\.status\.message = this\.idleHint\(\)/,
-    'the opening message is hardcoded rather than derived from the game state')
+  assert.ok(!/idleHint/.test(game.split('\n').filter((l) => !/^\s*(\/\/|\*)/.test(l)).join('\n')),
+    'the guidance line is back')
+  assert.ok(!/status\.message/.test(game), 'the status still carries a guidance line')
+  const hud = src('scenes/HudScene.ts')
+  assert.ok(!/this\.message\b/.test(hud), 'the HUD still draws a guidance line')
 })
 
 /* ------------------------------------------------------------ pacing */
@@ -543,23 +594,81 @@ test('the game clock is faster than real time but still a game', () => {
   assert.ok(p.gameSpeed <= 2, `${p.gameSpeed}x is a fast-forward button, not a pace`)
 })
 
-test('a wave always starts on its own, and starting it early pays', () => {
+test('waves 2 onward start on their own, and starting one early pays', () => {
   const p = rules.pacing
   assert.ok(p.readySeconds > 0, 'without a countdown the player can sit in the build phase forever')
   assert.ok(p.readySeconds >= 8 && p.readySeconds <= 30,
     `${p.readySeconds}s between waves is either panic or a nap`)
-  // The opening is the one place nothing is built and the screen is still new.
-  assert.ok(p.firstReadySeconds >= p.readySeconds,
-    'the first wave should not arrive sooner than every later one')
   assert.ok(p.earlyStartPeanutsPerSecond > 0, 'starting early has to be worth something')
 
   const game = src('scenes/GameScene.ts')
   assert.match(game, /tickReadyCountdown/, 'nothing counts down')
   assert.match(game, /armReadyCountdown\(\)/, 'the countdown is never started')
   // The bonus has to fall out of the clock rather than out of who called
-  // startWave, or an auto-started wave pays out too.
+  // startWave, or an auto-started wave pays out too -- and it is also what
+  // makes wave 1 pay nothing without a second rule saying so.
   assert.match(game, /Math\.floor\(this\.status\.readyCountdown\)/,
     'the early-start bonus is not derived from the time actually saved')
+})
+
+test('wave 1 has no clock, and does not start without the player', () => {
+  /*
+   * The pressure a countdown creates is pressure to hurry, and the one moment
+   * that should be unhurried is a level the player has never seen. Wave 1 waits
+   * for the banner; waves 2 onward are unchanged.
+   */
+  const p = rules.pacing
+  assert.equal((p as Record<string, unknown>).firstReadySeconds, undefined,
+    'the first wave has a countdown length again')
+  assert.equal(typeof (p as Record<string, unknown>)._firstWave, 'string',
+    'nothing in the data says what happens before wave 1')
+
+  const game = src('scenes/GameScene.ts')
+  // ONE PLACE DECIDES IT. Everything else -- no auto-start, no bonus, and the
+  // banner reading as a prompt -- falls out of the zero.
+  assert.match(game,
+    /this\.status\.readyCountdown = this\.status\.wave === 0 \? 0 : RULES\.pacing\.readySeconds/,
+    'wave 1 is not given a zero clock')
+
+  // And the zero cannot auto-start: the tick returns before it could fire.
+  const tick = /private tickReadyCountdown\([\s\S]*?\n  \}/.exec(game)
+  assert.ok(tick, 'tickReadyCountdown is gone')
+  assert.match(tick[0], /if \(this\.status\.readyCountdown <= 0\) return/,
+    'a zero clock falls through to startWave')
+  assert.ok(tick[0].indexOf('<= 0) return') < tick[0].indexOf('startWave()'),
+    'the zero guard runs after the auto-start, so wave 1 would begin by itself')
+})
+
+test('no early bonus is paid for wave 1', () => {
+  // Walked as arithmetic rather than asserted from the source: the bonus is
+  // whatever is left on the clock, and wave 1's clock is zero.
+  const p = rules.pacing
+  const armed = (wave: number): number => (wave === 0 ? 0 : p.readySeconds)
+  const bonusFor = (wave: number, spentSeconds: number): number =>
+    Math.floor(Math.max(0, armed(wave) - spentSeconds)) * p.earlyStartPeanutsPerSecond
+
+  // However fast the player presses it, wave 1 pays nothing.
+  for (const spent of [0, 0.5, 3, 14, 30, 600]) {
+    assert.equal(bonusFor(0, spent), 0, `wave 1 paid a bonus after ${spent}s`)
+  }
+  // Wave 2 is untouched: press it instantly and it pays the full clock.
+  assert.equal(bonusFor(1, 0), p.readySeconds * p.earlyStartPeanutsPerSecond)
+  assert.equal(bonusFor(1, p.readySeconds), 0, 'an auto-started wave 2 still paid out')
+  assert.ok(bonusFor(1, 5) > 0, 'starting wave 2 early stopped paying')
+})
+
+test('resuming before wave 1 still waits for the player', () => {
+  // `create` restores the saved run and THEN arms the clock, so a save taken
+  // at wave 0 is handed the same zero a fresh run is. Order is the whole of
+  // it: arming first would give the restored wave the previous wave's clock.
+  const game = src('scenes/GameScene.ts')
+  const create = game.slice(game.indexOf('create(): void {'), game.indexOf('private deal('))
+  const restore = create.indexOf('this.restoreRun(saved)')
+  const arm = create.indexOf('this.armReadyCountdown()')
+  assert.ok(restore > 0, 'the resume path is gone from create()')
+  assert.ok(arm > 0, 'the countdown is not armed in create()')
+  assert.ok(restore < arm,
+    'the clock is armed before the saved wave is restored, so a resumed wave 1 would count down')
 })
 
 test('the countdown runs on real seconds, not the scaled clock', () => {

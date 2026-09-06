@@ -3,7 +3,7 @@ import { COLOR, faceFor, uiSize } from '../ui/Theme.ts'
 import { fitUiCamera, viewH, viewW } from '../systems/Resolution.ts'
 import { onSceneResize, sceneIsLive } from '../systems/SceneEvents.ts'
 import { logEvent } from '../systems/Diagnostics.ts'
-import { markSeen, panelKey, panelUrl, panelsFor } from '../systems/Cutscenes.ts'
+import { panelKey, panelUrl, panelsFor } from '../systems/Cutscenes.ts'
 import { cutsceneLayout, type CutsceneLayout } from '../systems/CutsceneLayout.ts'
 import { safeAreaInsets } from '../systems/SafeArea.ts'
 import { PRESENTATION } from '../systems/Presentation.ts'
@@ -262,20 +262,19 @@ export class CutsceneScene extends Phaser.Scene {
     logEvent('cutscene', `${this.levelId} panel ${this.index + 1}/${this.panels.length}`)
   }
 
-  /** Straight to the level. Counts as seen: the player has decided about this
-   *  comic, and asking again next run is not respecting the answer. */
+  /** Straight to the level, from one tap, at any point in the comic. That
+   *  cheapness is the whole reason the comic can afford to replay every run. */
   private skip(): void {
     if (this.finished) return
     this.handOver('skipped')
   }
 
+  /** The one point every ending goes through -- read to the end, skipped, or
+   *  a level with no panels at all -- so they cannot drift apart. It used to
+   *  also write the seen flag; nothing is recorded now, because nothing asks. */
   private handOver(why: string): void {
     if (this.finished) return
     this.finished = true
-    // WRITTEN HERE AND ONLY HERE, at the one point every ending goes through,
-    // so "read to the end" and "skipped" cannot drift apart. A level with no
-    // panels is not marked -- there is nothing to have seen.
-    if (this.panels.length > 0) markSeen(this.levelId)
     logEvent('cutscene', `${this.levelId} ${why} -> ${this.next}`)
     this.scene.start(this.next)
   }

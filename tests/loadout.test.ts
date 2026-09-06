@@ -208,12 +208,18 @@ test('the screen is laid out from the viewport, not from the content', () => {
   const s = src('scenes/LoadoutScene.ts')
   const render = s.slice(s.indexOf('private render(): void {'), s.indexOf('private headingHeight'))
 
-  assert.match(render, /const by = H - LO\.buttonMargin - LO\.buttonHeight \/ 2/,
+  assert.match(render, /const by = H - LO\.buttonMargin - buttonH \/ 2/,
     'the button row is not anchored to the bottom of the viewport')
+  // AND IT RESERVES WHAT IT ACTUALLY TAKES. `plateButton` applies the 44pt tap
+  // floor, so on a phone a 48-unit button is 81 units tall. Reserving the
+  // requested height rather than the floored one left the cards a budget 33
+  // units too generous, and the specials' description ran into BEGIN THE RUN.
+  assert.match(render, /const buttonH = tapFloor\(this, LO\.buttonHeight\)/,
+    'the button row reserves its requested height rather than the height it gets')
   // Placed before the cards exist, so nothing measured later can move them.
-  assert.ok(render.indexOf('this.buildButtons(by)') < render.indexOf('this.heroSection('),
+  assert.ok(render.indexOf('this.buildButtons(by, buttonH)') < render.indexOf('this.heroSection('),
     'the buttons are placed after the cards, so a tall card can still push them off')
-  assert.match(render, /const budget = \(by - LO\.buttonHeight \/ 2 - LO\.buttonGap\) - top/,
+  assert.match(render, /const budget = \(by - buttonH \/ 2 - LO\.buttonGap\) - top/,
     'the card area is not the space left over after the buttons')
   // The two DEALT rows are given their height. They hold whatever the draft
   // handed over and must fit it into the space that is left.

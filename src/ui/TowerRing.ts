@@ -156,8 +156,8 @@ export class TowerRing {
   readonly panelLayer: Phaser.GameObjects.Container
   private readonly leader: Phaser.GameObjects.Graphics
   private readonly scene: Phaser.Scene
-  private readonly opts: TowerRingOptions
-  private readonly buttons: ButtonParts[] = []
+  private opts: TowerRingOptions
+  private buttons: ButtonParts[] = []
   private placement: RingPlacement | null = null
   private selected: number | null = null
   private panelSize = { w: CFG.panelWidth, h: 0 }
@@ -181,6 +181,51 @@ export class TowerRing {
 
   get active(): boolean {
     return !this.closed
+  }
+
+  /** What the ring currently believes about each option, so the scene can ask
+   *  whether a re-price would change anything before paying for a rebuild. */
+  get affordability(): Array<{ id: string; affordable: boolean }> {
+    return this.opts.options.map((o) => ({ id: o.id, affordable: o.affordable }))
+  }
+
+  /**
+   * Re-reads the options WITHOUT closing, keeping the selection.
+   *
+   * THE BUG THIS EXISTS FOR. Every option's `affordable` was computed once, in
+   * the array handed to the constructor, so a player who opened a build panel
+   * one peanut short and then earned three watched the control stay dead until
+   * they closed the panel and opened it again. The check was not wrong, it was
+   * a snapshot -- and nothing re-took it.
+   *
+   * The scene calls this when the balance moves AND the answer actually
+   * changed; peanuts arrive on every kill, and rebuilding a ring forty times a
+   * wave to redraw nothing would be its own bug.
+   *
+   * The selection survives by id rather than by index: the option list is the
+   * same list re-priced, but pinning to a position would silently follow the
+   * wrong tower the day one of them is filtered out.
+   */
+  refreshOptions(options: RingOption[]): void {
+    if (this.closed) return
+    const openId = this.selected === null ? null : this.opts.options[this.selected]?.id ?? null
+    this.opts = { ...this.opts, options }
+    this.ringLayer.removeAll(true)
+    this.buttons = []
+    this.selected = null
+    this.buildRing()
+    const back = openId === null ? -1 : options.findIndex((o) => o.id === openId)
+    if (back >= 0) {
+      // Straight to `buildPanel` rather than through `select`, which would
+      // play the click sound and re-fire the preview for a tap nobody made.
+      this.selected = back
+      for (const [i, b] of this.buttons.entries()) b.plate.setActive(i === back)
+      this.buildPanel(options[back]!)
+    } else {
+      this.panelLayer.removeAll(true)
+      this.panelSize = { w: this.panelSize.w, h: 0 }
+    }
+    this.reposition()
   }
 
   /** How many positions the geometry is laid out for. See `slots`. */

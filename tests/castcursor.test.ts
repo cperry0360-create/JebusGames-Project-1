@@ -73,15 +73,15 @@ test('CANCEL is in the HUD, and the layout reserves it', () => {
   assert.equal(typeof P.hud.layout.cancelWidth, 'number')
 })
 
-test('the wave message has a plate under it', () => {
+test('there is no wave message bar left to need a plate', () => {
+  // IT USED TO HAVE ONE, and the plate was the right fix for the wrong thing:
+  // a permanent line of guidance across the top of the board, over painted
+  // map, needed a backing to be readable at all. The line is gone -- what a
+  // player needs at the moment it happens goes through `toast`, and what was
+  // teaching waits for a tutorial -- so the plate went with it.
   const hud = src('scenes/HudScene.ts')
-  assert.match(hud, /private drawMessagePlate\(\): void/)
-  // Created before the text, because Phaser draws in creation order.
-  assert.ok(hud.indexOf('this.messagePlate = this.add.graphics()')
-    < hud.indexOf('this.message = this.add.text('),
-    'the plate is created after the text and would cover it')
-  // Sized to the words, not to the rectangle they are allowed to use.
-  assert.match(hud, /Math\.min\(r\.width, this\.message\.width \+ pad \* 2\)/)
-  // And it takes turns with the boss bar exactly as the text does.
-  assert.match(hud, /this\.messagePlate\.setVisible\(!boss\)/)
+  assert.ok(!/drawMessagePlate/.test(hud), 'the message plate is back')
+  assert.ok(!/this\.message\b/.test(hud), 'the message text is back')
+  // The rectangle stays: the boss bar uses it for one wave in thirteen.
+  assert.match(hud, /this\.layout\.messageRow/, 'the boss bar lost its region too')
 })

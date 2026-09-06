@@ -58,6 +58,7 @@
     "ability-bailey-1": "abilities/ability_bailey_1.webp",
     "ability-bailey-2": "abilities/ability_bailey_2.webp",
     "hud-peanuts": "ui/hud_peanuts.webp",
+    "hud-peanut": "ui_icons/hud_peanut_icon.webp",
     "hud-lives": "ui/hud_lives.webp",
     "hud-wave": "ui/hud_wave.webp",
     "enemy-politician": "enemies/enemy_boss_politician.webp",
@@ -294,6 +295,11 @@
       "anchorY": 0.5,
       "contentWidth": 166,
       "contentHeight": 256
+    },
+    "hud-peanut": {
+      "_note": "THE PEANUT, on its own, painted. It was in public/assets/ui_icons/ the whole time and art.json never named it, so every peanut in the game was drawn either as part of the counter plate or as `gen-icon-peanut` -- a flood-filled cut-out of that plate, which is the plain white peanut the HUD was showing.",
+      "contentWidth": 512,
+      "contentHeight": 512
     },
     "hud-peanuts": {
       "contentWidth": 232,
@@ -849,9 +855,10 @@
       "covered": "ui-scratch-covered",
       "revealed": "ui-scratch-revealed"
     },
+    "peanut": "hud-peanut",
     "icons": {
       "upgrade": "icon-upgrade",
-      "sell": "gen-icon-peanut",
+      "sell": "hud-peanut",
       "target": "icon-target",
       "cancel": "icon-cancel",
       "locked": "icon-locked",
@@ -886,7 +893,7 @@
     "groundShadow": "gen-ground-shadow",
     "buildGlow": "generated-build-glow",
     "iconMissing": "generated-icon-missing",
-    "peanutIcon": "gen-icon-peanut"
+    "_peanutIcon": "RETIRED. It was a flood-filled cut-out of the counter plate, generated at boot by src/systems/PeanutIcon.ts, and its own docstring said to delete it the day real peanut art arrived. The art was already in the repository; art.json simply never named it. `ui.peanutIcon` is the real file now."
   },
   "greyable": [
     "turret-ledger",

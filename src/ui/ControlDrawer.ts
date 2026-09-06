@@ -513,7 +513,7 @@ export class ControlDrawer {
   private drawHeader(): void {
     const s = this.scene
     const r = this.layout.header
-    const icon = ART.generated.peanutIcon
+    const icon = ART.ui.peanut
     let x = r.x
     if (s.textures.exists(icon)) {
       const img = s.add.image(r.x + CFG.headerIcon / 2, r.y + r.height / 2, icon)

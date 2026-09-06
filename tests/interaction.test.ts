@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, readdirSync } from 'node:fs'
+import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import {
   atSpecChoice, BASE_TIER, isMaxed, maxTier, nextStep, sellValue, statAt,
 } from '../src/systems/Upgrades.ts'
@@ -310,7 +310,7 @@ test('a refused ability says so', () => {
   const arm = game.slice(game.indexOf('armAbility(id: string | undefined)'),
     game.indexOf('/** True where this ability may be cast'))
   assert.match(arm, /if \(this\.casting\) \{/, 'the cast check is still a silent early return')
-  assert.match(arm, /this\.status\.message =/, 'a refusal during a cast says nothing')
+  assert.match(arm, /this\.status\.alert =/, 'a refusal during a cast says nothing')
 })
 
 test('nothing exempts the boss from abilities', () => {
@@ -370,13 +370,17 @@ test('a downed hero comes back, and says where and when', () => {
   const game = src('scenes/GameScene.ts')
   assert.match(game, /reviveLabel/, 'nothing marks the spot he returns to')
   assert.match(game, /BACK IN \$\{secs\}s/, 'the ground marker carries no countdown')
+  // ONE COUNTDOWN, ON THE GROUND. There were two -- a copy on the hero's HUD
+  // bar, beside a name and a mode label -- and the HUD half went with the
+  // label when the name and "DAD MODE" were removed. The ground marker is the
+  // better of the two anyway: it is where the player is already looking, and
+  // it is where he comes back.
   const hud = src('scenes/HudScene.ts')
-  // In REAL seconds, both places. reviveIn is in game seconds and gameSpeed is
-  // 1.4, so a 25 in the data is 17.9 on the player's watch — and a countdown
-  // that disagrees with a stopwatch reads as broken.
-  assert.match(hud,
-    /BACK IN \$\{Math\.max\(0, Math\.ceil\(realSeconds\(s\.heroReviveIn, 1\)\)\)\}s/,
-    'the hero bar does not count him down in real seconds')
+  assert.ok(!/BACK IN/.test(hud), 'the hero bar carries a second countdown again')
+  assert.ok(!/heroLabel/.test(hud), 'the hero name and mode label are back on the HUD')
+  // In REAL seconds. reviveIn is in game seconds and gameSpeed is 1.4, so a 25
+  // in the data is 17.9 on the player's watch — and a countdown that disagrees
+  // with a stopwatch reads as broken.
   assert.match(game, /realSeconds\(this\.hero\.reviveIn, 1\)/,
     'the ground marker counts down in game seconds')
 })
@@ -547,8 +551,18 @@ test('reopening the menu does not pile up live objects', () => {
   // container is destroyed — so a new menu is a new object rather than an
   // append to an old one.
   const ring = src('ui/TowerRing.ts')
-  assert.match(ring, /private readonly buttons: ButtonParts\[\] = \[\]/,
+  assert.match(ring, /private buttons: ButtonParts\[\] = \[\]/,
     'the button list is not per-instance')
+  // It lost `readonly` so a live re-price can rebuild the ring in place. That
+  // is only safe if the rebuild DESTROYS what it replaces and starts from a
+  // fresh array rather than appending -- which is the exact failure this test
+  // was written about.
+  const refresh = /refreshOptions\([\s\S]*?\n  \}/.exec(ring)
+  assert.ok(refresh, 'refreshOptions is gone')
+  assert.match(refresh[0], /this\.ringLayer\.removeAll\(true\)/,
+    'a re-price leaves the old buttons alive')
+  assert.match(refresh[0], /this\.buttons = \[\]/,
+    'a re-price appends to the old button list instead of replacing it')
   assert.doesNotMatch(ring, /buttons\.length = 0/,
     'the button list is being reset in place, which means it outlives an open')
   assert.match(ring, /onComplete: \(\) => ring\.destroy\(true\)/,
@@ -794,30 +808,40 @@ test('only SELL asks twice, and it asks in words', () => {
   assert.doesNotMatch(game, /confirmUpgrade/, 'UPGRADE grew a confirmation too')
 })
 
-test('the sell button wears the currency the game actually uses', () => {
+test('the peanut the game shows is the peanut the game was drawn', () => {
   /*
-   * It wore a cash symbol. The currency is peanuts.
+   * IT WORE A CUT-OUT, AND THE REAL ART WAS IN THE REPOSITORY THE WHOLE TIME.
    *
-   * And the counter's own key is NOT the answer: `hud-peanuts` is the whole
-   * 233x96 counter PLATE with a peanut painted into its left end, so pointing
-   * the button at it drew that plate squashed into a 40px square. The peanut
-   * is cut out of the plate at boot. Measured: a 54x72 cut-out, 41.3% opaque —
-   * a shape in a box rather than a filled rectangle.
+   * public/assets/ui_icons/hud_peanut_icon.webp is a 512x512 painted peanut.
+   * art.json never named it, so `ui.icons.sell` and the drawer's prices used
+   * `gen-icon-peanut` instead -- a flood-filled crop of the counter PLATE,
+   * generated at boot by a module whose own docstring said to delete it the
+   * day real peanut art arrived. That crop is the plain white peanut the HUD
+   * was showing.
    */
   const art = JSON.parse(readFileSync(new URL('../src/data/art.json', import.meta.url), 'utf8'))
-  assert.equal(art.ui.icons.sell, 'gen-icon-peanut')
+  assert.equal(art.files['hud-peanut'], 'ui_icons/hud_peanut_icon.webp',
+    'the painted peanut is not in the manifest')
+  assert.equal(art.ui.peanut, 'hud-peanut', 'nothing names the painted peanut as a role')
+  assert.equal(art.ui.icons.sell, 'hud-peanut', 'the sell button is back on the cut-out')
   assert.equal(art.files['icon-sell'], undefined, 'the cash symbol is still shipped')
-  assert.equal(art.ui.counters.peanuts, 'hud-peanuts',
-    'the counter changed, so the cut-out is now taken from the wrong plate')
-  const boot = src('scenes/BootScene.ts')
-  assert.match(boot, /ensurePeanutIcon\(\s*\n?\s*this, ART\.ui\.counters\.peanuts, ART\.generated\.peanutIcon\)/,
-    'nothing generates the cut-out, so the sell button has no icon at all')
-  assert.equal(art.generated.peanutIcon, 'gen-icon-peanut',
-    'the generated key is not declared in the manifest')
-  const peanut = src('systems/PeanutIcon.ts')
-  assert.match(peanut, /outKey: string,/, 'the key is hardcoded in the component again')
-  // The background is FLOODED from the border, not colour-keyed: the peanut's
-  // own outline is as dark as the plate behind it, and a colour key eats it.
-  assert.match(peanut, /stack\.push/, 'the knockout is not a flood fill')
+  assert.equal(art.generated?.peanutIcon, undefined, 'the generated cut-out is back')
+
+  // The counter plate keeps its own painted end -- it is the frame and the
+  // number field as well -- and the real peanut is drawn over it.
+  assert.equal(art.ui.counters.peanuts, 'hud-peanuts')
+  const hud = src('scenes/HudScene.ts')
+  assert.match(hud, /name === 'peanuts' && this\.textures\.exists\(ART\.ui\.peanut\)/,
+    'the HUD counter still shows the plate\'s painted peanut')
+  // Fitted to the plate's own peanut end, which the manifest measures.
+  assert.match(hud, /const end = \(cfg\.fieldLeft \?\? 0\.3\) \* plateW/,
+    'the peanut is positioned by a guess rather than by the measured field')
+
+  // And the generator is gone rather than left orphaned.
+  assert.ok(!existsSync(new URL('../src/systems/PeanutIcon.ts', import.meta.url)),
+    'PeanutIcon.ts is still in the tree with nothing calling it')
+  for (const f of ['scenes/BootScene.ts', 'ui/ControlDrawer.ts']) {
+    assert.ok(!/peanutIcon|ensurePeanutIcon/.test(src(f)), `${f} still reaches for the cut-out`)
+  }
 })
 

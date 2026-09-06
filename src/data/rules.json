@@ -6,7 +6,7 @@
   "pacing": {
     "gameSpeed": 1.4,
     "readySeconds": 15,
-    "firstReadySeconds": 30,
+    "_firstWave": "WAVE 1 HAS NO COUNTDOWN AND DOES NOT AUTO-START. There is no number for it here because there is no clock: the player has unlimited time to read a level they have never seen, and the wave begins when they press the banner. `readySeconds` governs waves 2 onward, exactly as before. This replaces `firstReadySeconds`, which was 30 -- twice the later gap, an acknowledgement that the first wave needs longer, made in the currency of a countdown. It needs longer than any number. And because the early-start bonus is whatever is left on the clock, wave 1 pays none: there is no timer to beat.",
     "earlyStartPeanutsPerSecond": 2
   },
   "combat": {

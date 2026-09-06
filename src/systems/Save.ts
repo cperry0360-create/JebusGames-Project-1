@@ -68,15 +68,6 @@ export interface SaveData {
    */
   controlDrawer: boolean
   /**
-   * Level ids whose opening comic has been watched or skipped.
-   *
-   * A list rather than a count, because "have I seen level 2's" is the
-   * question and a number cannot answer it. It lives here beside
-   * `runsCleared` for the same reason that does: it is a fact about the
-   * player rather than about a run, and it has to survive one.
-   */
-  seenCutscenes: string[]
-  /**
    * The hero the player last chose, preselected on the next run.
    *
    * An empty string means they never have, and the roster resolves that to
@@ -89,7 +80,7 @@ export interface SaveData {
 export const DEFAULT_SAVE: SaveData = {
   volume: 0.7, musicVolume: 1, voiceVolume: 1,
   muted: false, runsCleared: 0, bannerPoints: 0, lastReport: '',
-  controlDrawer: false, seenCutscenes: [], heroId: '',
+  controlDrawer: false, heroId: '',
 }
 
 /** localStorage is small and shared; a report is truncated rather than
@@ -106,6 +97,16 @@ function clamp01(v: unknown, fallback: number): number {
     : fallback
 }
 
+/**
+ * Reads the save, field by field.
+ *
+ * IT NAMES EVERY FIELD IT WANTS AND COPIES NOTHING ELSE, which is what makes a
+ * retired field a non-event: `seenCutscenes` was here until cutscenes started
+ * playing every time, and a save written by an older build still carries it.
+ * That save loads exactly as before -- the key is simply not read, no
+ * validation runs against it, and the next `writeSave` drops it. A loader that
+ * spread `parsed` would have had to be taught to forget it instead.
+ */
 export function loadSave(): SaveData {
   try {
     const raw = globalThis.localStorage?.getItem(KEY)
@@ -128,18 +129,11 @@ export function loadSave(): SaveData {
       // `=== true` rather than a truthy check: a save written before the flag
       // existed has `undefined` here, and the default is OFF.
       controlDrawer: parsed.controlDrawer === true,
-      // Validated element by element, not trusted for being an array. A save
-      // hand-edited or written by an older build can hold anything here, and a
-      // non-string in the list would compare false against every level id
-      // forever -- a comic that silently never plays again.
-      // A string or nothing. Validated rather than trusted for the same reason
-      // the cutscene list is: a save can hold anything, and a hero id that is
-      // not a hero resolves to the default at the point of use rather than
-      // being repaired here -- one place decides what an unknown id means.
+      // A string or nothing. Validated rather than trusted, because a save can
+      // hold anything: a hero id that is not a hero resolves to the default at
+      // the point of use rather than being repaired here, so one place decides
+      // what an unknown id means.
       heroId: typeof parsed.heroId === 'string' ? parsed.heroId : '',
-      seenCutscenes: Array.isArray(parsed.seenCutscenes)
-        ? [...new Set(parsed.seenCutscenes.filter((v): v is string => typeof v === 'string'))]
-        : [],
     }
   } catch {
     // Unreadable, unparseable or unavailable: start fresh rather than fail.

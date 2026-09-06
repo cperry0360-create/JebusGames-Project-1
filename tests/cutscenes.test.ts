@@ -12,8 +12,8 @@ const store = new Map<string, string>()
 }
 
 const {
-  cutsceneProblems, forgetAllCutscenes, hasSeen, levelsWithCutscenes,
-  markSeen, panelKey, panelUrl, panelsFor, shouldPlay,
+  cutsceneProblems, levelsWithCutscenes,
+  panelKey, panelUrl, panelsFor, shouldPlay,
 } = await import('../src/systems/Cutscenes.ts')
 const { DEFAULT_SAVE, loadSave, writeSave } = await import('../src/systems/Save.ts')
 
@@ -57,9 +57,11 @@ test('a level with no entry simply has no cutscene', () => {
   assert.deepEqual(panelsFor('level-that-does-not-exist'), [])
   assert.equal(shouldPlay('level-that-does-not-exist'), false)
 
-  // And nothing is ever recorded for it, so a run on level 3 cannot leave a
-  // seen flag behind that a future level 3 comic would then be hidden by.
-  assert.equal(hasSeen('level3'), false)
+  // Repeatedly, and after a save has been written: a level with no entry
+  // starts normally every time, and nothing anywhere can turn that into a
+  // comic.
+  writeSave({ ...DEFAULT_SAVE, runsCleared: 9 })
+  for (let run = 0; run < 5; run++) assert.equal(shouldPlay('level3'), false)
 })
 
 test('every panel file named actually exists, at the size the layout assumes', () => {
@@ -104,105 +106,110 @@ test('the checker fails an unknown level id rather than leaving it to runtime', 
   assert.deepEqual(cutsceneProblems(), [])
 })
 
-/* ---------------------------------------------------------- the seen flag */
+/* --------------------------------------------------------- every time */
 
-test('a cutscene plays once and then does not play again', () => {
-  assert.equal(shouldPlay('level1'), true, 'a fresh save should get the comic')
-  markSeen('level1')
-  assert.equal(hasSeen('level1'), true)
-  assert.equal(shouldPlay('level1'), false, 'it played again on a later run')
-  // Only the level that was watched.
-  assert.equal(shouldPlay('level2'), true)
-})
-
-test('marking seen twice does not grow the list', () => {
-  markSeen('level1')
-  markSeen('level1')
-  assert.deepEqual(loadSave().seenCutscenes, ['level1'])
-})
-
-test('the flag is written after the last panel and not before', () => {
-  // The scene's own rule, walked: `handOver` is the ONE place that writes, and
-  // `advance` only reaches it from the last panel. Stepping through three
-  // panels, nothing is written until the third is left behind.
-  const panels = panelsFor('level1')
-  let index = 0
-  let finished = false
-  const advance = (): void => {
-    if (finished) return
-    if (index + 1 >= panels.length) { finished = true; markSeen('level1'); return }
-    index++
+test('a cutscene plays on every start of its level, not just the first', () => {
+  // THE POINT OF THE CHANGE. This used to assert the opposite -- play once,
+  // then never again -- and the suppression cost a save field, a replay badge
+  // on the level select and a developer control to clear the flags. Skip is
+  // one tap, so a replay costs a player almost nothing and those three
+  // mechanisms cost more than that to keep correct.
+  for (let run = 0; run < 10; run++) {
+    assert.equal(shouldPlay('level1'), true, `level 1's comic was suppressed on run ${run + 1}`)
+    assert.equal(shouldPlay('level2'), true, `level 2's comic was suppressed on run ${run + 1}`)
   }
-
-  advance()
-  assert.equal(index, 1)
-  assert.equal(hasSeen('level1'), false, 'seen was written on the first advance')
-  advance()
-  assert.equal(index, 2)
-  assert.equal(hasSeen('level1'), false, 'seen was written before the last panel')
-  advance()
-  assert.equal(hasSeen('level1'), true, 'seen was not written when the comic ended')
 })
 
-test('a skipped cutscene still counts as seen', () => {
-  // The player has decided about this comic. Asking again next run is not
-  // respecting the answer.
-  const skip = (): void => { markSeen('level2') }
+test('nothing a run can write to the save suppresses a comic', () => {
+  // The failure this guards against is a flag coming back under another name.
+  // Every field the save has, at a value a played-through game would produce,
+  // and the comic still plays.
+  writeSave({
+    ...DEFAULT_SAVE,
+    runsCleared: 12, bannerPoints: 4000, heroId: 'courtland',
+    controlDrawer: true, muted: true, lastReport: 'something went wrong',
+  })
+  assert.equal(shouldPlay('level1'), true)
   assert.equal(shouldPlay('level2'), true)
-  skip()
-  assert.equal(hasSeen('level2'), true)
-  assert.equal(shouldPlay('level2'), false)
 })
 
-test('the scene writes in exactly one place, and only when it has panels', () => {
+test('shouldPlay is exactly "does this level have a comic"', () => {
+  // Stated as an equivalence rather than as two examples, so a second
+  // condition cannot be added without this failing.
+  for (const id of [...LEVELS.map((l: { id: string }) => l.id), 'nonsense']) {
+    assert.equal(shouldPlay(id), panelsFor(id).length > 0, `shouldPlay disagrees for ${id}`)
+  }
+})
+
+test('skipping still advances into the level, and so does reading to the end', () => {
   const scene = src('src/scenes/CutsceneScene.ts')
-  const writes = scene.match(/markSeen\(/g) ?? []
-  assert.equal(writes.length, 1,
-    'markSeen is called from more than one place; skip and read-to-the-end would drift')
-  assert.match(scene, /if \(this\.panels\.length > 0\) markSeen\(this\.levelId\)/,
-    'a level with no panels would be marked as having seen one')
-  // Both endings go through the one exit.
-  assert.match(scene, /private skip\(\)[\s\S]{0,200}this\.handOver\('skipped'\)/)
-  assert.match(scene, /this\.handOver\('read to the end'\)/)
+  // Both endings go through the one exit, and that exit starts the next scene.
+  assert.match(scene, /private skip\(\)[\s\S]{0,240}this\.handOver\('skipped'\)/,
+    'Skip no longer hands over')
+  assert.match(scene, /this\.handOver\('read to the end'\)/,
+    'reading to the end no longer hands over')
+  assert.match(scene, /private handOver\([\s\S]{0,400}this\.scene\.start\(this\.next\)/,
+    'handOver does not start the next scene')
+  // And tap-to-advance is still wired.
+  assert.match(scene, /advance\(/, 'nothing advances the comic any more')
+})
+
+test('the scene records nothing when the comic ends', () => {
+  const scene = src('src/scenes/CutsceneScene.ts')
+  assert.ok(!/markSeen/.test(scene), 'the scene still writes a seen flag')
+  assert.ok(!/seenCutscenes/.test(scene), 'the scene still touches the seen list')
 })
 
 /* -------------------------------------------------------------- the save */
 
-test('the seen list survives a round trip and a broken save resets it', () => {
-  // Same schema versioning and validate-or-reset as everything else in there.
-  writeSave({ ...DEFAULT_SAVE, runsCleared: 3, seenCutscenes: ['level1'] })
+test('the save has no seen-cutscene field, and an old one loads without it', () => {
+  assert.ok(!('seenCutscenes' in DEFAULT_SAVE),
+    'the retired field is back in the default save')
+
+  // A SAVE WRITTEN BY THE OLD BUILD. It still carries the list, and it has to
+  // load -- with every neighbouring field intact and nothing thrown.
+  store.set('courjahan.save.v1', JSON.stringify({
+    volume: 0.4, runsCleared: 3, bannerPoints: 120, heroId: 'han',
+    seenCutscenes: ['level1', 'level2'],
+  }))
   const back = loadSave()
-  assert.deepEqual(back.seenCutscenes, ['level1'])
   assert.equal(back.runsCleared, 3, 'the neighbouring fields were disturbed')
+  assert.equal(back.bannerPoints, 120)
+  assert.equal(back.heroId, 'han')
+  assert.equal(back.volume, 0.4)
+  assert.ok(!('seenCutscenes' in back), 'the retired field survived the load')
 
-  // A save from before the field existed.
-  store.set('courjahan.save.v1', JSON.stringify({ runsCleared: 2 }))
-  assert.deepEqual(loadSave().seenCutscenes, [])
-  assert.equal(loadSave().runsCleared, 2)
-
-  // Rubbish in the field: validated element by element, not trusted for being
-  // an array. A number in the list would compare false against every level id
-  // forever -- a comic that silently never plays again.
-  store.set('courjahan.save.v1',
-    JSON.stringify({ seenCutscenes: ['level1', 7, null, 'level1', 'level2'] }))
-  assert.deepEqual(loadSave().seenCutscenes, ['level1', 'level2'])
-
-  store.set('courjahan.save.v1', JSON.stringify({ seenCutscenes: 'level1' }))
-  assert.deepEqual(loadSave().seenCutscenes, [])
-
-  store.set('courjahan.save.v1', 'not json at all')
-  assert.deepEqual(loadSave().seenCutscenes, [])
-})
-
-test('the developer reset makes every comic play again', () => {
-  markSeen('level1')
-  markSeen('level2')
-  writeSave({ ...loadSave(), runsCleared: 4 })
-  forgetAllCutscenes()
-  assert.deepEqual(loadSave().seenCutscenes, [])
+  // And the comics play, which is the thing the old flag would have stopped.
   assert.equal(shouldPlay('level1'), true)
   assert.equal(shouldPlay('level2'), true)
-  assert.equal(loadSave().runsCleared, 4, 'the reset took more than the cutscene flags')
+
+  // Rubbish in the retired field is equally a non-event: it is not read, so
+  // there is nothing for it to break.
+  for (const junk of ['level1', 7, null, { level1: true }, ['level1', 7]]) {
+    store.set('courjahan.save.v1', JSON.stringify({ runsCleared: 5, seenCutscenes: junk }))
+    assert.equal(loadSave().runsCleared, 5, `a save carrying ${JSON.stringify(junk)} failed to load`)
+    assert.equal(shouldPlay('level1'), true)
+  }
+
+  // The next write drops it, rather than carrying it forward forever.
+  store.set('courjahan.save.v1', JSON.stringify({ runsCleared: 5, seenCutscenes: ['level1'] }))
+  writeSave({ ...loadSave(), runsCleared: 6 })
+  assert.ok(!store.get('courjahan.save.v1')!.includes('seenCutscenes'),
+    'the retired field is written back out')
+})
+
+test('nothing in the game still reaches for the retired parts', () => {
+  for (const f of [
+    'src/systems/Cutscenes.ts', 'src/systems/Save.ts', 'src/scenes/CutsceneScene.ts',
+    'src/scenes/WorldMapScene.ts', 'src/scenes/DiagnosticsScene.ts', 'src/scenes/LoadoutScene.ts',
+  ]) {
+    const code = src(f)
+    // Comments explaining the removal are allowed; code is not.
+    const live = code.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n')
+    for (const gone of ['markSeen', 'hasSeen', 'forgetAllCutscenes', 'seenCutscenes']) {
+      assert.ok(!live.includes(gone), `${f} still uses ${gone}`)
+    }
+  }
 })
 
 /* ------------------------------------------------------------- the wiring */
@@ -229,13 +236,17 @@ test('the comic sits in front of a run beginning, not in front of a resume', () 
   }
 })
 
-test('the level select can replay a comic, and only one it has seen', () => {
+test('the level select has no replay control, and the diagnostics no reset', () => {
+  // Both existed only to work around the suppression. A card is a card again:
+  // there is no second tap target inside its hit rectangle.
   const world = src('src/scenes/WorldMapScene.ts')
-  assert.match(world, /private drawReplay\(/, 'no replay control on the level select')
-  assert.match(world, /if \(panelsFor\(level\.id\)\.length === 0 \|\| !hasSeen\(level\.id\)\) return/,
-    'the replay badge is offered for a comic that has not been watched yet')
-  assert.match(world, /start\('Cutscene', \{ levelId: level\.id, then: 'WorldMap' \}\)/,
-    'replaying a comic does not come back to the level select')
+  assert.ok(!/drawReplay/.test(world), 'the replay badge is still on the level select')
+  assert.ok(!/start\('Cutscene'/.test(world),
+    'the level select still starts a cutscene of its own')
+
+  const diag = src('src/scenes/DiagnosticsScene.ts')
+  assert.ok(!/REPLAY INTROS/.test(diag), 'the developer reset button is still there')
+  assert.ok(!/forgetCutscenes/.test(diag), 'the developer reset handler is still there')
 })
 
 test('the fit is contain, not cover, so no bubble is ever cut off', () => {

@@ -155,8 +155,9 @@ export interface RulesDef {
   peanutsPerWaveCleared: number
   pacing: {
     gameSpeed: number
+    /** The gap before waves 2 onward. Wave 1 has no clock: see `_firstWave`
+     *  in rules.json and `GameScene.armReadyCountdown`. */
     readySeconds: number
-    firstReadySeconds: number
     earlyStartPeanutsPerSecond: number
   }
   combat: {
@@ -392,6 +393,16 @@ export interface DisableDef {
 
 export interface EnemyDef {
   name: string
+  /**
+   * Which way this enemy's art is drawn, before any mirroring.
+   *
+   * A PROPERTY OF THE ART, so it lives with the enemy -- the same shape, and
+   * for the same reason, as `HeroDef.artFacing`. Enemy.ts used to carry "the
+   * art is drawn facing right" as a blanket rule; it was true of all seven
+   * enemies that existed when it was written and false of all five added for
+   * level 3, so every enemy on that level walked backwards.
+   */
+  artFacing: 'left' | 'right'
   flavor: string
   role: string
   /** What kind of thing this is, for rules that key off importance rather
@@ -400,6 +411,18 @@ export interface EnemyDef {
   /** False for a boss that walks through the line rather than being held by
    *  it. Holding one would let a player park it and ignore the fight. */
   blockable: boolean
+  /**
+   * False for an enemy that ignores slows, the same way `blockable: false`
+   * makes one ignore the line.
+   *
+   * The Rainbow Reaper is the only one so far. Its whole fight is a clock --
+   * it disables towers on a cooldown while it walks -- and a permanent 45%
+   * slow from one Deferral turns that clock off, which is the same trick as
+   * parking an unblockable boss on a soldier. THE POLITICIAN IS DELIBERATELY
+   * STILL SLOWABLE: he is unblockable for the same reason, but level 1's win
+   * rate is tuned around him as he is, and this brief was about level 3.
+   */
+  slowable: boolean
   /** Present only on The Politician: he takes a share of the player's
    *  peanuts instead of attacking anything. */
   tax?: TaxDef
@@ -838,6 +861,9 @@ export interface ArtDef {
   /** Painted level plates, one per level. */
   map: Record<string, string>
   ui: {
+    /** The painted peanut, for every place the currency is shown: the sell
+     *  button, the drawer's prices, and the counter plate's own end. */
+    peanut: string
     /** null once towers ship as one sprite carrying their own base. */
     /** The painted title illustration. null falls back to a flat panel. */
     titleBackdrop: string | null
@@ -917,10 +943,6 @@ export interface ArtDef {
     groundShadow: string
     buildGlow: string
     iconMissing: string
-    /** The peanut, cut out of the counter plate at boot. The pack has no
-     *  peanut icon, and the sell button used to wear a cash symbol for a
-     *  currency this game does not have. */
-    peanutIcon: string
   }
   /** Per-tier tower sprites, keyed by the tower's base sprite key. A tower
    *  with no entry keeps one sprite at every tier, which is the default and
