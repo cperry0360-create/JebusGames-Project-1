@@ -522,7 +522,6 @@
       {
         "minViewW": 700,
         "width": 152,
-        "headerHeight": 20,
         "tabBarHeight": 20,
         "detailHeight": 56,
         "detailIcon": 34,
@@ -532,7 +531,6 @@
       {
         "minViewW": 0,
         "width": 118,
-        "headerHeight": 16,
         "tabBarHeight": 16,
         "detailHeight": 40,
         "detailIcon": 26,
@@ -606,8 +604,6 @@
     "tabFillIdle": 3813154,
     "tabLabelActive": 16182489,
     "tabLabelIdle": 9273194,
-    "headerSize": 13,
-    "headerIcon": 15,
     "detailNameSize": 15,
     "detailStatSize": 15,
     "detailTraitSize": 15,

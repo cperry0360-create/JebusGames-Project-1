@@ -70,6 +70,7 @@ import { clearRun, saveRun, type SavedRun } from '../systems/RunSave.ts'
 import { TRANSFORM_BELOW } from '../systems/Transform.ts'
 import { logEvent, provideState } from '../systems/Diagnostics.ts'
 import { heartbeat, setRunActive } from '../systems/Watchdog.ts'
+import { enterGate, leaveGate, noteInputAccepted } from '../systems/InputGates.ts'
 import {
   hudBlocksGesture, hudLayout, NO_INSETS, type HudLayout, type Rect,
 } from '../systems/HudLayout.ts'
@@ -562,7 +563,6 @@ export class GameScene extends Phaser.Scene {
       // screen. `panelArea` insets by six for chrome that floats inside it.
       dockRight: () => viewW(this) - safeAreaInsets().right,
       tiles: () => this.drawerTiles(),
-      peanuts: () => this.status.peanuts,
       detailFor: (id) => this.drawerDetail(id),
       onSelect: (id) => {
         this.drawerPick = id
@@ -1676,6 +1676,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onClick(p: Phaser.Input.Pointer): void {
+    // A tap this scene actually dispatched. The stuck guard reads the time of
+    // the last one: a paused scene runs no input step, so this going stale
+    // while the player is still tapping is the soft lock as measured.
+    noteInputAccepted()
     if (p.rightButtonDown()) {
       this.clearSelection()
       return
@@ -2647,8 +2651,22 @@ export class GameScene extends Phaser.Scene {
       && (this.selected?.isDeployer !== true || this.towerKey(this.selected) !== req.id)) {
       this.targeting.cancel('replaced')
     }
-    this.status.mode = this.targeting.active ? 'targeting' : 'normal'
+    // ONE WRITER, so one place to announce the gate. Targeting owns the next
+    // tap wherever it lands, which makes it an input gate, and an input gate
+    // that opens without a matching close is the shape of a soft lock.
+    const was = this.status.mode === 'targeting'
+    const now = this.targeting.active
+    this.status.mode = now ? 'targeting' : 'normal'
     this.status.pendingAbility = this.targeting.pendingAbility
+    if (now && !was) {
+      const r = this.targeting.request
+      enterGate('targeting', {
+        kind: r?.kind ?? '?', id: r?.id ?? '?',
+        wave: this.status.wave, peanuts: this.status.peanuts,
+      })
+    } else if (!now && was) {
+      leaveGate('targeting', { wave: this.status.wave })
+    }
     this.refreshCancel()
     this.drawTargetArea()
   }

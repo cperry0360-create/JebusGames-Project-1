@@ -19,6 +19,7 @@
 
 import Phaser from 'phaser'
 import { logEvent } from './Diagnostics.ts'
+import { enterGate, leaveGate } from './InputGates.ts'
 import { audioUnavailable, onAudioUnavailable, resumeAudio, suspendAudio } from './Audio.ts'
 import { pauseMusic, resumeMusic } from './Music.ts'
 import { toast } from '../ui/Toast.ts'
@@ -99,6 +100,9 @@ export function installLifecycle(game: Phaser.Game, opts: LifecycleOptions = {})
     if (away) return
     away = true
     logEvent('lifecycle', 'backgrounded')
+    // Claimed: a run stopped because the page went away is owned by the page
+    // coming back, not by anything the stuck guard should seize.
+    enterGate('background', { visibility: globalThis.document?.visibilityState ?? '?' })
     pauseScenes()
     suspendAudio(game)
     // The soundtrack is not a Phaser sound, so pauseAll does not reach it.
@@ -110,6 +114,7 @@ export function installLifecycle(game: Phaser.Game, opts: LifecycleOptions = {})
     if (!away) return
     away = false
     logEvent('lifecycle', 'foregrounded')
+    leaveGate('background')
 
     // Audio first, and awaited, so the scenes are not running while the device
     // is still being handed back. The promise cannot reject.

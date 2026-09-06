@@ -66,6 +66,8 @@ screenshots are the evidence.
 | `background` | leaving the tab and coming back, with the audio device refused on the way in |
 | `revive` | the hero going down, the countdown marker, and coming back on |
 | `gnomes` | the summon refused off the lane and allowed on it, both gnome sprites, their size beside a soldier, and how long they actually survive |
+| `softlock` | one frame of a stale portrait viewport mid-run, and whether the rotate gate hands the game back or latches a pause behind a hidden overlay |
+| `stuckguard` | a run paused by nothing at all, and whether the guard recovers and reports it — then a settings panel, which it must leave alone |
 
 ## Notes
 

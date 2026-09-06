@@ -297,27 +297,32 @@ test('how far each viewport has to scroll, measured', () => {
    * the bound is now `min(abilities.y, cancel.y)` and CANCEL is the taller of
    * the two once the icons have shrunk.
    *
-   *   844x390   inner 218 -> grid 94   content 198   maxScroll 104
-   *   568x320   inner 149 -> grid 55   content 198   maxScroll 143
+   * Fourth, and it is the peanut counter leaving. The panel had its own
+   * wallet in a header row, and a level 3 playtest screenshot caught it
+   * reading 404 while the HUD read 408. One number in two places is one too
+   * many, so the header went and the grid got its height back.
    *
-   * THE NARROW CASE IS THE ONE TO LOOK AT, and it is no longer alarming. A
-   * 62px tile still does not FIT in a 55px grid, so nothing at 568x320 is
-   * shown whole — but 55 is 89% of a tile against the 50% the pick path
-   * requires, where it used to be 58%. The margin went from eight pixels to
-   * twenty-four, and a tile that is 89% visible is one a thumb can find.
+   *   844x390   inner 202 -> grid 118  content 198   maxScroll 80
+   *   568x320   inner 133 -> grid 73   content 198   maxScroll 125
+   *
+   * THE NARROW CASE IS THE ONE TO LOOK AT, and it has finally crossed the
+   * line that mattered. A 62px tile now FITS in the 73px grid, so 568x320
+   * shows a whole tile for the first time — it was 55px and 89% of one. The
+   * counter was costing the smallest screen the ability to see any tile
+   * completely.
    */
   const wide = drawerLayout(844, area(844, 390), 6, 0, CFG)
   const narrow = drawerLayout(568, area(568, 320), 6, 0, CFG)
   const desk = drawerLayout(1280, area(1280, 720), 6, 0, CFG)
-  assert.equal(Math.round(wide.grid.height), 94, '844x390 grid height moved')
-  assert.equal(Math.round(narrow.grid.height), 55, '568x320 grid height moved')
-  assert.equal(Math.round(wide.maxScroll), 104, '844x390 no longer scrolls by 104')
-  assert.equal(Math.round(narrow.maxScroll), 143, '568x320 no longer scrolls by 143')
-  // THE MARGIN, pinned. A grid under half a tile makes every tile untappable,
-  // and the narrow screen is eight pixels above that line.
-  assert.ok(narrow.grid.height > CFG.tileHeight * 0.5,
+  assert.equal(Math.round(wide.grid.height), 118, '844x390 grid height moved')
+  assert.equal(Math.round(narrow.grid.height), 73, '568x320 grid height moved')
+  assert.equal(Math.round(wide.maxScroll), 80, '844x390 no longer scrolls by 80')
+  assert.equal(Math.round(narrow.maxScroll), 125, '568x320 no longer scrolls by 125')
+  // THE MARGIN, pinned. A grid under half a tile makes every tile untappable.
+  // The narrow screen now clears a WHOLE tile, which it never did before.
+  assert.ok(narrow.grid.height >= CFG.tileHeight,
     `568x320's grid is ${narrow.grid.height}px against a ${CFG.tileHeight}px tile; ` +
-    'under half and nothing in the drawer can be tapped')
+    'it used to fit none of one and must not go back')
   assert.equal(desk.maxScroll, 0, 'a 720-tall screen should never need to scroll')
   assert.ok(narrow.maxScroll > wide.maxScroll,
     'the narrow screen must be the worse case, or the widths are the wrong way round')
@@ -330,8 +335,8 @@ test('the panel chrome takes exactly what the breakpoint says, and no more', () 
     const l = drawerLayout(w, area(w, h), 6, 0, CFG)
     const step = l.step
     const inner = l.panel.height - CFG.pad * 2
-    const chrome = step.headerHeight + step.tabBarHeight + step.detailHeight
-      + step.sectionGap * 3
+    // Three sections, so two gaps between them plus one under the grid.
+    const chrome = step.tabBarHeight + step.detailHeight + step.sectionGap * 2
     assert.ok(Math.abs(inner - chrome - l.grid.height) < 0.001,
       `${name}: inner ${inner} minus chrome ${chrome} is not the grid's ${l.grid.height}`)
     assert.ok(l.grid.height > 0, `${name}: the chrome has eaten the whole grid`)
@@ -399,9 +404,12 @@ test('which viewports can show a whole tile, recorded', () => {
   for (const [name, w, h] of VIEWPORTS) {
     canShowWhole[name] = drawerLayout(w, area(w, h), 6, 0, CFG).grid.height >= CFG.tileHeight
   }
+  // 568x320 crossed this line when the drawer's duplicate peanut counter was
+  // removed: its header row was the last thing keeping the smallest screen
+  // from ever showing a tile whole.
   assert.deepEqual(canShowWhole, {
     '844x390': true,
-    '568x320': false,
+    '568x320': true,
     '1280x720': true,
     '390x844': true,
   }, 'a viewport has crossed the line between showing a whole tile and not')
@@ -682,10 +690,10 @@ test('the drawer takes every colour it draws from the data', () => {
 
 /* ------------------------------------------------- the three new sections */
 
-test('the panel stacks header, tabs, grid and strip in that order', () => {
+test('the panel stacks tabs, grid and strip in that order', () => {
   for (const [name, w, h] of VIEWPORTS) {
     const l = drawerLayout(w, area(w, h), 6, 0, CFG)
-    const order = [l.header, l.tabBar, l.grid, l.detail]
+    const order = [l.tabBar, l.grid, l.detail]
     for (let i = 1; i < order.length; i++) {
       assert.ok(order[i]!.y >= order[i - 1]!.y + order[i - 1]!.height - 0.001,
         `${name}: section ${i} starts above the one before it`)
@@ -695,7 +703,7 @@ test('the panel stacks header, tabs, grid and strip in that order', () => {
     assert.ok(Math.abs((l.detail.y + l.detail.height) - (l.panel.y + l.panel.height - CFG.pad)) < 0.001,
       `${name}: the strip is not pinned to the bottom of the panel`)
     // Everything inside the panel's inner width, and nothing hanging out.
-    for (const r of [l.header, l.tabBar, l.grid, l.detail, ...l.tabs]) {
+    for (const r of [l.tabBar, l.grid, l.detail, ...l.tabs]) {
       assert.ok(r.x >= l.panel.x + CFG.pad - 0.001, `${name}: a section starts left of the panel`)
       assert.ok(r.x + r.width <= l.panel.x + l.panel.width - CFG.pad + 0.001,
         `${name}: a section runs past the panel`)

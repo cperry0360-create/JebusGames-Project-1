@@ -18,8 +18,6 @@ import type { Rect } from './HudLayout.ts'
 export interface DrawerStep {
   minViewW: number
   width: number
-  /** The currency readout's row. */
-  headerHeight: number
   /** TOWERS / ACTIVE / PASSIVE. */
   tabBarHeight: number
   /** The pinned strip, which reserves its height whether or not it has
@@ -62,8 +60,6 @@ export interface DrawerConfig {
 export interface DrawerLayout {
   /** The always-visible tab, docked to the right edge. */
   tab: Rect
-  /** The currency readout's row, at the top of the panel's inner area. */
-  header: Rect
   /** The whole TOWERS / ACTIVE / PASSIVE bar. */
   tabBar: Rect
   /** One rectangle per tab, left to right, in the order of `cfg.tabLabels`. */
@@ -175,10 +171,14 @@ export function drawerLayout(
   }
 
   /*
-   * THE PANEL IS FOUR STACKED SECTIONS, and only one of them scrolls.
+   * THE PANEL IS THREE STACKED SECTIONS, and only one of them scrolls.
    *
-   *   header   the peanut count, because the player is spending the whole
-   *            time this is open and the number belongs where the prices are
+   * It was four. The first was a peanut counter, on the reasoning that the
+   * player is spending the whole time this is open so the number belongs where
+   * the prices are. It was a SECOND counter, and a screenshot from a level 3
+   * playtest caught it reading 404 while the HUD read 408. One number in two
+   * places is one number too many; the grid gets the height back.
+   *
    *   tabBar   TOWERS / ACTIVE / PASSIVE, so each group gets the full height
    *            rather than a third of it when the other two are filled
    *   grid     the tiles, and the only thing that scrolls
@@ -191,9 +191,6 @@ export function drawerLayout(
   const innerX = panel.x + cfg.pad
   const innerW = panel.width - cfg.pad * 2
   let y = panel.y + cfg.pad
-
-  const header: Rect = { x: innerX, y, width: innerW, height: step.headerHeight }
-  y += step.headerHeight + step.sectionGap
 
   const tabBar: Rect = { x: innerX, y, width: innerW, height: step.tabBarHeight }
   const n = Math.max(1, cfg.tabLabels.length)
@@ -268,7 +265,7 @@ export function drawerLayout(
   }
 
   return {
-    tab, panel, header, tabBar, tabs, detail, detailIcon, detailText,
+    tab, panel, tabBar, tabs, detail, detailIcon, detailText,
     grid, tiles, contentHeight, maxScroll, step,
   }
 }

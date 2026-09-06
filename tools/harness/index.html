@@ -100,6 +100,12 @@ window.lifecycle = installLifecycle(game)
 const { installOrientationGate, isPortrait } = await import('./js/systems/Orientation.js')
 installOrientationGate(game)
 window.isPortrait = isPortrait
+// The safety net that notices a run nobody is holding. Installed here for the
+// same reason the gate and the lifecycle are: a guard that only existed on
+// main.ts's boot path would be a guard no scenario could exercise, and the
+// point of a safety net is that it has been dropped on.
+const { installGameStuckGuard } = await import('./js/systems/StuckWatch.js')
+installGameStuckGuard(game)
 note('visibilityState at boot: ' + document.visibilityState)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const scene = (k) => game.scene.getScene(k)
@@ -939,6 +945,183 @@ async function run() {
     return
   }
   g = await startRun()
+
+  if (scenario === 'softlock') {
+    // THE iOS ROTATION TRANSIENT, REPRODUCED.
+    //
+    // Orientation.ts's own comments record that iOS "reports the old viewport
+    // for a frame or two either side of a rotation". The gate reads that
+    // viewport EVERY FRAME through POST_STEP and pauses on portrait, but only
+    // RESUMES from sync(), which runs on resize/orientationchange. A single
+    // stale frame landing after the last settle() therefore has nothing to
+    // undo it.
+    //
+    // Faked by shadowing innerWidth/innerHeight for one frame while touching
+    // neither the DOM nor the CSS, because that is exactly what the device
+    // does: the media query has already flipped to landscape, so the overlay
+    // is hidden, while window.inner* still describes the portrait viewport.
+    const OWN_W = Object.getOwnPropertyDescriptor(window, 'innerWidth')
+    const OWN_H = Object.getOwnPropertyDescriptor(window, 'innerHeight')
+    const shadow = (w, h) => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: w })
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: h })
+    }
+    // Put the REAL accessors back, or isPortrait() reads undefined > undefined
+    // afterwards and the result proves nothing about a landscape viewport.
+    const unshadow = () => {
+      Object.defineProperty(window, 'innerWidth', OWN_W)
+      Object.defineProperty(window, 'innerHeight', OWN_H)
+    }
+    const gateEl = () => document.getElementById('rotate-gate')
+    const overlay = () => (gateEl() ? getComputedStyle(gateEl()).display : 'absent')
+    const state = (label) => {
+      note(label + ': Game ' + (game.scene.isPaused('Game') ? 'PAUSED' : 'running') +
+        ' | Hud ' + (game.scene.isPaused('Hud') ? 'PAUSED' : 'running') +
+        ' | overlay ' + overlay() +
+        ' | isPortrait() ' + window.isPortrait() +
+        ' | window ' + window.innerWidth + 'x' + window.innerHeight)
+      // The other two candidates, read at the moment of the lock rather than
+      // argued about: a targeting mode that never exited, and a latched modal.
+      const h = scene('Hud')
+      note(label + ' gates: mode ' + g.status.mode +
+        ' | pendingAbility ' + g.status.pendingAbility +
+        ' | hud.paused ' + (h && h.paused) +
+        ' | hud.panel ' + (h && h.panel !== undefined) +
+        ' | hud.settings ' + (h && !!h.settings))
+    }
+    const positions = () => (g.enemies || []).map((e) => Math.round(e.x) + ',' + Math.round(e.y))
+    const drift = (a, b) => a.filter((p, i) => b[i] !== undefined && b[i] !== p).length
+
+    await sleep(600)
+    state('before')
+
+    // A wave moving, so "enemies frozen mid-lane" is observed rather than
+    // inferred. Wave 1 waits for input, so it is started explicitly.
+    g.startWave()
+    await until(() => (g.enemies || []).length > 0, 8000)
+    await sleep(1200)
+
+    // CONTROL: prove the thing being measured can move, before reporting that
+    // it did not. Three of four faults the input harness first found were
+    // bugs in the harness, each looking exactly like the product bug.
+    const c0 = positions()
+    await sleep(900)
+    const c1 = positions()
+    note('CONTROL enemies moved while running: ' + drift(c0, c1) + ' of ' + c0.length)
+    await shot('01-running')
+
+    // ONE stale frame. No resize event, no DOM change, no CSS change.
+    shadow(390, 844)
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+    unshadow()
+    note('stale frame delivered; window is back to ' + window.innerWidth + 'x' + window.innerHeight)
+
+    // Well past every settle() timeout (0, rAF, 60, 180, 400ms). Nothing
+    // fired one, because nothing fired an event.
+    await sleep(1800)
+    state('after')
+
+    const f0 = positions()
+    await sleep(900)
+    const f1 = positions()
+    note('enemies moved after the stale frame: ' + drift(f0, f1) + ' of ' + f0.length)
+
+    // THE VERDICT IS TAKEN HERE, before anything is clicked. Probing input
+    // means opening the settings panel, and that legitimately pauses
+    // GameScene -- reading isPaused afterwards reports the probe, not the bug.
+    const locked = game.scene.isPaused('Game')
+    note('VERDICT ' + (locked
+      ? 'SOFT LOCK: the run is paused, the overlay is ' + overlay() +
+        ', isPortrait() is ' + window.isPortrait() + ', and nothing is scheduled to resume it'
+      : 'NO LOCK: the gate handed the run back'))
+    await shot('02-after-stale-frame')
+
+    // And a board tap, which should at minimum open a build ring on a pad.
+    const ringBefore = !!g.ring
+    const [bx, by] = toScreen(SPOTS[0].x, SPOTS[0].y)
+    if (Number.isFinite(bx) && Number.isFinite(by)) {
+      await click(bx, by)
+      note('INPUT board tap: ring before ' + ringBefore + ' after ' + !!g.ring)
+    } else {
+      note('INPUT board tap skipped: worldView is ' + bx + ',' + by +
+        ' -- a paused camera stops updating it')
+    }
+
+    // Then prove input either way. The settings gear is HUD chrome, built to
+    // keep working while GameScene is paused -- so if even that does nothing,
+    // the whole UI is gone rather than just the board.
+    const hud = scene('Hud')
+    const gear = hud.layout?.settings
+    const hadPanel = !!hud.settings
+    if (gear) await click(gear.x + gear.width / 2, gear.y + gear.height / 2)
+    note('INPUT settings gear: panel before ' + hadPanel + ' after ' + !!hud.settings)
+    if (hud.settings) { await key('Escape'); await sleep(300) }
+    return
+  }
+
+  if (scenario === 'stuckguard') {
+    // AN UNOWNED PAUSE, put there from outside so it stands for any of them:
+    // the rotate gate's stale frame, a modal that closed without resuming, a
+    // future path nobody has written yet. The guard must not care which.
+    const { recentEvents } = await import('./js/systems/Diagnostics.js')
+    const { openGates, gateSummary } = await import('./js/systems/InputGates.js')
+
+    g.startWave()
+    await until(() => (g.enemies || []).length > 0, 8000)
+    await sleep(1200)
+    note('before: Game ' + (game.scene.isPaused('Game') ? 'PAUSED' : 'running') +
+      ' | gates ' + gateSummary())
+    await shot('01-running')
+
+    game.scene.pause('Game')
+    game.scene.pause('Hud')
+    note('locked by hand: Game PAUSED, Hud PAUSED, gates ' + gateSummary() +
+      ' (nothing claims it)')
+    const frozen = (g.enemies || []).map((e) => Math.round(e.x)).join('|')
+
+    // STUCK_MS is 6s and the guard samples at 500ms. Nine seconds is past it
+    // with room for a slow CI box.
+    await sleep(9000)
+
+    const still = (g.enemies || []).map((e) => Math.round(e.x)).join('|')
+    note('after 9s: Game ' + (game.scene.isPaused('Game') ? 'STILL PAUSED' : 'running') +
+      ' | Hud ' + (game.scene.isPaused('Hud') ? 'STILL PAUSED' : 'running') +
+      ' | enemies ' + (still === frozen ? 'still frozen' : 'moving again'))
+
+    const events = recentEvents().filter((e) => e.kind === 'stuck' || e.kind === 'gate')
+    note('event log (' + events.length + ' gate/stuck entries):')
+    for (const e of events.slice(-12)) note('  [' + e.t + 'ms] ' + e.kind + ': ' + e.detail)
+
+    const { lastReport } = await import('./js/systems/Diagnostics.js')
+    const r = lastReport()
+    note('crash report: ' + (r ? r.cause + ' -- ' + r.message : 'NONE'))
+    note('VERDICT ' + (!game.scene.isPaused('Game') && r && r.cause === 'soft lock'
+      ? 'RECOVERED and REPORTED'
+      : 'FAILED: paused=' + game.scene.isPaused('Game') + ' report=' + (r && r.cause)))
+    await shot('02-recovered')
+
+    // THE OTHER HALF, and the one that would make the net worse than nothing:
+    // a settings panel the player opened and walked away from looks identical
+    // from the outside -- paused scene, still board, no input -- and must NOT
+    // be taken off them.
+    const hud = scene('Hud')
+    hud.openSettings()
+    await sleep(600)
+    note('settings opened: gates ' + gateSummary() +
+      ' | Game ' + (game.scene.isPaused('Game') ? 'PAUSED' : 'running'))
+    await sleep(9000)
+    const seized = !game.scene.isPaused('Game') || !hud.settings
+    note('after 9s with settings open: Game ' +
+      (game.scene.isPaused('Game') ? 'still PAUSED (correct)' : 'RESUMED') +
+      ' | panel ' + (hud.settings ? 'still open (correct)' : 'GONE') +
+      ' | gates ' + gateSummary())
+    const owned = recentEvents().filter((e) => e.kind === 'gate').slice(-4)
+    for (const e of owned) note('  gate log: [' + e.t + 'ms] ' + e.detail)
+    note('VERDICT owned gate ' + (seized ? 'SEIZED -- the guard took a panel the player owns'
+      : 'LEFT ALONE, as it must be'))
+    await shot('03-settings-left-alone')
+    return
+  }
 
   if (scenario === 'game') {
     await shot('01-fresh')
