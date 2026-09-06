@@ -612,6 +612,39 @@
     "_tabLabelSize": "Requested, not rendered. `uiSize` clamps every screen-space size up to typography.minUiSize, which is 15, so a tab label draws at 15 however small a number is put here. That clamp is the reason the words do not fit: \"TOWERS\" at 15px bold is 71px wide and the widest tab this drawer has is 44. The brief expected \"about 43px is enough for a short word at small caps\"; it is not, against this project’s own legibility floor, so the glyph fallback the brief specified for the narrow screen is what runs on both. Lowering this number changes nothing; lowering minUiSize would trade the drawer’s tabs against every other piece of small UI in the game.",
     "_detailSizes": "ALL THREE ARE THE FLOOR, and they have to be. typography.minUiSize is 15 and `uiSize` clamps every screen-space size up to it, so \"small labels\" under the numbers is not a thing this strip can have: three captions at 15px need about 100px and the text column is 92 at 844x390 and 68 at 568x320. What the strip carries is therefore the name, the three numbers in a fixed order, and the trait where there is room for it — see reports/ for the arithmetic and the three ways out."
   },
+  "worldMap": {
+    "_note": "THE ROAD ON THE LEVEL-SELECT SCREEN, and every number that shapes it. The screen used to be four full-size cards scattered across the design box at hand-authored positions: it had run out of room at four levels, the cards were different apparent sizes because the pictures were, and the path drawn between them in level order ran the width of the screen backwards. It is one winding road of identical nodes now, laid out by level order, long enough to carry every planned level -- so it is wider than the design box and scrolls sideways.",
+    "_band": "The vertical space the road may use, in design units: under the title and above the scrollbar. The wave is centred so that the DEEPEST node's name still lands inside it, which is what puts the road in the middle of the screen instead of in the top half with the bottom empty.",
+    "band": { "top": 100, "bottom": 596 },
+    "_node": "IDENTICAL FOR EVERY LEVEL, built and unbuilt alike -- which is the fix for four cards that read as four different sizes. 160x107 is 3:2, the aspect the card art is cropped at, so no picture is stretched to fit. `framePad` is the painted border, and it is the border rather than the picture that has to clear the next node.",
+    "node": { "width": 160, "height": 107, "framePad": 8, "radius": 10 },
+    "_pitch": "Distance between node centres along the road, and the side margin at each end of it. 210 against a 168-wide framed node leaves 42 units of road showing between neighbours, and holds two names apart at the narrowest viewport the game runs at.",
+    "pitch": 210,
+    "margin": 80,
+    "_sway": "The road's wave: a node's centre is `centre + amplitude * sin(index * step)`. The step is deliberately not a neat fraction of a turn, so the road does not repeat itself over twenty nodes and no two neighbours land at the same height. The amplitude is as large as the band allows once the longest name and its unlock line are reserved for.",
+    "sway": { "amplitude": 105, "step": 0.75 },
+    "_label": "The name under a node, wrapped to the node's width. `reserve` is the room kept for it when the road is centred, and it is MEASURED off a rendered frame rather than counted in lines: SPORTS COMPLEX AT DUSK wraps to three lines and its unlock line to two, which comes to 147 design units, and that is the worst case any node can be. A short reserve does not clip the text -- it pushes the deepest node down until its last line lands under the scrollbar, which is exactly what a first pass at 118 did. 22 is the floor for a screen that is fitted from the design box down onto a phone; below it this text is seven real pixels.",
+    "label": { "gap": 10, "size": 22, "reserve": 152 },
+    "_badge": "The level number, top-left of every node. It is the one thing on the screen that says where in the campaign a node sits, which is the whole point of a road.",
+    "badge": { "radius": 21, "size": 24, "inset": 6 },
+    "_path": "The road: a bed, a lighter surface over it, and evenly spaced steps along the middle, drawn as ONE polyline through every node in level order. It passes BEHIND the nodes, which is what makes it read as a single road rather than as a set of links between cards.",
+    "path": { "bedWidth": 17, "bedColour": 2759950, "bedAlpha": 0.55, "surfaceWidth": 9, "surfaceColour": 14271642, "surfaceAlpha": 0.22, "dotSpacing": 26, "dotRadius": 4.5, "dotColour": 15786168, "dotAlpha": 0.9 },
+    "_scrollbar": "SHOWN ONLY WHEN THE ROAD IS LONGER THAN THE SCREEN, and horizontal, because that is the axis the road runs on. Drawn rather than made a control: the map itself is dragged, so the bar reports where you are and there is no thin target to miss.",
+    "scrollbar": { "y": 610, "height": 12, "width": 620, "minThumb": 64, "trackColour": 2759950, "trackAlpha": 0.55, "trackEdge": 7034682, "thumbColour": 14268530, "thumbEdge": 5916208 },
+    "_states": "THREE, AND THEY HAVE TO BE TELLABLE APART AT A GLANCE. cleared: full colour, a green frame, a tick. open: full colour, an amber frame and a ring, nothing over the picture -- this is the one to play. locked: the picture darkened to a cool grey under a padlock, or a bare plate where the level is not built yet.",
+    "states": {
+      "cleared": { "edge": 7323507, "label": "#8fd07a" },
+      "open": { "edge": 15771696, "label": "#f2d06b" },
+      "locked": { "edge": 5916208, "label": "#a4b0bd", "tint": 9079434, "alpha": 0.5 },
+      "hover": 16777215
+    },
+    "_plate": "The node's own backing, which every node has and only an unbuilt one shows: a level that is not built yet has no picture to crop a card from, so its slot is the plate, the number on its badge, a padlock and `unbuiltLabel`. The label is there because a padlock alone reads as YOU HAVE NOT EARNED THIS when the truth is THIS DOES NOT EXIST YET, and a player who reads the first goes looking for what they missed. Sixteen invented level names would be inventing the campaign, so it carries none.",
+    "plate": { "fill": 2759950, "unbuiltFill": 1906186, "unbuiltLabel": "COMING SOON" },
+    "_lockHeight": "The padlock over a locked node, as a fraction of the node's height.",
+    "lockHeight": 0.42,
+    "_ring": "The pulse around the one level that is open and unplayed. It is the only thing on the screen that moves, so it cannot be missed and nothing else competes with it.",
+    "ring": { "width": 4, "spread": 10, "alpha": 0.55, "periodMs": 1400 }
+  },
   "safeArea": {
     "housingAtAngle90": "left",
     "_housingAtAngle90": "Which horizontal edge the sensor housing lands on at screen.orientation.angle 90, which is landscape-primary. That is iOS landscapeLeft — home indicator on the right, device top edge on the left — so the housing is on the left, and 270 is the mirror of it. THIS IS THE ONE VALUE HERE NOT VERIFIED ON HARDWARE: it comes from the orientation conventions, not from a notched phone. Both branches are tested and both viewports are asserted; if the inset ever shows up on the wrong edge, flip this string and change nothing else."

@@ -840,15 +840,49 @@ test('the peanut the game shows is the peanut the game was drawn', () => {
   assert.equal(art.files['icon-sell'], undefined, 'the cash symbol is still shipped')
   assert.equal(art.generated?.peanutIcon, undefined, 'the generated cut-out is back')
 
-  // The counter plate keeps its own painted end -- it is the frame and the
-  // number field as well -- and the real peanut is drawn over it.
+  // AND THE PLATE NO LONGER CARRIES A SECOND ONE. The plate is a single
+  // 232x96 image and a plain white OUTLINE peanut was painted into its left
+  // end -- the placeholder from before the art existed -- so drawing the real
+  // one over it showed both, the white one poking out from behind the brown.
+  // Nothing in code drew the white one, so there was no call to delete: it
+  // was in the picture, and tools/clear_peanut_plate.py took it out.
   assert.equal(art.ui.counters.peanuts, 'hud-peanuts')
   const hud = src('scenes/HudScene.ts')
   assert.match(hud, /name === 'peanuts' && this\.textures\.exists\(ART\.ui\.peanut\)/,
     'the HUD counter still shows the plate\'s painted peanut')
-  // Fitted to the plate's own peanut end, which the manifest measures.
-  assert.match(hud, /const end = \(cfg\.fieldLeft \?\? 0\.3\) \* plateW/,
-    'the peanut is positioned by a guess rather than by the measured field')
+
+  // Two things say the placeholder is gone rather than merely covered.
+  //
+  // One: the peanuts plate's number field now starts where the wave plate's
+  // does. `dark_field` in measure_art.py finds fieldLeft as the first column
+  // of the plate's longest DARK run, so on a plate with a painted icon it
+  // lands just past that icon -- 0.2845 here while the two clean-fronted
+  // plates read 0.319. A plate that still had a peanut in it could not carry
+  // the same number as one that does not.
+  assert.equal(art.render['hud-peanuts'].fieldLeft, art.render['hud-wave'].fieldLeft,
+    'the peanuts plate\'s number field is still stopped short by a painted peanut')
+
+  // Two: the icon is placed in the box measured off the heart PAINTED into
+  // the lives plate, so the drawn peanut and the painted heart keep the same
+  // margins. It used to be centred on half of fieldLeft, which is the middle
+  // of the plate's END and not the middle of its empty field -- 0.14 of the
+  // plate against the heart's 0.21 -- and that is what pushed it out over the
+  // frame.
+  const box = art.ui.counterIcon
+  for (const k of ['left', 'top', 'width', 'height']) {
+    assert.equal(typeof box?.[k], 'number', `art.json's counterIcon has no ${k}`)
+  }
+  assert.match(hud, /fitInRect\(peanut, ART\.ui\.peanut, box\.width \* plateH, box\.height \* plateH\)/,
+    'the peanut is fitted by a single number again, which cannot fit a 1.25:1 shape into a 0.96:1 box')
+  assert.doesNotMatch(hud, /fitInBox\(peanut/,
+    'the peanut is back on the square fit that overflowed the plate')
+
+  // The source extents are the ART's, not its canvas. 512x512 is the canvas;
+  // fitInBox and fitInRect both DIVIDE by these, so the canvas figure sized
+  // every peanut in the game 3% small and told the fit a 1.25:1 shape was
+  // square.
+  assert.equal(art.render['hud-peanut'].contentWidth, 498)
+  assert.equal(art.render['hud-peanut'].contentHeight, 400)
 
   // And the generator is gone rather than left orphaned.
   assert.ok(!existsSync(new URL('../src/systems/PeanutIcon.ts', import.meta.url)),

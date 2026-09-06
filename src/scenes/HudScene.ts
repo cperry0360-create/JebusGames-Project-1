@@ -4,7 +4,7 @@ import type { RulesDef } from '../types.ts'
 import presentationData from '../data/presentation.json'
 import rulesData from '../data/rules.json'
 import { COLOR, FONT_UI } from '../ui/Theme.ts'
-import { ART, fitInBox, renderFor } from '../systems/Art.ts'
+import { ART, fitInBox, fitInRect, renderFor } from '../systems/Art.ts'
 import { greyKey } from '../systems/Desaturate.ts'
 import { plateButton, type PlateButton } from '../ui/Plate.ts'
 import { iconPlate } from '../ui/Plate.ts'
@@ -276,21 +276,31 @@ export class HudScene extends Phaser.Scene {
       const plate = this.add.image(x, top, key).setOrigin(0, 0)
       plate.setScale(scale)
 
-      // THE REAL PEANUT, OVER THE PLATE'S PAINTED ONE. The counter plate is a
-      // single 232x96 image with a peanut drawn into its left end, and that
-      // painted peanut is a plain white outline -- it is what the HUD has been
-      // showing all along. The game's own peanut art has been sitting in
-      // public/assets/ui_icons/ the whole time, unnamed by art.json.
+      // THE ONLY PEANUT ON THE CHIP.
       //
-      // Drawn OVER the plate's end rather than replacing the plate, because
-      // the plate is also the frame and the number field. `fieldLeft` is where
-      // the dark number field begins, so everything left of it is the peanut's
-      // end -- which makes it exactly the box to fit into, measured rather
-      // than guessed.
+      // It used to be the second one. The plate is a single 232x96 image and a
+      // plain white OUTLINE peanut was painted into its left end -- a
+      // placeholder from before the game had peanut art -- and this drew the
+      // real painted peanut on top of it, so the chip carried both and the
+      // white one poked out from behind. No draw call made the white one:
+      // it was in the picture, which is why nothing in code could be deleted
+      // to fix it. tools/clear_peanut_plate.py flattened that end back to the
+      // plate's own field colour; the plate is now a frame and an empty field
+      // and this is the whole icon.
+      //
+      // Placed in the box art.json measures off the heart PAINTED into the
+      // lives plate, so the drawn icon and the painted one keep the same
+      // margins as each other -- which is the thing a player actually reads,
+      // two chips side by side.
       if (name === 'peanuts' && this.textures.exists(ART.ui.peanut)) {
-        const end = (cfg.fieldLeft ?? 0.3) * plateW
-        const peanut = this.add.image(x + end / 2, top + plate.displayHeight / 2, ART.ui.peanut)
-        fitInBox(peanut, ART.ui.peanut, Math.min(end, plate.displayHeight) * 0.74)
+        const box = ART.ui.counterIcon
+        const plateH = plate.displayHeight
+        const peanut = this.add.image(
+          x + (box.left + box.width / 2) * plateH,
+          top + (box.top + box.height / 2) * plateH,
+          ART.ui.peanut,
+        )
+        fitInRect(peanut, ART.ui.peanut, box.width * plateH, box.height * plateH)
       }
 
       // Defaults only matter for a plate whose field was never measured; the

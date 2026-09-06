@@ -891,6 +891,10 @@ export interface ArtDef {
     icons: Record<string, string>
     /** The three counter plates, each carrying its own icon and empty field. */
     counters: Record<string, string>
+    /** Where an icon DRAWN over a counter plate goes, as fractions of the
+     *  plate's height, measured off the heart painted into the lives plate.
+     *  See the note in art.json. */
+    counterIcon: { left: number; top: number; width: number; height: number }
     /** The arcade button plates, by the weight of the action they carry. */
     buttons: { primary: string; secondary: string; disabled: string }
     /** The small square plate for an icon button, and its selected state. */

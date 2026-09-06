@@ -453,6 +453,113 @@ async function run() {
   //   NOTCH  a control sits inside a safe-area inset
   //   SMALL  a control is under 44x44, the minimum tap target
   //   OVER   two texts, or two controls, overlap each other
+  // THE LEVEL SELECT SCROLLS, and this is what establishes that it does.
+  //
+  // The road is three screens long. A screenshot of it cannot tell a map that
+  // scrolls from a map that is simply cropped, and the layout audit cannot
+  // either -- it is told to ignore anything inside the scrolling container,
+  // so if the container never moved the audit would go quiet and pass. So the
+  // first thing this does is prove a node MOVES when the map is dragged.
+  //
+  // The second thing is the fault that comes with dragging a screen whose
+  // content is also its buttons: a drag that happens to end on top of a level
+  // must not start that level.
+  if (scenario === 'worldmap') {
+    const RESM = await import('./js/systems/Resolution.js')
+    const WR = await import('./js/systems/WorldRoad.js')
+    scene('Title').scene.start('WorldMap')
+    if (!(await until(() => running('WorldMap'), 8000))) {
+      note('WORLDMAP: *** did not build ***')
+      return
+    }
+    await sleep(500)
+    const wm = () => scene('WorldMap')
+    const cam = () => wm().cameras.main
+    // Where a level's picture is on the glass, in CSS pixels.
+    const cardAt = (key) => {
+      let found = null
+      const visit = (o) => {
+        if (o.texture && o.texture.key === key) found = o
+        if (o.list) o.list.forEach(visit)
+      }
+      wm().children.list.forEach(visit)
+      if (!found) return null
+      const b = found.getBounds()
+      const a = RESM.worldToScreen(wm(), b.centerX, b.centerY, cam())
+      return { x: Math.round(a.x), y: Math.round(a.y) }
+    }
+
+    const visW = wm().scrollWindow ? wm().scrollWindow().width : cam().width / cam().zoom
+    note('viewport ' + VP.w + 'x' + VP.h + '  dpr=' + RESM.deviceScale())
+    note('road ' + Math.round(WR.roadWidth()) + ' world units across '
+      + Math.round(visW) + ' visible = ' + (WR.roadWidth() / visW).toFixed(2) + ' screens')
+    note('slots ' + WR.roadNodes().length + '  maxScroll ' + Math.round(WR.maxScroll(visW))
+      + '  (0 would mean the bar must not be drawn)')
+
+    const start = cardAt('card-level1')
+    note('level 1 sits at ' + JSON.stringify(start))
+    await shot('worldmap-1-opened-' + VP.w + 'x' + VP.h)
+
+    // Drag left, which walks the road forward.
+    const cx = Math.round(VP.w / 2), cy = Math.round(VP.h * 0.35)
+    mouse('mousedown', cx, cy)
+    for (let i = 1; i <= 10; i++) await move(cx - (VP.w * 0.6 * i) / 10, cy)
+    mouse('mouseup', Math.round(cx - VP.w * 0.6), cy)
+    await sleep(300)
+    const after = cardAt('card-level1')
+    const moved = start && after && Math.abs(after.x - start.x) > 20
+    note('after a drag of ' + Math.round(VP.w * 0.6) + 'px, level 1 sits at ' + JSON.stringify(after)
+      + (moved ? '  *** MOVED ***' : '  UNMOVED -- the map does not scroll'))
+    note('scroll is now ' + Math.round(wm().scroll) + ' of ' + Math.round(WR.maxScroll(visW)))
+    await shot('worldmap-2-scrolled-' + VP.w + 'x' + VP.h)
+
+    // Back to the start. A drag right is clamped at the near end of the road,
+    // so an over-long one is the reliable way home.
+    const home = async () => {
+      mouse('mousedown', cx, cy)
+      for (let i = 1; i <= 10; i++) await move(cx + (VP.w * 1.2 * i) / 10, cy)
+      mouse('mouseup', Math.round(cx + VP.w * 1.2), cy)
+      await sleep(300)
+      return cardAt('card-level1')
+    }
+    const back = await home()
+    note('dragged back: level 1 at ' + JSON.stringify(back)
+      + '  scroll ' + Math.round(wm().scroll))
+
+    // THE FAULT THAT COMES WITH DRAGGING A SCREEN WHOSE CONTENT IS ALSO ITS
+    // BUTTONS: a short drag that starts and ends on a level must not start it.
+    //
+    // It has to be SHORT and it has to start on the card, because the card
+    // travels with the drag -- a long drag that ends where the card used to be
+    // ends over empty parchment and proves nothing. 40px is past the 10-unit
+    // tap slop and small enough that the card is still under the finger.
+    if (back) {
+      // LEFT, so the road actually moves under the finger: a rightward drag at
+      // scroll 0 is clamped and moves nothing, which makes the check weaker
+      // than it looks.
+      mouse('mousedown', back.x, back.y)
+      for (let i = 1; i <= 4; i++) await move(back.x - (40 * i) / 4, back.y)
+      mouse('mouseup', back.x - 40, back.y)
+      await sleep(400)
+      const nowAt = cardAt('card-level1')
+      note('a 40px LEFT DRAG starting and ending on level 1 (card now at '
+        + JSON.stringify(nowAt) + '): Loadout running = ' + running('Loadout')
+        + (running('Loadout') ? '  *** a scroll started a run ***' : '  (correct)'))
+    }
+
+    // And a real tap does start it.
+    const tapAt = await home()
+    if (tapAt && !running('Loadout')) {
+      note('  tapping level 1 at ' + JSON.stringify(tapAt)
+        + '  dragged=' + wm().dragged + ' scroll=' + Math.round(wm().scroll))
+      await click(tapAt.x, tapAt.y)
+      await sleep(500)
+      note('a TAP on level 1: Loadout running = ' + running('Loadout')
+        + (running('Loadout') ? '  (correct)' : '  *** a tap did nothing ***'))
+    }
+    return
+  }
+
   if (scenario === 'screens') {
     const RESM = await import('./js/systems/Resolution.js')
     const SA = await import('./js/systems/SafeArea.js')
@@ -543,8 +650,15 @@ async function run() {
       // `masked` marks the children of a container the scene clips -- the
       // loadout's scrolling stack. Their bounds are reported in full whether
       // they are on screen or not, so only these get clipped to the band.
-      const visit = (o, masked = false) => {
+      //
+      // `scrolled` marks the children of a container the scene PANS -- the
+      // world map's road, which is three screens long and is dragged sideways.
+      // Content running past the edge of the screen is what scrolling IS, so
+      // reporting it as cut off would be reporting the feature. Only what is
+      // wholly on screen is audited; see where these are dropped below.
+      const visit = (o, masked = false, scrolled = false) => {
         if (sc.stack && o === sc.stack) masked = true
+        if (sc.road && o === sc.road) scrolled = true
         if (o.visible === false || (o.alpha ?? 1) <= 0.02) return
         // An empty Text still reports bounds and draws no ink. Measuring one
         // is measuring a placeholder -- the boss name's label sits at 0,0 with
@@ -563,12 +677,12 @@ async function run() {
           const c = camFor(sc, o)
           items.push({
             r, live, txt: o.text !== undefined, name: label(o),
-            scene: sc.scene.key, chrome: screenSpace(sc, o), masked,
+            scene: sc.scene.key, chrome: screenSpace(sc, o), masked, scrolled,
             vp: { x: c.x / dprNow, y: c.y / dprNow,
                   w: c.width / dprNow, h: c.height / dprNow },
           })
         }
-        if (o.list) for (const ch of o.list) visit(ch, masked)
+        if (o.list) for (const ch of o.list) visit(ch, masked, scrolled)
       }
       for (const o of sc.children.list) visit(o)
       return items
@@ -660,6 +774,23 @@ async function run() {
         }
       }
       const vw = VP.w, vh = VP.h
+      // A SCROLLING MAP'S CONTENT RUNS PAST THE EDGES OF THE SCREEN, and that
+      // is the feature rather than a fault: the world map's road is three
+      // screens long. Anything inside its scrolling container that is not
+      // WHOLLY on screen is dropped -- not clipped, because a half-visible tap
+      // target measures under 44pt and would read as SMALL. What is left is
+      // exactly what a player is looking at, and it is audited in full.
+      let dropped = 0
+      for (let i = items.length - 1; i >= 0; i--) {
+        const it = items[i]
+        if (!it.scrolled) continue
+        const r = it.r
+        if (r.x < -1 || r.y < -1 || r.x + r.w > vw + 1 || r.y + r.h > vh + 1) {
+          items.splice(i, 1)
+          dropped++
+        }
+      }
+      if (dropped) note('  ' + dropped + ' object(s) scrolled off screen, not audited')
       // A thing that CONTAINS the whole viewport is a backdrop, a scrim or a
       // full-screen tap zone, and running past the edges is its job. Only
       // something partly outside is content the player cannot see.

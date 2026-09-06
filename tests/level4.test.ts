@@ -12,6 +12,7 @@ import towers from '../src/data/towers.json' with { type: 'json' }
 import draft from '../src/data/draft.json' with { type: 'json' }
 import levels from '../src/data/levels.json' with { type: 'json' }
 import art from '../src/data/art.json' with { type: 'json' }
+import { ROAD, nodeBlock, roadNodes } from '../src/systems/WorldRoad.ts'
 
 const GEOMETRY = JSON.parse(
   readFileSync(new URL('../tools/level4_geometry.json', import.meta.url), 'utf8'))
@@ -368,43 +369,51 @@ test('an air enemy is untouchable by a tower that only shoots the ground', () =>
 
 /* ----------------------------------------------------------- the level entry */
 
-test('no card\'s caption lands on another card', () => {
-  // THE NUMBERS MISSED THIS AND A PICTURE FOUND IT. The overlap check in
-  // level3.test.ts compares CARD rectangles, 264x176, and level 4's first
-  // position cleared every one of them. What it did not compare was the block
-  // of text UNDER a card, and level 3's name wraps to two lines: "SPORTS
-  // COMPLEX AT DUSK" over "Clear 2 runs to unlock" came down squarely on top
-  // of level 4's card, which a rendered frame showed at once.
+test('no node\'s name lands on another node, anywhere on the road', () => {
+  // THE NUMBERS MISSED THIS ONCE AND A PICTURE FOUND IT. The check this
+  // replaces compared CARD rectangles and level 4's position cleared every
+  // one of them; what actually collided was the block of TEXT under level 3 --
+  // "SPORTS COMPLEX AT DUSK" over "Clear 2 runs to unlock" -- landing squarely
+  // on level 4's card. It was invisible to the test because the test had
+  // re-derived the scene's layout from constants copied out of it, and one
+  // copy had drifted.
   //
-  // WorldMapScene's own numbers. The name sits at CARD_H / 2 + 18 below the
-  // centre with origin (0.5, 0) and wraps to the card's width, so two 22px
-  // rows reach about +162; the unlock line follows at +168 and reaches +196.
-  // A card's own top is 88 above its centre. So two cards stacked need 284px
-  // between centres, and the whole band a centre may sit in is 244 -- which is
-  // why level 4 is beside level 3 rather than under it.
-  const [W, H, CW, CH, TOP, BOT] = [1280, 720, 264, 176, 150, 150]
-  const centre = (l: any) => ({
-    x: CW / 2 + l.mapPosition[0] * (W - CW),
-    y: (TOP + CH / 2) + l.mapPosition[1] * ((H - BOT - CH / 2) - (TOP + CH / 2)),
-  })
-  // Card and caption as one box: the caption is the card's width and reaches
-  // 196px below its centre.
-  const box = (l: any) => {
-    const c = centre(l)
-    return { id: l.id, left: c.x - CW / 2, right: c.x + CW / 2, top: c.y - CH / 2, bottom: c.y + 196 }
-  }
-  const boxes = (levels as any).levels.map(box)
-  for (let i = 0; i < boxes.length; i++) {
-    for (let j = i + 1; j < boxes.length; j++) {
-      const a = boxes[i], b = boxes[j]
-      const overlaps = a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
-      assert.ok(!overlaps, `${a.id} and ${b.id} overlap once their captions are counted`)
+  // So this measures the REAL geometry, through the module the scene draws
+  // from, and it measures the node WITH the room reserved under it for its
+  // name. It also covers every slot on the road rather than the four that are
+  // built, because a slot that is empty today gets a level tomorrow.
+  const nodes = roadNodes()
+  assert.ok(nodes.length >= (levels as any).levels.length,
+    'the road has fewer slots than there are levels')
+
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const a = nodeBlock(nodes[i]!), b = nodeBlock(nodes[j]!)
+      const hit = a.x < b.x + b.width && b.x < a.x + a.width
+        && a.y < b.y + b.height && b.y < a.y + a.height
+      assert.ok(!hit,
+        `slots ${nodes[i]!.number} and ${nodes[j]!.number} overlap once their names are counted`)
     }
   }
-  // And every box is still on the world.
-  for (const b of boxes) {
-    assert.ok(b.left >= 0 && b.right <= W, `${b.id}'s card runs off the world`)
-    assert.ok(b.top >= 0 && b.bottom <= H, `${b.id}'s caption runs off the bottom of the world`)
+
+  // And the whole road stays inside the band it is allowed, top and bottom.
+  // The road runs off the sides on purpose -- it is three screens long and
+  // scrolls -- so only the vertical bound is a fault.
+  for (const n of nodes) {
+    const b = nodeBlock(n)
+    assert.ok(b.y >= ROAD.band.top,
+      `slot ${n.number} rides up over the title (${b.y} < ${ROAD.band.top})`)
+    assert.ok(b.y + b.height <= ROAD.band.bottom,
+      `slot ${n.number}'s name runs into the scrollbar (${b.y + b.height} > ${ROAD.band.bottom})`)
+  }
+
+  // Left to right, in level order, with no two at the same height: that is
+  // what makes the road readable as a progression rather than a scatter.
+  for (let i = 1; i < nodes.length; i++) {
+    assert.ok(nodes[i]!.x > nodes[i - 1]!.x,
+      `slot ${nodes[i]!.number} is not further along the road than slot ${nodes[i - 1]!.number}`)
+    assert.notEqual(nodes[i]!.y, nodes[i - 1]!.y,
+      `slots ${nodes[i - 1]!.number} and ${nodes[i]!.number} sit at the same height; the road reads flat there`)
   }
 })
 

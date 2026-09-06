@@ -39,11 +39,6 @@ export interface LevelDef {
   laneLengthPx: number
   /** Cleared runs needed before this level can be picked. 0 = open always. */
   runsClearedToUnlock: number
-  /** Where this level sits on the world map, normalised 0-1 against the
-   *  world's bounds. The ONLY place a level's position lives: the cards are
-   *  placed from it and the trail between them is generated from it, so
-   *  moving a level is one edit in levels.json. */
-  mapPosition: [number, number]
   /**
    * Towers this level can draw that the shared pool does not offer, with their
    * draft weights. Absent on every level that draws only the shared pool.
@@ -84,10 +79,26 @@ const WAVE_TABLES: Record<string, WavesDef> = {
   'waves.level4.json': wavesLevel4 as unknown as WavesDef,
 }
 
-// `as unknown as` because a JSON import types mapPosition as number[], and the
-// interface wants the [x, y] pair it actually is. The shape is held by tests,
-// not by this cast.
 export const LEVELS: LevelDef[] = (levelsData as unknown as { levels: LevelDef[] }).levels
+
+/**
+ * How many slots the world map's road has, the unbuilt stretch included.
+ *
+ * A LEVEL'S PLACE ON THAT ROAD IS ITS PLACE IN `LEVELS`, and there is no
+ * second opinion about it any more. Every level used to carry a hand-authored
+ * `mapPosition`, and the four of them had drifted out of level order -- level
+ * 4 was parked at the far left because the old full-size cards had run out of
+ * room anywhere else -- so the path drawn between them in order ran backwards
+ * across the screen and read as though it skipped a level. Order IS the
+ * position now, so the two cannot disagree.
+ *
+ * Never fewer slots than there are levels: a level that exists always has
+ * somewhere to be drawn, whatever the file says.
+ */
+export const ROAD_SLOTS: number = Math.max(
+  LEVELS.length,
+  (levelsData as unknown as { plannedLevels?: number }).plannedLevels ?? 0,
+)
 
 /** The level a run plays when nothing has said otherwise. First in the file,
  *  not a hardcoded 'level1', so reordering levels.json cannot silently

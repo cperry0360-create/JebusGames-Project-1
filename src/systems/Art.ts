@@ -183,6 +183,28 @@ export function fitInBox(
   sprite.setScale(Math.min(box / w, box / h))
 }
 
+/**
+ * Fits art inside a RECTANGLE, from the manifest alone.
+ *
+ * `fitInBox` takes one number and so can only fit a square. A shape that is
+ * not square then gets sized by whichever of its own dimensions is larger,
+ * which is fine in an icon slot and wrong in a slot that is not square either:
+ * the peanut is 1.25:1 and the empty end of its counter plate is 0.96:1, and
+ * fitting the first into the second by a single number overflowed the plate.
+ */
+export function fitInRect(
+  sprite: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image,
+  key: string,
+  boxW: number,
+  boxH: number,
+): void {
+  const cfg = renderFor(key)
+  const w = cfg.contentWidth ?? sprite.width
+  const h = cfg.contentHeight ?? sprite.height
+  sprite.setOrigin(0.5, 0.5)
+  sprite.setScale(Math.min(boxW / w, boxH / h))
+}
+
 /** On-screen width of art fitted to a given content height. */
 export function contentWidthAt(key: string, targetHeight: number): number {
   const cfg = renderFor(key)

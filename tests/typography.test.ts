@@ -95,7 +95,8 @@ test('no UI text is set below the legible minimum', () => {
   // Menu scenes are fitted from the 1280x720 design box down to the viewport,
   // so their floor is much higher: on a phone in landscape the fit is about
   // 0.55, and a 13px menu label was seven real pixels.
-  const MENU = ['scenes/TitleScene.ts', 'scenes/LoadoutScene.ts', 'scenes/CreditsScene.ts', 'scenes/SplashScene.ts']
+  const MENU = ['scenes/TitleScene.ts', 'scenes/LoadoutScene.ts', 'scenes/CreditsScene.ts',
+    'scenes/SplashScene.ts', 'scenes/WorldMapScene.ts']
   for (const { path, body } of ALL) {
     if (path === 'scenes/BootScene.ts') continue // the missing-art dump, not UI
     const floor = MENU.includes(path) ? type.minMenuSize : type.minUiSize
@@ -103,6 +104,24 @@ test('no UI text is set below the legible minimum', () => {
       assert.ok(s.size >= floor,
         `${path}:${s.at} sets ${s.size}px text; the floor ${MENU.includes(path) ? 'for a fitted menu screen' : 'for screen-space UI'} is ${floor}px`)
     }
+  }
+})
+
+test('type sizes that live in data are held to the same floor as the ones in code', () => {
+  // THE REGEX ABOVE CANNOT SEE THESE. It looks for `fontSize: 'Npx'` in a
+  // source file, and the world map's sizes are in presentation.json -- read
+  // through ROAD and interpolated -- because that is where this project keeps
+  // numbers that might be tuned. A rule that a whole screen can step outside
+  // by moving a number into JSON is not a rule, so the JSON is checked too.
+  const wm = JSON.parse(readFileSync(url('../src/data/presentation.json'), 'utf8')).worldMap
+  const sizes: Array<[string, number]> = [
+    ['worldMap.label.size', wm.label.size],
+    ['worldMap.badge.size', wm.badge.size],
+  ]
+  for (const [where, px] of sizes) {
+    assert.equal(typeof px, 'number', `${where} is not a number`)
+    assert.ok(px >= type.minMenuSize,
+      `${where} is ${px}px; the floor for a fitted menu screen is ${type.minMenuSize}px`)
   }
 })
 

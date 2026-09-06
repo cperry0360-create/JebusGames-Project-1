@@ -306,13 +306,16 @@
     },
     "hud-peanut": {
       "_note": "THE PEANUT, on its own, painted. It was in public/assets/ui_icons/ the whole time and art.json never named it, so every peanut in the game was drawn either as part of the counter plate or as `gen-icon-peanut` -- a flood-filled cut-out of that plate, which is the plain white peanut the HUD was showing.",
-      "contentWidth": 512,
-      "contentHeight": 512
+      "_size": "512x512 IS THE CANVAS, NOT THE ART, and these are SOURCE EXTENTS that fitInBox divides by -- so the canvas figure made every peanut in the game 3% small and, worse, made a shape that is 1.25:1 behave as though it were square. Measured ink is 498x400; run `python3 tools/measure_art.py` and read the UI icons section to re-derive it.",
+      "contentWidth": 498,
+      "contentHeight": 400
     },
     "hud-peanuts": {
+      "_field": "AUTHORED, NOT MEASURED, and the only one of the three that is. fieldLeft is where the number starts, and dark_field in measure_art.py finds it as the first column of the plate's longest dark run -- which on the other two plates lands just past the painted icon. This plate no longer HAS a painted icon (see _icon), so the same measurement would return the field's own left edge, 0.0647, and print the counter over the peanut. 0.319 is the wave plate's, measured on the identical 232x96 frame, so all three numbers start in the same place.",
+      "_icon": "THE PAINTED PEANUT IS GONE FROM THE PLATE. It was a plain white outline from before the game had peanut art, and HudScene draws the real one over that end -- so the chip showed two peanuts, the white one poking out from behind the brown one. No draw call made it: it was in the picture. tools/clear_peanut_plate.py flattened that end back to the field colour.",
       "contentWidth": 232,
       "contentHeight": 96,
-      "fieldLeft": 0.2845,
+      "fieldLeft": 0.319,
       "fieldRight": 0.9397,
       "fieldCentreY": 0.4948
     },
@@ -894,6 +897,13 @@
       "peanuts": "hud-peanuts",
       "lives": "hud-lives",
       "wave": "hud-wave"
+    },
+    "counterIcon": {
+      "_note": "WHERE AN ICON DRAWN OVER A COUNTER PLATE GOES, taken off the heart that is painted into the lives plate so a drawn icon and a painted one sit the same. The heart's ink measures x21-74, y24-76 on a 229x96 plate (`python3 tools/measure_art.py`, the counter icon box section); these are those numbers as fractions of the plate's HEIGHT, which is the one dimension all three plates share (232x96, 229x96, 232x96). Only the peanuts plate uses them -- its icon is the one that is drawn rather than painted -- but they are the shared geometry rather than that plate's own, which is why they live beside `counters` and not in its render entry.",
+      "left": 0.2188,
+      "top": 0.25,
+      "width": 0.5625,
+      "height": 0.5521
     },
     "buttons": {
       "primary": "ui-btn-primary",

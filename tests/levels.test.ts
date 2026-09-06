@@ -7,8 +7,10 @@ const read = (n: string) => JSON.parse(readFileSync(url(`../src/data/${n}.json`)
 const src = (p: string) => readFileSync(url(`../src/${p}`), 'utf8')
 
 import {
-  DEFAULT_LEVEL_ID, LEVELS, isLevelUnlocked, levelDef, loadLevel, resolveLevelId, unlockedLevels,
+  DEFAULT_LEVEL_ID, LEVELS, ROAD_SLOTS, isLevelUnlocked, levelDef, loadLevel,
+  resolveLevelId, unlockedLevels,
 } from '../src/systems/Levels.ts'
+import { roadNodes } from '../src/systems/WorldRoad.ts'
 
 const levels = read('levels'), enemies = read('enemies')
 const l1 = read('waves'), l2 = read('waves.level2')
@@ -182,10 +184,13 @@ test('a run can only ever begin on a level the player has unlocked', () => {
   const map = src('scenes/WorldMapScene.ts')
   assert.match(map, /if \(!isLevelUnlocked\(id, cleared\)\) return/,
     'the map starts a level without re-checking that it is unlocked')
-  // And a locked card is given no handler at all: the early return in drawCard
-  // happens before any interactive object is made.
-  assert.match(map, /if \(!open\) \{[\s\S]*?return\n {4}\}/,
-    'a locked card falls through to the tappable path')
+  // And a locked node is given no handler at all: the interactive rectangle is
+  // made inside a branch a locked node never reaches, and that branch returns.
+  assert.match(map, /if \(state !== 'locked'\) \{[\s\S]*?return\n {4}\}/,
+    'a locked node falls through to the tappable path')
+  const tappable = map.slice(map.indexOf("if (state !== 'locked') {"))
+  assert.ok(tappable.indexOf('setInteractive') < tappable.indexOf('\n    }'),
+    'the interactive rectangle is made outside the branch a locked node cannot reach')
 })
 
 test('a resume goes back to the level it was saved on', () => {
@@ -202,25 +207,21 @@ test('a resume goes back to the level it was saved on', () => {
 
 /* ------------------------------------------------------------- the world map */
 
-test('every level has a place on the world map and a card to draw there', () => {
+test('every level has a slot on the road and a card to draw there', () => {
   // THE POINT OF THE MAP BEING COMPOSED. Adding a level is a row in
   // levels.json plus one card in art.json, and this is what makes forgetting
-  // either a failed build rather than a gap on the screen — a card with no
-  // position draws at 0,0 under the title, and a position with no card throws
-  // on a missing texture key.
+  // either a failed build rather than a gap on the screen.
+  //
+  // A LEVEL'S POSITION IS NO LONGER DATA. Every level used to carry a
+  // hand-authored mapPosition, and the four of them had drifted out of level
+  // order -- so the trail drawn between them in order ran backwards across the
+  // screen and read as though it skipped a level. Order is the position now.
   const art = JSON.parse(src('data/art.json'))
   const cards = art.worldMap.cards as Record<string, string>
 
   for (const l of LEVELS) {
-    const pos = (l as any).mapPosition
-    assert.ok(Array.isArray(pos) && pos.length === 2,
-      `${l.id} has no mapPosition; it would draw in the corner of the world map`)
-    for (const [i, n] of pos.entries()) {
-      assert.equal(typeof n, 'number', `${l.id}'s mapPosition[${i}] is not a number`)
-      assert.ok(n >= 0 && n <= 1,
-        `${l.id}'s mapPosition[${i}] is ${n}; it is normalised 0-1 against the world bounds`)
-    }
-
+    assert.equal((l as any).mapPosition, undefined,
+      `${l.id} still carries a mapPosition; the road places a level by its order`)
     const key = cards[l.id]
     assert.ok(key, `art.json's worldMap.cards has no card for ${l.id}`)
     assert.ok(art.files[key],
@@ -233,34 +234,53 @@ test('every level has a place on the world map and a card to draw there', () => 
     assert.ok(LEVELS.some((l) => l.id === id),
       `worldMap.cards has a card for "${id}", which is not a level`)
   }
-})
 
-test('two levels never share a spot on the map', () => {
-  // Two cards at the same place is one card as far as the player is concerned,
-  // and the trail between them is a dot.
-  const seen = new Map<string, string>()
-  for (const l of LEVELS) {
-    const key = (l as any).mapPosition.join(',')
-    const other = seen.get(key)
-    assert.ok(!other, `${l.id} and ${other} are both at ${key} on the world map`)
-    seen.set(key, l.id)
+  // Every level gets a slot, and the road is at least as long as the campaign
+  // is planned to be -- the unbuilt stretch is the point, so the screen shows
+  // a road ahead rather than stopping at whatever shipped last.
+  assert.ok(ROAD_SLOTS >= LEVELS.length, 'the road has fewer slots than there are levels')
+  assert.equal(roadNodes().length, ROAD_SLOTS)
+  for (const [i, l] of LEVELS.entries()) {
+    assert.equal(roadNodes()[i]!.level?.id, l.id, `slot ${i + 1} is not ${l.id}`)
+    assert.equal(roadNodes()[i]!.number, i + 1, 'a node is numbered by something other than its slot')
+  }
+  for (const n of roadNodes().slice(LEVELS.length)) {
+    assert.equal(n.level, null, `slot ${n.number} claims a level that is not built`)
   }
 })
 
-test('the map screen reads a level\'s position and picture from the data only', () => {
+test('two levels never share a spot on the map', () => {
+  // Two nodes at the same place is one node as far as the player is concerned.
+  // It cannot happen now -- the slots are a level apart by construction --
+  // which is most of why the positions were taken out of the data.
+  const seen = new Set<string>()
+  for (const n of roadNodes()) {
+    const key = `${n.x},${n.y}`
+    assert.ok(!seen.has(key), `two slots are both at ${key} on the world map`)
+    seen.add(key)
+  }
+})
+
+test('the map screen reads a level\'s place and picture from the data only', () => {
   // The whole claim of "composed": no coordinate and no texture key for a
   // level may be written into the scene.
   const map = src('scenes/WorldMapScene.ts')
-  assert.match(map, /level\.mapPosition/, 'the map screen does not read mapPosition')
-  assert.match(map, /ART\.worldMap\.cards\[level\.id\]/,
+  assert.match(map, /ART\.worldMap\.cards\[node\.level\.id\]/,
     'the map screen does not look its cards up by level id')
   for (const l of LEVELS) {
     assert.ok(!map.includes(`'${l.id}'`),
       `WorldMapScene names "${l.id}" directly; levels must come from the registry`)
   }
-  // The trail is generated from the same positions, not drawn as art.
-  assert.match(map, /cardCentre\(LEVELS\[i\]!\)/,
-    'the trail is not generated from the cards own positions')
+  // The road is generated from the nodes' own positions, not drawn as art, and
+  // it is ONE polyline through them in order -- which is what the four
+  // separate runs it replaces could not guarantee.
+  assert.match(map, /roadNodes\(\)/, 'the scene does not lay itself out from the road')
+  assert.match(map, /strokePoints\(points, false, false\)/,
+    'the road is no longer one unbroken stroke through the nodes')
+  // And no layout number is typed into the scene: they are all in
+  // presentation.json's worldMap block, read through ROAD.
+  assert.ok(!/const (CARD_W|CARD_H|TOP_MARGIN|BOTTOM_MARGIN|FRAME_PAD) =/.test(map),
+    'the map screen has grown its own copy of the layout numbers again')
 })
 
 /* ------------------------------------------------------------ the same shape */

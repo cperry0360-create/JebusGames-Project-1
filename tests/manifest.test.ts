@@ -57,9 +57,15 @@ test('every role in the manifest resolves to a file that exists', () => {
   for (const [role, key] of Object.entries(art.ui) as [string, unknown][]) {
     // A null role is a deliberate opt-out, e.g. towers that carry their own base.
     if (key === null) continue
+    // An underscore key is a note, everywhere in this manifest.
+    if (role.startsWith('_')) continue
     if (typeof key === 'object') {
-      // A nested group, like the three counter plates.
-      for (const [sub, k] of Object.entries(key as Record<string, string>)) {
+      // A nested group. Usually roles, like the three counter plates -- but
+      // `counterIcon` is geometry, four fractions of a plate saying where an
+      // icon drawn over one goes, and its note is prose. So a member is a
+      // role only if it is a string that is not a note; a number never is.
+      for (const [sub, k] of Object.entries(key as Record<string, unknown>)) {
+        if (sub.startsWith('_') || typeof k !== 'string') continue
         roleRefs.push([`ui.${role}.${sub}`, k])
       }
     } else {

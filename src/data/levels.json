@@ -10,10 +10,6 @@
       "waves": "waves.json",
       "laneLengthPx": 1976.9,
       "runsClearedToUnlock": 0,
-      "mapPosition": [
-        0.3,
-        0.62
-      ],
       "extraTowerWeights": {
         "imaDummy": 4
       }
@@ -23,36 +19,25 @@
       "name": "Head Office",
       "waves": "waves.level2.json",
       "laneLengthPx": 1955.3,
-      "runsClearedToUnlock": 1,
-      "mapPosition": [
-        0.7,
-        0.34
-      ]
+      "runsClearedToUnlock": 1
     },
     {
       "id": "level3",
       "name": "Sports Complex at Dusk",
       "waves": "waves.level3.json",
       "laneLengthPx": 1560.2,
-      "runsClearedToUnlock": 2,
-      "mapPosition": [
-        1.0,
-        0.06
-      ]
+      "runsClearedToUnlock": 2
     },
     {
       "id": "level4",
       "name": "The Conundrum",
       "waves": "waves.level4.json",
       "laneLengthPx": 1479.0,
-      "runsClearedToUnlock": 3,
-      "mapPosition": [
-        0.03,
-        0.0
-      ]
+      "runsClearedToUnlock": 3
     }
   ],
-  "_mapPosition4": "LEVEL 4 IS TOP-LEFT, AND THE TRAIL DOUBLES BACK, which is not the first choice and is the only one that works. Two cards can sit above one another only if there are 284 px between their centres -- 88 for the lower card's half height and 196 for the upper one's name and its \"Clear N runs to unlock\" line, both of which wrap to two rows on a long name. The band a card centre may sit in is 238 to 482, which is 244. So no two cards can be stacked at all, and every card has to clear every other by a card width, 264 px, horizontally. With levels 1, 2 and 3 at x 437, 843 and 1148 the only x left is under 173. THE NUMBERS DID NOT CATCH THIS: the overlap check in level3.test.ts compared card rectangles, and what actually collided was level 3's two-line caption over level 4's card. A rendered frame caught it. level4.test.ts now checks the caption block as well.",
-  "_mapPosition": "WHERE A LEVEL SITS ON THE WORLD MAP, normalised 0-1 against the world's own bounds, and the ONLY place that position lives. WorldMapScene multiplies it by the world size; the trail between the cards is generated from these numbers rather than drawn, so moving a card moves the trail with it. Adding a level means a row here with a mapPosition and a card in art.json's worldMap.cards — a test fails the build if either is missing.",
+  "_roadmap": "WHERE A LEVEL SITS ON THE WORLD MAP: nowhere in this file, because it is the level's PLACE IN THIS LIST. mapPosition used to be here, one hand-authored pair per level, and it is why the trail on that screen was wrong -- level 4 sat at x 0.03 because the old full-size cards could not be stacked and there was nowhere else to put it, so the path drawn in level order ran the width of the screen backwards and read as though it skipped level 1 altogether. Its own note admitted the corner it had been painted into. A road cannot have positions that disagree with its order, so it no longer has positions: WorldMapScene lays every node out along one curve by index and the levels here take the first slots on it. Moving a level means moving its row. Adding one means a row here and a card in art.json's worldMap.cards -- a test fails the build without both.",
+  "_plannedLevels": "HOW LONG THE ROAD IS, the unbuilt stretch included. Every slot past the last row above draws darkened and padlocked, so the map shows how far the campaign is meant to run instead of stopping at whatever shipped last. Raising it costs nothing and adds road; a value below the number of levels above is ignored, since a level that exists always gets a slot.",
+  "plannedLevels": 20,
   "_towers": "WHICH TOWERS A LEVEL CAN DRAW, beyond draft.json's shared pool. draft.json's towerWeights is every level's pool; extraTowerWeights adds to it for one level and is absent everywhere else. The Ima Dummy Tower is level 1's only for now, which is what the brief asked for and also what keeps levels 2 and 3 comparable to the numbers they were tuned against."
 }

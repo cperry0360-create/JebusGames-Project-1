@@ -8,6 +8,7 @@ import waves from '../src/data/waves.level3.json' with { type: 'json' }
 import enemies from '../src/data/enemies.json' with { type: 'json' }
 import towers from '../src/data/towers.json' with { type: 'json' }
 import levels from '../src/data/levels.json' with { type: 'json' }
+import { nodeCentre, roadNodes } from '../src/systems/WorldRoad.ts'
 
 const GEOMETRY = JSON.parse(
   readFileSync(new URL('../tools/level3_geometry.json', import.meta.url), 'utf8'))
@@ -268,31 +269,16 @@ test('level 3 is locked until level 2 has been cleared, and open after', () => {
 
 test('level 3 has a place on the world map and a card to draw there', () => {
   const art = JSON.parse(readFileSync(new URL('../src/data/art.json', import.meta.url), 'utf8'))
-  const l3 = (levels as any).levels.find((l: any) => l.id === 'level3')
-  assert.ok(Array.isArray(l3.mapPosition) && l3.mapPosition.length === 2)
   const key = art.worldMap.cards.level3
   assert.ok(key, 'no world map card for level 3')
   assert.equal(art.files[key], 'ui/card_level3.webp')
 
-  // And the cards do not sit on top of one another. These are WorldMapScene's
-  // own numbers; a position that overlapped would draw one card over another
-  // and there is nothing on screen to catch it here.
-  const [W, H, CW, CH, TOP, BOT] = [1280, 720, 264, 176, 150, 150]
-  const centre = (l: any) => ({
-    x: CW / 2 + l.mapPosition[0] * (W - CW),
-    y: (TOP + CH / 2) + l.mapPosition[1] * ((H - BOT - CH / 2) - (TOP + CH / 2)),
-  })
-  const spots = (levels as any).levels.map((l: any) => ({ id: l.id, ...centre(l) }))
-  for (const p of spots) {
-    assert.ok(p.x - CW / 2 >= 0 && p.x + CW / 2 <= W, `${p.id}'s card runs off the world`)
-    assert.ok(p.y - CH / 2 >= 0 && p.y + CH / 2 <= H, `${p.id}'s card runs off the world`)
-  }
-  for (let i = 0; i < spots.length; i++) {
-    for (let j = i + 1; j < spots.length; j++) {
-      const dx = Math.abs(spots[i].x - spots[j].x)
-      const dy = Math.abs(spots[i].y - spots[j].y)
-      assert.ok(dx >= CW || dy >= CH,
-        `${spots[i].id} and ${spots[j].id} overlap on the world map`)
-    }
-  }
+  // ITS PLACE IS ITS PLACE IN THE FILE. levels.json used to carry a
+  // hand-authored mapPosition per level and this test checked that one against
+  // a copy of the scene's arithmetic; the copy is gone, and so is the position.
+  // Slot 3 of the road, because level 3 is the third row.
+  const order = (levels as any).levels.findIndex((l: any) => l.id === 'level3')
+  assert.equal(order, 2, 'level 3 is not the third level in the file any more')
+  assert.equal(nodeCentre(order).x, roadNodes()[order]!.x,
+    'the road puts level 3 somewhere other than its own slot')
 })

@@ -414,6 +414,78 @@ for name in ('peanuts', 'lives', 'wave'):
     print(f'  {key}: {w}x{h}, field x{left}-{right - 1} y{top}-{bot} -> {prender[key]}')
 json.dump({'files': pfiles, 'render': prender}, open('/tmp/hudpatch.json', 'w'), indent=2)
 
+# THE PEANUTS PLATE'S fieldLeft IS AUTHORED NOW; DO NOT COPY THE ONE ABOVE.
+#
+# dark_field finds the field as the plate's longest run of dark COLUMNS, so on
+# a plate with an icon painted into it the run starts just past that icon --
+# which is what made 0.2845 the right answer while a placeholder peanut was
+# still in the picture. It is not any more (tools/clear_peanut_plate.py), so
+# the run now starts at the field's own left edge and this prints 0.0647: the
+# number would be drawn over the icon. art.json carries the wave plate's
+# 0.319, measured on the identical 232x96 frame. See its `_field` note.
+if abs(prender['hud-peanuts']['fieldLeft'] - prender['hud-wave']['fieldLeft']) > 0.01:
+    print('  NOTE: hud-peanuts fieldLeft above is the empty field\'s own edge, not where')
+    print('        the number goes. art.json authors it as the wave plate\'s. Do not copy.')
+
+
+# ------------------------------------------------------------------ UI icons
+
+# Icons drawn OVER something else -- a plate, a button, a counter -- rather
+# than into it. contentWidth/contentHeight are what fitInBox and fitInRect
+# DIVIDE by, so an icon whose entry carries its canvas size instead of its ink
+# is silently drawn small, and a non-square one is silently fitted as a square.
+# hud-peanut carried 512x512, which is the canvas: the ink is 498x400.
+print('\n\nUI icons')
+for key, path in (
+    ('hud-peanut', 'public/assets/ui_icons/hud_peanut_icon.webp'),
+):
+    w, h, px = img.read(path)
+    xs = [x for x in range(w) if any(px[(y * w + x) * 4 + 3] > ALPHA for y in range(h))]
+    ys = [y for y in range(h) if any(px[(y * w + x) * 4 + 3] > ALPHA for x in range(w))]
+    iw, ih = xs[-1] - xs[0] + 1, ys[-1] - ys[0] + 1
+    print(f'  {key}: canvas {w}x{h}, ink x{xs[0]}-{xs[-1]} y{ys[0]}-{ys[-1]}'
+          f" -> {{'contentWidth': {iw}, 'contentHeight': {ih}}}  ({iw / ih:.3f}:1)")
+
+
+# ------------------------------------------- where a drawn icon goes on a plate
+
+# art.json's ui.counterIcon. The peanut is the one counter icon that is DRAWN
+# rather than painted into its plate, and "put it in the middle of the plate's
+# end" is not the same box the painted ones occupy -- it is further left and
+# smaller. So the box is taken off the heart painted into the lives plate and
+# every drawn counter icon uses it, which is what makes two chips side by side
+# read as a set.
+w, h, px = img.read('public/assets/ui/hud_lives.webp')
+FIELD = (17, 19, 21)
+
+
+def _is_field(i):
+    return (abs(px[i] - FIELD[0]) < 10 and abs(px[i + 1] - FIELD[1]) < 10
+            and abs(px[i + 2] - FIELD[2]) < 10 and px[i + 3] > 200)
+
+
+ink = []
+for y in range(h):
+    run = None
+    for x in range(12, 96):
+        if all(_is_field(((y * w + x + k) * 4)) for k in range(6)):
+            run = x
+            break
+    if run is None:
+        continue
+    for x in range(run, 96):
+        if not _is_field((y * w + x) * 4):
+            ink.append((x, y))
+if ink:
+    x0 = min(p[0] for p in ink); x1 = max(p[0] for p in ink)
+    y0 = min(p[1] for p in ink); y1 = max(p[1] for p in ink)
+    print('\n\nCounter icon box (from the heart painted into the lives plate)')
+    print(f'  ink x{x0}-{x1} y{y0}-{y1} on a {w}x{h} plate')
+    print('  -> ui.counterIcon (fractions of plate HEIGHT, the one dimension'
+          ' all three plates share):')
+    print(f"     {{'left': {x0 / h:.4f}, 'top': {y0 / h:.4f},"
+          f" 'width': {(x1 - x0 + 1) / h:.4f}, 'height': {(y1 - y0 + 1) / h:.4f}}}")
+
 
 # ------------------------------------------------------------ button plates
 
