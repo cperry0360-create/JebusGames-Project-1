@@ -259,9 +259,31 @@ export class GameScene extends Phaser.Scene {
   /** Everything drawn in screen space rather than on the map. The main
    *  camera ignores it, so it neither pans nor zooms. */
   private uiCam!: Phaser.Cameras.Scene2D.Camera
-  /** Where the HUD's elements sit. Public so anything the scene draws in
-   *  screen space can keep clear of them without guessing. */
-  layout: HudLayout = hudLayout(
+  /**
+   * Where the HUD's elements sit. Public so anything the scene draws in screen
+   * space can keep clear of them without guessing.
+   *
+   * IT COMES FROM THE HUD, and that is the fix for the counters panning the
+   * map. This scene used to compute its own copy with `countersWidth: 0` and
+   * `abilitiesWidth: 0` -- the widths are MEASURED from the plates and the
+   * icons, and only HudScene has them -- so `layout.counters` here was a
+   * rectangle of zero width. The camera gate then asked "is this press inside
+   * the counters?" of a rectangle nothing can be inside, and a drag starting
+   * on the peanut counter panned the map.
+   *
+   * That is why the previous fix held for the drawer and not for these: the
+   * PREDICATE was unified and the GEOMETRY it consults was not. One layout,
+   * owned by the scene that can measure it.
+   *
+   * `ownLayout` is the fallback for the frames before the HUD exists, and for
+   * the harness scenarios that run GameScene without it.
+   */
+  get layout(): HudLayout {
+    const hud = this.scene?.get('Hud') as unknown as { layout?: HudLayout } | null
+    return hud?.layout ?? this.ownLayout
+  }
+
+  private ownLayout: HudLayout = hudLayout(
     { width: 1280, height: 720, insets: NO_INSETS, countersWidth: 0, abilitiesWidth: 0 },
     LAYOUT,
   )
@@ -996,7 +1018,7 @@ export class GameScene extends Phaser.Scene {
     // retina canvas. The HUD band arithmetic below is a LAYOUT, so it is CSS
     // pixels, like every other layout in the game.
     this.cameras.main.setViewport(0, 0, this.scale.width, this.scale.height)
-    this.layout = hudLayout(
+    this.ownLayout = hudLayout(
       {
         width: viewW(this), height: viewH(this),
         insets: safeAreaInsets(), countersWidth: 0, abilitiesWidth: 0,

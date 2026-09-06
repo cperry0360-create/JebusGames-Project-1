@@ -63,7 +63,16 @@ export class HudScene extends Phaser.Scene {
   private waveText!: Phaser.GameObjects.Text
   private heroBar!: Phaser.GameObjects.Graphics
   /** Every element's rectangle. Disjoint by construction, checked by a test. */
-  private layout: HudLayout = hudLayout(
+  /**
+   * Where every HUD element sits, MEASURED.
+   *
+   * Public because GameScene reads it: the camera gate has to know where the
+   * counters and the ability bar actually are, and their widths come from the
+   * plates and the icons, which only this scene has. GameScene used to compute
+   * its own copy with both widths set to zero, which made the counters a
+   * rectangle of zero width and let a drag on them pan the map.
+   */
+  layout: HudLayout = hudLayout(
     { width: 1280, height: 720, insets: NO_INSETS, countersWidth: 0, abilitiesWidth: 0 },
     LAYOUT,
   )
@@ -76,8 +85,11 @@ export class HudScene extends Phaser.Scene {
   private bossBar!: Phaser.GameObjects.Graphics
   private bossLabel!: Phaser.GameObjects.Text
   private startBtn!: PlateButton
-  private panel?: Dialog
-  private paused = false
+  /** Public for the harness, which has to be able to put the HUD back into a
+   *  known state between checks -- a modal reports the whole screen as chrome,
+   *  so one left open makes every later check pass without testing anything. */
+  panel?: Dialog
+  paused = false
   /** Public for the harness, which presses its way through it. */
   settings?: SettingsPanel
   slots: SlotView[] = []

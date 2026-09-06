@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { collisions, hudLayout, hudTakesPress, overlaps, NO_INSETS, type Insets } from '../src/systems/HudLayout.ts'
+import { collisions, hudBlocksGesture, hudLayout, hudTakesPress, overlaps, NO_INSETS, type Insets } from '../src/systems/HudLayout.ts'
 import presentation from '../src/data/presentation.json' with { type: 'json' }
 
 const url = (p: string) => new URL(p, import.meta.url)
@@ -315,4 +315,50 @@ test('the HUD claims presses only where it has something to press', () => {
   assert.ok(share < 0.12,
     `the HUD claims ${(share * 100).toFixed(1)}% of the screen; that is a band, not four controls`)
   assert.ok(share > 0.01, `the HUD claims only ${(share * 100).toFixed(1)}%; the guard is not working`)
+})
+
+test('the camera gate is asked about the HUD the player can see', () => {
+  /*
+   * THE COUNTERS PANNED THE MAP, and the predicate was innocent.
+   *
+   * `hudBlocksGesture` has always included `layout.counters`. But GameScene
+   * built its OWN copy of the layout with `countersWidth: 0` and
+   * `abilitiesWidth: 0` -- those widths are measured from the plates and the
+   * icons, and only HudScene has them -- and `hudLayout` turns a zero width
+   * into a zero-width rectangle. So the gate asked "is this press inside the
+   * counters?" of a rectangle nothing can be inside, and a drag starting on
+   * the peanut counter panned the board.
+   *
+   * That is why the previous fix held for the drawer and not for these: the
+   * PREDICATE was unified and the GEOMETRY it consults was not.
+   */
+  const game = src('scenes/GameScene.ts')
+  const hud = src('scenes/HudScene.ts')
+
+  // One layout, owned by the scene that can measure it.
+  assert.match(game, /get layout\(\): HudLayout \{[\s\S]{0,240}hud\?\.layout \?\? this\.ownLayout/,
+    'GameScene computes its own HUD layout again')
+  assert.match(hud, /\n  layout: HudLayout = hudLayout\(/,
+    'HudScene no longer publishes the measured layout')
+  assert.match(hud, /countersWidth: this\.countersWidth/,
+    'HudScene stopped measuring the counters')
+
+  // And a zero width really does produce a rectangle nothing is inside, so
+  // the fallback can never quietly become the answer again.
+  const blind = hudLayout(
+    { width: 844, height: 390, insets: NO_INSETS, countersWidth: 0, abilitiesWidth: 0 },
+    CFG,
+  )
+  assert.equal(blind.counters.width, 0,
+    'a zero measurement no longer collapses the rectangle, so this test proves nothing')
+  assert.ok(!hudBlocksGesture(blind, 177, 32),
+    'the unmeasured layout blocks a press it cannot know about')
+
+  // Measured, the same point IS the counters.
+  const seen = hudLayout(
+    { width: 844, height: 390, insets: NO_INSETS, countersWidth: 334, abilitiesWidth: 320 },
+    CFG,
+  )
+  assert.ok(hudBlocksGesture(seen, 177, 32),
+    'a press on the counters is not chrome, so a drag there pans the map')
 })

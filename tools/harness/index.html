@@ -4431,6 +4431,250 @@ async function run() {
     return
   }
 
+  // DOES CHROME STILL PAN THE MAP?
+  //
+  // Reported fixed twice and regressed twice, so this measures rather than
+  // reads: every surface the brief names -- the drawer, the counters, the
+  // start button, the settings gear, the ability bar, the wave banner, CANCEL
+  // and a modal -- gets a tap, a drag and a pinch, and the camera is read
+  // before and after each one.
+  //
+  // The last case is the control: a drag on the BOARD must still pan. A gate
+  // that stops everything would pass every check above and break the game.
+  if (scenario === 'chromepan') {
+    for (const k of ['Title', 'Splash', 'Credits', 'Boot', 'Loadout']) game.scene.stop(k)
+    const RS = await import('./js/systems/RunState.js')
+    const SAVE = await import('./js/systems/Save.js')
+    RS.setRunState({ heroId: 'cory', openingTowers: ['withholding', 'rounding'],
+      abilities: ['molotov', 'glacier'], reserveTowers: [] })
+    game.scene.start('Game')
+    await until(() => running('Game'), 12000)
+    await until(() => running('Hud'), 12000)
+    await sleep(800)
+    const g = scene('Game'), hud = scene('Hud')
+    g.status.peanuts = 99999
+    await sleep(400)
+    note('viewport ' + VP.w + 'x' + VP.h)
+
+    const cam = () => {
+      const c = g.cameras.main
+      return { x: +c.scrollX.toFixed(2), y: +c.scrollY.toFixed(2), z: +c.zoom.toFixed(4) }
+    }
+    const same = (a, b) => a.x === b.x && a.y === b.y && a.z === b.z
+    const moved = (a, b) =>
+      'dx=' + (b.x - a.x).toFixed(1) + ' dy=' + (b.y - a.y).toFixed(1)
+      + ' dz=' + (b.z - a.z).toFixed(3)
+
+    let bad = 0
+
+    // A drag: press, eight moves, release. Long enough to beat the tap slop.
+    const drag = async (x, y, dx, dy) => {
+      mouse('mousemove', x, y); await sleep(40)
+      mouse('mousedown', x, y); await sleep(60)
+      for (let i = 1; i <= 8; i++) {
+        mouse('mousemove', x + (dx * i) / 8, y + (dy * i) / 8); await sleep(28)
+      }
+      mouse('mouseup', x + dx, y + dy); await sleep(140)
+    }
+
+    // A two-finger pinch, through the touch events the input manager listens
+    // on. Two down, spread apart, two up.
+    const pinch = async (x, y) => {
+      const r = game.canvas.getBoundingClientRect()
+      const t = (cx, cy, id) => ({
+        identifier: id, clientX: r.left + cx, clientY: r.top + cy,
+        pageX: r.left + cx, pageY: r.top + cy, target: game.canvas,
+      })
+      const ev = (type, touches) => {
+        const e = new Event(type, { bubbles: true, cancelable: true })
+        // A synthesised TouchEvent cannot be constructed everywhere, and the
+        // manager only reads these three lists.
+        e.touches = touches; e.changedTouches = touches; e.targetTouches = touches
+        return e
+      }
+      game.canvas.dispatchEvent(ev('touchstart', [t(x - 20, y, 1), t(x + 20, y, 2)]))
+      await sleep(60)
+      for (let i = 1; i <= 6; i++) {
+        game.canvas.dispatchEvent(ev('touchmove',
+          [t(x - 20 - i * 8, y, 1), t(x + 20 + i * 8, y, 2)]))
+        await sleep(30)
+      }
+      game.canvas.dispatchEvent(ev('touchend', [t(x - 68, y, 1), t(x + 68, y, 2)]))
+      await sleep(160)
+    }
+
+    const check = async (label, x, y, expectPan, dx = 90, dy = 40) => {
+      const before = cam()
+      await click(x, y)
+      const afterTap = cam()
+      await drag(x, y, dx, dy)
+      const afterDrag = cam()
+      await pinch(x, y)
+      const afterPinch = cam()
+      const tapOk = same(before, afterTap)
+      const dragOk = expectPan ? !same(afterTap, afterDrag) : same(afterTap, afterDrag)
+      const pinchOk = expectPan ? true : same(afterDrag, afterPinch)
+      const ok = tapOk && dragOk && pinchOk
+      if (!ok) bad++
+      note('  ' + label.padEnd(16) + ' @' + Math.round(x) + ',' + Math.round(y)
+        + '  tap ' + (tapOk ? 'still' : 'MOVED ' + moved(before, afterTap))
+        + ' | drag ' + (dragOk ? (expectPan ? 'panned' : 'still')
+            : (expectPan ? 'DID NOT PAN' : 'MOVED ' + moved(afterTap, afterDrag)))
+        + ' | pinch ' + (pinchOk ? 'still' : 'ZOOMED ' + moved(afterDrag, afterPinch))
+        + (ok ? '' : '   *** ***'))
+      // EVERY CASE CLEANS UP AFTER ITSELF, and this is not housekeeping.
+      // Tapping the settings gear OPENS the settings panel and pauses -- and a
+      // modal correctly reports the whole screen as chrome, so every case
+      // AFTER the gear passed trivially, having tested nothing. Three of the
+      // seven surfaces here were being scored against a dialog.
+      if (hud.modalOpen) {
+        hud.settings?.close?.()
+        hud.panel?.close?.()
+        hud.paused = false
+        // AND RESUME THE GAME SCENE. `openSettings` calls `scene.pause('Game')`,
+        // so clearing the flag alone leaves GameScene paused -- receiving no
+        // pointer events at all. Every later check then reported "the map did
+        // not move" about a scene that could not have moved it, and the board
+        // control read as a swallowed gesture when the rig had simply never
+        // been asked. `claims asked 0 time(s)` is what finally said so.
+        game.scene.resume('Game')
+        await until(() => !hud.modalOpen && game.scene.isActive('Game'), 3000)
+      }
+      await sleep(140)
+    }
+
+    const L = hud.layout
+    const mid = (r) => ({ x: r.x + r.width / 2, y: r.y + r.height / 2 })
+
+    // BASELINE FIRST, with the shipping control scheme and nothing touched:
+    // can the board be panned at all here? Every "chrome did not pan" result
+    // below is worthless if the answer is no.
+    {
+      const b0 = cam()
+      await drag(VP.w * 0.42, VP.h * 0.62, -30, -170)
+      await sleep(500)
+      const a0 = cam()
+      const v0 = g.cameras.main.worldView
+      const room0 = v0.width < 1279 || v0.height < 719
+      note('baseline: a drag on the board with the ring scheme '
+        + (!same(b0, a0) ? 'panned ' + moved(b0, a0)
+          : room0 ? '*** DID NOT PAN ***'
+            : 'had nothing to pan to (whole board on screen at '
+              + Math.round(v0.width) + 'x' + Math.round(v0.height) + ')'))
+      if (same(b0, a0) && room0) bad++
+    }
+
+    SAVE.setControlDrawer(true)
+    g.applyControlScheme()
+    await sleep(400)
+    note('drawer enabled=' + g.drawer.enabled)
+
+    note('--- chrome must NOT pan ---')
+    g.drawer.setOpen(true)
+    g.drawer.refresh()
+    await sleep(350)
+    // WHERE THE DRAWER IS, ASKED RATHER THAN ASSUMED. It resolves presses
+    // against its own laid-out rectangles rather than through the hit list, so
+    // `ownsPress` is the only honest way to find a point inside it -- and it is
+    // the same question the camera gate asks.
+    let drawerAt = null
+    for (let y = VP.h - 4; y > VP.h * 0.3 && !drawerAt; y -= 6) {
+      for (let x = 6; x < VP.w; x += 12) {
+        if (g.drawer.ownsPress(x, y)) { drawerAt = { x, y }; break }
+      }
+    }
+    if (drawerAt) await check('drawer', drawerAt.x, drawerAt.y, false)
+    else { note('  *** the drawer is open and owns no point on the screen ***'); bad++ }
+    await check('counters', mid(L.counters).x, mid(L.counters).y, false)
+    await check('start button', mid(L.startButton).x, mid(L.startButton).y, false)
+    await check('settings gear', mid(L.settings).x, mid(L.settings).y, false)
+    await check('ability bar', mid(L.abilities).x, mid(L.abilities).y, false)
+    await check('wave banner', mid(L.startButton).x, mid(L.startButton).y, false)
+    await check('cancel', mid(L.cancel).x, mid(L.cancel).y, false)
+
+    // THE BOARD CONTROL RUNS BEFORE THE MODAL CASE, deliberately. A modal
+    // reports the whole screen as chrome -- correctly -- so a board check run
+    // after one that did not close reads exactly like an over-broad gate. That
+    // happened here, and it very nearly became a bug report.
+    note('--- and the board still MUST pan ---')
+    const RESD = (await import('./js/systems/Resolution.js')).deviceScale()
+    const ask = (x, y) => g.chromeUnderPointer({ x: x * RESD, y: y * RESD, id: 99 }, [])
+    g.drawer.setOpen(false)
+    await sleep(250)
+    note('  modal flags: game=' + g.modalOpen + ' hud=' + hud.modalOpen)
+    note('  gate says chrome? board=' + ask(VP.w * 0.42, VP.h * 0.62)
+      + '  counters=' + ask(mid(L.counters).x, mid(L.counters).y)
+      + '  abilities=' + ask(mid(L.abilities).x, mid(L.abilities).y))
+    const c0 = g.cameras.main
+    note('  camera zoom=' + c0.zoom.toFixed(3) + ' view=' + Math.round(c0.worldView.width)
+      + 'x' + Math.round(c0.worldView.height))
+    // A BIG drag, and on the axis that has somewhere to go. At the opening
+    // view the board is framed exactly to the width, so X is pinned against
+    // its own limits and a horizontal drag correctly moves nothing -- which
+    // from outside is indistinguishable from a swallowed gesture. The world is
+    // 720 tall against a 591 view, so Y has room.
+    note('  rig: enabled=' + g.rig.enabled + ' mode=' + g.rig.mode
+      + ' pointers=' + g.rig.pointers.length
+      + ' target=' + g.rig.targetCenterX?.toFixed?.(1) + ',' + g.rig.targetCenterY?.toFixed?.(1)
+      + ' cur=' + g.rig.curCenterX?.toFixed?.(1) + ',' + g.rig.curCenterY?.toFixed?.(1)
+      + ' follow=' + JSON.stringify(g.rig.following ?? g.rig.follow ?? null))
+    // INLINE, AND WITHOUT A TAP FIRST. `check` taps before it drags, and a tap
+    // on the board can open a build ring -- after which the drag starts on the
+    // ring and is claimed, correctly. That is the control measuring the tap it
+    // just made rather than the drag it meant to test.
+    // BACK THE OTHER WAY. The baseline drag above already took the camera to
+    // its Y limit -- `target=640,424.3` against a range that ends at 424.5 --
+    // and a second drag in the same direction correctly moves nothing. That is
+    // the camera being where it is allowed to be, not a swallowed gesture, and
+    // reading it as the latter cost a round here.
+    // WRAPPED, so "the rig never saw it" and "the rig saw it and claimed it"
+    // stop being the same observation.
+    const calls = []
+    const realClaims = g.rig.limits.claims
+    g.rig.limits.claims = (p, over) => {
+      const r = realClaims(p, over)
+      calls.push(Math.round(p.x) + ',' + Math.round(p.y) + '=' + r)
+      return r
+    }
+    const bx = VP.w * 0.42, by2 = VP.h * 0.62
+    const panBefore = cam()
+    await drag(bx, by2, 30, 170)
+    await sleep(500)
+    const panAfter = cam()
+    const panned = !same(panBefore, panAfter)
+    // A BOARD WITH NOWHERE TO GO IS NOT A SWALLOWED GESTURE. At 667x375 the
+    // viewport is 16:9 and so is the world, so the fitted camera shows all
+    // 1280x720 of it and is pinned on both axes -- correctly. Reporting that
+    // as a broken gate would be the harness inventing a bug.
+    const v = g.cameras.main.worldView
+    const room = v.width < 1279 || v.height < 719
+    if (!panned && room) bad++
+    g.rig.limits.claims = realClaims
+    note('  claims asked ' + calls.length + ' time(s): ' + JSON.stringify(calls.slice(0, 4)))
+    note('  the board       @' + Math.round(bx) + ',' + Math.round(by2)
+      + '  drag ' + (panned ? 'panned ' + moved(panBefore, panAfter)
+        : room ? 'DID NOT PAN   *** ***'
+          : 'nothing to pan to: the whole ' + Math.round(v.width) + 'x'
+            + Math.round(v.height) + ' board is on screen'))
+    note('  rig after: mode=' + g.rig.mode + ' pointers=' + g.rig.pointers.length
+      + ' target=' + g.rig.targetCenterX?.toFixed?.(1) + ',' + g.rig.targetCenterY?.toFixed?.(1))
+
+    // And LAST, the modal: it owns the whole screen including the parts of it
+    // nothing is drawn on, so the check is a point in the middle of the board.
+    note('--- and a modal owns everything ---')
+    hud.openSettings()
+    await until(() => g.modalOpen || hud.modalOpen, 4000)
+    await sleep(300)
+    note('  modal up: game=' + g.modalOpen + ' hud=' + hud.modalOpen)
+    await check('under a modal', VP.w * 0.5, VP.h * 0.55, false)
+
+    await shot('chromepan-' + VP.w + 'x' + VP.h)
+    note('RESULT ' + (bad === 0
+      ? 'no chrome moves the map, and the map still moves'
+      : '*** ' + bad + ' surface(s) wrong ***'))
+    return
+  }
+
   if (scenario === 'pauseresume') {
     // THE REPORTED FAILURE, end to end and through real input: start a run,
     // start a wave, tap PAUSE, tap RESUME, and check the wave actually moves
