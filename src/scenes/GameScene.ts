@@ -4515,7 +4515,16 @@ export class GameScene extends Phaser.Scene {
     if (!enemy.alive) return
     if (enemy.hurt(damage, ignoresArmor, showNumber, pierce)) {
       play(this, 'death')
-      logEvent('death', `${enemy.def.name} +${enemy.def.peanutReward}`)
+      // A boss who retreats is logged as retreating. The line is read back off
+      // a soak run and off a crash report, and "death: The Glitch Lich King"
+      // at wave 7 followed by the same name at wave 13 is the one reading that
+      // would make the log look wrong when the game was right.
+      if (enemy.def.retreatsWhenDefeated) {
+        logEvent('retreat', `${enemy.def.name} withdraws +${enemy.def.peanutReward}`)
+        this.status.alert = `${enemy.def.name} withdraws. That is not the last of him.`
+      } else {
+        logEvent('death', `${enemy.def.name} +${enemy.def.peanutReward}`)
+      }
       this.status.kills++
       this.earn(enemy.def.peanutReward)
       this.rollRareDrop(enemy)

@@ -105,9 +105,17 @@
     "enemy-zamboni": "enemies/enemy_zamboni.webp",
     "enemy-unicorn": "enemies/boss_unicorn.webp",
     "map-level3": "maps/map_level3.webp",
+    "enemy-tourist-small": "enemies/enemy_tourist_small.webp",
+    "enemy-tourist-mid": "enemies/enemy_tourist_mid.webp",
+    "enemy-tourist-big": "enemies/enemy_tourist_big.webp",
+    "enemy-tiny-glitch": "enemies/enemy_tiny_glitch.webp",
+    "enemy-glitch-bug": "enemies/enemy_glitch_bug.webp",
+    "enemy-glitch-lich": "enemies/boss_glitch_lich.webp",
+    "map-level4": "maps/map_level4.webp",
     "fx-boss-bolt": "effects/boss_projectile.webp",
     "fx-stunned": "effects/fx_stunned.webp",
     "card-level3": "ui/card_level3.webp",
+    "card-level4": "ui/card_level4.webp",
     "turret-dummy": "towers/tower_dummy_1.webp",
     "turret-dummy-t2": "towers/tower_dummy_2.webp",
     "turret-dummy-t3": "towers/tower_dummy_3.webp",
@@ -639,6 +647,54 @@
       "contentWidth": 1087,
       "contentHeight": 1000
     },
+    "enemy-tourist-small": {
+      "anchorX": 0.6814,
+      "anchorY": 1.0,
+      "displayHeight": 66.0,
+      "shadowWidth": 17.2,
+      "contentWidth": 554,
+      "contentHeight": 600
+    },
+    "enemy-tourist-mid": {
+      "anchorX": 0.4287,
+      "anchorY": 1.0,
+      "displayHeight": 78.0,
+      "shadowWidth": 50.2,
+      "contentWidth": 568,
+      "contentHeight": 600
+    },
+    "enemy-tourist-big": {
+      "anchorX": 0.5685,
+      "anchorY": 1.0,
+      "displayHeight": 85.0,
+      "shadowWidth": 74.5,
+      "contentWidth": 650,
+      "contentHeight": 600
+    },
+    "enemy-tiny-glitch": {
+      "anchorX": 0.3712,
+      "anchorY": 1.0,
+      "displayHeight": 52.0,
+      "shadowWidth": 18.1,
+      "contentWidth": 497,
+      "contentHeight": 420
+    },
+    "enemy-glitch-bug": {
+      "anchorX": 0.515,
+      "anchorY": 1.0,
+      "displayHeight": 80.0,
+      "shadowWidth": 110.9,
+      "contentWidth": 832,
+      "contentHeight": 600
+    },
+    "enemy-glitch-lich": {
+      "anchorX": 0.473,
+      "anchorY": 1.0,
+      "displayHeight": 140.0,
+      "shadowWidth": 95.7,
+      "contentWidth": 871,
+      "contentHeight": 800
+    },
     "fx-boss-bolt": {
       "sheet": {
         "frameWidth": 482,
@@ -829,7 +885,8 @@
   "map": {
     "level1": "map-level1",
     "level2": "map-level2",
-    "level3": "map-level3"
+    "level3": "map-level3",
+    "level4": "map-level4"
   },
   "ui": {
     "titleBackdrop": "ui-title-bg",
@@ -1015,7 +1072,8 @@
     "cards": {
       "level1": "card-level1",
       "level2": "card-level2",
-      "level3": "card-level3"
+      "level3": "card-level3",
+      "level4": "card-level4"
     }
   },
   "soldierTiers": {

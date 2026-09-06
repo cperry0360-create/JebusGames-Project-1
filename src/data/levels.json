@@ -1,6 +1,7 @@
 {
   "_note": "WHICH MAP, WAVE TABLE AND PLATE BELONG TO WHICH LEVEL. GameScene reads this: it takes a level id and loads that level's map, waves and plate through here, which is what made a second and third level possible at all. The note this replaces still claimed GameScene loaded waves.json directly and was single-level on purpose; that stopped being true when the level-aware refactor landed, and a file describing an architecture the repository no longer has is worse than no note.",
   "_lane": "laneLengthPx is the walked length of the painted road, summed over the level's waypoints, rounded to 0.1. BOTH are now measured from the level's own map file by that one method: level 1 from map.json, level 2 from map_level2.json. Level 2 previously carried 1916.7, a figure that arrived with the plate before the lane was traced and was never checked; the traced waypoints walk 1955.3, so it was short by 38.6 px. It is recorded because wave spacing is only comparable between levels that walk the same distance, and the two here differ by 1.1%, which is not enough to retune. Re-measure after any retrace rather than carrying a number forward. LEVEL 3 IS THE SHORT ONE: 1560.2 px, both routes, against 1976.9 and 1955.3. That is 21% less road than level 1, which is far outside the 1.1% that made levels 1 and 2 comparable, so its wave spacing is NOT copied from theirs and its health total is not directly comparable either. Its two branches walk 1560.18 and 1560.15 -- equal to 0.03 px, which is in the geometry rather than arranged, and means neither gate is the fast one.",
+  "_unlock4": "LEVEL 4 IS 3, NOT 1, and the brief asked for 1. It is the same disagreement level 3's brief carried, resolved the same way and for the same reason -- see _unlock below. The two halves of the brief cannot both hold: it asks for runsClearedToUnlock 1 AND for level 4 to be locked until level 3 has been cleared once. At 1 it is not locked at all past level 2's own threshold, so a player who cleared level 1 once would find levels 2, 3 and 4 all open and START RUN would send them straight to level 4, skipping two levels. At 3 the confirmation holds: isLevelCleared('level3', n) is true exactly when n >= 3, which is exactly when level 4 opens. Set it back to 1 here if skipping is wanted; nothing else needs to change. The limitation _unlock records applies unchanged -- the save counts runs, not which levels they were on, so clearing level 1 three times also opens level 4.",
   "_unlock": "runsClearedToUnlock is how many runs must be cleared before a level can be picked, counted by Save.runsCleared. It IS enforced: the title screen greys a locked level and START RUN re-checks the count before handing the level to the run. Level 2 was held at 99 while it was unwinnable; its pads have since been moved inside tower range and its wave health cut, so it is back to 1. LEVEL 3 IS 2, NOT 1, and the brief asked for 1. The two halves of that brief disagree: it also asks to confirm that level 3 is locked until level 2 has been cleared once and open after. At 1 it is not -- 1 is level 2's own threshold, so clearing level 1 opens BOTH, and because START RUN asks for the furthest unlocked level it would send a player who has just finished level 1 straight past level 2 into level 3. At 2 the confirmation holds and the progression is the one the numbers describe. Set it back to 1 here if skipping level 2 is wanted; nothing else needs to change. WHAT NEITHER VALUE CAN DO is gate on level 2 SPECIFICALLY. The save counts runs cleared and not which levels they were on -- the limitation Levels.isLevelCleared is documented with -- so clearing level 1 twice also opens level 3. Fixing that needs a new save field and a migration.",
   "levels": [
     {
@@ -38,8 +39,20 @@
         1.0,
         0.06
       ]
+    },
+    {
+      "id": "level4",
+      "name": "The Conundrum",
+      "waves": "waves.level4.json",
+      "laneLengthPx": 1479.0,
+      "runsClearedToUnlock": 3,
+      "mapPosition": [
+        0.03,
+        0.0
+      ]
     }
   ],
+  "_mapPosition4": "LEVEL 4 IS TOP-LEFT, AND THE TRAIL DOUBLES BACK, which is not the first choice and is the only one that works. Two cards can sit above one another only if there are 284 px between their centres -- 88 for the lower card's half height and 196 for the upper one's name and its \"Clear N runs to unlock\" line, both of which wrap to two rows on a long name. The band a card centre may sit in is 238 to 482, which is 244. So no two cards can be stacked at all, and every card has to clear every other by a card width, 264 px, horizontally. With levels 1, 2 and 3 at x 437, 843 and 1148 the only x left is under 173. THE NUMBERS DID NOT CATCH THIS: the overlap check in level3.test.ts compared card rectangles, and what actually collided was level 3's two-line caption over level 4's card. A rendered frame caught it. level4.test.ts now checks the caption block as well.",
   "_mapPosition": "WHERE A LEVEL SITS ON THE WORLD MAP, normalised 0-1 against the world's own bounds, and the ONLY place that position lives. WorldMapScene multiplies it by the world size; the trail between the cards is generated from these numbers rather than drawn, so moving a card moves the trail with it. Adding a level means a row here with a mapPosition and a card in art.json's worldMap.cards — a test fails the build if either is missing.",
   "_towers": "WHICH TOWERS A LEVEL CAN DRAW, beyond draft.json's shared pool. draft.json's towerWeights is every level's pool; extraTowerWeights adds to it for one level and is absent everywhere else. The Ima Dummy Tower is level 1's only for now, which is what the brief asked for and also what keeps levels 2 and 3 comparable to the numbers they were tuned against."
 }

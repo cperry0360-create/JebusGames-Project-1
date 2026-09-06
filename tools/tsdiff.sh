@@ -40,9 +40,16 @@ git worktree add -q --detach "$W/tree" "$BASE"
 
 # Drop line and column, so an edit that shifts a file does not read as a
 # hundred new errors.
+#
+# And drop the "and N more" tail that TS2740 and friends append when they list
+# a type's missing members. That N is the SIZE OF THE CLASS, not the error:
+# adding one method to Enemy turned "and 63 more" into "and 64 more" and this
+# script reported a pre-existing cascade error in Tower.ts as newly introduced.
+# It cost a real investigation to establish that the error was in the baseline
+# too, character for character apart from that number.
 norm() {
   grep -oE '^[^(]+\([0-9]+,[0-9]+\): error TS[0-9]+: .*' \
-    | sed -E 's/\([0-9]+,[0-9]+\)//' | sort -u
+    | sed -E 's/\([0-9]+,[0-9]+\)//; s/and [0-9]+ more/and N more/g' | sort -u
 }
 
 ( cd "$W/tree" && npx tsc --noEmit 2>&1 ) | norm > "$W/base"

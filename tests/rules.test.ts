@@ -235,9 +235,22 @@ test('each level fields three fightable enemy types and exactly one boss', () =>
     const cast = [...used].map((id) => enemies[id])
     const rank = cast.filter((e) => e.tier !== 'boss')
     assert.ok(rank.length >= 3, `${level} fields only ${rank.length} fightable types`)
-    assert.deepEqual(new Set(rank.map((e) => e.role)), new Set(['basic', 'fast', 'armored']),
-      `${level} does not cover all three roles`)
-    assert.equal(cast.filter((e) => e.tier === 'boss').length, 1, `${level} does not have exactly one boss`)
+    // ALL THREE ROLES, AND POSSIBLY MORE. It was an exact set while three was
+    // all there were; level 4 adds a fourth, `flyer`, which is a role in the
+    // sense the other three are -- a thing the board needs a different answer
+    // for. What a level owes a player is still the three that every board must
+    // handle, so the rule is containment rather than equality.
+    for (const role of ['basic', 'fast', 'armored']) {
+      assert.ok(rank.some((e) => e.role === role),
+        `${level} does not cover all three roles: no ${role}`)
+    }
+    // ONE BOSS, COUNTED AS A CHARACTER RATHER THAN AS A ROW. Level 4 fights the
+    // Glitch Lich King twice -- at wave 7, where he retreats, and at wave 13
+    // with half again the health -- and those are two entries in enemies.json
+    // drawn with one piece of art. The sprite is what a player sees, so the
+    // sprite is what "two bosses in a run" has to mean.
+    const bossSprites = new Set(cast.filter((e) => e.tier === 'boss').map((e) => e.sprite))
+    assert.equal(bossSprites.size, 1, `${level} does not have exactly one boss`)
   }
 })
 
@@ -373,7 +386,10 @@ test('nothing but a boss walks through the line, and nothing but a boss taxes', 
       assert.equal(e.damage, 0, `${id} is a boss that attacks towers or the hero`)
       if (e.tax) taxing++
     } else {
-      assert.equal(e.blockable, true, `${id} should be holdable`)
+      // A flyer is the other thing a ground line cannot hold, and for a
+      // different reason from a boss: not "it would be too strong", but "there
+      // is nothing down here to take hold of". See blocking.test.ts.
+      assert.equal(e.blockable, e.layer !== 'air', `${id} should be holdable`)
       assert.equal(e.tax, undefined, `${id} should not tax the player`)
     }
   }
@@ -407,13 +423,24 @@ test('every boss pays a lump sum, and the rule is checked on every boss', () => 
    * only ever looking at the one boss it happened to be true of.
    */
   const bosses = Object.entries(enemies).filter(([, e]: [string, any]) => e.tier === 'boss')
-  assert.equal(bosses.length, 3, 'the roster gained or lost a boss')
+  // FIVE ROWS, FOUR BOSSES. Level 4's Glitch Lich King is two rows -- the wave
+  // 7 form that retreats and the wave 13 form that does not -- and both are
+  // held to every rule below, which is the point of the count being here at
+  // all: it is a tripwire against a boss being added and never examined.
+  assert.equal(bosses.length, 5, 'the roster gained or lost a boss')
   const dearest = Math.max(...Object.values(towers).map((t: any) => t.cost))
   const bestOther = Math.max(...Object.values(enemies)
     .filter((e: any) => e.tier !== 'boss').map((e: any) => e.peanutReward))
 
   for (const [id, boss] of bosses as [string, any][]) {
-    assert.ok(boss.peanutReward > bestOther * 10, `${id}'s payout is not a lump sum`)
+    // AT LEAST TEN TIMES, not more than. It was strictly greater while the
+    // best ordinary payout was the Zamboni's 48 and the smallest boss purse
+    // was 900 -- nineteen times over. Level 4's Glitch Bug pays 90, which is
+    // what an elite that destroys a tower is worth, and that lands the
+    // Politician and the Rainbow Reaper at exactly 10x. Ten times the best
+    // thing on the board is a lump sum; the rule is the order of magnitude,
+    // and it was never about the last peanut.
+    assert.ok(boss.peanutReward >= bestOther * 10, `${id}'s payout is not a lump sum`)
     assert.ok(boss.peanutReward >= dearest * 3, `${id}'s payout should buy a real answer`)
     assert.ok(boss.livesCost > 1, `letting ${id} through should not be cheap`)
   }
@@ -422,18 +449,28 @@ test('every boss pays a lump sum, and the rule is checked on every boss', () => 
   // mechanic is the tax rather than a fight; the other two are fights.
   assert.equal((enemies as any).politician.armor, 0,
     'the Politician has no armour by design -- his mechanic is the tax')
-  for (const id of ['theDevil', 'unicornBoss']) {
+  for (const id of ['theDevil', 'unicornBoss', 'glitchLich', 'glitchLichReturn']) {
     assert.ok((enemies as any)[id].armor > 0, `${id} is a fight and should carry armour`)
   }
 })
 
-test('a boss payout is a trophy, not an economy', () => {
-  // EVERY BOSS IS ON ITS LEVEL'S LAST WAVE, so no boss payout is ever spent --
-  // and Banner Points come from waves reached, the clear bonus and lives
-  // remaining, never from peanuts. The number is the one on the results
-  // screen and nothing else, which is worth knowing before anyone tunes it.
+test('a boss payout is a trophy, not an economy -- except level 4\'s first one', () => {
+  // EVERY LEVEL FINISHES ON ITS BOSS, and Banner Points come from waves
+  // reached, the clear bonus and lives remaining, never from peanuts. So a
+  // boss payout on a last wave is the number on the results screen and nothing
+  // else, which is worth knowing before anyone tunes it.
+  //
+  // LEVEL 4 IS THE FIRST EXCEPTION, and a deliberate one. The Glitch Lich King
+  // is fought at wave 7 as well as wave 13, and his wave 7 purse -- 1500
+  // peanuts, the largest in the game -- lands with six waves left to spend it
+  // on. It is the first boss payout that has ever been spendable, and it is
+  // half of why the fight sits in the middle: the reward is a board the player
+  // could not otherwise have afforded, in time to need it. The rule below is
+  // therefore about the LAST wave being a boss wave, not about bosses being
+  // last.
   for (const [file, level] of [['waves.json', 'level1'], ['waves.level2.json', 'level2'],
-                               ['waves.level3.json', 'level3']] as const) {
+                               ['waves.level3.json', 'level3'],
+                               ['waves.level4.json', 'level4']] as const) {
     const table = JSON.parse(
       readFileSync(new URL(`../src/data/${file}`, import.meta.url), 'utf8'))
     const last = table.waves[table.waves.length - 1]
@@ -525,9 +562,16 @@ test('the art manifest points at asset paths, not bare filenames', () => {
 })
 
 test('towers, enemies and the hero all look different from each other', () => {
+  // ACROSS CHARACTERS, NOT ACROSS FORMS. Level 4 has two enemies that are one
+  // character seen twice -- the Glitch Lich King at wave 7 and again at 13,
+  // and the Glitch Bug as a harmless beta build and then for real -- so the
+  // enemy side is deduplicated by sprite before the comparison. What the test
+  // is actually protecting is that a TOWER never wears an enemy's art, or the
+  // hero's: those are the collisions a player could not read past.
+  const enemySprites = [...new Set(enemyList.map(([, e]) => e.sprite))]
   const sprites = [
     ...towerList.map(([, t]) => t.sprite),
-    ...enemyList.map(([, e]) => e.sprite),
+    ...enemySprites,
     heroes.cory.bodySprite,
   ]
   assert.equal(new Set(sprites).size, sprites.length, 'two units share a sprite')

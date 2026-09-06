@@ -233,7 +233,14 @@ test('a ground shadow covers the footprint and not the whole sprite', () => {
     // The Zamboni Wraith is the first vehicle to live in enemies/, so the folder
     // stopped being enough to tell the two apart. It shadows under its whole
     // body, which is the rule tools/measure_art.py applies to it by name.
-    const BODY_SHADOWED = new Set(['enemy-zamboni'])
+    //
+    // The Glitch Bug is the second, and the reason is different again: it does
+    // not stand on anything at all. A flyer has no stance for a footprint to be
+    // measured from -- the only thing its silhouette puts near the ground is
+    // the tip of its stinger -- and a shadow the width of a stinger under a
+    // wingspan is the mismeasurement this test exists to catch, arrived at from
+    // the other direction. Its shadow is its body's, like the vehicle's.
+    const BODY_SHADOWED = new Set(['enemy-zamboni', 'enemy-glitch-bug'])
     const isCharacter = /^enemies\/|^hero\/hero_cory\.webp$/.test(art.files[key])
       && !BODY_SHADOWED.has(key)
     if (isCharacter) {

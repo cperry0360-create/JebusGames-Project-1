@@ -386,7 +386,7 @@ test('each level\'s laneLengthPx is what its own map actually walks', () => {
   // each gate to the exit, and on a single-lane map the route is the waypoints,
   // which is why levels 1 and 2 read the same as they always did.
   const maps: Record<string, string> = {
-    level1: 'map', level2: 'map_level2', level3: 'map_level3',
+    level1: 'map', level2: 'map_level2', level3: 'map_level3', level4: 'map_level4',
   }
   const walk = (w: [number, number][]): number => {
     let d = 0

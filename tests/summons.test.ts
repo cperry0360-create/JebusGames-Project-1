@@ -70,9 +70,15 @@ test('the Devil summons underlings, capped, on a timer', () => {
   const d = E.theDevil
   assert.deepEqual(d.summons, { enemy: 'directReport', count: 1, interval: 5, cap: 6 })
   assert.ok(E[d.summons.enemy], 'the Devil summons an enemy that does not exist')
-  // Nothing else summons, so level 1 cannot have gained a mechanic.
+  // And the level 4 boss, in both his forms: the same block, two per burst
+  // rather than one, and faster on the way back. Named rather than counted --
+  // the point of the list is that a level cannot quietly GAIN a mechanic, and
+  // a count would not notice the mechanic moving to a different enemy.
   const summoners = Object.entries(E).filter(([, v]) => (v as any).summons).map(([k]) => k)
-  assert.deepEqual(summoners, ['theDevil'])
+  assert.deepEqual(summoners, ['theDevil', 'glitchLich', 'glitchLichReturn'])
+  assert.deepEqual(E.glitchLich.summons, { enemy: 'tinyGlitch', count: 2, interval: 6, cap: 8 })
+  assert.deepEqual(E.glitchLichReturn.summons, { enemy: 'tinyGlitch', count: 2, interval: 4, cap: 8 })
+  assert.ok(E[E.glitchLich.summons.enemy], 'the Lich King summons an enemy that does not exist')
 })
 
 /* ------------------------------------------------- where children appear */

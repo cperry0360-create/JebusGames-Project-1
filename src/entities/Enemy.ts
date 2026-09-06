@@ -650,6 +650,10 @@ export class Enemy extends Phaser.GameObjects.Container {
     this.status = 'dead'
     this.bar.setVisible(false)
     this.shadow.setVisible(false)
+    if (this.def.retreatsWhenDefeated) {
+      this.retreat()
+      return
+    }
     deathPuff(this.scene, this.x, this.centreY)
     this.scene.tweens.add({
       targets: this,
@@ -658,6 +662,26 @@ export class Enemy extends Phaser.GameObjects.Container {
       alpha: 0,
       duration: 300,
       ease: 'Quad.easeIn',
+      onComplete: () => this.destroy(),
+    })
+  }
+
+  /**
+   * Beaten, and going -- which is not the same as beaten and gone.
+   *
+   * The death tween spins the sprite, shrinks it to nothing and throws a puff:
+   * three separate ways of saying "that is the last of it". A boss who comes
+   * back six waves later must not be sent off with any of them. He backs away
+   * from the exit instead, fading as he goes, and the direction is the giveaway
+   * -- everything else on this board only ever moves toward the exit.
+   */
+  private retreat(): void {
+    this.scene.tweens.add({
+      targets: this,
+      x: this.x - 120,
+      alpha: 0,
+      duration: 700,
+      ease: 'Quad.easeOut',
       onComplete: () => this.destroy(),
     })
   }

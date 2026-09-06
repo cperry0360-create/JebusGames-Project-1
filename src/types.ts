@@ -451,6 +451,24 @@ export interface EnemyDef {
   towerDisable?: DisableDef
 
   /**
+   * True for an enemy that LEAVES when its health runs out instead of dying.
+   *
+   * The Glitch Lich King is the only one, and only in his wave 7 form. He is
+   * fought twice on level 4 -- once in the middle of the level and once as its
+   * finale -- and a boss who visibly dies at wave 7 and walks back on at wave
+   * 13 reads as the game forgetting itself. So the first fight ends with him
+   * going rather than falling.
+   *
+   * IT CHANGES THE PICTURE AND NOTHING ELSE. The player is still paid, the
+   * kill still counts, and the wave still ends -- the work was done. The
+   * returning form is a separate entry in enemies.json (`glitchLichReturn`)
+   * rather than a state carried between waves, because the wave table is the
+   * thing that decides what arrives, and a boss whose stats depended on
+   * whether an earlier wave went a particular way could not be soaked.
+   */
+  retreatsWhenDefeated?: boolean
+
+  /**
    * What this enemy calls in while it walks, if anything.
    *
    * Reusable across bosses rather than written into one of them: the block is

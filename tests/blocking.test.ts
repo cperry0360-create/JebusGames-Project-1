@@ -121,13 +121,23 @@ test('an enemy flagged not blockable walks straight through', () => {
   assert.ok(through.mob.x > 700, `it was slowed to ${through.mob.x}`)
 })
 
-test('both bosses walk through soldiers, and nothing else does', () => {
+test('bosses and flyers walk through soldiers, and nothing else does', () => {
   assert.equal(E.theDevil.blockable, false)
   assert.equal(E.unicornBoss.blockable, false,
     'two soldiers could pin the level 3 boss forever')
   assert.equal(E.politician.blockable, false)
   for (const [id, def] of Object.entries(E)) {
     if (def.tier === 'boss') continue
+    // AND THE OTHER REASON SOMETHING IS NOT HELD, which level 4 introduced: it
+    // is in the air. A boss is unblockable by design -- a player could
+    // otherwise park it on a soldier and ignore the fight -- but a flyer is
+    // unblockable by physics. There is nothing for a line of lads standing on
+    // the ground to take hold of. The two exemptions mean different things and
+    // are written out separately for that reason.
+    if (def.layer === 'air') {
+      assert.equal(def.blockable, false, `${id} flies and is being held by ground troops`)
+      continue
+    }
     assert.equal(def.blockable, true, `${id} is rank and file but cannot be blocked`)
   }
 })

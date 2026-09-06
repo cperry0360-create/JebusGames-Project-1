@@ -19,6 +19,7 @@ const PLATES = {
   level1: 'public/assets/maps/map_level1_v2.webp',
   level2: 'public/assets/maps/map_level2.webp',
   level3: 'public/assets/maps/map_level3.webp',
+  level4: 'public/assets/maps/map_level4.webp',
 }
 
 async function load(path) {
@@ -43,6 +44,12 @@ const CROPS = {
   // (733, 378) so both branches are still separate on the way in and joined on
   // the way out -- a crop of the shared tail alone would be another road.
   level3: [0.30, 0.04, 0.55, 0.65],
+  // THE FORK AND THE SEAM. Level 4's plate is grass on the west and snow on
+  // the east, and the merge at (737, 347) sits close to where the two meet --
+  // so a crop centred a little left of it carries both branches, the join, and
+  // the line where the grass turns white. Either half alone would be a card of
+  // one texture with a road on it. Chosen off preview_level4.png.
+  level4: [0.37, 0.04, 0.50, 0.59],
 }
 
 const CARD_W = 300, CARD_H = 200

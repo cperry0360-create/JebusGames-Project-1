@@ -38,8 +38,16 @@ test('absent means ground, in both directions', () => {
   assert.equal(canHit([GROUND, AIR], AIR), true)
 })
 
-test('every existing enemy is on the ground, so levels 1 to 3 are unchanged', () => {
+test('only level 4 flies, so levels 1 to 3 are unchanged', () => {
+  // The list is named rather than derived. Deriving it from the wave tables
+  // would make the test agree with whatever the data says, which is the one
+  // thing a test guarding "levels 1 to 3 did not change" must not do.
+  const FLYERS = new Set(['glitchBug', 'glitchBugBeta'])
   for (const [id, def] of Object.entries(E)) {
+    if (FLYERS.has(id)) {
+      assert.equal(layerOf(def), AIR, `${id} is level 4's flyer and is on the ground`)
+      continue
+    }
     assert.equal(layerOf(def), GROUND, `${id} is no longer a ground enemy`)
   }
 })
