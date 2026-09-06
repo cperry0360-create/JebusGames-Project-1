@@ -12,9 +12,18 @@
 // What it IS: every Phaser-free rule module the game actually ships, wired
 // together over lightweight structs, reading the real JSON. Targeting, the
 // wave spawner, the armour and stun maths, upgrade stats, Last Stand, the
-// scratch table, cooldowns, the draft, the lane, the build spots, the Banner
-// scoring — all of it is the code the game runs, not a copy. What is stubbed
-// is drawing, tweening and input.
+// scratch table, cooldowns, the draft, the lane, the build spots, the Beacon's
+// aura, the Banner scoring — all of it is the code the game runs, not a copy.
+// What is stubbed is drawing, tweening and input.
+//
+// SUPPORT WAS THE LAST OF THOSE TO ARRIVE, and until it did, every win rate
+// this file has ever printed was measured on a board where a drafted Beacon
+// was a dead tower: it cost 140 peanuts, took a pad, and did nothing. The rule
+// lived inside `GameScene.refreshSupport`, out of reach; it is
+// `systems/Support.ts` now and both callers read it. Numbers printed before
+// 2026-09-06 are therefore low against the game by whatever a Beacon is worth
+// on that level -- 4 to 15 points of win rate, measured per level in
+// reports/2026-09-06-soak-support-modeling.md.
 //
 // So a failure here is a real failure in a rule the game depends on, and a
 // clean run here does not prove the entity layer is clean.
@@ -68,8 +77,10 @@ import { Cooldowns } from '../../src/systems/Cooldowns.ts'
 import { waveOutcome } from '../../src/systems/Wave.ts'
 import { pickFirst, pickNearest, withinRadius } from '../../src/systems/Targeting.ts'
 import {
-  canStun, damageAfterArmor, diminishedSeconds, slowedSpeed, slowStacksAfter, stunLockoutFor,
+  boostedDamage, canStun, damageAfterArmor, diminishedSeconds, slowedSpeed, slowStacksAfter,
+  stunLockoutFor,
 } from '../../src/systems/Combat.ts'
+import { auraAt, NO_AURA, type Aura, type AuraSource } from '../../src/systems/Support.ts'
 import {
   applyHit, attackInterval, incomingDamage, outgoingDamage,
 } from '../../src/systems/LastStand.ts'
@@ -333,6 +344,42 @@ export function simulate(
 
   const statOf = (t: SimTower, key: string): number =>
     finite(`${t.id}.${key}`, statAt(t.def, t.tier, key as any, t.spec))
+
+  /**
+   * Every Beacon on the board, as the aura rule sees one.
+   *
+   * Rebuilt each frame rather than cached on a board-changed hook: the scene
+   * can afford a hook because it owns the events, and this loop cannot see
+   * one -- towers are built between waves, upgraded mid-wave, switched off by
+   * a boss and eaten by the Glitch Bug. Fourteen pads is a fourteen-entry
+   * filter, which is nothing next to the work the same frame does walking
+   * enemies.
+   *
+   * `dark` is `disabledFor`, so a Beacon the Rainbow Reaper switches off stops
+   * lifting for exactly as long as it is off -- the same rule the scene runs,
+   * out of the same file.
+   */
+  const auraSources = (): AuraSource[] => {
+    const out: AuraSource[] = []
+    for (const t of towers) {
+      const radius = statOf(t, 'supportRadius')
+      if (radius <= 0) continue
+      // The spec's grants are flat fields rather than multipliers, so they are
+      // read off the specialization directly. `statAt` would multiply a base
+      // the tower does not have and hand back 0 -- which is what `Tower`'s own
+      // `supportRangeBonus` and `grantsPierce` getters avoid the same way.
+      const b: any = specById(t.def, t.spec) ?? {}
+      out.push({
+        x: t.x, y: t.y,
+        radius,
+        damageBonus: statOf(t, 'supportDamageBonus'),
+        rangeBonus: b.supportRangeBonus ?? 0,
+        pierce: b.grantsPierce ?? 0,
+        dark: t.disabledFor > 0,
+      })
+    }
+    return out
+  }
 
   const spawn = (id: string, at = 0, summonedBy: SimEnemy | null = null,
                  laneId: string = MAIN_LANE, laneAt = at): void => {
@@ -799,6 +846,14 @@ export function simulate(
       cooldowns.tick(DT)
 
       // Towers.
+      //
+      // The Beacons first, because what every gun below is worth depends on
+      // them: an aura is read at the moment of the shot rather than cached on
+      // the tower, so a Beacon switched off between two shots is felt on the
+      // second one.
+      const sources = auraSources()
+      const lift = (t: SimTower): Aura =>
+        sources.length === 0 ? NO_AURA : auraAt(t.x, t.y, sources)
       for (const t of towers) {
         if (t.buildLeft > 0) {
           t.buildLeft -= DT
@@ -820,14 +875,18 @@ export function simulate(
         if (statOf(t, 'supportRadius') > 0) continue
         t.cooldown -= DT
         if (t.cooldown > 0) continue
-        const range = statOf(t, 'range')
+        // Damage, reach and pierce, exactly as `Tower`'s three getters read
+        // them: the bonus multiplies the base, the range bonus is a fraction
+        // of the tower's own, and the pierce is flat on top.
+        const gain = lift(t)
+        const range = statOf(t, 'range') * (1 + gain.range)
         const target = pickFirst(enemies.filter((e) => e.alive) as any, t.x, t.y, range) as SimEnemy | null
         if (!target) continue
         t.cooldown = Math.max(0.05, statOf(t, 'fireInterval'))
         firedTowers.add(t.id)
-        const dmg = statOf(t, 'damage')
+        const dmg = boostedDamage(statOf(t, 'damage'), gain.damage)
         const splash = statOf(t, 'splashRadius')
-        const pierce = statOf(t, 'armorPierce')
+        const pierce = statOf(t, 'armorPierce') + gain.pierce
         const b = specById(t.def, t.spec) ?? {}
         if (splash > 0) {
           for (const e of withinRadius(enemies.filter((x) => x.alive) as any, target.x, target.y, splash)) {

@@ -23,6 +23,7 @@ import { BuildSystem } from '../systems/BuildSystem.ts'
 import type { BuildSpot } from '../systems/BuildSystem.ts'
 import { WaveSpawner } from '../systems/WaveSpawner.ts'
 import { withinRadius, pickNearest } from '../systems/Targeting.ts'
+import { auraAt, darkCount, type AuraSource } from '../systems/Support.ts'
 import { GROUND_DEPTH } from '../systems/DepthSort.ts'
 import { boardBounds, coverZoom, openingView } from '../systems/CameraMath.ts'
 import { distanceAtX, type EmergeConfig } from '../systems/Gateway.ts'
@@ -294,6 +295,12 @@ export class GameScene extends Phaser.Scene {
   /** Held still for a beat on a big impact. See `skillPunch`. Public so a
    *  harness run can assert the pause happened rather than infer it. */
   hitPaused = false
+  /** How many Beacons were dark at the last `refreshSupport`. The aura has to
+   *  come back WITH the tower, and the timer in `landDisable` is not what
+   *  clears `disabledFor` -- `Tower.tick` is, on the scaled clock, while that
+   *  timer runs on the wall clock and can fire either side of it. Watching the
+   *  count is the only version of this that cannot drift. */
+  private darkSupports = 0
   /** Child count at the last camera split, so new objects get assigned. */
   private splitAt = -1
   private spawner!: WaveSpawner
@@ -3933,6 +3940,11 @@ export class GameScene extends Phaser.Scene {
     this.tickEngagement()
     this.tickEnemies(dt)
     for (const t of this.towers) t.tick(dt, this.enemies, (tower, target) => this.fire(tower, target))
+    // A Beacon that has just come back relights everything it covers, and a
+    // Beacon that has just gone dark drops it -- both read off the towers
+    // themselves, one frame after their own tick, rather than off a timer.
+    if (this.darkSupports !== this.towers.reduce(
+      (n, t) => n + (t.isSupport && t.disabledFor > 0 ? 1 : 0), 0)) this.refreshSupport()
     this.shots = this.shots.filter((s) => !s.tick(dt))
     this.fighters = this.fighters.filter(
       (f) => !f.tick(dt, this.enemies, (e, dmg) => this.damageEnemy(e, dmg, false)),
@@ -4207,8 +4219,11 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(seconds * 1000, () => {
       pulse.remove()
       overlay.destroy()
-      // The tower's own tick clears `disabledFor` and hands it a fresh
-      // cooldown; this only puts the aura back if it was a Shelter.
+      // The overlay's own timer, and nothing else: this clock is the wall
+      // clock and `disabledFor` counts down on the scaled one, so the two do
+      // not land on the same frame and this call is not what relights a
+      // Beacon. The run loop's dark-count watch is. Kept because a recompute
+      // here is free and the board may have changed under it.
       this.refreshSupport()
     })
     logEvent('disable-land', `${tower.def.name} off for ${seconds}s`)
@@ -4879,27 +4894,30 @@ export class GameScene extends Phaser.Scene {
    * long as both have existed. The Glitch Bug made it matter more: it takes
    * the Beacon away entirely, and the difference between "gone" and "off"
    * should not be that only one of them is felt.
+   *
+   * The arithmetic itself is `systems/Support.ts` rather than a loop written
+   * here, because the headless soak has to score the same board the same way
+   * and could not reach a rule that lived in a Phaser scene.
    */
   private refreshSupport(): void {
+    const sources: AuraSource[] = this.towers.filter((t) => t.isSupport).map((t) => ({
+      x: t.x, y: t.y,
+      radius: t.supportRadius,
+      damageBonus: t.supportDamageBonus,
+      // A specialized Shelter gives its neighbours something beyond raw
+      // damage, which is what makes its tier-3 choice a choice.
+      rangeBonus: t.supportRangeBonus,
+      pierce: t.grantsPierce,
+      dark: t.disabledFor > 0,
+    }))
     for (const t of this.towers) {
       if (t.isSupport) continue
-      let bonus = 0
-      let range = 0
-      let pierce = 0
-      for (const s of this.towers) {
-        if (!s.isSupport || s === t || s.disabledFor > 0) continue
-        if (Phaser.Math.Distance.Between(s.x, s.y, t.x, t.y) <= s.supportRadius) {
-          bonus += s.supportDamageBonus
-          // A specialized Shelter gives its neighbours something beyond raw
-          // damage, which is what makes its tier-3 choice a choice.
-          range += s.supportRangeBonus
-          pierce += s.grantsPierce
-        }
-      }
-      t.supportBonus = bonus
-      t.grantedRange = range
-      t.grantedPierce = pierce
+      const gain = auraAt(t.x, t.y, sources)
+      t.supportBonus = gain.damage
+      t.grantedRange = gain.range
+      t.grantedPierce = gain.pierce
     }
+    this.darkSupports = darkCount(sources)
   }
 
   /** Exposed for the HUD. */

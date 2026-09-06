@@ -1335,6 +1335,74 @@ async function run() {
     return
   }
 
+  if (scenario === 'beacon') {
+    // THE AURA, on a real board rather than in a unit test.
+    //
+    // Three claims, and only the first was ever checked anywhere: a Beacon
+    // lifts the gun next to it, the lift goes out when a boss switches the
+    // Beacon off, and the lift COMES BACK when it recovers. The third is the
+    // one that needs a running scene: `disabledFor` counts down on the scaled
+    // clock inside `Tower.tick`, and `landDisable`'s delayed call runs on the
+    // wall clock, so nothing but the loop itself knows the moment a Beacon is
+    // back.
+    g.status.peanuts = 999999
+    const spots = g.build.freeSpots()
+    const RADIUS = 215   // shelter.supportRadius, tier 1
+    let gunSpot = null, beaconSpot = null
+    for (const a of spots) {
+      for (const b of spots) {
+        if (a === b) continue
+        if (Math.hypot(a.x - b.x, a.y - b.y) <= RADIUS) { gunSpot = a; beaconSpot = b; break }
+      }
+      if (gunSpot) break
+    }
+    if (!gunSpot) { note('RESULT no two pads on this map are within one aura of each other'); return }
+    await lookAt(gunSpot.x, gunSpot.y)
+    g.place('withholding', gunSpot)
+    const gun = g.towers[g.towers.length - 1]
+    g.place('shelter', beaconSpot)
+    const beacon = g.towers[g.towers.length - 1]
+    const bare = gun.damage / (1 + gun.supportBonus)
+    note('pads ' + Math.round(Math.hypot(gunSpot.x - beaconSpot.x, gunSpot.y - beaconSpot.y)) +
+      'px apart, aura ' + RADIUS + 'px')
+    note('lit:  bonus=' + gun.supportBonus.toFixed(2) + '  damage=' + gun.damage.toFixed(1) +
+      ' against ' + bare.toFixed(1) + ' bare')
+    const faults = []
+    if (!(gun.supportBonus > 0)) faults.push('the Beacon lifted nothing at all')
+
+    // Switched off, through the same call the Rainbow Reaper's cast makes.
+    const SECONDS = 1.5
+    g.landDisable(beacon, SECONDS)
+    note('dark: bonus=' + gun.supportBonus.toFixed(2) + '  damage=' + gun.damage.toFixed(1))
+    if (gun.supportBonus !== 0) faults.push('a switched-off Beacon went on buffing')
+
+    // And back. 1.5 game-seconds is 1.07 real ones at gameSpeed 1.4.
+    const t0 = performance.now()
+    let relitAt = -1
+    while (performance.now() - t0 < 5000) {
+      await sleep(30)
+      if (gun.supportBonus > 0) { relitAt = performance.now() - t0; break }
+    }
+    note('relit after ' + (relitAt < 0 ? 'NEVER (5s)' : Math.round(relitAt) + 'ms real, against ' +
+      Math.round(SECONDS / 1.4 * 1000) + 'ms expected') +
+      '  bonus=' + gun.supportBonus.toFixed(2) + '  beacon.disabledFor=' + beacon.disabledFor.toFixed(2))
+    // LATE IS A FAULT, not a detail. Without the run loop's dark-count watch
+    // the aura still comes back -- off `landDisable`'s wall-clock timer, 44%
+    // late, because `disabledFor` counts down 1.4x faster than that timer
+    // runs. Measured at 1546ms against 1071ms with the watch taken out.
+    const expected = SECONDS / 1.4 * 1000
+    if (relitAt < 0) faults.push('the aura never came back after the Beacon did')
+    else if (relitAt > expected + 250) {
+      faults.push('the aura came back ' + Math.round(relitAt - expected) + 'ms late, which is a '
+        + 'timer relighting it rather than the tower')
+    }
+    await shot('beacon-01-relit')
+    note('RESULT ' + (faults.length === 0
+      ? 'the aura lifts, goes dark with the tower and comes back with it'
+      : '*** ' + faults.join('; ') + ' ***'))
+    return
+  }
+
   if (scenario === 'ui') {
     await shot('ui-01-fresh')
     // Look at the pad this scenario works on, or every tap below lands off
