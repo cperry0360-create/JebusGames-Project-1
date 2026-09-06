@@ -8,7 +8,8 @@ measured, and every measurement says how it was taken.
 | commit | what | CI |
 |---|---|---|
 | `be8e2f9` | the relight fix, `systems/Support.ts`, the soak's aura, the harness scenario, 8 tests | green on `main` (run 135), Pages deployed |
-| *this commit* | this report and the `SOAK-REPORT.md` section | pending at the time of writing; see the note under the table |
+| `ffc3f9b` | this report and the `SOAK-REPORT.md` section | green on `main` (run 137), Pages deployed |
+| *this commit* | fills in the row above, and nothing else | — |
 
 `main` was already at `19de88e` when this session started, so the whole level 4
 branch had landed. This work is on top of it, pushed straight to `main` as
@@ -16,9 +17,11 @@ asked. Run 135 ran typecheck, `npm test` and the gated Pages deploy, and all
 four jobs are green.
 
 > The report rule says the file is written last and updated until the work is
-> finished. The row above is filled in from the run for this commit's own
-> pre-amend hash; if you are reading it as `pending`, the amend that filled it
-> in did not happen and the run should be checked by hand.
+> finished. `ffc3f9b` was already pushed to `main` when its run went green, so
+> its CI result arrives as the one-line commit above rather than as an amend:
+> rewriting a pushed `main` to tidy a table is a worse trade than an extra
+> commit. That last commit touches this table row only, so the run it triggers
+> can only say what run 137 already said.
 
 ---
 
