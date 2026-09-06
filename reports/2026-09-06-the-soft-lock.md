@@ -9,7 +9,7 @@ No crash, no error, no report.
 | commit | what | CI |
 |---|---|---|
 | 5d30310 | Stop a stale viewport frame from freezing a run, and net the class | green (`test`, `typecheck`; `deploy` skipped, gated on `main`) — [run 34039366717](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34039366717) |
-| 4c1a1ec | this report | n/a |
+| 725783d | this report | n/a |
 
 Branch `claude/phaser-vendor-layout-authority-74uaif`, a clean fast-forward to
 `main`.
