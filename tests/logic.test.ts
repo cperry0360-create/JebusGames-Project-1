@@ -424,3 +424,35 @@ test('nothing decides facing with a bare flip any more', () => {
   assert.match(enemy, /const flip0 = mirroredFor\(this\.facingLeft, def\.artFacing\)/,
     'the opening flip is never applied')
 })
+
+test('a boss that walks through the line also walks through a slow', () => {
+  // THE RAINBOW REAPER'S FIGHT IS A CLOCK: it disables towers on a cooldown
+  // while it walks, and the player's job is to out-damage that clock. A
+  // permanent 45% slow from one Deferral turns the clock off, which is the
+  // same trick as parking an unblockable boss on a soldier -- and the reason
+  // it is unblockable is that trick.
+  //
+  // Expressed as a flag on the enemy, beside `blockable`, rather than as a
+  // rule about tiers: crowd-control immunity is a property of a character.
+  const enemies = JSON.parse(
+    readFileSync(new URL('../src/data/enemies.json', import.meta.url), 'utf8'))
+  for (const [id, def] of Object.entries(enemies) as [string, any][]) {
+    assert.equal(typeof def.slowable, 'boolean', `${id} does not say whether it can be slowed`)
+  }
+  assert.equal(enemies.unicornBoss.slowable, false, 'the Rainbow Reaper can be slowed')
+  assert.equal(enemies.unicornBoss.blockable, false, 'the Rainbow Reaper can be blocked')
+
+  // THE POLITICIAN IS DELIBERATELY STILL SLOWABLE. He is unblockable for the
+  // same reason, but levels 1 and 2 are tuned around him as he is, and this
+  // was a level 3 change. Stated so that "bosses resist crowd control" is not
+  // quietly generalised into a balance change nobody measured.
+  assert.equal(enemies.politician.slowable, true,
+    'the Politician was made slow-immune, which retunes levels 1 and 2')
+
+  // And BOTH the game and the simulator honour it, or the soak reports a boss
+  // the game does not have.
+  for (const f of ['../src/entities/Enemy.ts', '../tools/soak/Sim.ts']) {
+    const code = readFileSync(new URL(f, import.meta.url), 'utf8')
+    assert.match(code, /slowable\) return/, `${f} applies slows regardless of the flag`)
+  }
+})

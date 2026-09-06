@@ -110,11 +110,12 @@ test('The Devil summons, and has grown nothing else', () => {
     'The Devil no longer summons what he was asked to')
   assert.ok(enemies[d.summons.enemy], 'The Devil summons an enemy that does not exist')
 
-  // The field list, plus the two that were added on purpose. `artFacing` is
-  // one of them: every enemy declares which way its art is drawn now, because
-  // Enemy.ts used to assume "right" for all of them and level 3's five are all
-  // drawn facing left.
+  // The field list, plus the three that were added on purpose. `artFacing`
+  // says which way the art is drawn, because Enemy.ts used to assume "right"
+  // for every enemy and level 3's five are all drawn facing left. `slowable`
+  // sits beside `blockable` and says whether crowd control lands; The Devil's
+  // is true, and it is the Rainbow Reaper that is immune.
   assert.deepEqual(Object.keys(d).sort(),
-    [...Object.keys(BRIEF.theDevil), 'flavor', 'summons', 'artFacing'].sort(),
+    [...Object.keys(BRIEF.theDevil), 'flavor', 'summons', 'artFacing', 'slowable'].sort(),
     'The Devil carries fields nobody asked for')
 })

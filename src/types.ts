@@ -410,6 +410,18 @@ export interface EnemyDef {
   /** False for a boss that walks through the line rather than being held by
    *  it. Holding one would let a player park it and ignore the fight. */
   blockable: boolean
+  /**
+   * False for an enemy that ignores slows, the same way `blockable: false`
+   * makes one ignore the line.
+   *
+   * The Rainbow Reaper is the only one so far. Its whole fight is a clock --
+   * it disables towers on a cooldown while it walks -- and a permanent 45%
+   * slow from one Deferral turns that clock off, which is the same trick as
+   * parking an unblockable boss on a soldier. THE POLITICIAN IS DELIBERATELY
+   * STILL SLOWABLE: he is unblockable for the same reason, but level 1's win
+   * rate is tuned around him as he is, and this brief was about level 3.
+   */
+  slowable: boolean
   /** Present only on The Politician: he takes a share of the player's
    *  peanuts instead of attacking anything. */
   tax?: TaxDef

@@ -667,6 +667,9 @@ export function simulate(
   }
 
   const applySlow = (e: SimEnemy, factor: number, seconds: number): void => {
+    // The simulator has to model this or the soak reports a boss the game does
+    // not have. Same flag, same place as Enemy.applySlow.
+    if (!e.def.slowable) return
     const d = RULES.combat.slowDiminish
     e.slowStacks = slowStacksAfter(e.sinceSlow, e.slowStacks, d)
     const dealt = diminishedSeconds(seconds, e.slowStacks, d)

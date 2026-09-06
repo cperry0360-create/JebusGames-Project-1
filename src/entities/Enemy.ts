@@ -358,6 +358,9 @@ export class Enemy extends Phaser.GameObjects.Container {
 
   applySlow(factor: number, seconds: number, diminish: DiminishDef): void {
     if (factor <= 0 || seconds <= 0) return
+    // Crowd control the same way the line is: a flag on the enemy, not a rule
+    // about tiers. See `EnemyDef.slowable`.
+    if (!this.def.slowable) return
     // A slowed enemy is still walking, so a tower holding one at 45% speed is
     // the tower doing its job — but "allowed to refresh" and "can never lapse"
     // are not the same thing, and nothing made the second one false. Measured:

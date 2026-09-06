@@ -1072,7 +1072,16 @@ test('the wave curve has no cliff in it', () => {
       const cap = table.waves[i].boss ? 0.8 : 0.55
       assert.ok(step <= cap,
         `${level} wave ${i + 1} is ${Math.round(step * 100)}% heavier than wave ${i}, which is a cliff`)
-      assert.ok(step > 0, `${level} wave ${i + 1} is lighter than wave ${i}`)
+      // A BOSS WAVE IS EXEMPT FROM "MUST BE HEAVIER", because total health is
+      // the wrong ruler for it. Level 3's last wave is ONE enemy against the
+      // fifty of the wave before, and the Rainbow Reaper's difficulty is its
+      // tower-disable clock and its armour, not its health pool -- it was
+      // 9,800hp and the level was 0/60. At 2,000 the same wave weighs less
+      // than wave 13 on this metric and the level plays at 72%. The ruler that
+      // decides a boss is the soak, not this sum.
+      if (!table.waves[i].boss) {
+        assert.ok(step > 0, `${level} wave ${i + 1} is lighter than wave ${i}`)
+      }
     }
   }
 })
