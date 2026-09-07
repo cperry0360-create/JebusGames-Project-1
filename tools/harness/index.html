@@ -290,7 +290,12 @@ async function edgeCheck(label) {
 
 let bootBroken = false
 async function toTitle() {
-  await until(() => game.textures.exists('map-level1') && game.textures.exists('enemy-notice'), 60000)
+  // NOT A MAP PLATE. This waited on `map-level1`, and plates are no longer
+  // loaded at boot -- they arrive with a level and are freed with it, which is
+  // the iOS memory fix. A wait on a plate here would have hung every scenario
+  // in this file for its full 60s and then reported that the game did not
+  // boot. Two boot-time textures from opposite ends of the manifest instead.
+  await until(() => game.textures.exists('ui-title-bg') && game.textures.exists('enemy-notice'), 60000)
   // Generous, because a software rasteriser at device resolution runs the
   // whole boot at a few frames a second and 15s is not enough to distinguish
   // 'did not boot' from 'is still booting'.
@@ -309,8 +314,15 @@ async function toTitle() {
 }
 async function startRun() {
   for (const k of ['Title', 'Draft', 'Splash', 'Credits', 'Boot']) game.scene.stop(k)
-  game.scene.start('Game'); game.scene.start('Hud')
-  await until(() => running('Game') && scene('Game').status.heroName !== '', 10000)
+  // GAME ONLY. `GameScene.create()` launches the HUD once it has a run to
+  // describe, and starting the two together races its `preload` -- the plate
+  // is fetched per level now rather than held from boot, so `create()` is
+  // behind a loader and a HUD built in front of it has no hand, hero or
+  // counters to read. The wait below is on the RUN, not on the scene being
+  // active, for the same reason.
+  game.scene.start('Game')
+  await until(() => running('Game') && scene('Game').status.heroName !== '', 20000)
+  await until(() => running('Hud'), 8000)
   await sleep(500)
   return scene('Game')
 }
@@ -391,6 +403,250 @@ let g = null
 async function run() {
   const okTitle = await toTitle()
   if (scenario === 'title') { await shot('title'); return }
+
+  /*
+   * TEXTURE MEMORY, MEASURED RATHER THAN REASONED ABOUT.
+   *
+   * The iOS Safari crash was blamed on plates accumulating across scene
+   * transitions. That is a claim about what the texture manager holds at four
+   * moments, and this is the scenario that reads it instead of arguing about
+   * it. The cost model is width x height x 4: an RGBA texture in GPU memory,
+   * which is what a plate becomes the moment it is uploaded, regardless of how
+   * small the WebP on disk is.
+   *
+   * Every source of every texture is counted, because a spritesheet is one
+   * source and a canvas texture is another and both are real bytes.
+   */
+  const texBytes = () => {
+    let bytes = 0, n = 0, list = []
+    for (const key of game.textures.getTextureKeys()) {
+      const t = game.textures.get(key)
+      if (!t || !t.source) continue
+      let b = 0, w0 = 0, h0 = 0
+      for (const s of t.source) {
+        // THE BACKING IMAGE, not only the declared size. A Text object's
+        // TextureSource reports 1x1 in this Phaser build while its canvas is
+        // the real several-hundred-pixel bitmap, so reading `s.width` alone
+        // undercounts every label on the screen -- and the world map is mostly
+        // labels. Whichever is larger is the honest number.
+        const img = s.image || s.source
+        const w = Math.max(s.width || 0, (img && img.width) || 0)
+        const h = Math.max(s.height || 0, (img && img.height) || 0)
+        b += w * h * 4
+        if (!w0) { w0 = w; h0 = h }
+      }
+      bytes += b
+      n++
+      list.push({ key, bytes: b, w: w0, h: h0 })
+    }
+    list.sort((a, b) => b.bytes - a.bytes)
+    return { n, bytes, list }
+  }
+  const MB = (b) => (b / 1048576).toFixed(1)
+  const TEXDUMP = []
+  /** Every texture key actually DRAWN by the live scenes right now. */
+  const drawnKeys = () => {
+    const out = new Set()
+    const walk = (o) => {
+      if (o.texture && o.texture.key) out.add(o.texture.key)
+      if (o.list) o.list.forEach(walk)
+    }
+    for (const sc of game.scene.scenes) {
+      if (!game.scene.isActive(sc.scene.key)) continue
+      sc.children.list.forEach(walk)
+    }
+    return out
+  }
+  const USED = new Set()
+  const collect = () => { for (const k of drawnKeys()) USED.add(k) }
+  const texPoint = (label) => {
+    const m = texBytes()
+    const plates = m.list.filter((t) => /^map-level/.test(t.key))
+    const plateB = plates.reduce((a, t) => a + t.bytes, 0)
+    note('TEX ' + label + ': ' + m.n + ' textures, ' + MB(m.bytes) + ' MB decompressed'
+      + '  (plates resident: ' + plates.length + ' = ' + MB(plateB) + ' MB)')
+    note('  plates: ' + (plates.map((t) => t.key).join(' ') || 'none'))
+    note('  top 6: ' + m.list.slice(0, 6).map((t) => t.key + ' ' + t.w + 'x' + t.h + ' ' + MB(t.bytes) + 'MB').join(', '))
+    TEXDUMP.push({
+      point: label, count: m.n, bytes: m.bytes,
+      plateKeys: plates.map((t) => t.key), plateBytes: plateB,
+      top: m.list.slice(0, 20),
+    })
+    return m
+  }
+
+  if (scenario === 'texmem') {
+    note('viewport ' + VP.w + 'x' + VP.h)
+    const after = texPoint('1 after boot (Title live)')
+
+    scene('Title').scene.start('WorldMap')
+    if (!(await until(() => running('WorldMap'), 10000))) { note('*** WorldMap did not build'); return }
+    await sleep(700)
+    texPoint('2 on the world map')
+    // WHAT THE UUID-KEYED TEXTURES ARE. `addCanvas(null, ...)` keys a texture
+    // by a generated uuid, so the biggest single texture in the game shows up
+    // in the dump as an anonymous 56 MB row with nothing saying who made it.
+    // This names the owner off the scene graph rather than guessing.
+    {
+      const owners = []
+      const walk = (o) => {
+        if (o.texture && o.texture.key && /^[0-9a-f-]{30,}$/.test(o.texture.key)) {
+          const s = o.texture.source[0]
+          owners.push(o.type + ' "' + o.texture.key.slice(0, 8) + '" '
+            + (s ? s.width + 'x' + s.height : '?')
+            + ' display=' + Math.round(o.width) + 'x' + Math.round(o.height))
+        }
+        if (o.list) o.list.forEach(walk)
+      }
+      scene('WorldMap').children.list.forEach(walk)
+      note('  anonymous canvas textures on the world map: ' + (owners.join(' | ') || 'none'))
+    }
+
+    // Into a real level, through the loadout the way a player gets there.
+    scene('WorldMap').scene.start('Loadout')
+    if (!(await until(() => running('Loadout'), 10000))) { note('*** Loadout did not build'); return }
+    await sleep(700)
+    scene('Loadout').scene.start('Game')
+    // Waited on the run rather than on the scene: GameScene is `isActive` while
+    // it is still preloading its plate, and everything below reads its state.
+    if (!(await until(() => running('Game') && scene('Game').status.heroName !== '', 20000))) {
+      note('*** Game did not build'); return
+    }
+    await sleep(1500)
+    const gm = scene('Game')
+    note('  level in play: ' + (gm.level ? gm.level.id : '?')
+      + ' plate=' + (gm.level && gm.level.map ? gm.level.map.plate : '?'))
+    texPoint('3 during a level')
+
+    // FINISHING THE LEVEL, which is the reported symptom: the results dialog
+    // and then the tap through to level select.
+    gm.endRun('won')
+    await sleep(1200)
+    await shot('texmem-won-' + VP.w + 'x' + VP.h)
+    // THE RESULTS DIALOG IS SCREEN SPACE, so its buttons must be converted
+    // through the UI camera and not through the world camera. Converting a
+    // dialog label with `cameras.main` is the mistake rule 4 in CLAUDE.md
+    // exists to stop, and it is why the first run of this scenario clicked
+    // empty board and reported the level select as unreached.
+    const dialogButton = (label) => {
+      const dlg = gm.dialog
+      if (!dlg || !dlg.layer) return null
+      let found = null
+      const visit = (o) => {
+        if (o.visible === false) return
+        if (o.text !== undefined && String(o.text) === label) found = o
+        if (o.list) o.list.forEach(visit)
+      }
+      dlg.layer.list.forEach(visit)
+      if (!found) return null
+      const b = found.getBounds()
+      const ui = gm.cameras.cameras.find((c) => c.name === 'ui') || gm.cameras.main
+      const c = RES.worldToScreen(gm, b.centerX, b.centerY, ui)
+      return { x: Math.round(c.x), y: Math.round(c.y) }
+    }
+    const ls = dialogButton('LEVEL SELECT')
+    note('  LEVEL SELECT button at ' + JSON.stringify(ls))
+    if (ls) { await click(ls.x, ls.y); await sleep(1400) }
+    else { note('  no LEVEL SELECT button found; stopping Game/Hud by hand'); for (const k of ['Game', 'Hud']) game.scene.stop(k); game.scene.start('WorldMap') }
+    await until(() => running('WorldMap'), 10000)
+    await sleep(800)
+    note('  back on the world map: WorldMap=' + running('WorldMap') + ' Game=' + running('Game'))
+    const back = texPoint('4 back on the world map after a finished level')
+    await shot('texmem-map-' + VP.w + 'x' + VP.h)
+
+    /*
+     * RESTART, WHICH IS THE FREE-AND-RELOAD PATH IN ONE TAP.
+     *
+     * The plate is removed on GameScene's shutdown and fetched again by its
+     * preload, and RESTART is the only control that does both in the same
+     * frame -- so it is the one that proves the pair works rather than just
+     * the freeing half. It is also the path that broke first: GameScene has a
+     * preload now, so the HUD's old "restart us both" raced it and built a HUD
+     * for a run that did not exist yet.
+     */
+    scene('WorldMap').scene.start('Loadout')
+    await until(() => running('Loadout'), 10000); await sleep(600)
+    scene('Loadout').scene.start('Game')
+    if (!(await until(() => running('Game') && scene('Game').status.heroName !== '', 20000))) {
+      note('*** RESTART CHECK: the level did not build')
+    } else {
+      await until(() => running('Hud'), 8000)
+      await sleep(600)
+      const gm2 = scene('Game')
+      const plateKey = (await import('./js/systems/Art.js')).ART.map[gm2.level.map.plate]
+      note('  before RESTART: plate ' + plateKey + ' resident=' + game.textures.exists(plateKey))
+      // Through the settings panel, the way a player reaches it.
+      const hud = scene('Hud')
+      hud.openSettings ? hud.openSettings() : hud.events.emit('noop')
+      await sleep(700)
+      let hit = null
+      const walk2 = (o) => {
+        if (o.visible !== false && o.text !== undefined && String(o.text) === 'RESTART') hit = o
+        if (o.list) o.list.forEach(walk2)
+      }
+      hud.children.list.forEach(walk2)
+      if (!hit) note('*** RESTART CHECK: no RESTART control on the settings panel')
+      else {
+        const b4 = hit.getBounds()
+        const c4 = RES.worldToScreen(hud, b4.centerX, b4.centerY, hud.cameras.main)
+        await click(Math.round(c4.x), Math.round(c4.y))
+        // The plate is gone and coming back, so this waits on the RUN.
+        const back = await until(() => running('Game') && running('Hud')
+          && scene('Game').status.heroName !== '', 25000)
+        await sleep(800)
+        note('  after RESTART: run rebuilt=' + back
+          + '  Hud=' + running('Hud')
+          + '  plate resident=' + game.textures.exists(plateKey))
+        const m5 = texBytes()
+        const pl5 = m5.list.filter((t) => /^map-level/.test(t.key))
+        note('TEX 5 after RESTART: ' + m5.n + ' textures, ' + MB(m5.bytes)
+          + ' MB decompressed  (plates resident: ' + pl5.length + ' = '
+          + MB(pl5.reduce((a, t) => a + t.bytes, 0)) + ' MB)')
+        await shot('texmem-restart-' + VP.w + 'x' + VP.h)
+        if (!back) note('*** RESTART did not bring the run back')
+        if (pl5.length !== 1) note('*** RESTART left ' + pl5.length + ' plates resident, expected 1')
+      }
+    }
+
+    /*
+     * WHAT THE MENUS NEVER DRAW.
+     *
+     * The third of step 2's questions -- "is anything loaded at boot that is
+     * only needed inside a level" -- is answered by measurement rather than by
+     * reading 146 manifest entries and guessing which screen wants which. The
+     * pre-level screens are visited, everything they actually draw is
+     * collected, and what is left is art the player carries through the title,
+     * the map and the loadout without a single pixel of it reaching the glass.
+     */
+    for (const k of ['Title', 'Game', 'Hud']) game.scene.stop(k)
+    game.scene.start('Title')
+    await until(() => running('Title'), 8000); await sleep(600); collect()
+    scene('Title').scene.start('WorldMap')
+    await until(() => running('WorldMap'), 8000); await sleep(600); collect()
+    scene('WorldMap').scene.start('Loadout')
+    await until(() => running('Loadout'), 8000); await sleep(900); collect()
+    const ART2 = (await import('./js/systems/Art.js'))
+    let unusedB = 0, unusedN = 0, unusedTop = []
+    for (const key of Object.keys(ART2.ART.files)) {
+      if (USED.has(key)) continue
+      const t = game.textures.get(key)
+      if (!t || !t.source) continue
+      let b = 0
+      for (const s of t.source) b += (s.width || 0) * (s.height || 0) * 4
+      unusedB += b; unusedN++
+      unusedTop.push({ key, bytes: b })
+    }
+    unusedTop.sort((a, b) => b.bytes - a.bytes)
+    note('NEVER DRAWN by Title/WorldMap/Loadout: ' + unusedN + ' of '
+      + Object.keys(ART2.ART.files).length + ' manifest textures, ' + MB(unusedB) + ' MB')
+    note('  largest: ' + unusedTop.slice(0, 8).map((t) => t.key + ' ' + MB(t.bytes) + 'MB').join(', '))
+
+    const peak = Math.max(...TEXDUMP.map((d) => d.bytes))
+    note('PEAK ' + MB(peak) + ' MB decompressed; growth boot -> after a level = '
+      + MB(back.bytes - after.bytes) + ' MB')
+    window.__screensDump = { texmem: TEXDUMP }
+    return
+  }
   if (scenario === 'realboot') {
     // The whole path, with nothing forced. Boot -> Splash -> Title -> Loadout
     // -> Game -> Hud, each one waited for rather than started by hand. This is
@@ -412,10 +668,14 @@ async function run() {
     let ok = okTitle
     if (ok) ok = await reach('Loadout', () => scene('Title').scene.start('Loadout'))
     if (ok) {
-      ok = await reach('Game', () => {
-        const lo = scene('Loadout')
-        lo.scene.start('Game'); lo.scene.launch('Hud')
-      })
+      // THE HUD IS NOT LAUNCHED FROM HERE. `GameScene.create()` launches it
+      // itself, and it has to: GameScene has a `preload` now (it fetches the
+      // level's plate rather than boot holding all five), so its `create()`
+      // runs behind the loader while a `launch('Hud')` in the same breath runs
+      // immediately -- and the HUD is built out of GameScene's run state. No
+      // scene in `src/` starts the two side by side; this line did, and it
+      // only worked because GameScene used to have nothing to load.
+      ok = await reach('Game', () => scene('Loadout').scene.start('Game'))
     }
     if (ok) ok = await reach('Hud')
     await sleep(700)
@@ -496,7 +756,7 @@ async function run() {
         openingTowers: ['withholding', 'writeoff'], abilities: ALL_ABILITIES,
         reserveTowers: [], resumeFrom: null,
       })
-      game.scene.start('Game'); game.scene.start('Hud')
+      game.scene.start('Game')  // Hud comes up with it; see startRun
       if (!(await until(() => running('Game') && running('Hud') && scene('Game').hero, 15000))) {
         fail(hid + ': the level did not start'); continue
       }
@@ -926,7 +1186,7 @@ async function run() {
     {
       SAVE.writeSave({ ...SAVE.DEFAULT_SAVE, clearedLevels: ['level1'] })
       for (const k of ['Title', 'WorldMap', 'Loadout']) game.scene.stop(k)
-      game.scene.start('Game'); game.scene.start('Hud')
+      game.scene.start('Game')  // Hud comes up with it; see startRun
       if (await until(() => running('Game') && scene('Game').hero, 15000)) {
         await sleep(600)
         const G = scene('Game')
@@ -1204,7 +1464,7 @@ async function run() {
     /* ------------------------------------------------------- 3. the HUD */
 
     for (const k of ['WorldMap', 'Title', 'Draft', 'Splash', 'Credits', 'Boot']) game.scene.stop(k)
-    game.scene.start('Game'); game.scene.start('Hud')
+    game.scene.start('Game')  // Hud comes up with it; see startRun
     if (!(await until(() => running('Game') && scene('Game').hero, 15000))) {
       note('*** the level did not start ***')
       return
@@ -1792,7 +2052,7 @@ async function run() {
       for (const form of ['base', 'powered']) {
         RS3.setRunState({ heroId: hid })
         game.scene.stop('Game'); game.scene.stop('Hud')
-        game.scene.start('Game'); game.scene.start('Hud')
+        game.scene.start('Game')  // Hud comes up with it; see startRun
         if (!await until(() => running('Game') && scene('Game').hero && running('Hud'), 15000)) {
           note('*** ' + hid + ': the run did not build'); faults3++; continue
         }
@@ -1903,7 +2163,7 @@ async function run() {
     for (const hid of ids4) {
       RS4.setRunState({ heroId: hid })
       game.scene.stop('Game'); game.scene.stop('Hud')
-      game.scene.start('Game'); game.scene.start('Hud')
+      game.scene.start('Game')  // Hud comes up with it; see startRun
       if (!await until(() => running('Game') && scene('Game').hero && running('Hud'), 15000)) {
         note('*** ' + hid + ': the run did not build'); faults4++; continue
       }
@@ -4172,7 +4432,7 @@ async function run() {
     for (const id of ids) {
       RS.setRunState({ heroId: id })
       game.scene.stop('Game'); game.scene.stop('Hud')
-      game.scene.start('Game'); game.scene.start('Hud')
+      game.scene.start('Game')  // Hud comes up with it; see startRun
       await until(() => running('Game') && scene('Game').hero, 12000)
       const G = scene('Game')
       await sleep(400)
@@ -5649,8 +5909,7 @@ async function run() {
         (t2 > t1 ? 'YES (' + t1.toFixed(1) + 's -> ' + t2.toFixed(1) + 's)' : 'position did not advance (no audio device?)'))
 
       game.scene.stop('Loadout')
-      game.scene.start('Game')
-      game.scene.start('Hud')
+      game.scene.start('Game')  // Hud comes up with it; see startRun
       await until(() => running('Game'), 10000)
       await sleep(1600)
       record(state('level'))
@@ -11280,7 +11539,7 @@ async function run() {
       openingTowers: ['withholding', 'writeoff'], abilities: ['molotov', 'glacier'],
       reserveTowers: [], resumeFrom: null,
     })
-    game.scene.start('Game'); game.scene.start('Hud')
+    game.scene.start('Game')  // Hud comes up with it; see startRun
     if (!(await until(() => running('Game') && scene('Game').hero, 15000))) {
       note('RESULT *** level 5 did not start ***'); return
     }
@@ -11616,7 +11875,7 @@ async function run() {
       const RS = await import('./js/systems/RunState.js')
       RS.setRunState({ levelId: LV })
       game.scene.stop('Game'); game.scene.stop('Hud')
-      game.scene.start('Game'); game.scene.start('Hud')
+      game.scene.start('Game')  // Hud comes up with it; see startRun
       await until(() => running('Game') && scene('Game').hero, 12000)
       await sleep(600)
     }

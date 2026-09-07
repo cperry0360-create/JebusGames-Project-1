@@ -39,6 +39,7 @@ import { dashArcs, HeroMarkers, type MarkersDef } from '../systems/HeroMarkers.t
 import {
   ART, applyRender, fitContentHeight, fitContentWidth, fitInRect, renderFor, soldierSprite,
 } from '../systems/Art.ts'
+import { queuePlate } from '../systems/ArtLoader.ts'
 import { EFFECT_MS, playEffect, sizeForRadius } from '../systems/Effects.ts'
 import { Cooldowns } from '../systems/Cooldowns.ts'
 import { unlockedTowerCount } from '../systems/Draft.ts'
@@ -227,6 +228,17 @@ const PAD_SQUASH = 0.62
  * the point of use for why the per-map value went.
  */
 const HERO_START: readonly [number, number] = [displayData.width / 2, displayData.height / 2]
+
+/**
+ * The near arch, cut out of the level's plate at run time.
+ *
+ * Named here rather than typed twice because it is now freed as well as made:
+ * it is a SLICE OF THE PLATE, so a cached copy that outlived its plate would
+ * be level 1's stonework drawn over level 3's road. The old code cached it
+ * under this key and never removed it, which was invisible only because
+ * nothing else freed anything either.
+ */
+const ARCH_NEAR_KEY = 'gen-arch-near'
 
 /** Live Spike Strips, with the art each one owns. See `tickHazards`. */
 interface LiveHazard { state: Hazard; art: HazardArt }
@@ -556,6 +568,50 @@ export class GameScene extends Phaser.Scene {
 
   constructor() {
     super('Game')
+  }
+
+  /**
+   * THE LEVEL'S PLATE, FETCHED HERE AND NOWHERE ELSE.
+   *
+   * Boot used to load all five with the rest of the manifest, which meant a
+   * phone on the title screen already held 134.5 MB of board art for levels
+   * nobody had picked, and 365.6 MB in total by the time it reached the world
+   * map — measured, not estimated; see reports/2026-09-07-the-crash.md. iOS
+   * Safari kills the web process rather than reporting that, which is the
+   * "A problem repeatedly occurred" the player sees.
+   *
+   * So one plate, for the level about to be played, and `shutdown` below frees
+   * it again. The cost is a load screen on the way in: a plate is about a
+   * megabyte and one decode, this game does not stream, and the file comes
+   * back out of the HTTP cache on every entry after the first.
+   *
+   * `loadLevel` is called again in `create()` rather than stashed here. The
+   * lookup is pure, and a field written in `preload` and read in `create` is a
+   * coupling between two lifecycle hooks that a restart would eventually get
+   * out of step.
+   */
+  preload(): void {
+    const level = loadLevel(runState().resumeFrom?.level ?? runState().levelId)
+    if (!queuePlate(this, ART.map[level.map.plate])) return
+
+    // Something on the glass while it lands, because `scene.start('Game')`
+    // has already stopped whatever the player was looking at and a silent
+    // black frame reads as the crash this change exists to fix. Destroyed on
+    // COMPLETE, so nothing here survives into `create()` and the two-camera
+    // rule is never in question.
+    const cam = this.cameras.main
+    const label = this.add.text(cam.centerX, cam.centerY, 'LOADING THE BOARD', {
+      fontFamily: FONT_UI, fontSize: '20px', color: COLOR.ink, letterSpacing: 2,
+    }).setOrigin(0.5)
+    const bar = this.add.rectangle(cam.centerX - 120, cam.centerY + 26, 0, 8, 0x6cc24a)
+      .setOrigin(0, 0.5)
+    const onProgress = (v: number): void => bar.setSize(240 * v, 8)
+    this.load.on(Phaser.Loader.Events.PROGRESS, onProgress)
+    this.load.once(Phaser.Loader.Events.COMPLETE, () => {
+      this.load.off(Phaser.Loader.Events.PROGRESS, onProgress)
+      label.destroy()
+      bar.destroy()
+    })
   }
 
   create(): void {
@@ -1053,7 +1109,29 @@ export class GameScene extends Phaser.Scene {
     this.events.once('shutdown', () => {
       setRunActive(false)
       provideState(null)
+      this.freePlate()
     })
+  }
+
+  /**
+   * Gives the level's plate back, and the arch crop taken out of it.
+   *
+   * THE HALF OF THE FIX THAT ACTUALLY RECLAIMS ANYTHING. Loading one plate
+   * instead of five is worth nothing if the four a session walks through are
+   * still resident at the end of it: nothing anywhere in `src/` called
+   * `TextureManager.remove` before this, so every texture a tab ever touched
+   * lived until the tab died — which on iOS Safari is what it did.
+   *
+   * Runs on shutdown, which Phaser fires after the display list has been torn
+   * down, so nothing on screen is holding the texture when it goes. `preload`
+   * fetches it again on the way back in, out of the HTTP cache.
+   */
+  private freePlate(): void {
+    // Defensive about `this.level`: shutdown can fire on a scene that threw on
+    // the way up, and failing to free memory must never become a second fault.
+    const key = this.level ? ART.map[this.level.map.plate] : undefined
+    if (key && this.textures.exists(key)) this.textures.remove(key)
+    if (this.textures.exists(ARCH_NEAR_KEY)) this.textures.remove(ARCH_NEAR_KEY)
   }
 
   // ---------------------------------------------------------------- setup
@@ -1462,7 +1540,7 @@ export class GameScene extends Phaser.Scene {
       w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys),
     }
 
-    const key = 'gen-arch-near'
+    const key = ARCH_NEAR_KEY
     if (!this.textures.exists(key)) {
       const sw = Math.round(box.w * perWorld)
       const sh = Math.round(box.h * perWorld)

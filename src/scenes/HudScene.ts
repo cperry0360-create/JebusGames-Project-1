@@ -458,10 +458,24 @@ export class HudScene extends Phaser.Scene {
     this.scene.resume('Game')
   }
 
+  /**
+   * RESTART, from the pause menu.
+   *
+   * THE HUD GOES DOWN AND THE BOARD PUTS IT BACK, rather than both restarting
+   * side by side. GameScene has a `preload` now — it fetches the level's plate
+   * on the way in, because holding all five for the life of the tab is the
+   * memory that was killing iOS Safari — so its `create()` is deferred behind
+   * the loader. Restarting this scene in the same breath ran the HUD's
+   * `create()` first, and the HUD is built out of GameScene's run state: the
+   * hand, the hero, the counters. There was no run yet, and it threw.
+   *
+   * `GameScene.create()` launches the HUD itself once it has a run to
+   * describe, which makes that the one ordering that cannot race.
+   */
   private restartRun(): void {
     this.scene.resume('Game')
+    this.scene.stop()
     this.scene.get('Game').scene.restart()
-    this.scene.restart()
   }
 
   /** Quitting throws the run away, so it asks first. */

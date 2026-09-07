@@ -90,6 +90,30 @@ export function hasTierArt(baseKey: string): boolean {
 export const SPRITE_KEYS = Object.keys(art.files)
 
 /**
+ * The map plates, by manifest key.
+ *
+ * THE ONLY ART THIS GAME LOADS PER LEVEL RATHER THAN ONCE AT BOOT, and the
+ * reason there is a list at all.
+ *
+ * Four of the five are 3840x2160. A WebP is small on disk and irrelevant in
+ * memory: the moment it is uploaded it is width x height x 4 bytes of RGBA, so
+ * each of those four is 31.6 MB and the set is 134.5 MB — held for the life of
+ * the tab, on a phone, to draw four boards nobody is playing. Measured at
+ * 365.6 MB total on the world map, which is where iOS Safari was killing the
+ * tab. See reports/2026-09-07-the-crash.md.
+ *
+ * `Object.values` rather than a hand-written list, so a sixth level is one row
+ * in `art.map` and nothing here.
+ */
+export const PLATE_KEYS: string[] = [...new Set(Object.values(art.map))]
+
+/** Whether this key is a map plate, and so loaded with a level and freed with
+ *  it rather than living at boot. */
+export function isPlateKey(key: string): boolean {
+  return PLATE_KEYS.includes(key)
+}
+
+/**
  * Keys whose file may legitimately not be there.
  *
  * A manifest hook is how new art is requested: the key and the path are agreed
@@ -110,16 +134,23 @@ export const SPRITE_KEYS = Object.keys(art.files)
 export const OPTIONAL_SPRITE_KEYS: string[] = (art as { optional?: string[] }).optional ?? []
 
 /**
- * Everything else: art the game cannot sensibly run without.
+ * Everything else BOOT LOADS: art the game cannot sensibly run without.
  *
- * Every map plate, every unit, every tower, every UI plate, every HUD icon.
- * A missing one is a real fault and says so loudly — but it still does not
- * stop the game, because a player looking at Phaser's magenta placeholder can
- * at least tell you what is wrong, and a player looking at a green screen
- * cannot.
+ * Every unit, every tower, every UI plate, every HUD icon. A missing one is a
+ * real fault and says so loudly — but it still does not stop the game, because
+ * a player looking at Phaser's magenta placeholder can at least tell you what
+ * is wrong, and a player looking at a green screen cannot.
+ *
+ * MAP PLATES ARE NOT ON THIS LIST, and that is not a downgrade of how required
+ * they are. It is that this list answers "did boot load everything it asked
+ * for", and boot does not ask for plates any more — one arrives with its level
+ * and is freed when that level ends. A plate on this list would be reported
+ * absent on every single boot, which is how a warning banner becomes
+ * wallpaper. GameScene owns the plate's own absence, on the one board it
+ * affects.
  */
 export const REQUIRED_SPRITE_KEYS = SPRITE_KEYS.filter(
-  (k) => !OPTIONAL_SPRITE_KEYS.includes(k),
+  (k) => !OPTIONAL_SPRITE_KEYS.includes(k) && !PLATE_KEYS.includes(k),
 )
 
 /** True when this key is allowed to be absent. */

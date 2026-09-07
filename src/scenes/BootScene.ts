@@ -56,6 +56,14 @@ export class BootScene extends Phaser.Scene {
     //
     // So: optional keys are a warning, required keys are an error and a
     // banner, and in both cases the game boots.
+    //
+    // NEITHER LIST NAMES A MAP PLATE any more, and that is deliberate rather
+    // than an oversight: boot stopped loading them, because five resident is
+    // 134.5 MB on a phone that has already spent the rest of its budget on
+    // everything else in the manifest. A plate arrives with its level and is
+    // freed when that level ends — see GameScene.preload — so reporting one
+    // missing here would be a false alarm on every single boot, which is how a
+    // banner becomes wallpaper. See REQUIRED_SPRITE_KEYS.
     const absent = (keys: string[]): string[] => keys.filter((k) => !this.textures.exists(k))
     const missingOptional = absent(OPTIONAL_SPRITE_KEYS)
     const missingRequired = absent(REQUIRED_SPRITE_KEYS)
