@@ -11,12 +11,13 @@ shares it with Level 5).
 | `5c83e70` | Merge `origin/main` (the level 8 art upload) | **green, run 194** |
 
 **Dependency check first.** The brief says to stop if Level 5 has not landed on
-`main`. **It has not.** Level 5 is on this branch, pushed and green, and `main`
-is still at `aa96a06`. The two-spawn/two-exit capability the brief depends on
-*exists* — `ec70fe2` on this branch — so nothing here re-implements pathing or
-leak handling. But it is not on `main`, and Level 6 cannot be finished until it
-is. What is built here is the half the brief itself says does not depend on the
-plate.
+`main`. **It has not.** Level 5 is on this branch, pushed and green; `main` is
+at `249c215` and carries only art uploads. The two-spawn/two-exit capability
+the brief depends on *exists* — `ec70fe2` on this branch — so nothing here
+re-implements pathing or leak handling, and the branch is a clean fast-forward
+so one merge lands both. But until that merge happens Level 6 cannot be
+finished, and what is built here is only the half the brief itself says does
+not depend on the plate.
 
 ---
 
