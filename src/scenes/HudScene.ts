@@ -19,6 +19,7 @@ import {
   type BarMetrics, type SlotDef, type SlotRegion,
 } from '../systems/AbilityBar.ts'
 import { SLOT2, heroSlotDefs, slot2Usable } from '../systems/HeroSkills.ts'
+import { difficultyName } from '../systems/Difficulty.ts'
 import { onSceneResize, sceneIsLive } from '../systems/SceneEvents.ts'
 import { fitUiCamera, viewH, viewW } from '../systems/Resolution.ts'
 import { enterGate, leaveGate, noteInputAccepted } from '../systems/InputGates.ts'
@@ -113,6 +114,9 @@ export class HudScene extends Phaser.Scene {
   private waveField = 999
   private bossBar!: Phaser.GameObjects.Graphics
   private bossLabel!: Phaser.GameObjects.Text
+  /** The run's difficulty, read off the run rather than off the save — see
+   *  `GameStatus.difficultyId`. */
+  private difficultyLabel!: Phaser.GameObjects.Text
   private startBtn!: PlateButton
   /** Public for the harness, which has to be able to put the HUD back into a
    *  known state between checks -- a modal reports the whole screen as chrome,
@@ -201,6 +205,22 @@ export class HudScene extends Phaser.Scene {
       fontFamily: FONT_UI, fontSize: '15px', color: COLOR.ink,
       fontStyle: 'bold', stroke: '#0d1016', strokeThickness: 4, letterSpacing: 1,
     }).setOrigin(0.5, 0.5)
+
+    // WHICH DIFFICULTY THIS RUN IS ON, at the left end of the second row.
+    //
+    // Small and dim on purpose: it is a fact about the run that never changes
+    // while the run is on, so it is there to be checked rather than watched.
+    // The boss bar shares this row and is CENTRED in it at a fixed 300px, so
+    // the two cannot meet on any viewport the game supports — the row is the
+    // full width less the margins, and the narrowest is 568.
+    // 15px, WHICH IS THE FLOOR AND NOT A PREFERENCE. It was set at 13 to read
+    // as quiet chrome; `typography.test.ts` refused it, and it is right to --
+    // a readout small enough to be ignored is a readout that cannot be read at
+    // arm's length on a phone. It is made quiet with COLOUR instead.
+    this.difficultyLabel = this.add.text(0, 0, '', {
+      fontFamily: FONT_UI, fontSize: '15px', color: COLOR.dim,
+      stroke: '#0d1016', strokeThickness: 3, letterSpacing: 1,
+    }).setOrigin(0, 0.5)
 
     // Bottom-left of the ability row: the hero's portrait, with his health on
     // it. See `buildHeroChip`.
@@ -627,6 +647,7 @@ export class HudScene extends Phaser.Scene {
     this.lastLives = s.lives
     this.setCounter(this.waveText, `${Math.min(s.wave + 1, s.waveCount)}/${s.waveCount}`, this.waveField)
     this.drawBossBar(s)
+    this.drawDifficulty(s)
     this.drawStartButton(s)
     this.drawSlots(s)
     this.drawHeroChip(s)
@@ -678,6 +699,21 @@ export class HudScene extends Phaser.Scene {
     }
     this.bossLabel.setText(s.bossName.toUpperCase())
     this.bossLabel.setPosition(x + w / 2, y + h / 2)
+  }
+
+  /**
+   * The run's difficulty, at the left end of the second row.
+   *
+   * READ OFF THE RUN, NOT OFF THE SAVE. `status.difficultyId` is captured on
+   * the frame the level is created and never re-read, so this shows what the
+   * run is actually being played on — where asking the save would show
+   * whatever the setting is now, which is a different thing the moment
+   * somebody changes it on the level select screen mid-run.
+   */
+  private drawDifficulty(s: GameScene['status']): void {
+    const region = this.layout.messageRow
+    this.difficultyLabel.setText(difficultyName(s.difficultyId).toUpperCase())
+    this.difficultyLabel.setPosition(region.x, region.y + region.height / 2)
   }
 
   /**

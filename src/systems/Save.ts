@@ -97,12 +97,27 @@ export interface SaveData {
    * Set would not survive `JSON.stringify` at all.
    */
   clearedLevels: string[]
+  /**
+   * The difficulty every run is played on.
+   *
+   * GLOBAL, NOT PER LEVEL. A per-level setting would mean a campaign played
+   * across three difficulties with no single answer to "how are you finding
+   * it", and it would have to be shown on every node of the world map to be
+   * honest about itself. One setting, changed on the level select screen,
+   * fixed for the length of a level once it has started.
+   *
+   * An empty string means the player has never chosen, and
+   * `resolveDifficultyId` turns that into the default -- which multiplies
+   * everything by 1, so a save from before this existed plays exactly the game
+   * it always did.
+   */
+  difficultyId: string
 }
 
 export const DEFAULT_SAVE: SaveData = {
   volume: 0.7, musicVolume: 1, voiceVolume: 1,
   muted: false, runsCleared: 0, bannerPoints: 0, lastReport: '',
-  controlDrawer: false, heroId: '', clearedLevels: [],
+  controlDrawer: false, heroId: '', clearedLevels: [], difficultyId: '',
 }
 
 /** localStorage is small and shared; a report is truncated rather than
@@ -202,6 +217,10 @@ export function loadSave(): SaveData {
       // what an unknown id means.
       heroId: typeof parsed.heroId === 'string' ? parsed.heroId : '',
       clearedLevels: clearedFrom(parsed),
+      // Validated as a string and no further, like `heroId`: an id that is not
+      // a mode resolves to the default at the point of use rather than being
+      // repaired here.
+      difficultyId: typeof parsed.difficultyId === 'string' ? parsed.difficultyId : '',
     }
   } catch {
     // Unreadable, unparseable or unavailable: start fresh rather than fail.
@@ -244,6 +263,24 @@ export function recordRunCleared(levelId?: string): void {
 /** The levels beaten so far, in the order they were first beaten. */
 export function clearedLevels(): string[] {
   return loadSave().clearedLevels
+}
+
+/**
+ * The chosen difficulty, or '' if the player has never picked one.
+ *
+ * Deliberately NOT resolved here. This module must not import Difficulty --
+ * it is read by everything and a save that could not load because a
+ * difficulty file was malformed would be a game that could not boot -- and
+ * resolving in one place at the point of use is the rule `heroId` already
+ * follows.
+ */
+export function savedDifficulty(): string {
+  return loadSave().difficultyId
+}
+
+/** Remembers the difficulty. Every other field is preserved. */
+export function setDifficulty(id: string): void {
+  writeSave({ ...loadSave(), difficultyId: id })
 }
 
 /** Banks a run's Banner Points and returns the new lifetime total, which is

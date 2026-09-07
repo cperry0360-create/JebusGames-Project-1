@@ -4,6 +4,104 @@ Newest first.
 
 ---
 
+## 2026-09-07 — the three difficulty modes, sanity-checked
+
+### What changed
+
+`simulate()` takes a difficulty id now — `simulate(seed, mode, levelId, heroFor,
+difficultyId)`, defaulting to `normal` — and `tools/soak/level.ts` takes it as a
+fourth argument:
+
+```
+node --experimental-strip-types tools/soak/level.ts 120 level2 try-hard
+```
+
+It imports `src/systems/Difficulty.ts`, the same module the game reads, rather
+than carrying its own copy of the multipliers. A soak with its own copy is a
+soak that can report on a game that does not exist.
+
+### `normal` is a no-op, measured as well as asserted
+
+Every number in the 2026-09-06 table below reproduced EXACTLY on `normal` after
+the change — 95, 25, 90 and 63 wins out of 120, seed for seed:
+
+| level | 2026-09-06 baseline | on `normal` after difficulty landed |
+|---|---|---|
+| level 1 | 95/120 (79%) | 95/120 (79%) |
+| level 2 | 25/120 (21%) | 25/120 (21%) |
+| level 3 | 90/120 (75%) | 90/120 (75%) |
+| level 4 | 63/120 (53%) | 63/120 (53%) |
+
+`tests/difficulty.test.ts` asserts the same identity against `rules.json`
+directly, so a multiplier that stopped being exactly 1 would fail the build
+rather than quietly invalidating this table.
+
+### The sanity pass, 120 seeds per level per mode
+
+**Nothing was retuned to hit a number on the non-normal modes.** The published
+win rates and the 35–45% band are statements about `normal`; these two columns
+exist to answer "is casual trivial" and "is hardcore impossible", and the
+answer to both is no.
+
+| level | lazy-dad | normal | try-hard |
+|---|---|---|---|
+| level 1 | 86/120 (72%) | 95/120 (79%) | 94/120 (78%) |
+| level 2 | 26/120 (22%) | 25/120 (21%) | 25/120 (21%) |
+| level 3 | 88/120 (73%) | 90/120 (75%) | 84/120 (70%) |
+| level 4 | 63/120 (53%) | 63/120 (53%) | 63/120 (53%) |
+
+### Reading that table honestly
+
+**The win rate is very nearly flat across all three modes, and that is the
+finding, not a bug.** Lives and starting money were chosen precisely because
+they do not change which towers work — and the simulator's losses are decided
+by whether the drafted set can hold wave 6 and wave 12, not by how much buffer
+was in front of it. Where the modes separate is in how far a losing run gets
+and how much slack a winning one had, and there they separate exactly as much
+as the multipliers say. Level 4, same 120 seeds:
+
+| mode | lost after wave | average lives left on a win |
+|---|---|---|
+| lazy-dad | w8×2 w9×7 w10×12 w11×7 w12×29 | 38.9 |
+| normal | w6×35 w8×1 w11×1 w12×20 | 18.5 |
+| try-hard | w6×38 w7×2 w11×3 w12×14 | 8.5 |
+
+Lazy Dad Mode loses no run before wave 8 where normal loses 35 before wave 7,
+and finishes with more than twice normal's cushion. Try Hard finishes with
+under half of it. That is what the setting is for.
+
+Two of these numbers are worth stating plainly rather than leaving to be
+noticed:
+
+- **Lazy Dad Mode is one run WORSE than normal on level 1** (86 vs 95). It has
+  a fatter purse, which changes what the drafting player can afford on turn
+  one, which changes every decision after it — so a lazy-dad run and a normal
+  run on the same seed are different runs, not the same run with a bigger
+  buffer. A per-seed comparison across modes is not meaningful and no
+  conclusion here rests on one.
+- **Level 4's 63 wins is identical in all three columns.** It is a coincidence
+  of the aggregate and not a sign the difficulty is inert: the loss
+  distributions above are from those same runs and are nothing alike.
+
+### What the modes do NOT change
+
+Starting lives and starting peanuts. That is the whole list, and
+`tests/difficulty.test.ts` fails the build if a third knob appears in
+`difficulty.json`. Enemy HP, damage, armour and wave timing are untouched on
+purpose — scaling armour would make the Grinder better and the Slingshot nearly
+useless rather than making the level harder, and it would mean re-soaking and
+re-tuning every level three times instead of once. The reasoning is in
+`src/data/difficulty.json` under `_whatTheyChange`.
+
+One consequence worth knowing while reading Try Hard's column: its 0.75 purse
+multiplier is **largely absorbed on wave 1**. `Economy.openingPurse` floors the
+opening purse at whatever the cheapest drafted tower costs plus the margin, and
+it is applied after the multiplier — so Try Hard's opening comes out at the
+same 104 peanuts normal does on the levels measured here. The mode's teeth are
+in its half-lives, and the loss distribution above is where to see them.
+
+---
+
 ## 2026-09-06 — the support aura, modelled, and every level re-baselined
 
 ### What changed

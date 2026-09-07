@@ -36,12 +36,16 @@ import {
   ROAD, maxScroll, nodeState, roadNodes, roadWidth, scrollToNode,
   type NodeState, type RoadNode,
 } from '../systems/WorldRoad.ts'
-import { loadSave } from '../systems/Save.ts'
+import { loadSave, setDifficulty } from '../systems/Save.ts'
 import { clearRun, loadRun } from '../systems/RunSave.ts'
 import { setRunState } from '../systems/RunState.ts'
 import { ART, icon } from '../systems/Art.ts'
 import { COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { plateButton } from '../ui/Plate.ts'
+import { Dialog } from '../ui/Dialog.ts'
+import {
+  DIFFICULTIES, difficultyName, resolveDifficultyId,
+} from '../systems/Difficulty.ts'
 import { fitCameraToDesign, DESIGN_WIDTH, DESIGN_HEIGHT } from '../ui/FitCamera.ts'
 import { musicForScene } from '../systems/Music.ts'
 import { logEvent } from '../systems/Diagnostics.ts'
@@ -527,6 +531,77 @@ export class WorldMapScene extends Phaser.Scene {
       plateButton(this, WORLD_W / 2, y, 200, 54, 'BACK',
         () => this.scene.start('Title'), 22, 'secondary')
     }
+
+    this.drawDifficultyChip()
+  }
+
+  /**
+   * The difficulty, shown and changed HERE.
+   *
+   * THIS SCREEN AND NOWHERE ELSE, which is what makes "it cannot be changed
+   * once a level has started" true. GameScene reads the setting once, on the
+   * frame the level is created, and never asks again — so the rule is a
+   * property of when the value is captured rather than a flag anybody has to
+   * remember to check.
+   *
+   * A CHIP THAT OPENS A PANEL rather than three buttons in a row. Three
+   * 200px buttons want 624px of the bottom row and the row already holds BACK
+   * and, when there is a run to pick up, RESUME. The panel also has room for
+   * each mode's one-line description, which a segmented control does not —
+   * and "what does Lazy Dad Mode actually do" is the question a player has at
+   * exactly this moment.
+   */
+  private drawDifficultyChip(): void {
+    // TOP RIGHT, ON THE TITLE'S LINE, and not in the bottom row with BACK.
+    //
+    // The bottom row already holds BACK and, when there is a run to pick up,
+    // RESUME — 280px and 200px of a 1280px design box, centred. A chip beside
+    // them fits until the day a level name or a third button grows, and the
+    // caption over it would land on the scrollbar at y 610 whatever height it
+    // was set at. The title is centred and about 560px wide, so everything
+    // past x 940 is empty on every screen.
+    const id = resolveDifficultyId(loadSave().difficultyId)
+    this.add.text(1120, 26, 'DIFFICULTY', {
+      // 22px: this screen is composed against the design box and fitted, so
+      // it is held to the menu floor rather than the screen-space one.
+      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.dim,
+      stroke: '#0d1016', strokeThickness: 4, letterSpacing: 1,
+    }).setOrigin(0.5).setDepth(10)
+    plateButton(this, 1120, 68, 280, 48, difficultyName(id).toUpperCase(),
+      () => this.pickDifficulty(), 20, 'secondary')
+  }
+
+  private pickDifficulty(): void {
+    const current = resolveDifficultyId(loadSave().difficultyId)
+    // IN DESIGN-BOX UNITS, NOT CSS PIXELS. This scene's camera is fitted by
+    // `fitCameraToDesign`, so its world units are the 1280x720 box — the same
+    // units the chip above is placed in. Handing the dialog `viewW`/`viewH`
+    // here would centre it on (422, 195) of the box on an 844x390 phone, which
+    // is up and to the left of centre with the scrim short of two edges.
+    new Dialog(this, WORLD_W / 2, WORLD_H / 2, 900, {
+      space: { width: WORLD_W, height: WORLD_H },
+      title: 'DIFFICULTY',
+      subtitle: 'Changes lives and starting peanuts. The enemies are the same on all three.',
+      choices: DIFFICULTIES.map((d) => ({
+        name: d.name,
+        lines: [
+          `Lives ×${d.livesMultiplier}`,
+          `Starting peanuts ×${d.peanutsMultiplier}`,
+        ],
+        cost: d.blurb,
+        takes: '',
+        label: d.id === current ? 'CURRENT' : 'CHOOSE',
+        onPick: () => {
+          setDifficulty(d.id)
+          // Redrawn rather than patched: the chip's label, and nothing else on
+          // this screen, depends on the setting. Restarting the scene is the
+          // one way to be sure the two agree.
+          this.scene.restart()
+        },
+      })),
+      cancelLabel: 'CLOSE',
+      dim: 0.6,
+    })
   }
 
   /** Begins a run on a level the player has actually unlocked. */

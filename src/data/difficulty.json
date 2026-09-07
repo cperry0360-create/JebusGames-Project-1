@@ -1,0 +1,33 @@
+{
+  "_note": "THE THREE DIFFICULTY SETTINGS. Global, chosen on the level select screen, remembered in the save, and fixed for the length of a level once it has started. Every number the game reads is here; nothing about difficulty is hardcoded.",
+  "_whatTheyChange": "STARTING LIVES AND STARTING PEANUTS. THAT IS THE WHOLE LIST, and it is a deliberate limit rather than a first pass that ran out of time.\nScaling enemy HP, enemy damage, armour or wave timing would change WHICH TOWERS ARE VIABLE. Armour is the clearest case: the Grinder ignores it and the Slingshot cuts it, so a difficulty that raised armour by 30% would not make the level 30% harder -- it would make one tower better and another nearly useless, and the draft would decide the run before the player did. The same is true of wave timing against the towers whose value is their fire rate.\nAnd it would force every level to be soaked and tuned THREE TIMES. There is one set of win rates per level, tuned to a 35-45% band; three sets of enemy stats means three sets of numbers to keep in that band, and a retune of one level's waves would have to be re-validated against all three.\nLives and starting money change how much a mistake costs and how quickly the board gets going. Neither touches the relationship between a tower and the thing it shoots, so a level tuned on normal stays tuned.",
+  "_normalIsANoOp": "`normal` MULTIPLIES BY 1 AND MUST CONTINUE TO. Every soak number in SOAK-REPORT.md, every per-level win rate and the whole 35-45% target band were measured against rules.json's shipped values, and they stay valid only while the default difficulty changes nothing at all. tests/difficulty.test.ts asserts it against rules.json directly rather than against a copy, so a change to either file that breaks the identity fails the build.",
+  "_ordering": "The list order is the order the selector draws them in, easiest first. The selector reads this array; it does not carry its own list.",
+  "default": "normal",
+  "modes": [
+    {
+      "id": "lazy-dad",
+      "name": "Lazy Dad Mode",
+      "blurb": "Twice the lives and a fatter purse. Nothing on the board hits any softer.",
+      "livesMultiplier": 2.0,
+      "peanutsMultiplier": 1.5
+    },
+    {
+      "id": "normal",
+      "name": "Yeah, I Game",
+      "blurb": "The game as it was tuned. Every published win rate is this one.",
+      "livesMultiplier": 1.0,
+      "peanutsMultiplier": 1.0
+    },
+    {
+      "id": "try-hard",
+      "name": "Try Hard",
+      "blurb": "Half the lives, a thin purse, and the same enemies. Leaks are what kill you.",
+      "livesMultiplier": 0.5,
+      "peanutsMultiplier": 0.75
+    }
+  ],
+  "_rounding": "Lives ROUND and floor at 1; peanuts ROUND and floor at 0. A difficulty that could hand out zero lives would end the run on the first leak before the player had done anything, which is not a difficulty setting, it is a broken level. The floor is in Difficulty.ts so both the game and the soak get the same number from the same function.",
+  "minLives": 1,
+  "_startingPeanutsFloor": "THE PURSE FLOOR IS NOT HERE and must not be. `Economy.openingPurse` already guarantees the opening purse covers the cheapest tower this run actually drew -- that is what `startingPeanutsMargin` is for -- and it is applied AFTER the multiplier. So Try Hard's 0.75 makes the opening slower without ever making the first instruction in the game impossible to follow, and a second floor here would fight the one that already works."
+}

@@ -3,6 +3,7 @@ import { platePanel, plateButton } from './Plate.ts'
 import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from './Theme.ts'
 import { play } from '../systems/Audio.ts'
 import { viewH, viewW } from '../systems/Resolution.ts'
+import { tapFloor } from '../systems/Layout.ts'
 
 /**
  * A modal panel on the dialog plate.
@@ -96,6 +97,22 @@ export interface DialogOptions {
    * tap either way.
    */
   dismissable?: boolean
+  /**
+   * The box the panel is centred in and scaled to fit, IN THE SCENE'S OWN
+   * UNITS.
+   *
+   * Defaults to the CSS viewport, which is the right answer for every scene
+   * that renders screen space 1:1 — the HUD, and GameScene's own panels, which
+   * are handed to the UI camera by `asScreenSpace`.
+   *
+   * A scene whose camera is fitted to the design box by `fitCameraToDesign` is
+   * NOT one of those. Its units are design-box units, so `viewW` would hand it
+   * the CSS width — 844 on a phone in landscape — and the panel would land up
+   * and to the left of centre by however much the fit had scaled by, with a
+   * scrim that stopped short of two edges. The level select screen is the
+   * first menu of that kind to open a dialog; it passes the design box.
+   */
+  space?: { width: number; height: number }
 }
 
 const ROW_H = 26
@@ -130,6 +147,9 @@ export class Dialog {
   constructor(scene: Phaser.Scene, x: number, y: number, depth: number, opts: DialogOptions) {
     this.scene = scene
     const w = opts.width ?? 580
+    // The space the panel has, in whatever units this scene draws in. See
+    // `DialogOptions.space`.
+    const space = opts.space ?? { width: viewW(scene), height: viewH(scene) }
 
     // Swallows every tap that is not on the dialog itself, and dismisses on
     // one. A panel that only its own button can close is a trap over a live
@@ -143,8 +163,8 @@ export class Dialog {
     // fault, same fix as ScratchCard's. Measured by corner luminance, which is
     // what tests/scrim.test.ts and the harness scenario "scrim" now assert.
     this.blocker = scene.add
-      .rectangle(viewW(scene) / 2, viewH(scene) / 2,
-        viewW(scene) * 1.5, viewH(scene) * 1.5, 0x000000, opts.dim ?? 0.45)
+      .rectangle(space.width / 2, space.height / 2,
+        space.width * 1.5, space.height * 1.5, 0x000000, opts.dim ?? 0.45)
       .setOrigin(0.5)
       .setInteractive()
     if (opts.dismissable !== false) this.blocker.on('pointerdown', () => this.close())
@@ -260,13 +280,23 @@ export class Dialog {
         picks.push({ x: cx, y: 0, w: colW - CARD_PAD * 2, c })
       })
 
-      const cardH = tallest + CHOICE_BTN_H + CARD_PAD
+      // THE HEIGHT THE BUTTON WILL ACTUALLY DRAW AT, not the height it is
+      // authored at. `plateButton` puts every control through `tapFloor`, and
+      // on a scene whose camera is fitted to the design box that grows a
+      // 44-unit button to about 81 so it lands at 44 CSS pixels on a phone.
+      // The card reserved 44, the plate drew 81, and its top ate the last line
+      // of the card's flavour text -- measured on the level select's
+      // difficulty panel at 844x390, where "any softer." disappeared under
+      // CHOOSE. Asking `tapFloor` the same question `plateButton` will ask
+      // means the two cannot disagree.
+      const btnH = tapFloor(scene, CHOICE_BTN_H)
+      const cardH = tallest + btnH + CARD_PAD
       // Origin re-set after the resize: a shape recomputes its display origin
       // from its size, so setting it before would leave the card half a card
       // out of place.
       cards.forEach((card) => card.setSize(colW, cardH).setOrigin(0.5, 0))
       // Buttons on one line across both cards, inside the card they belong to.
-      for (const p of picks) p.y = ty + tallest + CHOICE_BTN_H / 2
+      for (const p of picks) p.y = ty + tallest + btnH / 2
       ty += cardH + 14
     }
 
@@ -342,7 +372,7 @@ export class Dialog {
     // rows is taller than that, and a panel that runs off the screen takes its
     // buttons with it — which on the results screen would be a dead end. So
     // the whole panel is scaled to fit rather than trusted to be short enough.
-    this.fit = Math.min(1, (viewH(scene) - MARGIN) / h, (viewW(scene) - MARGIN) / w)
+    this.fit = Math.min(1, (space.height - MARGIN) / h, (space.width - MARGIN) / w)
     this.layer.setScale(this.fit * 0.86)
     scene.tweens.add({
       targets: this.layer, scale: this.fit, duration: 170, ease: 'Back.easeOut',

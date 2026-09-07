@@ -17,6 +17,10 @@ import abilitiesData from '../data/abilities.json'
 import draftData from '../data/draft.json'
 
 import { loadLevel, nextLevelId, type Level } from '../systems/Levels.ts'
+import {
+  DEFAULT_DIFFICULTY_ID, difficultyName, resolveDifficultyId,
+  startingLives, startingPeanuts,
+} from '../systems/Difficulty.ts'
 import { LaneNetwork } from '../systems/Lanes.ts'
 import { Path } from '../systems/Path.ts'
 import { BuildSystem } from '../systems/BuildSystem.ts'
@@ -63,7 +67,7 @@ import {
 } from '../systems/Upgrades.ts'
 import { openingPurse } from '../systems/Economy.ts'
 import {
-  addBannerPoints, controlDrawerOn, hasClearedARun, recordRunCleared,
+  addBannerPoints, controlDrawerOn, hasClearedARun, recordRunCleared, savedDifficulty,
 } from '../systems/Save.ts'
 import { bannerPointsFor, verdictFor, type RunOutcome } from '../systems/Banner.ts'
 import { waveOutcome } from '../systems/Wave.ts'
@@ -156,6 +160,24 @@ export interface GameStatus {
   heroMarks: number[]
   /** Seconds until the next wave starts by itself. 0 when nothing is counting. */
   readyCountdown: number
+  /**
+   * The difficulty this run is being played on, CAPTURED AT THE START.
+   *
+   * Read from the save once, in `create`, and never re-read. That is what
+   * makes "it cannot be changed once a level has started" true rather than
+   * merely unoffered: a HUD or an end screen that asked the save would show
+   * whatever the setting is NOW, and a player who changed it in another tab --
+   * or, less exotically, on the level select screen after a run was saved and
+   * resumed -- would be shown a number their run was not played on.
+   *
+   * The starting lives and purse are derived from this same value on the same
+   * frame, so the readout and the rules can never disagree.
+   */
+  difficultyId: string
+  /** Lives this run STARTED with, which is not `RULES.startingLives` any more.
+   *  The results screen shows "17 of N" and the cake thresholds are a fraction
+   *  of it, so the run has to remember its own N. */
+  startingLives: number
   /** Run totals, for the results screen. Kills counts enemies killed by any
    *  means; earned counts peanuts taken in, not peanuts recovered by selling. */
   kills: number
@@ -211,6 +233,7 @@ export class GameScene extends Phaser.Scene {
     lastStand: false,
     unlockedTowers: [], abilities: [], rareAbility: null, pendingAbility: null,
     readyCountdown: 0, heroMarks: [],
+    difficultyId: DEFAULT_DIFFICULTY_ID, startingLives: 0,
     kills: 0, peanutsEarned: 0,
     alert: '',
     bossName: '', bossHealth: 0, bossMax: 0,
@@ -672,14 +695,23 @@ export class GameScene extends Phaser.Scene {
       logEvent('hero-power', `${heroDef.slot2.name} ready: ${heroDef.name} powered up`)
     })
 
+    // THE DIFFICULTY, READ ONCE. Everything below derives from this rather
+    // than from the save, so the run cannot change under the player: the
+    // setting is fixed for the length of a level by the simple fact that
+    // nothing asks again.
+    this.status.difficultyId = resolveDifficultyId(savedDifficulty())
+
     // A floor rather than a constant: the opening instruction is to build a
-    // tower, so the purse has to cover the cheapest one this run actually drew.
+    // tower, so the purse has to cover the cheapest one this run actually
+    // drew. The difficulty scales the BASE and the floor is applied after, so
+    // a thin purse never makes the game's first instruction impossible.
     this.setPeanuts(openingPurse(
-      RULES.startingPeanuts,
+      startingPeanuts(RULES.startingPeanuts, this.status.difficultyId),
       RULES.startingPeanutsMargin,
       run.openingTowers.map((id) => TOWERS[id].cost),
     ))
-    this.status.lives = RULES.startingLives
+    this.status.startingLives = startingLives(RULES.startingLives, this.status.difficultyId)
+    this.status.lives = this.status.startingLives
     this.status.wave = 0
     this.status.kills = 0
     this.status.peanutsEarned = 0
@@ -3870,7 +3902,7 @@ export class GameScene extends Phaser.Scene {
       wavesReached: this.status.wave,
       cleared: won,
       livesRemaining: this.status.lives,
-      maxLives: RULES.startingLives,
+      maxLives: this.status.startingLives,
     }
     const earned = bannerPointsFor(outcome, RULES.banner)
     const total = addBannerPoints(earned)
@@ -3895,7 +3927,8 @@ export class GameScene extends Phaser.Scene {
       headline: { value: `+${earned}`, label: 'BANNER POINTS EARNED' },
       rows: [
         { label: 'Waves survived', value: `${this.status.wave} of ${this.status.waveCount}` },
-        { label: 'Lives remaining', value: `${this.status.lives} of ${RULES.startingLives}` },
+        { label: 'Lives remaining', value: `${this.status.lives} of ${this.status.startingLives}` },
+        { label: 'Difficulty', value: difficultyName(this.status.difficultyId) },
         { label: 'Kills', value: `${this.status.kills}` },
         { label: 'Peanuts earned', value: `${this.status.peanutsEarned}` },
         { label: 'Banner Points, all runs', value: `${total}`, accent: true },

@@ -87,8 +87,14 @@ test('the run-end screen is on the screen it appears on, and cannot be left behi
 
   // A phone in landscape can be 320px tall and a results panel is taller than
   // that. A panel that runs off the screen takes its buttons with it.
-  assert.match(dialog, /Math\.min\(1, \(viewH\(scene\) - MARGIN\) \/ h/,
-    'a dialog taller than the viewport is not scaled to fit')
+  assert.match(dialog, /Math\.min\(1, \(space\.height - MARGIN\) \/ h/,
+    'a dialog taller than the space it is opened in is not scaled to fit')
+  // And that space is the live viewport unless the caller says otherwise. The
+  // exception is a scene whose camera is fitted to the design box — the level
+  // select screen — where CSS pixels are not the units the scene draws in and
+  // a panel composed in them lands up and to the left of centre.
+  assert.match(dialog, /const space = opts\.space \?\? \{ width: viewW\(scene\), height: viewH\(scene\) \}/,
+    'a dialog no longer defaults to the live viewport')
   // `by` rather than `btnY`: the row wraps at two buttons now, so the y a
   // button is drawn at is its ROW's y. The height is what this is about and it
   // is unchanged.

@@ -61,6 +61,9 @@ import presentationData from '../../src/data/presentation.json' with { type: 'js
 import draftData from '../../src/data/draft.json' with { type: 'json' }
 
 import { DEFAULT_LEVEL_ID, loadLevel, towerWeightsFor } from '../../src/systems/Levels.ts'
+import {
+  DEFAULT_DIFFICULTY_ID, startingLives, startingPeanuts,
+} from '../../src/systems/Difficulty.ts'
 import { DEFAULT_HERO_ID, HERO_IDS, resolveHeroId } from '../../src/systems/Heroes.ts'
 import { SLOT1, isAreaSkill } from '../../src/systems/HeroSkills.ts'
 import {
@@ -224,6 +227,21 @@ export type SoakMode = 'normal' | 'nobuild' | 'supportonly' | 'noabilities'
 export function simulate(
   seed: number, mode: SoakMode = 'normal', levelId: string = DEFAULT_LEVEL_ID,
   heroFor?: string,
+  /**
+   * The DIFFICULTY, which changes starting lives and starting peanuts and
+   * nothing else.
+   *
+   * Defaults to `normal`, which multiplies both by 1 — so every existing
+   * caller, every published win rate and the whole 35-45% target band are
+   * unaffected by this parameter existing. TUNING IS DONE AGAINST NORMAL AND
+   * ONLY NORMAL; the other two are run as a sanity check that casual is not
+   * trivial and hardcore is not impossible, and nothing is retuned to hit a
+   * number on either.
+   *
+   * It reads the game's own `Difficulty` module rather than its own copy of
+   * the multipliers, so a soak cannot report on a game that does not exist.
+   */
+  difficultyId: string = DEFAULT_DIFFICULTY_ID,
 ): SoakResult {
   // The level is a parameter now rather than two module-scope imports, so a
   // soak can be pointed at level 2. Everything below reads these two and does
@@ -302,12 +320,16 @@ export function simulate(
   for (const id of draftedAbilities) cooldowns.register(id, ABILITIES[id].cooldown)
   cooldowns.register(SLOT1, hero.slot1.cooldown)
 
+  // The same two calls the scene makes, in the same order: the difficulty
+  // scales the base and the opening-purse floor is applied to the result, so
+  // a thin purse never makes the first tower unaffordable.
   let peanuts = openingPurse(
-    RULES.startingPeanuts, RULES.startingPeanutsMargin,
+    startingPeanuts(RULES.startingPeanuts, difficultyId), RULES.startingPeanutsMargin,
     opening.map((id) => TOWERS[id].cost),
   )
   let peanutsEarned = 0
-  let lives = RULES.startingLives
+  const livesAtStart = startingLives(RULES.startingLives, difficultyId)
+  let lives = livesAtStart
   /** 1-based wave on which the first life was lost, or -1 if none ever was. */
   let firstLifeLostWave = -1
   let kills = 0
@@ -1065,7 +1087,7 @@ export function simulate(
   // deliberately crippled, so "it had money and did not build" is what they
   // are FOR rather than something to report.
   if (mode === 'normal'
-      && lives < RULES.startingLives
+      && lives < livesAtStart
       && peanuts >= Math.min(...Object.values(TOWERS).map((t: any) => t.cost))
       && build.spots.some((s) => build.isFree(s.index))) {
     note('idle-money', `lost lives with ${peanuts} unspent and a free pad`)
@@ -1073,7 +1095,7 @@ export function simulate(
 
   const wavesReached = Math.min(waveIndex + (outcome === 'won' ? 1 : 0), WAVES.length)
   bannerPoints = bannerPointsFor(
-    { wavesReached, cleared: outcome === 'won', livesRemaining: Math.max(0, lives), maxLives: RULES.startingLives },
+    { wavesReached, cleared: outcome === 'won', livesRemaining: Math.max(0, lives), maxLives: livesAtStart },
     RULES.banner,
   )
 

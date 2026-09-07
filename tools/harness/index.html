@@ -560,6 +560,220 @@ async function run() {
     return
   }
 
+  if (scenario === 'difficulty') {
+    // THE SETTING, ON THE ONE SCREEN THAT MAY CHANGE IT AND IN THE TWO PLACES
+    // THAT MAY ONLY SHOW IT.
+    //
+    // Three things are under test and they are three different claims:
+    //   1. the level select screen shows the current mode and can change it;
+    //   2. the in-level HUD shows what the RUN is on, not what the save says;
+    //   3. the end screens name it too.
+    // (2) is the one worth driving rather than reading: the rule "it cannot be
+    // changed once a level has started" is a property of WHEN the value is
+    // captured, so the only honest way to check it is to change the save
+    // mid-run and watch the HUD not move.
+    const SAVE = await import('./js/systems/Save.js')
+    const DIFF = await import('./js/systems/Difficulty.js')
+    const RESM = await import('./js/systems/Resolution.js')
+    const RULES = (await import('./js/data/rules.json', { with: { type: 'json' } })).default
+    let faults = 0
+    const fail = (m) => { faults++; note('   *** ' + m) }
+    note('viewport ' + VP.w + 'x' + VP.h + '  dpr=' + RESM.deviceScale())
+
+    // Every visible text in a scene, in CSS pixels, through the scene's own
+    // camera — the level select screen is FITTED, so its own coordinates are
+    // design-box units and reading x/y off the object would measure a screen
+    // nobody sees.
+    const textsUnder = (key, roots) => {
+      const sc = scene(key)
+      if (!sc || !running(key)) return []
+      const cam = sc.cameras.main
+      const out = []
+      const visit = (o) => {
+        if (o.visible === false || (o.alpha ?? 1) <= 0.02) return
+        if (o.text !== undefined && String(o.text).trim() !== '') {
+          const b = o.getBounds()
+          const tl = RESM.worldToScreen(sc, b.left, b.top, cam)
+          const br = RESM.worldToScreen(sc, b.right, b.bottom, cam)
+          out.push({
+            label: String(o.text), l: Math.round(tl.x), t: Math.round(tl.y),
+            r: Math.round(br.x), b: Math.round(br.y),
+            x: Math.round((tl.x + br.x) / 2), y: Math.round((tl.y + br.y) / 2),
+          })
+        }
+        if (o.list) o.list.forEach(visit)
+      }
+      ;(roots ?? sc.children.list).forEach(visit)
+      return out
+    }
+    const textsIn = (key) => textsUnder(key, null)
+    // The open dialog's own layer, so the panel is measured on its own rather
+    // than against every word on the screen behind it. THE ROAD IS THREE
+    // SCREENS LONG: half its nodes are legitimately off the viewport at any
+    // scroll, and an "everything is on screen" check run over the whole scene
+    // reports twenty-six faults that are all the map doing its job.
+    const dialogLayer = () => (scene('WorldMap')?.children.list ?? [])
+      .filter((o) => o.type === 'Container' && o.depth === 900)
+    const onScreen = (t) => t.l >= -1 && t.t >= -1 && t.r <= VP.w + 1 && t.b <= VP.h + 1
+
+    /* ---------------------------------------- 1. the chip on the level select */
+
+    SAVE.setDifficulty('normal')
+    scene('Title').scene.start('WorldMap')
+    if (!(await until(() => running('WorldMap'), 8000))) {
+      note('*** the level select screen did not build ***')
+      return
+    }
+    await sleep(600)
+    await shot('difficulty-1-map-' + VP.w + 'x' + VP.h)
+
+    const chipOf = () => textsIn('WorldMap').find(
+      (t) => DIFF.DIFFICULTIES.some((d) => d.name.toUpperCase() === t.label))
+    const caption = textsIn('WorldMap').find((t) => t.label === 'DIFFICULTY')
+    let chip = chipOf()
+    note('caption: ' + JSON.stringify(caption))
+    note('chip:    ' + JSON.stringify(chip))
+    if (!caption) fail('the level select screen does not say what the chip is')
+    if (!chip) fail('the level select screen does not show the current difficulty')
+    if (chip && chip.label !== DIFF.difficultyName('normal').toUpperCase()) {
+      fail('the chip reads ' + chip.label + ', not the saved mode')
+    }
+    for (const t of [caption, chip]) {
+      if (t && !onScreen(t)) fail(t.label + ' is off screen at ' + JSON.stringify(t))
+    }
+    // AND NOT ON TOP OF THE TITLE. The chip was moved out of the bottom row
+    // onto the title's line, so this is the collision that move could cause.
+    const title = textsIn('WorldMap').find((t) => /CHOOSE YOUR BATTLE/.test(t.label))
+    if (title && chip && title.r > chip.l - 2 && title.t < chip.b - 2 && chip.t < title.b - 2) {
+      fail('the chip lies across the title: title ' + JSON.stringify(title)
+        + ' chip ' + JSON.stringify(chip))
+    }
+
+    /* ------------------------------------------------------ 2. the selector */
+
+    await click(chip.x, chip.y)
+    await sleep(700)
+    await shot('difficulty-2-panel-' + VP.w + 'x' + VP.h)
+    const layer = dialogLayer()
+    const panel = textsUnder('WorldMap', layer)
+    const labels = panel.map((t) => t.label)
+    note('panel (' + layer.length + ' layer): ' + JSON.stringify(labels))
+    if (layer.length !== 1) fail('the chip did not open exactly one panel')
+    for (const d of DIFF.DIFFICULTIES) {
+      if (!labels.includes(d.name.toUpperCase())) fail('the panel does not offer ' + d.name)
+    }
+    if (!labels.includes('CURRENT')) fail('the panel does not say which mode is on')
+    if (labels.filter((l) => l === 'CHOOSE').length !== DIFF.DIFFICULTIES.length - 1) {
+      fail('the panel does not offer exactly one CHOOSE per mode that is not current')
+    }
+    // EVERY WORD OF IT ON SCREEN. A panel opened on a fitted-camera screen is
+    // the exact case that lands off-centre if it is composed in CSS pixels.
+    for (const t of panel) if (!onScreen(t)) fail('panel text off screen: ' + JSON.stringify(t))
+    // AND CENTRED. Off-centre by the fit factor is what the bug looks like, and
+    // "on screen" alone would not catch it on a roomy viewport.
+    const heading = panel.find((t) => t.label === 'DIFFICULTY')
+    if (heading) {
+      note('panel heading centred at x ' + heading.x + ' of ' + VP.w
+        + ' (viewport centre ' + Math.round(VP.w / 2) + ')')
+      if (Math.abs(heading.x - VP.w / 2) > VP.w * 0.06) {
+        fail('the panel is not centred on the viewport')
+      }
+    }
+
+    // Pick the hardest mode: the one whose card is not CURRENT and sits last.
+    const hardest = DIFF.DIFFICULTIES[DIFF.DIFFICULTIES.length - 1]
+    const card = panel.find((t) => t.label === hardest.name.toUpperCase())
+    const choose = panel.filter((t) => t.label === 'CHOOSE')
+      .sort((a, b) => Math.abs(a.x - card.x) - Math.abs(b.x - card.x))[0]
+    note('choosing ' + hardest.id + ' at ' + JSON.stringify(choose))
+    await click(choose.x, choose.y)
+    await sleep(900)
+    await shot('difficulty-3-chosen-' + VP.w + 'x' + VP.h)
+    chip = chipOf()
+    note('saved difficulty is now ' + SAVE.savedDifficulty() + '; chip reads '
+      + (chip ? chip.label : 'NOTHING'))
+    if (SAVE.savedDifficulty() !== hardest.id) fail('the choice was not saved')
+    if (!chip || chip.label !== hardest.name.toUpperCase()) {
+      fail('the chip did not redraw to the mode that was chosen')
+    }
+
+    /* ------------------------------------------------------- 3. the HUD */
+
+    for (const k of ['WorldMap', 'Title', 'Draft', 'Splash', 'Credits', 'Boot']) game.scene.stop(k)
+    game.scene.start('Game'); game.scene.start('Hud')
+    if (!(await until(() => running('Game') && scene('Game').hero, 15000))) {
+      note('*** the level did not start ***')
+      return
+    }
+    await sleep(700)
+    const G = scene('Game')
+    const wantLives = DIFF.startingLives(RULES.startingLives, hardest.id)
+    const wantPurse = DIFF.startingPeanuts(RULES.startingPeanuts, hardest.id)
+    note('run: difficulty=' + G.status.difficultyId + ' lives=' + G.status.lives
+      + ' startingLives=' + G.status.startingLives + ' (want ' + wantLives + ')'
+      + ' peanuts=' + G.status.peanuts + ' (base scaled to ' + wantPurse
+      + ', then the opening-purse floor)')
+    if (G.status.difficultyId !== hardest.id) fail('the run did not take the chosen difficulty')
+    if (G.status.startingLives !== wantLives) fail('the run did not scale its lives')
+
+    const hudTexts = () => textsIn('Hud')
+    let readout = hudTexts().find((t) => t.label === hardest.name.toUpperCase())
+    note('HUD readout: ' + JSON.stringify(readout))
+    if (!readout) fail('the HUD does not show the difficulty')
+    if (readout && !onScreen(readout)) fail('the HUD readout is off screen')
+    if (readout && (readout.b - readout.t) < 10) {
+      fail('the HUD readout is ' + (readout.b - readout.t) + 'px tall')
+    }
+    // NOT ON TOP OF ANYTHING. It shares its row with the boss bar and sits
+    // under the counters, so those are the two it could meet.
+    const hudRects = rectsFor('Hud')
+    const mine = readout && { l: readout.l, t: readout.t, r: readout.r, b: readout.b }
+    if (mine) {
+      for (const o of hudRects) {
+        if (o.name === 'TEXT:' + hardest.name.toUpperCase()) continue
+        if (overlap(mine, o)) fail('the HUD readout lies across ' + o.name
+          + ' ' + JSON.stringify(o))
+      }
+    }
+    await shot('difficulty-4-hud-' + VP.w + 'x' + VP.h)
+
+    // THE CAPTURE-ONCE RULE, DRIVEN. Change the save under a live run and the
+    // HUD must not budge: the run is being played on what it started on.
+    SAVE.setDifficulty('lazy-dad')
+    await sleep(400)
+    readout = hudTexts().find((t) => DIFF.DIFFICULTIES.some(
+      (d) => d.name.toUpperCase() === t.label))
+    note('after setting the save to lazy-dad mid-run, the HUD says '
+      + (readout ? readout.label : 'NOTHING'))
+    if (!readout || readout.label !== hardest.name.toUpperCase()) {
+      fail('a mid-run change to the save reached the run')
+    }
+    if (G.status.difficultyId !== hardest.id) fail('the run\'s own difficulty changed mid-run')
+
+    /* --------------------------------------------------- 4. the end screens */
+
+    G.status.wave = G.status.waveCount
+    G.status.lives = Math.max(1, Math.round(G.status.startingLives * 0.6))
+    G.endRun('won')
+    await sleep(800)
+    const won = []
+    const walkT = (l) => { for (const o of l) { if (o.text) won.push(String(o.text)); if (o.list) walkT(o.list) } }
+    walkT(G.dialog ? G.dialog.layer.list : [])
+    note('victory panel: ' + JSON.stringify(won.filter((t) => t.length < 40)))
+    if (!won.includes('Difficulty')) fail('the victory screen does not name the difficulty')
+    if (!won.includes(hardest.name)) fail('the victory screen names the wrong difficulty')
+    if (!won.some((t) => new RegExp('of ' + G.status.startingLives + '$').test(t))) {
+      fail('the victory screen does not measure lives against the run\'s own starting lives')
+    }
+    await shot('difficulty-5-won-' + VP.w + 'x' + VP.h)
+
+    note('RESULT ' + (faults === 0
+      ? 'the difficulty is chosen on level select, carried by the run and shown in both places, at '
+        + VP.w + 'x' + VP.h
+      : '*** ' + faults + ' faults ***'))
+    return
+  }
+
   if (scenario === 'screens') {
     const RESM = await import('./js/systems/Resolution.js')
     const SA = await import('./js/systems/SafeArea.js')
