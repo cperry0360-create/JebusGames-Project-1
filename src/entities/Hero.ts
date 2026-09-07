@@ -7,6 +7,7 @@ import { HeroFrames, type FrameDef, type HeroPose } from '../systems/HeroFrames.
 import { makeShadow, deathPuff } from '../systems/Presentation.ts'
 import { applyGroundRender } from '../systems/Art.ts'
 import { facesLeft, mirroredFor } from '../systems/Facing.ts'
+import { restFacingTarget } from '../systems/HeroFacing.ts'
 import presentationData from '../data/presentation.json'
 import { attackFramesFor, heroHeight, heroSprite, walkFramesFor } from '../systems/Heroes.ts'
 import {
@@ -75,6 +76,9 @@ export class Hero extends Phaser.GameObjects.Container {
   powered = false
   /** Seconds of the bob's own clock. */
   private bobPhase = 0
+  /** Whether the floating bar is currently faded IN. Tracked rather than read
+   *  back off the alpha, which is mid-tween most of the time it matters. */
+  private barShown = false
   /** How many enemies he is holding right now, and the most he may hold. The
    *  scene sets the first every frame; both are read by the HUD and by the
    *  at-capacity marker, so the number the player is shown is the number the
@@ -109,6 +113,17 @@ export class Hero extends Phaser.GameObjects.Container {
   /** Whatever he swung at last frame, so `engaged` can be asked before the
    *  order is carried out rather than after. */
   private lastTarget: Enemy | null = null
+  /**
+   * Where enemies come onto this level, so a hero with nothing to look at
+   * still looks the right way.
+   *
+   * SET BY THE SCENE FROM MAP DATA, never guessed here. It was "left", which
+   * is true of levels 1 and 2 and false of 3 and 4 — those have two gates that
+   * merge, and a hero posted past the merge has one of them up and to the left
+   * and the other down and to the left. Empty until the scene says otherwise,
+   * and an empty list means "keep the facing you have" rather than a default.
+   */
+  arrivalPoints: Array<{ x: number; y: number }> = []
   /** Set while the transformation plays, so he neither moves nor fights. */
   private transforming = false
   /** Enemies currently under the vehicle, so one pass is one hit each. */
@@ -162,6 +177,9 @@ export class Hero extends Phaser.GameObjects.Container {
     this.restingBodyY = this.body_.y
     this.captureRest()
     this.bar = scene.add.graphics()
+    // STARTS INVISIBLE, because he starts at full health. `drawBar` fades it
+    // in the first time he is hurt.
+    this.bar.setAlpha(0)
     this.add([this.shadow, this.body_, this.bar])
     scene.add.existing(this)
     this.drawBar()
@@ -356,6 +374,27 @@ export class Hero extends Phaser.GameObjects.Container {
         }
         this.frames.swing()
       }
+    } else {
+      // STANDING THERE WITH NOTHING IN REACH, which is most of a run.
+      //
+      // He used to keep whichever way he last turned, which on the first frame
+      // of a level is whichever way the constructor happened to leave him. The
+      // rule is in `HeroFacing`: the nearest live enemy at ANY distance — not
+      // just the ones inside `attackRange`, which is 70 to 122 world pixels on
+      // a 1280px board, so a hero can watch a wave walk the length of the map
+      // with his back to it and still be "correct" — and, with the board
+      // empty, the nearest gate enemies actually arrive through.
+      // The nearest enemy ANYWHERE, found with the same `pickNearest` the
+      // attack targeting uses so the two cannot disagree about which one it
+      // is -- just without the range limit, which is the whole difference
+      // between "who am I fighting" and "who should I be looking at".
+      const seen = pickNearest(enemies, this.x, this.y, Infinity)
+      // A plain point rather than `this`: without node_modules the Container
+      // base is absent, so `this` satisfies no structural parameter and the
+      // call reads as an error locally whether or not it is one. See
+      // CLAUDE.md on tsdiff.
+      const look = restFacingTarget({ x: this.x, y: this.y }, seen, this.arrivalPoints)
+      if (look) this.faceTowards(look.x, look.y)
     }
 
     // The frame goes on last, after the position and facing are final, and it
@@ -776,6 +815,9 @@ export class Hero extends Phaser.GameObjects.Container {
     this.setAlpha(1)
     this.shadow.setVisible(true)
     this.bar.setVisible(true)
+    // Back at full health, so the bar has nothing to say; `drawBar` takes it
+    // down through the same fade rather than snapping it off.
+    this.barShown = true
     this.drawBar()
     ySort(this)
 
@@ -792,7 +834,36 @@ export class Hero extends Phaser.GameObjects.Container {
     return { x: this.fellX, y: this.fellY }
   }
 
+  /**
+   * Shows the floating bar and starts its fade, or fades it out at full health.
+   *
+   * THE BAR IS ONLY UP WHILE HE IS HURT. It used to be up always, which put a
+   * permanent readout over the hero's head on a board whose whole look is
+   * "nothing between the player and the map" — and the number it carried is on
+   * the portrait chip now, where the thumb already is. What a floating bar is
+   * FOR is the moment the damage happens: it is worth seeing where the hit
+   * landed, and worth nothing for the twenty seconds afterwards.
+   *
+   * Tweened rather than toggled: an element that blinks on and off over a
+   * moving sprite reads as a rendering fault. The fade is on the bar's own
+   * alpha rather than on `visible`, so a hit during a fade-out catches the
+   * bar on its way down and takes it back up from wherever it got to.
+   */
+  private syncBarVisibility(): void {
+    const want = !this.down && this.health < this.def.maxHealth
+    if (want === this.barShown) return
+    this.barShown = want
+    this.scene.tweens.killTweensOf(this.bar)
+    this.scene.tweens.add({
+      targets: this.bar,
+      alpha: want ? 1 : 0,
+      duration: want ? PRESENTATION.heroBarFade.inMs : PRESENTATION.heroBarFade.outMs,
+      ease: want ? 'Quad.easeOut' : 'Quad.easeIn',
+    })
+  }
+
   private drawBar(): void {
+    this.syncBarVisibility()
     // Sized and floated from the art, so the bar grows with the vehicle.
     const w = Phaser.Math.Clamp(this.body_.displayWidth * 0.62, 46, 96)
     const y = -this.body_.displayHeight - 10
@@ -816,6 +887,10 @@ export class Hero extends Phaser.GameObjects.Container {
     // that he was blocking all of them and losing. Three pips over the health
     // bar say what the rule actually is, and turn amber together the moment
     // there is no room left — which is the moment the next enemy walks by.
+    // The block pips ride on the same Graphics as the health bar, so they fade
+    // with it. That is the right answer rather than a compromise: he is only
+    // holding anything while something is hitting him, and something hitting
+    // him is exactly when the bar is up.
     const cap = this.def.blockCapacity
     if (cap > 0 && !this.down) {
       const full = this.blocking >= cap

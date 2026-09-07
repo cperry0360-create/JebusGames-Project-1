@@ -100,18 +100,31 @@
       "startWidth": 168,
       "startMinWidth": 116,
       "cancelWidth": 116,
-      "cancelHeight": 48
+      "cancelHeight": 48,
+      "heroChip": 60,
+      "heroChipGap": 22
     },
-    "heroBar": {
-      "_note": "Cory's name and health, top-left under the counters. OPAQUE, because it lives over a full-bleed painted map and there is no screen position a HUD element can occupy that the camera cannot put painted art under — measured: 0 of 82,290 screen cells at 844x390 are unreachable by painted content at some camera position. So the answer is not a safer corner, it is a proper plate. It was a 55% black wash, which let the tavern's painted signboard show through the bar and the bar show through the signboard.",
+    "_bossBarWidth": "Read at last. It was 560 and unread: drawBossBar took layout.messageRow.width instead, which is 563px on an 844px screen — 67% of the width for one wave in thirteen. 300 is wide enough to read a health fraction off and narrow enough to stay a bar rather than a band. The message row still bounds it, so a narrow phone shrinks the bar rather than pushing it into the counters.",
+    "_bossBarTop": "DELETED. It said 10 and nothing read it: the bar sits in the message row, which the layout places, so a second opinion about its y could only ever disagree with the layout. It is centred in that row now.",
+    "heroChip": {
+      "_note": "THE HERO'S PORTRAIT AND HEALTH, at the bottom beside the ability buttons. It replaces the wide bar that used to sit under the counters at the top left, which drew the hero's health in a second place -- the sprite on the map already had a bar over its head -- and put a solid plate across the top of the board for the whole run. The two readouts are one now: the bar is drawn ON the portrait rather than beside it, so the thing that says how the hero is doing is the thing with the hero's face on it.",
+      "size": 60,
+      "_size": "The chip's square edge, and it is a TAP TARGET: tapping it selects the hero, and the next tap on the map moves him. 60 clears the 44pt minimum with room to spare, which matters more here than for the ability buttons beside it -- a mis-tap on those wastes a cooldown, and a mis-tap on this walks the hero into a fireball.",
+      "gap": 22,
+      "_gap": "Between the chip and the nearest ability button, and it is deliberately LARGER than the 26px seam between the drafted group and the hero medallions is wide at the edges -- the two controls do different things and a thumb travelling along the row must not find them adjacent. Checked at 375x667 by the harness, which is where the row is tightest.",
+      "radius": 8,
       "backing": 1185824,
       "backingAlpha": 1.0,
       "edge": 856086,
       "edgeWidth": 2,
-      "radius": 5
-    },
-    "_bossBarWidth": "Read at last. It was 560 and unread: drawBossBar took layout.messageRow.width instead, which is 563px on an 844px screen — 67% of the width for one wave in thirteen. 300 is wide enough to read a health fraction off and narrow enough to stay a bar rather than a band. The message row still bounds it, so a narrow phone shrinks the bar rather than pushing it into the counters.",
-    "_bossBarTop": "DELETED. It said 10 and nothing read it: the bar sits in the message row, which the layout places, so a second opinion about its y could only ever disagree with the layout. It is centred in that row now."
+      "barHeight": 9,
+      "_barHeight": "The health bar, overlaid across the bottom of the portrait rather than placed beside it. Thin, because it is read as a colour and a length rather than as a shape, and because the portrait underneath it is what the chip is for.",
+      "barInset": 3,
+      "selectedEdge": 16768067,
+      "downTint": 5921370,
+      "_downTint": "A hero who is down: the portrait desaturated to this and the bar replaced by the respawn countdown. The state has to be legible at a glance from the bottom of the screen, because it is the answer to 'why is nothing happening where I left him'.",
+      "downAlpha": 0.55
+    }
   },
   "typography": {
     "minUiSize": 15,
@@ -718,5 +731,10 @@
   "safeArea": {
     "housingAtAngle90": "left",
     "_housingAtAngle90": "Which horizontal edge the sensor housing lands on at screen.orientation.angle 90, which is landscape-primary. That is iOS landscapeLeft — home indicator on the right, device top edge on the left — so the housing is on the left, and 270 is the mirror of it. THIS IS THE ONE VALUE HERE NOT VERIFIED ON HARDWARE: it comes from the orientation conventions, not from a notched phone. Both branches are tested and both viewports are asserted; if the inset ever shows up on the wrong edge, flip this string and change nothing else."
+  },
+  "heroBarFade": {
+    "_note": "THE FLOATING BAR OVER THE HERO'S HEAD, which is up only while he is damaged. In fast and out slow: the fade IN has to keep up with the hit that caused it, and the fade OUT is the board going quiet again and should not snatch the bar away the instant a heal or a revive lands. Tweened rather than toggled because an element that blinks on and off over a moving sprite reads as a rendering fault.",
+    "inMs": 120,
+    "outMs": 420
   }
 }

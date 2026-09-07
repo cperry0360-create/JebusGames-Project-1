@@ -110,6 +110,13 @@ export interface LayoutConfig {
   rowGap: number
   rowHeight: number
   iconHeight: number
+  /** The hero portrait chip's square edge. A tap target: 44 is the floor and
+   *  this is comfortably over it, because a mis-tap here moves the hero. */
+  heroChip: number
+  /** Between the chip and the nearest ability button. Deliberately generous:
+   *  the two controls do different things and a thumb travelling the row must
+   *  not find them adjacent. */
+  heroChipGap: number
   /** The settings gear. Square. It used to set CANCEL's height as well; CANCEL
    *  has its own now, because it is not a peer of the gear — one is opened
    *  once a session and the other is the way out of a mode. */
@@ -131,9 +138,22 @@ export interface HudLayout {
   /** The right of the second row: the wave message, or the boss bar while one
    *  is up. They are mutually exclusive, so they share one rectangle. */
   messageRow: Rect
-  /** The left of the second row, under the counters: the hero's name and
-   *  health. On the LEFT deliberately — see the note where it is built. */
-  heroRow: Rect
+  /**
+   * THE HERO'S PORTRAIT CHIP, at the bottom beside the ability buttons.
+   *
+   * It replaces `heroRow`, a wide bar on the second row under the counters
+   * that carried the hero's name and a segmented health bar. Two things were
+   * wrong with it and only one was a layout problem. The layout problem: it
+   * was a solid plate parked across the top of the board for the whole run, on
+   * a map that is full-bleed by design. The other: the hero's health was drawn
+   * in TWO places, there and on a bar over the sprite's own head, and neither
+   * of them was where the player's thumb already was.
+   *
+   * So it is one control now, at the bottom, with the bar drawn ON the
+   * portrait instead of beside it — and it is a control rather than a readout:
+   * tapping it selects the hero, exactly as tapping his sprite does.
+   */
+  heroChip: Rect
   abilities: Rect
   /**
    * The settings gear, at the RIGHT-HAND END OF THE TOP ROW. ONE corner
@@ -240,37 +260,24 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
     x: topRight - startW, y: top, width: startW, height: cfg.plateHeight,
   }
 
-  // Second row, split by x. Three things want it — the wave message, the boss
-  // bar and the hero's health — and splitting by position rather than by
-  // priority is what makes "they never collide" a property of the layout.
+  // THE SECOND ROW IS THE MESSAGE ROW AND NOTHING ELSE NOW.
   //
-  // THE HERO BAR IS ON THE LEFT, and it used to be on the right. The new map
-  // plate paints COURJAHAN'S TAVERN and its signboard into the map's top-right
-  // corner, and at the minimum zoom the whole board is on screen — so the
-  // map's top-right corner IS the screen's top-right corner, and the hero's
-  // health bar sat on the painted sign for the entire run. Measured at
-  // 844x390: the sign lands at screen x 572..722, the old hero row at 587..834.
+  // It used to be split by x between the wave message and the hero's health,
+  // with the health on the left — it had been on the right, and the map plate
+  // paints COURJAHAN'S TAVERN into the board's top-right corner, so at minimum
+  // zoom the bar sat on the painted signboard for the entire run. Moving it
+  // left fixed that collision and left the real problem: a solid plate across
+  // the top of a map that is full-bleed by design, drawing a number the sprite
+  // on the board was already showing.
   //
-  // The left is where it stops being a collision at every zoom below maximum,
-  // and it groups the hero's health with the counters, which are also his.
-  // The message row inherits the right-hand end and can still reach the sign;
-  // that is a line of stroked text, and the boss bar that shares the rectangle
-  // carries its own plate and is only up for one wave in thirteen. A solid
-  // plate parked there for the whole run is the thing worth moving.
+  // The hero's health went to the bottom, onto a portrait chip beside his own
+  // buttons. So the row is one occupant again and takes its width back rather
+  // than reserving a hole for something that is not there — which is the same
+  // thing that happened when CANCEL left it.
   const rowY = top + Math.max(counters.height, startButton.height) + cfg.rowGap
   const rowW = right - left
-  const heroW = Math.max(96, Math.round(rowW * 0.3))
-  const gap = 14
-  const heroRow: Rect = {
-    x: left, y: rowY, width: heroW, height: cfg.rowHeight,
-  }
-  // The second row is the hero's health and the message, and nothing else:
-  // CANCEL has left it for the bottom of the screen, so the message row takes
-  // the width back rather than reserving a hole for a button that is not there.
   const messageRow: Rect = {
-    x: left + heroW + gap, y: rowY,
-    width: Math.max(60, rowW - heroW - gap),
-    height: cfg.rowHeight,
+    x: left, y: rowY, width: rowW, height: cfg.rowHeight,
   }
 
   // CANCEL, flush to the display's right edge and sitting on the same baseline
@@ -283,27 +290,57 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
     height: cfg.cancelHeight,
   }
 
-  // THE ABILITY ROW GIVES WAY TO CANCEL, and only as far as it has to.
+  // THE BOTTOM ROW IS THE CHIP AND THE ICONS, CENTRED AS ONE GROUP.
   //
-  // The icons are centred in the whole row. On a screen with room to spare
-  // that puts them nowhere near the corner and nothing is reserved at all —
+  // THE ABILITY ROW GIVES WAY TO CANCEL, and only as far as it has to. The
+  // icons are centred in the whole row. On a screen with room to spare that
+  // puts them nowhere near the corner and nothing is reserved at all —
   // 1280x720 keeps every icon at full size. On a narrow one the row would
   // reach under the button, so its half-width is capped at the distance from
   // the row's centre to CANCEL's left edge, which shrinks it SYMMETRICALLY and
   // leaves the icons centred. A one-sided reservation would keep them larger
   // and slide the whole hand off centre, which reads as a layout fault.
+  //
+  // THE ICONS STAY EXACTLY CENTRED AND THE CHIP SITS BESIDE THEM, which is
+  // not the first thing tried and is the right one.
+  //
+  // Carrying the chip INSIDE the centred group — [chip][gap][icons] centred as
+  // one — is tidier to write and pushes the icons 41px to the right of centre
+  // on every screen. That row's position is tuned and long-standing, and
+  // "where the hand sits" is not something a new readout gets to move. So the
+  // chip is reserved from the row's half-width instead, exactly as CANCEL
+  // already is on the other side: the icons give way symmetrically and stay
+  // centred, and the chip takes the space that reservation freed.
+  //
+  // THE CHIP DOES NOT SHRINK WITH THE ICONS. `abilityScale` exists because a
+  // smaller icon is survivable; a tap target under 44pt is not, and a mis-tap
+  // on THIS one walks the hero into a fireball rather than wasting a cooldown.
   const lo = left
   const hi = right
-  const room = Math.max(0, hi - lo)
   const centre = (lo + hi) / 2
-  const halfRoom = Math.max(0, cancel.x - cfg.marginX - centre)
-  const abilitiesW = Math.min(input.abilitiesWidth, room, halfRoom * 2)
+  const chipBlock = cfg.heroChip + cfg.heroChipGap
+  // Two reservations, and the row is capped by the tighter of them so it stays
+  // centred: CANCEL on the right, the chip's block on the left.
+  const halfRight = Math.max(0, cancel.x - cfg.marginX - centre)
+  const halfLeft = Math.max(0, centre - lo - chipBlock)
+  const abilitiesW = Math.min(input.abilitiesWidth, Math.min(halfLeft, halfRight) * 2)
   const abilityScale = input.abilitiesWidth > 0 ? abilitiesW / input.abilitiesWidth : 1
   const abilities: Rect = {
     x: centre - abilitiesW / 2,
     y: bottom - cfg.iconHeight * abilityScale,
     width: abilitiesW,
     height: cfg.iconHeight * abilityScale,
+  }
+  // Immediately left of the icons with the gap between, and clamped to the
+  // margin so it can never run off the edge on a screen too narrow to honour
+  // both. Bottom-aligned with them rather than centred on them: a row of
+  // controls that share a bottom edge reads as one row, whatever the icons
+  // have shrunk to.
+  const heroChip: Rect = {
+    x: Math.max(lo, abilities.x - chipBlock),
+    y: bottom - cfg.heroChip,
+    width: cfg.heroChip,
+    height: cfg.heroChip,
   }
 
   // WHERE CHROME MAY GO: under everything in the HUD band, above the hand.
@@ -316,7 +353,10 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
   // on a narrow screen `abilityScale` shrinks the icons below CANCEL's height,
   // so CANCEL is the taller of the pair and the lower bound.
   const panelTop = rowY + cfg.rowHeight + 8
-  const panelBottom = Math.min(abilities.y, cancel.y)
+  // The chip joins the `min`: it is the same height as a full-size icon row
+  // and taller than a shrunk one, so on a narrow screen it is the lowest thing
+  // a panel must stay clear of.
+  const panelBottom = Math.min(abilities.y, cancel.y, heroChip.y)
   const panelArea: Rect = {
     x: insets.left + 6,
     y: panelTop,
@@ -325,7 +365,7 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
   }
 
   return {
-    counters, startButton, messageRow, heroRow, abilities, settings, cancel,
+    counters, startButton, messageRow, heroChip, abilities, settings, cancel,
     panelArea, counterScale, abilityScale,
   }
 }
@@ -370,7 +410,7 @@ export function hudTakesPress(layout: HudLayout, x: number, y: number): boolean 
   const inside = (r: Rect): boolean =>
     x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height
   return inside(layout.abilities) || inside(layout.startButton)
-    || inside(layout.settings) || inside(layout.cancel)
+    || inside(layout.settings) || inside(layout.cancel) || inside(layout.heroChip)
 }
 
 /**
@@ -394,5 +434,5 @@ export function hudTakesPress(layout: HudLayout, x: number, y: number): boolean 
 export function hudBlocksGesture(layout: HudLayout, x: number, y: number): boolean {
   const inside = (r: Rect): boolean =>
     x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height
-  return hudTakesPress(layout, x, y) || inside(layout.counters) || inside(layout.heroRow)
+  return hudTakesPress(layout, x, y) || inside(layout.counters)
 }

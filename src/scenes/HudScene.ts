@@ -22,6 +22,7 @@ import { SLOT2, heroSlotDefs, slot2Usable } from '../systems/HeroSkills.ts'
 import { onSceneResize, sceneIsLive } from '../systems/SceneEvents.ts'
 import { fitUiCamera, viewH, viewW } from '../systems/Resolution.ts'
 import { enterGate, leaveGate, noteInputAccepted } from '../systems/InputGates.ts'
+import { realSeconds } from '../systems/GameTime.ts'
 
 /**
  * A placed slot's Phaser objects, and the region they were all built from.
@@ -50,6 +51,17 @@ const RULES = rulesData as unknown as RulesDef
  *  frames, so nothing is drawn behind them. */
 const ICON_H = 64
 
+/**
+ * How far a press may travel and still count as a tap, in CSS pixels.
+ *
+ * THE WORLD MAP'S NUMBER, and deliberately the same one. That screen is
+ * dragged with the finger that picks a level and solves it exactly this way;
+ * the board is dragged with the finger that presses the hero chip, which is
+ * the identical problem. Two different slops would mean a gesture that
+ * scrolls one screen selects on the other.
+ */
+const TAP_SLOP = 10
+
 /** How faint the empty reserved socket is. See drawSlots. */
 const SOCKET = presentationData.abilityBar.emptySocket as {
   fillAlpha: number; strokeAlpha: number; strokeWidth: number; inset: number
@@ -62,9 +74,23 @@ export class HudScene extends Phaser.Scene {
   private peanutsText!: Phaser.GameObjects.Text
   private livesText!: Phaser.GameObjects.Text
   private waveText!: Phaser.GameObjects.Text
-  private heroBar!: Phaser.GameObjects.Graphics
-  /** The hero's name, on the bar. See the note where it is created. */
-  private heroLabel!: Phaser.GameObjects.Text
+  /**
+   * The hero's portrait chip: the picture, the health over it, the frame
+   * round it and the rectangle that takes the tap.
+   *
+   * ONE OBJECT PER JOB AND NO SECOND SOURCE OF TRUTH. The portrait's texture
+   * comes from the same `heroDef` the loadout card reads, the form it shows
+   * comes from the same `heroPowered` that greys slot 2, and the bar's ratio
+   * comes from the same `heroHealth` the sprite's own bar uses.
+   */
+  private chipPlate!: Phaser.GameObjects.Graphics
+  private chipPortrait!: Phaser.GameObjects.Image
+  private chipBar!: Phaser.GameObjects.Graphics
+  private chipLabel!: Phaser.GameObjects.Text
+  private chipHit!: Phaser.GameObjects.Rectangle
+  /** The texture the portrait is currently wearing, so it is swapped on a
+   *  transformation rather than re-fitted every frame. */
+  private chipKey = ''
   /** Every element's rectangle. Disjoint by construction, checked by a test. */
   /**
    * Where every HUD element sits, MEASURED.
@@ -176,29 +202,9 @@ export class HudScene extends Phaser.Scene {
       fontStyle: 'bold', stroke: '#0d1016', strokeThickness: 4, letterSpacing: 1,
     }).setOrigin(0.5, 0.5)
 
-    // Under the start button: the hero's health.
-    //
-    // THE MODE LABEL IS GONE AND THE NAME IS BACK, which is not where this
-    // ended up the first time. It read "Cory · DAD MODE" and the mode half was
-    // wrong for four heroes out of five -- `lastStand.name` is the string
-    // "DAD MODE" in all five entries of heroes.json -- so both halves were
-    // taken off together. That left a blue segmented bar in the top left with
-    // nothing on it at all, and it was reported as exactly that: an
-    // unlabelled bar nobody could name. A bar with no label is not more honest
-    // than a bar with a wrong one, it is only quieter.
-    //
-    // So the name comes back and the mode does not. The name was never the
-    // untrue half, and "you already chose him" is an argument about the
-    // loadout screen rather than about a bar the player looks at mid-wave with
-    // a boss on the board. The two ticks across it are the two thresholds --
-    // the transformation at half and Last Stand at a quarter -- and they are
-    // what makes it look segmented; with the name on it they read as marks on
-    // a health bar rather than as three mystery cells.
-    this.heroBar = this.add.graphics()
-    this.heroLabel = this.add.text(0, 0, '', {
-      fontFamily: FONT_UI, fontSize: '15px', color: COLOR.ink, fontStyle: 'bold',
-      stroke: '#0d1016', strokeThickness: 4, letterSpacing: 1,
-    }).setOrigin(0, 0.5)
+    // Bottom-left of the ability row: the hero's portrait, with his health on
+    // it. See `buildHeroChip`.
+    this.buildHeroChip(L.heroChip)
 
     // Bottom corners and centre.
     this.buildSettingsButton(L.settings)
@@ -623,7 +629,7 @@ export class HudScene extends Phaser.Scene {
     this.drawBossBar(s)
     this.drawStartButton(s)
     this.drawSlots(s)
-    this.drawHeroBar(s)
+    this.drawHeroChip(s)
   }
 
   /**
@@ -905,49 +911,143 @@ export class HudScene extends Phaser.Scene {
   }
 
   /**
-   * The hero's health, in the left region of the second row.
+   * The hero's portrait chip, built once.
    *
-   * NO NAME AND NO MODE LABEL. It read "Cory · DAD MODE" -- and it read DAD
-   * MODE for Courtland, Han, Eli and Bailey too, because `lastStand.name` is
-   * that literal string in all five entries of heroes.json. The name told the
-   * player something they chose one screen ago about the only hero on the
-   * board; the mode told four of them something false. A hero who is down
-   * still needs the countdown, so that is what is left, on the bar itself.
+   * THE ART IS THE LOADOUT CARD'S ART, referenced rather than copied. Both
+   * read `heroDef().portraitSprite`; there is no second key and no second
+   * file, so a change to the card changes this with it. That was the explicit
+   * requirement and it is also the only version that stays true — a duplicate
+   * key is a duplicate that drifts.
    */
-  private drawHeroBar(s: GameScene['status']): void {
-    const region = this.layout.heroRow
-    const x = region.x
-    const w = region.width
-    const h = region.height - 2
-    const y = region.y
+  private buildHeroChip(box: Rect): void {
+    const C = HUD.heroChip
+    this.chipPlate = this.add.graphics()
+    // Placed at the box's centre; the texture and the fit are done in
+    // `drawHeroChip`, which is also what swaps it when the hero transforms.
+    this.chipPortrait = this.add.image(box.x + box.width / 2, box.y + box.height / 2,
+      ART.generated.iconMissing)
+    this.chipBar = this.add.graphics()
+    this.chipLabel = this.add.text(box.x + box.width / 2, box.y + box.height / 2, '', {
+      fontFamily: FONT_UI, fontSize: '19px', color: COLOR.ink, fontStyle: 'bold',
+      stroke: '#0d1016', strokeThickness: 5,
+    }).setOrigin(0.5)
 
-    const ratio = Phaser.Math.Clamp(s.heroHealth / Math.max(s.heroMax, 1), 0, 1)
-    const bar = HUD.heroBar
-    this.heroBar.clear()
-    // OPAQUE, AND EDGED. It was a 55% black wash, which is the thing the
-    // report was actually about: the painted tavern signboard showed through
-    // the bar and the bar showed through the signboard, and neither was
-    // readable. Moving it helps and cannot solve it — measured, there is no
-    // screen position the camera cannot put painted art under — so the bar
-    // carries its own plate now, the way every other piece of HUD does.
-    this.heroBar.fillStyle(bar.backing, bar.backingAlpha)
-    this.heroBar.fillRoundedRect(x, y, w, h, bar.radius)
-    this.heroBar.lineStyle(bar.edgeWidth, bar.edge, 1)
-    this.heroBar.strokeRoundedRect(x, y, w, h, bar.radius)
-    this.heroBar.fillStyle(s.heroDown ? 0x5a5a5a : s.lastStand ? 0xff5a3c : 0x4fa3e3, 1)
-    this.heroBar.fillRoundedRect(x + 2, y + 2, Math.max(0, (w - 4) * ratio), h - 4, 4)
-    // BOTH THRESHOLDS, from `status.heroMarks`, which is data both ways.
-    // There was one tick here at a hardcoded 0.25 -- the LAST STAND threshold,
-    // still live -- and the transformation at 0.5, which is the bigger moment
-    // of the two, had no mark at all.
-    for (const mark of s.heroMarks) {
-      const markX = x + 2 + (w - 4) * mark
-      this.heroBar.lineStyle(1, COLOR.panelEdge, 0.9).lineBetween(markX, y, markX, y + h)
+    // THE TAP, WITH THE WORLD MAP'S DRAG RULE.
+    //
+    // The board pans under the same finger that presses this, so a press that
+    // TRAVELLED is a scroll and must not also select the hero. The world map
+    // solves it by measuring how far the pointer moved and acting on release
+    // rather than on press; the same rule, and the same slop, are used here.
+    // Without it, every drag that happened to start on the chip would post the
+    // hero somewhere — and the next tap on the map would move him there.
+    this.chipHit = this.add.rectangle(
+      box.x + box.width / 2, box.y + box.height / 2, box.width, box.height, 0xffffff, 0.001,
+    ).setInteractive({ useHandCursor: true })
+    let downAt = { x: 0, y: 0 }
+    let travelled = 0
+    this.chipHit.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      downAt = { x: p.x, y: p.y }
+      travelled = 0
+    })
+    this.chipHit.on('pointermove', (p: Phaser.Input.Pointer) => {
+      if (!p.isDown) return
+      travelled = Math.max(travelled, Math.hypot(p.x - downAt.x, p.y - downAt.y))
+    })
+    this.chipHit.on('pointerup', () => {
+      if (travelled > TAP_SLOP) return
+      this.world.selectHero()
+    })
+    void C
+  }
+
+  /**
+   * The chip, every frame: which form, how hurt, and whether he is coming back.
+   *
+   * THREE STATES AND THEY ARE ALL READ OFF GAME STATE.
+   *
+   *   up          the current form's portrait, full colour, with a health bar
+   *               across the bottom of it.
+   *   damaged     the same, with the bar shorter and coloured for Last Stand
+   *               when that is running.
+   *   down        the portrait desaturated and dimmed, the bar replaced by the
+   *               respawn countdown in seconds, and the tap refused — the
+   *               world already refuses it, and the chip says why rather than
+   *               looking pressable and doing nothing.
+   *
+   * The FORM comes from `s.heroPowered`, which is the same field that decides
+   * whether slot 2 is greyed out — not a flag of its own. A separate flag is
+   * how the button and the portrait come to disagree about which hero is on
+   * the board.
+   */
+  private drawHeroChip(s: GameScene['status']): void {
+    const C = HUD.heroChip
+    const box = this.layout.heroChip
+    const hero = this.world.heroDef()
+
+    // THE SAME KEY THE LOADOUT CARD DRAWS, in the form he is currently in.
+    // `portraitSprite` is the base picture; the powered form is the same key
+    // the sprite on the board swaps to, so the chip and the board cannot show
+    // different heroes.
+    const want = s.heroPowered && hero.poweredSprite ? hero.poweredSprite : hero.portraitSprite
+    const key = this.textures.exists(want) ? want : ART.generated.iconMissing
+    if (key !== this.chipKey) {
+      this.chipKey = key
+      this.chipPortrait.setTexture(key)
+      // Fitted inside the chip less its frame, by the art's own content box —
+      // so a hero whose canvas has more empty space than another's is still
+      // drawn the same size as them.
+      fitInBox(this.chipPortrait, key, box.width - C.edgeWidth * 4)
     }
-    // OVER THE FILL, not beside the bar: there is no room beside it at
-    // 568x320, and the stroke is what keeps it readable over the blue, the
-    // grey of a hero who is down and the red of Last Stand alike.
-    this.heroLabel.setText(s.heroName.toUpperCase())
-    this.heroLabel.setPosition(x + 8, y + h / 2)
+
+    // A hero who is down is a different picture of the same hero: dimmed and
+    // drained rather than hidden, because the chip is also the countdown and
+    // a blank square cannot carry one.
+    this.chipPortrait.setTint(s.heroDown ? C.downTint : 0xffffff)
+    this.chipPortrait.setAlpha(s.heroDown ? C.downAlpha : 1)
+
+    this.chipPlate.clear()
+    this.chipPlate.fillStyle(C.backing, C.backingAlpha)
+    this.chipPlate.fillRoundedRect(box.x, box.y, box.width, box.height, C.radius)
+    // SELECTED IS A RING ON THE CHIP, matching the ring on his feet. The two
+    // are the same state and the player is looking at one of them.
+    this.chipPlate.lineStyle(C.edgeWidth, this.world.heroIsSelected ? C.selectedEdge : C.edge, 1)
+    this.chipPlate.strokeRoundedRect(box.x, box.y, box.width, box.height, C.radius)
+
+    // The health bar, ACROSS THE BOTTOM OF THE PORTRAIT rather than beside it.
+    const bw = box.width - C.barInset * 2
+    const bh = C.barHeight
+    const bx = box.x + C.barInset
+    const by = box.y + box.height - C.barInset - bh
+    this.chipBar.clear()
+    if (s.heroDown) {
+      // THE RESPAWN STATE, DEFINED: no bar at all, because an empty bar and a
+      // full one look the same at nine pixels tall and the number is what the
+      // player actually needs. Rounded UP and floored at 1, so it never reads
+      // 0 while he is still gone.
+      //
+      // IN REAL SECONDS, through the same conversion the ground marker uses.
+      // `reviveIn` is in GAME seconds and the clock runs at 1.4x, so 25 in the
+      // data is 17.9 on the player's watch. There are two countdowns on screen
+      // now — this one and the marker on the spot he fell — and two countdowns
+      // that disagree are worse than either alone. They read the same number
+      // because they do the same conversion.
+      this.chipLabel.setText(`${Math.max(1, Math.ceil(realSeconds(s.heroReviveIn, 1)))}`)
+      this.chipLabel.setPosition(box.x + box.width / 2, box.y + box.height / 2)
+    } else {
+      this.chipLabel.setText('')
+      const ratio = Phaser.Math.Clamp(s.heroHealth / Math.max(s.heroMax, 1), 0, 1)
+      this.chipBar.fillStyle(0x14181f, 0.92)
+      this.chipBar.fillRoundedRect(bx - 1, by - 1, bw + 2, bh + 2, 3)
+      this.chipBar.fillStyle(s.lastStand ? 0xff5a3c : 0x4fa3e3, 1)
+      this.chipBar.fillRect(bx, by, bw * ratio, bh)
+      // BOTH THRESHOLDS, from `status.heroMarks`, which is data both ways --
+      // the transformation at half and Last Stand at a quarter. They were on
+      // the bar this chip replaces and they are the reason a player can see a
+      // transformation coming.
+      for (const mark of s.heroMarks) {
+        this.chipBar.lineStyle(1, COLOR.panelEdge, 0.9)
+          .lineBetween(bx + bw * mark, by, bx + bw * mark, by + bh)
+      }
+    }
   }
 }

@@ -2514,6 +2514,179 @@ async function run() {
     return
   }
 
+  if (scenario === 'herochip') {
+    // THE HERO PORTRAIT CHIP, in all three of its states, and as a control.
+    //
+    // It replaces a wide health bar at the top of the HUD and it is not just a
+    // readout: tapping it selects the hero and the next tap on the map moves
+    // him, which is the same two-step as tapping his sprite. So this checks
+    // both halves -- what it DRAWS in each state, and what it DOES when
+    // pressed and when dragged.
+    const hud = game.scene.getScene('Hud')
+    const L = () => hud.layout.heroChip
+    const A = () => hud.layout.abilities
+    const dpr = window.devicePixelRatio || 1
+    let faults = 0
+    const fail = (m) => { faults++; note('   *** ' + m) }
+    g.status.peanuts = 999999
+    g.status.lives = 9999
+    await sleep(500)
+
+    const box = L()
+    note('viewport ' + VP.w + 'x' + VP.h + '  dpr ' + dpr)
+    note('chip ' + Math.round(box.width) + 'x' + Math.round(box.height) +
+      ' at ' + Math.round(box.x) + ',' + Math.round(box.y))
+
+    // 44pt MINIMUM, and this one matters more than the icons beside it: a
+    // mis-tap here moves the hero rather than wasting a cooldown.
+    if (box.width < 44 || box.height < 44) fail('the chip is under 44pt')
+    // AND EXPLICIT SPACING FROM THE NEAREST ABILITY BUTTON. Measured against
+    // the real hit rectangles rather than the layout rectangle, because what a
+    // thumb can hit is the hit rectangle.
+    let nearest = Infinity
+    for (const slot of hud.slots) {
+      const b = slot.hit.getBounds()
+      const dx = Math.max(box.x - (b.x + b.width), b.x - (box.x + box.width))
+      const dy = Math.max(box.y - (b.y + b.height), b.y - (box.y + box.height))
+      const gap = Math.max(dx, dy, 0)
+      if (b.x > box.x) nearest = Math.min(nearest, gap)
+    }
+    note('gap to the nearest ability hit rectangle: ' + Math.round(nearest) + 'px')
+    // A thumb is about 44pt across, so anything under about 20px of clear
+    // space between two controls that do different things is a mis-tap waiting
+    // to happen. The layout reserves 22.
+    if (nearest < 20) fail('only ' + Math.round(nearest) + 'px between the chip and an ability button')
+    // No overlap with anything else on the glass, at all.
+    const rects = { abilities: A(), cancel: hud.layout.cancel, counters: hud.layout.counters,
+      settings: hud.layout.settings, startButton: hud.layout.startButton,
+      messageRow: hud.layout.messageRow }
+    for (const [k, r] of Object.entries(rects)) {
+      const hit = box.x < r.x + r.width && r.x < box.x + box.width
+        && box.y < r.y + r.height && r.y < box.y + box.height
+      if (hit) fail('the chip overlaps ' + k)
+    }
+    // On screen, including under a notch.
+    if (box.x < 0 || box.y < 0 || box.x + box.width > VP.w || box.y + box.height > VP.h) {
+      fail('the chip is off screen')
+    }
+
+    const portrait = () => hud.chipPortrait.texture.key
+    // --- BASE. His own picture, full colour, a full health bar.
+    note('base form: portrait=' + portrait() + '  health=' + g.status.heroHealth +
+      '/' + g.status.heroMax)
+    if (portrait() !== g.hero.def.portraitSprite) fail('the chip is not showing the base art')
+    await shot('chip-1-base-' + VP.w + 'x' + VP.h)
+
+    // --- DAMAGED. The bar shortens, and the sprite's own floating bar fades
+    // in -- it is only up while he is hurt, which is the other half of this
+    // change.
+    const barAlpha = () => g.hero.bar.alpha
+    note('floating bar at full health: alpha ' + barAlpha().toFixed(2) +
+      (barAlpha() < 0.05 ? '  correct -- nothing to say' : '  *** VISIBLE AT FULL HEALTH ***'))
+    if (barAlpha() > 0.05) fail('the floating bar is up at full health')
+    g.hero.hurt(120)
+    await sleep(400)
+    note('after a hit: health=' + Math.round(g.status.heroHealth) +
+      '  floating bar alpha ' + barAlpha().toFixed(2))
+    if (barAlpha() < 0.5) fail('the floating bar did not fade in when he was hurt')
+    await shot('chip-2-damaged-' + VP.w + 'x' + VP.h)
+
+    // --- POWERED. Read off the SAME state that ungreys slot 2, so the two
+    // cannot disagree about which form he is in.
+    g.hero.hurt(g.status.heroMax * 0.35)
+    await until(() => g.status.heroPowered, 4000)
+    await sleep(500)
+    const slot2 = hud.slots.find((s2) => s2.region.id === 'heroSlot2')
+    note('powered: portrait=' + portrait() +
+      '  slot 2 icon=' + (slot2 ? slot2.icon.texture.key : 'none'))
+    if (portrait() !== g.hero.def.poweredSprite) fail('the chip did not change to the powered art')
+    if (slot2 && /-grey$/.test(slot2.icon.texture.key)) {
+      fail('slot 2 is still greyed out while the chip shows the powered form')
+    }
+    await shot('chip-3-powered-' + VP.w + 'x' + VP.h)
+
+    // --- DOWN. The defined respawn state: drained portrait, no bar, a
+    // countdown in REAL seconds -- the same conversion the ground marker uses.
+    // AFTER THE TRANSFORMATION'S GRACE WINDOW. Powering up gives the hero
+    // TRANSFORM_INVULNERABLE_SECONDS during which `hurt` refuses everything --
+    // the transformation is a scripted beat and it was once possible to be
+    // deleted in the middle of it. A killing blow thrown at him the instant he
+    // powered up was therefore ignored, he never went down, and this scenario
+    // reported the chip's down state as broken three times over. That is the
+    // probe hitting an invulnerable target, not the chip.
+    // TAKES MORE THAN ONE BLOW, and the reasons are both deliberate rules.
+    //
+    // `applyHit` refuses to carry the hero THROUGH the Last Stand band: a hit
+    // that would take him from above 25% to dead leaves him standing at 25%
+    // and triggers the transformation instead, because Last Stand is the
+    // climax of a life and must not be skipped over. And every transformation
+    // -- that one and the powered one -- opens an invulnerable window, since
+    // it was once possible to be deleted in the middle of the beat.
+    //
+    // So a single killing blow cannot put him down from full health, and a
+    // probe that threw one and then asserted the down state reported the CHIP
+    // as broken three times over. Hit, wait out whatever window that opened,
+    // hit again.
+    let wentDown = false
+    for (let i = 0; i < 6 && !wentDown; i++) {
+      await until(() => g.hero.invulnerableFor <= 0 && !g.hero.transforming, 6000)
+      g.hero.hurt(999999)
+      wentDown = await until(() => g.status.heroDown, 1200)
+    }
+    if (!wentDown) fail('the hero could not be put down, so the respawn state was never shown')
+    await sleep(300)
+    note('down: reviveIn=' + g.status.heroReviveIn.toFixed(1) + ' game seconds' +
+      '  chip reads "' + hud.chipLabel.text + '"' +
+      '  portrait tint=' + hud.chipPortrait.tintTopLeft.toString(16) +
+      '  alpha=' + hud.chipPortrait.alpha.toFixed(2))
+    if (hud.chipLabel.text === '') fail('the chip says nothing while the hero is down')
+    if (hud.chipPortrait.alpha >= 1) fail('a downed hero looks exactly like a live one')
+    // The two countdowns must agree. 25 game seconds is 17.9 on a stopwatch.
+    const real = Math.max(1, Math.ceil(g.status.heroReviveIn / 1.4))
+    if (Number(hud.chipLabel.text) !== real) {
+      fail('the chip reads ' + hud.chipLabel.text + ' where the ground marker reads ' + real)
+    }
+    await shot('chip-4-down-' + VP.w + 'x' + VP.h)
+
+    // --- AS A CONTROL. A tap selects; a drag does not.
+    await until(() => !g.status.heroDown, 40000)
+    await sleep(600)
+    const c = [box.x + box.width / 2, box.y + box.height / 2]
+    g.clearSelection()
+    await sleep(150)
+    // A DRAG THAT ENDS ON THE CHIP MUST NOT SELECT IT. The board pans under
+    // the same finger, so this is the world map's rule: measure how far the
+    // pointer travelled and act on release.
+    mouse('mousemove', c[0] - 60, c[1]); await sleep(40)
+    mouse('mousedown', c[0] - 60, c[1]); await sleep(60)
+    for (let i = 1; i <= 8; i++) { mouse('mousemove', c[0] - 60 + i * 8, c[1]); await sleep(25) }
+    mouse('mouseup', c[0], c[1]); await sleep(200)
+    note('after a DRAG ending on the chip: selected=' + g.heroIsSelected +
+      (g.heroIsSelected ? '  *** A SCROLL SELECTED THE HERO ***' : '  correct'))
+    if (g.heroIsSelected) fail('a drag that ended on the chip selected the hero')
+
+    // A real tap does select, and then a tap on the map moves him.
+    await click(c[0], c[1])
+    await sleep(250)
+    note('after a TAP on the chip: selected=' + g.heroIsSelected)
+    if (!g.heroIsSelected) fail('tapping the chip did not select the hero')
+    const before = { x: Math.round(g.hero.rally.x), y: Math.round(g.hero.rally.y) }
+    const dest = g.lane.pointAt(g.lane.totalLength * 0.6)
+    await click(...toScreen(dest.x, dest.y))
+    await sleep(400)
+    const after = { x: Math.round(g.hero.rally.x), y: Math.round(g.hero.rally.y) }
+    note('then a tap on the map: rally ' + JSON.stringify(before) + ' -> ' + JSON.stringify(after))
+    if (before.x === after.x && before.y === after.y) {
+      fail('the second tap did not move the hero, so the chip is not a move control')
+    }
+    await shot('chip-5-selected-' + VP.w + 'x' + VP.h)
+
+    note('RESULT ' + (faults === 0
+      ? 'the chip draws all three states, keeps its distance, and moves the hero in two taps'
+      : '*** ' + faults + ' faults ***'))
+    return
+  }
+
   if (scenario === 'retreat') {
     // "Once Cory is engaged, setting a new rally point does nothing."
     const H = (await import('./js/data/heroes.json', { with: { type: 'json' } })).default.cory
@@ -4150,6 +4323,28 @@ async function run() {
       return right
     }
 
+    // --- AT REST WITH AN EMPTY BOARD. Before any wave, so there is nothing
+    // alive to look at and the only thing left to face is where enemies will
+    // arrive from -- which is computed from this level's own lanes and wave
+    // table rather than being the word "left".
+    note('gates: ' + JSON.stringify(hero.arrivalPoints.map(
+      (p) => [Math.round(p.x), Math.round(p.y)])))
+    if (hero.arrivalPoints.length === 0) wrong.push('the hero was told about no gates at all')
+    const gate = hero.arrivalPoints[0]
+    // Posted well to the RIGHT of the gate and left to settle, so "faces the
+    // gate" and "kept whatever facing it started with" are different answers.
+    g.orderHero(hero.x + 300, hero.y)
+    await until(() => hero.atRally, 12000)
+    await sleep(400)
+    sample('idle, empty board', gate ? gate.x > hero.x : null,
+      gate ? 'gate is ' + (gate.x > hero.x ? 'right' : 'left') + ' of him' : '')
+    // And from the other side of it, where the answer flips. This is the check
+    // a hardcoded "left" passes half of.
+    g.orderHero(hero.x - 500, hero.y)
+    await until(() => hero.atRally, 12000)
+    await sleep(400)
+    sample('idle, empty board, moved', gate ? gate.x > hero.x : null)
+
     // --- WALKING. Ordered left, then right, sampled all the way there.
     const hx = hero.x, hy = hero.y
     for (const [dir, dx] of [['left', -260], ['right', 260]]) {
@@ -4175,10 +4370,23 @@ async function run() {
       await sleep(200)
     }
 
-    // --- IDLE. He keeps the last facing rather than snapping to a default.
+    // --- IDLE, AND THE RULE HERE HAS CHANGED. It used to be "he keeps the
+    // last facing rather than snapping to a default", and this asserted that
+    // he was still facing right after walking right. That was the honest rule
+    // while there was nothing better to face: the alternative on the table was
+    // snapping to a hardcoded side, which is worse than staleness.
+    //
+    // There is something better now. An idle hero faces the nearest live
+    // enemy at any distance, and with the board empty it faces the gate
+    // enemies arrive through -- computed from the level's lanes and its wave
+    // table. So after walking right on an empty level 1, the correct answer is
+    // that he turns back to the arch on his left. "Kept the last facing" and
+    // "turned to the gate" are opposite answers here, which is what makes this
+    // worth asserting rather than dropping.
     g.orderHero(hero.x, hero.y)
     await sleep(600)
-    sample('idle after walking right', true, 'last facing kept')
+    sample('idle after walking right', gate ? gate.x > hero.x : null,
+      'faces the gate, not the last heading')
 
     // --- ATTACKING. An enemy on each side while he stands still.
     g.startWave()
@@ -4217,7 +4425,7 @@ async function run() {
     }
     await shot('facing-' + VP.w + 'x' + VP.h)
     note('RESULT ' + (wrong.length === 0
-      ? 'he faces where he is going and what he is hitting, and keeps it when idle'
+      ? 'he faces where he is going, what he is hitting, and the gate when the board is empty'
       : '*** ' + wrong.join('; ') + ' ***'))
     return
   }
@@ -5091,6 +5299,20 @@ async function run() {
   // the way he is walking" are not the same claim and only the picture settles
   // the second one.
   if (scenario === 'enemyfacing') {
+    // WHICH WAY EVERY ENEMY ON A LEVEL IS POINTING, against which way it is
+    // actually walking.
+    //
+    // This used to record the two facts and print them, and compute a `wrong`
+    // counter it never incremented -- so it always ended "RESULT n enemy types
+    // seen" whatever it had seen, including a boss walking backwards. That is
+    // the shape of check that reports a clean bill of health: it gathers the
+    // evidence and never draws the conclusion.
+    //
+    // It draws it now. Travel is measured from the enemy's own movement
+    // between two samples rather than assumed to be left-to-right, because on
+    // level 3 the two gates come in from opposite corners and the lane doubles
+    // back; and the sweep runs to the BOSS WAVE, because the boss is the one
+    // that was reported and it spawns on wave 13.
     for (const k of ['Title', 'Splash', 'Credits', 'Boot', 'Loadout']) game.scene.stop(k)
     const RS = await import('./js/systems/RunState.js')
     const lvl = arg || 'level3'
@@ -5101,42 +5323,85 @@ async function run() {
     await until(() => running('Hud'), 12000)
     await sleep(800)
     const g = scene('Game')
+    g.status.lives = 99999
     note('level ' + lvl + ' at ' + VP.w + 'x' + VP.h)
 
-    // One wave after another until every type this level uses has been seen.
     const seen = new Map()
-    for (let w = 0; w < 14 && seen.size < 5; w++) {
+    // Sampled over a real interval: a single frame's dx is dominated by the
+    // emergence fade and by knockback, and the dead zone in `facesLeft` means
+    // a near-vertical stretch legitimately keeps whatever facing it had.
+    const sample = async () => {
+      const was = new Map()
+      for (const e of g.enemies) if (e.alive) was.set(e, { x: e.x, y: e.y })
+      await sleep(260)
+      for (const e of g.enemies) {
+        const before = was.get(e)
+        if (!before || !e.alive) continue
+        const dx = e.x - before.x
+        const dy = e.y - before.y
+        // Only judged where the travel is CLEARLY sideways. Straight up or
+        // down the board is exactly the case the dead zone exists for, and
+        // either facing is correct there.
+        if (Math.abs(dx) < 0.6 || Math.abs(dx) < Math.abs(dy) * 0.5) continue
+        const travelling = dx > 0 ? 'right' : 'left'
+        const shows = (e.def.artFacing === 'left') !== !!e.art.flipX ? 'left' : 'right'
+        const rec = seen.get(e.def.name) ?? { drawn: e.def.artFacing, samples: 0, backwards: 0 }
+        rec.samples++
+        if (shows !== travelling) rec.backwards++
+        rec.shows = shows
+        rec.travelling = travelling
+        seen.set(e.def.name, rec)
+      }
+    }
+
+    // Every wave, so the boss is included. Waves are advanced by hand rather
+    // than played out: what is under test is which way a sprite points on the
+    // road, not whether the towers can kill it.
+    const waves = g.level.waveTable.waves.length
+    for (let w = 0; w < waves; w++) {
+      // FORCED BACK TO 'ready' FIRST. `startWave` returns immediately unless
+      // the phase is ready, so a loop that only set `status.wave` started wave
+      // 1 and then no-opped twelve times -- which is why this scenario saw two
+      // enemy types on a level with five and never reached the boss at all.
       g.status.wave = w
+      g.status.phase = 'ready'
       g.startWave()
       const t0 = Date.now()
-      while (Date.now() - t0 < 9000) {
-        for (const e of g.enemies) {
-          if (seen.has(e.def.name)) continue
-          // Heading from the art's own flip and the walk direction, so this is
-          // what the player sees rather than what the data says.
-          seen.set(e.def.name, {
-            drawn: e.def.artFacing,
-            flipped: !!e.art.flipX,
-            // Where the art's nose points, after the flip.
-            shows: (e.def.artFacing === 'left') !== !!e.art.flipX ? 'left' : 'right',
-          })
+      let posed = false
+      while (Date.now() - t0 < 6000) {
+        await sample()
+        // THE BOSS, PHOTOGRAPHED WHERE IT IS. A frame of the whole board at
+        // the moment wave 13 starts does not contain the boss -- it spawns off
+        // the plate behind the arch and takes seconds to walk on -- so the one
+        // shot that was taken of "the boss wave" reliably showed everything
+        // except the boss. The camera is put on it instead, once, the first
+        // time one is alive and on screen.
+        const boss = g.enemies.find((e) => e.alive && e.def.tier === 'boss' && e.art.alpha > 0.9)
+        if (boss && !posed) {
+          posed = true
+          await lookAt(boss.x, boss.y)
+          await sleep(200)
+          note('  boss ' + boss.def.name + ' at ' + Math.round(boss.x) + ',' + Math.round(boss.y) +
+            ' drawn=' + boss.def.artFacing + ' flipX=' + !!boss.art.flipX)
+          await shot('facing-' + lvl + '-boss-' + VP.w + 'x' + VP.h)
         }
-        if (seen.size >= 5) break
-        await sleep(200)
+        if (g.enemies.filter((e) => e.alive).length === 0 && Date.now() - t0 > 2000) break
       }
-      if (seen.size >= 5) break
     }
-    await sleep(400)
-    await shot('facing-' + lvl + '-' + VP.w + 'x' + VP.h)
+
     let wrong = 0
-    for (const [name, v] of seen) {
-      // Every enemy on every level walks from the arch towards the cabinet, so
-      // it should be showing the side it is travelling towards.
-      note('  ' + name.padEnd(18) + ' drawn=' + v.drawn.padEnd(5)
-        + ' flipped=' + String(v.flipped).padEnd(5) + ' shows=' + v.shows)
+    for (const [name, v] of [...seen].sort()) {
+      const bad = v.backwards > v.samples * 0.5
+      if (bad) wrong++
+      note('  ' + name.padEnd(18) + ' drawn=' + String(v.drawn).padEnd(5)
+        + ' last shows=' + String(v.shows).padEnd(5)
+        + ' travelling=' + String(v.travelling).padEnd(5)
+        + '  backwards on ' + v.backwards + ' of ' + v.samples + ' samples'
+        + (bad ? '   *** BACKWARDS ***' : ''))
     }
-    note('RESULT ' + seen.size + ' enemy type(s) seen on ' + lvl
-      + (wrong ? '  *** ' + wrong + ' backwards ***' : ''))
+    await shot('facing-' + lvl + '-' + VP.w + 'x' + VP.h)
+    note('RESULT ' + seen.size + ' enemy type(s) judged on ' + lvl
+      + (wrong ? '  *** ' + wrong + ' BACKWARDS ***' : '  all facing their travel direction'))
     return
   }
 

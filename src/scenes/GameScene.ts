@@ -86,6 +86,7 @@ import {
   alongLine, areaRing, burstAt, groundStrip, statusMarker,
   type HazardArt, type StatusMarker,
 } from '../systems/HeroFx.ts'
+import { spawnLaneIds } from '../systems/HeroFacing.ts'
 import { cameraAcceptsGestures, LAYER } from '../systems/Layers.ts'
 import { barWidth, regions, slotDefs, type BarMetrics } from '../systems/AbilityBar.ts'
 import { safeAreaInsets } from '../systems/SafeArea.ts'
@@ -637,6 +638,14 @@ export class GameScene extends Phaser.Scene {
     // at 360 and who stands about 120 px tall reaches y=240, well inside it.
     this.hero = new Hero(this, HERO_START[0], HERO_START[1],
       heroDef, resolveHeroId(run.heroId))
+    // WHERE ENEMIES COME IN, so a hero with nothing to look at faces the way
+    // they will arrive from rather than keeping whichever way he last turned.
+    // Computed from this level's own lanes and its own wave table -- levels 3
+    // and 4 have two gates, and which lanes are gates is a question only the
+    // waves can answer: level 3's `main` is the trunk the other two merge
+    // into, and its first waypoint is in the middle of the board.
+    this.hero.arrivalPoints = spawnLaneIds(this.level.waveTable)
+      .map((id) => this.lanes.lane(id).path.pointAt(0))
     this.hero.on('revived', () => {
       play(this, 'build')
       logEvent('hero', 'revived where he fell')
@@ -1829,7 +1838,17 @@ export class GameScene extends Phaser.Scene {
     this.clearSelection()
   }
 
-  private selectHero(): void {
+  /**
+   * Selects the hero: the first half of the two-step move.
+   *
+   * PUBLIC BECAUSE THERE ARE TWO WAYS IN. Tapping his sprite on the board is
+   * one and the HUD's portrait chip is the other, and they are the SAME
+   * interaction rather than two that resemble each other — the same selection,
+   * the same foot ring, the same refusal while he is down, and the same second
+   * tap on the map to move him. A chip that ran its own version of this would
+   * be a second selection state to keep in step.
+   */
+  selectHero(): void {
     this.deselectTower()
     if (this.hero.down) {
       this.status.alert =
@@ -5067,5 +5086,12 @@ export class GameScene extends Phaser.Scene {
 
   heroDef(): HeroDef {
     return this.hero.def
+  }
+
+  /** Whether the hero is the current selection, so the HUD's portrait chip can
+   *  carry the same ring his feet do. Read-only: the chip asks, it does not
+   *  set — `selectHero` is the one way in. */
+  get heroIsSelected(): boolean {
+    return this.heroSelected
   }
 }

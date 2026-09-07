@@ -233,7 +233,8 @@
       "duration": 3.5,
       "range": 260
     },
-    "artFacing": "left"
+    "artFacing": "right",
+    "_artFacing": "DRAWN FACING RIGHT, and this said 'left' until it was checked against the pixels. THAT IS THE REPORTED BACKWARDS BOSS. `mirroredFor` flips a sprite exactly when its heading disagrees with the way its art was drawn, so a wrong declaration here inverts the answer everywhere: the Rainbow Reaper walked the whole of level 3 back to front. She was reported as the LEVEL 1 boss, which is level 1's Politician -- he is drawn facing right, declared right, and is correct; the unicorn is level 3's, and is the one that was wrong.\nHOW IT GOT WRONG: she arrived in the same upload as Pom-Pom, the Long Snapper, the Catcher and the Zamboni Wraith, and all four of THOSE really are drawn facing left. Hers was filled in with theirs. Nothing in the engine could have caught it -- which way a picture faces is not derivable from the picture -- so the only check is looking, and all eighteen enemy sprites were looked at when this was fixed. The other seventeen agree with their declarations."
   },
   "touristSmall": {
     "name": "Day Tripper",

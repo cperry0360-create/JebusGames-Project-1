@@ -36,27 +36,55 @@ test('no two HUD elements overlap, at any viewport, notch or not', () => {
   }
 })
 
-test('the hero bar is on the left, clear of the painted tavern sign', () => {
-  // The map plate paints COURJAHAN'S TAVERN and its signboard into the map's
-  // top-right corner, at world (930..1007, 103..147). At the minimum zoom the
-  // whole board is on screen, so the map's top-right corner is the screen's
-  // top-right corner and there is no camera position that moves the sign out
-  // from under a HUD element parked there. The hero's health bar was parked
-  // there for the whole run.
+test('the hero chip is at the bottom, beside the hand, and off the tavern sign', () => {
+  // WHAT THIS TEST USED TO BE ABOUT. The map plate paints COURJAHAN'S TAVERN
+  // and its signboard into the map's top-right corner, at world (930..1007,
+  // 103..147). At the minimum zoom the whole board is on screen, so the map's
+  // top-right corner IS the screen's top-right corner and no camera position
+  // moves the sign out from under a HUD element parked there. The hero's
+  // health bar was parked there for the whole run; it was moved to the top
+  // LEFT, and this checked it had not drifted back.
   //
-  // Measured, so this is a fact about the game and not about the wording of a
-  // requirement: the sign's projection at minimum zoom on the reference phone.
+  // It has moved again and much further: it is a portrait chip at the bottom
+  // of the screen beside the ability buttons, which takes it off the second
+  // row entirely. The sign check is kept — the geometry it encodes is a fact
+  // about the map and is exactly the kind of thing that gets re-broken by the
+  // next element that wants the top-right — and it now has a second element to
+  // ask about, since the message row inherited the whole of that row.
   const SIGN = { x: 930, y: 103, w: 77, h: 44 }
   const MIN_ZOOM = 0.776
   const WORLD = { width: 1280, height: 720 }
 
   for (const [name, width, height] of VIEWPORTS) {
     const layout = hudLayout({ width, height, insets: NO_INSETS, ...WIDEST }, CFG)
-    assert.ok(layout.heroRow.x < layout.messageRow.x,
-      `${name}: the hero bar is not on the left of the second row`)
+
+    // BESIDE THE HAND. The chip is on the ability row's baseline and to the
+    // left of the icons, with a real gap: it is a control that MOVES THE HERO
+    // sitting next to controls that spend cooldowns, so a thumb travelling the
+    // row must not find them adjacent.
+    assert.equal(layout.heroChip.y + layout.heroChip.height,
+      layout.abilities.y + layout.abilities.height,
+      `${name}: the chip and the icons do not share a baseline`)
+    assert.ok(layout.heroChip.x + layout.heroChip.width <= layout.abilities.x,
+      `${name}: the chip overlaps the ability icons`)
+    const gap = layout.abilities.x - (layout.heroChip.x + layout.heroChip.width)
+    assert.ok(gap >= 20,
+      `${name}: only ${Math.round(gap)}px between the hero chip and the nearest ability button`)
+
+    // A TAP TARGET, and one whose mis-tap walks the hero somewhere. 44 is the
+    // floor everything else on the glass is held to; this does not shrink with
+    // the icons on a narrow screen, which is the point of checking it at every
+    // viewport rather than at one.
+    assert.ok(layout.heroChip.width >= 44 && layout.heroChip.height >= 44,
+      `${name}: the hero chip is ${layout.heroChip.width}x${layout.heroChip.height}, under 44pt`)
+
+    // And the second row is the message row's alone now.
+    assert.equal(layout.messageRow.x, Math.round(layout.messageRow.x),
+      `${name}: the message row has a fractional origin`)
 
     // Every camera position the clamp allows at minimum zoom, which is where
-    // the sign's screen position is most constrained.
+    // the sign's screen position is most constrained. Neither the chip nor
+    // anything else on the second row may sit on it.
     const halfW = width / (2 * MIN_ZOOM)
     const halfH = height / (2 * MIN_ZOOM)
     const cxs = halfW * 2 >= WORLD.width ? [WORLD.width / 2] : [halfW, WORLD.width - halfW]
@@ -69,45 +97,48 @@ test('the hero bar is on the left, clear of the painted tavern sign', () => {
           width: SIGN.w * MIN_ZOOM,
           height: SIGN.h * MIN_ZOOM,
         }
-        assert.ok(!overlaps(r, layout.heroRow),
-          `${name}: the hero bar is on the painted tavern sign again ` +
+        assert.ok(!overlaps(r, layout.heroChip),
+          `${name}: the hero chip is on the painted tavern sign ` +
           `(sign at ${Math.round(r.x)},${Math.round(r.y)})`)
       }
     }
   }
 })
 
-test('the hero bar carries its own plate, because no corner is safe', () => {
+test('the hero chip carries its own plate, because no corner is safe', () => {
   // MEASURED, not assumed, and the measurement says the corner cannot be the
   // whole answer. The map is full-bleed and the camera is free, so at maximum
   // zoom it can put any painted feature under any pixel: sweeping every camera
-  // position the clamp allows, at every zoom in the band, against the painted
-  // content found by classifying the plate itself, ZERO of 82,290 screen cells
-  // at 844x390 are never reached. There is no safe corner to move to.
+  // position the clamp allows, at every zoom in the band, ZERO of 82,290
+  // screen cells at 844x390 are never reached. There is no safe corner.
   //
-  // What the move does buy, over 768 camera positions:
-  //
-  //   position                  on the painted signboard   on any painted art
-  //   old, top-right 587,60     110 / 768   (14%)          395 / 768  (51%)
-  //   now, top-left   10,60       6 / 768   (0.8%)         380 / 768  (49%)
-  //   best alternative clear
-  //   of the rest of the HUD      2 / 768                  405 / 768  (worse)
-  //
-  // So the left is within noise of the best position available, and the
-  // remainder is not a placement problem. It is what the HUD's own rules
-  // already say: elements sit over map art, and each one carries its own
-  // plate. The hero bar was a 55% black wash and did not.
+  // So the rule is the HUD's own: elements sit over map art, and each one
+  // carries its own plate. The bar this replaces was a 55% black wash and did
+  // not, which is how the painted signboard showed through it and it showed
+  // through the signboard. The chip inherits the plate that fixed that.
   const hud = src('scenes/HudScene.ts')
-  const bar = (presentation.hud as Record<string, any>).heroBar
-  assert.ok(bar, 'the hero bar has no plate settings')
-  assert.equal(bar.backingAlpha, 1, `a ${bar.backingAlpha} backing lets the map through the bar`)
-  assert.ok(bar.edgeWidth >= 1, 'the bar has no edge, so it has no outline against busy art')
-  assert.match(hud, /this\.heroBar\.fillStyle\(bar\.backing, bar\.backingAlpha\)/,
-    'the hero bar no longer draws its backing from the plate settings')
-  assert.match(hud, /this\.heroBar\.strokeRoundedRect\(x, y, w, h, bar\.radius\)/,
-    'the hero bar draws no edge')
-  assert.doesNotMatch(hud, /heroBar\.fillStyle\(0x000000, 0\.55\)/,
-    'the translucent wash is back')
+  const chip = (presentation.hud as Record<string, any>).heroChip
+  assert.ok(chip, 'the hero chip has no plate settings')
+  assert.equal((presentation.hud as Record<string, any>).heroBar, undefined,
+    'the retired hero bar\'s settings are still in the data')
+  assert.equal(chip.backingAlpha, 1, `a ${chip.backingAlpha} backing lets the map through the chip`)
+  assert.ok(chip.edgeWidth >= 1, 'the chip has no edge, so it has no outline against busy art')
+  assert.match(hud, /this\.chipPlate\.fillStyle\(C\.backing, C\.backingAlpha\)/,
+    'the chip no longer draws its backing from the plate settings')
+  assert.match(hud, /this\.chipPlate\.strokeRoundedRect\(/, 'the chip draws no edge')
+  assert.doesNotMatch(hud, /heroBar/, 'the old hero bar is still drawn somewhere')
+
+  // THE HEALTH IS ON THE PORTRAIT, not beside it: one readout rather than two.
+  assert.ok(chip.barHeight > 0 && chip.barHeight < chip.size / 4,
+    'the health overlay is not a thin bar across the portrait')
+
+  // AND THE STATE IS READ OFF THE SAME FIELDS EVERYTHING ELSE USES. A separate
+  // flag for "which form is he in" is how the portrait and the slot 2 button
+  // come to disagree about which hero is on the board.
+  assert.match(hud, /s\.heroPowered && hero\.poweredSprite/,
+    'the chip decides the hero\'s form from something other than the run state')
+  assert.match(hud, /hero\.portraitSprite/,
+    'the chip does not draw the same art key the loadout card does')
 })
 
 test('every element stays inside the safe area', () => {

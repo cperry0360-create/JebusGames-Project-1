@@ -95,7 +95,7 @@ test('the tab never covers the ability strip, the wave chip or the gear', () => 
     const { tab } = drawerLayout(w, hud.panelArea, TOWERS.length, 0, CFG)
     for (const [k, r] of Object.entries({
       counters: hud.counters, startButton: hud.startButton, settings: hud.settings,
-      abilities: hud.abilities, cancel: hud.cancel, heroRow: hud.heroRow,
+      abilities: hud.abilities, cancel: hud.cancel, heroChip: hud.heroChip,
     })) {
       assert.ok(!overlaps(tab, r), `${name}: the tab overlaps ${k}`)
     }
@@ -110,7 +110,7 @@ test('the expanded panel never covers the ability strip or the wave chip', () =>
     const { panel } = drawerLayout(w, hud.panelArea, TOWERS.length, 0, CFG)
     for (const [k, r] of Object.entries({
       counters: hud.counters, startButton: hud.startButton, settings: hud.settings,
-      abilities: hud.abilities, cancel: hud.cancel, heroRow: hud.heroRow,
+      abilities: hud.abilities, cancel: hud.cancel, heroChip: hud.heroChip,
       messageRow: hud.messageRow,
     })) {
       assert.ok(!overlaps(panel, r), `${name}: the panel overlaps ${k}`)

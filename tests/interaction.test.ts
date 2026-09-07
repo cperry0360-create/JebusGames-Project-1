@@ -370,27 +370,38 @@ test('a downed hero comes back, and says where and when', () => {
   const game = src('scenes/GameScene.ts')
   assert.match(game, /reviveLabel/, 'nothing marks the spot he returns to')
   assert.match(game, /BACK IN \$\{secs\}s/, 'the ground marker carries no countdown')
-  // ONE COUNTDOWN, ON THE GROUND. There were two -- a copy on the hero's HUD
-  // bar, beside a name and a mode label -- and the HUD half went with the
-  // label when the name and "DAD MODE" were removed. The ground marker is the
-  // better of the two anyway: it is where the player is already looking, and
-  // it is where he comes back.
+  // TWO COUNTDOWNS NOW, AND THEY HAVE TO AGREE.
   //
-  // THE NAME IS BACK AND THE MODE IS NOT. Taking both off left a blue bar in
-  // the top left with nothing on it, which was reported as an unlabelled bar
-  // nobody could name -- so the half that was never untrue came back. What
-  // must not come back is the mode label, which said DAD MODE for all five
-  // heroes, and the second countdown.
+  // There used to be one, on the ground, and that was the right call at the
+  // time: the other copy lived on a HUD bar beside a hero name and a mode
+  // label, and the whole bar went. The portrait chip that replaced it brings a
+  // countdown back deliberately — the chip is the hero's state at the bottom
+  // of the screen, and "he is gone, for this long" is the most important thing
+  // that state ever has to say. A chip that showed an empty health bar during
+  // a respawn would be saying he is on the board at zero health.
+  //
+  // WHAT MADE TWO COUNTDOWNS A BUG WAS NEVER THE COUNT, IT WAS THE UNITS.
+  // `reviveIn` is in GAME seconds and the clock runs at 1.4x, so a 25 in the
+  // data is 17.9 on a stopwatch. Both of these run it through `realSeconds`,
+  // so they show the same number; a second countdown in raw game seconds
+  // beside one in real seconds is the failure this now guards against.
   const hud = src('scenes/HudScene.ts')
-  assert.ok(!/BACK IN/.test(hud), 'the hero bar carries a second countdown again')
-  assert.ok(/heroLabel/.test(hud), 'the hero bar is unlabelled again')
-  assert.match(hud, /this\.heroLabel\.setText\(s\.heroName\.toUpperCase\(\)\)/,
-    'the hero bar label is not the hero name')
+  assert.match(hud, /realSeconds\(s\.heroReviveIn, 1\)/,
+    'the chip counts the respawn down in game seconds while the ground marker uses real ones')
+  // NO NAME ON THE CHIP. The bar needed one — it was an unlabelled blue
+  // rectangle and was reported as exactly that. A portrait does not: the thing
+  // that says which hero this is is his face.
+  assert.ok(!/heroLabel/.test(hud), 'the retired hero bar\'s label is still here')
   // Comments stripped: the reasoning above is written into HudScene too, and
   // it has to be allowed to name the string it is explaining.
   const hudCode = hud.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
   assert.ok(!/lastStand\.name|DAD MODE/.test(hudCode),
     'the mode label is back, and it is wrong for four heroes out of five')
+  // AND THE DOWN STATE IS VISIBLE RATHER THAN INFERRED. A hero who is down is
+  // drawn drained and dimmed rather than simply losing his health bar, because
+  // "no bar" and "full bar" are the same picture at nine pixels tall.
+  assert.match(hudCode, /setTint\(s\.heroDown \? C\.downTint : 0xffffff\)/,
+    'a downed hero looks exactly like a healthy one on the chip')
   // In REAL seconds. reviveIn is in game seconds and gameSpeed is 1.4, so a 25
   // in the data is 17.9 on the player's watch — and a countdown that disagrees
   // with a stopwatch reads as broken.
@@ -892,3 +903,64 @@ test('the peanut the game shows is the peanut the game was drawn', () => {
   }
 })
 
+
+test('the hero portrait chip is a move control, and a drag is not a tap', () => {
+  // TWO WAYS INTO ONE INTERACTION. Tapping the hero's sprite selects him and
+  // the next tap on the map moves him; the portrait chip at the bottom of the
+  // HUD is the second way in, and it is the SAME interaction rather than one
+  // that resembles it. A chip running its own version of the selection would
+  // be a second state to keep in step, and the two would drift.
+  const hud = src('scenes/HudScene.ts')
+  const game = src('scenes/GameScene.ts')
+  assert.match(hud, /this\.world\.selectHero\(\)/,
+    'the chip does not go through the scene\'s own selection')
+  assert.match(game, /\n  selectHero\(\): void \{/,
+    'selectHero is not reachable from the HUD, so the chip cannot share it')
+  // Still the one way in: the chip asks whether the hero is selected, it does
+  // not set it.
+  assert.match(game, /get heroIsSelected\(\): boolean/,
+    'the chip has no read-only way to ask about the selection')
+  assert.doesNotMatch(hud, /heroSelected\s*=/, 'the HUD writes the selection state directly')
+
+  // THE WORLD MAP'S DRAG RULE, and the same number. The board pans under the
+  // finger that presses this chip, so a press that TRAVELLED is a scroll and
+  // must not also select the hero — which would then make the next tap on the
+  // map an order. The world map has exactly this problem with its level nodes
+  // and solves it by measuring the travel and acting on release; two different
+  // slops would mean a gesture that scrolls one screen selects on the other.
+  const worldMap = src('scenes/WorldMapScene.ts')
+  const slopOf = (code: string): number => {
+    const m = /const TAP_SLOP = (\d+)/.exec(code)
+    return m ? Number(m[1]) : NaN
+  }
+  assert.equal(slopOf(hud), slopOf(worldMap),
+    'the chip and the world map disagree about how far a tap may travel')
+  assert.ok(slopOf(hud) > 0, 'the chip has no drag rule at all')
+  assert.match(hud, /pointerup/, 'the chip acts on press rather than on release')
+  assert.match(hud, /if \(travelled > TAP_SLOP\) return/,
+    'a drag that ends on the chip still selects the hero')
+})
+
+test('the floating bar over the hero is only up while he is damaged', () => {
+  // It used to be up always, which put a permanent readout over the hero's
+  // head on a board whose whole look is "nothing between the player and the
+  // map" — and the number it carried is on the portrait chip now, where the
+  // thumb already is. What a floating bar is FOR is the moment of the hit.
+  const hero = src('entities/Hero.ts')
+  assert.match(hero, /private syncBarVisibility\(\): void/, 'the bar has no visibility rule')
+  assert.match(hero, /this\.health < this\.def\.maxHealth/,
+    'the bar is not conditioned on the hero actually being hurt')
+  // TWEENED, NOT TOGGLED. An element that blinks on and off over a moving
+  // sprite reads as a rendering fault.
+  const fn = /private syncBarVisibility\(\)[\s\S]*?\n  \}/.exec(hero)!
+  assert.match(fn[0], /tweens\.add/, 'the bar snaps rather than fading')
+  assert.match(fn[0], /killTweensOf/,
+    'a hit during a fade-out leaves two tweens fighting over the alpha')
+  // And it starts hidden, because he starts at full health.
+  assert.match(hero, /this\.bar\.setAlpha\(0\)/, 'the bar is visible before he is ever hurt')
+
+  const p = JSON.parse(readFileSync(url('../src/data/presentation.json'), 'utf8'))
+  assert.ok(p.heroBarFade, 'the fade timings are not in the data')
+  assert.ok(p.heroBarFade.inMs < p.heroBarFade.outMs,
+    'the bar fades in no faster than it fades out; the hit is the urgent half')
+})

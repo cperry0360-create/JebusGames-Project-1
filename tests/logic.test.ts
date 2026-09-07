@@ -397,11 +397,27 @@ test('every enemy declares which way its art is drawn', () => {
       `${id} does not say which way its art is drawn`)
     facing[id] = def.artFacing
   }
-  // Levels 1 and 2 face right; level 3's five face left. Stated rather than
+  // FOUR OF LEVEL 3'S FIVE FACE LEFT, NOT ALL FIVE. Stated rather than
   // derived, so re-exporting a sprite mirrored fails here.
+  //
+  // `unicornBoss` was on this list and should never have been. She is drawn
+  // facing RIGHT -- horn-cannon, muzzle flash and head all to the right, tail
+  // and rainbow to the left -- and she arrived in the same upload as the four
+  // that really are drawn facing left, so hers was filled in with theirs. The
+  // effect is the bug this whole test exists to lock out, arrived at from the
+  // other direction: `mirroredFor` inverts on a wrong declaration exactly as
+  // it did on a blanket rule, and the Rainbow Reaper walked the whole of level
+  // 3 backwards.
+  //
+  // The comment above says these values were established by decoding the
+  // sprites and looking at them. They were, and one of them was still wrong,
+  // which is worth keeping on the record: LOOKING IS THE ONLY CHECK THERE IS
+  // -- which way a picture faces cannot be derived from the picture -- so the
+  // fix was to look at all eighteen rather than at the one that was reported.
+  // The other seventeen agree with their declarations.
   assert.deepEqual(
     Object.entries(facing).filter(([, v]) => v === 'left').map(([k]) => k).sort(),
-    ['catcher', 'longsnap', 'pompom', 'unicornBoss', 'zamboni'],
+    ['catcher', 'longsnap', 'pompom', 'zamboni'],
     'the set of left-drawn enemies changed')
 })
 
