@@ -385,7 +385,14 @@ test('slot 2 is unusable in base form and enabled in powered form', () => {
   // halves of that are already in drawSlots -- the greyscale swap and the
   // hit rectangle -- and this is what says slot 2 goes through them.
   assert.match(HUD, /const usable = this\.slotUsable\(r, s\)/)
-  assert.match(HUD, /const wantKey = usable \? base : greyKey\(base\)/)
+  // The grey swap, with the fallback that was added after an iPad showed a
+  // 256px stand-in in a 56px slot: when the greyscale copy does not exist --
+  // which is what happens when the icon ITSELF failed to load, since nothing
+  // builds a grey copy of a texture that is not there -- the slot falls back
+  // to the colour icon rather than to nothing. Wrong-looking but present.
+  assert.match(HUD, /const wantKey = usable \? base\s*\n?\s*: \(this\.textures\.exists\(grey\) \? grey : base\)/,
+    'the unavailable state no longer swaps to the greyscale copy')
+  assert.match(HUD, /const grey = greyKey\(base\)/, 'the greyscale key is no longer derived')
 
   // And the button is wired, to something that says it is not built yet.
   assert.match(HUD, /else if \(region\.id === SLOT2\) this\.world\.castHeroSlot2\(\)/,

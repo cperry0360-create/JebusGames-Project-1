@@ -464,6 +464,131 @@ async function run() {
   // The second thing is the fault that comes with dragging a screen whose
   // content is also its buttons: a drag that happens to end on top of a level
   // must not start that level.
+  if (scenario === 'abilityicons') {
+    // EVERY ABILITY ICON, ON EVERY HERO, AT ITS DRAWN SIZE.
+    //
+    // The report: a giant yellow exclamation on a dashed square at the left of
+    // the bar, and a blank grey circle where Zoomies should be, playing Bailey
+    // on level 3. Both are fallbacks, so what matters is WHICH KEY each slot
+    // ended up with and HOW BIG it drew -- neither of which a screenshot can
+    // be argued about.
+    const ARTD = (await import('./js/data/art.json', { with: { type: 'json' } })).default
+    const RS = await import('./js/systems/RunState.js')
+    const HEROES = (await import('./js/data/heroes.json', { with: { type: 'json' } })).default
+    const ids = Object.keys(HEROES).filter((k) => !k.startsWith('_'))
+    const LEVEL = arg || 'level3'
+    let faults = 0
+    const fail = (m) => { faults++; note('   *** ' + m) }
+    const MISS = ARTD.generated.iconMissing
+    const ABD = (await import('./js/data/abilities.json', { with: { type: 'json' } })).default
+    const ALL_ABILITIES = Object.keys(ABD).filter((k) => !k.startsWith('_'))
+    note('drafting all of: ' + JSON.stringify(ALL_ABILITIES))
+    note('level ' + LEVEL + ' at ' + VP.w + 'x' + VP.h + '; the stand-in key is ' + MISS)
+
+    for (const hid of ids) {
+      for (const k of ['Title', 'WorldMap', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+      // EVERY DRAFTABLE ABILITY AT ONCE, not the harness's usual pinned pair.
+      // The report puts the giant stand-in at the LEFT of the bar, which is
+      // where DRAFTED abilities live -- and a scenario that always drafts
+      // molotov and glacier can only ever exercise two of the seven paths.
+      RS.setRunState({
+        heroId: hid, levelId: LEVEL, seed: 7,
+        openingTowers: ['withholding', 'writeoff'], abilities: ALL_ABILITIES,
+        reserveTowers: [], resumeFrom: null,
+      })
+      game.scene.start('Game'); game.scene.start('Hud')
+      if (!(await until(() => running('Game') && running('Hud') && scene('Game').hero, 15000))) {
+        fail(hid + ': the level did not start'); continue
+      }
+      await sleep(900)
+      const G = scene('Game'), H = scene('Hud')
+
+      // The slots, off the HUD's own list rather than by hunting the display
+      // list: a slot that drew nothing at all still has to be reported.
+      const rows = []
+      for (const slot of (H.slots ?? [])) {
+        const img = slot.icon
+        if (!img) continue
+        const b = img.getBounds()
+        rows.push({
+          id: slot.id ?? '?', key: img.texture.key,
+          w: Math.round(b.width), h: Math.round(b.height),
+          x: Math.round(b.centerX), y: Math.round(b.centerY),
+          alpha: +(img.alpha ?? 1).toFixed(2), visible: img.visible !== false,
+        })
+      }
+      note(hid + ' (' + rows.length + ' slots):')
+      const boxes = rows.map((r) => r.h).filter((h) => h > 0)
+      const median = boxes.sort((a, b) => a - b)[Math.floor(boxes.length / 2)] || 0
+      for (const r of rows) {
+        const isMiss = r.key === MISS || r.key === MISS + '-grey'
+        const exists = game.textures.exists(r.key)
+        note('   ' + String(r.id).padEnd(12) + String(r.key).padEnd(28) +
+          r.w + 'x' + r.h + ' at ' + r.x + ',' + r.y +
+          (exists ? '' : '  TEXTURE DOES NOT EXIST') + (isMiss ? '  <-- STAND-IN' : ''))
+        if (isMiss) fail(hid + ': slot ' + r.id + ' is drawing the missing-texture stand-in')
+        // OVERSIZE is the other half of the report: a stand-in that draws at
+        // its own 256px canvas instead of the slot's ~64 is four times every
+        // other control and lies across the board.
+        if (median > 0 && r.h > median * 1.6) {
+          fail(hid + ': slot ' + r.id + ' draws ' + r.w + 'x' + r.h +
+            ', against a median slot of ' + median)
+        }
+        if (r.w <= 1 || r.h <= 1) fail(hid + ': slot ' + r.id + ' drew nothing')
+      }
+      // And the grey copies the bar swaps to when a slot is unavailable.
+      const greys = rows.map((r) => r.key.replace(/-grey$/, ''))
+        .filter((k, i, a) => a.indexOf(k) === i)
+      const missingGrey = greys.filter((k) => !game.textures.exists(k + '-grey'))
+      if (missingGrey.length) {
+        note('   no greyscale copy for: ' + JSON.stringify(missingGrey))
+      }
+      await shot('abilityicons-' + hid + '-' + VP.w + 'x' + VP.h)
+
+      // AND THE STATE CORY ACTUALLY HIT, forced. Every check above passes on
+      // current main because the three ability files that were missing at
+      // 9172418 have since been added -- so the only way to exercise the
+      // FALLBACK is to take a texture away and watch what the bar does.
+      //
+      // Both of his textures are removed: the icon, and the greyscale copy the
+      // bar swaps to when a slot is unavailable. That second removal is the
+      // whole bug -- nothing builds a grey copy of a texture that is not
+      // there, so the wanted key did not exist and the swap was skipped
+      // entirely, leaving the sprite at its construction size.
+      if (hid === 'bailey') {
+        const victims = ['ability-bailey-1', 'ability-bailey-1-grey',
+          'ability-bailey-2', 'ability-bailey-2-grey']
+        for (const k of victims) if (game.textures.exists(k)) game.textures.remove(k)
+        note('   forced missing: ' + JSON.stringify(victims))
+        await sleep(700)
+        const after = []
+        for (const slot of (H.slots ?? [])) {
+          const img = slot.icon
+          if (!img) continue
+          const b = img.getBounds()
+          after.push({ key: img.texture.key, h: Math.round(b.height), w: Math.round(b.width) })
+        }
+        const med = after.map((r) => r.h).sort((a, b) => a - b)[Math.floor(after.length / 2)] || 0
+        for (const r of after) {
+          const flag = r.key === MISS ? '  <-- STAND-IN' : ''
+          note('   after removal: ' + String(r.key).padEnd(28) + r.w + 'x' + r.h + flag)
+          // THE ASSERTION THE BRIEF ASKED FOR: a missing texture must draw at
+          // the size of the thing it replaced, not at its own canvas size.
+          if (med > 0 && r.h > med * 1.4) {
+            fail('with its texture removed, a slot drew ' + r.w + 'x' + r.h +
+              ' against a median slot of ' + med + ' -- the stand-in is not fitted')
+          }
+          if (r.w <= 1 || r.h <= 1) fail('with its texture removed, a slot drew nothing at all')
+        }
+        await shot('abilityicons-bailey-missing-' + VP.w + 'x' + VP.h)
+      }
+    }
+    note('RESULT ' + (faults === 0
+      ? 'every ability slot on all five heroes drew its own art at the slot size'
+      : '*** ' + faults + ' faults ***'))
+    return
+  }
+
   if (scenario === 'mapedge') {
     // BUG C. A black vertical rounded pill on the LEFT EDGE of the world map.
     //

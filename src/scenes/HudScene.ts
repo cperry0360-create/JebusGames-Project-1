@@ -876,12 +876,39 @@ export class HudScene extends Phaser.Scene {
       //                the word painted into the placeholder.
       //   cooling      the colour icon, dimmed, under the sweep and a count.
       //   ready        the colour icon, undimmed.
+      //
+      // THE SWAP NEVER LEAVES A SLOT UNFITTED, and that is the bug this shape
+      // fixes rather than the states above.
+      //
+      // It used to read `if (exists(wantKey) && key !== wantKey)` and do BOTH
+      // the setTexture and the fitInBox inside. So when the wanted texture did
+      // not exist -- which is exactly what happens to `<icon>-grey` when the
+      // icon itself failed to load, because nothing builds a greyscale copy of
+      // a texture that is not there -- the whole block was skipped, the sprite
+      // kept the texture and the SCALE it was constructed with, and the
+      // 256-pixel stand-in drew at 256 pixels in a 56-pixel slot. On an iPad
+      // that is a yellow exclamation mark four times the size of every other
+      // control, lying across the board.
+      //
+      // Two rules now, and they are separate on purpose:
+      //   1. never ask for a texture that does not exist -- fall back to the
+      //      colour icon, which is wrong-looking but present and legible,
+      //      rather than to nothing;
+      //   2. FIT WHATEVER WAS ACTUALLY SET, every time it changes. A stand-in
+      //      is fitted by the same call as real art, so it can only ever be
+      //      the size of the slot it is standing in for.
       const base = this.world.abilityIcon(r.id) ?? slot.icon.texture.key
-      const wantKey = usable ? base : greyKey(base)
-      if (this.textures.exists(wantKey) && slot.icon.texture.key !== wantKey) {
+      const grey = greyKey(base)
+      const wantKey = usable ? base
+        : (this.textures.exists(grey) ? grey : base)
+      if (slot.icon.texture.key !== wantKey && this.textures.exists(wantKey)) {
         slot.icon.setTexture(wantKey)
-        fitInBox(slot.icon, base, r.boxH)
       }
+      // Fitted against the key the sprite is ACTUALLY wearing, not against the
+      // one that was wanted. Those differ whenever a fallback is in play, and
+      // fitting by a key the sprite is not showing is how a stand-in ends up
+      // sized for the art it replaced rather than for its own canvas.
+      fitInBox(slot.icon, slot.icon.texture.key, r.boxH)
       // The greyscale copy is already the "off" state; dimming it as well
       // makes an unavailable button darker than a cooling one, which inverts
       // the reading -- the thing you cannot use at all looked further away
