@@ -1754,35 +1754,86 @@ async function run() {
     // the canvas at a phone's zoom.
     await lookAt(SPOTS[4][0], SPOTS[4][1])
     await move(...toScreen(SPOTS[4][0], SPOTS[4][1])); await shot('ui-02-hover-spot')
-    await click(...toScreen(SPOTS[4][0], SPOTS[4][1])); await shot('ui-03-menu')
-    let hit = g.menu.hitAreas?.[0]
-    if (hit) { const b = hit.getBounds(); await move(b.centerX, b.centerY); await shot('ui-04-menu-hover-range') }
-    // Press and hold, like every other purchase: the menu previews on press
-    // and buys on release.
-    if (hit) {
-      const b = hit.getBounds()
-      mouse('mousedown', b.centerX, b.centerY)
-      await sleep(300)
-      mouse('mouseup', b.centerX, b.centerY)
-      await sleep(260)
-    }
+    await click(...toScreen(SPOTS[4][0], SPOTS[4][1])); await shot('ui-03-ring')
+    // THE RING, through the shared helper. Everything from here to the shot
+    // below used to hand-roll `g.menu.hitAreas`, and it threw on the first
+    // line of it the day the build menu was deleted -- so the hero-control
+    // half of this scenario, which is the part nothing else covers, had not
+    // run since.
+    const builtOk = await build(4, 0)
     await shot('ui-05-built')
-    note('after build: towers=' + g.towers.length + ' peanuts=' + g.status.peanuts)
+    note('after build: ok=' + builtOk + ' towers=' + g.towers.length +
+      ' peanuts=' + g.status.peanuts)
     await click(...toScreen(SPOTS[4][0], SPOTS[4][1])); await shot('ui-06-select-tower')
+
+    // CLOSE THE TOWER RING FIRST. The tap above opened it, and GameScene's
+    // pointer handler begins `if (this.ring?.active) { clearSelection(); return }`
+    // -- so with a ring up, every tap below is spent dismissing it and the
+    // hero is never reached. That is correct behaviour and it made "a tap on
+    // the hero did not select him" look like a product bug for one whole
+    // round of this repair.
+    g.ring?.close()
+    await sleep(300)
 
     // Hero control: a ground tap alone must do nothing.
     const before = [Math.round(g.hero.x), Math.round(g.hero.y)]
     await click(...toScreen(400, 620))
     const afterGround = [Math.round(g.hero.x), Math.round(g.hero.y)]
     await sleep(900)
-    note(`ground tap with hero UNSELECTED: ${before} -> ${afterGround} -> ${[Math.round(g.hero.x), Math.round(g.hero.y)]} (must not move)`)
+    const settled = [Math.round(g.hero.x), Math.round(g.hero.y)]
+    // 6px of slack: the hero drifts a pixel or two around his own footing.
+    const movedOnGroundTap = Math.abs(settled[0] - before[0]) > 6 || Math.abs(settled[1] - before[1]) > 6
+    note(`ground tap with hero UNSELECTED: ${before} -> ${afterGround} -> ${settled} (must not move)`)
     await shot('ui-07-ground-tap-unselected')
 
-    await click(...toScreen(g.hero.x, g.hero.y))
-    note('hero selected: ' + g.heroSelected + ' msg="' + g.status.message + '"')
+    // `heroIsSelected` and `alert`. `heroSelected` is private now and `message`
+    // was renamed to `alert`; both read `undefined` here for weeks and printed
+    // as though they were answers.
+    // LOOK AT HIM FIRST. The camera is parked on pad 4 from the build above,
+    // and at a phone's zoom it shows about 490x230 of a 1280x720 board -- the
+    // hero starts at the middle of the map and is simply not on the canvas, so
+    // a tap computed from his world position lands outside it and selects
+    // nothing. This is the same trap `build()` documents for pads, and it is
+    // why "a tap on the hero did not select him" has to be proved rather than
+    // believed.
+    await lookAt(g.hero.x, g.hero.y)
+    const heroOnScreen = g.cameras.main.worldView.contains(g.hero.x, g.hero.y)
+    note('hero at ' + Math.round(g.hero.x) + ',' + Math.round(g.hero.y) +
+      ' on screen: ' + heroOnScreen)
+    const rallyBefore = JSON.stringify(g.hero.rally)
+    // EVERY REASON THE TAP COULD BE REFUSED, READ OUT BEFORE IT IS SENT, so a
+    // red result here is a statement about the product and not about the aim.
+    // GameScene's tap handler takes the sign, then a free pad, then an open
+    // ring, then a tower, and only then the hero -- so all four are recorded.
+    const [hx, hy] = toScreen(g.hero.x, g.hero.y)
+    const padUnder = g.build.spotAt(g.hero.x, g.hero.y)
+    note('before the tap: ringActive=' + !!g.ring?.active +
+      ' heroHits=' + g.hero.hits(g.hero.x, g.hero.y) +
+      ' padUnderHero=' + (padUnder ? '#' + padUnder.index : 'none') +
+      ' tapAt=' + Math.round(hx) + ',' + Math.round(hy) +
+      ' phase=' + g.status.phase + ' heroDown=' + g.status.heroDown)
+    await click(hx, hy)
+    const picked = g.heroIsSelected
+    // AND THEN THE SAME THING THROUGH THE API. This separates "the hero cannot
+    // be selected" from "the tap never arrived" -- different bugs with
+    // different owners, and a finding that does not say which is not worth
+    // filing. It also lets the rally half below run either way, so one broken
+    // route does not blind the rest of the scenario.
+    g.selectHero()
+    const byApi = g.heroIsSelected
+    note('tap on the hero: selected=' + picked + ' alert="' + g.status.alert + '"' +
+      '  |  selectHero() called directly: selected=' + byApi)
     await shot('ui-08-hero-selected')
-    await click(...toScreen(400, 620))
-    note('after order: selected=' + g.heroSelected + ' rally=' + JSON.stringify(g.hero.rally))
+    // And an order to a point that is also on screen, for the same reason.
+    const target = [g.hero.x - 60, g.hero.y + 40]
+    await click(...toScreen(target[0], target[1]))
+    // MOVED, not merely non-null. `hero.rally` is initialised to the hero's own
+    // spawn, so `!!rally` is true before any order is given and an assertion
+    // built on it passes without the order ever happening.
+    const rallyAfterOrder = JSON.stringify(g.hero.rally)
+    const ordered = rallyAfterOrder !== rallyBefore
+    note('after order: selected=' + g.heroIsSelected +
+      ' rally ' + rallyBefore + ' -> ' + rallyAfterOrder + '  (changed=' + ordered + ')')
     await shot('ui-09-rally-ordered')
     await sleep(2500)
     note(`hero walked to ${[Math.round(g.hero.x), Math.round(g.hero.y)]} atRally=${g.hero.atRally}`)
@@ -1791,12 +1842,35 @@ async function run() {
     // A tap on a pad must beat a rally order aimed at the same pixel.
     await click(...toScreen(g.hero.x, g.hero.y))
     await click(...toScreen(SPOTS[2][0], SPOTS[2][1]))
-    note('pad vs ground precedence: menuOpen=' + g.menu.isOpen + ' heroRally=' + JSON.stringify(g.hero.rally))
+    const ringOpen = !!g.ring
+    const rallyAfter = JSON.stringify(g.hero.rally)
+    note('pad vs ground precedence: ringOpen=' + ringOpen + ' heroRally=' + rallyAfter)
     await shot('ui-11-pad-beats-ground')
+    g.ring?.close()
     await click(20, 700)
 
     await key('KeyQ'); await move(700, 430); await shot('ui-13-ability-target')
     await key('Escape')
+
+    // THE THREE CLAIMS THIS SCENARIO IS ACTUALLY FOR, asserted rather than
+    // printed. Nothing else in the harness covers hero rally precedence.
+    let faults = 0
+    const fail = (m) => { faults++; note('   *** ' + m) }
+    if (!builtOk) fail('a tower could not be built through the ring on pad 4')
+    if (movedOnGroundTap) fail('a ground tap moved the hero while he was NOT selected')
+    if (!heroOnScreen) fail('the hero was off screen, so nothing below measured anything')
+    if (!byApi) fail('selectHero() does not select the hero at all')
+    if (!picked) {
+      fail('A TAP ON THE HERO DOES NOT SELECT HIM. selectHero() works when it is '
+        + 'called directly, hero.hits() is true at the tapped point, no ring is open '
+        + 'and no pad is under him -- so the pointer ROUTE is what is broken, not '
+        + 'the selection. Reported, not fixed: see reports/2026-09-07-the-blind-harness.md')
+    }
+    if (!ordered) fail('a ground tap did not move the hero\'s rally after he was selected')
+    if (!ringOpen) fail('a tap on a pad did not beat a rally order aimed at the same pixel')
+    note('RESULT ' + (faults === 0
+      ? 'the pad beats the ground, and the hero moves only when he has been picked up'
+      : '*** ' + faults + ' faults ***'))
     return
   }
 
@@ -2001,17 +2075,17 @@ async function run() {
     // everything it touched for the rest of the wave. Measured as movement.
     const RULES = (await import('./js/data/rules.json', { with: { type: 'json' } })).default
     g.status.peanuts = 99999
+    // Through the shared `build()` helper, which drives the RING. This was ten
+    // lines of hand-rolled `g.menu` and it threw on the first of them the day
+    // the build menu was deleted -- taking the whole stun measurement with it,
+    // silently, because the director's catch swallowed the throw.
     const cam0 = g.cameras.main
     const spot = SPOTS.findIndex((p) => cam0.worldView.contains(p[0], p[1]))
-    const [px, py] = toScreen(SPOTS[spot][0], SPOTS[spot][1])
-    await click(px, py); await sleep(350)
-    const b = g.menu.hitAreas[0].getBounds()
-    await move(b.centerX, b.centerY)
-    mouse('mousedown', b.centerX, b.centerY); await sleep(300)
-    mouse('mouseup', b.centerX, b.centerY); await sleep(600)
+    if (!(await build(spot, 0))) { note('RESULT *** could not place a tower to stun with ***'); return }
+    await sleep(300)
 
     // Whatever was in the first slot becomes a fully specialized Filing
-    // Extension: the panel is not what is under test, the stun is.
+    // Extension: how it got there is not what is under test, the stun is.
     const t = g.towers[0]
     t.def = g.towerDefs.extension
     t.tier = 3
@@ -2048,22 +2122,76 @@ async function run() {
       stunnedTicks + ' of ' + ticks + ' samples')
 
     // And the invariant itself, without a tower in the way.
-    const e2 = g.enemies.find((x) => x !== e && x.alive) ?? e
-    e2.applyStun(0.6, RULES.combat.stunLockoutMultiple)
+    //
+    // THE SIGNATURE GAINED A THIRD ARGUMENT WHILE THIS SCENARIO WAS BLIND.
+    // `applyStun(seconds, lockoutMultiple)` became
+    // `applyStun(seconds, lockoutMultiple, diminish)`, and diminishing returns
+    // -- each stop inside a 6s window shorter than the last -- are a mechanic
+    // that arrived after this stopped running. The old two-argument call threw
+    // on `diminish.windowSeconds`; the director swallowed it, and nobody
+    // learned that the lockout is no longer the only thing limiting a stun.
+    const DIM = RULES.combat.stunDiminish
+    const stun = (x) => x.applyStun(0.6, RULES.combat.stunLockoutMultiple, DIM)
+    // A CLEAN TARGET, and both halves of "clean" are needed.
+    //
+    // `e` has just spent six seconds under the tower and is deep in its
+    // lockout with stacks on it, so the old `?? e` fallback measured the
+    // LOCKOUT and reported "the stun did not land" as though it were a product
+    // bug. And the tower goes on firing on its own clock at anything in range,
+    // so most of the enemies near it are in lockout too -- `!x.stunned` is not
+    // enough, because an enemy that has recovered still carries one.
+    //
+    // So: stand the tower down first, then pick an enemy with neither a stun
+    // nor a lockout on it. Both fields are read directly; a probe that cannot
+    // see the state it is asserting about cannot assert about it.
+    g.towers = g.towers.filter((x) => x !== t)
+    await sleep(400)
+    await until(() => g.enemies.some((x) =>
+      x !== e && x.alive && x.stunRemaining <= 0 && x.stunLockout <= 0), 20000)
+    const e2 = g.enemies.find((x) =>
+      x !== e && x.alive && x.stunRemaining <= 0 && x.stunLockout <= 0)
+    if (!e2) { note('RESULT *** no un-stunned, un-locked enemy to test the invariant on ***'); return }
+    e2.health = 99999
+    stun(e2)
     const first = e2.stunned
-    e2.applyStun(0.6, RULES.combat.stunLockoutMultiple)
+    const firstSeconds = e2.stunRemaining
+    stun(e2)
     await sleep(900)
     const refreshedWhileStunned = e2.stunned
-    e2.applyStun(0.6, RULES.combat.stunLockoutMultiple)
+    stun(e2)
     const refreshedDuringLockout = e2.stunned
     await sleep(900)
-    e2.applyStun(0.6, RULES.combat.stunLockoutMultiple)
+    stun(e2)
     const afterLockout = e2.stunned
+    const secondSeconds = e2.stunRemaining
     note('stun landed=' + first + ', still stunned after 0.9s of re-applying=' +
       refreshedWhileStunned + ', re-applied during lockout=' + refreshedDuringLockout +
       ', lands again after the lockout=' + afterLockout)
+    // THE DIMINISH, which is the half of this that had never been exercised.
+    // A second stop inside the window has to be shorter than the first, or one
+    // tower holds a target forever -- which is the bug this whole scenario is
+    // named after, in its second form.
+    note('diminish: window ' + DIM.windowSeconds + 's factor ' + DIM.factor +
+      ' floor ' + DIM.minSeconds + 's; first stop ' + firstSeconds.toFixed(2) +
+      's, later stop inside the window ' + secondSeconds.toFixed(2) + 's')
+    let faults = 0
+    const fail = (m) => { faults++; note('   *** ' + m) }
+    if (!first) fail('the first stun did not land at all')
+    if (refreshedWhileStunned && refreshedDuringLockout) {
+      fail('a stun can be refreshed indefinitely while it runs')
+    }
+    if (!(secondSeconds < firstSeconds)) {
+      fail('a repeated stop inside the window is not shorter than the first (' +
+        secondSeconds.toFixed(2) + 's against ' + firstSeconds.toFixed(2) + 's)')
+    }
+    if (secondSeconds > 0 && secondSeconds < DIM.minSeconds - 1e-6) {
+      fail('a diminished stop came out under its own floor')
+    }
 
     await shot('stun-01-under-fire')
+    note('RESULT ' + (faults === 0
+      ? 'a single Amendment cannot hold a target: the lockout blocks the refresh and the diminish shortens every repeat'
+      : '*** ' + faults + ' faults ***'))
     return
   }
 
@@ -2277,28 +2405,29 @@ async function run() {
       const inView = v.contains(wx, wy)
       await click(sx, sy)
       await sleep(250)
-      const opened = !!g.menu?.isOpen
-      let bought = false
-      if (opened) {
-        const hit = g.menu.hitAreas?.[0]
-        const bb = hit && hit.getBounds()
-        const before = g.towers.length
-        if (bb) {
-          await move(bb.centerX, bb.centerY)
-          mouse('mousedown', bb.centerX, bb.centerY); await sleep(300)
-          mouse('mouseup', bb.centerX, bb.centerY); await sleep(300)
-        }
-        bought = g.towers.length > before
-        note('pad ' + i + ' world ' + Math.round(wx) + ',' + Math.round(wy) +
-          ' inView=' + inView + ' screen ' + Math.round(sx) + ',' + Math.round(sy) +
-          ' menu=' + opened + ' option@' + (bb ? Math.round(bb.centerX) + ',' + Math.round(bb.centerY) : 'none') +
-          ' bought=' + bought + ' msg="' + g.status.message + '"')
-      } else {
-        note('pad ' + i + ' inView=' + inView + ' screen ' + Math.round(sx) + ',' +
-          Math.round(sy) + ' MENU DID NOT OPEN msg="' + g.status.message + '"')
-      }
+      // THE RING, through the shared helper. This used to hand-roll the build
+      // menu and read `g.status.message`, which is `alert`. It did not throw --
+      // `g.menu?.isOpen` is optional-chained -- so it ran to the end, printed
+      // "MENU DID NOT OPEN" fifteen times, reported "total 0 of 15 pads built",
+      // and exited 0. Its own output said everything had failed and nothing
+      // was reading it.
+      const opened = !!g.ring
+      const before = g.towers.length
+      const bought = await build(i, 0)
+      note('pad ' + i + ' world ' + Math.round(wx) + ',' + Math.round(wy) +
+        ' inView=' + inView + ' screen ' + Math.round(sx) + ',' + Math.round(sy) +
+        ' ringOnTap=' + opened + ' bought=' + bought +
+        ' towers ' + before + '->' + g.towers.length +
+        ' alert="' + g.status.alert + '"')
     }
-    note('total ' + g.towers.length + ' of ' + g.build.spots.length + ' pads built')
+    const built = g.towers.length, pads = g.build.spots.length
+    note('total ' + built + ' of ' + pads + ' pads built')
+    // AND IT HAS TO BE ALL OF THEM. This is the scenario that answers "can the
+    // director place a tower on every pad at a phone's zoom, where most of
+    // them start off screen" -- a question whose only useful answer is yes.
+    note('RESULT ' + (built === pads
+      ? 'every one of the ' + pads + ' pads took a tower at ' + VP.w + 'x' + VP.h
+      : '*** only ' + built + ' of ' + pads + ' pads could be built on ***'))
     return
   }
 
@@ -2313,14 +2442,12 @@ async function run() {
     }
 
     g.status.peanuts = 99999
+    // Through `build()`, which drives the ring. The hand-rolled `g.menu`
+    // version threw here and took the whole projectile check with it.
     const cam0 = g.cameras.main
     const spot = SPOTS.findIndex((p) => cam0.worldView.contains(p[0], p[1]))
-    const [px, py] = toScreen(SPOTS[spot][0], SPOTS[spot][1])
-    await click(px, py); await sleep(350)
-    const b = g.menu.hitAreas[0].getBounds()
-    await move(b.centerX, b.centerY)
-    mouse('mousedown', b.centerX, b.centerY); await sleep(300)
-    mouse('mouseup', b.centerX, b.centerY); await sleep(600)
+    if (!(await build(spot, 0))) { note('RESULT *** could not place a tower to fire from ***'); return }
+    await sleep(300)
     const t = g.towers[0]
 
     g.startWave()
@@ -2980,14 +3107,12 @@ async function run() {
     }
 
     g.status.peanuts = 99999
+    // Through `build()`, which drives the ring. The hand-rolled `g.menu`
+    // version threw here and took the effect-sheet check with it.
     const cam0 = g.cameras.main
     const spot = SPOTS.findIndex((p) => cam0.worldView.contains(p[0], p[1]))
-    const [px, py] = toScreen(SPOTS[spot][0], SPOTS[spot][1])
-    await click(px, py); await sleep(350)
-    const b = g.menu.hitAreas[0].getBounds()
-    await move(b.centerX, b.centerY)
-    mouse('mousedown', b.centerX, b.centerY); await sleep(300)
-    mouse('mouseup', b.centerX, b.centerY); await sleep(600)
+    if (!(await build(spot, 0))) { note('RESULT *** could not place a tower to blast from ***'); return }
+    await sleep(300)
     // A splash tower, so blast() runs.
     const t = g.towers[0]
     t.def = g.towerDefs.escalation
@@ -4989,8 +5114,14 @@ async function run() {
       }
       // The HUD against itself, live rather than from the layout arithmetic.
       const L = hud.layout
+      // `heroChip`, not `heroRow`. The wide hero bar across the top of the map
+      // was replaced by a portrait chip at the bottom, and `L.heroRow` has been
+      // undefined ever since -- so `a.x` threw on the first pass of this loop,
+      // on the first frame of the watch, and the whole 13-wave run this
+      // scenario exists to watch has not been watched since. It is the most
+      // expensive of the blind ones: nothing else plays a run end to end.
       const boxes = [['counters', L.counters], ['start', L.startButton],
-        ['hero row', L.heroRow], ['message', L.messageRow],
+        ['hero chip', L.heroChip], ['message', L.messageRow],
         ['abilities', L.abilities], ['settings', L.settings]]
       for (let i = 0; i < boxes.length; i++) {
         for (let j = i + 1; j < boxes.length; j++) {
@@ -6544,64 +6675,24 @@ async function run() {
     return
   }
 
-  if (scenario === 'icons') {
-    // The tower panel with the real icons: sizes, that no button carries text,
-    // and that the price sits below the plate rather than on it.
-    g.status.peanuts = 99999
-    await build(3, 0)
-    await sleep(400)
-    const t = g.towers[0]
-    g.openTowerRing ? g.openTowerRing(t) : g.selectTower(t)
-    await until(() => !!g.panel, 5000)
-    await sleep(500)
-    note('viewport ' + VP.w + 'x' + VP.h + '  dpr ' + (window.devicePixelRatio || 1))
-    const layer = g.panel.layer
-    const kids = layer.list
-    const imgs = kids.filter((o) => o.texture && /icon-|generated-icon/.test(o.texture.key))
-    // Non-empty only. plateButton keeps its own label object and we pass '',
-    // so every button carries an empty Text that draws nothing — counting it
-    // reported the price as sitting on the plate when it is not there at all.
-    const texts = kids.filter((o) => o.type === 'Text' && String(o.text ?? '').trim() !== '')
-    note('panel: ' + kids.length + ' objects, ' + imgs.length + ' icons, ' + texts.length + ' texts')
-    for (const im of imgs) {
-      const b = im.getBounds()
-      note('  ' + String(im.texture.key).padEnd(24) +
-        Math.round(b.width) + 'x' + Math.round(b.height) +
-        ' at ' + Math.round(b.centerX) + ',' + Math.round(b.centerY))
-    }
-    // No button may carry a word. The only text on a button row is the price,
-    // and it must sit BELOW the plate.
-    let worstIconPx = 999, labelsOnButtons = 0, priceOnPlate = 0
-    for (const btn of g.panel.buttons || []) {
-      const hb = btn.hit.getBounds()
-      const label = String(btn.text?.text ?? '')
-      if (label.trim() !== '') labelsOnButtons++
-      const inside = imgs.filter((im) => {
-        const b = im.getBounds()
-        return Math.abs(b.centerX - hb.centerX) < 4 && Math.abs(b.centerY - hb.centerY) < 4
-      })
-      for (const im of inside) worstIconPx = Math.min(worstIconPx, im.getBounds().height)
-      for (const tx of texts) {
-        const b = tx.getBounds()
-        if (Math.abs(b.centerX - hb.centerX) < 6 && b.centerY < hb.bottom - 2 && b.centerY > hb.y) {
-          priceOnPlate++
-          note('    OVERLAP: "' + tx.text + '" centreY ' + Math.round(b.centerY) +
-            ' inside plate ' + Math.round(hb.y) + '..' + Math.round(hb.bottom))
-        }
-      }
-      note('  button at ' + Math.round(hb.centerX) + ',' + Math.round(hb.centerY) +
-        ' ' + Math.round(hb.width) + 'x' + Math.round(hb.height) +
-        '  label="' + label + '"  icon ' + (inside.length ? Math.round(inside[0].getBounds().height) + 'px' : 'NONE'))
-    }
-    note('  smallest button icon: ' + worstIconPx + 'px  (floor is 40)')
-    note('  buttons carrying text: ' + labelsOnButtons + ' (must be 0)')
-    note('  prices drawn on a plate: ' + priceOnPlate + ' (must be 0)')
-    await shot('icons-' + VP.w + 'x' + VP.h)
-    const ok = worstIconPx >= 40 && labelsOnButtons === 0 && priceOnPlate === 0 && imgs.length >= 4
-    note('RESULT ' + (ok ? 'icons only, at 40px, prices beneath'
-      : '*** THE UPGRADE RING IS NOT RIGHT ***'))
-    return
-  }
+  // `icons` WAS HERE AND IS DELETED. Its subject was the TOWER PANEL -- the
+  // sliding panel that `g.panel` pointed at -- and that control no longer
+  // exists; the radial `TowerRing` replaced it. A scenario cannot be repaired
+  // onto a different control without becoming a different scenario, and a
+  // green stub is worse than nothing.
+  //
+  // COVERAGE LOST, stated so it can be decided on rather than discovered:
+  //   * the minimum drawn size of an icon on the control (it counted the
+  //     smallest and refused anything under a floor),
+  //   * "no button carries a word" -- the panel's buttons were icon-only,
+  //   * "the price sits BELOW the plate, not on it".
+  // `towerring` is the successor and covers the ring's geometry properly --
+  // every tower, every tier, both branches, and the claim that no SELL
+  // rectangle ever lands where an UPGRADE one has been -- plus the identity
+  // and shape of the sell icon. It does NOT cover the three above. Whether
+  // they still matter on a radial control is a design question, which is why
+  // they are written down here instead of guessed at.
+  // See reports/2026-09-07-the-blind-harness.md.
 
   if (scenario === 'regressions') {
     // Read-only diagnosis of the reported regressions that need a renderer.
@@ -6612,70 +6703,21 @@ async function run() {
     note('viewport ' + VP.w + 'x' + VP.h + '  canvas ' + game.canvas.width + 'x' + game.canvas.height +
       '  dpr ' + dpr)
 
-    // --- 2. THE MODAL SCRIM. Which camera draws it, how big it is, and what
-    //        the canvas actually looks like once it is up.
-    const ctx = game.canvas.getContext('2d')
-    const lum = (x, y, w2, h2) => {
-      const d = ctx.getImageData(Math.max(0, x | 0), Math.max(0, y | 0),
-        Math.max(1, w2 | 0), Math.max(1, h2 | 0)).data
-      let s2 = 0, n = 0
-      for (let i = 0; i < d.length; i += 4) { s2 += (d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114); n++ }
-      return s2 / n
-    }
-    const CW = game.canvas.width, CH = game.canvas.height
-    // Look at the middle of the map first, so the scrim is measured over a
-    // busy frame rather than over whatever the camera happened to show.
-    await lookAt(640, 360)
-    const before = [lum(0,0,CW/2,CH/2), lum(CW/2,0,CW/2,CH/2), lum(0,CH/2,CW/2,CH/2), lum(CW/2,CH/2,CW/2,CH/2)]
-    g.showTicket({ label: 'JACKPOT', payout: 500 }, 30)
-    await sleep(500)
-    const t = g.ticket
-    if (!t) { note('*** the ticket did not open ***') } else {
-      const b = t.blocker
-      const bb = b.getBounds()
-      const uiOnly = (b.cameraFilter & 0) === 0
-      note('2. SCRIM: rect ' + Math.round(b.width) + 'x' + Math.round(b.height) +
-        ' at ' + Math.round(b.x) + ',' + Math.round(b.y) + ' origin ' + b.originX + ',' + b.originY +
-        '  scrollFactor ' + b.scrollFactorX)
-      note('   its bounds ' + Math.round(bb.x) + ',' + Math.round(bb.y) + ' ' +
-        Math.round(bb.width) + 'x' + Math.round(bb.height) +
-        '  viewport is 0,0 ' + VP.w + 'x' + VP.h)
-      note('   drawn by: world=' + !(b.cameraFilter & (1 << 0)) + ' (filter ' + b.cameraFilter + ')')
-      const after = [lum(0,0,CW/2,CH/2), lum(CW/2,0,CW/2,CH/2), lum(0,CH/2,CW/2,CH/2), lum(CW/2,CH/2,CW/2,CH/2)]
-      note('   quadrant luminance before ' + before.map((v) => v.toFixed(0)).join(' / ') +
-        '   after ' + after.map((v) => v.toFixed(0)).join(' / '))
-      note('   (quadrants include the bright card, so they answer nothing on their own)')
-      // THE CORNERS are what answer it: far from the card, so any change there
-      // is the scrim and only the scrim.
-      const K = 40
-      const corner = (x, y) => lum(x, y, K, K)
-      const cAfter = [corner(0,0), corner(CW-K,0), corner(0,CH-K), corner(CW-K,CH-K)]
-      note('   CORNER luminance after: ' + cAfter.map((v) => v.toFixed(0)).join(' / ') +
-        '  (TL / TR / BL / BR)')
-      const spread = Math.max(...cAfter) - Math.min(...cAfter)
-      note('   corners agree to within ' + spread.toFixed(0) +
-        (spread < 12 ? '  — the scrim reaches all four' : '  *** THE SCRIM DOES NOT REACH THEM ALL ***'))
-      // Walk a row and a column looking for the hard edges the report saw.
-      const row = Math.round(CH * 0.75), col = Math.round(CW * 0.25)
-      const edgesX = [], edgesY = []
-      let prev = lum(0, row, 4, 4)
-      for (let x = 4; x < CW - 4; x += 4) {
-        const v = lum(x, row, 4, 4)
-        if (Math.abs(v - prev) > 18) edgesX.push(x)
-        prev = v
-      }
-      prev = lum(col, 0, 4, 4)
-      for (let y = 4; y < CH - 4; y += 4) {
-        const v = lum(col, y, 4, 4)
-        if (Math.abs(v - prev) > 18) edgesY.push(y)
-        prev = v
-      }
-      note('   hard edges across row y=' + row + ': ' + JSON.stringify(edgesX.slice(0, 8)))
-      note('   hard edges down col x=' + col + ': ' + JSON.stringify(edgesY.slice(0, 8)))
-      await shot('regress-scrim-' + VP.w + 'x' + VP.h)
-      t.destroy?.()
-      await sleep(200)
-    }
+    // --- 2. THE MODAL SCRIM WAS HERE AND HAS BEEN REMOVED, not repaired.
+    //
+    // It measured raw corner LUMINANCE with the scrim up and called a spread
+    // over 25 a failure. That criterion could never have held: `scrim` reports
+    // the bare map's own corners at 63/59/39/65, a spread of 26 with no scrim
+    // in the picture at all, because the four corners of a painted map are not
+    // equally bright to begin with. So this section reported
+    // "THE SCRIM DOES NOT REACH THEM ALL" against a scrim that reaches all of
+    // them, and it was doing so from the day it was written.
+    //
+    // `scrim` is the successor and asks the question properly: the RATIO each
+    // corner keeps against its own bare-map baseline, per overlay, which comes
+    // out at 0.539/0.540/0.538/0.543 for a dialog -- a spread of 0.005. It is
+    // also the one `tests/scrim.test.ts` cites. Nothing is lost by deleting a
+    // second, wronger copy of it.
 
     // --- 6. THE HUD OVER THE MAP. Where the painted tavern sign lands on the
     //        glass, and what the HUD puts there.
@@ -6697,11 +6739,17 @@ async function run() {
     const [sx1, sy1] = proj(signBox[2], signBox[3])
     note('6. the painted COURJAHAN\'S TAVERN sign projects to ' +
       Math.round(sx0) + ',' + Math.round(sy0) + ' .. ' + Math.round(sx1) + ',' + Math.round(sy1))
-    const hr = g.layout.heroRow
-    note('   the HUD hero row is at ' + Math.round(hr.x) + ',' + Math.round(hr.y) + ' ' +
+    // THE HERO CHIP, on the HUD's layout. This read `g.layout.heroRow`, and
+    // both halves of that were wrong by the time it ran: the layout belongs to
+    // HudScene, not GameScene, and `heroRow` was the wide hero BAR across the
+    // top of the map, which was deleted when the hero HUD became a portrait
+    // chip at the bottom. The undefined read threw and took the four checks
+    // below it -- including where a built tower ends up -- with it.
+    const hr = scene('Hud').layout.heroChip
+    const overlaps = sx1 > hr.x && sx0 < hr.x + hr.width && sy1 > hr.y && sy0 < hr.y + hr.height
+    note('   the HUD hero chip is at ' + Math.round(hr.x) + ',' + Math.round(hr.y) + ' ' +
       Math.round(hr.width) + 'x' + Math.round(hr.height) +
-      (sx1 > hr.x && sx0 < hr.x + hr.width && sy1 > hr.y && sy0 < hr.y + hr.height
-        ? '  *** THEY OVERLAP ***' : '  clear'))
+      (overlaps ? '  *** THEY OVERLAP ***' : '  clear'))
 
     // --- 7. WHERE A BUILT TOWER ENDS UP.
     const sp = g.build.freeSpots()[0]
@@ -9721,16 +9769,15 @@ async function run() {
     return
   }
 
-  if (scenario === 'poor') {
-    // Insufficient gold: does the game say why nothing happened?
-    g.status.gold = 5
-    await click(...toScreen(SPOTS[1][0], SPOTS[1][1]))
-    const hit = g.menu.hitAreas?.[0]
-    if (hit) { const b = hit.getBounds(); await click(b.centerX, b.centerY) }
-    note('poor: towers=' + g.towers.length + ' msg="' + g.status.message + '" menuOpen=' + g.menu.isOpen)
-    await shot('poor')
-    return
-  }
+  // `poor` WAS HERE AND IS DELETED, not repaired. It asked "insufficient
+  // funds: does the game say why nothing happened", and it had rotted three
+  // ways at once -- it set `g.status.gold`, which is not the currency and
+  // never has been in this repository; it read `g.status.message`, which is
+  // `alert`; and it drove `g.menu`, which was deleted with the build menu.
+  // `afford` is its successor and is strictly better: it opens the real ring
+  // at 0 peanuts, asserts nothing is affordable, funds the player WITH THE
+  // PANEL STILL OPEN, and asserts it re-prices in both directions. No coverage
+  // is lost. See reports/2026-09-07-the-blind-harness.md.
 
   if (scenario === 'lost') {
     await key('Space')
@@ -10071,19 +10118,22 @@ async function run() {
     const inView = SPOTS.map((p, i) => [i, p])
       .filter(([, p]) => cam.worldView.contains(p[0], p[1])).map(([i]) => i)
 
-    // 1. Tower placement: the menu open over a pad.
+    // 1. Tower placement: the RING open over a pad. This was the build menu,
+    // and the two lines that reached for it threw -- so all three of this
+    // scenario's moments went unphotographed and unmeasured.
     const [px, py] = toScreen(SPOTS[inView[0]][0], SPOTS[inView[0]][1])
     await click(px, py)
     await sleep(400)
     await shot('phone-1-placing')
-    note('placing: menuOpen=' + !!g.menu?.isOpen)
+    note('placing: ringOpen=' + !!g.ring)
     dumpOverlaps('placing')
 
     // Hold a finger on an option: the ghost belongs on the pad while the
     // player is deciding, which on a touch device is only ever during a press.
-    const hit = g.menu.hitAreas?.[0]
+    const opts = (g.ring?.hitBoxes ?? []).filter((h) => !h.id.startsWith('ring:'))
+    const hit = opts[0]
     if (hit) {
-      const b = hit.getBounds()
+      const b = { centerX: hit.rect.x + hit.rect.width / 2, centerY: hit.rect.y + hit.rect.height / 2 }
       await move(b.centerX, b.centerY)
       mouse('mousedown', b.centerX, b.centerY)
       await sleep(320)
@@ -10232,14 +10282,21 @@ async function run() {
   }
 
   if (scenario === 'typegame') {
-    // The pause dialog and the results panel, both of which are titles.
-    scene('Hud').openPause()
+    // The settings panel and the results panel, both of which are titles.
+    //
+    // `openPause()` and `resumeGame()` are gone -- pause is the SETTINGS panel
+    // now and `openSettings()` is what raises it. The old call threw on the
+    // first line, so neither screenshot this scenario exists to take had been
+    // taken since.
+    const hud = scene('Hud')
+    hud.openSettings()
+    await until(() => !!hud.settings, 5000)
     await sleep(700)
     await shot('type-5-pause')
-    scene('Hud').panel?.close()
-    scene('Hud').resumeGame()
-    await until(() => !scene('Hud').panel, 5000)
+    hud.settings?.close()
+    await until(() => !hud.settings, 5000)
     await sleep(500)
+    note('settings raised and dismissed; paused=' + hud.paused)
     g.status.wave = 6
     g.status.lives = 0
     g.endRun('lost')
@@ -10438,7 +10495,33 @@ async function run() {
   }
 }
 
-try { await run() } catch (e) { note('DIRECTOR ERROR: ' + e.message + ' | ' + String(e.stack).slice(0, 400)) }
+/*
+ * THE GUARD. A SCENARIO THAT THROWS MUST FAIL THE RUN.
+ *
+ * This line used to be `catch (e) { note(...) }` and nothing else, and that
+ * one swallowed exception is how eleven scenarios spent weeks reporting
+ * success while running none of their assertions. The shape of the failure is
+ * always the same: the build menu (or the tower panel, or `openPause`) is
+ * deleted, the scenario's first line touching it throws, the catch turns the
+ * throw into a log line nobody reads, `/done` is posted as though the run had
+ * finished, and `run.sh` exits 0. A green harness meant nothing.
+ *
+ * So the error is RECORDED ON THE REPORT now, not just noted, and server.py
+ * exits non-zero when it sees one. `note` is kept as well, because the console
+ * is the only record when a scenario hangs instead of throwing.
+ *
+ * PAGE ERROR and REJECT above are deliberately NOT fatal. They fire for things
+ * outside the director's own call stack — an image that 404s, an audio promise
+ * the browser rejects — and several scenarios exist precisely to provoke those
+ * and report on them.
+ */
+let directorError = null
+try {
+  await run()
+} catch (e) {
+  directorError = { message: String(e && e.message || e), stack: String(e && e.stack || '').slice(0, 1200) }
+  note('DIRECTOR ERROR: ' + directorError.message + ' | ' + directorError.stack.slice(0, 400))
+}
 
 /**
  * THE DEVICE-RATIO FINGERPRINT, emitted after every scenario.
@@ -10518,7 +10601,7 @@ fingerprint()
 const gs = scene('Game')
 if (bootBroken) log.unshift('*** BOOT FAILED — see below ***')
 await post('/done', JSON.stringify({
-  scenario, bootFailed: bootBroken, log,
+  scenario, bootFailed: bootBroken, directorError, log,
   status: gs?.status ?? null,
   towers: gs?.towers?.length, enemies: gs?.enemies?.length, spots: SPOTS.length,
   heroAt: gs?.hero ? [Math.round(gs.hero.x), Math.round(gs.hero.y)] : null,

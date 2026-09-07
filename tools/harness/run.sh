@@ -69,6 +69,14 @@ fi
   "http://127.0.0.1:8899/index.html?s=$S$QS" > "$H/shots/$S.err" 2>&1 &
 CHROME=$!
 wait $SRV
+# THE SERVER'S EXIT CODE IS THE RUN'S EXIT CODE.
+#
+# This was `exit 0` unconditionally, which is the outer half of the swallowed
+# exception described in index.html: a scenario could throw on its first line,
+# assert nothing, and still come back green. server.py now exits 1 when the
+# scenario threw, 2 on a timeout, 3 on an unreadable report and 4 when the game
+# did not boot, and those have to reach the caller.
+STATUS=$?
 kill $CHROME 2>/dev/null
 wait $CHROME 2>/dev/null
-exit 0
+exit $STATUS

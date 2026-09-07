@@ -3,7 +3,7 @@
 Running the game in real time and letting it upload frames avoids headless
 Chromium's virtual clock entirely, which never advanced Phaser's TimeStep.
 """
-import base64, http.server, os, sys, threading
+import base64, http.server, json, os, sys, threading
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'stage')
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'shots')
@@ -99,8 +99,44 @@ srv = http.server.ThreadingHTTPServer(('127.0.0.1', 8899), H)
 threading.Thread(target=srv.serve_forever, daemon=True).start()
 if len(sys.argv) > 1 and sys.argv[1] == 'wait':
     ok = DONE.wait(timeout=float(sys.argv[2]) if len(sys.argv) > 2 else 180)
+    srv.shutdown()
+    # THE OTHER HALF OF THE GUARD -- see the note on `directorError` in
+    # index.html. A scenario that threw, or one that never finished at all,
+    # has to come back as a non-zero exit or `run.sh` reports success for a
+    # run that asserted nothing. This is what stops that class recurring.
     if not ok:
         print('TIMEOUT: page never posted /done', flush=True)
-    srv.shutdown()
+        sys.exit(2)
+    try:
+        rep = json.load(open(os.path.join(OUT, 'report.json')))
+    except Exception as e:                                  # noqa: BLE001
+        print('UNREADABLE REPORT: %s' % e, flush=True)
+        sys.exit(3)
+    err = rep.get('directorError')
+    if err:
+        print('SCENARIO THREW: %s' % err.get('message'), flush=True)
+        print(err.get('stack', ''), flush=True)
+        sys.exit(1)
+    if rep.get('bootFailed'):
+        print('BOOT FAILED: everything in this run was forced by hand', flush=True)
+        sys.exit(4)
+    # A SCENARIO THAT FOUND SOMETHING MUST SAY SO IN ITS EXIT CODE.
+    #
+    # The throw guard above stops a scenario passing when it never ran. This
+    # stops one passing when it DID run and did not like what it saw. The
+    # convention across the harness is already there and was only ever printed:
+    # a fault is a line starting '   *** ' and a scenario that counted any ends
+    # on 'RESULT *** n faults ***'. Reading it here is what turns that
+    # convention into something CI could gate on.
+    #
+    # A DISTINCT CODE from a throw, because they mean different things: 1 is
+    # "this check is broken", 5 is "this check works and the product failed it".
+    faults = [ln for ln in rep.get('log', [])
+              if ln.lstrip().startswith('*** ') or ln.startswith('RESULT ***')]
+    if faults:
+        print('SCENARIO REPORTED FAULTS:', flush=True)
+        for ln in faults[:20]:
+            print('  ' + ln.strip(), flush=True)
+        sys.exit(5)
 else:
     threading.Event().wait()
