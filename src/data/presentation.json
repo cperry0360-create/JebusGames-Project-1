@@ -217,7 +217,7 @@
     "safeLeft": 0.17,
     "safeRight": 0.76,
     "minContentWidth": 520,
-    "maxContentWidth": 720,
+    "maxContentWidth": 820,
     "sectionGap": 4,
     "headingGap": 4,
     "safeMargin": 40,
@@ -288,7 +288,17 @@
     },
     "heroSectionMaxShare": 0.62,
     "_heroSectionMaxShare": "The ceiling on what the hero block may take out of the three-row budget before the towers and the specials get theirs. The block asks for what its content needs; this is what stops a long blurb starving the two rows underneath it.",
-    "_cardPadBottom": "Clearance under the last thing in ANY panel on the loadout screen. MEASURED off a rendered frame at 667x375, twice: the panel's painted green inner rail sits 21 design pixels above the plate's outer bottom edge, so content within 21 of it is drawn ON the frame -- and content bottom is exactly plate bottom minus this number, so 27 leaves six pixels of air. `cardPad` is 9 and `frameInsetFor` is deliberately only a FRACTION of the painted frame, which is why nine is inside the paint rather than clear of it: at 9 the hero block's third ability chip had the rail running through it, and so did the tower cards' price badge and last line.\nTHE FIELD WAS ALREADY HERE, at 15, AND NOTHING READ IT. `heroPlan` and `cardGeometry` both read it now, which is the point -- the harness's containment check asserts that every panel keeps the clearance the screen declares, and a number honoured by one drawer out of two is a rule with an invisible exception."
+    "_cardPadBottom": "Clearance under the last thing in ANY panel on the loadout screen. MEASURED off a rendered frame at 667x375, twice: the panel's painted green inner rail sits 21 design pixels above the plate's outer bottom edge, so content within 21 of it is drawn ON the frame -- and content bottom is exactly plate bottom minus this number, so 27 leaves six pixels of air. `cardPad` is 9 and `frameInsetFor` is deliberately only a FRACTION of the painted frame, which is why nine is inside the paint rather than clear of it: at 9 the hero block's third ability chip had the rail running through it, and so did the tower cards' price badge and last line.\nTHE FIELD WAS ALREADY HERE, at 15, AND NOTHING READ IT. `heroPlan` and `cardGeometry` both read it now, which is the point -- the harness's containment check asserts that every panel keeps the clearance the screen declares, and a number honoured by one drawer out of two is a rule with an invisible exception.",
+    "columnGap": 24,
+    "_columnGap": "Between the two side-by-side columns when the screen reflows. See `minColumn`.",
+    "minColumn": 300,
+    "_minColumn": "Unused since the two-column dealt row started laying its cards ACROSS its half-band. It guarded the COLUMN, and the column is not what shrinks -- see `minDealtCard`, which guards the card the player actually reads. Kept so the number is not lost if a future arrangement needs a band floor again.",
+    "minDealtCard": 160,
+    "_minDealtCard": "THE NARROWEST A TOWER OR SPECIAL CARD MAY BE. Below this the two-column arrangement is refused and the screen stays stacked, because a card that cannot hold a readable stats line has bought vertical space by spending legibility -- the exact trade the reflow exists to avoid. A column holds two cards across, so at 160 a column must be 342 and a content width 708. Measured on the audited viewports: 904x400 and 844x390 give cards of 184, 1400x708 gives 158 and 667x375 gives 139, so the reflow takes the two screens where it saves 40 and 66 units and declines the two where it saves 14.",
+    "heroBlurbMinWidth": 130,
+    "_heroBlurbMinWidth": "The narrowest the hero blurb column may be when it sits BESIDE the portrait row rather than under it. Below about this the blurb is one or two words a line and reads as a column of fragments. The chip column beside it is measured from the widest ability label on the roster, so the description asks for what its content needs and the portrait row gets the rest.",
+    "minReflowSaving": 30,
+    "_minReflowSaving": "The least vertical room a reflow must buy before the screen takes it. One heading is 29 units, so 30 means the rearrangement has to be worth at least the section label it removes. It earns its keep on this hand -- two towers and two specials of similar height -- where the two columns are as tall as the TALLER of them and the short one wastes its slack: laid across, the saving is 40 units at 904x400 and 66 at 844x390 but only 14 at 1400x708 and 14 at 667x375. Without a threshold the arithmetic says yes to those last two and rearranges half a screen for half a line of text."
   },
   "scratchCard": {
     "cardHeight": 260,

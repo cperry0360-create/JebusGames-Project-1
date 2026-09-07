@@ -195,8 +195,21 @@ export interface DescriptionInput {
   blurbHeight: number
   /** Measured height of one ability chip: icon or label, whichever is taller. */
   chipHeight: number
-  /** How many chips. Two: slot 1 and the hero power. */
+  /** How many chips. Any number: a hero declares an ordered ability list. */
   chips: number
+  /**
+   * How wide the chip column is, in the same units as `width`.
+   *
+   * OPTIONAL, AND THE FRACTION IS THE FALLBACK. `chipColumn` is a share of the
+   * block, which is right when the block is the full width of a panel: a
+   * third of a wide row is plenty for a label. It stops being right when the
+   * block is a narrow column beside the portrait row -- a third of 236 units
+   * is 85, and "Mind Control" needs 95 for the label alone. A caller that
+   * knows what its labels measure passes the width they need instead, which is
+   * the same "measure it, do not take a share of it" the rest of this file is
+   * built on.
+   */
+  chipsWidth?: number
 }
 
 export interface DescriptionConfig {
@@ -217,7 +230,10 @@ export interface DescriptionLayout {
 export function heroDescription(
   input: DescriptionInput, cfg: DescriptionConfig,
 ): DescriptionLayout {
-  const chipsW = Math.round(input.width * cfg.chipColumn)
+  const chipsW = Math.min(
+    Math.max(0, input.width - cfg.gap),
+    Math.round(input.chipsWidth ?? input.width * cfg.chipColumn),
+  )
   const blurbW = input.width - chipsW - cfg.gap
   const chipsH = input.chips * input.chipHeight + Math.max(0, input.chips - 1) * cfg.gap
   const height = Math.max(input.blurbHeight, chipsH)

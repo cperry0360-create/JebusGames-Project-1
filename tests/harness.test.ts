@@ -59,6 +59,54 @@ test('a harness scenario that finds a fault cannot report success either', () =>
     'a scenario that reported faults exits 0 again')
 })
 
+/* ------------------------------------------- containment, asserted generally */
+
+test('the containment check covers both menu screens, and both rules', () => {
+  /*
+   * THE COVERAGE THAT WAS MISSING, and the reason it is general.
+   *
+   * Three layout bugs reached the live site through green CI: the missing
+   * ability art, the tower panel, and the loadout's ability strip drawn on its
+   * own panel's bottom border with the second icon clipped by it. Each was
+   * found afterwards by a person looking at a picture of one screen, and each
+   * fix was specific to that screen -- so the next screen was uncovered again.
+   *
+   * `screens` cannot catch this class. Its four faults are OFF (past the
+   * viewport edge), NOTCH, SMALL and OVER (two things colliding), and "drawn
+   * outside the panel it belongs to" is none of them: a chip on its card's
+   * bottom rail is inside the viewport, clear of the notch, big enough, and
+   * overlapping nothing but a painted frame that is not an audited object.
+   *
+   * So `contain` asserts two rules that do not know which screen they are on:
+   * nothing outside the viewport, no child outside its parent panel. This test
+   * is what stops the scenario being deleted, gutted, or quietly narrowed to
+   * one screen again -- the exact failure mode the `screens` audit had when it
+   * stopped driving the tower panel and nobody noticed for weeks.
+   */
+  assert.match(INDEX, /if \(scenario === 'contain'\) \{/,
+    'the containment scenario is gone')
+
+  // BOTH SCREENS THE BRIEF NAMES. The loadout is checked once per hero,
+  // because the heroes no longer describe the same number of things and the
+  // three-chip case is the one that escaped its panel.
+  assert.match(INDEX, /await checkScene\('Loadout', 'loadout-' \+ hid\)/,
+    'the containment check no longer walks the loadout per hero')
+  assert.match(INDEX, /await checkScene\('WorldMap', 'worldmap'\)/,
+    'the containment check no longer covers the level select screen')
+
+  // BOTH RULES. Either one alone passed on the tree that shipped the bug.
+  assert.match(INDEX, /--- 1\. the viewport/, 'the viewport rule is gone')
+  assert.match(INDEX, /--- 2\. the panel/, 'the parent-panel rule is gone')
+
+  // AND IT STILL REPORTS FAULTS THE WAY THE SERVER READS THEM, or a scenario
+  // that finds everything exits 0 and the check is decoration. See the two
+  // tests above for the chain this hangs off.
+  assert.match(INDEX, /const fail6 = \(m\) => \{ faults6\+\+; note\('   \*\*\* ' \+ m\) \}/,
+    'the containment scenario no longer writes the fault convention')
+  assert.match(INDEX, /containment fault\(s\) at ' \+ VP\.w/,
+    'the containment scenario no longer ends on a RESULT the server can fail on')
+})
+
 /* --------------------------------------------- the deleted UI, still deleted */
 
 test('no scenario drives the build menu or the tower panel', () => {

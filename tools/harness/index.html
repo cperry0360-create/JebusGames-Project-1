@@ -1605,7 +1605,16 @@ async function run() {
       const lp = scene('Loadout').stackPlan
       if (lp) {
         note('  loadout stack: available=' + Math.round(lp.available)
-          + ' headings=' + Math.round(lp.headingH) + ' cardW=' + Math.round(lp.cardW))
+          + ' headings=' + Math.round(lp.headingH) + ' cardW=' + Math.round(lp.cardW)
+          // WHICH ARRANGEMENT IT CHOSE. Without these two the log shows the
+          // heights the reflow produced but not the reflow, and a candidate
+          // silently disqualified (a hero card under the tap floor, a portrait
+          // row wrapped to two lines) reads exactly like a reflow that never
+          // triggered.
+          + ' dealt=' + (lp.wide ? 'columns' : 'stacked')
+          + ' (columns=' + Math.round(lp.dealtColumnsFloor) + ' vs stacked=' + Math.round(lp.dealtStackedFloor)
+          + ', col=' + Math.round(lp.colW) + ')'
+          + ' hero=' + lp.heroLayout + ' rows=' + lp.rowsInHeroRow)
         note('    wants   hero=' + Math.round(lp.heroWant) + '/' + Math.round(lp.heroFloor)
           + '  towers=' + Math.round(lp.towerWant) + '/' + Math.round(lp.towerFloor)
           + '  specials=' + Math.round(lp.specialWant) + '/' + Math.round(lp.specialFloor)
@@ -2368,10 +2377,16 @@ async function run() {
     game.scene.start('Loadout')
     if (await until(() => running('Loadout'), 10000)) {
       for (const hid of heroIds) {
-        RS6.setRunState({ heroId: hid })
+        // `pickHero` FIRST AND ALONE. It returns early when the run state
+        // already names the hero, so setting the state and then calling it was
+        // a no-op: every one of these checks ran against Cory's card, and the
+        // screenshots said so once anybody looked at them. The scene writes
+        // the run state itself.
         const LD7 = scene('Loadout')
         if (LD7.pickHero) LD7.pickHero(hid)
-        await sleep(250)
+        await sleep(300)
+        const got = RS6.runState().heroId
+        if (got !== hid) fail6('picking ' + hid + ' left the run on ' + got)
         await checkScene('Loadout', 'loadout-' + hid)
       }
     } else fail6('the loadout did not build')

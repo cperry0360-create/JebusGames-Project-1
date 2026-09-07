@@ -241,34 +241,52 @@ test('the screen is a stack that flows, and the buttons are placed first', () =>
 
   // The stack is fed what each section MEASURED, with a floor it may be
   // squeezed to and no further.
-  assert.match(render, /const laid = stackSections\(\[/, 'the sections are not stacked')
+  assert.match(render, /const laid = stackSections\(sections, top, available\)/,
+    'the sections are not stacked')
   assert.match(render, /natural: heroWant, min: Math\.min\(heroWant, heroFloor\)/,
     'the hero block has no measured floor')
-  assert.match(render, /natural: towerWant, min: Math\.min\(towerWant, towerFloor\)/,
-    'the tower row has no measured floor')
+  // THE DEALT ROWS ARE ONE SECTION WHEN THE SCREEN REFLOWS and two when it
+  // does not, so what is checked is that whichever it is carries a measured
+  // floor -- and that the two-column case takes the TALLER of the pair, since
+  // they share a band.
+  assert.match(render, /natural: dealtWant, min: Math\.min\(dealtWant, dealtFloor\)/,
+    'the dealt row has no measured floor')
   assert.match(render, /natural: specialWant, min: Math\.min\(specialWant, specialFloor\)/,
-    'the specials row has no measured floor')
+    'the specials row has no measured floor in the stacked arrangement')
+  assert.match(render, /const dealtWant = wide\s*\n?\s*\? this\.dealtFloor\(run, cardW, LO\.bodySizes\[0\]!, true\) : towerWant/,
+    'the dealt band is not measured by the same function that decided the reflow')
   // The floors come from the SMALLEST size on the type ladder, so a floor is
   // what the content genuinely needs rather than a number somebody picked.
   assert.match(render, /const small = LO\.bodySizes\[LO\.bodySizes\.length - 1\]!/,
     'the floors are not taken from the bottom of the type ladder')
-  assert.match(render, /this\.heroPlan\(run\.heroId, 0\)/,
+  assert.match(render, /this\.heroPlan\(run\.heroId, 0, heroLayout\)/,
     "the hero block's floor is a chosen number rather than what it solves to")
 
   // THE HEADINGS ARE SECTIONS. That is what stops a label being overlapped
   // from either side: it owns a band of the stack rather than sitting in a gap
   // between two things that were sized independently.
+  // TWO IN THE SHARED LIST AND A THIRD ADDED FOR THE STACKED ARRANGEMENT --
+  // side by side, the towers and the specials sit under ONE heading row with a
+  // label over each column, so there are three labels either way.
   const headings = [...render.matchAll(/\{ natural: headingH/g)]
   assert.equal(headings.length, 3, 'the three section labels are not part of the stack')
 
   // Every section is placed at a top the stack computed, never at a literal.
   for (const call of ['this.heading(\'HERO\', heroLabel!)',
-                      'this.heroSection(run.heroId, heroAt!, heroH!)',
-                      'this.heading(\'TOWERS\', towerLabel!)',
-                      'this.towerSection(run.openingTowers, towerAt!, towerH!)',
+                      'this.heroSection(run.heroId, heroAt!, heroH!, heroLayout)',
+                      'this.heading(\'TOWERS\', dealtLabel!)',
+                      'this.towerSection(run.openingTowers, dealtAt!, dealtH!)',
                       'this.heading(\'SPECIALS\', specialLabel!)',
                       'this.abilitySection(run.abilities, specialAt!, specialH!)']) {
     assert.ok(render.includes(call), `the stack does not place: ${call}`)
+  }
+  // And the wide arrangement places both dealt rows on the SAME top, in bands
+  // either side of the middle.
+  for (const call of ['this.heading(\'TOWERS\', dealtLabel!, leftBand.cx)',
+                      'this.heading(\'SPECIALS\', dealtLabel!, rightBand.cx)',
+                      'this.towerSection(run.openingTowers, dealtAt!, dealtH!, leftBand)',
+                      'this.abilitySection(run.abilities, dealtAt!, dealtH!, rightBand)']) {
+    assert.ok(render.includes(call), `the two-column arrangement does not place: ${call}`)
   }
 
   // The rows are still told their height rather than deciding it.
@@ -631,4 +649,92 @@ test('the three rows all fit the design box, with the hero block capped', () => 
     assert.ok(towers >= 70, `the tower row is left ${towers}px`)
     assert.ok(rest - towers >= 60, `the specials row is left ${rest - towers}px`)
   }
+})
+
+test('text is wrapped to the width it RENDERS at, not the width Phaser wraps at', () => {
+  /*
+   * ONE BUG, THREE PLACES, AND IT IS INVISIBLE UNTIL A COLUMN GETS NARROW.
+   *
+   * Phaser wraps on the unspaced advance. `BODY_SPACING` adds letterSpacing
+   * AFTER the wrap, so a line wrapped at `w` renders wider than `w` by roughly
+   * one letterSpacing per character. On a full-width card that is a few pixels
+   * into the padding and nobody sees it. On a 184-unit card it is the tower's
+   * last line printed out through the card's right rail and into the card
+   * beside it, and on the hero panel it was the blurb reserving one line less
+   * than it takes and drawing the last one on the panel's bottom border.
+   *
+   * `wrapWithin` measures the rendered width and tightens until it fits. The
+   * rule is that anything MEASURED is measured the same way, or the height the
+   * layout reserves is not the height the text takes.
+   */
+  const s = src('scenes/LoadoutScene.ts')
+  assert.match(s, /private wrapWithin\(t: Phaser\.GameObjects\.Text, width: number\)/,
+    'the wrap tightener is gone')
+
+  // THE CARD, drawn and measured.
+  const face = s.slice(s.indexOf('private cardFace('), s.indexOf('private frameInsetFor'))
+  assert.equal((face.match(/this\.wrapWithin\(this\.add\.text\(/g) || []).length, 3,
+    'the card draws a name, a stats line and a body, and all three must be tightened')
+  const needs = s.slice(s.indexOf('private cardNeeds('), s.indexOf('private cardFace('))
+  assert.match(needs, /this\.wrapWithin\(this\.add\.text\(/,
+    'the card is measured with a plain wrap and drawn with a tightened one')
+
+  // THE HERO BLURB, drawn and measured.
+  const plan = s.slice(s.indexOf('const blurbHeightAt = '), s.indexOf('const descFloor ='))
+  assert.match(plan, /this\.wrapWithin\(this\.add\.text\(/,
+    "the blurb's reserved height is measured with a wrap it is not drawn with")
+})
+
+test('the side clearance is bought from whoever has the slack', () => {
+  /*
+   * `frameInsetFor` is deliberately only a FRACTION of the painted frame, so
+   * `cardPad`'s nine units are inside the paint rather than clear of it. Bare
+   * text reaches this block's edges -- the blurb's first character on the left,
+   * the longest ability label on the right -- and both were drawn with the rail
+   * through them: "Mind Control" lost its last letter, "Holds the line" lost
+   * the stem of its H.
+   *
+   * WHERE THE CLEARANCE COMES FROM IS THE FIX. Widening the block's padding
+   * costs `innerW`, and beside the row `innerW` is within a few units of
+   * wrapping the five portraits onto two lines -- doing it there sent 667x375
+   * back to the stacked arrangement and its overflow from 73 to 153. Under the
+   * row there is slack and the block simply pads wider. So the arrangement
+   * decides, and that is what this pins.
+   */
+  const s = src('scenes/LoadoutScene.ts')
+  const plan = s.slice(s.indexOf('private heroPlan('), s.indexOf('private heroSection('))
+  assert.match(plan, /const wideSides = mode === 'under'/,
+    'the block no longer decides its side padding from the arrangement')
+  assert.match(plan, /const railR = wideSides \? 0 : Math\.max\(0, clearR - padSideR\)/,
+    'the chip column no longer gets its clearance off the right rail')
+  assert.match(plan, /const railL = wideSides \? 0 : Math\.max\(0, clearL - pad\)/,
+    'the blurb no longer gets its clearance off the left rail')
+  assert.match(plan, /const innerW = w - pad - padSideR/,
+    'the block is padded symmetrically again, which is what cost the row its line')
+  // AND THE CLEARANCE IS THE ONE THE SCREEN DECLARES, not a literal, so the
+  // harness's containment check and the drawer are reading the same number.
+  for (const m of [/const clearL = Math\.max\(LO\.cardPadBottom, Math\.ceil\(frame\.left\)\)/,
+                   /const clearR = Math\.max\(LO\.cardPadBottom, Math\.ceil\(frame\.right\)\)/]) {
+    assert.match(plan, m, 'the side clearance is a number of its own rather than the declared one')
+  }
+})
+
+test('a hero card is a button, so an arrangement that shrinks it below the tap floor loses', () => {
+  /*
+   * `minPortrait` is a floor in DESIGN units and the 44pt tap floor is a floor
+   * in CSS pixels, and on a short viewport those are different numbers. At
+   * 667x375 laying the description beside the row left five cards of 43 CSS px
+   * -- one pixel under, and a fault the design-unit floor cannot see, because
+   * `fitHeroRow` was doing exactly what it was asked.
+   *
+   * A card that cannot be tapped is worse than a screen that scrolls, so the
+   * arrangement is disqualified rather than the floor lowered.
+   */
+  const s = src('scenes/LoadoutScene.ts')
+  const render = s.slice(s.indexOf('private render(): void {'), s.indexOf('private headingHeight'))
+  assert.match(render, /const minTapW = minDesign\(this\)/,
+    'the arrangements are no longer measured against the tap floor')
+  assert.match(render,
+    /plans\.filter\(\(c\) => c\.plan\.row\.rows === 1\s*\n?\s*&& c\.plan\.row\.cards\.every\(\(r\) => r\.width >= minTapW\)\)/,
+    'an arrangement whose hero cards fall under the tap floor is usable again')
 })

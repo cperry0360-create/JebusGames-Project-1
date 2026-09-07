@@ -13,7 +13,7 @@ import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI, uiSize } from '../ui/Theme.
 import { panelInset, plateButton, platePanel, type PlateButton } from '../ui/Plate.ts'
 import { buttonRow } from '../systems/ButtonRow.ts'
 import { fitInBox } from '../systems/Art.ts'
-import { fitHeroRow, heroDescription, type DescriptionLayout } from '../systems/HeroRow.ts'
+import { fitHeroRow, heroDescription } from '../systems/HeroRow.ts'
 import type { Rect } from '../systems/HudLayout.ts'
 import { fitCameraToDesign } from '../ui/FitCamera.ts'
 import { abilityLine, towerLine, towerStats } from '../systems/AbilityText.ts'
@@ -22,7 +22,10 @@ import presentationData from '../data/presentation.json'
 import { play } from '../systems/Audio.ts'
 import { musicForScene } from '../systems/Music.ts'
 import { logEvent } from '../systems/Diagnostics.ts'
-import { stackSections, tapFloor, visibleDesignBox } from '../systems/Layout.ts'
+import {
+  columnWidth, minDesign, stackSections, tapFloor, useTwoColumns, visibleDesignBox,
+  type StackSection,
+} from '../systems/Layout.ts'
 
 const TOWERS = towersData as Record<string, TowerDef>
 const ABILITIES = abilitiesData as Record<string, AbilityDef>
@@ -35,6 +38,24 @@ const LO = presentationData.loadout
 /** Between two cards in a row. Named because the measurers need the same
  *  number the drawer uses to work out how wide one card gets. */
 const CARD_GAP = 22
+
+/**
+ * How the hero block arranges its portrait row and its description.
+ *
+ * `under` is the arrangement this screen has always had. The other two are
+ * what it reflows to when the vertical budget runs out on a wide, short
+ * viewport, and each is measured before it is taken:
+ *
+ *   `beside`        the whole description moves up next to the portraits. The
+ *                   block is as tall as the taller of the two rather than the
+ *                   sum. Needs the most width: the row still has to hold five
+ *                   portraits on one line beside a readable blurb column.
+ *   `chips-beside`  only the ability chips move up; the blurb stays under the
+ *                   row with the block's full width, which costs it one line
+ *                   instead of the chip column's whole height. Needs far less
+ *                   width and, where the wider one does not fit, saves more.
+ */
+type HeroLayout = 'under' | 'beside' | 'chips-beside'
 
 /**
  * One card on the loadout screen.
@@ -352,41 +373,157 @@ export class LoadoutScene extends Phaser.Scene {
      */
     const top = drawn.y + drawn.height + 10
     const available = (by - buttonH / 2 - LO.buttonGap) - top
-    const headingH = this.headingHeight()
-    const cardW = this.cardWidthFor(2)
 
     // What each block wants. The hero block is solved against a generous
     // ceiling so `natural` is what it would take if nothing else needed room;
     // its floor is what it takes when squeezed as hard as it can be.
     const small = LO.bodySizes[LO.bodySizes.length - 1]!
-    const heroWant = this.heroPlan(run.heroId, available).height
+
+    /*
+     * ONE COLUMN OR TWO, and the screen decides by measuring rather than by
+     * asking how wide the viewport is.
+     *
+     * WHAT THIS FIXES. Everything on this screen is composed against the fixed
+     * 1280x720 design box, and every tap target inside it carries a 44 CSS
+     * pixel floor -- which costs MORE design units the shorter the viewport,
+     * because the box is scaled down to fit. At 2.26:1 the buttons alone eat
+     * eighty units that cost forty-five on a desktop, the stack runs out of
+     * vertical room, and the specials are masked away below the fold. The
+     * horizontal budget is untouched the whole time.
+     *
+     * NOT SOLVED BY SCALING THE SCREEN DOWN. That is on record here as the
+     * wrong answer: a panel scaled to fit a phone put its own buttons at about
+     * 24 CSS pixels, and the standing note says the answer is a shorter panel
+     * rather than a smaller one. Scaling this screen makes the tower stats and
+     * the ability labels unreadable and trades one complaint for another.
+     *
+     * So it REFLOWS. The towers and the specials go side by side, and the hero
+     * block puts its description beside the portrait row instead of under it.
+     * Both cost width, which is what there is; neither costs a font size.
+     */
+    const stackedFloor = this.stackedFloor(run, small)
+    const headingH = this.headingHeight()
+    const needsRoom = stackedFloor > available
+
+    // THE HERO BLOCK PICKS THE SHORTEST ARRANGEMENT THAT IS STILL LEGIBLE,
+    // by solving all three and comparing, rather than by a rule about the
+    // viewport's shape.
+    //
+    // Three things disqualify a candidate however short it looks. It has to be
+    // NEEDED -- a screen that already fits is not rearranged. Its portrait
+    // row has to stay on ONE line: `fitHeroRow` wraps to two rather than going
+    // below `minPortrait`, and two rows of cards beside a description is
+    // taller than one row above it, so the reflow would make the thing it was
+    // meant to fix worse. Both were measured on the way here: at 62% of the
+    // block to the row, "Mind Control" went out through the panel's rail; at
+    // 52% the five portraits wrapped.
+    //
+    // AND EVERY HERO CARD IS A BUTTON, so it owes the same 44 CSS pixels every
+    // other control on this screen owes. `minPortrait` is a floor in DESIGN
+    // units and the tap floor is a floor in CSS pixels, and on a short viewport
+    // those are different numbers: at 667x375 `beside` left the row 5 cards of
+    // 43 CSS px, one pixel under, which is a fault the design-unit floor cannot
+    // see. A card that cannot be tapped is worse than a screen that scrolls,
+    // so the arrangement loses and the block goes back under the row.
+    const minTapW = minDesign(this)
+    const candidates: HeroLayout[] = needsRoom
+      ? ['beside', 'chips-beside', 'under'] : ['under']
+    const plans = candidates.map((m) => ({ mode: m, plan: this.heroPlan(run.heroId, 0, m) }))
+    const usable = plans.filter((c) => c.plan.row.rows === 1
+      && c.plan.row.cards.every((r) => r.width >= minTapW))
+    const heroLayout: HeroLayout = (usable.length ? usable : plans)
+      .reduce((best, c) => (c.plan.height < best.plan.height ? c : best)).mode
+
+    // AND THE DEALT ROWS REFLOW ON THEIR OWN TERMS, WHICH IS A DIFFERENT
+    // QUESTION AND A DIFFERENT ANSWER.
+    //
+    // Side by side, each column lays its own two cards ACROSS its half-band,
+    // so the dealt block is one card deep instead of two. It buys the second
+    // heading, the gap under it, and a whole card's height; it costs each card
+    // half its width, and a card half as wide wraps its stats into more lines.
+    //
+    // THE OTHER READING WAS TRIED AND MEASURED, and it never wins. Stacking
+    // each column's cards DOWN keeps a card the full width of its column --
+    // within a pixel of what it has today -- but leaves the block two cards
+    // deep, exactly as deep as stacked, so all it can buy is one heading while
+    // it pays a card gap and a slightly narrower card. Across all four audited
+    // viewports it came out TALLER than the arrangement it was meant to
+    // replace: 325 against 319, 343/345, 343/345 and 377/371. Laid across, the
+    // same four read 279/319, 331/345, 279/345 and 357/371.
+    const colW = columnWidth(this.contentWidth, LO.columnGap)
+    const stackedCardW = this.cardWidthFor(2)
+    // Two cards ACROSS a half-band, which is what a column holds.
+    const columnCardW = this.cardWidthFor(2, colW)
+    const dealtStackedFloor =
+      this.dealtFloor(run, stackedCardW, small, false) + headingH * 2 + LO.sectionGap
+    const dealtColumnsFloor = this.dealtFloor(run, columnCardW, small, true) + headingH
+    const wide = needsRoom && useTwoColumns({
+      stackedFloor: dealtStackedFloor,
+      columnsFloor: dealtColumnsFloor,
+      // THE CARD, not the column, is what has to stay readable. `minColumn`
+      // guarded the band and the band is not what shrinks: laid across, a
+      // 391-unit column holds two 184-unit cards, and it is those the player
+      // reads a tower's stats off.
+      column: columnCardW,
+      minColumn: LO.minDealtCard,
+      minSaving: LO.minReflowSaving,
+    })
+    // The band each block is laid out in. One column is the whole width
+    // centred; two are halves either side of the middle.
+    const leftBand = { cx: W / 2 - (colW + LO.columnGap) / 2, width: colW }
+    const rightBand = { cx: W / 2 + (colW + LO.columnGap) / 2, width: colW }
+    const cardW = wide ? columnCardW : stackedCardW
+
+    const heroWant = this.heroPlan(run.heroId, available, heroLayout).height
     // Solved against a ceiling of nothing, which is what makes it the block's
     // true floor rather than a number somebody picked.
-    const heroFloor = this.heroPlan(run.heroId, 0).height
+    const heroFloor = this.heroPlan(run.heroId, 0, heroLayout).height
     const towerWant = this.towerNeeds(run.openingTowers, cardW)
     const towerFloor = this.towerNeeds(run.openingTowers, cardW, small)
     const specialWant = this.abilityNeeds(run.abilities, cardW)
     const specialFloor = this.abilityNeeds(run.abilities, cardW, small)
 
-    const laid = stackSections([
+    // TWO COLUMNS ARE ONE SECTION IN THE STACK. The towers and the specials
+    // share a heading row and a band, so the stack sees one band as tall as
+    // the taller COLUMN rather than two bands stacked -- which is the whole of
+    // what the reflow buys vertically: the second heading and the gap under
+    // it, at no cost to a card's width.
+    const dealtWant = wide
+      ? this.dealtFloor(run, cardW, LO.bodySizes[0]!, true) : towerWant
+    const dealtFloor = wide ? this.dealtFloor(run, cardW, small, true) : towerFloor
+
+    const sections: StackSection[] = [
       { natural: headingH, gapAfter: 0 },
       { natural: heroWant, min: Math.min(heroWant, heroFloor), gapAfter: LO.sectionGap },
       { natural: headingH, gapAfter: 0 },
-      { natural: towerWant, min: Math.min(towerWant, towerFloor), gapAfter: LO.sectionGap },
-      { natural: headingH, gapAfter: 0 },
-      { natural: specialWant, min: Math.min(specialWant, specialFloor) },
-    ], top, available)
+      { natural: dealtWant, min: Math.min(dealtWant, dealtFloor), gapAfter: LO.sectionGap },
+    ]
+    if (!wide) {
+      sections.push(
+        { natural: headingH, gapAfter: 0 },
+        { natural: specialWant, min: Math.min(specialWant, specialFloor) },
+      )
+    }
+    const laid = stackSections(sections, top, available)
 
-    const [heroLabel, heroAt, towerLabel, towerAt, specialLabel, specialAt] = laid.tops
-    const [, heroH, , towerH, , specialH] = laid.heights
+    const [heroLabel, heroAt, dealtLabel, dealtAt, specialLabel, specialAt] = laid.tops
+    const [, heroH, , dealtH, , specialH] = laid.heights
 
     this.target = this.stack
     this.heading('HERO', heroLabel!)
-    this.heroSection(run.heroId, heroAt!, heroH!)
-    this.heading('TOWERS', towerLabel!)
-    this.towerSection(run.openingTowers, towerAt!, towerH!)
-    this.heading('SPECIALS', specialLabel!)
-    this.abilitySection(run.abilities, specialAt!, specialH!)
+    this.heroSection(run.heroId, heroAt!, heroH!, heroLayout)
+    if (wide) {
+      // Both headings on the same line, each over its own column.
+      this.heading('TOWERS', dealtLabel!, leftBand.cx)
+      this.heading('SPECIALS', dealtLabel!, rightBand.cx)
+      this.towerSection(run.openingTowers, dealtAt!, dealtH!, leftBand)
+      this.abilitySection(run.abilities, dealtAt!, dealtH!, rightBand)
+    } else {
+      this.heading('TOWERS', dealtLabel!)
+      this.towerSection(run.openingTowers, dealtAt!, dealtH!)
+      this.heading('SPECIALS', specialLabel!)
+      this.abilitySection(run.abilities, specialAt!, specialH!)
+    }
     this.target = this.layer
 
     // A stack that still does not fit after every section has been squeezed to
@@ -397,9 +534,19 @@ export class LoadoutScene extends Phaser.Scene {
     // covers what it ASKED FOR -- a card drawing past its own frame is a
     // number, and this is the number.
     this.stackPlan = {
-      available, headingH, cardW,
+      available, headingH, cardW, wide, heroLayout, stackedFloor,
+      // BOTH SIDES OF THE REFLOW'S DECISION, so a log can say why it declined
+      // rather than only that it did.
+      dealtStackedFloor, dealtColumnsFloor, colW,
+      contentWidth: this.contentWidth,
+      // THE PLAN THAT WAS DRAWN, recorded by `heroSection` rather than solved
+      // again here. Solving it again asks a different question -- at a taller
+      // ceiling `fitHeroRow` grows the portraits and wraps to two lines, and
+      // `heroSection` re-solves at a ceiling of nothing when that happens --
+      // so an independent solve reported `rows=2` for a block that draws one.
+      rowsInHeroRow: this.heroRowsDrawn,
       heroWant, heroFloor, towerWant, towerFloor, specialWant, specialFloor,
-      granted: { hero: heroH!, towers: towerH!, specials: specialH! },
+      granted: { hero: heroH!, towers: dealtH!, specials: wide ? dealtH! : specialH! },
       overflow: laid.overflow,
       // The band the content is clipped to, so the harness can tell a card
       // that is masked away from a card that is overlapping something.
@@ -496,9 +643,13 @@ export class LoadoutScene extends Phaser.Scene {
     this.layer.add([...reroll.parts, ...begin.parts])
   }
 
-  /** A section heading. Returns the y its content should start at. */
-  private heading(text: string, y: number): number {
-    const t = this.add.text(W / 2, y, text, {
+  /** A section heading. Returns the y its content should start at.
+   *
+   *  `cx` is the centre it is written on, which is the screen's middle in the
+   *  stacked arrangement and a column's middle when the screen has reflowed
+   *  into two. */
+  private heading(text: string, y: number, cx: number = W / 2): number {
+    const t = this.add.text(cx, y, text, {
       fontFamily: FONT_UI, fontSize: '22px', color: COLOR.amber, letterSpacing: 3,
       stroke: '#0d1016', strokeThickness: 4,
     }).setOrigin(0.5, 0)
@@ -568,6 +719,72 @@ export class LoadoutScene extends Phaser.Scene {
    * needs and the caller gives the remainder to the two dealt rows.
    */
   /**
+   * What the ONE-COLUMN arrangement needs when squeezed as hard as it goes.
+   *
+   * The input to the reflow decision, and it has to be measured rather than
+   * guessed: every section's floor is a question about wrapped text at a given
+   * width, which only a scene can answer. Solved at the stacked widths -- the
+   * full content width, the description under the row -- because that is the
+   * arrangement being asked about.
+   *
+   * The gaps are counted too. A floor that ignored them would say the stack
+   * fits by exactly the room between its sections, which is the arithmetic
+   * that goes wrong by a hair and reflows a screen that did not need it.
+   */
+  /**
+   * What the two dealt rows need at their floor, stacked or side by side.
+   *
+   * Side by side they SHARE a band, so the pair costs the taller of the two
+   * and one heading; stacked they cost the sum and two headings. Both are
+   * measured at the card width that arrangement would actually use, which is
+   * the whole point -- a narrower card is a taller card.
+   */
+  private dealtFloor(
+    run: { openingTowers: string[]; abilities: string[] },
+    cardW: number, small: number, sideBySide: boolean,
+  ): number {
+    const towers = this.towerNeeds(run.openingTowers, cardW, small)
+    const specials = this.abilityNeeds(run.abilities, cardW, small)
+    if (!sideBySide) return towers + specials
+    // Each column lays ITS OWN cards across its half-band, so a column is one
+    // card deep and the pair is as tall as the taller of the two. `cardW` is
+    // already the half-band card -- see the caller.
+    return Math.max(towers, specials)
+  }
+
+  /**
+   * The widest ability label on the roster, rendered.
+   *
+   * Measured across EVERY hero rather than the selected one, so the chip
+   * column is the same width whoever is highlighted and the block does not
+   * change shape as the player moves along the row -- the same reason the chip
+   * COUNT is the roster's longest list.
+   */
+  private widestAbilityLabel(roster: ReturnType<typeof heroList>): number {
+    const size = LO.heroDescription.chipNameSize
+    let w = 0
+    for (const { def } of roster) {
+      for (const a of def.abilities) {
+        const probe = this.add.text(0, 0, a.name, {
+          fontFamily: FONT_UI, fontSize: `${size}px`, fontStyle: 'bold',
+        })
+        w = Math.max(w, probe.width)
+        probe.destroy()
+      }
+    }
+    return Math.ceil(w)
+  }
+
+  private stackedFloor(
+    run: { heroId: string; openingTowers: string[]; abilities: string[] },
+    small: number,
+  ): number {
+    return this.heroPlan(run.heroId, 0, 'under').height
+      + this.dealtFloor(run, this.cardWidthFor(2), small, false)
+      + this.headingHeight() * 3 + LO.sectionGap * 2
+  }
+
+  /**
    * SOLVES the hero block for a given ceiling, and draws nothing.
    *
    * Split out of `heroSection` so the stack can ask what this block NEEDS
@@ -575,17 +792,55 @@ export class LoadoutScene extends Phaser.Scene {
    * back from here, so the block that is measured and the block that is drawn
    * cannot be two different blocks.
    */
-  private heroPlan(selectedId: string, cap: number): {
+  private heroPlan(selectedId: string, cap: number, mode: HeroLayout = 'under'): {
     height: number; pad: number; padT: number
     row: ReturnType<typeof fitHeroRow>
     desc: ReturnType<typeof heroDescription>
     bodySize: number
     roster: ReturnType<typeof heroList>
     selected: ReturnType<typeof heroList>[number]
+    /**
+     * Where the blurb and the FIRST chip go, relative to the padded area's
+     * top-left, and how big a chip's box is.
+     *
+     * ABSOLUTE, NOT AN OFFSET TO ADD TO `desc`. The first version handed back
+     * a block origin for the drawer to add `desc.blurb.x` and `desc.chips[i].x`
+     * to, and `chips-beside` -- where the chip column's own x inside `desc` is
+     * already the whole width less the column -- added the same number twice
+     * and drew the chips 428 units off the side of the panel. There is one
+     * place that resolves a position now and it is here.
+     */
+    blurbAt: { x: number; y: number; width: number }
+    chipsAt: { x: number; y: number; width: number; height: number; pitch: number }
   } {
     const w = this.contentWidth
     const frame = this.frameInsetFor(w, cap)
-    const pad = Math.max(LO.cardPad, Math.ceil(Math.max(frame.left, frame.right)))
+    // THE SIDE CLEARANCE, AND WHO PAYS FOR IT.
+    //
+    // Bare text reaches this block's left and right edges -- the blurb's first
+    // character on one side, the longest ability label on the other -- and at
+    // `cardPad`'s nine pixels both were drawn with the panel's painted rail
+    // through them. "Mind Control" lost its last letter at 667x375 and the H
+    // of "Holds the line" lost its stem at 1400x708. Exactly the defect the
+    // chips had at the BOTTOM, on the other axis, and `cardPadBottom` is the
+    // number that fixed that one.
+    //
+    // WHERE THE CLEARANCE IS TAKEN FROM DEPENDS ON THE ARRANGEMENT, because
+    // the portrait row's slack does. Laid out UNDER the row, the row has the
+    // whole block and five cards to spare, so the block simply pads wider and
+    // everything inside it moves in together. Laid out BESIDE it, the row is
+    // within a few units of wrapping to two lines -- widening the padding
+    // there sent 667x375 back to the stacked arrangement and its overflow from
+    // 73 to 153 -- so the block keeps `cardPad` and the DESCRIPTION shifts
+    // inside it instead: the chip column left by `railR`, the blurb right by
+    // `railL`, out of the gaps rather than out of the row.
+    const wideSides = mode === 'under'
+    const clearL = Math.max(LO.cardPadBottom, Math.ceil(frame.left))
+    const clearR = Math.max(LO.cardPadBottom, Math.ceil(frame.right))
+    const pad = wideSides ? clearL : Math.max(LO.cardPad, Math.ceil(frame.left))
+    const padSideR = wideSides ? clearR : Math.max(LO.cardPad, Math.ceil(frame.right))
+    const railR = wideSides ? 0 : Math.max(0, clearR - padSideR)
+    const railL = wideSides ? 0 : Math.max(0, clearL - pad)
     const padT = Math.max(LO.cardPad, Math.ceil(frame.top))
     // THE BOTTOM IS `cardPadBottom` RATHER THAN `cardPad`, here and in
     // `cardGeometry` -- every panel on the screen keeps the same clearance.
@@ -603,7 +858,7 @@ export class LoadoutScene extends Phaser.Scene {
     // `cardPadBottom` was already in presentation.json and read by nothing at
     // all. It is what this needed.
     const padB = Math.max(LO.cardPadBottom, Math.ceil(frame.bottom))
-    const innerW = w - pad * 2
+    const innerW = w - pad - padSideR
 
     const roster = heroList()
     const selected = roster.find((h) => h.id === selectedId) ?? roster[0]!
@@ -644,17 +899,58 @@ export class LoadoutScene extends Phaser.Scene {
     // and the card does not jump as the player moves along the row.
     const chipCount = Math.max(...roster.map((h) => h.def.abilities.length))
     const chipsH = chipH * chipCount + descCfg.gap * (chipCount - 1)
+    // BESIDE THE ROW, OR UNDER IT.
+    //
+    // Under is the arrangement this screen has always had, and it costs the
+    // block the WHOLE height of the description on top of the whole height of
+    // the portrait row. On a short viewport that is most of what there is --
+    // and the horizontal budget is sitting unused, because the portraits do
+    // not need the full width. Beside, the block is as tall as the taller of
+    // the two rather than the sum, and the description simply gets a narrower
+    // column: its blurb wraps to more lines and its chips are unchanged.
+    // WHAT EACH COLUMN NEEDS, MEASURED, rather than a share of the block.
+    //
+    // A share is exactly the machinery this file threw out -- `rowShares` and
+    // `heroSectionMaxShare` are gone and the tests keep them gone -- and it
+    // fails here in both directions: 62% to the row squeezed "Mind Control"
+    // out through the panel's rail, and 52% wrapped the five portraits onto
+    // two lines, which made the block taller than leaving the description
+    // under it.
+    //
+    // So the DESCRIPTION asks for what its content needs -- the widest ability
+    // label plus its icon, and a blurb column that is not one word per line --
+    // and the portrait row gets everything else. If what is left will not hold
+    // five portraits on ONE line, laying them beside each other has bought
+    // nothing and `heroSection` is told so; see `heroBeside`.
+    const chipsNeed = descCfg.iconSize + descCfg.iconGap + this.widestAbilityLabel(roster)
+    const descNeed = chipsNeed + descCfg.gap + LO.heroBlurbMinWidth
+    // WHAT THE DESCRIPTION TAKES OUT OF THE ROW'S WIDTH, per arrangement.
+    // `beside` moves the whole description up next to the portraits; the
+    // narrower `chips-beside` moves only the chip column and leaves the blurb
+    // underneath, where it has the block's full width and costs one line.
+    const asideW = mode === 'beside' ? descNeed : mode === 'chips-beside' ? chipsNeed : 0
+    const rowW = asideW > 0 ? Math.max(0, innerW - asideW - LO.columnGap) : innerW
+    const descW = mode === 'beside' ? innerW - rowW - LO.columnGap : innerW
     // The blurb's column, which the ladder never changes: it is a fraction of
     // the width, so the smallest size gives the shortest possible block.
+    const chipsWidth = mode === 'under' ? undefined : chipsNeed
     const blurbW = heroDescription(
-      { width: innerW, blurbHeight: 0, chipHeight: chipH, chips: chipCount }, descCfg,
+      { width: descW, blurbHeight: 0, chipHeight: chipH, chips: chipCount, chipsWidth },
+      descCfg,
     ).blurb.width
     const sizes = LO.bodySizes
+    // MEASURED THE WAY IT IS DRAWN. `heroBlurb` tightens the wrap with
+    // `wrapWithin` so the rendered line -- letterSpacing and all -- stays in
+    // its column, and that tightening can cost a line. Measuring with the
+    // plain wrap and drawing with the tightened one reserved one line less
+    // than the blurb takes, and at 1400x708 the last line was drawn with the
+    // hero panel's bottom rail through it.
     const blurbHeightAt = (size: number): number => {
-      const probe = this.add.text(0, 0, selected.def.blurb, {
+      const w2 = Math.max(40, blurbW)
+      const probe = this.wrapWithin(this.add.text(0, 0, selected.def.blurb, {
         fontFamily: FONT_UI, fontSize: `${size}px`, ...BODY_SPACING,
-        wordWrap: { width: Math.max(40, blurbW) },
-      })
+        wordWrap: { width: w2 },
+      }), w2)
       const h = probe.height
       probe.destroy()
       return h
@@ -662,30 +958,82 @@ export class LoadoutScene extends Phaser.Scene {
     const descFloor = Math.max(chipsH, blurbHeightAt(sizes[sizes.length - 1]!))
 
     const rowCfg = LO.heroRow
+    // BESIDE, THE ROW KEEPS THE WHOLE CEILING. Stacked it has to leave the
+    // description's floor behind; side by side the two are independent and the
+    // block is as tall as whichever is taller, so taking the description's
+    // height off the row's ceiling would be reserving room twice.
     const row = fitHeroRow(
-      { width: innerW, count: roster.length, nameHeight }, rowCfg,
-      cap - padT - padB - LO.sectionGap - descFloor,
+      { width: rowW, count: roster.length, nameHeight }, rowCfg,
+      mode === 'beside'
+        ? cap - padT - padB
+        : cap - padT - padB - LO.sectionGap - (mode === 'chips-beside' ? 0 : descFloor),
     )
 
     // The blurb then takes the largest size on the ladder that still fits what
     // the row left behind. The smallest always fits, because the room was
     // reserved from it.
-    const roomForText = cap - padT - padB - row.height - LO.sectionGap
+    const roomForText = mode === 'beside'
+      ? cap - padT - padB
+      : cap - padT - padB - row.height - LO.sectionGap
     let bodySize = sizes[sizes.length - 1]!
     let desc = heroDescription(
-      { width: innerW, blurbHeight: descFloor, chipHeight: chipH, chips: chipCount }, descCfg,
+      { width: descW, blurbHeight: descFloor, chipHeight: chipH, chips: chipCount, chipsWidth },
+      descCfg,
     )
     for (const size of sizes) {
       const next = heroDescription(
-        { width: innerW, blurbHeight: blurbHeightAt(size), chipHeight: chipH, chips: chipCount }, descCfg,
+        { width: descW, blurbHeight: blurbHeightAt(size), chipHeight: chipH,
+          chips: chipCount, chipsWidth }, descCfg,
       )
       bodySize = size
       desc = next
       if (next.height <= roomForText) break
     }
 
-    const height = padT + row.height + LO.sectionGap + desc.height + padB
-    return { height, pad, padT, row, desc, bodySize, roster, selected }
+    // The chip column's own extent, which `chips-beside` needs separately
+    // from the description block's: beside the row, the chips are as tall as
+    // themselves rather than as tall as a block they share with the blurb.
+    const chipsH2 = chipH * chipCount + descCfg.gap * (chipCount - 1)
+    const blurbH = desc.blurb.height
+    const height = mode === 'beside'
+      ? padT + Math.max(row.height, desc.height) + padB
+      : mode === 'chips-beside'
+        ? padT + Math.max(row.height, chipsH2) + LO.sectionGap + blurbH + padB
+        : padT + row.height + LO.sectionGap + desc.height + padB
+    // Beside: to the right of the row, and top-aligned with it rather than
+    // centred, so the first ability chip lines up with the top of the
+    // portraits instead of floating in the middle of a taller block.
+    // RESOLVED HERE, ONCE. `desc` places the blurb and the chip column inside
+    // a block; these place that block inside the card, and the two are added
+    // together now rather than by the drawer.
+    const chipBox = desc.chips[0] ?? { x: 0, y: 0, width: 0, height: chipH }
+    // SHIFTED LEFT BY THE RAIL, not narrowed by it. Narrowing the description
+    // reflows the blurb onto another line, which makes the block taller and
+    // costs the stack more than the clearance is worth -- 904x400 went from an
+    // overflow of 0 to 16 that way. Moving it takes the clearance out of
+    // `columnGap` instead, where there is room for it and nothing to reflow.
+    //
+    // Only the arrangements that put the chips beside the row need it: laid
+    // out UNDER, the chip column is a 36% share of the block rather than a
+    // measured fit, so the longest label still stops well short of its own
+    // column's edge.
+    const asideX = rowW + LO.columnGap - railR
+    const blurbAt = mode === 'beside'
+      ? { x: asideX + desc.blurb.x, y: desc.blurb.y, width: desc.blurb.width }
+      : mode === 'chips-beside'
+        ? { x: railL, y: Math.max(row.height, chipsH2) + LO.sectionGap,
+            width: desc.blurb.width }
+        : { x: desc.blurb.x + railL, y: row.height + LO.sectionGap + desc.blurb.y,
+            width: desc.blurb.width }
+    const chipsAt = mode === 'under'
+      ? { x: chipBox.x, y: row.height + LO.sectionGap + chipBox.y,
+          width: chipBox.width, height: chipBox.height, pitch: chipH + descCfg.gap }
+      : mode === 'beside'
+        ? { x: asideX + chipBox.x, y: chipBox.y,
+            width: chipBox.width, height: chipBox.height, pitch: chipH + descCfg.gap }
+        : { x: asideX, y: 0,
+            width: chipsNeed, height: chipBox.height, pitch: chipH + descCfg.gap }
+    return { height, pad, padT, row, desc, bodySize, roster, selected, blurbAt, chipsAt }
   }
 
   /**
@@ -696,7 +1044,9 @@ export class LoadoutScene extends Phaser.Scene {
    * here, because the stack has already reconciled it with everything else on
    * the screen.
    */
-  private heroSection(selectedId: string, top: number, height: number): number {
+  private heroSection(
+    selectedId: string, top: number, height: number, mode: HeroLayout = 'under',
+  ): number {
     const w = this.contentWidth
     // SOLVED AT THE HEIGHT IT ACTUALLY GOT, and re-solved at the tightest
     // possible ceiling if that still wants more room than it was given.
@@ -707,9 +1057,10 @@ export class LoadoutScene extends Phaser.Scene {
     // granted exactly the floor, the drawing solve came back wanting a taller
     // block than the card it was about to be drawn into, and the last line of
     // the blurb was cut off by the panel's own edge.
-    let plan = this.heroPlan(selectedId, height)
-    if (plan.height > height) plan = this.heroPlan(selectedId, 0)
-    const { pad, padT, row, desc, bodySize, roster, selected } = plan
+    let plan = this.heroPlan(selectedId, height, mode)
+    if (plan.height > height) plan = this.heroPlan(selectedId, 0, mode)
+    this.heroRowsDrawn = plan.row.rows
+    const { pad, padT, row, bodySize, roster, selected, blurbAt, chipsAt } = plan
     const c = this.card(W / 2 - w / 2, top, w, Math.max(height, plan.height))
     // BOTH OFFSETS COME FROM THE CARD, not from w and h. `left` was derived
     // correctly and `rowTop` was derived as `-height / 2 + padT` -- right for a
@@ -727,8 +1078,7 @@ export class LoadoutScene extends Phaser.Scene {
       ))
     }
 
-    const descTop = rowTop + row.height + LO.sectionGap
-    c.face.add(this.heroBlurb(selected.def, left, descTop, desc, bodySize))
+    c.face.add(this.heroBlurb(selected.def, left, rowTop, blurbAt, chipsAt, bodySize))
     return top + height
   }
 
@@ -798,9 +1148,21 @@ export class LoadoutScene extends Phaser.Scene {
   private scrollMax = 0
   private scrollAt = 0
 
+  /** How many lines the portrait row was drawn on. Recorded by `heroSection`
+   *  for the harness, because only the drawer knows which of the two solves
+   *  it ended up using. */
+  private heroRowsDrawn = 1
+
   /** What the stack asked for and what it got. For the harness. */
   stackPlan?: {
     available: number; headingH: number; cardW: number
+    /** Whether the screen reflowed into two columns, and what the one-column
+     *  arrangement would have needed. Published so a harness run can say WHY
+     *  a screen chose the shape it did rather than inferring it from a
+     *  picture. */
+    wide: boolean; heroLayout: HeroLayout; stackedFloor: number
+    dealtStackedFloor: number; dealtColumnsFloor: number; colW: number
+    contentWidth: number; rowsInHeroRow: number
     heroWant: number; heroFloor: number
     towerWant: number; towerFloor: number
     specialWant: number; specialFloor: number
@@ -906,21 +1268,30 @@ export class LoadoutScene extends Phaser.Scene {
     )
     fitInBox(img, hero.portraitSprite, portrait.width)
 
-    const label = this.add.text(
+    // HELD INSIDE ITS OWN CARD. The name had no width bound -- no wrap, no
+    // clamp -- so COURTLAND, the longest on the roster, ran out of its card
+    // and into HAN's on any viewport where the row is tight. `heroRow` already
+    // measures the box the name gets; this is what keeps the glyphs inside it.
+    const label = this.fitWithin(this.add.text(
       name.x - dx + name.width / 2, name.y - dy, hero.name.toUpperCase(), {
         fontFamily: FONT_UI, fontSize: `${LO.bodySizes[LO.bodySizes.length - 1]!}px`,
         fontStyle: 'bold', color: selected ? COLOR.amber : COLOR.ink, align: 'center',
-      }).setOrigin(0.5, 0)
+      }).setOrigin(0.5, 0), name.width)
     g.add([img, label])
 
     if (selected) {
       const ring = this.add.graphics()
       ring.lineStyle(LO.heroCard.ringWidth, LO.heroCard.edgeSelected, 1)
         .strokeRoundedRect(0, 0, card.width, card.height, LO.heroCard.radius)
+      // A CORNER BADGE, ON THE ARTWORK ON PURPOSE, and it says so -- the same
+      // declaration the tower cards' price carries. See `setData('overlaps')`
+      // there: the harness's containment check flags two things drawn on a
+      // card that run into each other, and a tick in the corner of the card it
+      // is ticking is a decision rather than a collision.
       const tick = this.add.text(card.width - 4, 2, '\u2713', {
         fontFamily: FONT_UI, fontSize: `${LO.bodySizes[LO.bodySizes.length - 1]!}px`,
         fontStyle: 'bold', color: COLOR.amber,
-      }).setOrigin(1, 0)
+      }).setOrigin(1, 0).setData('overlaps', true)
       g.add([ring, tick])
     } else {
       g.setAlpha(0.72)
@@ -943,7 +1314,10 @@ export class LoadoutScene extends Phaser.Scene {
    * player actually chooses between once they have looked at the pictures.
    */
   private heroBlurb(
-    hero: HeroDef, left: number, top: number, desc: DescriptionLayout, size: number,
+    hero: HeroDef, left: number, top: number,
+    blurbAt: { x: number; y: number; width: number },
+    chipsAt: { x: number; y: number; width: number; height: number; pitch: number },
+    size: number,
   ): Phaser.GameObjects.GameObject[] {
     const D = LO.heroDescription
     const out: Phaser.GameObjects.GameObject[] = []
@@ -952,20 +1326,19 @@ export class LoadoutScene extends Phaser.Scene {
     // word wrap -- so the drawn line was wider than the column it was measured
     // for and ran into the ability icons. See `wrapWithin`.
     out.push(this.wrapWithin(this.add.text(
-      left + desc.blurb.x, top + desc.blurb.y, hero.blurb, {
+      left + blurbAt.x, top + blurbAt.y, hero.blurb, {
         fontFamily: FONT_UI, fontSize: `${size}px`, color: COLOR.dim, ...BODY_SPACING,
-        wordWrap: { width: desc.blurb.width },
-      }).setOrigin(0, 0), desc.blurb.width))
+        wordWrap: { width: blurbAt.width },
+      }).setOrigin(0, 0), blurbAt.width))
 
     // EVERY ABILITY THIS HERO HAS. It was `[hero.slot1, hero.slot2]`, a pair,
     // which is one chip short for Courtland. `desc.chips` is laid out for the
     // roster's longest list, so a hero with fewer simply leaves the last box
     // empty rather than the block resizing under the row.
     for (const [i, slot] of hero.abilities.entries()) {
-      const box = desc.chips[i]
-      if (!box) continue
-      const x = left + box.x
-      const y = top + box.y
+      const box = { width: chipsAt.width, height: chipsAt.height }
+      const x = left + chipsAt.x
+      const y = top + chipsAt.y + i * chipsAt.pitch
       // A SLOT THAT IS RESERVED SAYS SO. Cory's second button read "Loophole"
       // for a whole build -- a name from a tower branch, on an ability that
       // does not exist yet. The name is the real one now and the STATE is
@@ -1090,11 +1463,16 @@ export class LoadoutScene extends Phaser.Scene {
     // A nominal height for the frame inset, which barely varies with it; the
     // answer is re-derived from the real height when the card is drawn.
     const g = this.cardGeometry(cw, LO.cardProbeHeight)
-    const wrap = { width: Math.max(20, g.tw) }
+    const tw = Math.max(20, g.tw)
+    // WRAPPED THE WAY THE CARD DRAWS IT, which is `wrapWithin` and not a bare
+    // `wordWrap`: Phaser wraps on the unspaced advance and BODY_SPACING widens
+    // the rendered line afterwards, so a line wrapped at `tw` renders wider
+    // than `tw`. Measuring with the plain wrap and drawing with the tightened
+    // one made the measured height a line short on a narrow card.
     const probe = (text: string, extra: object = {}): number => {
-      const t = this.add.text(0, 0, text, {
-        fontFamily: FONT_UI, fontSize: `${size}px`, wordWrap: wrap, ...extra,
-      })
+      const t = this.wrapWithin(this.add.text(0, 0, text, {
+        fontFamily: FONT_UI, fontSize: `${size}px`, wordWrap: { width: tw }, ...extra,
+      }), tw)
       const h = t.height
       t.destroy()
       return h
@@ -1132,18 +1510,25 @@ export class LoadoutScene extends Phaser.Scene {
       body: Phaser.GameObjects.Text; total: number } | null = null
     for (const size of LO.bodySizes) {
       built?.name.destroy(); built?.stats?.destroy(); built?.body.destroy()
-      const n = this.add.text(tx, 0, name.toUpperCase(), {
+      // `wrapWithin`, NOT a bare `wordWrap`. Phaser wraps on the unspaced
+      // advance, so a line wrapped at `tw` renders wider than `tw` by roughly
+      // one letterSpacing per character -- and on a full-width card that is a
+      // few pixels into the padding, while on a 184-unit card in a two-column
+      // arrangement it is the tower's last line printed out through the card's
+      // right rail and into the card beside it. Same bug at every width; only
+      // the narrow card made it visible.
+      const n = this.wrapWithin(this.add.text(tx, 0, name.toUpperCase(), {
         fontFamily: FONT_UI, fontSize: `${size}px`, color: COLOR.ink, fontStyle: 'bold',
         wordWrap: { width: tw },
-      }).setOrigin(0, 0)
-      const st = stats === null ? null : this.add.text(tx, 0, stats, {
+      }).setOrigin(0, 0), tw)
+      const st = stats === null ? null : this.wrapWithin(this.add.text(tx, 0, stats, {
         fontFamily: FONT_UI, fontSize: `${size}px`, color: COLOR.ink,
         wordWrap: { width: tw },
-      }).setOrigin(0, 0)
-      const bd = this.add.text(tx, 0, body, {
+      }).setOrigin(0, 0), tw)
+      const bd = this.wrapWithin(this.add.text(tx, 0, body, {
         fontFamily: FONT_UI, fontSize: `${size}px`, color: COLOR.dim, ...BODY_SPACING,
         wordWrap: { width: tw },
-      }).setOrigin(0, 0)
+      }).setOrigin(0, 0), tw)
       const total = n.height + 4 + (st ? st.height + 3 : 0) + bd.height
       built = { name: n, stats: st, body: bd, total }
       if (total <= room) break
@@ -1255,7 +1640,10 @@ export class LoadoutScene extends Phaser.Scene {
     }))
   }
 
-  private towerSection(ids: string[], top: number, height: number): number {
+  private towerSection(
+    ids: string[], top: number, height: number,
+    band?: { cx: number; width: number },
+  ): number {
     return this.cardRow(ids, top, height, (id, cw, ch) => {
       const def = TOWERS[id]!
       return this.cardFace(
@@ -1269,7 +1657,7 @@ export class LoadoutScene extends Phaser.Scene {
         (cx, cy, box) => [this.boxedIcon(def.sprite, cx, cy, box)],
         def.name, `${def.cost}`, towerStats(def), towerLine(def),
       )
-    })
+    }, band)
   }
 
   /** What one special card needs to hold its content. */
@@ -1280,7 +1668,10 @@ export class LoadoutScene extends Phaser.Scene {
     }))
   }
 
-  private abilitySection(ids: string[], top: number, height: number): number {
+  private abilitySection(
+    ids: string[], top: number, height: number,
+    band?: { cx: number; width: number },
+  ): number {
     return this.cardRow(ids, top, height, (id, cw, ch) => {
       const def = ABILITIES[id]!
       return this.cardFace(
@@ -1288,7 +1679,7 @@ export class LoadoutScene extends Phaser.Scene {
         (cx, cy, box) => [this.boxedIcon(def.icon, cx, cy, box)],
         def.name, null, null, abilityLine(def),
       )
-    })
+    }, band)
   }
 
   /**
@@ -1300,22 +1691,32 @@ export class LoadoutScene extends Phaser.Scene {
    */
   /** The width one card gets in a row of `n`. The measurers need it before a
    *  single card exists. */
-  private cardWidthFor(n: number): number {
-    return Math.floor((this.contentWidth - CARD_GAP * (Math.max(1, n) - 1)) / Math.max(1, n))
+  private cardWidthFor(n: number, width: number = this.contentWidth): number {
+    return Math.floor((width - CARD_GAP * (Math.max(1, n) - 1)) / Math.max(1, n))
   }
 
+  /**
+   * A row of cards inside a horizontal band.
+   *
+   * `band` is the width and centre the row is laid out in. It was always the
+   * full content width centred on the screen; it is a parameter now because
+   * the wide arrangement puts the towers in the left half and the specials in
+   * the right, and a row that could only ever centre itself on `W / 2` cannot
+   * be half of a screen.
+   */
   private cardRow(
     ids: string[],
     y: number,
     height: number,
     build: (id: string, cw: number, ch: number) => { parts: Phaser.GameObjects.GameObject[] },
+    band: { cx: number; width: number } = { cx: W / 2, width: this.contentWidth },
   ): number {
     const n = Math.max(1, ids.length)
-    const cw = this.cardWidthFor(n)
+    const cw = this.cardWidthFor(n, band.width)
     const total = n * cw + (n - 1) * CARD_GAP
 
     ids.forEach((id, i) => {
-      const x = W / 2 - total / 2 + i * (cw + CARD_GAP)
+      const x = band.cx - total / 2 + i * (cw + CARD_GAP)
       const c = this.card(x, y, cw, height)
       c.face.add(build(id, cw, height).parts)
     })

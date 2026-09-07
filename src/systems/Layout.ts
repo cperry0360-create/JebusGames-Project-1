@@ -202,6 +202,78 @@ export interface Stacked {
   overflow: number
 }
 
+/* ------------------------------------------------ one column or two */
+
+export interface ColumnsInput {
+  /** What the one-column arrangement needs when squeezed as hard as it can
+   *  be. Measured by the caller, which is the only thing that can measure
+   *  text. */
+  stackedFloor: number
+  /** What the two-column arrangement needs, measured the same way. */
+  columnsFloor: number
+  /** The width the thing that has to stay readable would have: the CARD in
+   *  a column, not the column, on the loadout screen. */
+  column: number
+  /** The narrowest that may be and still hold its content readably. */
+  minColumn: number
+  /**
+   * The least vertical room the reflow must buy to be worth taking.
+   *
+   * A REFLOW THAT SAVES TWO UNITS IS NOT A REFLOW, it is a rearrangement of
+   * half a screen for nothing -- and that is the measurement this game's
+   * loadout actually produced, twice, with two different two-column
+   * arrangements. A threshold is the difference between "the arithmetic says
+   * yes" and "this is worth doing".
+   */
+  minSaving: number
+}
+
+export function columnWidth(contentWidth: number, columnGap: number): number {
+  return Math.floor((contentWidth - columnGap) / 2)
+}
+
+/**
+ * Whether a screen should lay a pair of sections SIDE BY SIDE rather than
+ * stacked.
+ *
+ * THE PROBLEM THIS ANSWERS. A menu composed against a fixed design box spends
+ * its whole budget vertically: sections stack, and every tap target inside
+ * them carries a 44 CSS-pixel floor that costs MORE design units the shorter
+ * the viewport is. On a wide, short screen -- 2.26:1 was the one reported --
+ * the vertical budget runs out while the horizontal budget sits unused, and
+ * the screen scrolls or clips content the player needed to see.
+ *
+ * SCALING THE SCREEN DOWN IS NOT THE ANSWER and this repository has the note
+ * on record: a panel scaled to fit a phone put its buttons at about 24 CSS
+ * pixels, and the standing answer there is a shorter panel rather than a
+ * smaller one. Scaling a loadout screen makes the tower stats and the ability
+ * labels unreadable, which trades one complaint for another.
+ *
+ * SO IT REFLOWS -- BUT ONLY WHEN THE REFLOW ACTUALLY PAYS, and that is
+ * measured rather than assumed. Two conditions, and both are needed. Whether
+ * the room is NEEDED at all is the caller's question and is asked before this
+ * one; what this answers is whether two columns are worth having.
+ *
+ *   - two columns really are SHORTER, by `minSaving` at least. Halving a
+ *     column's width makes its text wrap more, and a card row twice as narrow
+ *     can be twice as tall, so the saving is never the heading it removes:
+ *     measured on this game's loadout, two columns each stacking their cards
+ *     DOWN came out 325/343/343/377 against 319/345/345/371 stacked -- taller
+ *     on three of four viewports -- while laying them ACROSS came out
+ *     279/331/279/357 against the same four. Same rearrangement, two very
+ *     different answers, and only the measurement can tell them apart.
+ *   - it would still be wide enough to hold its content. Below `minColumn`
+ *     the reflow has bought vertical room by spending legibility, which is
+ *     the trade it exists to avoid.
+ *
+ * Pure arithmetic, driven by the tests: whether a layout changes shape is a
+ * decision, and a decision should not need a canvas to check.
+ */
+export function useTwoColumns(i: ColumnsInput): boolean {
+  if (i.column < i.minColumn) return false
+  return i.columnsFloor + i.minSaving <= i.stackedFloor
+}
+
 /**
  * A VERTICAL STACK THAT FLOWS: each section starts at the bottom of the one
  * above it, never at a hardcoded y.
