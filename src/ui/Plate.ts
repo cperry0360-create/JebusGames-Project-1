@@ -112,6 +112,24 @@ function chromeFor(w: number, h: number): number {
 }
 
 /**
+ * The same answer, for a caller that has to PIN a plate's chrome rather than
+ * let it follow the box.
+ *
+ * `chromeFor` takes `min(w, h)`, and a card is always wider than it is tall --
+ * so its frame weight, and therefore the padding anything inside it is laid
+ * out against, follows its HEIGHT. That is fine for a dialog whose height is
+ * chosen; it is not fine for a card whose height is whatever a stack had left
+ * over, because it makes the card's TEXT COLUMN a function of a number decided
+ * somewhere else and changed by things that have nothing to do with the card.
+ * A caller in that position pins the weight to a nominal height and passes the
+ * same value to `platePanel` and `panelInset`, so the paint and the padding
+ * stay one answer.
+ */
+export function panelChrome(w: number, h: number): number {
+  return chromeFor(w, h)
+}
+
+/**
  * A dialog plate stretched to any size, sliced in both directions.
  *
  * The corners are scaled down rather than drawn at full size, because the

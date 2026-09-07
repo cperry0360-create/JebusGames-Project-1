@@ -10,7 +10,9 @@ import { runState, setRunState } from '../systems/RunState.ts'
 import { shouldPlay } from '../systems/Cutscenes.ts'
 import { towerWeightsFor } from '../systems/Levels.ts'
 import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI, uiSize } from '../ui/Theme.ts'
-import { panelInset, plateButton, platePanel, type PlateButton } from '../ui/Plate.ts'
+import {
+  panelChrome, panelInset, plateButton, platePanel, type PlateButton,
+} from '../ui/Plate.ts'
 import { buttonRow } from '../systems/ButtonRow.ts'
 import { fitInBox } from '../systems/Art.ts'
 import { fitHeroRow, heroDescription } from '../systems/HeroRow.ts'
@@ -658,7 +660,7 @@ export class LoadoutScene extends Phaser.Scene {
   }
 
   /** Builds a plate with an empty face container on top, ready to fill. */
-  private card(x: number, y: number, w: number, h: number): Card {
+  private card(x: number, y: number, w: number, h: number, chrome?: number): Card {
     // A solid fill behind the plate, not a heavier overlay over the
     // illustration. The painted room is already dark and dimming it further
     // flattens it; the panels are what has to stay readable, so they carry
@@ -666,7 +668,7 @@ export class LoadoutScene extends Phaser.Scene {
     const backing = this.add
       .rectangle(x + w / 2, y + h / 2, w - 10, h - 10, 0x121820, LO.panelAlpha)
       .setOrigin(0.5)
-    const plate = platePanel(this, x, y, w, h)
+    const plate = platePanel(this, x, y, w, h, chrome ?? panelChrome(w, h))
     // Centred horizontally, top-aligned vertically. See `Card.inner`: the
     // asymmetry is deliberate (a row of cards is laid out from its centre and
     // filled from its top) and it is the reason `inner` exists.
@@ -792,7 +794,9 @@ export class LoadoutScene extends Phaser.Scene {
    * back from here, so the block that is measured and the block that is drawn
    * cannot be two different blocks.
    */
-  private heroPlan(selectedId: string, cap: number, mode: HeroLayout = 'under'): {
+  private heroPlan(
+    selectedId: string, cap: number, mode: HeroLayout = 'under', frameAt?: number,
+  ): {
     height: number; pad: number; padT: number
     row: ReturnType<typeof fitHeroRow>
     desc: ReturnType<typeof heroDescription>
@@ -814,7 +818,26 @@ export class LoadoutScene extends Phaser.Scene {
     chipsAt: { x: number; y: number; width: number; height: number; pitch: number }
   } {
     const w = this.contentWidth
-    const frame = this.frameInsetFor(w, cap)
+    // THE PAINTED FRAME IS ASKED AT THE HEIGHT THE BLOCK IS DRAWN AT.
+    //
+    // It used to be asked at `cap`, the CEILING the block is being solved
+    // against, and `heroSection` re-solves at a ceiling of NOTHING whenever
+    // the granted height is too small -- which is every viewport measured.
+    // `panelInset` scales the chrome by `min(w, h)`, so at h = 0 it returned a
+    // frame inset of ZERO on all four sides and `padT` fell back to
+    // `cardPad`'s nine pixels while `platePanel`, which is handed the real
+    // height, went on painting a rail twenty-odd pixels thick over the top of
+    // the block. That is what cut the ascenders off "Immovable.": the panel
+    // was not too short for the blurb, the blurb was drawn on the frame.
+    //
+    // The block's own height is not known until the solve finishes, so it is
+    // asked once at `frameAt` and the whole solve is REPEATED at the height
+    // that came out. One repeat is enough -- the inset moves by a fraction of
+    // a pixel per pixel of height, so the second answer cannot move the first
+    // by enough to matter -- and `frameAt` being passed in is what stops it
+    // recursing further.
+    const askAt = frameAt ?? Math.max(cap, LO.heroMinHeight)
+    const frame = this.frameInsetFor(w, askAt)
     // THE SIDE CLEARANCE, AND WHO PAYS FOR IT.
     //
     // Bare text reaches this block's left and right edges -- the blurb's first
@@ -837,8 +860,17 @@ export class LoadoutScene extends Phaser.Scene {
     const wideSides = mode === 'under'
     const clearL = Math.max(LO.cardPadBottom, Math.ceil(frame.left))
     const clearR = Math.max(LO.cardPadBottom, Math.ceil(frame.right))
-    const pad = wideSides ? clearL : Math.max(LO.cardPad, Math.ceil(frame.left))
-    const padSideR = wideSides ? clearR : Math.max(LO.cardPad, Math.ceil(frame.right))
+    // BESIDE, THE PADDING STAYS AT `cardPad` ON PURPOSE and `railL`/`railR`
+    // below carry the clearance instead. Taking it out of the padding here
+    // narrows the block, and the block is what decides whether five portraits
+    // fit beside the description at all: at 844x390 it dropped the screen back
+    // to `chips-beside` and cost the specials another 26 units of a viewport
+    // that was already scrolling. `Math.max(cardPad, frame.left)` used to
+    // stand here and did no harm only because `frame` was being asked at a
+    // height of zero and came back zero on every side -- the same defect that
+    // cut the top off the blurb.
+    const pad = wideSides ? clearL : LO.cardPad
+    const padSideR = wideSides ? clearR : LO.cardPad
     const railR = wideSides ? 0 : Math.max(0, clearR - padSideR)
     const railL = wideSides ? 0 : Math.max(0, clearL - pad)
     const padT = Math.max(LO.cardPad, Math.ceil(frame.top))
@@ -922,6 +954,20 @@ export class LoadoutScene extends Phaser.Scene {
     // and the portrait row gets everything else. If what is left will not hold
     // five portraits on ONE line, laying them beside each other has bought
     // nothing and `heroSection` is told so; see `heroBeside`.
+    //
+    // THE COLUMN THE BLOCK RESERVES IS THE ROSTER'S; THE COLUMN THE CHIPS TAKE
+    // IS THE SELECTED HERO'S, and the blurb keeps the difference.
+    //
+    // Reserving the roster's widest label is what stops the portrait row
+    // moving as the player walks along it -- the block is the same width for
+    // everybody. Spending all of it on every hero is a different thing, and it
+    // was throwing width away: "Mind Control" is the widest label there is, so
+    // Eli's "Star Rain" left a column of empty panel to the right of itself
+    // while his blurb, pinned at `heroBlurbMinWidth`, took eight words onto
+    // five lines. The chips sit flush with the block's right edge and the
+    // blurb takes what they do not need.
+    const chipColumnFor = (h: ReturnType<typeof heroList>[number]): number =>
+      descCfg.iconSize + descCfg.iconGap + this.widestAbilityLabel([h])
     const chipsNeed = descCfg.iconSize + descCfg.iconGap + this.widestAbilityLabel(roster)
     const descNeed = chipsNeed + descCfg.gap + LO.heroBlurbMinWidth
     // WHAT THE DESCRIPTION TAKES OUT OF THE ROW'S WIDTH, per arrangement.
@@ -933,11 +979,16 @@ export class LoadoutScene extends Phaser.Scene {
     const descW = mode === 'beside' ? innerW - rowW - LO.columnGap : innerW
     // The blurb's column, which the ladder never changes: it is a fraction of
     // the width, so the smallest size gives the shortest possible block.
-    const chipsWidth = mode === 'under' ? undefined : chipsNeed
-    const blurbW = heroDescription(
-      { width: descW, blurbHeight: 0, chipHeight: chipH, chips: chipCount, chipsWidth },
-      descCfg,
-    ).blurb.width
+    const chipsWidthFor = (h: ReturnType<typeof heroList>[number]): number | undefined =>
+      mode === 'under' ? undefined : chipColumnFor(h)
+    const chipsWidth = chipsWidthFor(selected)
+    const blurbWidthFor = (h: ReturnType<typeof heroList>[number]): number =>
+      Math.max(40, heroDescription(
+        { width: descW, blurbHeight: 0, chipHeight: chipH, chips: chipCount,
+          chipsWidth: chipsWidthFor(h) },
+        descCfg,
+      ).blurb.width)
+    const blurbW = blurbWidthFor(selected)
     const sizes = LO.bodySizes
     // MEASURED THE WAY IT IS DRAWN. `heroBlurb` tightens the wrap with
     // `wrapWithin` so the rendered line -- letterSpacing and all -- stays in
@@ -945,16 +996,29 @@ export class LoadoutScene extends Phaser.Scene {
     // plain wrap and drawing with the tightened one reserved one line less
     // than the blurb takes, and at 1400x708 the last line was drawn with the
     // hero panel's bottom rail through it.
-    const blurbHeightAt = (size: number): number => {
-      const w2 = Math.max(40, blurbW)
-      const probe = this.wrapWithin(this.add.text(0, 0, selected.def.blurb, {
+    const wrappedHeight = (text: string, size: number, width: number): number => {
+      const probe = this.wrapWithin(this.add.text(0, 0, text, {
         fontFamily: FONT_UI, fontSize: `${size}px`, ...BODY_SPACING,
-        wordWrap: { width: w2 },
-      }), w2)
+        wordWrap: { width },
+      }), width)
       const h = probe.height
       probe.destroy()
       return h
     }
+    // THE BLOCK IS SIZED TO THE LONGEST BLURB ON THE ROSTER, MEASURED.
+    //
+    // It was sized to the SELECTED hero's, which is a measurement of the wrong
+    // thing: `chipCount` already takes the roster's maximum precisely so the
+    // block does not change height as the player moves along the row, and the
+    // blurb was left to change it anyway. Bailey wraps to four lines and Eli
+    // to five, so the block was 143 units tall for one and 160 for the other
+    // -- and every card BELOW it was handed a different height, and re-wrapped
+    // its own text, because a different hero was highlighted.
+    //
+    // Each hero is measured in the column HE gets, not in one shared column,
+    // because the chips no longer take the same width for everybody.
+    const blurbHeightAt = (size: number): number =>
+      Math.max(...roster.map((h) => wrappedHeight(h.def.blurb, size, blurbWidthFor(h))))
     const descFloor = Math.max(chipsH, blurbHeightAt(sizes[sizes.length - 1]!))
 
     const rowCfg = LO.heroRow
@@ -1018,12 +1082,19 @@ export class LoadoutScene extends Phaser.Scene {
     // measured fit, so the longest label still stops well short of its own
     // column's edge.
     const asideX = rowW + LO.columnGap - railR
+    // THE BAND IS THE ROSTER'S TALLEST BLURB; THIS HERO'S SITS IN THE MIDDLE
+    // OF IT. Reserving the tallest is what keeps the block one height, and
+    // pinning every shorter blurb to the top of the reserve would leave a
+    // ragged gap under four of the five. Centred, they read as one panel.
+    const ownBlurbH = wrappedHeight(selected.def.blurb, bodySize, blurbW)
+    const blurbInset = Math.max(0, (desc.blurb.height - ownBlurbH) / 2)
     const blurbAt = mode === 'beside'
-      ? { x: asideX + desc.blurb.x, y: desc.blurb.y, width: desc.blurb.width }
+      ? { x: asideX + desc.blurb.x, y: desc.blurb.y + blurbInset, width: desc.blurb.width }
       : mode === 'chips-beside'
-        ? { x: railL, y: Math.max(row.height, chipsH2) + LO.sectionGap,
+        ? { x: railL, y: Math.max(row.height, chipsH2) + LO.sectionGap + blurbInset,
             width: desc.blurb.width }
-        : { x: desc.blurb.x + railL, y: row.height + LO.sectionGap + desc.blurb.y,
+        : { x: desc.blurb.x + railL,
+            y: row.height + LO.sectionGap + desc.blurb.y + blurbInset,
             width: desc.blurb.width }
     const chipsAt = mode === 'under'
       ? { x: chipBox.x, y: row.height + LO.sectionGap + chipBox.y,
@@ -1033,6 +1104,16 @@ export class LoadoutScene extends Phaser.Scene {
             width: chipBox.width, height: chipBox.height, pitch: chipH + descCfg.gap }
         : { x: asideX, y: 0,
             width: chipsNeed, height: chipBox.height, pitch: chipH + descCfg.gap }
+    // THE SECOND PASS, at the height the first one produced. See `askAt`.
+    if (frameAt === undefined && Math.abs(height - askAt) > 1) {
+      return this.heroPlan(selectedId, cap, mode, height)
+    }
+    this.heroBlockPlan = {
+      padT, padB, pad, padSideR, frameTop: frame.top, frameBottom: frame.bottom,
+      rowHeight: row.height, descHeight: desc.height, blurbHeight: desc.blurb.height,
+      blurbY: blurbAt.y, blurbWidth: blurbAt.width, chipsH, bodySize, height,
+      cap, askAt,
+    }
     return { height, pad, padT, row, desc, bodySize, roster, selected, blurbAt, chipsAt }
   }
 
@@ -1152,6 +1233,11 @@ export class LoadoutScene extends Phaser.Scene {
    *  for the harness, because only the drawer knows which of the two solves
    *  it ended up using. */
   private heroRowsDrawn = 1
+
+  /** The hero block's own arithmetic, as the last solve left it. For the
+   *  harness: a blurb drawn on the panel's rail is a number here before it is
+   *  a picture, and the picture is the only thing that showed it last time. */
+  heroBlockPlan?: Record<string, number>
 
   /** What the stack asked for and what it got. For the harness. */
   stackPlan?: {
@@ -1416,7 +1502,29 @@ export class LoadoutScene extends Phaser.Scene {
     pad: number; padR: number; padT: number; padB: number
     col: number; tx: number; tw: number; room: number
   } {
-    const frame = this.frameInsetFor(cw, ch)
+    // THE TEXT COLUMN IS A FUNCTION OF THE CARD'S WIDTH AND NOTHING ELSE.
+    //
+    // This asked the painted frame for its inset at the card's real HEIGHT,
+    // and `chromeFor` weights the frame by `min(w, h)` -- a card is always
+    // wider than it is tall, so the side padding, and therefore the width
+    // every line of text on the card is wrapped to, followed the height.
+    //
+    // A card's height is not the card's business: it is whatever the stack had
+    // left after the hero block took what it needed, and the hero block was a
+    // line taller for a hero whose blurb wrapped to five lines. So picking a
+    // different hero re-wrapped the SPECIALS -- "up to 900 peanuts - 25% pay
+    // nothing - 34s cooldown" broke after "25%" in one frame and after "25%
+    // pay" in the next, with no resize between them. And because `cardNeeds`
+    // measured at `cardProbeHeight` while `cardFace` drew at the real height,
+    // the two disagreed by however far the granted height was from 140, which
+    // is how a wrapped line came to be a few pixels wider than the column it
+    // was reserved in and printed out through the card's right rail.
+    //
+    // Pinned to `cardProbeHeight` here AND painted with the same weight in
+    // `cardRow`, so the rail the player sees and the padding the text is laid
+    // out against are still one number -- they are just no longer a number the
+    // stack can move.
+    const frame = this.frameInsetFor(cw, LO.cardProbeHeight, this.cardChrome(cw))
     const pad = Math.max(LO.cardPad, Math.ceil(frame.left))
     const padR = Math.max(LO.cardPad, Math.ceil(frame.right))
     const padT = Math.max(LO.cardPad, Math.ceil(frame.top))
@@ -1460,8 +1568,10 @@ export class LoadoutScene extends Phaser.Scene {
     cw: number, name: string, cost: string | null, stats: string | null, body: string,
     size: number = LO.bodySizes[0]!,
   ): number {
-    // A nominal height for the frame inset, which barely varies with it; the
-    // answer is re-derived from the real height when the card is drawn.
+    // The card's real height is not known yet, and it no longer matters: the
+    // text column `cardGeometry` returns is a function of the WIDTH alone, so
+    // this measures the same column the card is drawn with. `room` is the one
+    // thing here that would want the real height, and this does not use it.
     const g = this.cardGeometry(cw, LO.cardProbeHeight)
     const tw = Math.max(20, g.tw)
     // WRAPPED THE WAY THE CARD DRAWS IT, which is `wrapWithin` and not a bare
@@ -1623,8 +1733,10 @@ export class LoadoutScene extends Phaser.Scene {
 
   /** The painted frame's inner rail for a card of this size. Exposed so a
    *  harness run measures against the frame the player sees. */
-  frameInsetFor(w: number, h = 140): { left: number; right: number; top: number; bottom: number } {
-    const f = panelInset(this, w, h)
+  frameInsetFor(
+    w: number, h = 140, chrome?: number,
+  ): { left: number; right: number; top: number; bottom: number } {
+    const f = panelInset(this, w, h, chrome ?? panelChrome(w, h))
     const k = LO.frameInsetShare
     return { left: f.left * k, right: f.right * k, top: f.top * k, bottom: f.bottom * k }
   }
@@ -1717,10 +1829,23 @@ export class LoadoutScene extends Phaser.Scene {
 
     ids.forEach((id, i) => {
       const x = band.cx - total / 2 + i * (cw + CARD_GAP)
-      const c = this.card(x, y, cw, height)
+      // PAINTED AT THE SAME WEIGHT `cardGeometry` PADS AGAINST. See there.
+      const c = this.card(x, y, cw, height, this.cardChrome(cw))
       c.face.add(build(id, cw, height).parts)
     })
     return y + height
+  }
+
+  /**
+   * The frame weight a dealt card wears, from its width alone.
+   *
+   * `cardProbeHeight` is the nominal height this is pinned to. It used to be
+   * described as a number only the MEASURER used; it is what the card is
+   * painted at as well now, which is the whole point -- a measurement taken at
+   * one weight and a plate drawn at another is two answers to one question.
+   */
+  private cardChrome(cw: number): number {
+    return panelChrome(cw, LO.cardProbeHeight)
   }
 }
 

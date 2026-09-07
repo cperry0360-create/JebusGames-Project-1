@@ -134,8 +134,21 @@ test('both card rows are built by the same component', () => {
   // filled with another, which is a card's last line under the next heading.
   const geom = s.slice(s.indexOf('private cardGeometry('), s.indexOf('private cardNeeds('))
   assert.match(geom, /tx: -cw \/ 2 \+ pad \+ col/, 'the text column is not offset past the icon')
-  assert.match(geom, /this\.frameInsetFor\(cw, ch\)/,
+  assert.match(geom, /this\.frameInsetFor\(cw, /,
     'the card pads against its box rather than its frame')
+  // AND THE COLUMN DOES NOT MOVE WITH THE CARD'S HEIGHT.
+  //
+  // It asked the frame for its inset at `ch`, and `chromeFor` weights the
+  // frame by min(width, height) -- a card is wider than it is tall, so the
+  // wrap width every line on the card was broken at followed a number the
+  // content stack decided. Picking a hero whose blurb wraps to five lines made
+  // the hero block taller, left the specials card shorter, and re-wrapped its
+  // description mid-run with no resize. `ch` is still taken, because `room`
+  // is genuinely a height; it may not reach the horizontal padding.
+  const horiz = geom.slice(geom.indexOf('const frame ='), geom.indexOf('const col ='))
+  assert.ok(!/\bch\b/.test(horiz),
+    "the card's text column is a function of its height, so it re-wraps when the stack moves")
+  assert.match(geom, /room: ch - padT - padB/, 'the card no longer measures its own room')
   const face = s.slice(s.indexOf('private cardFace'), s.indexOf('private towerSection'))
   assert.match(face, /this\.cardGeometry\(cw, ch\)/, 'the face lays its own columns out again')
   assert.match(s.slice(s.indexOf('private cardNeeds(')), /this\.cardGeometry\(/,
@@ -680,7 +693,7 @@ test('text is wrapped to the width it RENDERS at, not the width Phaser wraps at'
     'the card is measured with a plain wrap and drawn with a tightened one')
 
   // THE HERO BLURB, drawn and measured.
-  const plan = s.slice(s.indexOf('const blurbHeightAt = '), s.indexOf('const descFloor ='))
+  const plan = s.slice(s.indexOf('const wrappedHeight = '), s.indexOf('const descFloor ='))
   assert.match(plan, /this\.wrapWithin\(this\.add\.text\(/,
     "the blurb's reserved height is measured with a wrap it is not drawn with")
 })
