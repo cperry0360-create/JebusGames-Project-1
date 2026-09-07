@@ -1091,6 +1091,21 @@ export interface SpriteRender {
    * parallel to it.
    */
   beamCoreHeight?: number
+  /**
+   * Sheets that END on a picture the game keeps: how big the ink of the LAST
+   * frame is, in source pixels.
+   *
+   * `contentWidth`/`contentHeight` on a strip are the UNION across every
+   * frame, which for the Glacier is a 262x378 box -- most of it the arc of
+   * shards thrown up at the peak of the eruption. What is left on the ground
+   * afterwards is a 248x172 frost patch, and that patch is what has to measure
+   * the ability's radius, because it is the only thing on screen telling the
+   * player where the slow zone is. Sizing the settled frame by the union would
+   * draw the patch at less than half the field it marks. Same failure as
+   * `beamCoreHeight`, one frame later.
+   */
+  restWidth?: number
+  restHeight?: number
   /** Button plates only: the end-cap sizes in source pixels. A plate is drawn
    *  by slicing at these, so the metal caps keep their proportions at any
    *  width and only the plain middle stretches. */
@@ -1184,6 +1199,9 @@ export interface ArtDef {
     /** Drawn over an enemy under someone else's orders. Bound so the art
      *  ships and is named; nothing sets that state yet. */
     mindControl: string
+    /** The Glacier's eruption, and the frost it leaves. Eight frames, played
+     *  once, then held on the last one for the field's duration. */
+    glacier: string
   }
   decor: string[]
   /** Keys that get a greyscale copy built at boot, for unavailable states. */

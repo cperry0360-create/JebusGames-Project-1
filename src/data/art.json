@@ -148,7 +148,8 @@
     "enemy-sprinter": "enemies/enemy_sprinter.webp",
     "enemy-bruiser": "enemies/enemy_bruiser.webp",
     "enemy-rooster": "enemies/boss_rooster.webp",
-    "fx-rooster-flame": "effects/fx_rooster_flame.webp"
+    "fx-rooster-flame": "effects/fx_rooster_flame.webp",
+    "fx-glacier": "effects/fx_glacier.webp"
   },
   "render": {
     "turret-escalation": {
@@ -1049,6 +1050,19 @@
         "frameHeight": 181,
         "frames": 12
       }
+    },
+    "fx-glacier": {
+      "anchorX": 0.5,
+      "anchorY": 0.6836,
+      "contentWidth": 262,
+      "contentHeight": 378,
+      "restWidth": 248,
+      "restHeight": 172,
+      "sheet": {
+        "frameWidth": 512,
+        "frameHeight": 512,
+        "frames": 8
+      }
     }
   },
   "map": {
@@ -1111,7 +1125,8 @@
     "bossBolt": "fx-boss-bolt",
     "stunned": "fx-stunned",
     "burn": "fx-burn",
-    "mindControl": "fx-mind-control"
+    "mindControl": "fx-mind-control",
+    "glacier": "fx-glacier"
   },
   "decor": [
     "decor-bush",

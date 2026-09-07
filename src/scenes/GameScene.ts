@@ -3525,7 +3525,9 @@ export class GameScene extends Phaser.Scene {
    * is a cancel and costs nothing. That is the same rule the targeting mode
    * already gives every placed ability: exactly one exit spends anything.
    *
-   * IT IS AIMED ALONG THE HERO'S FACING FROM THE FIRST FRAME, and it fires.
+   * IT IS AIMED ALONG THE HERO'S FACING FROM THE FIRST FRAME, and until the
+   * finger reaches the board that picture is ALL it is: feedback, costing
+   * nothing. See `updateHeldBeam`, which is where the two are told apart.
    *
    * The finger is on a medallion at the bottom of the screen when this runs.
    * Converting THAT point to the world is what pointed the beam into the HUD
@@ -3574,7 +3576,10 @@ export class GameScene extends Phaser.Scene {
     this.aimHeld(aim.x, aim.y)
     play(this, a.sound)
     logEvent('hero-power', `${a.name} held: ${bothUnits(a.holdSeconds)} of beam`)
-    this.status.alert = `${a.name}: drag to aim, let go to stop.`
+    // "Drag to aim" was true and not enough: it did not say that dragging onto
+    // the BOARD is what starts the beam, which is the one thing a player has to
+    // do and the one thing nothing on screen said.
+    this.status.alert = `${a.name}: drag onto the board to fire.`
   }
 
   /**
@@ -3744,6 +3749,25 @@ export class GameScene extends Phaser.Scene {
     const aim = h.onBoard ? { x: h.aimX, y: h.aimY } : this.facingAim(h.def)
     this.aimHeld(aim.x, aim.y)
 
+    // THE FACING BEAM IS FEEDBACK, NOT FIRE, and everything below this line is
+    // the firing.
+    //
+    // It was both, which spent the ability on a tap. The picture exists from
+    // the instant of the press so that a held button does not read as a button
+    // that did nothing -- but it was also draining `left` and setting `fired`,
+    // and `fired` is the one thing `endHeldAbility` reads to decide whether to
+    // start the cooldown. So a press and release on the medallion, with the
+    // finger never leaving it, burned the whole cooldown on a beam the player
+    // never aimed. The only way to actually use the ability was to press and
+    // then drag off the button, which nobody would guess.
+    //
+    // `onBoard` already records the one thing that distinguishes the two: the
+    // finger has reached a point the BOARD owns, so there is an aim the player
+    // chose rather than one the hero's facing supplied. Before that the beam
+    // costs nothing and does nothing, and a release hands the ability back
+    // ready -- which is the promise `endHeldAbility`'s comment already makes.
+    if (!h.onBoard) return
+
     h.left -= dt
     h.until -= dt
     if (h.until <= 0) {
@@ -3773,9 +3797,9 @@ export class GameScene extends Phaser.Scene {
    * Every way a held beam stops, in one place.
    *
    * THE COOLDOWN STARTS HERE AND NOWHERE ELSE, and only when the beam
-   * actually fired. A press let go inside the charge-up has spent nothing and
-   * is handed back ready, which is the same promise the targeting mode makes
-   * about a placed ability that was cancelled.
+   * actually fired. A press let go before the finger ever reached the board
+   * has spent nothing and is handed back ready, which is the same promise the
+   * targeting mode makes about a placed ability that was cancelled.
    */
   private endHeldAbility(reason: 'released' | 'spent' | 'interrupted' | 'replaced'): void {
     const h = this.held

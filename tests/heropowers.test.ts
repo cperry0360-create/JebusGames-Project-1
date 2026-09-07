@@ -612,6 +612,51 @@ test('the held beam is never aimed at the HUD that started it', () => {
     'letting go no longer stops the beam')
 })
 
+test('a held beam that never reached the board spends nothing', () => {
+  /*
+   * THE BUG: the Mind Laser spent itself on a tap.
+   *
+   * `endHeldAbility` starts the cooldown only when `fired` is true, which is
+   * right. What was wrong is when `fired` became true. The beam exists from the
+   * instant of the press -- it is aimed along the hero's facing until a board
+   * aim arrives, because a held button that draws nothing reads as a button
+   * that did not work -- and `updateHeldBeam` was damaging, draining `left` and
+   * setting `fired` off that facing beam. So pressing the medallion and letting
+   * go fired a short burst at nothing and burned the whole 20-second cooldown,
+   * and the only way to actually use the ability was to press and then drag off
+   * the button, which no player would guess.
+   *
+   * `onBoard` is the line between the two, and it was already in the struct.
+   * Before it turns true the beam is PURELY VISUAL; after it, it is the
+   * ability.
+   */
+  const game = src('scenes/GameScene.ts')
+  const update = game.slice(game.indexOf('private updateHeldBeam('))
+  const body = update.slice(0, update.indexOf('\n  }'))
+
+  // THE GATE, and it comes before every one of the three things a press must
+  // not cost: the budget, the damage tick, and the flag the cooldown reads.
+  const gate = body.indexOf('if (!h.onBoard) return')
+  assert.ok(gate > 0, 'nothing stops a beam that has not been aimed at the board')
+  for (const spent of ['h.left -= dt', 'h.fired = true', 'this.damageEnemy(']) {
+    assert.ok(body.indexOf(spent) > gate,
+      `"${spent}" runs before the beam is known to be aimed at the board`)
+  }
+
+  // AND THE PICTURE IS STILL DRAWN. Suppressing it was the other option and it
+  // is worse; the aim follows the facing every frame until the finger lands.
+  const draw = body.indexOf('this.aimHeld(aim.x, aim.y)')
+  assert.ok(draw > 0 && draw < gate,
+    'the beam stopped being drawn during the phase where it costs nothing')
+
+  // THE COOLDOWN STILL HANGS OFF `fired` AND NOTHING ELSE, which is what makes
+  // the gate above sufficient rather than merely part of a fix.
+  const end = game.slice(game.indexOf('private endHeldAbility('))
+  assert.match(end.slice(0, end.indexOf('\n  }')),
+    /if \(h\.fired\) this\.cooldowns\.start\(h\.slot\)/,
+    'the cooldown no longer depends on whether the beam fired')
+})
+
 test('the held beam draws its own art at its own proportions', () => {
   /*
    * `fx_mind_laser` was loaded, sliced and animating the whole time -- the
