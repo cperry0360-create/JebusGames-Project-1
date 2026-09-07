@@ -287,8 +287,14 @@ test('a ground shadow covers the footprint and not the whole sprite', () => {
     // reached from the other side. Its shadow is its body's, and so -- uniquely
     // in this list -- is its x anchor: see ENEMY_BODY_ANCHOR in
     // tools/measure_art.py.
+    //
+    // The Rooster is the fifth, and it is the Glider's reason again: it is
+    // drawn mid-leap with its tail plumes sweeping to the ground and one foot
+    // raised, so the deepest thing in its silhouette is a feather rather than
+    // a stance. Body shadow, and body anchor with it.
     const BODY_SHADOWED = new Set([
-      'enemy-zamboni', 'enemy-glitch-bug', 'enemy-glider', 'hero-cory-power'])
+      'enemy-zamboni', 'enemy-glitch-bug', 'enemy-glider', 'enemy-rooster',
+      'hero-cory-power'])
     // `heroes/` as well as `enemies/`. It used to name one file --
     // `hero/hero_cory.webp` -- because Cory was the only hero whose art this
     // script had measured; the other four lived in `heroes/` and were checked
@@ -427,7 +433,7 @@ test('every file in the manifest is bound to something that draws it', () => {
   // ...and anything a LEVEL'S OWN rules name. level5.json's `acid.fx` is the
   // acid puddle, which no role and no shared data file mentions: it belongs to
   // one level, so it is named where that level's numbers are.
-  for (const name of ['towers', 'enemies', 'abilities', 'heroes', 'map', 'level5']) {
+  for (const name of ['towers', 'enemies', 'abilities', 'heroes', 'map', 'level5', 'level6']) {
     const body = readFileSync(url(`../src/data/${name}.json`), 'utf8')
     for (const key of Object.keys(art.files)) {
       if (new RegExp(`"${key}"`).test(body)) claimed.add(key)

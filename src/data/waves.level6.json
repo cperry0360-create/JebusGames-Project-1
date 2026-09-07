@@ -1,0 +1,341 @@
+{
+  "_note": "LEVEL 6, THE UNFINISHED LEVEL. Thirteen waves across TWO PARALLEL LANES that never touch, never merge and never cross -- each runs from its own spawn on the left edge to its own exit on the right, and both exits cost lives. That topology is new: level 5's crossroads merges three gates into one exit, and levels 3 and 4 fork into one. Two independent routes is the shape `LaneDef.merge` became a list to allow, and it needs one more change before it validates -- see `_lanes` below.\nHAND-AUTHORED, like levels 4 and 5. THE BOSS'S HEALTH IS NOT IN enemies.json YET and this table is therefore NOT TUNED: it is a shape with the brief's starting stats poured into it, waiting for a board to be measured against. See reports/2026-09-07-level-6-roster-and-plate-spec.md.",
+  "_lanes": "TWO LANES, TWO GATES, TWO EXITS, AND THEY NEVER MEET. Every group names `upper` or `lower` and nothing merges.\nTHIS DOES NOT VALIDATE YET, and the map pass has to fix it rather than discover it. `Lanes.validateLanes` reports `a lane that reaches an exit and that nothing merges into is a route with no gate` -- a rule written for level 5 to catch a FORGOTTEN merge, which is exactly what a second independent route looks like from the outside. `main` is exempt, so one of level 6's lanes is fine and the other is not. The fix is one more property, not a relaxation: a lane with no continuation is legal if it has a SPAWN GROUP naming it, which the wave table can answer and the lane list cannot. It is left undone here because a validator change with no map to validate is a change nothing can be run against.\nTHE LANES ARE NOT MIRRORED. The heavier side alternates -- upper, lower, upper, lower, upper, lower, upper, lower, upper, lower, upper, lower, upper -- and the two lanes carry different KINDS of pressure on the same wave rather than the same group twice, so a board built symmetrically is wrong on one side of every wave.",
+  "_curve": "Rank and file health: 440, 540, 700, 1010, 1190, 1740, 2100, 2700, 3540, 4320, 5300, 6360, then wave 13's 1880 of escort under the Rooster. Every step is upward and inside the 55% cap.\nTHE SPAWN COUNTS ARE THE NUMBER TO WATCH ON THIS LEVEL, not the health. The route is roughly 50 seconds of walk at these speeds -- against 15 to 25 on every level before it -- so far more is alive at once than any board has had to hold: 34 bodies on wave 12 against level 5's 30 at its heaviest, on a lane three times as long. If the soak reports the level stuck rather than lost, this is the first place to look.",
+  "_economy": "The run pays 0.147 peanuts per point of rank-and-file health, which is ABOVE the 0.13 floor and will not stay there: the Rooster's health is unset, and every point of it that lands goes into the denominator. At 6,000 it falls to 0.124 and content.test.ts's floor fails. So the map pass has to re-check this the moment the boss HP is picked, and the answer will be either fewer boss hit points or a larger purse. It is written down here rather than discovered there.",
+  "_boss": "THE ROOSTER IS WAVE 13 AND THERE IS NO MID-LEVEL APPEARANCE, which is the brief's shape and level 4's read the other way round. His escort is a trickle from the OTHER lane to his own -- he walks the upper rail, and the scrappers and sprinters come up the lower one -- so the player cannot park the whole board in front of him.\nWHAT HE DOES IS THE FLAME, not a swing: `damage: 0`, `blockable: false`, and level6.json's `flame` block. He stops every six seconds, telegraphs for 0.8, and breathes a 300 px corridor down his own lane.",
+  "waves": [
+    {
+      "name": "Grey Box",
+      "spawns": [
+        {
+          "enemy": "scrapper",
+          "count": 4,
+          "interval": 1.3,
+          "delay": 0,
+          "lane": "upper"
+        }
+      ]
+    },
+    {
+      "name": "The Other Rail",
+      "spawns": [
+        {
+          "enemy": "scrapper",
+          "count": 3,
+          "interval": 1.2,
+          "delay": 0,
+          "lane": "lower"
+        },
+        {
+          "enemy": "sprinter",
+          "count": 3,
+          "interval": 0.7,
+          "delay": 4,
+          "lane": "upper"
+        }
+      ]
+    },
+    {
+      "name": "Placeholder Rush",
+      "spawns": [
+        {
+          "enemy": "sprinter",
+          "count": 6,
+          "interval": 0.6,
+          "delay": 0,
+          "lane": "upper"
+        },
+        {
+          "enemy": "sprinter",
+          "count": 4,
+          "interval": 0.6,
+          "delay": 2,
+          "lane": "lower"
+        }
+      ]
+    },
+    {
+      "name": "Two Grey Files",
+      "spawns": [
+        {
+          "enemy": "scrapper",
+          "count": 6,
+          "interval": 1.1,
+          "delay": 0,
+          "lane": "lower"
+        },
+        {
+          "enemy": "sprinter",
+          "count": 5,
+          "interval": 0.6,
+          "delay": 3,
+          "lane": "upper"
+        }
+      ]
+    },
+    {
+      "name": "Untextured",
+      "spawns": [
+        {
+          "enemy": "scrapper",
+          "count": 7,
+          "interval": 1.0,
+          "delay": 0,
+          "lane": "upper"
+        },
+        {
+          "enemy": "sprinter",
+          "count": 6,
+          "interval": 0.6,
+          "delay": 3,
+          "lane": "lower"
+        }
+      ]
+    },
+    {
+      "name": "The Wall Arrives",
+      "spawns": [
+        {
+          "enemy": "bruiser6",
+          "count": 2,
+          "interval": 2.2,
+          "delay": 0,
+          "lane": "lower"
+        },
+        {
+          "enemy": "scrapper",
+          "count": 5,
+          "interval": 1.0,
+          "delay": 3,
+          "lane": "upper"
+        },
+        {
+          "enemy": "sprinter",
+          "count": 5,
+          "interval": 0.6,
+          "delay": 6,
+          "lane": "upper"
+        }
+      ]
+    },
+    {
+      "name": "Low Poly Count",
+      "spawns": [
+        {
+          "enemy": "bruiser6",
+          "count": 2,
+          "interval": 2.2,
+          "delay": 0,
+          "lane": "upper"
+        },
+        {
+          "enemy": "scrapper",
+          "count": 7,
+          "interval": 1.0,
+          "delay": 2,
+          "lane": "lower"
+        },
+        {
+          "enemy": "sprinter",
+          "count": 7,
+          "interval": 0.6,
+          "delay": 5,
+          "lane": "lower"
+        }
+      ]
+    },
+    {
+      "name": "Asset Pending",
+      "spawns": [
+        {
+          "enemy": "bruiser6",
+          "count": 3,
+          "interval": 2.2,
+          "delay": 0,
+          "lane": "lower"
+        },
+        {
+          "enemy": "scrapper",
+          "count": 8,
+          "interval": 1.0,
+          "delay": 2,
+          "lane": "upper"
+        },
+        {
+          "enemy": "sprinter",
+          "count": 8,
+          "interval": 0.55,
+          "delay": 5,
+          "lane": "upper"
+        }
+      ]
+    },
+    {
+      "name": "Are We Out Of Ideas",
+      "spawns": [
+        {
+          "enemy": "bruiser6",
+          "count": 3,
+          "interval": 2.2,
+          "delay": 0,
+          "lane": "upper"
+        },
+        {
+          "enemy": "bruiser6",
+          "count": 2,
+          "interval": 2.2,
+          "delay": 4,
+          "lane": "lower"
+        },
+        {
+          "enemy": "scrapper",
+          "count": 8,
+          "interval": 1.0,
+          "delay": 2,
+          "lane": "lower"
+        },
+        {
+          "enemy": "sprinter",
+          "count": 8,
+          "interval": 0.55,
+          "delay": 6,
+          "lane": "upper"
+        }
+      ]
+    },
+    {
+      "name": "Ship It",
+      "spawns": [
+        {
+          "enemy": "bruiser6",
+          "count": 4,
+          "interval": 2.0,
+          "delay": 0,
+          "lane": "lower"
+        },
+        {
+          "enemy": "bruiser6",
+          "count": 2,
+          "interval": 2.0,
+          "delay": 4,
+          "lane": "upper"
+        },
+        {
+          "enemy": "scrapper",
+          "count": 10,
+          "interval": 0.95,
+          "delay": 2,
+          "lane": "upper"
+        },
+        {
+          "enemy": "sprinter",
+          "count": 10,
+          "interval": 0.5,
+          "delay": 6,
+          "lane": "lower"
+        }
+      ]
+    },
+    {
+      "name": "Feature Freeze",
+      "spawns": [
+        {
+          "enemy": "bruiser6",
+          "count": 5,
+          "interval": 2.0,
+          "delay": 0,
+          "lane": "upper"
+        },
+        {
+          "enemy": "bruiser6",
+          "count": 3,
+          "interval": 2.0,
+          "delay": 4,
+          "lane": "lower"
+        },
+        {
+          "enemy": "scrapper",
+          "count": 10,
+          "interval": 0.95,
+          "delay": 2,
+          "lane": "lower"
+        },
+        {
+          "enemy": "sprinter",
+          "count": 12,
+          "interval": 0.5,
+          "delay": 6,
+          "lane": "upper"
+        }
+      ]
+    },
+    {
+      "name": "Release Candidate",
+      "spawns": [
+        {
+          "enemy": "bruiser6",
+          "count": 6,
+          "interval": 1.9,
+          "delay": 0,
+          "lane": "lower"
+        },
+        {
+          "enemy": "bruiser6",
+          "count": 4,
+          "interval": 1.9,
+          "delay": 4,
+          "lane": "upper"
+        },
+        {
+          "enemy": "scrapper",
+          "count": 12,
+          "interval": 0.9,
+          "delay": 2,
+          "lane": "upper"
+        },
+        {
+          "enemy": "sprinter",
+          "count": 12,
+          "interval": 0.5,
+          "delay": 6,
+          "lane": "lower"
+        }
+      ]
+    },
+    {
+      "name": "The Rooster",
+      "boss": "rooster",
+      "spawns": [
+        {
+          "enemy": "rooster",
+          "count": 1,
+          "interval": 2,
+          "delay": 0,
+          "lane": "upper"
+        },
+        {
+          "enemy": "scrapper",
+          "count": 6,
+          "interval": 1.6,
+          "delay": 8,
+          "lane": "lower"
+        },
+        {
+          "enemy": "sprinter",
+          "count": 8,
+          "interval": 1.2,
+          "delay": 16,
+          "lane": "lower"
+        },
+        {
+          "enemy": "scrapper",
+          "count": 6,
+          "interval": 1.6,
+          "delay": 26,
+          "lane": "upper"
+        }
+      ]
+    }
+  ]
+}

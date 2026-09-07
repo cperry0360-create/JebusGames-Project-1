@@ -241,8 +241,15 @@ export class Enemy extends Phaser.GameObjects.Container {
     // arrive with a crowd already around it.
     this.summonTimer = def.summons?.interval ?? 0
     this.disabler = def.towerDisable ? new Disabler(def.towerDisable) : null
-    this.maxHealth = def.maxHealth
-    this.health = def.maxHealth
+    // `?? 0` FOR A BOSS WHOSE LEVEL HAS NOT BEEN SOAKED. `EnemyDef.maxHealth`
+    // is nullable so an unfinished level's boss can exist as data before its
+    // number does, and a level that spawns one cannot be registered -- a test
+    // holds that. So this branch is unreachable in a real run, and it is a 0
+    // rather than a throw because the honest failure of a 0-health boss is
+    // that it dies instantly and visibly, which is a far better bug report
+    // than a crash on the first frame of a wave.
+    this.maxHealth = def.maxHealth ?? 0
+    this.health = this.maxHealth
 
     this.shadow = makeShadow(scene, def.sprite)
     this.art = scene.add.sprite(0, 0, def.sprite)

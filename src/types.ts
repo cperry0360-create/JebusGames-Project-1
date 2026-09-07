@@ -469,7 +469,17 @@ export interface EnemyDef {
    *  peanuts instead of attacking anything. */
   tax?: TaxDef
   sprite: string
-  maxHealth: number
+  /**
+   * NULL FOR A BOSS WHOSE LEVEL HAS NOT BEEN SOAKED YET.
+   *
+   * A boss's health only means anything against the DPS the board it walks
+   * past can hold, so it is the last number a level gets rather than the
+   * first, and there is no honest placeholder for it -- level 4's 5200 was one
+   * and no board in the game could kill it. The Rooster carries null until
+   * level 6 has a map to be measured on, and `tests/level6.test.ts` refuses to
+   * let levels.json register a level that spawns an enemy with no health.
+   */
+  maxHealth: number | null
   /** Flat damage subtracted per hit, unless the attacker ignores armour. */
   armor: number
   speed: number
@@ -595,6 +605,18 @@ export interface EnemyDef {
    * here and no new code at all.
    */
   acidTrail?: boolean
+
+  /**
+   * True for the one enemy that breathes a line of fire ahead of itself.
+   *
+   * A FLAG RATHER THAN AN ID, like `acidTrail` and for the same reason: the
+   * scene and the simulator find "the enemy that does this" by asking rather
+   * than by knowing the Rooster's name. What the fire DOES -- the interval,
+   * the telegraph, the reach, the width, the damage and the scorch -- is
+   * level6.json's `flame`, so a second boss with the same habit is one field
+   * here and no new code.
+   */
+  flame?: boolean
   peanutReward: number
   livesCost: number
   damage: number

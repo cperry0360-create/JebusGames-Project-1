@@ -143,7 +143,12 @@
     "enemy-batula": "enemies/boss_batula.webp",
     "map-level5": "maps/map_level5.webp",
     "card-level5": "ui/card_level5.webp",
-    "fx-acid-puddle": "effects/fx_acid_puddle.webp"
+    "fx-acid-puddle": "effects/fx_acid_puddle.webp",
+    "enemy-scrapper": "enemies/enemy_scrapper.webp",
+    "enemy-sprinter": "enemies/enemy_sprinter.webp",
+    "enemy-bruiser": "enemies/enemy_bruiser.webp",
+    "enemy-rooster": "enemies/boss_rooster.webp",
+    "fx-rooster-flame": "effects/fx_rooster_flame.webp"
   },
   "render": {
     "turret-escalation": {
@@ -999,6 +1004,51 @@
       "anchorY": 0.5,
       "contentWidth": 320,
       "contentHeight": 106
+    },
+    "enemy-scrapper": {
+      "anchorX": 0.4478,
+      "anchorY": 1.0,
+      "displayHeight": 68.0,
+      "shadowWidth": 47.7,
+      "contentWidth": 556,
+      "contentHeight": 611
+    },
+    "enemy-sprinter": {
+      "anchorX": 0.3732,
+      "anchorY": 1.0,
+      "displayHeight": 64.0,
+      "shadowWidth": 43.9,
+      "contentWidth": 611,
+      "contentHeight": 649
+    },
+    "enemy-bruiser": {
+      "anchorX": 0.5121,
+      "anchorY": 1.0,
+      "displayHeight": 85.0,
+      "shadowWidth": 65.1,
+      "contentWidth": 782,
+      "contentHeight": 692
+    },
+    "enemy-rooster": {
+      "anchorX": 0.5008,
+      "anchorY": 1.0,
+      "displayHeight": 145.0,
+      "shadowWidth": 148.6,
+      "contentWidth": 1251,
+      "contentHeight": 1224
+    },
+    "fx-rooster-flame": {
+      "anchorX": 0.0,
+      "anchorY": 0.5138,
+      "contentWidth": 181,
+      "contentHeight": 168,
+      "beamCoreHeight": 93,
+      "stretch": "line",
+      "sheet": {
+        "frameWidth": 181,
+        "frameHeight": 181,
+        "frames": 12
+      }
     }
   },
   "map": {

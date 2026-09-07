@@ -221,14 +221,30 @@ ENEMY_KEY = {
     # survives and the anchor collapses to 0.330 -- a fifth of his width off.
     'enemy_vampire_lord.webp':    ('enemy-vampire-lord',  0.90, 110.0),
     'boss_batula.webp':           ('enemy-batula',        0.90, 140.0),
+    # THE LEVEL 6 CAST. Three grey mannequins and a rooster, and the sizes are
+    # the brief's with ONE change, stated rather than quietly made: the Bruiser
+    # is 85 and not the 92 asked for. Every tower in the game is 87.1 px tall
+    # and content.test.ts holds the rank and file under that, so a 92 px
+    # Bruiser would be the only ordinary enemy on the board taller than every
+    # building on it. 85 is what level 3's and level 5's heaviest elites
+    # already are, so he reads as the same size class they do.
+    'enemy_scrapper.webp':        ('enemy-scrapper',       0.94,  68.0),
+    'enemy_sprinter.webp':        ('enemy-sprinter',       0.92,  64.0),
+    'enemy_bruiser.webp':         ('enemy-bruiser',        0.94,  85.0),
+    'boss_rooster.webp':          ('enemy-rooster',        0.90, 145.0),
 }
 # Enemies whose shadow is cast by the whole body, not by the feet.
 # A GLIDER HAS NO FEET ON THE GROUND. It hovers, so its foot band catches the
 # lowest of whatever hangs off it -- a boot tip and a cape point -- rather than
 # a stance, and the shadow it casts is its body's. The same rule the Zamboni
 # and the Glitch Bug already get, and for the same reason.
-ENEMY_BODY_SHADOW = {'enemy-zamboni', 'enemy-glitch-bug', 'enemy-glider'}
-ENEMY_BODY_ANCHOR = {'enemy-glider'}
+# THE ROOSTER IS THE FOURTH BODY-SHADOWED THING and the reason is the Glider's
+# again: it is drawn mid-leap, wings out, with its tail plumes sweeping down to
+# the left and one foot raised. The ground silhouette therefore finds TAIL, not
+# feet -- at its 0.90 band the deepest run is x5-710 of a 1254 px canvas, which
+# is a plume -- so both its shadow and its x anchor come off the ink instead.
+ENEMY_BODY_SHADOW = {'enemy-zamboni', 'enemy-glitch-bug', 'enemy-glider', 'enemy-rooster'}
+ENEMY_BODY_ANCHOR = {'enemy-glider', 'enemy-rooster'}
 # Where to LOOK for feet, as fractions of the source width, for art whose
 # ground silhouette catches something that is not one.
 #
@@ -977,6 +993,13 @@ if absent:
 #
 # The middle 55% of a cell's width, so the muzzle and the impact burst, which
 # are several times the core's thickness, do not drag the median.
+# THE ROOSTER'S FLAME IS MEASURED HERE TOO, and it is not a hero beam. The
+# section below reads `chargeFrames`/`sustainFrames` out of presentation.json's
+# heroFx.laser, which describes ONE strip; the flame has no charge and no fade,
+# so every one of its twelve frames is a sustain frame. `_BEAM_FRAMES` says
+# which frames to measure per key rather than assuming the laser's split, and
+# an entry missing from it falls back to the laser's -- which is what every
+# hero beam wants.
 print('\n\nbeam strips (recorded vs measured core)')
 _P = json.load(open('src/data/presentation.json'))
 _beams = [(k, c) for k, c in sorted(manifest['render'].items()) if 'beamCoreHeight' in c]
@@ -991,7 +1014,9 @@ for key, cfg in _beams:
     w, h, px = img.read(path)
     fw = cfg['sheet']['frameWidth']
     L = _P['heroFx']['laser']
-    first, last = L['chargeFrames'], L['chargeFrames'] + L['sustainFrames'] - 1
+    _BEAM_FRAMES = {'fx-rooster-flame': (0, cfg['sheet']['frames'] - 1)}
+    first, last = _BEAM_FRAMES.get(
+        key, (L['chargeFrames'], L['chargeFrames'] + L['sustainFrames'] - 1))
     heights, centres = [], []
     for f in range(first, last + 1):
         lo = f * fw + int(fw * 0.225)

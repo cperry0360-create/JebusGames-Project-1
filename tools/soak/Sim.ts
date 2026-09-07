@@ -64,6 +64,10 @@ import { DEFAULT_LEVEL_ID, levelRules, loadLevel, towerWeightsFor } from '../../
 import { NightRules } from '../../src/systems/NightRules.ts'
 import { NO_BLEED, convertedHealth, type BleedState } from '../../src/systems/Vampirism.ts'
 import {
+  flameEnd, inFlame, newFlameState, scorchIntervalMultiplier, tickFlame,
+  type FlameRules, type FlameState,
+} from '../../src/systems/Flame.ts'
+import {
   DEFAULT_DIFFICULTY_ID, startingLives, startingPeanuts,
 } from '../../src/systems/Difficulty.ts'
 import { DEFAULT_HERO_ID, HERO_IDS, resolveHeroId } from '../../src/systems/Heroes.ts'
@@ -153,6 +157,21 @@ interface SimEnemy {
   selfHeld: boolean
   bleed: BleedState
   thresholdFired: boolean
+  /** The Rooster's breath clock, or null for everything that does not breathe.
+   *  Held on the enemy so a boss killed mid-telegraph takes its half-finished
+   *  cast with it, exactly as the Disabler is. */
+  flame: FlameState | null
+  /**
+   * Which way it is walking, in radians, from the last step it took.
+   *
+   * AN APPROXIMATION OF THE SCENE'S FACING and it is the flame's one. The
+   * scene asks the LANE for its angle at the enemy's distance; this reads the
+   * direction it actually moved, which is the same answer on a straight run
+   * and drifts by a few degrees through a bend. Level 6's two lanes are nearly
+   * straight, so the two agree closely there. It is only ever read by the
+   * flame, so nothing else can be affected by the difference.
+   */
+  heading: number
   health: number
   /** Total walked across every lane, and only ever incremented. What
    *  targeting sorts on, so a merge cannot make a tower drop its target. */
@@ -207,6 +226,9 @@ interface SimSoldier {
 interface SimTower {
   id: string
   def: any
+  /** Seconds of scorch left. A scorched tower keeps firing, at half rate.
+   *  0 on every level but the sixth. */
+  scorchedFor: number
   spot: number
   x: number
   y: number
@@ -332,6 +354,12 @@ export function simulate(
   // level naming no rules file runs precisely the simulation it always did --
   // which is the property re-soaking levels 1 to 4 on the same seeds proves.
   const night = NightRules.from(levelRules(levelId))
+  // THE ROOSTER'S BREATH, or null on every level that is not level 6. Read off
+  // the same `levelRules` resolver the night rules use, so the scoping is one
+  // mechanism rather than two: a level that names no rules file gets null and
+  // nothing below fires.
+  const FLAME: FlameRules | null =
+    ((levelRules(levelId) as any)?.flame as FlameRules | undefined) ?? null
   const net = new LaneNetwork(MAP)
   const lane = net.main
   const build = new BuildSystem(MAP.buildSpots, MAP.spotRadius)
@@ -447,6 +475,10 @@ export function simulate(
       // and levels 1 to 4 bit-identical.
       routePick,
       speedScale: 1, selfHeld: false, bleed: NO_BLEED, thresholdFired: false,
+      flame: def.flame && FLAME ? newFlameState(FLAME) : null,
+      // Enemies walk left to right on every map in the game, so facing east is
+      // the right answer before anything has moved.
+      heading: 0,
       laneId: on.id, laneDistance: laneAt, x: p.x, y: p.y, alive: true,
       slowFactor: 0, slowRemaining: 0, slowStacks: 0, sinceSlow: 99,
       stunRemaining: 0, stunLockout: 0, stunStacks: 0, sinceStun: 99,
@@ -556,6 +588,69 @@ export function simulate(
   }
 
   /**
+   * The Rooster's breath, one frame at a time.
+   *
+   * WHAT IS MODELLED EXACTLY, sharing systems/Flame.ts with the scene: the
+   * six-second cadence measured from the moment the fire goes out, the 0.8s
+   * telegraph during which nothing is damaged, the rule that a boss killed
+   * mid-telegraph burns nothing, the corridor's geometry including its round
+   * tip, the damage-per-tick to the hero and the lads, the scorch's fire-rate
+   * halving and its four seconds, and the rule that the fire never touches
+   * another enemy.
+   *
+   * WHAT IS APPROXIMATED. The HEADING. The scene reads the boss's own facing
+   * off the lane it is walking; here the corridor is cast along the direction
+   * from where it stood a frame ago to where it stands now, which is the same
+   * answer on a straight run and drifts by a few degrees through a bend. On
+   * level 6 both lanes are nearly straight, so the two agree closely -- but it
+   * is an approximation and not an equality, and a level with a hairpin in it
+   * would need this replaced with a lane lookup.
+   *
+   * WHAT IS NOT MODELLED. The summoned fighters, which the soak does not put
+   * on the board at all, so the fire has two kinds of victim here and three in
+   * the game.
+   */
+  const tickBoss = (dt: number): void => {
+    if (!FLAME) return
+    for (const t of towers) if (t.scorchedFor > 0) t.scorchedFor = Math.max(0, t.scorchedFor - dt)
+    for (const e of enemies) {
+      if (!e.flame) continue
+      const r = tickFlame(e.flame, dt, e.alive, FLAME)
+      e.flame = r.state
+      e.selfHeld = r.held
+      if (!r.burning) continue
+      const from = { x: e.x, y: e.y }
+      const to = flameEnd(e.x, e.y, e.heading, FLAME)
+      // Towers are scorched for as long as the fire touches them, refreshed
+      // every frame it does -- so the four seconds run from the LAST frame in
+      // the fire rather than the first.
+      for (const t of towers) {
+        if (t.buildLeft > 0) continue
+        if (inFlame({ x: t.x, y: t.y }, from, to, FLAME)) t.scorchedFor = FLAME.scorchSeconds
+      }
+      if (r.ticks <= 0) continue
+      const per = FLAME.damagePerSecond * FLAME.tickSeconds
+      for (let i = 0; i < r.ticks; i++) {
+        if (!heroState.down && inFlame({ x: heroState.x, y: heroState.y }, from, to, FLAME)) {
+          const out = applyHit(heroState.health, hero.maxHealth, per, heroState.powered)
+          heroState.health = out.health
+          if (out.triggers) {
+            heroState.powered = true
+            heroState.poweredGrace = TRANSFORM_INVULNERABLE_SECONDS
+            heroState.invulnerable = TRANSFORM_INVULNERABLE_SECONDS
+          }
+        }
+        for (const t of towers) {
+          for (const sd of t.soldiers) {
+            if (sd.respawnIn > 0) continue
+            if (inFlame({ x: sd.x, y: sd.y }, from, to, FLAME)) sd.health -= per
+          }
+        }
+      }
+    }
+  }
+
+  /**
    * Bosses calling in help, modelled the way the scene does it: at the
    * summoner's own distance, capped by how many of ITS children are still
    * alive, and not counted toward the wave being over.
@@ -594,7 +689,9 @@ export function simulate(
   }
 
   /** What a tower's reload is multiplied by where it stands. 1 with no acid. */
-  const acidScale = (t: SimTower): number => night?.towerSlowAt(t.x, t.y) ?? 1
+  const acidScale = (t: SimTower): number =>
+    (night?.towerSlowAt(t.x, t.y) ?? 1)
+    * (t.scorchedFor > 0 && FLAME ? scorchIntervalMultiplier(FLAME) : 1)
 
   const hurtEnemy = (e: SimEnemy, damage: number, ignoresArmor: boolean, pierce = 0): void => {
     if (!e.alive) return
@@ -722,7 +819,7 @@ export function simulate(
       build.occupy(spot.index)
       const t: SimTower = {
         id, def: TOWERS[id], spot: spot.index, x: spot.x, y: spot.y,
-        tier: BASE_TIER, spec: null, cooldown: 0, buildLeft: 0,
+        tier: BASE_TIER, spec: null, cooldown: 0, buildLeft: 0, scorchedFor: 0,
         disabledFor: 0, distanceToExit: padToExit[spot.index] ?? Infinity,
         value: TOWERS[id].cost, soldiers: [], rally: null,
       }
@@ -1039,6 +1136,7 @@ export function simulate(
       // which is what every wave written before branching existed means.
       for (const sp of spawner.update(DT)) spawn(sp.enemy, 0, null, sp.lane ?? MAIN_LANE, 0)
       tickNight(DT)
+      tickBoss(DT)
       tickSummons(DT)
       tickTowerDisable(DT)
       tickGarrisons(DT)
@@ -1230,6 +1328,12 @@ export function simulate(
         e.distance = moved.distance
         const on = net.lane(e.laneId)
         const p = on.path.pointAt(e.laneDistance)
+        // The step it just took, before the position is overwritten. Held to a
+        // real movement so a stopped enemy keeps facing the way it last went
+        // rather than snapping to zero.
+        if (Math.abs(p.x - e.x) > 1e-6 || Math.abs(p.y - e.y) > 1e-6) {
+          e.heading = Math.atan2(p.y - e.y, p.x - e.x)
+        }
         e.x = p.x
         e.y = p.y
         // Only a lane that runs to the exit can leak. A branch ENDS at its

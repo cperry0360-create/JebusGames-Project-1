@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import {
   TRANSFORM_BELOW, applyHit, atThreshold, attackInterval, damageToHero, outgoingDamage,
   shouldTransform,
@@ -395,8 +395,24 @@ test('every wave references a real enemy and introduces types gradually', () => 
   // rather than within one of them: an enemy drawn, statted and shipped but
   // spawned by no level is dead weight in the deploy, and that is what this
   // has always been checking.
+  //
+  // EVERY WAVE TABLE ON DISK, not only the ones levels.json currently names.
+  // A level's roster and its wave table can be finished before its MAP is --
+  // level 6's plate is a contact-sheet proof that has to be re-rendered before
+  // a pad can be placed, so its four enemies are authored, statted, converted
+  // and tested while `levels.json` still has no row for it. Counted the old
+  // way they read as dead weight, which is the opposite of true. What stops
+  // that being a loophole is tests/level6.test.ts, which requires any wave
+  // table not named by levels.json to belong to a level that is genuinely
+  // unfinished -- and a level stops being unfinished the moment its boss has
+  // a health value.
+  for (const f of readdirSync(new URL('../src/data/', import.meta.url))) {
+    if (!/^waves.*\.json$/.test(f)) continue
+    const table = read(f.replace(/\.json$/, ''))
+    for (const w of table.waves) for (const sp of w.spawns) seen.add(sp.enemy)
+  }
   assert.equal(seen.size, Object.keys(enemies).length,
-    `enemies never spawned by any level: ${Object.keys(enemies).filter((id) => !seen.has(id)).join(', ')}`)
+    `enemies never spawned by any wave table: ${Object.keys(enemies).filter((id) => !seen.has(id)).join(', ')}`)
 })
 
 test('the run ends on a boss, escorted but not buried', () => {
@@ -491,12 +507,12 @@ test('every boss pays a lump sum, and the rule is checked on every boss', () => 
    * only ever looking at the one boss it happened to be true of.
    */
   const bosses = Object.entries(enemies).filter(([, e]: [string, any]) => e.tier === 'boss')
-  // SIX ROWS, FIVE BOSSES. Level 4's Glitch Lich King is two rows -- the wave
-  // 7 form that retreats and the wave 13 form that does not -- and both are
-  // held to every rule below, which is the point of the count being here at
-  // all: it is a tripwire against a boss being added and never examined.
-  // Batula is the sixth row and the fifth boss.
-  assert.equal(bosses.length, 6, 'the roster gained or lost a boss')
+  // SEVEN ROWS, SIX BOSSES. Level 4's Glitch Lich King is two rows -- the
+  // wave 7 form that retreats and the wave 13 form that does not -- and both
+  // are held to every rule below, which is the point of the count being here
+  // at all: it is a tripwire against a boss being added and never examined.
+  // Batula is the sixth row and the Rooster the seventh.
+  assert.equal(bosses.length, 7, 'the roster gained or lost a boss')
   const dearest = Math.max(...Object.values(towers).map((t: any) => t.cost))
   // THE BEST ORDINARY PAYOUT, and `ordinary` is role as well as tier -- level
   // 5's Vampire Lord is a mini-boss carrying `tier: elite` (see enemies.json's
