@@ -1689,6 +1689,45 @@ async function run() {
           note('    chips: ' + (found.join('  ') || 'none')
             + '   backing=' + frame + ' plate=' + plateB + ' content=' + faceB)
         }
+        // EVERY WRAPPED TEXT ON EVERY CARD, RENDER BY RENDER.
+        //
+        // A card's body is wrapped by `wrapWithin`, which corrects Phaser's
+        // letterSpacing-blind wrap by narrowing the box -- so the wrap width a
+        // line was broken at is NOT the column the layout reserved, and the
+        // two can disagree without anything on screen saying so. These are the
+        // numbers behind "it wrapped differently in the last frame": the size
+        // the ladder chose, the width the box ended up at, the lines it broke
+        // into, and how far the drawn ink is from the card's own padded edge.
+        if (LD.heroBlockPlan) {
+          const hb = LD.heroBlockPlan
+          note('    hero block: ' + Object.keys(hb).map(
+            (k5) => k5 + '=' + Math.round(hb[k5] * 100) / 100).join(' '))
+        }
+        {
+          const rows = []
+          const walkCards = (o, card) => {
+            if (o.getData && o.getData('cardPlate')) card = o
+            if (o.type === 'Text' && o.style && o.style.wordWrapWidth) {
+              const b4 = o.getBounds()
+              rows.push({
+                txt: String(o.text).slice(0, 30),
+                size: o.style.fontSize,
+                wrap: Math.round(o.style.wordWrapWidth),
+                w: Math.round(o.width),
+                lines: o.getWrappedText().length,
+                broke: o.getWrappedText().map((l) => l.trim()).join(' | ').slice(0, 90),
+                right: Math.round(b4.right),
+              })
+            }
+            if (o.list) for (const c4 of o.list) walkCards(c4, card)
+          }
+          for (const o of LD.children.list) walkCards(o, null)
+          for (const r4 of rows) {
+            note('    text ' + JSON.stringify(r4.txt) + ' @' + r4.size
+              + ' wrap=' + r4.wrap + ' drawn=' + r4.w + ' right=' + r4.right
+              + ' [' + r4.broke + ']')
+          }
+        }
         total += await audit('3-loadout-' + hid)
       }
     }
@@ -1965,6 +2004,8 @@ async function run() {
     //   6. It expires after `holdSeconds` of HELD time, and a press let go
     //      before it has fired anything costs nothing.
     const RS5 = await import('./js/systems/RunState.js')
+    const RESM7 = await import('./js/systems/Resolution.js')
+    const HL7 = await import('./js/systems/HudLayout.js')
     const HJ5 = (await import('./js/data/heroes.json', { with: { type: 'json' } })).default
     const EJ5 = (await import('./js/data/enemies.json', { with: { type: 'json' } })).default
     let faults5 = 0
@@ -2098,12 +2139,38 @@ async function run() {
     // AIMED BY DRAGGING, which is what the HUD forwards. Pointed straight at
     // something so the corridor has a target in it.
     if (G5.held && victim) {
-      G5.held.aimX = victim.x; G5.held.aimY = victim.y
+      // `onBoard` TOO, and that is not a detail. The aim point is only ever
+      // written from a pointer sample the BOARD owns -- a sample on the HUD is
+      // refused outright -- so a beam that has not been dragged off its own
+      // medallion yet re-derives the hero's facing every frame and ignores
+      // whatever is in `aimX`. Setting the coordinates without the flag pokes
+      // a field the scene is deliberately not reading. Section 7 below drives
+      // the same thing through real mouse events; this one is aiming at a
+      // named victim so the damage can be measured.
+      G5.held.aimX = victim.x; G5.held.aimY = victim.y; G5.held.onBoard = true
       const hp0 = victim.health
       await sleep(700)
       note('   after 0.7s of beam the target went ' + Math.round(hp0) + ' -> '
         + Math.round(victim.health) + ' (alive=' + victim.alive + ')')
       if (victim.alive && victim.health >= hp0) fail5('the beam damaged nothing under it')
+      // WHAT IS ACTUALLY ON THE GLASS. A screenshot of a heavily squashed
+      // beam cannot tell a real strip from a stand-in, and "the art is not
+      // wired" was diagnosed off one. So the sprite is asked directly: which
+      // texture, which frame, which clip, and at what scale.
+      const HA = G5.held && G5.held.art
+      note('   beam sprite: texture=' + (HA ? HA.texture.key : '-')
+        + '  frame=' + (HA ? HA.frame.name : '-')
+        + '  clip=' + (HA && HA.anims && HA.anims.currentAnim ? HA.anims.currentAnim.key : 'none')
+        + '  playing=' + (HA && HA.anims ? HA.anims.isPlaying : '-'))
+      if (HA) {
+        note('   beam draw: scale=' + HA.scaleX.toFixed(3) + ',' + HA.scaleY.toFixed(3)
+          + '  display=' + Math.round(HA.displayWidth) + 'x' + Math.round(HA.displayHeight)
+          + '  anisotropy=' + (HA.scaleX / HA.scaleY).toFixed(2) + 'x'
+          + '  origin=' + HA.originX + ',' + HA.originY)
+        if (HA.texture.key !== AB[2].fx) fail5('the beam is drawing ' + HA.texture.key
+          + ' rather than ' + AB[2].fx)
+        if (!HA.anims || !HA.anims.isPlaying) fail5('the beam sprite is not animating')
+      }
       await shot('courtland-3-laser-sustain')
       const spent = AB[2].holdSeconds - G5.held.left
       note('   budget spent after 0.7s of holding: ' + spent.toFixed(2) + 's')
@@ -2135,6 +2202,83 @@ async function run() {
     note('with the budget wound to 0.05s: held=' + !!G5.held
       + '  cooldown ready=' + G5.cooldowns.ready(LASER))
     if (G5.held) fail5('the beam outlived its own hold budget')
+
+    // --- 7: WHERE A HELD BEAM POINTS WHILE THE FINGER IS STILL ON THE BUTTON
+    //
+    // Driven through the real HUD with real mouse events, because the whole
+    // bug lives in the gap between the two: the medallion is on the UI camera
+    // and the board it aims at is on the world camera, and every pointer
+    // sample during the hold was converted straight to the world. The beam
+    // fired into the third HUD button for its full duration.
+    {
+      const hud7 = scene('Hud')
+      const slots7 = (hud7 && hud7.slots) || []
+      const heroSlots = slots7.filter((s7) => s7.region && s7.region.kind === 'heroSlot')
+      const btn = heroSlots[heroSlots.length - 1]
+      if (!btn) fail5('no hero medallion to press')
+      else {
+        G5.cooldowns.reset(LASER)
+        hero5.powered = true
+        const bx = btn.hit.x, by = btn.hit.y
+        const facing0 = hero5.facingLeft
+        mouse('mousedown', bx, by)
+        await sleep(120)
+        note('   pressed the medallion at ' + Math.round(bx) + ',' + Math.round(by)
+          + ': held=' + !!G5.held)
+        if (!G5.held) fail5('pressing the medallion did not light the beam')
+        // A DRAG THAT HAS NOT LEFT THE BUTTON YET. Two samples on the button
+        // itself and one on the counters, all of which are chrome.
+        await move(bx, by)
+        await move(bx + 4, by - 2)
+        const cn = G5.layout.counters
+        await move(cn.x + cn.width / 2, cn.y + cn.height / 2)
+        if (G5.held) {
+          // The beam's real far end, off the scene's own arithmetic: the aim
+          // point is a DIRECTION and `range` is the reach, so what has to be
+          // clear of the HUD is where the line actually stops.
+          const endA = G5.heldEnd(G5.held)
+          const uiA = RESM7.worldToScreen(G5, endA.x, endA.y, G5.cameras.main)
+          const onHud = HL7.hudBlocksGesture(G5.layout, uiA.x, uiA.y)
+          // ALONG THE FACING: same y as the hero, and on the side he is on.
+          const dx = G5.held.aimX - hero5.x
+          const alongFacing = Math.abs(G5.held.aimY - hero5.y) < 1
+            && (facing0 ? dx < 0 : dx > 0)
+          note('   with the finger still on chrome: aim=' + Math.round(G5.held.aimX)
+            + ',' + Math.round(G5.held.aimY) + '  hero=' + Math.round(hero5.x)
+            + ',' + Math.round(hero5.y) + '  facingLeft=' + facing0
+            + '  along facing=' + alongFacing
+            + '  beam end lands on HUD=' + onHud + '  onBoard=' + G5.held.onBoard)
+          if (!alongFacing) fail5('a beam held on the button is not aimed along the hero\'s facing')
+          if (onHud) fail5('the beam terminates inside a HUD region')
+          if (G5.held.onBoard) fail5('chrome under the finger counted as a board point')
+        }
+        // ONTO THE BOARD, and it retargets.
+        const board = RESM7.worldToScreen(G5, hero5.x, hero5.y - 240, G5.cameras.main)
+        await move(board.x, board.y)
+        if (G5.held) {
+          note('   after moving onto the board: aim=' + Math.round(G5.held.aimX)
+            + ',' + Math.round(G5.held.aimY) + '  onBoard=' + G5.held.onBoard)
+          if (!G5.held.onBoard) fail5('a point on the board did not retarget the beam')
+          if (Math.abs(G5.held.aimY - hero5.y) < 1) {
+            fail5('the beam is still on the facing after the finger reached the board')
+          }
+        }
+        // AND BACK ONTO THE BUTTON: the last board aim is KEPT, not replaced
+        // and not clamped.
+        const kept = G5.held ? { x: G5.held.aimX, y: G5.held.aimY } : null
+        await move(bx, by)
+        if (G5.held && kept) {
+          const same = Math.abs(G5.held.aimX - kept.x) < 0.5 && Math.abs(G5.held.aimY - kept.y) < 0.5
+          note('   dragged back over the button: aim held at '
+            + Math.round(G5.held.aimX) + ',' + Math.round(G5.held.aimY) + ' = ' + same)
+          if (!same) fail5('coming back over the HUD moved the aim')
+        }
+        mouse('mouseup', bx, by)
+        await sleep(120)
+        note('   after mouseup: held=' + !!G5.held)
+        if (G5.held) fail5('releasing over the button did not stop the beam')
+      }
+    }
 
     note('RESULT ' + (faults5 === 0
       ? "Courtland's three behave as specified"
