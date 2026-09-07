@@ -587,7 +587,22 @@ export class LoadoutScene extends Phaser.Scene {
     const frame = this.frameInsetFor(w, cap)
     const pad = Math.max(LO.cardPad, Math.ceil(Math.max(frame.left, frame.right)))
     const padT = Math.max(LO.cardPad, Math.ceil(frame.top))
-    const padB = Math.max(LO.cardPad, Math.ceil(frame.bottom))
+    // THE BOTTOM IS THE HERO BLOCK'S ALONE, and it is `cardPadBottom` rather
+    // than `cardPad`.
+    //
+    // `frameInsetFor` is deliberately a FRACTION of the painted frame -- see
+    // `LO.frameInsetShare` -- so content is allowed to sit partway into the
+    // rail. That is right for the tower and special cards, whose last line is
+    // text on a dark backing and never reaches it. It is wrong here now that
+    // the last thing in the block is a 28px circular badge: at nine pixels of
+    // clearance Courtland's third chip was drawn with the plate's bottom rail
+    // running straight through it, and the picture showed it while every
+    // number said the block fitted -- the audit's four faults are OFF, NOTCH,
+    // SMALL and OVER, and none of them is "drawn on the frame".
+    //
+    // `cardPadBottom: 15` was already in presentation.json, measured, and read
+    // by nothing at all. It is what this needed.
+    const padB = Math.max(LO.cardPadBottom, Math.ceil(frame.bottom))
     const innerW = w - pad * 2
 
     const roster = heroList()

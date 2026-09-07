@@ -1622,6 +1622,66 @@ async function run() {
         if (lp.granted.hero < lp.heroFloor - 1) short.push('hero by ' + Math.round(lp.heroFloor - lp.granted.hero))
         if (short.length) note('    *** squeezed BELOW the content floor: ' + short.join(', '))
       }
+
+      // EVERY HERO'S CARD, because they no longer describe the same number of
+      // things. Courtland has three abilities and the other four have two, so
+      // the description block is laid out for the roster's LONGEST list and a
+      // hero with fewer leaves the last box empty -- which keeps the block the
+      // same height whoever is highlighted, rather than the row jumping as the
+      // player moves along it. Auditing only the default hero would have
+      // measured the two-chip case and reported the three-chip one as fine.
+      const LD = scene('Loadout')
+      const HJ6 = (await import('./js/data/heroes.json', { with: { type: 'json' } })).default
+      for (const hid of Object.keys(HJ6).filter((k) => !k.startsWith('_'))) {
+        if (LD.pickHero) LD.pickHero(hid)
+        await sleep(350)
+        const sp = LD.stackPlan || {}
+        note('  loadout card for ' + hid + ' (' + HJ6[hid].abilities.length + ' abilities)'
+          + '  heroWant=' + Math.round(sp.heroWant || 0)
+          + '/' + Math.round(sp.heroFloor || 0)
+          + '  granted=' + Math.round((sp.granted || {}).hero || 0)
+          + '  band=' + JSON.stringify(sp.band || null)
+          + '  overflow=' + Math.round(sp.overflow || 0))
+        // THE CHIPS THEMSELVES, off the objects. The audit's four faults are
+        // OFF, NOTCH, SMALL and OVER, and none of them is "the panel this is
+        // drawn in is shorter than the thing drawn in it" -- which is what a
+        // third chip in a two-chip block looks like. The picture showed it;
+        // these are the numbers behind the picture.
+        {
+          const names = HJ6[hid].abilities.map((a2) => a2.name)
+          const found = []
+          const walk3 = (o) => {
+            if (o.type === 'Text' && names.includes(o.text)) {
+              const b3 = o.getBounds()
+              found.push(o.text + ' @' + Math.round(b3.y) + '..' + Math.round(b3.bottom))
+            }
+            if (o.list) for (const c3 of o.list) walk3(c3)
+          }
+          for (const o of LD.children.list) walk3(o)
+          // THE CARD'S OWN FRAME, off the object. `granted.hero` is the
+          // section's budget and the card is drawn at `max(granted, plan)`, so
+          // the only honest bottom edge is the plate's.
+          const cards = LD.cards || []
+          const hc = cards[0]
+          let frame = 'none', faceB = 'none', plateB = 'none'
+          if (hc && hc.parts) {
+            const fb = hc.parts[0].getBounds()
+            frame = Math.round(fb.y) + '..' + Math.round(fb.bottom)
+            const fc = hc.face.getBounds()
+            faceB = Math.round(fc.y) + '..' + Math.round(fc.bottom)
+            let lo = 1e9, hi = -1e9
+            for (const q of hc.parts.slice(1, -1)) {
+              if (!q.getBounds) continue
+              const qb = q.getBounds()
+              lo = Math.min(lo, qb.y); hi = Math.max(hi, qb.bottom)
+            }
+            plateB = Math.round(lo) + '..' + Math.round(hi)
+          }
+          note('    chips: ' + (found.join('  ') || 'none')
+            + '   backing=' + frame + ' plate=' + plateB + ' content=' + faceB)
+        }
+        total += await audit('3-loadout-' + hid)
+      }
     }
     else note('LOADOUT: *** did not build ***')
 
