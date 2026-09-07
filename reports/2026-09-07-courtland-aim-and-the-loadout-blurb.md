@@ -1,20 +1,21 @@
 # Courtland's aim, his beam's art, and the loadout blurb
 
-Four fixes from two screen recordings taken against `3d30139`. Three commits on
-`claude/courtland-aim-loadout-blurb-45ufwl`. **Not merged.** The merge command
-is at the bottom, and the branch is fast-forwardable.
+Four fixes from two screen recordings taken against `3d30139`. Three commits of
+code and tools on `claude/courtland-aim-loadout-blurb-45ufwl`, plus this report
+and the commit that fills in its CI row. **Not merged.** The merge command is at
+the bottom, and the branch is fast-forwardable.
 
 | commit | what it is | CI |
 |---|---|---|
 | `a3b1477` | Aim the Mind Laser at the board, and let its own art be seen | covered by run 178 |
 | `fdd7b80` | Ask the loadout's frame how thick it is at the height it is drawn | covered by run 178 |
 | `4ceddce` | Let the harness ask the beam and the blurb what they actually are | **green** — [run 178](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34147266536) |
-| `bf9d09e` | This report | **green** — [run 179](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34147600624) |
+| `09c2563` | This report | **green** — [run 179](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34147686463) |
 
 The first three went up in one push, so one run, and it covers the branch head.
 `test` and `typecheck` both green; `deploy` skipped, which is what it does off
-`main`. A report cannot carry its own run, so the last row was filled in by
-checking run 179 after this file was pushed.
+`main`. A report cannot carry its own run, so the last row was filled in by the
+commit after it — the same shape the last few reports here used.
 
 Tests **968 → 970**, all passing. `sh tools/tsdiff.sh 3d30139`: 206 against a
 206 baseline — no new errors, and CI's `tsc` with the real Phaser typings agrees.
