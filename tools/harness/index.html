@@ -9531,32 +9531,116 @@ async function run() {
   // The results panel on a win, without playing thirteen waves for it: the
   // run is driven to the end state directly and the panel it opens is real.
   if (scenario === 'results') {
-    // A few kills and some income first, so the rows are not all zero.
-    const cam = g.cameras.main
-    // Only pads inside the camera's view can be tapped at gameplay zoom.
-    const inView = SPOTS.map((p, i) => [i, p])
-      .filter(([, p]) => cam.worldView.contains(p[0], p[1])).map(([i]) => i)
-    note('pads in view: ' + JSON.stringify(inView) + ' at zoom ' + cam.zoom.toFixed(2))
-    await shot('results-00-hud-normal')
-    await build(inView[0], 0)
-    note('towers ' + g.towers.length + ' peanuts ' + g.status.peanuts)
-    await key('Space')
-    await until(() => g.status.kills > 6, 120000)
-    note('after play: kills=' + g.status.kills + ' wave=' + g.status.wave +
-      ' lives=' + g.status.lives + ' earned=' + g.status.peanutsEarned)
-    for (const [name, phase] of [['results-lost', 'lost'], ['results-won', 'won']]) {
-      g.status.phase = 'ready'
-      g.dialog?.close()
-      if (phase === 'won') { g.status.wave = g.status.waveCount; g.status.lives = 17 }
-      else { g.status.wave = 6; g.status.lives = 0 }
-      g.endRun(phase)
-      await sleep(700)
-      await shot(name)
-      note(name + ': kills=' + g.status.kills + ' earned=' + g.status.peanutsEarned +
-        ' modalOpen=' + g.modalOpen +
-        ' hudAlpha=' + scene('Hud').cameras.main.alpha +
-        ' hudRunning=' + running('Hud'))
+    // THE END-OF-LEVEL SCREENS, in every case that has different buttons on it.
+    //
+    // Three: a defeat, a win with a level after it, and a win with none. The
+    // last is the one worth photographing -- four levels are built and the road
+    // has twenty slots, so past level 4 NEXT LEVEL would point at a COMING SOON
+    // node, and it is REPLACED by LEVEL SELECT rather than disabled.
+    //
+    // `arg` names the level, so the same scenario covers both win cases:
+    //   run.sh results 200 "" level1   -> a win with level 2 after it
+    //   run.sh results 200 "" level4   -> a win with nothing after it
+    const LV = arg || 'level1'
+    if (LV !== 'level1') {
+      const RS = await import('./js/systems/RunState.js')
+      RS.setRunState({ levelId: LV })
+      game.scene.stop('Game'); game.scene.stop('Hud')
+      game.scene.start('Game'); game.scene.start('Hud')
+      await until(() => running('Game') && scene('Game').hero, 12000)
+      await sleep(600)
     }
+    const G = scene('Game')
+    const cam = G.cameras.main
+    note('level ' + G.level.id + ' at ' + VP.w + 'x' + VP.h)
+
+    // A few kills and some income first, so the rows are not all zero.
+    const spots = G.build.spots.map((sp, i) => [i, sp])
+      .filter(([, sp]) => cam.worldView.contains(sp.x, sp.y)).map(([i]) => i)
+    note('pads in view: ' + JSON.stringify(spots) + ' at zoom ' + cam.zoom.toFixed(2))
+    await shot('results-00-hud-' + LV)
+    if (spots.length) await build(spots[0], 0)
+    note('towers ' + G.towers.length + ' peanuts ' + G.status.peanuts)
+    await key('Space')
+    await until(() => G.status.kills > 4, 120000)
+    note('after play: kills=' + G.status.kills + ' wave=' + G.status.wave +
+      ' lives=' + G.status.lives + ' earned=' + G.status.peanutsEarned)
+
+    // EVERY BUTTON ON THE PANEL, read off the dialog rather than off the
+    // source. A label that is drawn is a label the player can press; a label
+    // in a string literal is not.
+    const buttons = () => {
+      const out = []
+      const walkAll = (list) => {
+        for (const o of list) {
+          if (o.type === 'Text' && o.text && /^[A-Z ]{3,}$/.test(String(o.text))) {
+            const b = o.getBounds()
+            out.push({ label: String(o.text), x: Math.round(b.centerX), y: Math.round(b.centerY),
+              w: Math.round(b.width), h: Math.round(b.height) })
+          }
+          if (o.list) walkAll(o.list)
+        }
+      }
+      walkAll(G.dialog ? G.dialog.layer.list : [])
+      return out
+    }
+
+    let faults = 0
+    const fail = (m) => { faults++; note('   *** ' + m) }
+    const want = {
+      'results-lost': ['RETRY', 'LEVEL SELECT', 'MAIN MENU'],
+      'results-won': LV === 'level4'
+        ? ['LEVEL SELECT', 'REPLAY', 'MAIN MENU']
+        : ['NEXT LEVEL', 'REPLAY', 'LEVEL SELECT', 'MAIN MENU'],
+    }
+    for (const [name, phase] of [['results-lost', 'lost'], ['results-won', 'won']]) {
+      G.status.phase = 'ready'
+      G.dialog?.close()
+      if (phase === 'won') { G.status.wave = G.status.waveCount; G.status.lives = 17 }
+      else { G.status.wave = 6; G.status.lives = 0 }
+      G.endRun(phase)
+      await sleep(700)
+      await shot(name + '-' + LV + '-' + VP.w + 'x' + VP.h)
+      const bs = buttons()
+      const labels = bs.map((b) => b.label)
+      note(name + ' [' + LV + ']: buttons ' + JSON.stringify(labels))
+      note('   kills=' + G.status.kills + ' earned=' + G.status.peanutsEarned +
+        ' modalOpen=' + G.modalOpen +
+        ' hudAlpha=' + scene('Hud').cameras.main.alpha + ' hudRunning=' + running('Hud'))
+      for (const w of want[name]) {
+        if (!labels.includes(w)) fail(name + ' does not offer ' + w)
+      }
+      // NEXT LEVEL must not be on the panel when there is no next level, and
+      // must not be on a defeat at all -- losing does not advance.
+      if ((name === 'results-lost' || LV === 'level4') && labels.includes('NEXT LEVEL')) {
+        fail(name + ' offers NEXT LEVEL when there is nowhere to go')
+      }
+      // EVERY BUTTON ON SCREEN AND BIG ENOUGH. A four-button panel that wraps
+      // to two rows inside a plate sized for one draws its second row over the
+      // plate's chrome, and a panel scaled to fit a phone can take its buttons
+      // off the bottom -- both leave the player on a dead board.
+      for (const b of bs) {
+        if (b.y > VP.h || b.y < 0 || b.x < 0 || b.x > VP.w) {
+          fail(b.label + ' is off screen at ' + b.x + ',' + b.y)
+        }
+      }
+      const rowYs = [...new Set(bs.map((b) => b.y))].sort((a, b2) => a - b2)
+      note('   button rows at y ' + JSON.stringify(rowYs) +
+        ' in a ' + VP.h + 'px viewport')
+    }
+    // AND THE PANEL SAYS WHY when there is no next level, rather than showing a
+    // dead button and leaving the question open.
+    if (LV === 'level4') {
+      const texts = []
+      const walkT = (l) => { for (const o of l) { if (o.text) texts.push(String(o.text)); if (o.list) walkT(o.list) } }
+      walkT(G.dialog ? G.dialog.layer.list : [])
+      const said = texts.some((t) => /more levels coming soon/i.test(t))
+      note('says more levels are coming: ' + said)
+      if (!said) fail('nothing on the panel explains why there is no next level')
+    }
+    note('RESULT ' + (faults === 0
+      ? 'both end screens offer the right way out, on screen, at ' + VP.w + 'x' + VP.h
+      : '*** ' + faults + ' faults ***'))
     return
   }
 

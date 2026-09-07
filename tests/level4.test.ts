@@ -423,14 +423,17 @@ test('level 4 is registered, and locked until level 3 has been cleared', () => {
   assert.equal(level.waveTable.waves.length, 13)
   assert.equal(LEVEL.name, 'The Conundrum')
 
-  // THE BRIEF ASKED FOR runsClearedToUnlock 1 AND for this property, and the
-  // two cannot both hold -- see levels.json's _unlock4. At 1, clearing level 1
-  // once would open level 4 and START RUN would skip two levels. At 3 the
-  // confirmation below is true. One line in levels.json changes it back.
-  assert.equal(LEVEL.runsClearedToUnlock, 3)
-  assert.equal(isLevelUnlocked('level4', 2), false, 'level 4 is open before level 3 is cleared')
-  assert.equal(isLevelUnlocked('level4', 3), true, 'level 4 never opens')
-  assert.equal(isLevelCleared('level3', 2), false)
-  assert.equal(isLevelCleared('level3', 3), true,
+  // THE BRIEF ASKED FOR runsClearedToUnlock 1 AND for this property, and under
+  // a run COUNT the two could not both hold -- levels.json carried a note
+  // explaining that the value had been raised to 3 to stop level 4 opening
+  // after one clear of level 1. There is no count any more and no
+  // disagreement: level 4 names level 3, which is what the brief was asking
+  // for both times.
+  assert.equal(LEVEL.unlockedBy, 'level3')
+  assert.equal(isLevelUnlocked('level4', ['level1', 'level2']), false,
+    'level 4 is open before level 3 is cleared')
+  assert.equal(isLevelUnlocked('level4', ['level3']), true, 'level 4 never opens')
+  assert.equal(isLevelCleared('level3', ['level1', 'level2']), false)
+  assert.equal(isLevelCleared('level3', ['level3']), true,
     'clearing level 3 does not open level 4, which is what unlocking it means')
 })

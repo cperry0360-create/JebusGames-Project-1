@@ -16,7 +16,7 @@ import {
 import abilitiesData from '../data/abilities.json'
 import draftData from '../data/draft.json'
 
-import { loadLevel, type Level } from '../systems/Levels.ts'
+import { loadLevel, nextLevelId, type Level } from '../systems/Levels.ts'
 import { LaneNetwork } from '../systems/Lanes.ts'
 import { Path } from '../systems/Path.ts'
 import { BuildSystem } from '../systems/BuildSystem.ts'
@@ -3855,8 +3855,12 @@ export class GameScene extends Phaser.Scene {
     // run offered back on the title screen would be a resume into a results
     // dialog, and the record is cleared before anything else can write it.
     clearRun()
-    // Clearing a run is what unlocks the Server Nuke for every run after it.
-    if (won) recordRunCleared()
+    // TWO THINGS, ONE CALL. Clearing a run is what unlocks the Server Nuke for
+    // every run after it; clearing THIS LEVEL is what opens the next one. The
+    // level id is what the second half needs, and it is passed here rather
+    // than recorded separately so a future end-of-run path cannot bank one
+    // without the other.
+    if (won) recordRunCleared(this.level.id)
     play(this, won ? 'won' : 'lost')
 
     // What the run was worth. Depth is the main term, so a defeat still banks
@@ -3872,9 +3876,22 @@ export class GameScene extends Phaser.Scene {
     const total = addBannerPoints(earned)
     this.status.alert = won ? 'The line held.' : 'Overrun.'
 
+    // WHAT COMES NEXT, and whether it exists.
+    //
+    // Four levels are built and the road has twenty slots, so past level 4
+    // there is no next level to offer. The button is not disabled in that
+    // case: a dead control that cannot say why is worse than no control, and
+    // "why is NEXT LEVEL greyed out" is a question the screen should answer
+    // rather than pose. It is REPLACED by LEVEL SELECT, and a line says the
+    // rest are coming.
+    const next = won ? nextLevelId(this.level.id) : null
+    const noMore = won && next === null
+
     this.openDialog({
       title: won ? 'HELD THE LINE' : 'OVERRUN',
-      subtitle: verdictFor(outcome, RULES.banner),
+      subtitle: noMore
+        ? `${verdictFor(outcome, RULES.banner)}  More levels coming soon.`
+        : verdictFor(outcome, RULES.banner),
       headline: { value: `+${earned}`, label: 'BANNER POINTS EARNED' },
       rows: [
         { label: 'Waves survived', value: `${this.status.wave} of ${this.status.waveCount}` },
@@ -3887,10 +3904,51 @@ export class GameScene extends Phaser.Scene {
       // back on a dead board with no way off it.
       dismissable: false,
       dim: 0.68,
-      confirm: { label: 'TRY AGAIN', onPick: () => this.tryAgain() },
-      cancelLabel: 'QUIT TO TITLE',
-      onCancel: () => this.toTitle(),
+      // FOUR WAYS OFF A WIN AND THREE OFF A LOSS, and the first is the one the
+      // player almost always wants. The screen used to offer TRY AGAIN and
+      // QUIT TO TITLE, which on a WIN is a dead end: the two things it offered
+      // were to play the level again or to leave, and neither is "carry on".
+      actions: won
+        ? [
+          next
+            ? { label: 'NEXT LEVEL', onPick: () => this.goToLevel(next) }
+            : { label: 'LEVEL SELECT', onPick: () => this.toWorldMap() },
+          { label: 'REPLAY', onPick: () => this.tryAgain() },
+          ...(next ? [{ label: 'LEVEL SELECT', onPick: () => this.toWorldMap() }] : []),
+          { label: 'MAIN MENU', onPick: () => this.toTitle() },
+        ]
+        : [
+          { label: 'RETRY', onPick: () => this.tryAgain() },
+          { label: 'LEVEL SELECT', onPick: () => this.toWorldMap() },
+          { label: 'MAIN MENU', onPick: () => this.toTitle() },
+        ],
     })
+  }
+
+  /**
+   * Straight into the next level's loadout, NOT back through the world map.
+   *
+   * The map is a place to CHOOSE a level, and the player pressing NEXT LEVEL
+   * has already chosen. Routing them through it would make them find and tap
+   * the node the button just named.
+   *
+   * The hand is cleared with the seed, exactly as `tryAgain` does: a new level
+   * deals a new hand, and the loadout screen only deals when there is none.
+   */
+  private goToLevel(id: string): void {
+    logEvent('scene', `Game -> Loadout (next level ${id})`)
+    setRunState({
+      heroId: runState().heroId, levelId: id, seed: Date.now() >>> 0,
+      openingTowers: [], abilities: [], reserveTowers: [], resumeFrom: null,
+    })
+    this.scene.stop('Hud')
+    this.scene.start('Loadout')
+  }
+
+  private toWorldMap(): void {
+    logEvent('scene', 'Game -> WorldMap')
+    this.scene.stop('Hud')
+    this.scene.start('WorldMap')
   }
 
   /**
@@ -3899,8 +3957,15 @@ export class GameScene extends Phaser.Scene {
    * it — and the loadout screen is where a player is shown what they drew.
    */
   private tryAgain(): void {
-    logEvent('scene', 'Game -> Loadout (try again)')
-    setRunState({ heroId: runState().heroId, seed: Date.now() >>> 0 })
+    logEvent('scene', 'Game -> Loadout (replay)')
+    // THE LEVEL IS NAMED rather than left to whatever the run state happens to
+    // hold. It held the right thing while there was one way into a run; the
+    // victory screen can now send the player to a DIFFERENT level, and a
+    // REPLAY that inherited a stale id would replay the wrong one.
+    setRunState({
+      heroId: runState().heroId, levelId: this.level.id, seed: Date.now() >>> 0,
+      openingTowers: [], abilities: [], reserveTowers: [], resumeFrom: null,
+    })
     this.scene.stop('Hud')
     this.scene.start('Loadout')
   }

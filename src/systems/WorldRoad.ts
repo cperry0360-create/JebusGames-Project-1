@@ -78,10 +78,10 @@ export function roadWidth(): number {
   return ROAD.margin * 2 + ROAD.node.width + (ROAD_SLOTS - 1) * ROAD.pitch
 }
 
-export function nodeState(node: RoadNode, runsCleared: number): NodeState {
+export function nodeState(node: RoadNode, cleared: readonly string[]): NodeState {
   if (!node.level) return 'locked'
-  if (isLevelCleared(node.level.id, runsCleared)) return 'cleared'
-  return isLevelUnlocked(node.level.id, runsCleared) ? 'open' : 'locked'
+  if (isLevelCleared(node.level.id, cleared)) return 'cleared'
+  return isLevelUnlocked(node.level.id, cleared) ? 'open' : 'locked'
 }
 
 /** The framed picture, which is what a neighbour must not touch. */

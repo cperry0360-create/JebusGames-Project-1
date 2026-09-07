@@ -32,11 +32,18 @@ test('no interaction anywhere in the game is keyboard-only', () => {
   const credits = src('scenes/CreditsScene.ts')
   const splash = src('scenes/SplashScene.ts')
 
-  // The run-end screen is a panel now, so its way out is a dialog button.
-  assert.match(game, /'TRY AGAIN'/,
-    'the run-end screen offers no way to start another run')
-  assert.match(game, /cancelLabel: 'QUIT TO TITLE'/,
-    'the run-end screen has no way out, so a touch player cannot leave it')
+  // THE RUN-END SCREEN IS A LIST OF WAYS OUT NOW, and every one of them is a
+  // dialog button. It used to be TRY AGAIN and QUIT TO TITLE, which on a WIN
+  // is a dead end of a different kind from the one this test was written
+  // about: there was a way off the screen, and no way FORWARD.
+  //
+  // Asserted as the set rather than as two strings, because the point is that
+  // a player can always both carry on and leave.
+  for (const label of ['NEXT LEVEL', 'REPLAY', 'LEVEL SELECT', 'MAIN MENU', 'RETRY']) {
+    assert.match(game, new RegExp(`'${label}'`),
+      `the run-end screen offers no ${label}`)
+  }
+  assert.match(game, /actions: won/, 'the run-end screen no longer offers a list of ways out')
   // FOUR POINTER ROUTES OUT OF TARGETING MODE, because one of them was dead
   // for a whole build and the mode has no other exit than deploying the skill.
   // The label itself lives in presentation.json now, so what is asserted is
@@ -82,9 +89,21 @@ test('the run-end screen is on the screen it appears on, and cannot be left behi
   // that. A panel that runs off the screen takes its buttons with it.
   assert.match(dialog, /Math\.min\(1, \(viewH\(scene\) - MARGIN\) \/ h/,
     'a dialog taller than the viewport is not scaled to fit')
-  const btn = /plateButton\(scene, bx, btnY, bw, (\d+),/.exec(dialog)
+  // `by` rather than `btnY`: the row wraps at two buttons now, so the y a
+  // button is drawn at is its ROW's y. The height is what this is about and it
+  // is unchanged.
+  const btn = /plateButton\(scene, bx, by, bw, (\d+),/.exec(dialog)
   assert.ok(btn && Number(btn[1]) >= 44,
     'dialog buttons are below the 44px touch target floor')
+
+  // AND THE PANEL GROWS FOR THE EXTRA ROWS. A four-button panel that wraps to
+  // two rows inside a plate sized for one draws its second row over the
+  // plate's bottom chrome, which is the same class of fault as running off the
+  // screen: the buttons are there and cannot be read.
+  assert.match(dialog, /const rows = Math\.max\(1, Math\.ceil\(row\.length \/ perRow\)\)/,
+    'the dialog does not count its button rows')
+  assert.match(dialog, /BUTTON_BAND \+ \(rows - 1\)/,
+    'the plate does not grow to hold a wrapped button row')
 })
 
 test('every full-screen overlay is drawn by the camera that does not move', () => {

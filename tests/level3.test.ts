@@ -246,25 +246,27 @@ test('level 3 loads through the registry with its own map and waves', () => {
   assert.equal(lv.map.buildSpots.length, 15)
   assert.equal(lv.waveTable.waves.length, 13)
   assert.equal((lv.map as any).plate, 'level3')
-  assert.equal(lv.runsClearedToUnlock, 2)
+  assert.equal(lv.unlockedBy, 'level2')
 })
 
 test('level 3 is locked until level 2 has been cleared, and open after', () => {
-  // The progression the thresholds describe: clear level 1 and level 2 opens,
-  // clear level 2 and level 3 does. The value here is 2 rather than the 1 the
-  // brief named, because 1 is level 2's OWN threshold -- at 1 both open at
-  // once, and START RUN, which asks for the furthest unlocked level, would
-  // walk a player who has just finished level 1 straight past level 2.
-  assert.equal(isLevelUnlocked('level3', 0), false, 'level 3 is open before anything is cleared')
-  assert.equal(isLevelUnlocked('level3', 1), false, 'level 3 opens as soon as level 1 is cleared')
-  assert.equal(isLevelUnlocked('level3', 2), true, 'level 3 stays locked after two cleared runs')
-  assert.equal(furthestUnlocked(1).id, 'level2', 'START RUN skips level 2')
-  assert.equal(furthestUnlocked(2).id, 'level3')
-
-  // One honest limit, the same one Levels.isLevelCleared records: the save
-  // counts runs, not which levels they were on, so clearing level 1 twice also
-  // opens level 3. Gating on a specific level needs a new save field.
-  assert.equal(unlockedLevels(2).length, 3)
+  // THE PROPERTY THE BRIEF ASKED FOR, NOW LITERALLY TRUE. It used to be
+  // approximated: the gate was a count of cleared runs, so this file carried a
+  // paragraph explaining that the value had to be 2 rather than the 1 the
+  // brief named, and a closing note admitting that clearing level 1 twice
+  // opened level 3 anyway. The gate names level 2 now, so neither is needed.
+  assert.equal(isLevelUnlocked('level3', []), false, 'level 3 is open before anything is cleared')
+  assert.equal(isLevelUnlocked('level3', ['level1']), false,
+    'level 3 opens as soon as level 1 is cleared')
+  assert.equal(isLevelUnlocked('level3', ['level2']), true,
+    'level 3 stays locked once level 2 is cleared')
+  // AND THE OLD LIMIT IS GONE: level 1 beaten three times opens nothing past
+  // level 2. That was the whole of what a run count could not express.
+  assert.equal(isLevelUnlocked('level3', ['level1', 'level1', 'level1']), false,
+    'clearing level 1 repeatedly still opens level 3')
+  assert.equal(furthestUnlocked(['level1']).id, 'level2', 'START RUN skips level 2')
+  assert.equal(furthestUnlocked(['level1', 'level2']).id, 'level3')
+  assert.equal(unlockedLevels(['level1', 'level2']).length, 3)
 })
 
 test('level 3 has a place on the world map and a card to draw there', () => {

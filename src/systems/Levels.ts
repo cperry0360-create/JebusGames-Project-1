@@ -37,8 +37,16 @@ export interface LevelDef {
    *  wave spacing can be compared between levels, and a test checks it against
    *  the map's own waypoints. */
   laneLengthPx: number
-  /** Cleared runs needed before this level can be picked. 0 = open always. */
-  runsClearedToUnlock: number
+  /**
+   * The level that opens this one, by id, or null for the level that is open
+   * from the start.
+   *
+   * It replaces `runsClearedToUnlock`, a count of cleared runs, and the reason
+   * is in levels.json's `_unlockedBy`: a count cannot say WHICH levels, so
+   * clearing level 1 three times opened level 4 and START RUN would have sent
+   * that player straight to it.
+   */
+  unlockedBy: string | null
   /**
    * Towers this level can draw that the shared pool does not offer, with their
    * draft weights. Absent on every level that draws only the shared pool.
@@ -144,45 +152,68 @@ export function loadLevel(id: string | null | undefined): Level {
   return { ...def, map, waveTable }
 }
 
-/** True when the player has cleared enough runs to pick this level. */
-export function isLevelUnlocked(id: string, runsCleared: number): boolean {
+/**
+ * Whether this level may be picked, given the levels already beaten.
+ *
+ * A LOOKUP, NOT A COMPARISON. It used to be `runsCleared >= threshold`, and
+ * `runsCleared` counts runs rather than naming levels -- so three runs on
+ * level 1 satisfied level 4's threshold of 3 and opened it. There is nothing
+ * to satisfy now: the level names the level that opens it, and either that
+ * one has been beaten or it has not.
+ *
+ * A level naming a prerequisite that does not exist stays LOCKED. That is the
+ * safer of the two failure modes by a distance: a typo makes a level
+ * unreachable, which is loud and is caught by a test, where treating an
+ * unknown prerequisite as satisfied would silently open the whole campaign.
+ */
+export function isLevelUnlocked(id: string, cleared: readonly string[]): boolean {
   const def = levelDef(id)
-  return def !== null && runsCleared >= def.runsClearedToUnlock
+  if (def === null) return false
+  return def.unlockedBy === null || cleared.includes(def.unlockedBy)
 }
 
-/** The levels a player with this many cleared runs may pick, in file order. */
-export function unlockedLevels(runsCleared: number): LevelDef[] {
-  return LEVELS.filter((l) => runsCleared >= l.runsClearedToUnlock)
+/** The levels this player may pick, in file order. */
+export function unlockedLevels(cleared: readonly string[]): LevelDef[] {
+  return LEVELS.filter((l) => isLevelUnlocked(l.id, cleared))
 }
 
 /** The furthest level open to this player: what START RUN begins, and the one
  *  the map screen marks as the current objective. Never null — the first level
  *  costs nothing, so there is always at least one. */
-export function furthestUnlocked(runsCleared: number): LevelDef {
-  const open = unlockedLevels(runsCleared)
+export function furthestUnlocked(cleared: readonly string[]): LevelDef {
+  const open = unlockedLevels(cleared)
   return open[open.length - 1] ?? LEVELS[0]!
 }
 
 /**
- * Whether this level has been beaten, as far as the save can tell.
+ * Whether this level has been beaten.
  *
- * DERIVED, NOT RECORDED, and that is a real limitation rather than a detail.
- * The save counts cleared RUNS, not which levels they were on, and this reuses
- * that count rather than adding a second thing to keep in step: a level counts
- * as cleared once the player has cleared enough runs to have opened the level
- * AFTER it, since opening the next one is what beating this one does.
- *
- * Where that is wrong: clearing level 1 twice also marks level 2 cleared,
- * because two cleared runs is two cleared runs however they were spent. Fixing
- * it properly means recording beaten levels in the save, which is a new field
- * and a migration, and is not this change.
+ * RECORDED, NOT DERIVED, which is the whole of the change. This used to infer
+ * an answer from the run counter -- a level counted as beaten once enough runs
+ * had been cleared to open the one after it -- and carried its own note
+ * admitting that clearing level 1 twice therefore marked level 2 beaten. The
+ * save lists the levels now, so there is nothing to infer and nothing to be
+ * wrong about.
  */
-export function isLevelCleared(id: string, runsCleared: number): boolean {
-  const i = LEVELS.findIndex((l) => l.id === id)
-  if (i < 0) return false
-  const next = LEVELS[i + 1]
-  // The last level has nothing after it to have opened, so it needs one more
-  // cleared run than it cost to reach.
-  const needed = next ? next.runsClearedToUnlock : LEVELS[i]!.runsClearedToUnlock + 1
-  return runsCleared >= needed
+export function isLevelCleared(id: string, cleared: readonly string[]): boolean {
+  return cleared.includes(id)
+}
+
+/**
+ * The level this one opens, or null when nothing follows it yet.
+ *
+ * READ OFF THE PREREQUISITES rather than off file order, and the difference is
+ * the point: "the level after this one" and "the level this one unlocks" have
+ * to be the same fact, and a second field saying so would eventually disagree
+ * with the first. If a branching campaign ever names two levels after one, the
+ * first in file order is offered and the rest are reached from the map -- which
+ * is a real answer rather than a crash, and the map is the right screen for a
+ * choice anyway.
+ *
+ * NULL IS THE CASE THAT MATTERS. Four levels exist and the road has twenty
+ * slots, so after level 4 there is no next level -- and the victory screen has
+ * to offer LEVEL SELECT instead of pointing NEXT LEVEL at a COMING SOON slot.
+ */
+export function nextLevelId(id: string): string | null {
+  return LEVELS.find((l) => l.unlockedBy === id)?.id ?? null
 }

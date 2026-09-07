@@ -8,7 +8,7 @@ const src = (p: string) => readFileSync(url(`../src/${p}`), 'utf8')
 
 import {
   DEFAULT_LEVEL_ID, LEVELS, ROAD_SLOTS, isLevelUnlocked, levelDef, loadLevel,
-  resolveLevelId, unlockedLevels,
+  nextLevelId, resolveLevelId, unlockedLevels,
 } from '../src/systems/Levels.ts'
 import { roadNodes } from '../src/systems/WorldRoad.ts'
 
@@ -31,8 +31,51 @@ test('every level names a wave table that exists, and no two share one', () => {
     assert.ok(existsSync(url(`../src/data/${l.waves}`)), `${l.id} points at ${l.waves}, which does not exist`)
     assert.ok(l.name && l.name.length > 0, `${l.id} has no name`)
     assert.ok(l.laneLengthPx > 0, `${l.id} has no lane length`)
-    assert.ok(Number.isInteger(l.runsClearedToUnlock) && l.runsClearedToUnlock >= 0,
-      `${l.id} has a nonsense unlock count`)
+    // THE PREREQUISITE IS A LEVEL OR IT IS NOTHING. A level naming an id that
+    // is not a level is unreachable -- `isLevelUnlocked` refuses an unknown
+    // prerequisite rather than treating it as satisfied -- and an unreachable
+    // level is a typo that should stop the build rather than a state a player
+    // discovers.
+    assert.ok(l.unlockedBy === null || typeof l.unlockedBy === 'string',
+      `${l.id} has a nonsense prerequisite`)
+    if (l.unlockedBy !== null) {
+      assert.ok(levels.levels.some((o: any) => o.id === l.unlockedBy),
+        `${l.id} is unlocked by "${l.unlockedBy}", which is not a level`)
+      // AND IT COMES FIRST. A prerequisite later in the file is a cycle or a
+      // level that unlocks backwards; both draw a road whose arrows disagree
+      // with its gates.
+      const me = levels.levels.findIndex((o: any) => o.id === l.id)
+      const pre = levels.levels.findIndex((o: any) => o.id === l.unlockedBy)
+      assert.ok(pre < me, `${l.id} is unlocked by a level that comes after it`)
+    }
+  }
+})
+
+test('exactly one level is open from the start, and it is the first', () => {
+  // TWO WOULD BE A CAMPAIGN WITH TWO BEGINNINGS and neither would be wrong to
+  // the code -- both would simply be open, and START RUN takes the furthest
+  // open one, so the second would be where a new player landed. NONE would be
+  // a campaign nobody can enter at all, which is the failure the prerequisite
+  // model makes possible and the run-count model could not.
+  const open = LEVELS.filter((l) => l.unlockedBy === null)
+  assert.deepEqual(open.map((l) => l.id), [LEVELS[0]!.id])
+})
+
+test('every level is reachable from the first one', () => {
+  // A chain, walked. A level whose prerequisite chain does not end at the
+  // opening level can never be played however much the player clears -- which
+  // is exactly what a typo in `unlockedBy` produces, and it is invisible on
+  // the world map because the node simply stays locked forever.
+  const byId = new Map(LEVELS.map((l) => [l.id, l]))
+  for (const l of LEVELS) {
+    const seen = new Set<string>()
+    let at: string | null = l.id
+    while (at !== null && !seen.has(at)) {
+      seen.add(at)
+      at = byId.get(at)?.unlockedBy ?? null
+    }
+    assert.ok(seen.has(LEVELS[0]!.id),
+      `${l.id} cannot be reached from ${LEVELS[0]!.id}: ${[...seen].join(' <- ')}`)
   }
 })
 
@@ -134,39 +177,77 @@ test('the scene builds the optional furniture only where the map declares it', (
 
 /* -------------------------------------------------------------- the unlock */
 
-test('a level opens exactly at its own threshold and never closes again', () => {
-  // Reads each threshold from levels.json rather than naming a number. The
-  // count is a tuning knob — level 2's moved from 1 to 99 to take an
-  // unwinnable level out of reach — and a test that hardcodes it fails on the
-  // tuning instead of on the gate, which is the thing worth protecting.
+test('a level opens exactly when its prerequisite is beaten, and never closes', () => {
+  // NAMED, NOT COUNTED. This used to read each level's `runsClearedToUnlock`
+  // and check the level opened at exactly that many cleared runs. The count
+  // was the bug: it could not say WHICH runs, so three clears of level 1
+  // satisfied level 4's threshold of 3. What is checked now is that the gate
+  // is the prerequisite itself and nothing else opens it.
   for (const l of LEVELS) {
-    const need = l.runsClearedToUnlock
-    if (need > 0) {
-      assert.ok(!isLevelUnlocked(l.id, need - 1),
-        `${l.id} is reachable one run short of its ${need}`)
+    if (l.unlockedBy === null) {
+      assert.ok(isLevelUnlocked(l.id, []), `${l.id} is not open to a new player`)
+      continue
     }
-    assert.ok(isLevelUnlocked(l.id, need), `${l.id} does not open at its own threshold of ${need}`)
-    assert.ok(isLevelUnlocked(l.id, need + 50), `${l.id} closes again after more runs`)
+    // Every OTHER level beaten, and this one stays shut.
+    const others = LEVELS.map((o) => o.id).filter((id) => id !== l.unlockedBy)
+    assert.ok(!isLevelUnlocked(l.id, others),
+      `${l.id} opens without ${l.unlockedBy}; beating everything else is enough`)
+    assert.ok(isLevelUnlocked(l.id, [l.unlockedBy]),
+      `${l.id} does not open when ${l.unlockedBy} is beaten`)
+    // And it never closes again.
+    assert.ok(isLevelUnlocked(l.id, LEVELS.map((o) => o.id)),
+      `${l.id} closes again once everything is beaten`)
   }
-  // The first level is open to someone who has never finished anything.
-  assert.ok(isLevelUnlocked(LEVELS[0]!.id, 0), 'the first level is not open to a new player')
   // An id that is not a level is not unlocked by any amount of play.
-  assert.ok(!isLevelUnlocked('level-that-never-was', 9999))
+  assert.ok(!isLevelUnlocked('level-that-never-was', LEVELS.map((l) => l.id)))
+  // AND A LEVEL WHOSE PREREQUISITE IS NOT A LEVEL STAYS SHUT. The safe
+  // direction: a typo makes a level unreachable, which a test above catches,
+  // rather than silently opening the campaign.
+  const orphan = { ...LEVELS[0]!, id: 'orphan', unlockedBy: 'nowhere' }
+  LEVELS.push(orphan)
+  try {
+    assert.ok(!isLevelUnlocked('orphan', LEVELS.map((l) => l.id)),
+      'an unknown prerequisite counts as satisfied, so a typo opens the level')
+  } finally {
+    LEVELS.pop()
+  }
 })
 
-test('unlockedLevels grows with cleared runs and never reorders', () => {
-  assert.deepEqual(unlockedLevels(0).map((l: any) => l.id),
-    LEVELS.filter((l) => l.runsClearedToUnlock === 0).map((l) => l.id))
-  const most = Math.max(...LEVELS.map((l) => l.runsClearedToUnlock))
+test('unlockedLevels grows as levels are beaten and never reorders', () => {
+  assert.deepEqual(unlockedLevels([]).map((l: any) => l.id),
+    LEVELS.filter((l) => l.unlockedBy === null).map((l) => l.id))
   // File order, so the select draws them in the order they were authored.
-  assert.deepEqual(unlockedLevels(most).map((l: any) => l.id), LEVELS.map((l) => l.id))
-  // Monotonic: clearing more runs never takes a level away.
-  let seen = 0
-  for (let runs = 0; runs <= most; runs++) {
-    const n = unlockedLevels(runs).length
-    assert.ok(n >= seen, `unlockedLevels shrank from ${seen} to ${n} at ${runs} cleared runs`)
+  assert.deepEqual(unlockedLevels(LEVELS.map((l) => l.id)).map((l: any) => l.id),
+    LEVELS.map((l) => l.id))
+  // Monotonic along the real chain: beating levels in order never takes one
+  // away, and each one opens exactly one more.
+  const cleared: string[] = []
+  let seen = unlockedLevels(cleared).length
+  assert.equal(seen, 1, 'more than one level is open to a new player')
+  for (const l of LEVELS) {
+    cleared.push(l.id)
+    const n = unlockedLevels(cleared).length
+    assert.ok(n >= seen, `unlockedLevels shrank from ${seen} to ${n} after beating ${l.id}`)
     seen = n
   }
+  assert.equal(seen, LEVELS.length, 'beating every level in order does not open every level')
+})
+
+test('the level after this one is the level this one unlocks', () => {
+  // ONE FACT, READ ONE WAY. There is no `next` field and there must not be:
+  // it would be a second opinion about the same thing.
+  for (const l of LEVELS) {
+    const next = nextLevelId(l.id)
+    if (next === null) continue
+    assert.equal(levelDef(next)?.unlockedBy, l.id,
+      `${l.id} claims ${next} follows it, but ${next} is unlocked by something else`)
+  }
+  // THE LAST BUILT LEVEL HAS NO NEXT, and that is the case the victory screen
+  // exists to handle: twenty road slots, four levels, so NEXT LEVEL must not
+  // point at a COMING SOON node.
+  assert.equal(nextLevelId(LEVELS[LEVELS.length - 1]!.id), null,
+    'the last level claims a next level, so NEXT LEVEL would open a slot that is not built')
+  assert.equal(nextLevelId('level-that-never-was'), null)
 })
 
 test('a run can only ever begin on a level the player has unlocked', () => {
@@ -176,7 +257,7 @@ test('a run can only ever begin on a level the player has unlocked', () => {
   // START RUN cannot pick a locked level BY CONSTRUCTION now: it asks for the
   // furthest unlocked one rather than choosing and then checking.
   const title = src('scenes/TitleScene.ts')
-  assert.match(title, /furthestUnlocked\(loadSave\(\)\.runsCleared\)/,
+  assert.match(title, /furthestUnlocked\(loadSave\(\)\.clearedLevels\)/,
     'START RUN no longer starts the furthest unlocked level')
 
   // The map's cards re-check on the way into the run, so a card that somehow

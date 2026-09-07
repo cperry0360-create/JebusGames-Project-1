@@ -63,6 +63,25 @@ export interface DialogOptions {
   /** A second action beside confirm, for a panel that offers two things —
    *  upgrading a tower and selling it are not the same button. */
   extra?: { label: string; onPick: () => void; enabled?: boolean }
+  /**
+   * A LIST of ways out, replacing confirm/extra/cancel entirely.
+   *
+   * The end-of-level screens are what this is for. A win offers four things —
+   * next level, replay, level select, main menu — and confirm plus extra plus
+   * cancel is three, in a fixed order, with the last one always styled as the
+   * way out. Bolting a fourth on would have meant a `third?:` field and then a
+   * `fourth?:`, each with its own name for what is really the same thing.
+   *
+   * They WRAP, at two per row. Four 122px buttons in one row on a 580px panel
+   * is legible on a desktop and unreadable once the panel scales itself down
+   * to fit a 375px-wide phone, which it does — so a long list becomes a grid
+   * rather than a thinner row. Two per row keeps every button the width the
+   * two-button panels already use.
+   *
+   * The FIRST is the primary unless one says otherwise: on these screens the
+   * thing the player almost always wants is the first thing offered.
+   */
+  actions?: Array<{ label: string; onPick: () => void; enabled?: boolean; weight?: Weight }>
   /** The way out. Always present: a dialog with no cancel is a trap. */
   cancelLabel?: string
   onCancel?: () => void
@@ -256,15 +275,27 @@ export class Dialog {
     // no numbers: the costs are already on their own rows above, and a label
     // long enough to hold one overflows its plate.
     const row: Array<{ label: string; onPick: () => void; enabled?: boolean; weight: Weight }> = []
-    if (opts.confirm) row.push({ ...opts.confirm, weight: 'primary' })
-    if (opts.extra) row.push({ ...opts.extra, weight: 'secondary' })
-    row.push({
-      label: opts.cancelLabel ?? (row.length > 0 ? 'CANCEL' : 'CLOSE'),
-      onPick: () => opts.onCancel?.(),
-      weight: 'secondary',
-    })
+    if (opts.actions && opts.actions.length > 0) {
+      // The explicit list wins outright. A panel that supplied both would be
+      // saying two different things about its own way out.
+      opts.actions.forEach((a, i) => {
+        row.push({ ...a, weight: a.weight ?? (i === 0 ? 'primary' : 'secondary') })
+      })
+    } else {
+      if (opts.confirm) row.push({ ...opts.confirm, weight: 'primary' })
+      if (opts.extra) row.push({ ...opts.extra, weight: 'secondary' })
+      row.push({
+        label: opts.cancelLabel ?? (row.length > 0 ? 'CANCEL' : 'CLOSE'),
+        onPick: () => opts.onCancel?.(),
+        weight: 'secondary',
+      })
+    }
 
-    const h = TOP_PAD + ty + BUTTON_BAND
+    // Two per row past two buttons, so a four-way panel is a grid. Each extra
+    // row costs the panel its own height, which the plate has to grow for.
+    const perRow = row.length > 2 ? 2 : row.length
+    const rows = Math.max(1, Math.ceil(row.length / perRow))
+    const h = TOP_PAD + ty + BUTTON_BAND + (rows - 1) * (48 + 12)
     const top = -h / 2
     for (const o of body) (o as Phaser.GameObjects.Text).y += top + TOP_PAD
 
@@ -284,14 +315,21 @@ export class Dialog {
     // chrome grows below them instead of over them.
     const btnY = top + TOP_PAD + ty + 34
     const gap = 12
-    const bw = Math.min(170, (w - 56 - gap * (row.length - 1)) / row.length)
-    const total = row.length * bw + (row.length - 1) * gap
+    const bw = Math.min(170, (w - 56 - gap * (perRow - 1)) / perRow)
     row.forEach((b, i) => {
-      const bx = -total / 2 + bw / 2 + i * (bw + gap)
+      // Laid out row by row, and the LAST row is centred on its own count: an
+      // odd fifth button belongs under the middle of the four above it rather
+      // than hanging off the left.
+      const r = Math.floor(i / perRow)
+      const inThisRow = Math.min(perRow, row.length - r * perRow)
+      const col = i % perRow
+      const total = inThisRow * bw + (inThisRow - 1) * gap
+      const bx = -total / 2 + bw / 2 + col * (bw + gap)
+      const by = btnY + r * (48 + gap)
       // The plate's end caps eat about 62px of the button's width, so the
       // label has less room than the plate suggests. plateButton holds the
       // legibility floor; the panel got wider to pay for it.
-      const btn = plateButton(scene, bx, btnY, bw, 48, b.label,
+      const btn = plateButton(scene, bx, by, bw, 48, b.label,
         () => { b.onPick(); this.close() }, 15, b.weight)
       if (b.enabled === false) btn.setEnabled(false)
       parts.push(...btn.parts)

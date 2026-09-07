@@ -54,24 +54,31 @@ test('every planned level has a slot, built or not', () => {
   assert.ok(unbuilt.length > 0, 'there is no road ahead; the map ends at the last built level')
   // An unbuilt slot is locked, always, whatever the save says. There is
   // nothing behind it to unlock.
-  for (const n of unbuilt) assert.equal(nodeState(n, 999), 'locked')
+  for (const n of unbuilt) assert.equal(nodeState(n, LEVELS.map((l) => l.id)), 'locked')
 })
 
 test('the three states are the three the player can be in, and no fourth', () => {
   const nodes = roadNodes()
   // Nothing cleared: level 1 is the one to play, everything else is shut.
-  const fresh = nodes.map((n) => nodeState(n, 0))
+  const fresh = nodes.map((n) => nodeState(n, []))
   assert.equal(fresh[0], 'open')
   assert.deepEqual(new Set(fresh.slice(1)), new Set(['locked']))
 
-  // Two runs in: levels 1 and 2 are behind them, level 3 is next.
-  const on = nodes.map((n) => nodeState(n, 2))
+  // Two levels in: 1 and 2 are behind them, level 3 is next.
+  const on = nodes.map((n) => nodeState(n, ['level1', 'level2']))
   assert.deepEqual(on.slice(0, 4), ['cleared', 'cleared', 'open', 'locked'])
 
+  // AND BEATING THE SAME LEVEL AGAIN OPENS NOTHING. Under the old run count
+  // this was the bug: three clears of level 1 read as three cleared runs and
+  // opened level 4.
+  const repeat = nodes.map((n) => nodeState(n, ['level1', 'level1', 'level1']))
+  assert.deepEqual(repeat.slice(0, 4), ['cleared', 'open', 'locked', 'locked'])
+
   // Exactly one node is ever the objective, so the pulse cannot appear twice.
-  for (const cleared of [0, 1, 2, 3, 4, 9]) {
-    const open = nodes.filter((n) => nodeState(n, cleared) === 'open')
-    assert.ok(open.length <= 1, `${open.length} nodes are the current objective at ${cleared} runs`)
+  const ids = LEVELS.map((l) => l.id)
+  for (let n = 0; n <= ids.length; n++) {
+    const open = nodes.filter((nd) => nodeState(nd, ids.slice(0, n)) === 'open')
+    assert.ok(open.length <= 1, `${open.length} nodes are the current objective at ${n} beaten`)
   }
 })
 

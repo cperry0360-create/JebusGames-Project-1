@@ -293,7 +293,7 @@ export class TitleScene extends Phaser.Scene {
     // presses START RUN rather than picking off the map means to be. One
     // definition, in Levels.ts, shared with the map screen's "current
     // objective" ring.
-    const levelId = furthestUnlocked(loadSave().runsCleared).id
+    const levelId = furthestUnlocked(loadSave().clearedLevels).id
     setRunState({
       heroId: this.selectedHero, seed: Date.now() >>> 0, levelId,
       openingTowers: [], abilities: [], reserveTowers: [], resumeFrom: null,

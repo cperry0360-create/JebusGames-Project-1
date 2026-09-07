@@ -31,7 +31,7 @@
 // a camera belong to CameraRig, which lives on GameScene alone.
 
 import Phaser from 'phaser'
-import { LEVELS, furthestUnlocked, isLevelUnlocked } from '../systems/Levels.ts'
+import { LEVELS, furthestUnlocked, isLevelUnlocked, levelDef } from '../systems/Levels.ts'
 import {
   ROAD, maxScroll, nodeState, roadNodes, roadWidth, scrollToNode,
   type NodeState, type RoadNode,
@@ -92,7 +92,7 @@ export class WorldMapScene extends Phaser.Scene {
     // it — see CameraRig for the one camera the player drives.
     fitCameraToDesign(this)
 
-    const cleared = loadSave().runsCleared
+    const cleared = loadSave().clearedLevels
     const nodes = roadNodes()
 
     this.drawBackground()
@@ -234,14 +234,13 @@ export class WorldMapScene extends Phaser.Scene {
   /**
    * One node on the road: identical box, identical frame, identical badge.
    *
-   * THREE STATES, all read off the two numbers the game already keeps —
-   * `runsClearedToUnlock` on the level and `runsCleared` in the save — plus
-   * whether the level exists at all:
+   * THREE STATES, read off the levels the save says have been beaten and the
+   * prerequisite each level names — plus whether the level exists at all:
    *   cleared   full colour, a green frame, a tick
    *   open      full colour, an amber frame and a pulse: play this one
    *   locked    darkened under a padlock, or a bare plate if it is not built
    */
-  private drawNode(node: RoadNode, cleared: number): void {
+  private drawNode(node: RoadNode, cleared: readonly string[]): void {
     const state = nodeState(node, cleared)
     const style = state === 'cleared' ? ROAD.states.cleared
       : state === 'open' ? ROAD.states.open : ROAD.states.locked
@@ -400,15 +399,27 @@ export class WorldMapScene extends Phaser.Scene {
     return t
   }
 
-  /** What would open this level, under its name. */
+  /**
+   * What would open this level, under its name.
+   *
+   * IT NAMES THE LEVEL. It used to read `Clear a run to unlock`, `Clear 2
+   * runs`, `Clear 3 runs` — true of the arithmetic behind it and no use to a
+   * player, who has to guess two runs of WHAT. The level knows which level
+   * opens it now, so the caption says so.
+   *
+   * A prerequisite that is not a level falls back to a plain "Locked". That is
+   * a typo in levels.json rather than a state a player can be in — a test
+   * fails the build on it — and a caption is not the place to shout about it.
+   */
   private drawUnlockLine(node: RoadNode, label: Phaser.GameObjects.Text): void {
-    const need = node.level!.runsClearedToUnlock
+    const need = node.level!.unlockedBy
+    const prereq = need === null ? null : levelDef(need)
     // UNDER THE NAME, MEASURED. A fixed offset is one line of title plus a
     // gap, and the longest level name wraps to three now that it is held to
     // the node's width, so a fixed offset put this line through the last one.
     const t = this.add.text(
       node.x, label.y + label.height + 4,
-      `Clear ${need === 1 ? 'a run' : `${need} runs`} to unlock`,
+      prereq ? `Clear ${prereq.name.toUpperCase()} to unlock` : 'Locked',
       {
         fontFamily: FONT_UI, fontSize: `${ROAD.label.size}px`, color: COLOR.dim,
         stroke: '#0d1016', strokeThickness: 3,
@@ -520,7 +531,7 @@ export class WorldMapScene extends Phaser.Scene {
 
   /** Begins a run on a level the player has actually unlocked. */
   private startLevel(id: string): void {
-    const cleared = loadSave().runsCleared
+    const cleared = loadSave().clearedLevels
     // Re-checked here rather than trusted to the node having no handler. The
     // node is a drawing; this is where the run begins.
     if (!isLevelUnlocked(id, cleared)) return

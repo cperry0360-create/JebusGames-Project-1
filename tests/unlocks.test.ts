@@ -29,9 +29,14 @@ test('the nuke is gated on having cleared a run, not just on the once-a-run rule
 
 test('clearing a run is what records the unlock', () => {
   const game = src('scenes/GameScene.ts')
-  assert.match(game, /if \(won\) recordRunCleared\(\)/, 'winning never records anything')
+  // WITH THE LEVEL. `runsCleared` is the lifetime count the Server Nuke asks
+  // about; the level id is what opens the next level. One call banks both, so
+  // a new end-of-run path cannot record one and forget the other.
+  assert.match(game, /if \(won\) recordRunCleared\(this\.level\.id\)/,
+    'winning never records anything, or records it without saying which level')
   const save = src('systems/Save.ts')
   assert.match(save, /runsCleared/, 'the save has nowhere to remember a cleared run')
+  assert.match(save, /clearedLevels/, 'the save has nowhere to remember WHICH level')
   assert.match(save, /export function hasClearedARun/, 'nothing exposes the unlock')
   assert.match(save, /export function recordRunCleared/, 'nothing records a clear')
 })
