@@ -13,6 +13,15 @@ const enemies = read('enemies'), art = read('art')
  * back out of enemies.json, so a stray edit to a stat has to argue with a
  * test instead of passing silently — which is the whole reason balance lives
  * in JSON in the first place.
+ *
+ * ONE NUMBER HAS BEEN CHANGED SINCE THE HANDOVER, and it is recorded here
+ * rather than quietly re-synced: `theDevil.maxHealth` went 6200 → 5200 after
+ * level 2 soaked at 21-22% against a 35-45% band. This test did its job — the
+ * change had to argue with it — and the argument is the sensitivity table in
+ * `reports/2026-09-07-balance-verification-and-level-2.md`, which measured
+ * armour, lives cost, summons, speed, the escorts and the draft weights and
+ * found health to be the only lever that moves the level continuously.
+ * Everything else about him is still exactly as handed over.
  */
 const BRIEF = {
   directReport: {
@@ -27,7 +36,7 @@ const BRIEF = {
   },
   theDevil: {
     name: 'The Devil', role: 'boss', tier: 'boss', sprite: 'enemy-devil',
-    maxHealth: 6200, armor: 4, speed: 26, peanutReward: 1200,
+    maxHealth: 5200, armor: 4, speed: 26, peanutReward: 1200,
     livesCost: 12, damage: 0, attackInterval: 99, blockable: false,
   },
 } as const

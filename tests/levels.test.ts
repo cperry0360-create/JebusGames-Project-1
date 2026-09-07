@@ -447,7 +447,14 @@ test('level 2 is a step up of 15 to 20 percent, not a spike', () => {
   // tuning the whole game to tune one map.
   assert.equal(enemies.directReport.maxHealth, 52)
   assert.equal(enemies.middleManager.maxHealth, 185)
-  assert.equal(enemies.theDevil.maxHealth, 6200)
+  // 5200 rather than the 6200 he was handed over at. THE POINT OF THIS
+  // ASSERTION IS UNCHANGED: the step between the two levels must be reached
+  // through wave COUNTS, and a level that buffs an enemy to hit a target is
+  // tuning the whole game to tune one map. The Devil moved for the opposite
+  // reason — he was carrying the level on his own, 367 of 374 losses were his
+  // wave, and the other twelve waves were free. The step is 15.4% with him at
+  // 5200, which the assertion above still checks.
+  assert.equal(enemies.theDevil.maxHealth, 5200)
 
   // No single wave is allowed to carry the increase on its own.
   for (let i = 0; i < l1.waves.length; i++) {

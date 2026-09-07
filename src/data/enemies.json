@@ -127,7 +127,7 @@
     "role": "boss",
     "tier": "boss",
     "sprite": "enemy-devil",
-    "maxHealth": 6200,
+    "maxHealth": 5200,
     "armor": 4,
     "speed": 26,
     "peanutReward": 1200,
