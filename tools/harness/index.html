@@ -464,6 +464,92 @@ async function run() {
   // The second thing is the fault that comes with dragging a screen whose
   // content is also its buttons: a drag that happens to end on top of a level
   // must not start that level.
+  if (scenario === 'mapedge') {
+    // BUG C. A black vertical rounded pill on the LEFT EDGE of the world map.
+    //
+    // Two earlier sessions could not reproduce it at 844x390, 667x375 or
+    // 1400x820 and wrote it off as belonging to whatever hosts the page. It is
+    // in a screenshot of the live site, so it is ours. Cory's viewport is wider
+    // and SHORTER than any of those -- about 2.26:1 -- and this walks that
+    // shape and the ones around it.
+    //
+    // Every visible object is listed by its screen rectangle rather than
+    // eyeballed, because a thin dark bar against dark chrome is exactly what a
+    // screenshot argues about and a rectangle does not.
+    const RESM = await import('./js/systems/Resolution.js')
+    let faults = 0
+    const fail = (m) => { faults++; note('   *** ' + m) }
+    for (const k of ['Title', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+    game.scene.start('WorldMap')
+    if (!(await until(() => running('WorldMap'), 8000))) { note('*** no map ***'); return }
+    await sleep(700)
+    const wm = scene('WorldMap')
+    const cam = wm.cameras.main
+    note('viewport ' + VP.w + 'x' + VP.h + '  aspect ' + (VP.w / VP.h).toFixed(2) +
+      ':1  dpr ' + RESM.deviceScale() + '  camera zoom ' + cam.zoom.toFixed(3))
+    note('  the camera sees ' + Math.round(cam.worldView.width) + 'x' +
+      Math.round(cam.worldView.height) + ' design units of a 1280x720 box')
+
+    const rects = []
+    const visit = (o, px, py) => {
+      if (o.visible === false || (o.alpha ?? 1) <= 0.02) return
+      if (o.list) { for (const c of o.list) visit(c, px + (o.x || 0), py + (o.y || 0)); return }
+      const b = o.getBounds ? o.getBounds() : null
+      if (!b || b.width <= 0 || b.height <= 0) return
+      const tl = RESM.worldToScreen(wm, b.left, b.top, cam)
+      const br = RESM.worldToScreen(wm, b.right, b.bottom, cam)
+      rects.push({
+        what: o.text !== undefined ? 'TEXT:' + String(o.text).slice(0, 18)
+          : (o.texture ? o.texture.key : o.type),
+        l: Math.round(tl.x), t: Math.round(tl.y), r: Math.round(br.x), b: Math.round(br.y),
+        w: Math.round(br.x - tl.x), h: Math.round(br.y - tl.y),
+      })
+    }
+    wm.children.list.forEach((o) => visit(o, 0, 0))
+
+    // ANYTHING TALL, NARROW AND NEAR AN EDGE. That is the shape being hunted:
+    // a pill is much taller than it is wide, and this one is reported on the
+    // left.
+    const suspects = rects.filter((r) =>
+      r.h > r.w * 2.5 && r.w < 90 && r.h > VP.h * 0.25 &&
+      (r.l < VP.w * 0.18 || r.r > VP.w * 0.82))
+    note('objects on the map: ' + rects.length + '; tall-narrow near an edge: ' + suspects.length)
+    for (const s of suspects) {
+      note('   SUSPECT ' + s.what + '  ' + s.w + 'x' + s.h + ' at ' + s.l + ',' + s.t)
+      fail('a ' + s.w + 'x' + s.h + ' vertical element (' + s.what + ') sits at x=' + s.l)
+    }
+
+    // AND THE SCROLLBAR THIS SCREEN IS SUPPOSED TO HAVE, which is horizontal
+    // and at the bottom. A vertical one would be the bug.
+    const bars = rects.filter((r) => r.w > r.h * 3 && r.h < 40)
+    note('horizontal bars (the intended scrollbar is one of these): ' +
+      bars.map((b) => b.what + ' ' + b.w + 'x' + b.h + '@' + b.l + ',' + b.t).join(' | '))
+
+    // A PIXEL CHECK DOWN THE LEFT EDGE, because an object list cannot see
+    // something drawn by the page rather than by the game.
+    const cv = game.canvas
+    const cx = cv.getContext('2d')
+    if (cx) {
+      const dpr = RESM.deviceScale()
+      const strip = cx.getImageData(0, 0, Math.round(24 * dpr), cv.height).data
+      let dark = 0, n = 0
+      for (let i = 0; i < strip.length; i += 4) {
+        const l = strip[i] * 0.299 + strip[i + 1] * 0.587 + strip[i + 2] * 0.114
+        if (l < 40) dark++
+        n++
+      }
+      note('left 24px strip: ' + (100 * dark / n).toFixed(1) + '% of pixels below luma 40' +
+        '  (the parchment reads about 130, so a black pill would push this up)')
+      if (dark / n > 0.25) fail('a quarter of the left edge is near-black')
+    }
+    await shot('mapedge-' + VP.w + 'x' + VP.h)
+    note('RESULT ' + (faults === 0
+      ? 'nothing vertical on either edge at ' + VP.w + 'x' + VP.h +
+        ' (' + (VP.w / VP.h).toFixed(2) + ':1)'
+      : '*** ' + faults + ' faults ***'))
+    return
+  }
+
   if (scenario === 'cakestate') {
     // BUG B. On the live map every cake is dimmed, on levels that are beaten.
     //

@@ -54,6 +54,7 @@ import { unlockAudio } from '../systems/Audio.ts'
 import { onSceneResize, sceneIsLive } from '../systems/SceneEvents.ts'
 import { deviceScale } from '../systems/Resolution.ts'
 import { safeAreaInsets } from '../systems/SafeArea.ts'
+import { tapFloor } from '../systems/Layout.ts'
 import presentation from '../data/presentation.json' with { type: 'json' }
 
 const WORLD_W = DESIGN_WIDTH
@@ -67,6 +68,7 @@ const WORLD_H = DESIGN_HEIGHT
  * is the space the drag is measured in.
  */
 const CAKES = presentation.cakes
+const CHIP = presentation.difficultyChip
 const TAP_SLOP = 10
 
 export class WorldMapScene extends Phaser.Scene {
@@ -640,23 +642,53 @@ export class WorldMapScene extends Phaser.Scene {
    * exactly this moment.
    */
   private drawDifficultyChip(): void {
-    // TOP RIGHT, ON THE TITLE'S LINE, and not in the bottom row with BACK.
+    // IN THE BOTTOM CHROME BAR, BESIDE BACK, AND NOT OVER THE ROAD.
     //
-    // The bottom row already holds BACK and, when there is a run to pick up,
-    // RESUME — 280px and 200px of a 1280px design box, centred. A chip beside
-    // them fits until the day a level name or a third button grows, and the
-    // caption over it would land on the scrollbar at y 610 whatever height it
-    // was set at. The title is centred and about 560px wide, so everything
-    // past x 940 is empty on every screen.
+    // It used to float at the top right at (1120, 68), which is inside the
+    // band the road scrolls through -- so map nodes passed underneath it as
+    // the road moved. That occlusion was the defect; the styling was the
+    // smaller half of the same mistake. The chrome band below y 620 is the
+    // one part of this screen nothing scrolls through, and it was empty apart
+    // from BACK.
+    //
+    // NOT A PLATE, DELIBERATELY. BACK wears the arcade plate because it is
+    // this screen's action; the difficulty is a state readout that happens to
+    // be tappable, and dressing the two identically said they were the same
+    // kind of thing. A flat dark chip with a thin edge reads as a value.
+    //
+    // ONE CONTROL, NOT TWO. The word DIFFICULTY sat above the plate in a
+    // different size and colour and read as a separate element; label and
+    // value are inline on one baseline now, the label dim and the value in
+    // ink, so the eye takes them as one thing.
+    const C = CHIP
     const id = resolveDifficultyId(loadSave().difficultyId)
-    this.add.text(1120, 26, 'DIFFICULTY', {
-      // 22px: this screen is composed against the design box and fitted, so
-      // it is held to the menu floor rather than the screen-space one.
-      fontFamily: FONT_UI, fontSize: '22px', color: COLOR.dim,
-      stroke: '#0d1016', strokeThickness: 4, letterSpacing: 1,
-    }).setOrigin(0.5).setDepth(10)
-    plateButton(this, 1120, 68, 280, 48, difficultyName(id).toUpperCase(),
-      () => this.pickDifficulty(), 20, 'secondary')
+
+    const g = this.add.graphics().setDepth(10)
+    g.fillStyle(C.fill, C.fillAlpha)
+    g.fillRoundedRect(C.x - C.width / 2, C.y - C.height / 2, C.width, C.height, C.radius)
+    g.lineStyle(2, C.edge, 0.9)
+    g.strokeRoundedRect(C.x - C.width / 2, C.y - C.height / 2, C.width, C.height, C.radius)
+
+    const pad = 16
+    const label = this.add.text(C.x - C.width / 2 + pad, C.y, 'DIFFICULTY', {
+      fontFamily: FONT_UI, fontSize: `${C.labelSize}px`, color: COLOR.dim,
+      fontStyle: 'bold', letterSpacing: 1,
+    }).setOrigin(0, 0.5).setDepth(11)
+    const value = this.add.text(C.x + C.width / 2 - pad, C.y, difficultyName(id).toUpperCase(), {
+      fontFamily: FONT_UI, fontSize: `${C.valueSize}px`, color: COLOR.ink,
+      fontStyle: 'bold', letterSpacing: 1,
+    }).setOrigin(1, 0.5).setDepth(11)
+    // The value is what changes, so it is what gives way if a mode is renamed
+    // to something long. The label never moves.
+    const room = C.width - pad * 2 - label.width - 10
+    if (value.width > room) value.setScale(Math.max(0.7, room / value.width))
+
+    // The tap target is the whole chip and is held to the same floor every
+    // other control on this screen is.
+    const hit = this.add.rectangle(C.x, C.y,
+      tapFloor(this, C.width), tapFloor(this, C.height), 0xffffff, 0.001)
+      .setInteractive({ useHandCursor: true }).setDepth(11)
+    hit.on('pointerdown', () => this.pickDifficulty())
   }
 
   private pickDifficulty(): void {

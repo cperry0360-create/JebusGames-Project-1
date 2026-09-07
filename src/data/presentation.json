@@ -635,6 +635,21 @@
     "_tabLabelSize": "Requested, not rendered. `uiSize` clamps every screen-space size up to typography.minUiSize, which is 15, so a tab label draws at 15 however small a number is put here. That clamp is the reason the words do not fit: \"TOWERS\" at 15px bold is 71px wide and the widest tab this drawer has is 44. The brief expected \"about 43px is enough for a short word at small caps\"; it is not, against this project’s own legibility floor, so the glyph fallback the brief specified for the narrow screen is what runs on both. Lowering this number changes nothing; lowering minUiSize would trade the drawer’s tabs against every other piece of small UI in the game.",
     "_detailSizes": "ALL THREE ARE THE FLOOR, and they have to be. typography.minUiSize is 15 and `uiSize` clamps every screen-space size up to it, so \"small labels\" under the numbers is not a thing this strip can have: three captions at 15px need about 100px and the text column is 92 at 844x390 and 68 at 568x320. What the strip carries is therefore the name, the three numbers in a fixed order, and the trait where there is room for it — see reports/ for the arithmetic and the three ways out."
   },
+  "_difficultyChip": "THE DIFFICULTY READOUT ON THE LEVEL SELECT SCREEN, in the bottom chrome bar beside BACK. It used to float at the top right OVER the scrolling road, and map nodes passed underneath it as the road moved -- which is the defect; the styling was the smaller half. Sizes are design units.",
+  "difficultyChip": {
+    "_x": "Bottom LEFT of the chrome band. The BACK/RESUME group is centred on the design box and its widest form (RESUME 280 + BACK 200 with a gap) reaches x 350, so 30..330 is the room that exists beside it. The chip is never over the road: the road's band ends at y 596 and this sits below it.",
+    "x": 180,
+    "y": 662,
+    "width": 300,
+    "height": 54,
+    "radius": 10,
+    "_quiet": "NOT A PLATE. BACK wears the arcade plate because it is the screen's action; this is a state readout that happens to be tappable, and giving it the same orange said they were the same kind of thing. A flat dark chip with a thin edge reads as a value, which is what it is.",
+    "fill": 2759950,
+    "edge": 7034682,
+    "fillAlpha": 0.9,
+    "labelSize": 18,
+    "valueSize": 22
+  },
   "_cakes": "THE ROW OF CAKES A LEVEL PAYS OUT. Sizes are in the units of whatever screen draws them -- design units on the level select road, screen pixels on the victory panel -- and both are set here so the two cannot drift.",
   "cakes": {
     "_gapFraction": "The space between two cakes, as a fraction of one cake's size. Proportional rather than fixed so a 34-unit map node cake and a 96-pixel victory cake read as the same row rather than as one row with wide gaps and one with tight ones.",

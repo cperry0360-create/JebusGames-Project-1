@@ -153,3 +153,55 @@ test('the screen opens on the level the player is up to, clamped to the ends', (
   const mid = Math.floor(ROAD_SLOTS / 2)
   assert.equal(scrollToNode(mid, visW), nodeCentre(mid).x - visW / 2)
 })
+
+/* ------------------------------------------ the difficulty chip, out of the road */
+
+test('the difficulty readout sits in the chrome bar, not over the scrolling road', () => {
+  /*
+   * BUG D. It floated at the top right at (1120, 68) -- inside the band the
+   * road scrolls through -- so map nodes passed underneath it as the road
+   * moved. THAT OCCLUSION IS THE DEFECT; the styling was the smaller half of
+   * the same mistake.
+   */
+  const P = JSON.parse(readFileSync(new URL('../src/data/presentation.json', import.meta.url), 'utf8'))
+  const chip = P.difficultyChip
+  const band = P.worldMap.band
+  assert.ok(chip, 'the chip has no layout entry, so it is hardcoded again')
+  // Below the road's band, with its whole height clear of it.
+  assert.ok(chip.y - chip.height / 2 > band.bottom,
+    `the chip's top edge is at ${chip.y - chip.height / 2}, inside a road band that ends at ${band.bottom}`)
+  // And clear of the BACK/RESUME group, which is centred on the design box.
+  // Its widest form is RESUME 280 at x-150 and BACK 200 at x+150, so the
+  // group's left edge is 640 - 150 - 140 = 350.
+  assert.ok(chip.x + chip.width / 2 <= 350,
+    `the chip reaches x ${chip.x + chip.width / 2}, into the BACK/RESUME group at 350`)
+  assert.ok(chip.x - chip.width / 2 >= 0, 'the chip runs off the left of the design box')
+
+  const map = readFileSync(new URL('../src/scenes/WorldMapScene.ts', import.meta.url), 'utf8')
+  const draw = /private drawDifficultyChip\(\): void \{[\s\S]*?\n  \}/.exec(map)![0]
+  // NOT A PLATE. BACK is the screen's action and wears the arcade plate; this
+  // is a state readout that happens to be tappable, and dressing the two the
+  // same said they were the same kind of thing.
+  assert.ok(!/plateButton/.test(draw),
+    'the difficulty wears the same plate as BACK, so it reads as an action')
+  // ONE CONTROL: the label and the value share a baseline inside one chip.
+  assert.match(draw, /'DIFFICULTY'/, 'the chip lost its label')
+  assert.match(draw, /difficultyName\(id\)\.toUpperCase\(\)/, 'the chip lost its value')
+  assert.match(draw, /\.setOrigin\(0, 0\.5\)[\s\S]{0,600}\.setOrigin\(1, 0\.5\)/,
+    'the label and value are not laid out inline on one baseline')
+  // And still a legal tap target.
+  assert.match(draw, /tapFloor\(this, C\.width\), tapFloor\(this, C\.height\)/,
+    'the chip is not held to the tap floor')
+})
+
+test('the harness can look for the black pill at any aspect ratio', () => {
+  // BUG C is not reproducible here and the detector is what is being left
+  // behind: `mapedge` lists every drawn object as a screen rectangle, flags
+  // anything tall and narrow near either edge, and samples the canvas down the
+  // left edge for near-black pixels. Two earlier sessions concluded "cannot
+  // reproduce" with nothing to show for it; this is something to show.
+  const harness = readFileSync(new URL('../tools/harness/index.html', import.meta.url), 'utf8')
+  assert.match(harness, /scenario === 'mapedge'/, 'the mapedge scenario is gone')
+  assert.match(harness, /tall-narrow near an edge/, 'it no longer looks for the pill shape')
+  assert.match(harness, /left 24px strip/, 'it no longer samples the left edge in pixels')
+})
