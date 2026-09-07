@@ -3,10 +3,10 @@
 | commit | what it is | CI |
 |---|---|---|
 | `4f23283` | Reflow the loadout instead of letting it run off a short viewport | **green** — [run 172](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34139333873) |
-| _this report_ | | _filled in below_ |
+| `009933b` | This report | **green** — [run 174](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34139863646) |
 
-Deployed: `deploy / build` and `deploy / deploy` both ran inside run 172 and both
-report **success** — read off the job list, not inferred. This sandbox cannot reach
+Deployed: `deploy / build` and `deploy / deploy` ran and reported **success** inside
+both runs — read off the job list, not inferred. This sandbox cannot reach
 github.io (the egress proxy returns 403 by policy), so the served page is Cory's to
 confirm. Tests **964 → 968**.
 
@@ -293,8 +293,9 @@ CLAUDE.md already requires it of every UI change.
 
 ## Where this leaves the repository
 
-**In flight:** nothing. `main` is `4f23283`, CI run 172 is green on all four jobs, and
-the Pages deploy ran and succeeded inside it. The working tree is clean.
+**In flight:** nothing. `main` is `009933b`, runs 172 and 174 are green on all four
+jobs each, and the Pages deploy ran and succeeded inside both. The working tree is
+clean and `claude/transformation-courtland-rework-89vg83` points at the same commit.
 
 **Open, carried forward:**
 
