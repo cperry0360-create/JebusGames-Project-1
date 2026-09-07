@@ -2133,6 +2133,262 @@ async function run() {
     return
   }
 
+  if (scenario === 'contain') {
+    // TWO CONTAINMENT RULES, ASSERTED GENERALLY RATHER THAN PER BUG.
+    //
+    //   1. NOTHING IS OUTSIDE THE VIEWPORT. Menu screens are composed against
+    //      the 1280x720 design box and fitted by `fitCameraToDesign`, so this
+    //      is the design box in world units -- which is exactly what a player
+    //      can see, and anything drawn beyond it is gone.
+    //   2. NO CHILD IS OUTSIDE ITS PARENT PANEL. A card's `face` container
+    //      holds everything drawn on that card, and `inner` is the panel it
+    //      was drawn into. A child past that edge is drawn ON the painted
+    //      frame or through it.
+    //
+    // WHY THE GENERAL FORM. Three bugs reached the live site through green CI
+    // -- the missing ability art, the tower panel, and the loadout's ability
+    // strip sitting on its own panel border -- and each was found by looking
+    // at a picture of one screen. The `screens` audit's four faults are OFF,
+    // NOTCH, SMALL and OVER, and none of them is "this is drawn outside the
+    // thing it belongs to". This one is, and it does not care which screen or
+    // which element, so it catches the next one too.
+    const DES = (await import('./js/data/display.json', { with: { type: 'json' } })).default
+    const RS6 = await import('./js/systems/RunState.js')
+    // The painted plate's frame is a picture, not a rectangle: `frameInsetFor`
+    // deliberately lets content sit part-way into the rail. So the panel test
+    // asks about the PANEL's own box and allows a pixel of rounding, rather
+    // than trying to guess where the paint starts. Anything beyond the box is
+    // outside the card by any reading.
+    const SLACK = 1
+    let faults6 = 0
+    const fail6 = (m) => { faults6++; note('   *** ' + m) }
+    note('viewport ' + VP.w + 'x' + VP.h + '   design box ' + DES.width + 'x' + DES.height)
+
+    // Leaves only: a Container's bounds are the union of its children, so a
+    // container reported separately is the same fault counted twice, and an
+    // empty one has meaningless bounds.
+    const leaves = (root, out = []) => {
+      for (const o of (root.list || [])) {
+        if (o.visible === false) continue
+        if (o.list && o.list.length) leaves(o, out)
+        else if (o.getBounds) out.push(o)
+      }
+      return out
+    }
+    const label = (o) => o.type + (o.text ? ' "' + String(o.text).slice(0, 28) + '"'
+      : o.texture && o.texture.key ? ' ' + o.texture.key : '')
+    const box = (b) => Math.round(b.x) + ',' + Math.round(b.y) + ' '
+      + Math.round(b.width) + 'x' + Math.round(b.height)
+
+    const checkScene = async (key, name) => {
+      const sc = scene(key)
+      if (!sc) { fail6(name + ' did not build'); return }
+      await sleep(700)
+      await shot('contain-' + name + '-' + VP.w + 'x' + VP.h)
+
+      // --- 1. the viewport ------------------------------------------------
+      //
+      // MEASURED AGAINST THE CAMERA'S VISIBLE WORLD, not against the design
+      // box as a constant: `fitCameraToDesign` centres the box on the safe
+      // area, so the visible world is the box plus whatever the letterbox
+      // leaves over, and that is what a player can actually see.
+      //
+      // SCROLLABLE CONTENT IS NOT CHROME, and the first version of this check
+      // did not know the difference -- it reported twenty-four faults on the
+      // level select, every one of them a future level's card sitting off to
+      // the right of a road that is DESIGNED to be longer than the screen and
+      // dragged. So a leaf under a scroll container is asked a different
+      // question: not "is it visible now" but "can it be reached", against the
+      // view widened by how far that container scrolls. A leaf that is not
+      // under one is chrome, and chrome has to be on the screen.
+      const view = sc.cameras.main.worldView
+      const reach = { x: view.x, y: view.y, right: view.right, bottom: view.bottom }
+      const scrollers = []
+      for (const [field, axis] of [['road', 'x'], ['stack', 'y']]) {
+        const c = sc[field]
+        if (!c || !c.list) continue
+        let range = 0
+        if (field === 'stack') range = sc.scrollMax || 0
+        if (field === 'road') {
+          const WR = await import('./js/systems/WorldRoad.js')
+          range = WR.maxScroll(view.width)
+        }
+        scrollers.push({ container: c, axis, range })
+        if (axis === 'x') { reach.x -= range; reach.right += range }
+        else { reach.y -= range; reach.bottom += range }
+      }
+      if (scrollers.length) {
+        note('  ' + name + ': ' + scrollers.length + ' scroll container(s), range '
+          + scrollers.map((z) => z.axis + '±' + Math.round(z.range)).join(' ')
+          + '  -> reachable ' + box({ x: reach.x, y: reach.y,
+            width: reach.right - reach.x, height: reach.bottom - reach.y }))
+      }
+      const scrolled = new Set()
+      for (const z of scrollers) for (const o of leaves(z.container)) scrolled.add(o)
+
+      let checked = 0, off = 0
+      for (const o of leaves(sc.children)) {
+        const b = o.getBounds()
+        if (b.width <= 0 || b.height <= 0) continue
+        checked++
+        // A BACKDROP IS SUPPOSED TO RUN OFF THE EDGES. The painted room, the
+        // road and the tiling ground are drawn beyond the box on purpose --
+        // see fitCameraToDesign -- so what is asked of them is that they COVER
+        // the view, not that they fit inside it. Anything that neither fits
+        // nor covers is content that has fallen off.
+        const lim = scrolled.has(o) ? reach : view
+        const inside = b.x >= lim.x - SLACK && b.y >= lim.y - SLACK
+          && b.right <= lim.right + SLACK && b.bottom <= lim.bottom + SLACK
+        const covers = b.x <= view.x + SLACK && b.y <= view.y + SLACK
+          && b.right >= view.right - SLACK && b.bottom >= view.bottom - SLACK
+        if (!inside && !covers) {
+          off++
+          fail6(name + (scrolled.has(o) ? ' UNREACHABLE: ' : ' OUTSIDE THE VIEWPORT: ')
+            + label(o) + ' @' + box(b) + '  limit ' + box({ x: lim.x, y: lim.y,
+              width: lim.right - lim.x, height: lim.bottom - lim.y }))
+        }
+      }
+      note('  ' + name + ': ' + checked + ' drawn objects, ' + scrolled.size
+        + ' of them scrollable, ' + off + ' out of reach')
+
+      // --- 2. the panels --------------------------------------------------
+      //
+      // AGAINST THE PADDING THE SCREEN DECLARES, not against the raw box and
+      // not against the painted frame.
+      //
+      // Three boundaries were tried and the first two are worth recording.
+      // The PANEL'S BOX is the whole plate including its frame, so a chip
+      // drawn with the green rail running through it is still inside the box
+      // and the check passed on a build where the bug was plainly visible.
+      // `panelInset` -- where the nine-slice's corners end -- is far too tight:
+      // it deflated a 230-tall card to 93 and every card on the screen failed,
+      // including ones that look perfect.
+      //
+      // What is both true and general is the screen's OWN declared minimum
+      // padding. `presentation.json loadout.cardPad` and `cardPadBottom` say
+      // how much clearance a panel keeps, and the rule is that every panel
+      // keeps it. That catches content which escapes the box the layout
+      // reserved -- an ability label with no width bound at all, a paragraph
+      // whose letter spacing carried it out of its column, a chip row sitting
+      // lower than the padding allows.
+      //
+      // WHAT IT CANNOT CATCH, said plainly: a reserved box that is itself the
+      // wrong size. If the padding is declared too small, content inside it
+      // still sits on the paint and this check still passes. That one needs a
+      // picture, and `cardPadBottom` is 27 because a picture is what found it.
+      const PRES6 = (await import('./js/data/presentation.json', { with: { type: 'json' } })).default
+      const PADX = PRES6.loadout.cardPad
+      const PADB = PRES6.loadout.cardPadBottom ?? PRES6.loadout.cardPad
+      const cards = sc.cards || []
+      let overflowing = 0
+      for (const [ci, c] of cards.entries()) {
+        if (!c.face || !c.inner) continue
+        // The card's own rectangle in world space. `face` is anchored at the
+        // card's top centre and `inner` is the box in its local units, so this
+        // is the panel the card was drawn into rather than a guess at it.
+        const px = c.face.x + c.inner.left + PADX
+        const py = c.face.y + c.inner.top + PADX
+        const rw = c.inner.width - PADX * 2
+        const rh = c.inner.height - PADX - PADB
+        const rect = { x: px, y: py, width: rw, height: rh,
+          right: px + rw, bottom: py + rh }
+        for (const o of leaves(c.face)) {
+          const b = o.getBounds()
+          if (b.width <= 0 || b.height <= 0) continue
+          const out = []
+          if (b.x < rect.x - SLACK) out.push('left by ' + Math.round(rect.x - b.x))
+          if (b.y < rect.y - SLACK) out.push('top by ' + Math.round(rect.y - b.y))
+          if (b.right > rect.right + SLACK) out.push('right by ' + Math.round(b.right - rect.right))
+          if (b.bottom > rect.bottom + SLACK) out.push('bottom by ' + Math.round(b.bottom - rect.bottom))
+          if (out.length) {
+            overflowing++
+            fail6(name + ' OUTSIDE ITS PANEL: card ' + ci + ' ' + label(o)
+              + ' @' + box(b) + ' escapes ' + out.join(', ') + '  panel ' + box(rect))
+          }
+        }
+      }
+      // --- 3. siblings inside a panel -------------------------------------
+      //
+      // CONTAINMENT IS NOT ENOUGH. The hero blurb and the ability chips are
+      // both inside the hero panel and both inside their own columns'
+      // arithmetic, and they still ran into each other: `heroDescription`
+      // leaves an eight-pixel gutter between the two columns and Phaser's word
+      // wrap does not count `letterSpacing`, so the drawn paragraph was wider
+      // than the column it was measured for.
+      //
+      // The `screens` audit has an OVER check and it could not see this one:
+      // it compares texts with texts and controls with controls, and this is a
+      // paragraph running into an ICON. So this compares every drawn thing on
+      // a card with every other.
+      //
+      // BACKDROPS AND FRAMES ARE SUPPOSED TO SIT UNDER THINGS. A hit
+      // rectangle covers its whole card, a selection ring outlines it, and a
+      // Graphics is a frame; none of those is a collision. Anything that
+      // CONTAINS the other is a backdrop by construction, which is the rule
+      // rather than a list of exceptions.
+      let collisions = 0
+      for (const c of cards) {
+        if (!c.face) continue
+        const marks = leaves(c.face)
+          .filter((o) => o.type === 'Text' || o.type === 'Image' || o.type === 'Sprite')
+          // A DELIBERATE OVERLAP DECLARES ITSELF. The tower cards' price is a
+          // tag lying across the bottom of the artwork it prices, and that is
+          // a decision rather than a collision -- so the drawer marks it and
+          // this skips it, which keeps the rule general and the exception
+          // beside the code that made it.
+          .filter((o) => !(o.getData && o.getData('overlaps')))
+          .map((o) => ({ o, b: o.getBounds() }))
+          .filter((z) => z.b.width > 0 && z.b.height > 0)
+        for (let i = 0; i < marks.length; i++) {
+          for (let j = i + 1; j < marks.length; j++) {
+            const a = marks[i].b, b = marks[j].b
+            const hit = a.x < b.right && b.x < a.right && a.y < b.bottom && b.y < a.bottom
+            if (!hit) continue
+            const holds = (p, q) => p.x <= q.x && p.y <= q.y && p.right >= q.right
+              && p.bottom >= q.bottom
+            if (holds(a, b) || holds(b, a)) continue
+            collisions++
+            fail6(name + ' COLLISION inside a panel: ' + label(marks[i].o) + ' @' + box(a)
+              + '  and  ' + label(marks[j].o) + ' @' + box(b))
+          }
+        }
+      }
+      note('  ' + name + ': ' + cards.length + ' panels, '
+        + overflowing + ' children outside their panel, '
+        + collisions + ' collisions between siblings')
+    }
+
+    // THE LOADOUT, WITH EVERY HERO SELECTED. The description block is the part
+    // that changes with the pick -- a longer blurb, a third ability chip --
+    // and checking only the default hero is how the third chip came to be
+    // drawn on the panel's own rail with every number saying it fitted.
+    const HJ7 = (await import('./js/data/heroes.json', { with: { type: 'json' } })).default
+    const heroIds = Object.keys(HJ7).filter((k) => !k.startsWith('_'))
+    for (const k of ['Title', 'Game', 'Hud', 'Boot', 'Splash']) game.scene.stop(k)
+    game.scene.start('Loadout')
+    if (await until(() => running('Loadout'), 10000)) {
+      for (const hid of heroIds) {
+        RS6.setRunState({ heroId: hid })
+        const LD7 = scene('Loadout')
+        if (LD7.pickHero) LD7.pickHero(hid)
+        await sleep(250)
+        await checkScene('Loadout', 'loadout-' + hid)
+      }
+    } else fail6('the loadout did not build')
+
+    // THE LEVEL SELECT. No `cards` of its own, so what it gets is the
+    // viewport half -- which is the half that matters for a screen that
+    // scrolls a road wider than the box it is seen through.
+    scene('Loadout').scene.start('WorldMap')
+    if (await until(() => running('WorldMap'), 10000)) await checkScene('WorldMap', 'worldmap')
+    else fail6('the level select did not build')
+
+    note('RESULT ' + (faults6 === 0
+      ? 'nothing escapes its viewport or its panel at ' + VP.w + 'x' + VP.h
+      : '*** ' + faults6 + ' containment fault(s) at ' + VP.w + 'x' + VP.h + ' ***'))
+    return
+  }
+
   if (scenario === 'diag') {
     // The diagnostics, which only matter if they work when everything else
     // does not. Three things to prove: the hidden screen opens, a thrown

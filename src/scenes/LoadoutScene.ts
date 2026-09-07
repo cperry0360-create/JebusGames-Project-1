@@ -587,8 +587,8 @@ export class LoadoutScene extends Phaser.Scene {
     const frame = this.frameInsetFor(w, cap)
     const pad = Math.max(LO.cardPad, Math.ceil(Math.max(frame.left, frame.right)))
     const padT = Math.max(LO.cardPad, Math.ceil(frame.top))
-    // THE BOTTOM IS THE HERO BLOCK'S ALONE, and it is `cardPadBottom` rather
-    // than `cardPad`.
+    // THE BOTTOM IS `cardPadBottom` RATHER THAN `cardPad`, here and in
+    // `cardGeometry` -- every panel on the screen keeps the same clearance.
     //
     // `frameInsetFor` is deliberately a FRACTION of the painted frame -- see
     // `LO.frameInsetShare` -- so content is allowed to sit partway into the
@@ -600,8 +600,8 @@ export class LoadoutScene extends Phaser.Scene {
     // number said the block fitted -- the audit's four faults are OFF, NOTCH,
     // SMALL and OVER, and none of them is "drawn on the frame".
     //
-    // `cardPadBottom: 15` was already in presentation.json, measured, and read
-    // by nothing at all. It is what this needed.
+    // `cardPadBottom` was already in presentation.json and read by nothing at
+    // all. It is what this needed.
     const padB = Math.max(LO.cardPadBottom, Math.ceil(frame.bottom))
     const innerW = w - pad * 2
 
@@ -818,6 +818,56 @@ export class LoadoutScene extends Phaser.Scene {
   }
 
   /**
+   * Holds a wrapped paragraph inside the column it was measured for.
+   *
+   * PHASER'S WORD WRAP DOES NOT KNOW ABOUT `letterSpacing`. It breaks lines on
+   * the font's own advance widths and the spacing is added afterwards, at
+   * render — so a line wrapped to exactly `width` comes out `letterSpacing`
+   * times its character count WIDER than the box the layout reserved for it.
+   * Every body text on this screen carries `BODY_SPACING`, and the hero blurb
+   * is the one with a neighbour: `heroDescription` leaves an 8px gutter
+   * between the blurb column and the ability chips, and forty-odd characters
+   * of spacing walks straight through it and into the icons.
+   *
+   * So the wrap width is CORRECTED against what was actually drawn, rather
+   * than trusted. Two passes are enough — pulling the wrap in by the overshoot
+   * moves at most one word to the next line — and the loop is bounded anyway,
+   * because a text that cannot be made narrower must not become an infinite
+   * one.
+   */
+  private wrapWithin(t: Phaser.GameObjects.Text, width: number): Phaser.GameObjects.Text {
+    let wrap = width
+    for (let pass = 0; pass < 3 && t.width > width; pass++) {
+      wrap -= Math.ceil(t.width - width)
+      if (wrap < 20) break
+      t.setWordWrapWidth(wrap)
+    }
+    return t
+  }
+
+  /**
+   * Holds a single unwrapped string inside its column, by shrinking it.
+   *
+   * The ability chip labels have no wrap and never should: "Mind Control"
+   * broken over two lines is a different control from "Mind Control" on one,
+   * and the chip's height is a fixed part of the block's arithmetic. What they
+   * had instead was no bound at all — the label was drawn at whatever width
+   * the string needed, out of a column that is a fixed 36% of the card, so a
+   * longer name simply ran out through the panel's right rail.
+   *
+   * Scaled rather than re-sized: `setScale` on a Text is a transform and
+   * leaves the glyph cache alone, which is the same thing the HUD's counters
+   * do when a number outgrows its plate. The floor stops a very long name
+   * becoming unreadable instead of overflowing — at which point the honest
+   * answer is a shorter name, and the harness's containment check will still
+   * pass while the picture says the name is too long.
+   */
+  private fitWithin(t: Phaser.GameObjects.Text, width: number): Phaser.GameObjects.Text {
+    if (t.width > width) t.setScale(Math.max(0.7, width / t.width))
+    return t
+  }
+
+  /**
    * One hero card: a plate, the character on it, and the name under them.
    *
    * THE CARD IS THE TARGET AND THE CARD IS THE HIGHLIGHT. The ring used to be
@@ -897,11 +947,15 @@ export class LoadoutScene extends Phaser.Scene {
   ): Phaser.GameObjects.GameObject[] {
     const D = LO.heroDescription
     const out: Phaser.GameObjects.GameObject[] = []
-    out.push(this.add.text(
+    // HELD INSIDE ITS OWN COLUMN. `heroDescription` leaves a gutter between
+    // the blurb and the chips, and `letterSpacing` is not counted by Phaser's
+    // word wrap -- so the drawn line was wider than the column it was measured
+    // for and ran into the ability icons. See `wrapWithin`.
+    out.push(this.wrapWithin(this.add.text(
       left + desc.blurb.x, top + desc.blurb.y, hero.blurb, {
         fontFamily: FONT_UI, fontSize: `${size}px`, color: COLOR.dim, ...BODY_SPACING,
         wordWrap: { width: desc.blurb.width },
-      }).setOrigin(0, 0))
+      }).setOrigin(0, 0), desc.blurb.width))
 
     // EVERY ABILITY THIS HERO HAS. It was `[hero.slot1, hero.slot2]`, a pair,
     // which is one chip short for Courtland. `desc.chips` is laid out for the
@@ -924,13 +978,17 @@ export class LoadoutScene extends Phaser.Scene {
         if (!ready) icon.setAlpha(0.5)
         out.push(icon)
       }
+      // AND THE LABEL IS HELD INSIDE THE CHIP COLUMN. It had no width bound
+      // at all -- no wrap, no clamp -- so a name longer than the column's
+      // 36% share was drawn straight out through the panel's right rail.
       const tx = x + D.iconSize + D.iconGap
-      out.push(this.add.text(
+      const labelW = Math.max(20, box.width - D.iconSize - D.iconGap)
+      out.push(this.fitWithin(this.add.text(
         tx, y + (box.height - this.probeHeight(D.chipNameSize)) / 2,
         ready ? slot.name : `${slot.name} (soon)`, {
           fontFamily: FONT_UI, fontSize: `${D.chipNameSize}px`, fontStyle: 'bold',
           color: ready ? COLOR.good : COLOR.dim,
-        }).setOrigin(0, 0))
+        }).setOrigin(0, 0), labelW))
     }
     return out
   }
@@ -989,7 +1047,20 @@ export class LoadoutScene extends Phaser.Scene {
     const pad = Math.max(LO.cardPad, Math.ceil(frame.left))
     const padR = Math.max(LO.cardPad, Math.ceil(frame.right))
     const padT = Math.max(LO.cardPad, Math.ceil(frame.top))
-    const padB = Math.max(LO.cardPad, Math.ceil(frame.bottom))
+    // THE SAME BOTTOM CLEARANCE EVERY PANEL ON THIS SCREEN KEEPS.
+    //
+    // This was `cardPad`, nine pixels, and the tower card's price badge and
+    // its last line were both drawn with the plate's painted rail running
+    // through them -- the identical defect the hero block's ability chips had,
+    // on a different card, found the same way: by looking at the picture.
+    // `frameInsetFor` is deliberately only a FRACTION of the painted frame, so
+    // nine pixels is inside the paint rather than clear of it.
+    //
+    // One number for every panel is also what makes the harness's containment
+    // check honest: it asserts that each card keeps the clearance the screen
+    // DECLARES, and a number read by one drawer out of two is a rule with an
+    // exception nobody can see.
+    const padB = Math.max(LO.cardPadBottom, Math.ceil(frame.bottom))
     // The icon column scales with the card rather than being a fixed 62px on
     // every screen. On a wide viewport that left the art small in a column
     // with room to spare; on a narrow one a fixed wide column would eat the
@@ -1122,12 +1193,21 @@ export class LoadoutScene extends Phaser.Scene {
     // and hung out of the bottom of it.
     const box = Math.max(12, Math.min(col - 8, room - (cost === null ? 0 : 26)))
     const iconCy = padT + room / 2
+    // THE PRICE SITS ON THE ARTWORK ON PURPOSE, and it says so.
+    //
+    // `setData('overlaps', true)` is read by the harness's containment check,
+    // which flags any two things drawn on a card that run into each other --
+    // the rule that catches a paragraph walking into an ability icon. A price
+    // tag lying across the bottom of the picture it is the price of is the one
+    // deliberate overlap on this screen, and the honest place to record that
+    // is here, beside the decision, rather than as a tower-shaped exception
+    // inside the harness.
     const costText = cost === null ? null : this.add.text(
       iconCx, padT + room, cost, {
         fontFamily: FONT_UI, fontSize: '22px', color: COLOR.amber, fontStyle: 'bold',
         stroke: '#0d1016', strokeThickness: 5,
       },
-    ).setOrigin(0.5, 1)
+    ).setOrigin(0.5, 1).setData('overlaps', true)
 
     return {
       parts: [
