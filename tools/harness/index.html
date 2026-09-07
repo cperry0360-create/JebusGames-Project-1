@@ -11260,6 +11260,169 @@ async function run() {
 
   // The results panel on a win, without playing thirteen waves for it: the
   // run is driven to the end state directly and the panel it opens is real.
+  if (scenario === 'nightfall') {
+    // LEVEL 5'S FIVE MECHANICS, ON RENDERED FRAMES.
+    //
+    // Everything here is measured off the live scene rather than off the data:
+    // the point is that the wiring runs, not that the JSON says it should. Each
+    // check names what it read and what it expected, so a green line is a
+    // measurement rather than a claim.
+    //
+    //   run.sh nightfall 300 844x390
+    const RS = await import('./js/systems/RunState.js')
+    const LEVELSM = await import('./js/systems/Levels.js')
+    let faults = 0
+    const fail = (m) => { faults++; note('   *** ' + m) }
+
+    for (const k of ['Title', 'WorldMap', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+    RS.setRunState({
+      heroId: 'cory', levelId: 'level5', seed: 7,
+      openingTowers: ['withholding', 'writeoff'], abilities: ['molotov', 'glacier'],
+      reserveTowers: [], resumeFrom: null,
+    })
+    game.scene.start('Game'); game.scene.start('Hud')
+    if (!(await until(() => running('Game') && scene('Game').hero, 15000))) {
+      note('RESULT *** level 5 did not start ***'); return
+    }
+    const G = scene('Game')
+    await sleep(500)
+    note('level ' + G.level.id + ' at ' + VP.w + 'x' + VP.h)
+
+    // 1. THREE GATES AND ONE EXIT, read off the lane network the scene built.
+    const lanes = G.lanes
+    const terminals = lanes.lanes.filter((l) => l.merge === null).map((l) => l.id)
+    const gates = lanes.lanes.filter((l) => l.merge !== null).map((l) => l.id)
+    note('lanes: gates ' + JSON.stringify(gates) + '  exits ' + JSON.stringify(terminals))
+    if (terminals.length !== 1) fail('expected one exit, found ' + terminals.length)
+    if (gates.length !== 3) fail('expected three gates, found ' + gates.length)
+    for (const g2 of gates) {
+      const t = lanes.terminals(g2).map((l) => l.id)
+      if (t.length !== 1 || t[0] !== terminals[0]) fail(g2 + ' does not reach the exit')
+    }
+    note('routes: ' + JSON.stringify(Object.fromEntries(
+      gates.map((g2) => [g2, Math.round(lanes.routeLength(g2) * 10) / 10]))))
+    note('pads: ' + G.build.spots.length)
+
+    // 2. THE SKY. Day first, then the flip, then night -- read off the
+    // rectangle the scene actually draws, not off the JSON.
+    const sky = () => (G.skyTint
+      ? { tint: G.skyTint.fillColor, alpha: +G.skyTint.fillAlpha.toFixed(3) } : null)
+    note('day sky: ' + JSON.stringify(sky()))
+    if (!sky()) fail('there is no sky tint rectangle at all')
+    await shot('nightfall-1-day-' + VP.w + 'x' + VP.h)
+
+    // A Thrall on the board, so the conversion has something to convert.
+    const ENEM = (await import('./js/data/enemies.json', { with: { type: 'json' } })).default
+    G.status.phase = 'wave'
+    const spawnOne = (id, lane) => {
+      const before = G.enemies.length
+      G.spawner.begin({ name: 'probe', spawns: [
+        { enemy: id, count: 1, interval: 1, delay: 0, lane }] })
+      return before
+    }
+    spawnOne('thrall', 'west')
+    await until(() => G.enemies.some((e) => e.def.name === 'Thrall'), 6000)
+    const thrall = G.enemies.find((e) => e.def.name === 'Thrall')
+    if (!thrall) { note('RESULT *** no Thrall spawned ***'); return }
+    // Hurt it, so the health-percentage rule has something to preserve.
+    thrall.health = Math.round(thrall.maxHealth * 0.3)
+    const share = thrall.health / thrall.maxHealth
+    const wasAt = { lane: thrall.laneId, d: Math.round(thrall.distance) }
+    note('a Thrall at ' + (share * 100).toFixed(0) + '% health on ' + wasAt.lane)
+
+    // 3. THE FLIP. Driven through the rules object's own clock rather than by
+    // waiting out five waves.
+    G.night.waveIndex = G.night.phases.flipWave - 1
+    G.night.secondsIntoWave = G.night.phases.flipAfterSeconds
+    await until(() => G.night.isNight, 6000)
+    // SAMPLED ON THE FRAME IT TURNS, not after the fade, and that is a real
+    // distinction rather than a nicety. The sun's damage BLENDS OUT across the
+    // two and a half seconds of dusk, so a vampire that exists during it burns
+    // for the tail of it -- 5/s falling to 0 over 2.5s is 6.25 damage. The
+    // first cut of this check measured after the fade, read the Glider at 26%
+    // instead of 30%, and reported the conversion as broken when what it had
+    // actually caught was the sun still setting.
+    const glider = G.enemies.find((e) => e.def.name === 'Glider')
+    if (!glider) fail('the Thrall did not become a Glider')
+    else {
+      const got = glider.health / glider.maxHealth
+      note('it is a Glider at ' + (got * 100).toFixed(1) + '% of ' + glider.maxHealth
+        + ' (was ' + (share * 100).toFixed(1) + '% of ' + thrall.maxHealth + ')'
+        + ' on ' + glider.laneId + ' at ' + Math.round(glider.distance))
+      if (Math.abs(got - share) > 0.02) fail('the conversion did not keep its health share')
+      if (glider.laneId !== wasAt.lane) fail('the conversion moved it to another lane')
+      const atFlip = glider.health
+      await until(() => G.night.day.progress >= 1, 8000)
+      note('across the fade it burned ' + (atFlip - glider.health).toFixed(2)
+        + ' to the setting sun (5/s falling to 0 over '
+        + G.night.phases.transitionSeconds + 's = 6.25 expected)')
+    }
+    note('night sky: ' + JSON.stringify(sky()))
+    if (sky() && sky().tint === 0xffb347) fail('the sky never changed colour')
+    await shot('nightfall-2-night-' + VP.w + 'x' + VP.h)
+
+    // 4. LIFESTEAL, AND BLEED SWITCHING IT OFF. Measured, not asserted.
+    const g3 = G.enemies.find((e) => e.def.name === 'Glider')
+    if (g3) {
+      g3.health = Math.round(g3.maxHealth * 0.5)
+      const before = g3.health
+      const healed = G.night.healFor(g3, 40)
+      note('a clean Glider bitten for 40 heals ' + healed.toFixed(1)
+        + ' (lifesteal ' + g3.def.lifesteal + ')')
+      if (healed <= 0) fail('lifesteal healed nothing at night')
+      G.night.bleedOne(g3)
+      const bleeding = G.night.healFor(g3, 40)
+      note('the same Glider with one bleed stack heals ' + bleeding.toFixed(1))
+      if (bleeding !== 0) fail('bleed did not switch lifesteal off')
+      g3.health = before
+    }
+
+    // 5. BATULA: puddles on a timer, towers slowed, enemies untouched.
+    G.enemies.slice().forEach((e) => e.destroy())
+    G.enemies.length = 0
+    spawnOne('batula', 'west')
+    await until(() => G.enemies.some((e) => e.def.acidTrail), 8000)
+    const boss = G.enemies.find((e) => e.def.acidTrail)
+    note('boss ' + boss.def.name + ' hp ' + boss.maxHealth + ' blockable ' + boss.def.blockable)
+    const dropped = await until(() => G.night.puddles.length > 0, 30000)
+    if (!dropped) fail('Batula never dropped a puddle')
+    else {
+      const p = G.night.puddles[0]
+      note('puddle at ' + Math.round(p.x) + ',' + Math.round(p.y)
+        + '  humiliation ' + G.night.humiliationStacks
+        + '  speed x' + G.night.humiliation.speed.toFixed(2))
+      // A tower standing in it fires at half rate; the boss standing in it is
+      // untouched. Both read through the same helpers the scene uses.
+      const inIt = G.night.towerSlowAt(p.x, p.y)
+      const outOfIt = G.night.towerSlowAt(p.x + 400, p.y)
+      note('tower fire interval: x' + inIt + ' inside the puddle, x' + outOfIt + ' outside')
+      if (inIt <= 1) fail('a tower in acid is not slowed')
+      if (outOfIt !== 1) fail('a tower outside the acid is slowed anyway')
+      const bossHp = boss.health
+      await sleep(1200)
+      if (boss.health < bossHp) fail('the puddle damaged the boss that made it')
+      else note('the boss took nothing from his own puddle over 1.2s')
+      if (G.puddleArt.length !== G.night.puddles.length) {
+        fail('puddle art and puddle state disagree: ' + G.puddleArt.length
+          + ' vs ' + G.night.puddles.length)
+      }
+    }
+    await shot('nightfall-3-batula-' + VP.w + 'x' + VP.h)
+
+    // 6. NOTHING ON LEVELS 1 TO 4. The scoping, asked of the resolver rather
+    // than assumed from where an `if` was written.
+    for (const id of ['level1', 'level2', 'level3', 'level4']) {
+      if (LEVELSM.levelRules(id) !== null) fail(id + ' has picked up level 5 rules')
+    }
+    note('levelRules: level5=' + (LEVELSM.levelRules('level5') ? 'set' : 'null')
+      + ', levels 1-4=null')
+
+    note('RESULT ' + (faults === 0
+      ? 'three gates, one exit, the flip, the conversion, lifesteal, bleed and the puddles all measured'
+      : '*** ' + faults + ' faults ***'))
+    return
+  }
+
   if (scenario === 'cakes') {
     // WHAT A LEVEL PAYS, ON BOTH SCREENS THAT SHOW IT, at every count.
     //
@@ -11494,9 +11657,17 @@ async function run() {
 
     let faults = 0
     const fail = (m) => { faults++; note('   *** ' + m) }
+    // WHETHER THERE IS A NEXT LEVEL IS ASKED, NOT ASSUMED. This read
+    // `LV === 'level4'`, which was true of the last built level on the day it
+    // was written and became false the moment level 5 landed -- the scenario
+    // then demanded NEXT LEVEL on a win that correctly offers LEVEL SELECT,
+    // and reported the right behaviour as a fault. `nextLevelId` is the same
+    // lookup the victory screen itself uses, so the two cannot disagree again.
+    const LAST = (await import('./js/systems/Levels.js')).nextLevelId(LV) === null
+    note('level after ' + LV + ': ' + (LAST ? 'none -- expecting LEVEL SELECT' : 'one -- expecting NEXT LEVEL'))
     const want = {
       'results-lost': ['RETRY', 'LEVEL SELECT', 'MAIN MENU'],
-      'results-won': LV === 'level4'
+      'results-won': LAST
         ? ['LEVEL SELECT', 'REPLAY', 'MAIN MENU']
         : ['NEXT LEVEL', 'REPLAY', 'LEVEL SELECT', 'MAIN MENU'],
     }
@@ -11519,7 +11690,7 @@ async function run() {
       }
       // NEXT LEVEL must not be on the panel when there is no next level, and
       // must not be on a defeat at all -- losing does not advance.
-      if ((name === 'results-lost' || LV === 'level4') && labels.includes('NEXT LEVEL')) {
+      if ((name === 'results-lost' || LAST) && labels.includes('NEXT LEVEL')) {
         fail(name + ' offers NEXT LEVEL when there is nowhere to go')
       }
       // EVERY BUTTON ON SCREEN AND BIG ENOUGH. A four-button panel that wraps
@@ -11537,7 +11708,11 @@ async function run() {
     }
     // AND THE PANEL SAYS WHY when there is no next level, rather than showing a
     // dead button and leaving the question open.
-    if (LV === 'level4') {
+    // `LAST`, not `level4`. Level 4 stopped being the last level the moment
+    // level 5 landed, and this asked the level-4 panel to explain an absence
+    // that is no longer there -- while asking nothing at all of level 5, which
+    // is where the question now lives.
+    if (LAST) {
       const texts = []
       const walkT = (l) => { for (const o of l) { if (o.text) texts.push(String(o.text)); if (o.list) walkT(o.list) } }
       walkT(G.dialog ? G.dialog.layer.list : [])

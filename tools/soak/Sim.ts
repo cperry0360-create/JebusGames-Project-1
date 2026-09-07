@@ -60,7 +60,9 @@ import rulesData from '../../src/data/rules.json' with { type: 'json' }
 import presentationData from '../../src/data/presentation.json' with { type: 'json' }
 import draftData from '../../src/data/draft.json' with { type: 'json' }
 
-import { DEFAULT_LEVEL_ID, loadLevel, towerWeightsFor } from '../../src/systems/Levels.ts'
+import { DEFAULT_LEVEL_ID, levelRules, loadLevel, towerWeightsFor } from '../../src/systems/Levels.ts'
+import { NightRules } from '../../src/systems/NightRules.ts'
+import { NO_BLEED, convertedHealth, type BleedState } from '../../src/systems/Vampirism.ts'
 import {
   DEFAULT_DIFFICULTY_ID, startingLives, startingPeanuts,
 } from '../../src/systems/Difficulty.ts'
@@ -140,6 +142,17 @@ interface SimEnemy {
   def: any
   /** Which arm of a split this one takes; see `Lanes.chooseContinuation`. */
   routePick: number
+  /**
+   * The four fields level 5 adds, and every one of them is inert on the other
+   * four levels: `night` is null there, so the speed scale stays 1, nothing is
+   * ever held by itself, no bleed is ever applied and no threshold exists to
+   * fire. They are on the struct rather than in a side table so a lookup
+   * cannot go missing on the one path that mattered.
+   */
+  speedScale: number
+  selfHeld: boolean
+  bleed: BleedState
+  thresholdFired: boolean
   health: number
   /** Total walked across every lane, and only ever incremented. What
    *  targeting sorts on, so a merge cannot make a tower drop its target. */
@@ -314,6 +327,11 @@ export function simulate(
   // These are the game's own primitives rather than a paraphrase of them, so a
   // merge means one thing in the scene and in the soak. That matters here more
   // than usual: this file's output is what level 3 is tuned against.
+  // LEVEL 5'S OWN RULES, or null, and null is the case that keeps four tuned
+  // levels tuned. Everything below that reads `night` is guarded on it, so a
+  // level naming no rules file runs precisely the simulation it always did --
+  // which is the property re-soaking levels 1 to 4 on the same seeds proves.
+  const night = NightRules.from(levelRules(levelId))
   const net = new LaneNetwork(MAP)
   const lane = net.main
   const build = new BuildSystem(MAP.buildSpots, MAP.spotRadius)
@@ -428,6 +446,7 @@ export function simulate(
       // mulberry32 seeded off the same seed keeps the crossroads reproducible
       // and levels 1 to 4 bit-identical.
       routePick,
+      speedScale: 1, selfHeld: false, bleed: NO_BLEED, thresholdFired: false,
       laneId: on.id, laneDistance: laneAt, x: p.x, y: p.y, alive: true,
       slowFactor: 0, slowRemaining: 0, slowStacks: 0, sinceSlow: 99,
       stunRemaining: 0, stunLockout: 0, stunStacks: 0, sinceStun: 99,
@@ -438,6 +457,102 @@ export function simulate(
       summonTimer: def.summons?.interval ?? 0,
       disabler: def.towerDisable ? new Disabler(def.towerDisable) : null,
     })
+  }
+
+  /**
+   * Everything level 5 adds, one frame at a time, in the scene's own order.
+   *
+   * WHICH OF THESE ARE MODELLED AND WHICH ARE APPROXIMATED is stated here
+   * rather than left to be discovered, because level 4's boss was tuned
+   * against a board where the Beacon did nothing and the number was confidently
+   * wrong:
+   *
+   *   MODELLED EXACTLY, sharing the shipping rule module with the scene --
+   *   the day/night phases and their speed and sun-damage modifiers, the dusk
+   *   conversion including the health-percentage rule, lifesteal and its cap,
+   *   bleed and the bleed-disables-lifesteal interaction, the acid puddles'
+   *   interval-on-movement, their damage to the hero and to the lads, their
+   *   effect on tower fire rate, the no-stacking rule, and the Humiliation
+   *   meter's speed and damage bonuses including the roar's free stack.
+   *
+   *   APPROXIMATED -- the summoned FIGHTERS are not on the board here at all
+   *   (the soak models the hero and the Ima Dummy's lads and nothing else that
+   *   can be stood on), so a puddle has two kinds of victim rather than three;
+   *   and a tower's position is its pad's, which it also is in the scene, so
+   *   the fire-rate halving is exact but the hero's and the lads' positions
+   *   are the sim's own simplification of where a player would put them.
+   *
+   *   NOT MODELLED AT ALL -- the Spike Strip, and therefore the whole Glider
+   *   ground-hazard question. Only the hero's FIRST ability is simulated (see
+   *   the header), and the Strip is Cory's second. Whichever way that decision
+   *   goes it cannot move a number this file prints, which is worth knowing
+   *   before reading the win rate as an answer to it.
+   */
+  const tickNight = (dt: number): void => {
+    if (!night) return
+    if (night.tick(dt)) {
+      // The sun goes down. Every live Thrall becomes a Glider where it stands,
+      // keeping its health as a PERCENTAGE -- `convertedHealth`, the same
+      // function the scene calls.
+      for (const e of enemies) {
+        if (!e.alive) continue
+        const to = night.conversionFor(e.id)
+        if (!to || !ENEMIES[to]) continue
+        const def = ENEMIES[to]
+        const was = e.health
+        const wasMax = e.def.maxHealth
+        e.id = to
+        e.def = def
+        e.health = convertedHealth(was, wasMax, def.maxHealth)
+        e.bleed = NO_BLEED
+      }
+    }
+
+    // Batula's own cycle. `moving` is the scene's test: walking, and not
+    // already hunched.
+    const boss = enemies.find((e) => e.alive && e.def.acidTrail)
+    if (boss) {
+      const moving = boss.blockedBy === null && boss.stunRemaining <= 0 && !boss.selfHeld
+      const r = night.tickBoss(dt, moving, boss.x, boss.y)
+      boss.selfHeld = r.held
+    }
+
+    // Puddles, and what stands in them. THE PLAYER'S SIDE ONLY: the hero and
+    // the lads. Batula walks through his own trail and takes nothing from it.
+    const { ticks } = night.tickPuddles(dt)
+    for (let t = 0; t < ticks; t++) {
+      const onHero = night.acidAt(heroState.x, heroState.y)
+      if (onHero > 0 && !heroState.down) {
+        const out = applyHit(heroState.health, hero.maxHealth, onHero, heroState.powered)
+        heroState.health = out.health
+        if (out.triggers) {
+          heroState.powered = true
+          heroState.poweredGrace = TRANSFORM_INVULNERABLE_SECONDS
+          heroState.invulnerable = TRANSFORM_INVULNERABLE_SECONDS
+        }
+      }
+      // A garrison is a TOWER with lads on it here, not a separate list.
+      for (const t of towers) {
+        for (const sd of t.soldiers) {
+          if (sd.respawnIn > 0) continue
+          const d = night.acidAt(sd.x, sd.y)
+          if (d > 0) sd.health -= d
+        }
+      }
+    }
+
+    // The sky on every enemy's legs, the sun on the vampires, and their own
+    // blood on whatever is bleeding. Written every frame rather than on the
+    // flip, so something that spawned after dusk has never seen one.
+    const hum = night.humiliation
+    for (const e of enemies) {
+      e.speedScale = night.speedFor(e.def) * (e.def.acidTrail ? hum.speed : 1)
+      if (!e.alive) continue
+      const sun = night.sunFor(e.def) * dt
+      if (sun > 0) hurtEnemy(e, sun, true)
+      const bled = night.bleedTick(e as never, dt)
+      if (bled > 0) hurtEnemy(e, bled, true)
+    }
   }
 
   /**
@@ -465,6 +580,22 @@ export function simulate(
     }
   }
 
+  /**
+   * A vampire heals off what it just took from a player unit.
+   *
+   * ON THE DAMAGE ACTUALLY DEALT, not on the swing: the hero's transformation
+   * takes a cut out of what reaches him and a vampire should drink what it
+   * got. `healFor` returns 0 for the three cases the caller must not have to
+   * remember -- no lifesteal, the sun up, or blood already running out of it.
+   */
+  const drink = (e: SimEnemy, dealt: number): void => {
+    const healed = night?.healFor(e as never, dealt) ?? 0
+    if (healed > 0) e.health = Math.min(e.def.maxHealth, e.health + healed)
+  }
+
+  /** What a tower's reload is multiplied by where it stands. 1 with no acid. */
+  const acidScale = (t: SimTower): number => night?.towerSlowAt(t.x, t.y) ?? 1
+
   const hurtEnemy = (e: SimEnemy, damage: number, ignoresArmor: boolean, pierce = 0): void => {
     if (!e.alive) return
     const armor = Math.max(0, e.def.armor - e.armorShred)
@@ -477,6 +608,29 @@ export function simulate(
       kills++
       peanuts += e.def.peanutReward
       peanutsEarned += e.def.peanutReward
+      // What is left when something breaks apart: the Vampire Lord's four
+      // Gliders, at the place and on the lane it died on, carrying its route
+      // pick. `summonedBy` keeps them out of the wave-over count, exactly as
+      // the scene's do.
+      const sp = e.def.splitsOnDeath
+      if (sp) {
+        for (let i = 0; i < sp.count; i++) {
+          spawn(sp.enemy, e.distance, e, e.laneId, e.laneDistance, e.routePick)
+        }
+      }
+    } else if (night && e.def.onHealthThreshold && !e.thresholdFired) {
+      // Batula's roar at half health. ONCE, latched: he heals for everything
+      // he bites, so his health crosses 50% in both directions.
+      const t = e.def.onHealthThreshold
+      if (e.health / e.def.maxHealth <= t.belowHealth) {
+        e.thresholdFired = true
+        if (t.humiliation) night.addHumiliation(t.humiliation)
+        if (t.summon) {
+          for (let i = 0; i < t.summon.count; i++) {
+            spawn(t.summon.enemy, e.distance, e, e.laneId, e.laneDistance, e.routePick)
+          }
+        }
+      }
     }
   }
 
@@ -691,6 +845,7 @@ export function simulate(
         if (sd.attackTimer > 0) continue
         sd.attackTimer = Math.max(0.05,
           statOf(t, 'soldierInterval') * (sd.enraged ? (spec.rageInterval ?? 1) : 1))
+        if (night?.heroBasicBleeds) night.bleedOne(held as never)
         hurtEnemy(held, statOf(t, 'soldierDamage') * (sd.enraged ? (spec.rageDamage ?? 1) : 1), false)
       }
     }
@@ -780,6 +935,7 @@ export function simulate(
           // over a fifth of a second -- close enough at this resolution, and a
           // second hit that is skipped when the first kills is modelled by
           // hurtEnemy ignoring a corpse.
+          if (night?.heroAbilityBleeds) night.bleedOne(target as never)
           for (let i = 0; i < k.hits; i++) hurtEnemy(target, k.damage, k.ignoresArmor)
           // The burn, applied whole. It arrives over four seconds in the game
           // and at once here, which flatters Ember slightly on a target that
@@ -861,6 +1017,8 @@ export function simulate(
   runLoop: for (waveIndex = 0; waveIndex < WAVES.length; waveIndex++) {
     spend()
     spawner.begin(WAVES[waveIndex])
+    // The dusk flip's clock is the WAVE's, not the run's. See DayNight.ts.
+    night?.beginWave(waveIndex)
     let escaped = 0
     const waveStart = now
 
@@ -880,6 +1038,7 @@ export function simulate(
       // A group walks in from the gate its wave named. Absent means the trunk,
       // which is what every wave written before branching existed means.
       for (const sp of spawner.update(DT)) spawn(sp.enemy, 0, null, sp.lane ?? MAIN_LANE, 0)
+      tickNight(DT)
       tickSummons(DT)
       tickTowerDisable(DT)
       tickGarrisons(DT)
@@ -908,7 +1067,7 @@ export function simulate(
           t.disabledFor -= DT
           if (t.disabledFor <= 0) {
             t.disabledFor = 0
-            t.cooldown = Math.max(0.05, statOf(t, 'fireInterval'))
+            t.cooldown = Math.max(0.05, statOf(t, 'fireInterval')) * acidScale(t)
           }
           continue
         }
@@ -922,7 +1081,10 @@ export function simulate(
         const range = statOf(t, 'range') * (1 + gain.range)
         const target = pickFirst(enemies.filter((e) => e.alive) as any, t.x, t.y, range) as SimEnemy | null
         if (!target) continue
-        t.cooldown = Math.max(0.05, statOf(t, 'fireInterval'))
+        // HALF THE FIRE RATE IS TWICE THE INTERVAL. A tower standing in one of
+        // Batula's puddles keeps shooting and takes no damage; it just reloads
+        // at half speed. 1 everywhere else, on every level.
+        t.cooldown = Math.max(0.05, statOf(t, 'fireInterval')) * acidScale(t)
         firedTowers.add(t.id)
         const dmg = boostedDamage(statOf(t, 'damage'), gain.damage)
         const splash = statOf(t, 'splashRadius')
@@ -935,6 +1097,11 @@ export function simulate(
         } else {
           hurtEnemy(target, dmg, !!t.def.ignoresArmor || !!(b as any).ignoresArmor, pierce)
         }
+        // BLEED IS BY ARCHETYPE, the same list the scene reads: the aimed guns
+        // and the thorns cut, the explosives crush. Applied to the primary
+        // target only, which is what the scene does -- `hitWith` runs once per
+        // shot and splash goes through a different path.
+        if (night?.towerBleeds(t.def.archetype)) night.bleedOne(target as never)
         const slowSeconds = statOf(t, 'slowSeconds')
         if (slowSeconds > 0 && t.def.slowFactor > 0) applySlow(target, t.def.slowFactor, slowSeconds)
         if ((b as any).stunSeconds) applyStun(target, (b as any).stunSeconds)
@@ -977,6 +1144,11 @@ export function simulate(
           ) as SimEnemy | null
           if (target) {
             heroState.attackTimer = attackInterval(hero.attackInterval, hero.powered, heroState.powered)
+            // The hero's basic cuts, which is level5.json's `fromHeroBasic`.
+            // It is the load-bearing half of the answer: the hero is what a
+            // vampire is usually biting, so a hero who could not make one
+            // bleed would be feeding it with no way to stop.
+            if (night?.heroBasicBleeds) night.bleedOne(target as never)
             hurtEnemy(target, outgoingDamage(hero.damage, hero.powered, heroState.powered), hero.ignoresArmor)
           }
         }
@@ -1006,7 +1178,9 @@ export function simulate(
           e.attackTimer -= DT
           if (e.attackTimer <= 0) {
             e.attackTimer = e.def.attackInterval
-            sd.health -= e.def.damage
+            const dealt = e.def.damage * (e.def.acidTrail ? (night?.humiliation.damage ?? 1) : 1)
+            sd.health -= dealt
+            drink(e, dealt)
             // The moment its blocker falls the enemy is free again -- next
             // frame, once the assignment has run.
             if (sd.health <= 0) e.blockedBy = null
@@ -1019,8 +1193,10 @@ export function simulate(
           if (e.attackTimer <= 0) {
             e.attackTimer = e.def.attackInterval
             if (heroState.invulnerable <= 0) {
+              const swing = e.def.damage * (e.def.acidTrail ? (night?.humiliation.damage ?? 1) : 1)
               const dmg = damageToHero(
-                e.def.damage, heroState.powered, heroState.poweredGrace)
+                swing, heroState.powered, heroState.poweredGrace)
+              drink(e, dmg)
               const out = applyHit(
                 heroState.health, hero.maxHealth, dmg, heroState.powered,
               )
@@ -1043,7 +1219,11 @@ export function simulate(
           continue
         }
 
-        const step = slowedSpeed(e.def.speed, e.slowFactor, e.slowRemaining > 0) * DT
+        // THE SKY FIRST, THEN THE SLOW, and `selfHeld` is a full stop -- the
+        // same three lines the scene's walk branch runs, in the same order.
+        const step = e.selfHeld
+          ? 0
+          : slowedSpeed(e.def.speed * e.speedScale, e.slowFactor, e.slowRemaining > 0) * DT
         const moved = advance(net, e as Walker, step)
         e.laneId = moved.laneId
         e.laneDistance = moved.laneDistance

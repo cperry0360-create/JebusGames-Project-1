@@ -419,7 +419,7 @@
     "role": "basic",
     "tier": "basic",
     "sprite": "enemy-glider",
-    "maxHealth": 190,
+    "maxHealth": 150,
     "armor": 2,
     "speed": 74,
     "peanutReward": 22,
@@ -459,7 +459,7 @@
     "role": "armored",
     "tier": "elite",
     "sprite": "enemy-vampire-elite",
-    "maxHealth": 620,
+    "maxHealth": 540,
     "armor": 11,
     "speed": 30,
     "peanutReward": 78,
@@ -479,7 +479,7 @@
     "role": "boss",
     "tier": "elite",
     "sprite": "enemy-vampire-lord",
-    "maxHealth": 1400,
+    "maxHealth": 1200,
     "armor": 6,
     "speed": 34,
     "peanutReward": 300,
@@ -504,7 +504,7 @@
     "role": "boss",
     "tier": "boss",
     "sprite": "enemy-batula",
-    "maxHealth": 4200,
+    "maxHealth": 4500,
     "armor": 8,
     "speed": 22,
     "peanutReward": 1800,
@@ -526,6 +526,6 @@
       "humiliation": 1
     },
     "_blockable": "THE FIRST BOSS IN THIS GAME THAT THE LINE CAN HOLD, and it is a decision rather than an oversight. Every boss before him is `blockable: false` for the reason the Politician's note gives: holding one lets a player park it and ignore the fight. Batula cannot be parked, because holding him is how he wins. He hits for 55 every two seconds and heals for ALL of it, so a line that stops him is a line feeding him -- the counterplay is bleed, which switches the healing off, and bleed only lands if somebody is shooting him. A boss who walked through the line would never bite anything and his lifesteal, which is the whole point of the level, would never once come up.\nHE IS ALSO SLOWABLE, unlike the Rainbow Reaper. Hers is a clock -- she disables a tower every seven seconds whatever she is doing -- so a permanent slow turns her fight off. His clock runs on MOVEMENT: a slowed Batula covers less ground and therefore drops fewer puddles, which is a real reward for slowing him rather than an exploit, and a stopped one stops dropping them altogether and starts eating whatever stopped him.",
-    "_health": "4200 IS A PLACEHOLDER UNTIL THE SOAK SAYS OTHERWISE. See reports/2026-09-07-level-5.md for the sensitivity table this was picked from; the brief deliberately does not specify it, because a boss's health only means anything against the DPS the board it walks past can hold."
+    "_health": "4500, AND IT CAME OFF THE SOAK RATHER THAN OUT OF THE BRIEF -- which deliberately does not specify it, because a boss's health only means anything against the DPS the board it walks past can hold. The sensitivity table is in reports/2026-09-07-level-5.md: 3000 pays 51%, 3600 48%, 4200 43%, 4500 40%, 4800 33%, 5400 26%, 6000 23% at 120 seeds, one value at a time with the file reverted between rows. It is steep and monotonic, so HP genuinely controls this fight -- a flat table would have meant something else did. Confirmed at 480 seeds: 4400 gives 42%, 4500 40%, 4600 40%. 4500 is the middle of the 35-45% band.\nTHIS NUMBER IS NOT COMPARABLE TO LEVEL 4'S BOSS. Level 4 covers 45.3% of its tail with pads and this level covers 85.4% of its whole route, so the DPS a board can bring to bear is not the same quantity on the two of them -- and level 4's own figure was tuned against a simulator that did not model support auras."
   }
 }

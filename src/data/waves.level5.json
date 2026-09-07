@@ -294,7 +294,7 @@
       "spawns": [
         {
           "enemy": "vampireElite",
-          "count": 2,
+          "count": 1,
           "interval": 2.2,
           "delay": 0,
           "lane": "west"
@@ -329,7 +329,7 @@
         },
         {
           "enemy": "glider",
-          "count": 6,
+          "count": 5,
           "interval": 1.1,
           "delay": 7.6,
           "lane": "north"
@@ -355,42 +355,42 @@
         },
         {
           "enemy": "glider",
-          "count": 6,
+          "count": 5,
           "interval": 1.2,
           "delay": 4,
           "lane": "west"
         },
         {
           "enemy": "glider",
-          "count": 6,
+          "count": 5,
           "interval": 1.2,
           "delay": 6.96,
           "lane": "south"
         },
         {
           "enemy": "glider",
-          "count": 6,
+          "count": 4,
           "interval": 1.2,
           "delay": 7.6,
           "lane": "north"
         },
         {
           "enemy": "babyFrank",
-          "count": 10,
+          "count": 4,
           "interval": 0.3,
           "delay": 12,
           "lane": "south"
         },
         {
           "enemy": "babyFrank",
-          "count": 10,
+          "count": 4,
           "interval": 0.3,
           "delay": 12.3,
           "lane": "north"
         },
         {
           "enemy": "babyFrank",
-          "count": 10,
+          "count": 4,
           "interval": 0.3,
           "delay": 14,
           "lane": "west"
