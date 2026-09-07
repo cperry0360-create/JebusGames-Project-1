@@ -30,7 +30,7 @@ import { withinRadius, pickNearest } from '../systems/Targeting.ts'
 import { auraAt, darkCount, type AuraSource } from '../systems/Support.ts'
 import { GROUND_DEPTH } from '../systems/DepthSort.ts'
 import { boardBounds, coverZoom, openingView } from '../systems/CameraMath.ts'
-import { distanceAtX, type EmergeConfig } from '../systems/Gateway.ts'
+import { distanceAtX, laneGates, type EmergeConfig, type GateDistances } from '../systems/Gateway.ts'
 import { makeRng } from '../systems/Draft.ts'
 import { dashArcs, HeroMarkers, type MarkersDef } from '../systems/HeroMarkers.ts'
 import {
@@ -421,6 +421,7 @@ export class GameScene extends Phaser.Scene {
     mouthDistance: number
     gateDistance: number
     stopDistance: number
+    byLane?: Record<string, GateDistances>
     emerge: EmergeConfig
   }
   /** Cropped out of the map plate at scene start; see createArchOccluders. */
@@ -616,6 +617,20 @@ export class GameScene extends Phaser.Scene {
       mouthDistance: map.entrance ? distanceAtX(map.waypoints, map.entrance.emergeFromX) : 0,
       gateDistance: map.exit ? distanceAtX(map.waypoints, map.exit.gateX) : laneEnd,
       stopDistance: map.exit ? distanceAtX(map.waypoints, map.exit.vanishX) : laneEnd,
+      // The same three per lane, because level 5 has two exits at two
+      // different distances and one map-wide `stopDistance` is the trunk's
+      // length -- which would leak everything on the longer arm early. The
+      // three above stay as the fallback, so a lane the table does not name
+      // reads exactly what every map before this one read.
+      byLane: laneGates(
+        this.lanes.lanes.map((l) => ({
+          id: l.id, waypoints: l.path.points.map((p) => [p.x, p.y]), totalLength: l.path.totalLength,
+        })),
+        {
+          emergeFromX: map.entrance?.emergeFromX,
+          gateX: map.exit?.gateX,
+          vanishX: map.exit?.vanishX,
+        }),
       emerge: map.entrance
         ? { fadeMs: map.entrance.fadeMs, startScale: map.entrance.startScale }
         : { fadeMs: 0, startScale: 1 },
@@ -4944,6 +4959,10 @@ export class GameScene extends Phaser.Scene {
           laneId: at.laneId,
           startAt: { laneDistance: at.laneDistance, distance: at.distance },
           summonedBy: parent,
+          // ITS PARENT'S ARM, not its own. A boss that took the upper road out
+          // of the crossroads and whose brood took the lower one would split
+          // a fight the player is standing in the middle of.
+          routePick: parent.routePick,
         })
         this.enemies.push(child)
         logEvent('summon', `${parent.def.name} -> ${def.name} lane=${at.laneId} at=${at.distance.toFixed(0)}`)

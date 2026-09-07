@@ -31,16 +31,43 @@ export interface DisplayDef {
  * the target's terms: moving the branch cannot silently detach it, and moving
  * the target's waypoints moves the join with them.
  */
+/**
+ * One place a lane's walkers can go when they reach its end.
+ *
+ * `weight` only means anything where a lane has SEVERAL of these -- a split --
+ * and it is the share of traffic that takes this arm. Absent is 1, so a lane
+ * with two undeclared weights splits its traffic evenly.
+ */
+export interface MergeContinuation {
+  into: string
+  atIndex: number
+  weight?: number
+}
+
 export interface LaneDef {
   /** Unique within the map. "main" is taken by the map's own waypoints. */
   id: string
   waypoints: number[][]
-  /** Where this lane joins another. Absent means it runs to the exit itself,
-   *  which exactly one lane per map may do. */
-  merge?: {
-    into: string
-    atIndex: number
-  }
+  /**
+   * Where this lane's walkers go at its end. Absent means it runs to an exit.
+   *
+   * ONE ENTRY IS A MERGE and is what levels 3 and 4 declare: the branch ends
+   * and everything on it continues along the named lane. SEVERAL ENTRIES ARE
+   * A SPLIT, which level 5's crossroads needs: the trunk ends and each walker
+   * takes ONE of the arms, chosen once from its own `routePick` so the same
+   * enemy never flickers between them. The single-entry form is written
+   * unwrapped so levels 3 and 4 need no edit at all.
+   *
+   * A MAP MAY NOW HAVE MORE THAN ONE LANE WITHOUT A CONTINUATION. It could
+   * not before: `validateLanes` rejected a second terminal outright, with the
+   * message "branches must merge before it", because until level 5 every
+   * multi-lane map was a fork feeding one gate and a lane that reached the
+   * exit on its own was always a forgotten `merge`. Level 5 has two exits and
+   * both cost lives, so the rule that caught that typo would now reject a
+   * correct map. What replaces it is narrower and still catches the typo that
+   * matters: a lane nothing leads to and that leads nowhere is unreachable.
+   */
+  merge?: MergeContinuation | MergeContinuation[]
 }
 
 export interface MapDef {
@@ -69,6 +96,21 @@ export interface MapDef {
    * copies of it to drift. See systems/Lanes.ts.
    */
   lanes?: LaneDef[]
+  /**
+   * Where the lane `waypoints` describes CONTINUES, if it is not itself an
+   * exit. Absent on every map before level 5, and the shape of the field is
+   * `LaneDef.merge`'s exactly.
+   *
+   * IT IS HERE RATHER THAN IN `lanes` because the trunk is not repeated in
+   * that array -- it is `waypoints`, resolved as the lane "main" -- and there
+   * is therefore no row of it to hang a continuation on. Level 5's crossroads
+   * needs one: two roads in, a shared junction, two roads out, so the lane in
+   * the middle both receives merges and splits.
+   *
+   * A map whose main lane runs to the exit, which is all four built levels,
+   * simply leaves it out.
+   */
+  mainMerge?: MergeContinuation | MergeContinuation[]
   buildSpots: number[][]
   /** The blank painted boards, and the rectangle a lettering overlay is drawn
    *  in on each. See systems/SignPlacement.

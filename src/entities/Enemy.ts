@@ -5,7 +5,7 @@ import { Disabler } from '../systems/TowerDisable.ts'
 import { ySort } from '../systems/DepthSort.ts'
 import { canStun, damageAfterArmor, diminishedSeconds, slowedSpeed, slowStacksAfter, stunLockoutFor, type DiminishDef } from '../systems/Combat.ts'
 import { makeShadow, PRESENTATION, floatingDamage, deathPuff } from '../systems/Presentation.ts'
-import { emergeState, vanishAlpha, type EmergeConfig } from '../systems/Gateway.ts'
+import { emergeState, vanishAlpha, type EmergeConfig, type GateDistances } from '../systems/Gateway.ts'
 import { MAIN_LANE, followMerges, type LaneNetwork } from '../systems/Lanes.ts'
 import { applyGroundRender } from '../systems/Art.ts'
 import { facesLeft, mirroredFor } from '../systems/Facing.ts'
@@ -120,12 +120,30 @@ export class Enemy extends Phaser.GameObjects.Container {
   private sinceMouth: number
   /** True once fully emerged, after which the emergence stops recomputing. */
   private emerged = false
-  /** Lane distance at which the arch mouth is reached, at which the gate gap
-   *  begins to swallow it, and at which nothing is left. All three measured
-   *  off the plate; see map.json. */
-  private readonly mouthDistance: number
-  private readonly gateDistance: number
-  private readonly stopDistance: number
+  /**
+   * Lane distance at which the arch mouth is reached, at which the gate gap
+   * begins to swallow it, and at which nothing is left. All three measured
+   * off the plate; see map.json.
+   *
+   * PER LANE, because level 5 has two exits and they are not the same length.
+   * The three numbers used to be one set for the whole map, taken from the
+   * main lane, which was right for as long as the main lane was the only one
+   * that could reach an exit — every branch is guarded out of both readers by
+   * `transferFrom`, so a branch's own numbers never mattered. With two
+   * terminals the trunk's length is simply the wrong end for one of them: an
+   * enemy on the longer arm would have counted as leaked while it was still
+   * on the board. `gatesHere` resolves them against the lane being walked and
+   * falls back to the map-wide set, so a single-lane map reads exactly the
+   * numbers it always did.
+   */
+  private readonly gateDefaults: GateDistances
+  private readonly gateByLane: Record<string, GateDistances> | undefined
+  /**
+   * This enemy's own number in [0, 1), which settles which arm of a split it
+   * takes. Rolled once here rather than per frame at the junction, so an
+   * enemy standing on a crossroads cannot flicker between two roads.
+   */
+  readonly routePick: number
   private readonly emergeCfg: EmergeConfig
   /**
    * How far to the side of the lane centreline this one walks, in world px.
@@ -153,6 +171,10 @@ export class Enemy extends Phaser.GameObjects.Container {
       mouthDistance: number
       gateDistance: number
       stopDistance: number
+      /** The same three, per lane, for a map whose exits are not all the same
+       *  distance from the junction. Absent means "the three above, for every
+       *  lane", which is every map before level 5. */
+      byLane?: Record<string, GateDistances>
       emerge: EmergeConfig
       /** Half the painted road's width, from map.json. Bounds the lateral
        *  spread so nobody walks in the grass. */
@@ -170,6 +192,9 @@ export class Enemy extends Phaser.GameObjects.Container {
       startAt?: { laneDistance: number; distance: number }
       /** The summoner that called this one in. */
       summonedBy?: Enemy
+      /** The split arm this one takes, for a child that should follow its
+       *  parent rather than roll its own. */
+      routePick?: number
     },
   ) {
     super(scene, 0, 0)
@@ -205,9 +230,13 @@ export class Enemy extends Phaser.GameObjects.Container {
     // Shadow first, then the art, then the bar, so each draws over the last.
     this.add([this.shadow, this.art, this.bar])
 
-    this.mouthDistance = gate.mouthDistance
-    this.gateDistance = gate.gateDistance
-    this.stopDistance = gate.stopDistance
+    this.gateDefaults = {
+      mouthDistance: gate.mouthDistance,
+      gateDistance: gate.gateDistance,
+      stopDistance: gate.stopDistance,
+    }
+    this.gateByLane = gate.byLane
+    this.routePick = network?.routePick ?? Math.random()
     this.emergeCfg = gate.emerge
     this.baseScaleY = this.art.scaleY
     // Half the road, less half of this enemy, less a margin — then a fraction
@@ -249,7 +278,7 @@ export class Enemy extends Phaser.GameObjects.Container {
     // did, and that is the shape of bug this file has had before.
     if (this.emerged) return
     if (this.sinceMouth < 0) {
-      if (this.laneDistance >= this.mouthDistance) {
+      if (this.laneDistance >= this.gatesHere().mouthDistance) {
         this.sinceMouth = 0
         const fn = this.onEmerge
         this.onEmerge = null
@@ -280,8 +309,9 @@ export class Enemy extends Phaser.GameObjects.Container {
     // The gate belongs to the lane that reaches the exit. A branch has not
     // got there yet, so nothing on one fades.
     if (this.lanes && this.lanes.transferFrom(this.laneId)) return
-    if (this.laneDistance <= this.gateDistance) return
-    const a = vanishAlpha(this.laneDistance, this.gateDistance, this.stopDistance)
+    const g = this.gatesHere()
+    if (this.laneDistance <= g.gateDistance) return
+    const a = vanishAlpha(this.laneDistance, g.gateDistance, g.stopDistance)
     this.art.setAlpha(a)
     this.bar.setAlpha(a)
     this.shadow.setAlpha(a * PRESENTATION.shadow.alpha)
@@ -514,9 +544,16 @@ export class Enemy extends Phaser.GameObjects.Container {
    * joins the trunk, and a long frame can carry an enemy through both in one
    * step. `validateLanes` rejects the cycle that would make this unbounded.
    */
+  /** The gate numbers for the lane being walked right now. */
+  private gatesHere(): GateDistances {
+    return this.gateByLane?.[this.laneId] ?? this.gateDefaults
+  }
+
   private followMerge(): void {
     if (!this.lanes) return
-    const at = followMerges(this.lanes, { laneId: this.laneId, laneDistance: this.laneDistance })
+    const at = followMerges(this.lanes, {
+      laneId: this.laneId, laneDistance: this.laneDistance, routePick: this.routePick,
+    })
     if (at.laneId === this.laneId) return
     this.laneId = at.laneId
     this.laneDistance = at.laneDistance
@@ -532,7 +569,7 @@ export class Enemy extends Phaser.GameObjects.Container {
    */
   private leaked(): boolean {
     if (this.lanes && this.lanes.transferFrom(this.laneId)) return false
-    return this.laneDistance >= this.stopDistance
+    return this.laneDistance >= this.gatesHere().stopDistance
   }
 
   /** True for anything that was called in rather than scripted by the wave. */

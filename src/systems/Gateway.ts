@@ -83,3 +83,46 @@ export function distanceAtX(waypoints: number[][], targetX: number): number {
   }
   return travelled
 }
+
+/** The three lane distances that decide where an enemy appears and vanishes. */
+export interface GateDistances {
+  mouthDistance: number
+  gateDistance: number
+  stopDistance: number
+}
+
+/**
+ * Those three, for every lane on the map.
+ *
+ * ONE SET PER LANE, because a map may now have more than one exit and they
+ * need not be equidistant from the junction: the trunk's own length is the
+ * right answer for the lane it belongs to and the wrong one for a longer arm,
+ * and the enemy on that arm would have vanished and leaked early.
+ *
+ * `emergeFromX` and the two exit x's are read off the PAINTED PLATE, so they
+ * are map positions and mean the same thing on every lane -- the conversion to
+ * a distance is what differs, and `distanceAtX` does it per lane. A lane that
+ * never reaches the named x falls back to its own full length, which is what
+ * `distanceAtX` already returns and is why a map with no gate at all (levels 2
+ * to 5) gets "the end of this lane" for free.
+ *
+ * Phaser-free, like the rest of this file: which pixel an enemy stops existing
+ * at is arithmetic.
+ */
+export function laneGates(
+  lanes: { id: string; waypoints: number[][]; totalLength: number }[],
+  ends: { emergeFromX?: number; gateX?: number; vanishX?: number },
+): Record<string, GateDistances> {
+  const out: Record<string, GateDistances> = {}
+  for (const l of lanes) {
+    out[l.id] = {
+      mouthDistance: ends.emergeFromX !== undefined
+        ? distanceAtX(l.waypoints, ends.emergeFromX) : 0,
+      gateDistance: ends.gateX !== undefined
+        ? distanceAtX(l.waypoints, ends.gateX) : l.totalLength,
+      stopDistance: ends.vanishX !== undefined
+        ? distanceAtX(l.waypoints, ends.vanishX) : l.totalLength,
+    }
+  }
+  return out
+}

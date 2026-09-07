@@ -138,6 +138,8 @@ export interface SoakResult {
 interface SimEnemy {
   id: string
   def: any
+  /** Which arm of a split this one takes; see `Lanes.chooseContinuation`. */
+  routePick: number
   health: number
   /** Total walked across every lane, and only ever incremented. What
    *  targeting sorts on, so a merge cannot make a tower drop its target. */
@@ -248,6 +250,9 @@ export function simulate(
   const WAVES = level.waveTable.waves
 
   const rng = makeRng(seed)
+  // See `spawn`: a separate stream, so adding a per-enemy draw cannot move a
+  // number on a level that never reads it.
+  const routeRng = makeRng((seed ^ 0x5f356495) >>> 0)
   const findings: SoakFinding[] = []
   const firedTowers = new Set<string>()
   const firedAbilities = new Set<string>()
@@ -404,13 +409,25 @@ export function simulate(
   }
 
   const spawn = (id: string, at = 0, summonedBy: SimEnemy | null = null,
-                 laneId: string = MAIN_LANE, laneAt = at): void => {
+                 laneId: string = MAIN_LANE, laneAt = at,
+                 routePick = routeRng()): void => {
     const def = ENEMIES[id]
     if (!def) { note('missing-data', `wave names unknown enemy "${id}"`); return }
     const on = net.lane(laneId)
     const p = on.path.pointAt(laneAt)
     enemies.push({
       id, def, health: def.maxHealth, distance: at,
+      // WHICH ARM OF A SPLIT this one takes, drawn from the run's own seed so
+      // the crossroads is reproducible.
+      //
+      // FROM ITS OWN STREAM, not the run's. The run's rng also picks the hero,
+      // the draft and every tower the builder buys, and those draws happen
+      // DURING the wave loop -- so taking one number per spawned enemy out of
+      // it would shift everything after it and move every win rate this tool
+      // has ever published, on four levels that have no split at all. A second
+      // mulberry32 seeded off the same seed keeps the crossroads reproducible
+      // and levels 1 to 4 bit-identical.
+      routePick,
       laneId: on.id, laneDistance: laneAt, x: p.x, y: p.y, alive: true,
       slowFactor: 0, slowRemaining: 0, slowStacks: 0, sinceSlow: 99,
       stunRemaining: 0, stunLockout: 0, stunStacks: 0, sinceStun: 99,
@@ -443,7 +460,8 @@ export function simulate(
       // On its parent's own lane at its parent's own place, so a boss called
       // down a branch does not send its brood along a different route.
       for (let i = 0; i < due; i++)
-        spawn(spec.enemy, parent.distance, parent, parent.laneId, parent.laneDistance)
+        spawn(spec.enemy, parent.distance, parent, parent.laneId, parent.laneDistance,
+          parent.routePick)
     }
   }
 
