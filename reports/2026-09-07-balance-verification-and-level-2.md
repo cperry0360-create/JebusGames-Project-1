@@ -8,7 +8,7 @@ and reverted.
 | commit | what it is | CI |
 |---|---|---|
 | `7ae13d4` | Level 4's Lich King goes to 1500, and his return follows at 2250 | **green** — [run](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34076760639) |
-| `REPORT_SHA` | This report | **CI_REPORT** |
+| `de03ec1` | This report | **green** — [run](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34076865933) |
 
 Branch `claude/hero-art-hud-rework-tqd10v`; this session cannot push to `main`.
 Tests 947 passing, 0 failing. `sh tools/tsdiff.sh 9172418` reports 206 against a
