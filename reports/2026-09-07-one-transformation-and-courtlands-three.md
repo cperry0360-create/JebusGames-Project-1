@@ -8,12 +8,12 @@ The merge command is at the bottom.
 | `0c4c274` | One transformation at half health, and Courtland's three abilities | covered by run 169 |
 | `4643bde` | Guard the held beam's art, and bring the docs and four scenarios up to date | covered by run 169 |
 | `c7e9d50` | The hero card's third chip was drawn on the panel's own frame | **green** — [run 169](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34130314964) |
-| — | This report | filled in by the commit after it |
+| `6bb1032` | This report | **green** — [run 170](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34130868172) |
 
 The first three went up in one push, so one run, and it covers the branch head.
-`typecheck` and `test` both green; `deploy` skipped, which is what it does off
-`main`. **A report cannot carry its own run**, so this table's last row is
-filled in by a following commit — the same shape the last few reports here
+`typecheck` and `test` green on both runs; `deploy` skipped, which is what it
+does off `main`. **A report cannot carry its own run**, so the last row was
+filled in by the commit after it — the same shape the last few reports here
 used.
 
 Tests **962 → 964**, all passing. `sh tools/tsdiff.sh d9dd7cf`: 206 against a
@@ -461,10 +461,11 @@ turned up.
   the most consequential open item on the branch.
 - **The hero blurb is clipped on its LEFT edge** by the same `frameInsetShare`
   fraction that clipped the chip on the bottom — visible as "ast, reckless" and
-  "Holds the line" with the first letter cut, for every hero, at every viewport.
-  It predates this branch (the same clipping is on Cory's card before any of
-  this) and the lever is `LO.cardPad`, which is shared with the tower and special
-  cards, so fixing it reflows the whole screen. Flagged, not touched.
+  "olds the line" with the first letter cut, for every hero, at every viewport.
+  Not measured against a pre-branch screenshot, but it cannot be this branch's:
+  the horizontal `pad` is computed exactly as it was and only `padB` changed.
+  The lever is `LO.cardPad`, which is shared with the tower and special cards,
+  so fixing it reflows the whole screen. Flagged, not touched.
 - **The loadout stack overflows and scrolls** — `overflow=112` at 844×390,
   `79` on desktop — and the three chips added 36 of that. It was overflowing
   before this branch. The SPECIALS cards are clipped at the bottom of the band
