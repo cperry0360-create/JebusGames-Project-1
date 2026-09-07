@@ -518,6 +518,58 @@ export interface EnemyDef {
    * summoner's own place on its own lane and carry on from there.
    */
   summons?: SummonsDef
+
+  /**
+   * What this one breaks into when it dies, if anything.
+   *
+   * DIFFERENT FROM `summons`, which is a burst on a clock while the summoner
+   * walks. This fires once, on death, at the place it died — the Vampire
+   * Lord's four Gliders. Kept as its own field rather than as a `summons`
+   * with an impossible interval because "what it does while alive" and "what
+   * is left when it dies" are two facts, and a reader of one should not have
+   * to work out which the other is.
+   */
+  splitsOnDeath?: {
+    enemy: string
+    count: number
+  }
+
+  /**
+   * The one-off that fires the first time this one drops below a share of its
+   * health. Batula's roar at 50%: six Baby Franks and a free Humiliation.
+   *
+   * ONCE PER ENEMY, not once per crossing. Health can cross a threshold twice
+   * — lifesteal is on this level and it heals — and a boss that re-roared
+   * every time a bleed lapsed would summon without limit.
+   */
+  onHealthThreshold?: {
+    belowHealth: number
+    summon?: { enemy: string; count: number }
+    /** Humiliation stacks granted outright. See level5.json. */
+    humiliation?: number
+  }
+
+  /**
+   * True for an enemy the sun bothers and the night helps: the day slow, the
+   * sun's damage per second and the night's speed bonus all key off it.
+   *
+   * NOT THE SAME QUESTION AS `lifesteal`, and they are separate fields for
+   * that reason. The Thrall is a villager mid-turn — it has no lifesteal and
+   * the sun does not burn it yet. Baby Frank is not a vampire at all.
+   */
+  vampiric?: boolean
+
+  /**
+   * The share of the damage it deals to a PLAYER unit that it heals for.
+   *
+   * Per enemy rather than one shared constant, because "high lifesteal" and
+   * "strong lifesteal" are what tells an Elite from a Lord. The brief's 50%
+   * is the Glider's; see level5.json's `_lifesteal` for the ladder.
+   *
+   * Absent on every enemy before level 5, which is what keeps levels 1 to 4
+   * out of this entirely.
+   */
+  lifesteal?: number
   peanutReward: number
   livesCost: number
   damage: number
