@@ -9,6 +9,7 @@ of it worth checking: three icons that 404'd on every boot while CI was green.
 | --- | --- | --- |
 | [`2f8145f`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/2f8145f) | PARTS 0–4: the asset-gap test, the harness fix, the art, Cory's swap, the icons, the power effects | **green** — test ✅ typecheck ✅ ([run 145](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34068603598)) |
 | [`82783b3`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/82783b3) | PARTS 5–6: facing at rest, the unicorn, the hero HUD chip | **green** — test ✅ typecheck ✅ ([run 146](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34070674243)) |
+| [`c68d898`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/c68d898) | this report | **green** — test ✅ typecheck ✅ |
 
 `deploy` is `skipped` on both, which is correct: that job only runs on `main`.
 
