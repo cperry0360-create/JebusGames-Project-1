@@ -60,9 +60,19 @@ shape of each one — add a field there when you add one here.
   `payoutMin`/`payoutMax` are rolled when the card appears, and
   `autoRevealSeconds` is how long it waits before scratching itself. The
   ticket never pauses the wave, so that timer has to stay short.
-- **`heroes.cory.lastStand` carries the whole vehicle form.** The multipliers
-  for reach, hold and speed, the ramming damage and knockback, and the three
-  timings of the transformation. Nothing about DAD MODE is in code.
+- **`heroes.<id>.powered` carries the whole transformed form.** The multipliers
+  for reach, hold and speed, the ramming damage and knockback, the three
+  timings of the swap, and the hero's own voice line or null. Nothing about it
+  is in code. WHEN it fires, what it takes off incoming damage and how long the
+  grace lasts are `rules.json heroTransform` instead, because those are facts
+  about the RULE rather than about any hero — they used to be per hero as well,
+  which is how the health bar came to be ticked at a quarter for something that
+  fires at a half.
+- **`heroes.<id>.abilities` is a LIST, of any length.** It was `slot1` and
+  `slot2`, two named fields with two different shapes, and the powered-form
+  gate was the slot's index. Courtland has three abilities, so the gate is
+  `poweredOnly` on the ability and how it is asked for is `activation`. Every
+  ability declares every field with zeros where it does not use one.
 - **`draft.unlockedTypeCap` is a cap on tower *types*, not on towers.** It is
   how many different towers the build menu ever offers. How many towers can
   stand on the map is `map.json.buildSpots.length` — seven. The field used to

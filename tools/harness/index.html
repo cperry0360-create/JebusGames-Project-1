@@ -4207,19 +4207,30 @@ async function run() {
     // Order him away first, so the return point is provably not where he fell.
     g.hero.setRally(300, 620)
     await sleep(2200)
-    // Take him to Last Stand on this life, so the revive can be checked
-    // against re-arming it.
+    // Transform him on this life, so the revive can be checked against
+    // re-arming it.
     g.damageHero(g.hero.def.maxHealth * 0.8)
-    await sleep(900)
-    note('last stand on this life: ' + g.hero.powered +
-      ' sprite=' + g.hero.list[1].texture.key)
+    // LONG ENOUGH TO OUTLAST THE GRACE. The transformation floors him at the
+    // threshold and gives him `heroTransform.invulnerableSeconds` of absolute
+    // immunity, and that is in GAME seconds against a 1.4x clock -- so 900ms
+    // of real time left it still running and the killing blow below was
+    // absorbed. The scenario then reported a hero who would not go down.
+    await sleep(1700)
+    note('transformed on this life: ' + g.hero.powered +
+      ' sprite=' + g.hero.list[1].texture.key +
+      ' invulnerableFor=' + g.hero.invulnerableFor.toFixed(2))
     const fell = [Math.round(g.hero.x), Math.round(g.hero.y)]
     g.damageHero(9999)
     await sleep(600)
     note('down=' + g.hero.down + ' at ' + JSON.stringify(fell) +
       ' visible=' + g.hero.visible + ' reviveIn=' + g.hero.reviveIn.toFixed(1) +
       ' msg="' + g.status.message + '"')
-    note('HUD says: "' + scene('Hud').heroLabel.text + '"')
+    // THE CHIP, not the bar. `heroLabel` was the wide hero bar's name and the
+    // bar was replaced by the portrait chip -- the reference has thrown ever
+    // since, which killed this scenario on its fifth line and took the whole
+    // revive check with it. The chip shows the countdown where the health bar
+    // goes, so that is what is read.
+    note('HUD chip says: "' + (scene('Hud').chipLabel || {}).text + '"')
     note('marker label: "' + g.reviveLabel.text + '" visible=' + g.reviveLabel.visible +
       ' at ' + Math.round(g.reviveLabel.x) + ',' + Math.round(g.reviveLabel.y))
     g.cameras.main.centerOn(home.x, home.y)
@@ -4241,15 +4252,23 @@ async function run() {
     note('marker cleared: ' + !g.reviveLabel.visible)
     await shot('revive-02-back')
 
-    // And he has to work: orders, and Last Stand must not re-arm.
+    // And he has to work: orders, and the transformation MUST re-arm.
+    //
+    // This line used to read the other way -- "must be false and on foot, one
+    // transformation per encounter". That was Last Stand's rule and it is the
+    // one that left a hero who went down at wave four with the climax spent
+    // for the rest of the level. There is one transformation now and it is
+    // once per LIFE, so dying is what earns it back.
     g.hero.setRally(500, 500)
     await sleep(1500)
     note('takes orders again: moved=' + (Math.round(g.hero.x) !== Math.round(home.x)))
     g.damageHero(g.hero.def.maxHealth * 0.8)
     await sleep(900)
+    const rearmed = g.hero.powered
     note('after dropping him to ' + Math.round(g.hero.health) + ': powered=' +
-      g.hero.powered + ' sprite=' + g.hero.list[1].texture.key +
-      ' (must be false and on foot — one transformation per encounter)')
+      rearmed + ' sprite=' + g.hero.list[1].texture.key +
+      ' (must be TRUE — the transformation is once per life, so a death re-arms it)')
+    if (!rearmed) note('   *** the transformation did not re-arm after a revive')
     return
   }
 
@@ -4543,6 +4562,17 @@ async function run() {
       hero.def.abilities[0].knockbackPixels + '); hitPaused now ' + g.hitPaused)
 
     // 4. The transformation, forced, and the invulnerability that makes it happen.
+    //
+    // HE HAS TO BE UP FIRST. The wave above can put him down, and `hurt`
+    // returns 'none' for a downed hero -- so this step used to set his health,
+    // hit him for four times his total, and report `result=none down=true`,
+    // which is a measurement of nothing. Waiting for the game's own revive
+    // rather than clearing `down` by hand: the revive is the path that also
+    // puts the sprite, the shadow and the bar back.
+    if (hero.down) {
+      note('he is down; waiting out the revive before forcing the transformation')
+      await until(() => !hero.down, (hero.def.reviveSeconds + 6) * 1000)
+    }
     await lookAt(hero.x, hero.y)
     hero.health = hero.def.maxHealth * 0.6
     const killed = hero.hurt(hero.def.maxHealth * 4)

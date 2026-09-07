@@ -160,14 +160,32 @@ Mild-mannered tax advisor with the power of pure strength. Not an auditor. Never
 - Passive: *Depreciation* — enemies near Cory lose armor over time
 - Active 1: *Haymaker* — massive single-target hit with knockback
 - Active 2: *Restructure* — instantly relocate one tower anywhere on the map, free
-- **Last Stand: DAD MODE** — he does not become an angrier man, he gets into an armoured SUV. Damage doubles, reach and speed grow, and he drives over the lane rather than along it, shoving aside anything he touches. Defense and precision drop. Pure haymakers.
+- **Transformation: DAD MODE** — he does not become an angrier man, he gets into an armoured SUV. Damage doubles, reach and speed grow, and he drives over the lane rather than along it, shoving aside anything he touches. Precision drops. Pure haymakers. **AT HALF HEALTH, ONCE PER LIFE, and the name is not printed anywhere** — this was two separate transformations, a quiet one at half and this at a quarter, and merging them is what stopped four other heroes wearing Cory's label.
 
-**Courtland — The Mind**
-Telepathic and brilliant. He will outsmart you in a second.
-- Passive: *Ten Steps Ahead* — you see the next wave's composition before it spawns
-- Active 1: *Persuade* — an enemy switches sides and fights for you until it dies
-- Active 2: *Checkmate* — marks a target; all towers focus it and crit
-- **Last Stand: BALLISTIC** — stops thinking, starts throwing. Attack speed triples, abilities recharge instantly, targeting logic goes out the window.
+**Courtland — The Spark**
+Fast, reckless and always where the trouble is.
+
+**THIRD REVISION, AND THE ROSTER'S FIRST THREE-ABILITY HERO.** He is the test of
+a more hero-centred shape: one ability in base form and three once he has
+transformed. Nothing about it is special-cased — a hero declares an ordered
+list of abilities of any length — so the same shape is available to the other
+four the day somebody wants it. **Every number is deliberately overpowered and
+deliberately untuned**, at the request of the child who designed the character;
+see `_abilities` in `heroes.json`.
+
+- Passive: *Static Cling* — enemies near him lose armor over time
+- Ability 1: *Seismic* — an instant burst of damage around him, short cooldown,
+  available in **both** forms
+- Ability 2: *Mind Control* — powered only. Tap, then tap a point: two enemies
+  near it turn and walk back down the lane, fighting whatever they meet. They
+  do not block, and they die when it expires. Bosses and anything flagged
+  unblockable are immune.
+- Ability 3: *Mind Laser* — powered only, and the game's first **held** ability.
+  Hold the button and drag to aim; the beam fires for up to ten seconds of held
+  time and damages everything along its line. Releasing stops it early.
+- **Transformation: FULL SEND** — at half health, once per life, like every
+  other hero. Damage doubles, reach, hold and speed grow, and slots 2 and 3
+  come off their gate.
 
 **Elijah — The Charmer**
 Wins you over with words and charm.

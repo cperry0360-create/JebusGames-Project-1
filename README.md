@@ -61,9 +61,9 @@ start, and two of six towers; a third tower arrives after wave 4 and a fourth
 after wave 8. The tower draw is weighted and guaranteed to open with at least
 one damage option and one AOE or control option.
 
-Cory holds up to three enemies at a time and fights them; at 25% health he goes
-into **DAD MODE**, and if he drops he stays down for the rest of the encounter,
-returning at full health for the next one.
+Cory holds up to three enemies at a time and fights them; at **half health he
+transforms**, once per life, and if he drops he is off the board for a while
+before walking back on at full health with the change to earn again.
 
 Six towers, each with its own job: a cheap single-target starter, an
 armour-piercing sniper, two splash options at different ranges, a slow, and a
@@ -146,12 +146,19 @@ colours: one is "this is selected", the other is "go here".
 
 He does not move again until told to.
 
-**DAD MODE.** At 25% health he does not become an angrier man. The screen
-shakes, everything goes white, and half a second later he is driving an
+**The transformation.** At half health he does not become an angrier man. The
+screen shakes, everything goes white, and half a second later he is driving an
 armoured SUV. In that form he is wider than the road, ignores it entirely,
 drives over anything in his way and shoves it back down the lane. His reach,
-his hold and his speed all grow. He reverts on foot at the next encounter,
-because a fresh Hero is built with the run.
+his hold and his speed all grow, he takes 40% less, and his powered-form
+ability comes off its gate. Nothing is printed on the board to say so: the
+flash, the held beat and the new picture are what say it.
+
+Every hero has this and every hero has it at the same half. There used to be
+two transformations — a quiet one at half and **DAD MODE** at a quarter — and
+because the second was Cory's, four other heroes were given his beat, his label
+and his voice line. It reverts on death and at the next encounter, because a
+fresh Hero is built with the run.
 
 Bare ground does nothing unless he is selected, which is what stops a misjudged
 tap walking him off his post mid-wave. Building pads take a tap before the

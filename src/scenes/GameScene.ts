@@ -3186,10 +3186,18 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (a.activation === 'held') {
-      // NOTHING IS SPENT ON THE PRESS. `beginHeldAbility` starts the beam and
-      // the cooldown starts when it ENDS, so a press-and-release that fired
-      // for a tenth of a second costs a tenth of a second of the budget rather
-      // than the whole cooldown. See `endHeldAbility`.
+      // ANYTHING ELSE WAITING FOR A TAP IS DROPPED FIRST, unspent.
+      //
+      // A held ability is aimed by dragging out over the board and released
+      // there, and an armed targeting mode would read that release as the tap
+      // it was waiting for -- so arming Mind Control and then firing the beam
+      // would place Mind Control wherever the finger came off. Leaving is
+      // free: `clearSelection` spends nothing.
+      this.clearSelection('replaced')
+      // NOTHING IS SPENT ON THE PRESS EITHER. `beginHeldAbility` starts the
+      // beam and the cooldown starts when it ENDS, so a press taken back
+      // before the beam has fired anything costs nothing at all. See
+      // `endHeldAbility`.
       this.beginHeldAbility(slot, a)
       return
     }
@@ -3434,6 +3442,15 @@ export class GameScene extends Phaser.Scene {
    */
   private beginHeldAbility(slot: string, a: HeroAbilityDef): void {
     if (this.held) this.endHeldAbility('replaced')
+    // NO ART, NO BEAM. `this.add.sprite` on a key that did not load hands back
+    // Phaser's green-and-black __MISSING texture rather than nothing, so a
+    // 404 on the strip would put a chequerboard across the map at whatever
+    // length the player aimed. The rest of this file's art paths guard the
+    // same way; this one has to as well because it also owns a cooldown.
+    if (!this.textures.exists(a.fx)) {
+      this.refuse(`${a.name} has no art loaded.`)
+      return
+    }
     const seen = pickNearest(this.enemies, this.hero.x, this.hero.y, Infinity)
     const aim = seen
       ? { x: seen.x, y: seen.y }
@@ -3450,7 +3467,7 @@ export class GameScene extends Phaser.Scene {
       aimX: aim.x, aimY: aim.y,
     }
     this.ensureLaserAnims(a.fx)
-    art.play(`${a.fx}-charge`)
+    if (this.anims.exists(`${a.fx}-charge`)) art.play(`${a.fx}-charge`)
     // The sustain follows the charge by itself, so the two are one clip to the
     // player rather than two the scene has to keep in step.
     art.once(Phaser.Animations.Events.ANIMATION_COMPLETE_KEY + `${a.fx}-charge`, () => {
@@ -3473,6 +3490,12 @@ export class GameScene extends Phaser.Scene {
    */
   private ensureLaserAnims(key: string): void {
     if (this.anims.exists(`${key}-charge`)) return
+    // A STRIP, OR NOTHING. `generateFrameNumbers` on a key loaded as a single
+    // image finds one frame and builds three clips that are the same still
+    // picture -- which plays, reports success, and is not an animation. The
+    // manifest is what says the key is a sheet, and it is the same field the
+    // loader read to slice it.
+    if (!renderFor(key).sheet) return
     const L = PRESENTATION.heroFx.laser
     const make = (name: string, start: number, end: number, repeat: number): void => {
       this.anims.create({
