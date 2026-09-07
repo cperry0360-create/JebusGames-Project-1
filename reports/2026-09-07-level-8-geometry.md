@@ -7,6 +7,7 @@ Geometry and a report only, as briefed. No level, no enemies, no wave table.
 | commit | what | CI |
 | --- | --- | --- |
 | [`3ab4ba6`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/3ab4ba6) | Derive level 8's map geometry off the plate | [green](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34162597775) |
+| [`eb2050a`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/eb2050a) | This report | [green](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34162746703) |
 
 Branch `claude/courjahan-defense-level-5-pto190`. Not on `main` — see **How to
 land it** at the bottom.
@@ -283,6 +284,10 @@ exactly, so this uses theirs. It cost three pads (23 → 20).
 
 **Blocked**
 
+- **The Level 8 BUILD brief is blocked and I have not started it.** It is gated
+  on Level 5 being on `main`, and Level 5 is not on `main` — `origin/main` is at
+  `60d0029` and has neither `map_level5.json` nor fork support in `Lanes.ts`.
+  Merging this branch clears the gate.
 - **Level 8 cannot be built until this branch merges.** `origin/main` has no
   fork support in `Lanes.ts`, and Level 8 is a fork.
 - **Level 6's plate has to be re-rendered** — four segments at 2048 × 2048.
