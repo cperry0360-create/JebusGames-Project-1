@@ -88,6 +88,7 @@
     "icon-range": "ui/icon_range.webp",
     "icon-firerate": "ui/icon_firerate.webp",
     "icon-armor": "ui/icon_armor.webp",
+    "ui-cake": "ui/ui_cake.webp",
     "map-bg": "ui/map_background.webp",
     "card-level1": "ui/card_level1.webp",
     "card-level2": "ui/card_level2.webp",
@@ -552,6 +553,14 @@
       "contentWidth": 256,
       "contentHeight": 256
     },
+    "ui-cake": {
+      "_note": "THE CAKE A LEVEL PAYS OUT, one file for both states. Earned is the picture; unearned is built at runtime by systems/Desaturate.ts -- greyscaled, pulled towards light grey and faded, never DARKENED, because the frosting is dark chocolate and darkening it makes it vanish against the dark HUD. Two files would have been the mistake the placeholder ability icons made: the word LOCKED was painted into the art, so an available button looked locked and no draw call could say otherwise.",
+      "_size": "1024x1024 IS THE CANVAS. These are SOURCE INK EXTENTS, which is what fitInBox divides by -- `python3 tools/measure_art.py`, the UI icons section, re-derives them. 1024 is the right source size for a 96px largest display under the >=7x rule in CLAUDE.md, and at webp q95 it costs 122KB of a 40MB budget.",
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 926,
+      "contentHeight": 982
+    },
     "prop-pad-flagstone": {
       "anchorX": 0.5,
       "anchorY": 0.518,
@@ -946,6 +955,7 @@
       "revealed": "ui-scratch-revealed"
     },
     "peanut": "hud-peanut",
+    "cake": "ui-cake",
     "icons": {
       "upgrade": "icon-upgrade",
       "sell": "hud-peanut",

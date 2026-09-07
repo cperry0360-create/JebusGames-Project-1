@@ -1,0 +1,13 @@
+{
+  "_note": "WHAT A LEVEL PAYS OUT IN STORY MODE. Cakes replace Banner Points here: points grade a RUN and go on accruing across a whole campaign, which is the right shape for run mode's skill tree and the wrong shape for a level somebody wants to go back and do properly. A cake count is a statement about one level, it is visible on that level's node forever, and it is the reason to replay a level that is already beaten.",
+  "_notAGate": "CAKES GATE NOTHING. What opens level 4 is having beaten level 3 -- see levels.json's `unlockedBy` -- and it stays that way whether the player earned one cake or three. A gate would turn an optional flourish into a wall, and the player who most needs to move on is the one least likely to be clearing levels at three cakes.",
+  "_percentNotCount": "THE THRESHOLDS ARE A FRACTION OF THE RUN'S OWN STARTING LIVES, NOT A NUMBER OF LIVES. Difficulty scales starting lives -- 40 on Lazy Dad Mode, 20 on normal, 10 on Try Hard -- so an absolute `>= 10 lives` would be three cakes for finishing a Try Hard run untouched and two for the same performance on normal. `GameStatus.startingLives` is what the run actually began with and is what these are measured against.",
+  "_ordering": "Tiers are listed easiest first and READ FROM THE TOP DOWN, so the last one whose fraction is met wins. A tier list out of order would award the wrong count silently; tests/cakes.test.ts asserts the order.",
+  "max": 3,
+  "tiers": [
+    { "cakes": 1, "livesFraction": 0, "why": "cleared the level at all" },
+    { "cakes": 2, "livesFraction": 0.5, "why": "finished with half the lives you started with" },
+    { "cakes": 3, "livesFraction": 1, "why": "nothing reached the gate" }
+  ],
+  "_zero": "A LOST RUN PAYS NOTHING and there is no tier for it, because the first tier is `cleared the level at all`. Cakes are not a participation counter -- Banner Points were, deliberately, and that is one of the things story mode stopped needing."
+}

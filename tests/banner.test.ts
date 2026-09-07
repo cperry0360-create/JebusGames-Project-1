@@ -78,20 +78,75 @@ test('the verdict names what actually happened', () => {
     CFG.verdicts.narrow)
 })
 
-test('the results screen is not a star rating', () => {
-  // DESIGN.md replaced the three-star system with the Banner. Stars would be a
-  // regression, so nothing in the run-end path may draw one.
+test('story mode pays in cakes, and banks no points at all', () => {
+  /*
+   * THIS TEST USED TO SAY THE OPPOSITE, and the change is deliberate.
+   *
+   * It asserted `BANNER POINTS EARNED`, `bannerPointsFor` and
+   * `addBannerPoints` in `endRun`, on the reasoning in DESIGN.md that the
+   * Banner "replaces the 3-star system entirely". That is still true of RUN
+   * MODE and is no longer true of story mode: points grade a run on depth and
+   * accrue across a campaign, which cannot say "you have done this level as
+   * well as it can be done". See the story-mode subsection under "Meta
+   * progression" in DESIGN.md.
+   *
+   * The two must not mix, so this checks BOTH halves: cakes are paid, and
+   * points are not merely hidden but never scored and never banked.
+   */
   const scene = src('scenes/GameScene.ts')
   const end = /\n  (?:private )?endRun\(phase[\s\S]*?\n  \}/.exec(scene)
   assert.ok(end, 'endRun is gone')
-  // Comments stripped: this file is allowed to say why stars are gone.
+  // Comments stripped: this file is allowed to say why points are gone from
+  // here, and a check that failed on the explanation would be a check that can
+  // only pass once the record of the change is deleted.
   const code = end[0].split('\n').filter((l) => !l.trim().startsWith('//')).join('\n')
-  // Word-bounded: `startingLives` is not a star rating.
-  assert.doesNotMatch(code, /\bstars?\b|starsFor|drawStar/i,
-    'the results screen grades the run with stars')
-  assert.match(code, /BANNER POINTS EARNED/, 'the headline is not the Banner Points')
-  assert.match(code, /bannerPointsFor/, 'the results screen does not score the run')
-  assert.match(code, /addBannerPoints/, 'the points are shown but never banked')
+
+  assert.match(code, /cakesFor\(won, this\.status\.lives, this\.status\.startingLives\)/,
+    'the results screen does not score the level in cakes')
+  assert.match(code, /recordCakes\(this\.level\.id, earned, this\.status\.difficultyId\)/,
+    'the cakes are shown but never banked against the level')
+  assert.match(code, /cakes: \{ earned, max: MAX_CAKES, animate: true \}/,
+    'the victory panel does not draw the cakes')
+
+  // AND NOT AGAINST THE UN-SCALED CONSTANT. Difficulty scales starting lives,
+  // so a threshold measured against `RULES.startingLives` would pay three
+  // cakes for an untouched Try Hard run and two for the same performance on
+  // normal.
+  assert.doesNotMatch(code, /cakesFor\([^)]*RULES\.startingLives/,
+    'the cake thresholds are measured against the un-scaled constant')
+
+  // Points: gone from this path entirely.
+  for (const gone of ['BANNER POINTS', 'bannerPointsFor', 'addBannerPoints']) {
+    assert.ok(!code.includes(gone), `story mode still deals in points: ${gone}`)
+  }
+})
+
+test('the skill tree and its points are kept, whole and unreferenced', () => {
+  /*
+   * DELETED FROM STORY MODE, NOT DELETED. Run mode is what Banner Points are
+   * for and it is not built yet, so the arithmetic, its tuning and the
+   * lifetime total in the save all stay exactly as they are — this file's
+   * other twenty tests still drive them. What must not happen is a later pass
+   * "tidying away" an unreferenced module and taking Phase 2 with it.
+   */
+  assert.match(src('systems/Banner.ts'), /export function bannerPointsFor/,
+    'the Banner scoring is gone; run mode needs it')
+  assert.ok(rules.banner && typeof rules.banner.perWaveCleared === 'number',
+    'rules.banner is gone; run mode needs it')
+  const save = src('systems/Save.ts')
+  assert.match(save, /bannerPoints: number/, 'the lifetime point total is gone from the save')
+  assert.match(save, /export function addBannerPoints/, 'nothing can bank a point any more')
+
+  // Nothing story mode touches may read them. The scenes are story mode today.
+  for (const f of ['scenes/GameScene.ts', 'scenes/WorldMapScene.ts', 'scenes/HudScene.ts']) {
+    const body = src(f).split('\n').filter((l) => !l.trim().startsWith('//')).join('\n')
+    assert.ok(!/bannerPointsFor|addBannerPoints|bannerTotal/.test(body),
+      `${f} still scores or banks Banner Points`)
+  }
+  // `verdictFor` is the exception and is not points: it is the one flavour
+  // line under the title, and it reads lives remaining.
+  assert.match(src('scenes/GameScene.ts'), /verdictFor\(outcome, RULES\.banner\)/,
+    'the verdict line is gone from the results screen')
 })
 
 test('the results screen reports the run and cannot be dismissed into a dead board', () => {
@@ -100,11 +155,18 @@ test('the results screen reports the run and cannot be dismissed into a dead boa
   for (const row of ['Waves survived', 'Lives remaining', 'Kills', 'Peanuts earned']) {
     assert.ok(end.includes(row), `the results screen does not report "${row}"`)
   }
-  assert.match(end, /all runs/i, 'the lifetime Banner Point total is not shown')
+  // The lifetime point total is gone from this screen with the rest of the
+  // points. What replaced it is the level's own best, and only when the level
+  // has done better before — see the cakes test above.
+  assert.ok(!/all runs/i.test(end), 'the lifetime Banner Point total is back on the results screen')
+  assert.match(end, /Best on this level/, 'a run below the level\'s record does not say so')
   assert.match(end, /dismissable: false/,
     'tapping outside the results panel leaves the player on a finished board')
-  assert.match(end, /TRY AGAIN/, 'there is no way to start another run')
-  assert.match(end, /QUIT TO TITLE/, 'there is no way out')
+  // A WIN OFFERS SOMEWHERE TO GO AND A LOSS OFFERS ANOTHER TRY. These were
+  // TRY AGAIN and QUIT TO TITLE, which on a win is a dead end of its own kind:
+  // there was a way off the screen and no way forward.
+  assert.match(end, /'REPLAY'/, 'there is no way to play the level again')
+  assert.match(end, /'MAIN MENU'/, 'there is no way out')
   // Dialog only honours the flag if it still has one.
   assert.match(src('ui/Dialog.ts'), /opts\.dismissable !== false/,
     'Dialog ignores dismissable, so the results panel closes on an outside tap')

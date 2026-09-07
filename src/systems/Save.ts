@@ -112,12 +112,42 @@ export interface SaveData {
    * it always did.
    */
   difficultyId: string
+  /**
+   * THE BEST CAKE COUNT EACH LEVEL HAS EVER PAID, and what it was earned on.
+   *
+   * Keyed by level id. A better result overwrites; a worse one does not — a
+   * player who three-caked level 2 and then replayed it badly has still
+   * three-caked level 2, and a record that could go down would make replaying
+   * a finished level a risk instead of a reason.
+   *
+   * The difficulty id rides along because "three cakes" means something
+   * different on Lazy Dad Mode than on Try Hard and the map node says which.
+   * It is the difficulty of the run that SET the record, not the current
+   * setting, which is why it is stored beside the count rather than looked up.
+   *
+   * CAKES EARNED ON ANY DIFFICULTY COUNT. The comparison is on the count alone
+   * and never on the mode — ranking modes here would mean a Lazy Dad three
+   * silently refusing to record, which is a save quietly disagreeing with the
+   * screen that just congratulated the player.
+   *
+   * A plain object rather than a Map: this is written straight through
+   * `JSON.stringify`, and a Map serialises to `{}`.
+   */
+  cakes: Record<string, CakeRecord>
+}
+
+/** One level's best result. */
+export interface CakeRecord {
+  count: number
+  /** The difficulty the record was set on. '' on a record from a save written
+   *  before difficulty existed. */
+  difficultyId: string
 }
 
 export const DEFAULT_SAVE: SaveData = {
   volume: 0.7, musicVolume: 1, voiceVolume: 1,
   muted: false, runsCleared: 0, bannerPoints: 0, lastReport: '',
-  controlDrawer: false, heroId: '', clearedLevels: [], difficultyId: '',
+  controlDrawer: false, heroId: '', clearedLevels: [], difficultyId: '', cakes: {},
 }
 
 /** localStorage is small and shared; a report is truncated rather than
@@ -173,6 +203,36 @@ function clearedFrom(parsed: Partial<SaveData>): string[] {
  */
 const MIGRATION_ORDER = ['level1', 'level2', 'level3', 'level4']
 
+/**
+ * The cake records a save holds, cleaned rather than trusted.
+ *
+ * THERE IS NO MIGRATION AND THERE CANNOT BE. A save from before cakes existed
+ * knows which levels were beaten and nothing whatever about how many lives
+ * were left when they were, and a guess would put a number on a map node that
+ * the player never earned. So an older save arrives with no records, its map
+ * nodes show empty cakes, and one replay of a level it has already beaten
+ * fills them in. That is a smaller lie than crediting three cakes to a run
+ * nobody watched.
+ *
+ * Unlike `clearedFrom`, a record for an unknown level is DROPPED rather than
+ * kept: a dead entry in `clearedLevels` gates nothing, but a dead cake record
+ * is a row in a table the world map iterates and would be carried forever with
+ * nothing able to show or clear it.
+ */
+function cakesFrom(parsed: Partial<SaveData>): Record<string, CakeRecord> {
+  const raw = parsed.cakes
+  const out: Record<string, CakeRecord> = {}
+  if (raw === null || typeof raw !== 'object') return out
+  for (const [id, rec] of Object.entries(raw as Record<string, unknown>)) {
+    if (id === '' || rec === null || typeof rec !== 'object') continue
+    const n = count((rec as CakeRecord).count)
+    if (n <= 0) continue
+    const mode = (rec as CakeRecord).difficultyId
+    out[id] = { count: n, difficultyId: typeof mode === 'string' ? mode : '' }
+  }
+  return out
+}
+
 function clamp01(v: unknown, fallback: number): number {
   return typeof v === 'number' && Number.isFinite(v)
     ? Math.max(0, Math.min(1, v))
@@ -221,6 +281,7 @@ export function loadSave(): SaveData {
       // a mode resolves to the default at the point of use rather than being
       // repaired here.
       difficultyId: typeof parsed.difficultyId === 'string' ? parsed.difficultyId : '',
+      cakes: cakesFrom(parsed),
     }
   } catch {
     // Unreadable, unparseable or unavailable: start fresh rather than fail.
@@ -258,6 +319,38 @@ export function recordRunCleared(levelId?: string): void {
     ? [...save.clearedLevels, levelId]
     : save.clearedLevels
   writeSave({ ...save, runsCleared: save.runsCleared + 1, clearedLevels: cleared })
+}
+
+/**
+ * Banks a level's cake count if it beats what is already there.
+ *
+ * Returns what the level now stands at, so the caller can show the record
+ * rather than re-reading the save to find out.
+ *
+ * BETTER OVERWRITES, WORSE DOES NOT, and equal does not either — re-recording
+ * an equal count would rewrite the difficulty id, quietly demoting a Try Hard
+ * three-cake to whatever the player last played on.
+ */
+export function recordCakes(levelId: string, count_: number, difficultyId: string): number {
+  const save = loadSave()
+  const had = save.cakes[levelId]?.count ?? 0
+  const earned = count(count_)
+  if (levelId === '' || earned <= had) return had
+  writeSave({
+    ...save,
+    cakes: { ...save.cakes, [levelId]: { count: earned, difficultyId } },
+  })
+  return earned
+}
+
+/** Every level's best cake count, keyed by level id. */
+export function cakeRecords(): Record<string, CakeRecord> {
+  return loadSave().cakes
+}
+
+/** One level's best, or zero if it has never paid out. */
+export function cakesEarned(levelId: string): number {
+  return loadSave().cakes[levelId]?.count ?? 0
 }
 
 /** The levels beaten so far, in the order they were first beaten. */

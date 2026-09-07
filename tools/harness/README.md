@@ -69,6 +69,7 @@ screenshots are the evidence.
 | `softlock` | one frame of a stale portrait viewport mid-run, and whether the rotate gate hands the game back or latches a pause behind a hidden overlay |
 | `stuckguard` | a run paused by nothing at all, and whether the guard recovers and reports it — then a settings panel, which it must leave alone |
 | `worldmap` | the level-select road: how many screens long it is, that a drag actually moves it, that a short drag ending on a level does NOT start that level, and that a tap does |
+| `cakes` | what a level pays: the unearned recipe measured off the two TEXTURES rather than off a screenshot, the panel at 0, 1, 2 and 3, and the record coming back on a map node at a size the log reports in CSS pixels |
 | `difficulty` | the setting end to end: the chip on the level select, the panel it opens, choosing Try Hard, and then the HUD readout — including a mid-run change to the SAVE that must not reach a run already going |
 
 ## Notes

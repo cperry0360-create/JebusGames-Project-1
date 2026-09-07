@@ -379,6 +379,9 @@ if abs(prender['hud-peanuts']['fieldLeft'] - prender['hud-wave']['fieldLeft']) >
 print('\n\nUI icons')
 for key, path in (
     ('hud-peanut', 'public/assets/ui_icons/hud_peanut_icon.webp'),
+    # The cake a level pays out. Its canvas is 1024x1024 and its ink is not,
+    # so art.json carrying the canvas would fit a 0.943:1 shape as a square.
+    ('ui-cake', 'public/assets/ui/ui_cake.webp'),
 ):
     w, h, px = img.read(path)
     xs = [x for x in range(w) if any(px[(y * w + x) * 4 + 3] > ALPHA for y in range(h))]

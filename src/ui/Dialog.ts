@@ -4,6 +4,10 @@ import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI } from './Theme.ts'
 import { play } from '../systems/Audio.ts'
 import { viewH, viewW } from '../systems/Resolution.ts'
 import { tapFloor } from '../systems/Layout.ts'
+import { cakeRow } from './CakeRow.ts'
+import presentation from '../data/presentation.json' with { type: 'json' }
+
+const CAKES = presentation.cakes
 
 /**
  * A modal panel on the dialog plate.
@@ -57,8 +61,16 @@ export interface DialogOptions {
    *  own button. Replaces confirm/extra: the choice *is* the action. */
   choices?: DialogChoice[]
   /** One number set large above the rows, for a panel that has a headline
-   *  rather than a list — the Banner Points a run paid out. */
+   *  rather than a list. */
   headline?: { label: string; value: string }
+  /**
+   * A row of cakes where the headline would go — what a level paid out.
+   *
+   * A panel may have one or the other and not both: they occupy the same band
+   * and they are two answers to the same question. The victory screen sets
+   * `animate` so the earned ones land one at a time; nothing else does.
+   */
+  cakes?: { earned: number; max: number; animate?: boolean }
   /** The action button. Omitted for an informational panel. */
   confirm?: { label: string; onPick: () => void; enabled?: boolean }
   /** A second action beside confirm, for a panel that offers two things —
@@ -197,10 +209,32 @@ export class Dialog {
       ty += sub.height + 12
     }
 
+    // THE CAKES, if this panel pays any. Same band as the headline, and the
+    // one that comes first wins — a panel that set both would be making two
+    // claims about the same thing, so this is drawn and the headline skipped.
+    if (opts.cakes) {
+      const size = CAKES.panelSize
+      // Positioned by `cakeRow`, then shifted with the rest of the body once
+      // the plate's height is known. The images are added to the scene and
+      // handed to the layer below like everything else here.
+      const row = cakeRow(scene, 0, ty + size / 2, {
+        earned: opts.cakes.earned, max: opts.cakes.max,
+        size, animate: opts.cakes.animate,
+      })
+      body.push(...row)
+      ty += size + 6
+      const cap = scene.add.text(0, ty, opts.cakes.earned === 1 ? 'CAKE' : 'CAKES', {
+        fontFamily: FONT_UI, fontSize: '15px', color: COLOR.dim,
+        fontStyle: 'bold', letterSpacing: 3,
+      }).setOrigin(0.5, 0)
+      body.push(cap)
+      ty += cap.height + 20
+    }
+
     // The headline, if there is one: the number first and large, its label
     // under it. A results screen has one number that matters and a list of
     // numbers that explain it, and they should not look alike.
-    if (opts.headline) {
+    if (opts.headline && !opts.cakes) {
       const big = scene.add.text(0, ty, opts.headline.value, {
         fontFamily: FONT_DISPLAY, fontSize: '58px', color: COLOR.amber,
       }).setOrigin(0.5, 0)

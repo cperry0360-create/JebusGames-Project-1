@@ -635,6 +635,28 @@
     "_tabLabelSize": "Requested, not rendered. `uiSize` clamps every screen-space size up to typography.minUiSize, which is 15, so a tab label draws at 15 however small a number is put here. That clamp is the reason the words do not fit: \"TOWERS\" at 15px bold is 71px wide and the widest tab this drawer has is 44. The brief expected \"about 43px is enough for a short word at small caps\"; it is not, against this project’s own legibility floor, so the glyph fallback the brief specified for the narrow screen is what runs on both. Lowering this number changes nothing; lowering minUiSize would trade the drawer’s tabs against every other piece of small UI in the game.",
     "_detailSizes": "ALL THREE ARE THE FLOOR, and they have to be. typography.minUiSize is 15 and `uiSize` clamps every screen-space size up to it, so \"small labels\" under the numbers is not a thing this strip can have: three captions at 15px need about 100px and the text column is 92 at 844x390 and 68 at 568x320. What the strip carries is therefore the name, the three numbers in a fixed order, and the trait where there is room for it — see reports/ for the arithmetic and the three ways out."
   },
+  "_cakes": "THE ROW OF CAKES A LEVEL PAYS OUT. Sizes are in the units of whatever screen draws them -- design units on the level select road, screen pixels on the victory panel -- and both are set here so the two cannot drift.",
+  "cakes": {
+    "_gapFraction": "The space between two cakes, as a fraction of one cake's size. Proportional rather than fixed so a 34-unit map node cake and a 96-pixel victory cake read as the same row rather than as one row with wide gaps and one with tight ones.",
+    "gapFraction": 0.18,
+    "_panelSize": "ON THE VICTORY PANEL, in screen pixels. The panel is composed against the live viewport and scaled down whole if it is taller than the screen, so this is the size on a screen with room -- a phone gets it times the panel's own fit. 96 is the largest a cake is ever drawn, which is the figure the >=7x source rule in CLAUDE.md was checked against.",
+    "panelSize": 96,
+    "_nodeSize": "ON A LEVEL SELECT NODE, in DESIGN units, drawn across the bottom of the 160x107 picture. Three at 44 plus their gaps is 148 of the 160 available, which is as large as they go without hanging off the level they belong to. It is deliberately not 24 and not 34: at 34 a rendered frame at 844x390 showed them 19 CSS pixels tall and unidentifiable, and the whole point of a cake rather than a number is that it can be recognised at a glance.",
+    "nodeSize": 44,
+    "_nodeDrop": "How far the row's centre sits below the node's own centre, in design units. 40 puts the row across the bottom of the picture, its plate 4 units past the painted frame, and its lowest pixel 5 clear of the name that starts 10 units under that frame.",
+    "nodeDrop": 40,
+    "_nodePlate": "A DARK STRIP UNDER THE ROW, and it is not decoration. The cakes are drawn straight onto the level's own painting, and level 1 is a bright village at midday: a rendered frame showed three EARNED cakes -- dark chocolate, full colour -- disappear into it completely while the pale unearned ones on the darker levels read fine. A plate is what makes the count legible on every card, whatever is painted on it. `pad` is added to the row on each side; `alpha` keeps the picture faintly visible through it rather than punching a hole in the card.",
+    "nodePlate": {
+      "pad": 7,
+      "radius": 9,
+      "alpha": 0.82
+    },
+    "_animation": "The victory panel only. Each earned cake drops in after the one before it, because the COUNT is the message and three that appear together are a picture rather than a score. A map node never animates: it is rebuilt on scene restart and a pop on every rebuild would read as the count changing.",
+    "firstDelayMs": 260,
+    "stepMs": 200,
+    "popMs": 300,
+    "popScale": 1.7
+  },
   "worldMap": {
     "_note": "THE ROAD ON THE LEVEL-SELECT SCREEN, and every number that shapes it. The screen used to be four full-size cards scattered across the design box at hand-authored positions: it had run out of room at four levels, the cards were different apparent sizes because the pictures were, and the path drawn between them in level order ran the width of the screen backwards. It is one winding road of identical nodes now, laid out by level order, long enough to carry every planned level -- so it is wider than the design box and scrolls sideways.",
     "_band": "The vertical space the road may use, in design units: under the title and above the scrollbar. The wave is centred so that the DEEPEST node's name still lands inside it, which is what puts the road in the middle of the screen instead of in the top half with the bottom empty.",

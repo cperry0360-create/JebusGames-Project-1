@@ -36,13 +36,14 @@ import {
   ROAD, maxScroll, nodeState, roadNodes, roadWidth, scrollToNode,
   type NodeState, type RoadNode,
 } from '../systems/WorldRoad.ts'
-import { loadSave, setDifficulty } from '../systems/Save.ts'
+import { cakesEarned, loadSave, setDifficulty } from '../systems/Save.ts'
 import { clearRun, loadRun } from '../systems/RunSave.ts'
 import { setRunState } from '../systems/RunState.ts'
 import { ART, icon } from '../systems/Art.ts'
 import { COLOR, FONT_DISPLAY, FONT_UI } from '../ui/Theme.ts'
 import { plateButton } from '../ui/Plate.ts'
 import { Dialog } from '../ui/Dialog.ts'
+import { cakeRow, cakeRowWidth } from '../ui/CakeRow.ts'
 import {
   DIFFICULTIES, difficultyName, resolveDifficultyId,
 } from '../systems/Difficulty.ts'
@@ -53,6 +54,7 @@ import { unlockAudio } from '../systems/Audio.ts'
 import { onSceneResize, sceneIsLive } from '../systems/SceneEvents.ts'
 import { deviceScale } from '../systems/Resolution.ts'
 import { safeAreaInsets } from '../systems/SafeArea.ts'
+import presentation from '../data/presentation.json' with { type: 'json' }
 
 const WORLD_W = DESIGN_WIDTH
 const WORLD_H = DESIGN_HEIGHT
@@ -64,6 +66,7 @@ const WORLD_H = DESIGN_HEIGHT
  * every scroll that ended over a node would start it. In design units, which
  * is the space the drag is measured in.
  */
+const CAKES = presentation.cakes
 const TAP_SLOP = 10
 
 export class WorldMapScene extends Phaser.Scene {
@@ -280,6 +283,7 @@ export class WorldMapScene extends Phaser.Scene {
     }
 
     this.drawBadge(node, state)
+    if (node.level) this.drawCakes(node)
 
     if (state === 'open') this.drawPulse(node)
     if (state === 'locked') this.drawLock(node)
@@ -312,6 +316,48 @@ export class WorldMapScene extends Phaser.Scene {
     // however the rest of the screen behaves. Its caption says what would open
     // it — where there is a level behind it to open.
     if (node.level) this.drawUnlockLine(node, label)
+  }
+
+  /**
+   * What this level has paid out, across the bottom of its picture.
+   *
+   * ON EVERY BUILT NODE, INCLUDING LOCKED AND UNPLAYED ONES. Three pale cakes
+   * on a level nobody has touched is the point: it says the level HAS three to
+   * give, which is the only thing that makes going back for them an idea a
+   * player can have. Showing them only where they had been earned would make
+   * the reward invisible to everyone who has not already found it.
+   *
+   * They gate nothing. Level 4 opens because level 3 was beaten, at one cake
+   * or at three -- see `_notAGate` in cakes.json.
+   *
+   * NOT ANIMATED here, unlike the victory panel. This scene is rebuilt on
+   * every restart, and cakes that popped each time would read as the count
+   * changing rather than as a record.
+   */
+  private drawCakes(node: RoadNode): void {
+    const earned = cakesEarned(node.level!.id)
+    const y = node.y + CAKES.nodeDrop
+
+    // A PLATE FIRST, because the cakes are drawn onto the level's own
+    // painting. Level 1 is a bright village at midday, and a rendered frame
+    // showed its three EARNED cakes -- dark chocolate, full colour -- vanish
+    // into it while the pale ones on the darker cards read perfectly well.
+    // Nothing about the cakes could fix that; what the row needed was
+    // something to sit on.
+    const P = CAKES.nodePlate
+    const w = cakeRowWidth(CAKES.nodeSize) + P.pad * 2
+    const h = CAKES.nodeSize + P.pad * 2
+    const plate = this.add.graphics().setDepth(2)
+    plate.fillStyle(ROAD.plate.fill, P.alpha)
+    plate.fillRoundedRect(node.x - w / 2, y - h / 2, w, h, P.radius)
+    this.road.add(plate)
+
+    // 44 design units. Three of them plus their gaps come to 148 of the
+    // picture's 160, which is as large as the row goes without hanging off the
+    // level it belongs to.
+    for (const img of cakeRow(this, node.x, y, { earned, size: CAKES.nodeSize })) {
+      this.road.add(img.setDepth(3))
+    }
   }
 
   /** The level number, top-left of every node. */

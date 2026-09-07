@@ -67,9 +67,15 @@ import {
 } from '../systems/Upgrades.ts'
 import { openingPurse } from '../systems/Economy.ts'
 import {
-  addBannerPoints, controlDrawerOn, hasClearedARun, recordRunCleared, savedDifficulty,
+  controlDrawerOn, hasClearedARun, recordCakes, recordRunCleared, savedDifficulty,
 } from '../systems/Save.ts'
-import { bannerPointsFor, verdictFor, type RunOutcome } from '../systems/Banner.ts'
+// `verdictFor` ONLY. Banner Points are gone from story mode -- see the note in
+// `endRun` -- but the verdict is the one line under the title and it is a
+// statement about lives remaining, not about points. `bannerPointsFor` and
+// `rules.banner` are untouched and still tested; run mode's skill tree is what
+// they are for.
+import { verdictFor, type RunOutcome } from '../systems/Banner.ts'
+import { cakesFor, MAX_CAKES } from '../systems/Cakes.ts'
 import { waveOutcome } from '../systems/Wave.ts'
 // No loadRun here on purpose: whether to resume is the title screen's
 // question to ask, and it arrives through RunState.resumeFrom.
@@ -3895,17 +3901,31 @@ export class GameScene extends Phaser.Scene {
     if (won) recordRunCleared(this.level.id)
     play(this, won ? 'won' : 'lost')
 
-    // What the run was worth. Depth is the main term, so a defeat still banks
-    // something: DESIGN.md replaced the three-star rating with the Banner
-    // precisely so that a run ending at wave nine is still progress.
+    // WHAT THE LEVEL PAID, IN CAKES.
+    //
+    // Banner Points are gone from this screen. They grade a RUN on depth
+    // reached and accrue across a whole campaign, which is the right shape for
+    // run mode's skill tree and the wrong shape for a level somebody means to
+    // come back and do properly: a number that only ever goes up cannot say
+    // "you have done this level as well as it can be done". A cake count can,
+    // it sits on the level's own node afterwards, and it is the reason to
+    // replay something already beaten. `Banner.ts` and `rules.banner` are
+    // untouched and unreferenced from here except for the verdict line.
+    //
+    // MEASURED AGAINST THE RUN'S OWN STARTING LIVES, not against a constant.
+    // Difficulty scales them, so an absolute threshold would pay three cakes
+    // for an untouched Try Hard run and two for the same performance on
+    // normal.
     const outcome: RunOutcome = {
       wavesReached: this.status.wave,
       cleared: won,
       livesRemaining: this.status.lives,
       maxLives: this.status.startingLives,
     }
-    const earned = bannerPointsFor(outcome, RULES.banner)
-    const total = addBannerPoints(earned)
+    const earned = cakesFor(won, this.status.lives, this.status.startingLives)
+    // Better overwrites, worse does not, so a bad replay of a three-cake level
+    // cannot take the record away.
+    const best = recordCakes(this.level.id, earned, this.status.difficultyId)
     this.status.alert = won ? 'The line held.' : 'Overrun.'
 
     // WHAT COMES NEXT, and whether it exists.
@@ -3924,14 +3944,21 @@ export class GameScene extends Phaser.Scene {
       subtitle: noMore
         ? `${verdictFor(outcome, RULES.banner)}  More levels coming soon.`
         : verdictFor(outcome, RULES.banner),
-      headline: { value: `+${earned}`, label: 'BANNER POINTS EARNED' },
+      // The cakes take the headline's place: they ARE the score now, and a
+      // number over them would be two answers to one question.
+      cakes: { earned, max: MAX_CAKES, animate: true },
       rows: [
         { label: 'Waves survived', value: `${this.status.wave} of ${this.status.waveCount}` },
         { label: 'Lives remaining', value: `${this.status.lives} of ${this.status.startingLives}` },
         { label: 'Difficulty', value: difficultyName(this.status.difficultyId) },
         { label: 'Kills', value: `${this.status.kills}` },
         { label: 'Peanuts earned', value: `${this.status.peanutsEarned}` },
-        { label: 'Banner Points, all runs', value: `${total}`, accent: true },
+        // Only when the level has done better before. Saying "best 3" under a
+        // run that just scored 3 is the screen congratulating itself; saying
+        // it under a run that scored 1 is the reason the record exists.
+        ...(best > earned
+          ? [{ label: 'Best on this level', value: `${best} of ${MAX_CAKES}`, accent: true }]
+          : []),
       ],
       // The run is over: a tap on the board behind must not put the player
       // back on a dead board with no way off it.

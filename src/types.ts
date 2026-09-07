@@ -952,6 +952,9 @@ export interface ArtDef {
     /** The two states of the painted ticket. Identical canvases, so one
      *  overlays the other exactly. */
     scratchCard: { covered: string; revealed: string }
+    /** The cake a level pays out. ONE asset for both states: the unearned one
+     *  is built from it at runtime by `Desaturate.UNEARNED`. */
+    cake: string
   }
   /** Props painted onto the map rather than owned by an entity. */
   prop: {

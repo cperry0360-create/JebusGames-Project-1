@@ -361,9 +361,34 @@ The boys can design these too, but you set the mechanic first and let them desig
 
 ## Meta progression — the Banner
 
-Replaces the 3-star system entirely.
+**Run mode's meta layer, and run mode's alone.** This section said "replaces
+the 3-star system entirely" and meant it across the whole game; that is no
+longer true and the reason is worth keeping.
 
 Runs award **Banner Points** based on depth reached, not just victory. A failed run still pays out.
+
+### Story mode pays in cakes instead
+
+A run is not a level, and the two want different scores. Points grade a RUN on
+how deep it got and go on accruing across a whole campaign — which is exactly
+what a skill tree needs, and exactly what cannot say "you have done this level
+as well as it can be done". So:
+
+- **Run mode** keeps Banner Points and the skill tree below. Nothing here is
+  cancelled or deleted.
+- **Story mode** pays **0 to 3 cakes** per level, from lives remaining as a
+  fraction of that run's own starting lives. Thresholds live in
+  `src/data/cakes.json`. The best count each level has paid is kept in the
+  save with the difficulty it was earned on, a better result overwrites a
+  worse one, and the count shows on the level's node on the level select road.
+- **Cakes gate nothing.** What opens a level is having beaten the one before
+  it (`unlockedBy` in `levels.json`), at one cake or at three.
+- The two do not mix. Story mode shows no points and banks none; the skill
+  tree, when it arrives, will not read cakes.
+
+This is a star rating in all but name, on the half of the game that is built
+out of levels. The original objection stands for the half that is built out of
+runs.
 
 Constellation-style tree, four branches: Offense, Control, Economy, Command.
 

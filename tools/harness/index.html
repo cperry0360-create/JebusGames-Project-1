@@ -9744,6 +9744,183 @@ async function run() {
 
   // The results panel on a win, without playing thirteen waves for it: the
   // run is driven to the end state directly and the panel it opens is real.
+  if (scenario === 'cakes') {
+    // WHAT A LEVEL PAYS, ON BOTH SCREENS THAT SHOW IT, at every count.
+    //
+    // The two have to agree and they are drawn by one helper, so what is under
+    // test is the two ENDS: does a run that finished on N lives pay the cakes
+    // the panel then draws, and does the record it banked come back on the map
+    // node at a size a player can count.
+    //
+    // ONE ASSET. The pale cakes are built at runtime from the same texture, so
+    // the check that matters most is a PIXEL one -- an unearned cake must be
+    // LIGHTER than the panel behind it, not darker, or the empty slots vanish
+    // and the count cannot be read.
+    const SAVE = await import('./js/systems/Save.js')
+    const CAKES = await import('./js/systems/Cakes.js')
+    const RESM = await import('./js/systems/Resolution.js')
+    let faults = 0
+    const fail = (m) => { faults++; note('   *** ' + m) }
+    note('viewport ' + VP.w + 'x' + VP.h + '  dpr=' + RESM.deviceScale())
+
+    // Every cake image in a scene, as a screen-space box in CSS pixels.
+    //
+    // THE TWO SCREENS NEED TWO CONVERSIONS AND THAT IS THE POINT OF THE FLAG.
+    // The level select's camera is FITTED to the design box, so a cake's own
+    // coordinates are design units and have to go through the camera. The
+    // victory panel is SCREEN SPACE -- GameScene hands it to the UI camera
+    // with `asScreenSpace` -- so its coordinates are already CSS pixels, and
+    // putting them through `cameras.main` would convert them by the WORLD
+    // camera's zoom and report a number no player ever sees. That is how this
+    // first reported a 96-unit cake as 109 CSS pixels on a desktop.
+    const cakesIn = (key, fitted) => {
+      const sc = scene(key)
+      if (!sc || !running(key)) return []
+      const cam = sc.cameras.main
+      const out = []
+      const at = (x, y) => (fitted ? RESM.worldToScreen(sc, x, y, cam) : { x, y })
+      const visit = (o) => {
+        if (o.visible === false || (o.alpha ?? 1) <= 0.02) return
+        if (o.texture && /^ui-cake/.test(o.texture.key)) {
+          const b = o.getBounds()
+          const tl = at(b.left, b.top)
+          const br = at(b.right, b.bottom)
+          out.push({
+            lit: o.texture.key === 'ui-cake',
+            x: Math.round((tl.x + br.x) / 2), y: Math.round((tl.y + br.y) / 2),
+            w: Math.round(br.x - tl.x), h: Math.round(br.y - tl.y),
+            alpha: +(o.alpha ?? 1).toFixed(2),
+          })
+        }
+        if (o.list) o.list.forEach(visit)
+      }
+      sc.children.list.forEach(visit)
+      return out.sort((a, b) => a.y - b.y || a.x - b.x)
+    }
+
+    /* -------------------------------- 1. the recipe, measured off the texture */
+
+    // Force both textures to exist before anything is drawn, so the pixels can
+    // be compared directly rather than inferred from a screenshot.
+    // This scenario runs AFTER `startRun()`, so the level is already up. It
+    // has to be: `endRun` is what pays the cakes and it needs a real run
+    // behind it, not a scene forced into existence a frame ago.
+    const DES = await import('./js/systems/Desaturate.js')
+    const G = scene('Game')
+    await sleep(400)
+    const paleKey = DES.ensureGrey(G, 'ui-cake', DES.UNEARNED)
+    note('unearned texture: ' + paleKey)
+    const sample = (key) => {
+      const img = game.textures.get(key).getSourceImage()
+      const cv = document.createElement('canvas')
+      cv.width = img.width; cv.height = img.height
+      const cx = cv.getContext('2d')
+      cx.drawImage(img, 0, 0)
+      const px = cx.getImageData(0, 0, img.width, img.height).data
+      let lum = 0, alpha = 0, n = 0
+      for (let i = 0; i < px.length; i += 4) {
+        if (px[i + 3] < 16) continue
+        lum += px[i] * 0.299 + px[i + 1] * 0.587 + px[i + 2] * 0.114
+        alpha += px[i + 3]
+        n++
+      }
+      return { lum: lum / n, alpha: alpha / n, n }
+    }
+    const lit = sample('ui-cake')
+    const pale = sample(paleKey)
+    note('earned:   mean luma ' + lit.lum.toFixed(1) + '  mean alpha ' + lit.alpha.toFixed(1))
+    note('unearned: mean luma ' + pale.lum.toFixed(1) + '  mean alpha ' + pale.alpha.toFixed(1))
+    // NOT DARKER. This is the whole reason the recipe is its own thing: the
+    // frosting is dark chocolate and the panel behind it is nearly black.
+    if (pale.lum <= lit.lum) {
+      fail('the unearned cake is DARKER than the earned one (' + pale.lum.toFixed(1)
+        + ' vs ' + lit.lum.toFixed(1) + '); it will vanish against the panel')
+    }
+    // And lighter than the dark panel it sits on, which is what makes an empty
+    // slot countable rather than invisible.
+    if (pale.lum < 110) fail('the unearned cake is too dark to read on a dark panel')
+    if (pale.alpha >= lit.alpha) fail('the unearned cake is not faded')
+
+    /* ------------------------------------ 2. the victory panel, at 0..3 cakes */
+
+    const RULES = (await import('./js/data/rules.json', { with: { type: 'json' } })).default
+    const start = G.status.startingLives
+    const cases = [
+      ['won-3', true, start],
+      ['won-2', true, Math.ceil(start / 2)],
+      ['won-1', true, 1],
+      ['lost-0', false, 0],
+    ]
+    for (const [name, won, livesLeft] of cases) {
+      G.status.phase = 'ready'
+      G.dialog?.close()
+      await sleep(220)
+      G.status.wave = won ? G.status.waveCount : 6
+      G.status.lives = livesLeft
+      G.endRun(won ? 'won' : 'lost')
+      // Past the whole drop-in, so the shot is of the finished row.
+      await sleep(1500)
+      const want = CAKES.cakesFor(won, livesLeft, start)
+      const shown = cakesIn('Game', false)
+      const litN = shown.filter((c) => c.lit).length
+      note(name + ': ' + livesLeft + ' of ' + start + ' lives -> ' + want + ' cakes; panel drew '
+        + shown.length + ' slots, ' + litN + ' lit, ' + (shown[0] ? shown[0].w + 'x' + shown[0].h
+        + ' CSS px each' : 'NONE'))
+      if (shown.length !== CAKES.MAX_CAKES) fail(name + ' drew ' + shown.length + ' slots, not 3')
+      if (litN !== want) fail(name + ' lit ' + litN + ' cakes for a ' + want + '-cake run')
+      for (const c of shown) {
+        if (c.x < 0 || c.y < 0 || c.x > VP.w || c.y > VP.h) {
+          fail(name + ': a cake is off screen at ' + c.x + ',' + c.y)
+        }
+      }
+      // The earned ones must have finished their tween. A shot taken mid-pop
+      // is a shot of a cake that is not the size it settles at.
+      for (const c of shown.filter((x) => x.lit)) {
+        if (c.alpha < 0.99) fail(name + ': an earned cake is still fading in at alpha ' + c.alpha)
+      }
+      await shot('cakes-' + name + '-' + VP.w + 'x' + VP.h)
+    }
+
+    /* --------------------------------------------- 3. the level select node */
+
+    note('save now holds: ' + JSON.stringify(SAVE.cakeRecords()))
+    for (const k of ['Game', 'Hud']) game.scene.stop(k)
+    game.scene.start('WorldMap')
+    if (!(await until(() => running('WorldMap'), 8000))) {
+      note('*** the level select screen did not build ***')
+      return
+    }
+    await sleep(700)
+    const onMap = cakesIn('WorldMap', true)
+    note('map: ' + onMap.length + ' cakes across the visible road, '
+      + onMap.filter((c) => c.lit).length + ' lit')
+    const sizes = [...new Set(onMap.map((c) => c.h))]
+    note('  drawn at ' + JSON.stringify(sizes) + ' CSS px tall '
+      + '(' + Math.round(sizes[0] / (game.canvas.width / VP.w
+        ? scene('WorldMap').cameras.main.zoom / RESM.deviceScale() : 1))
+      + ' design units through this screen\'s fit)')
+    // EVERY BUILT NODE SHOWS ITS SLOTS. Four levels are built; the visible ones
+    // must each carry three.
+    if (onMap.length % CAKES.MAX_CAKES !== 0) {
+      fail('a node is showing a partial row: ' + onMap.length + ' cakes is not a multiple of 3')
+    }
+    if (onMap.length === 0) fail('the level select road shows no cakes at all')
+    // The record that was just banked has to be back on the map.
+    const bankedTo = SAVE.cakesEarned('level1')
+    const first = onMap.slice(0, CAKES.MAX_CAKES)
+    note('  level 1 banked ' + bankedTo + '; its node lights ' + first.filter((c) => c.lit).length)
+    if (first.filter((c) => c.lit).length !== bankedTo) {
+      fail('the map node disagrees with the save about level 1')
+    }
+    await shot('cakes-map-' + VP.w + 'x' + VP.h)
+
+    note('RESULT ' + (faults === 0
+      ? 'cakes are paid, banked, and shown at ' + sizes.join('/') + ' CSS px on the map, at '
+        + VP.w + 'x' + VP.h
+      : '*** ' + faults + ' faults ***'))
+    return
+  }
+
   if (scenario === 'results') {
     // THE END-OF-LEVEL SCREENS, in every case that has different buttons on it.
     //
