@@ -508,9 +508,13 @@ cake, dialog and typography items from earlier reports.
 ## Merging
 
 ```bash
-git checkout main
+git fetch origin main
+git checkout main && git reset --hard origin/main
 git merge --ff-only claude/mind-laser-glacier-fixes-ne2f14
 git push origin main
 ```
 
-The branch is ahead of `main` at `9847c84` and fast-forwardable.
+The branch is ahead of `origin/main` (`12258d7`) and fast-forwardable —
+`git merge-base --is-ancestor origin/main HEAD` passes. The `fetch` and
+`reset` are there because a stale local `main` will refuse the `--ff-only`
+merge; the session that produced this branch had one, several commits behind.
