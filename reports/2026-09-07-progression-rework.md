@@ -9,6 +9,7 @@ reply that carried this report and is repeated at the bottom of this file.
 | `71d6199` | Levels name the level that opens them, and a win offers somewhere to go | **green**, covered by run 149 (pushed with `020b66e`) |
 | `020b66e` | Three difficulty modes, and they move lives and money only | **green** — [run 149](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34074241917) |
 | `3e9a32b` | Story mode pays in cakes, and banks no points at all | **green** — [run 150](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34075482965) |
+| `ea3a755` | This report | **green** — [run 151](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34075629522) |
 
 Tests went 932 → 947, all passing. `sh tools/tsdiff.sh 9172418` reports 206
 against a 205 baseline; the single difference is `Cannot find module 'phaser'`
