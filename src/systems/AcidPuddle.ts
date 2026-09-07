@@ -16,6 +16,10 @@
 // arithmetic; the scene draws a circle at the answer.
 
 export interface AcidRules {
+  /** The puddle's art, as an art.json key. Named in the level's data rather
+   *  than in code: art.json is the only place a FILENAME lives, and a data
+   *  file is the only place a sprite KEY does. */
+  fx: string
   /** Seconds OF MOVEMENT between drops, not seconds of wall clock. */
   intervalSeconds: number
   stopSeconds: number

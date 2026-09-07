@@ -560,6 +560,20 @@ export interface EnemyDef {
   vampiric?: boolean
 
   /**
+   * True for an enemy that hovers a few pixels off the ground rather than
+   * standing on it, so things lying ON the ground miss it.
+   *
+   * WHAT THAT COSTS IT is not here: it is level5.json's `gliding`, which is
+   * one place and is where the open question about the Spike Strip gets
+   * answered. The enemy only declares that it glides.
+   *
+   * NOT `layer: 'air'`. A glider is a legal target for every tower, including
+   * the ground-only ones; the air layer is about what may SHOOT it and this is
+   * about what may TOUCH it.
+   */
+  glides?: boolean
+
+  /**
    * The share of the damage it deals to a PLAYER unit that it heals for.
    *
    * Per enemy rather than one shared constant, because "high lifesteal" and
@@ -570,6 +584,17 @@ export interface EnemyDef {
    * out of this entirely.
    */
   lifesteal?: number
+
+  /**
+   * True for the one enemy that leaves acid behind it.
+   *
+   * A FLAG RATHER THAN AN ID, so the scene and the simulator both find "the
+   * enemy that does this" by asking rather than by knowing Batula's name.
+   * What the trail DOES -- the interval, the radius, the damage, the stop --
+   * is level5.json's `acid`, so a second boss with the same habit is one field
+   * here and no new code at all.
+   */
+  acidTrail?: boolean
   peanutReward: number
   livesCost: number
   damage: number

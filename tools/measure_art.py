@@ -190,9 +190,45 @@ ENEMY_KEY = {
     # the same rule the Zamboni gets, because there is nothing else to cast it.
     'enemy_glitch_bug.webp':      ('enemy-glitch-bug',    0.90,  80.0),
     'boss_glitch_lich.webp':      ('enemy-glitch-lich',   0.90, 140.0),
+    # THE LEVEL 5 CAST, and the first four of them are sized differently from
+    # every entry above: they were cut from ONE SHEET at ONE SCALE, so their
+    # sizes relative to each other are the artist's and are not re-chosen here.
+    # A single multiplier is applied to all four -- 0.22135, set so the Elite
+    # lands on 85 with the other heavy elites -- and the other three fall where
+    # the sheet puts them: 344 -> 76.2, 335 -> 74.2, 384 -> 85.0, 247 -> 54.7.
+    # Sizing them individually to a target each would have thrown away the one
+    # thing the shared sheet guarantees.
+    # Each band is the deepest cut that still catches BOTH feet, read off the
+    # silhouette this script prints, exactly as the four above it were:
+    #   thrall  0.94 -- his rear boot and his front boot. 0.96 also finds both.
+    #   elite   0.94 -- 0.90 additionally catches his cape's lower point and
+    #                   his coat hem and drags the anchor 0.035 to the left.
+    #   frank   0.92 -- the DEEPEST that finds his trailing foot. At 0.94 only
+    #                   the leading one is left and the anchor jumps to 0.657,
+    #                   a quarter of his width off, which would run him with
+    #                   the lane under his ear.
+    'enemy_thrall.webp':          ('enemy-thrall',        0.94,  76.2),
+    'enemy_glider.webp':          ('enemy-glider',        0.90,  74.2),
+    'enemy_vampire_elite.webp':   ('enemy-vampire-elite', 0.94,  85.0),
+    'enemy_baby_frank.webp':      ('enemy-baby-frank',    0.92,  54.7),
+    # These two came separately and are sized against the roster rather than
+    # against each other's sheet. The Lord at 110 is `noticeably larger than
+    # the Elite` and still under the 140 the two standing bosses use; Batula
+    # takes 140 so he stands with the Reaper and the Lich King.
+    # 0.90 AND NOT DEEPER for the Lord, which is the opposite of the note
+    # above and is the same lesson. His weight is on his leading boot and his
+    # trailing one barely brushes the ground: at 0.92 only the leading contact
+    # survives and the anchor collapses to 0.330 -- a fifth of his width off.
+    'enemy_vampire_lord.webp':    ('enemy-vampire-lord',  0.90, 110.0),
+    'boss_batula.webp':           ('enemy-batula',        0.90, 140.0),
 }
 # Enemies whose shadow is cast by the whole body, not by the feet.
-ENEMY_BODY_SHADOW = {'enemy-zamboni', 'enemy-glitch-bug'}
+# A GLIDER HAS NO FEET ON THE GROUND. It hovers, so its foot band catches the
+# lowest of whatever hangs off it -- a boot tip and a cape point -- rather than
+# a stance, and the shadow it casts is its body's. The same rule the Zamboni
+# and the Glitch Bug already get, and for the same reason.
+ENEMY_BODY_SHADOW = {'enemy-zamboni', 'enemy-glitch-bug', 'enemy-glider'}
+ENEMY_BODY_ANCHOR = {'enemy-glider'}
 # Where to LOOK for feet, as fractions of the source width, for art whose
 # ground silhouette catches something that is not one.
 #
@@ -202,7 +238,23 @@ ENEMY_BODY_SHADOW = {'enemy-zamboni', 'enemy-glitch-bug'}
 # 140 px height, which would walk him with the lane under his shoulder rather
 # than under his hooves. The window stops at 0.80, past both hooves and short
 # of the blade. It is a measuring correction, not a size or position choice.
+#
+# BATULA WAS GIVEN ONE AND DID NOT NEED IT. His wings sweep out to both sides,
+# so a window around his boots looked like the obvious precaution -- and at his
+# 0.90 band the silhouette finds exactly two groups, (148-354) and (644-860),
+# which ARE his two boots: the wings bottom out well above the cut. The window
+# then excluded both groups for crossing its edges and the script raised on an
+# empty list. Measure first.
 ENEMY_FOOT_WINDOW = {'enemy-glitch-lich': (0.0, 0.80)}
+# Enemies whose x anchor is the INK CENTRE rather than the middle of their
+# footprint.
+#
+# Only the Glider, and only because it does not have a footprint. It hovers,
+# so the one thing that reaches its ground line is the tip of a trailing boot
+# at x 73-123 of 355 -- and anchoring on that puts the sprite's position under
+# its heel with the whole body hanging off to the right, 0.22 of its width off
+# centre. What a hovering thing is centred on is its body, which is also what
+# casts its shadow, so both come off the ink.
 # The second value is where the foot band starts, as a fraction of the sprite's
 # height. It cannot be one number for all three: the brute's leaf blower hangs
 # to within 10% of his ground line while the scout's trailing skate is 13%
@@ -262,7 +314,11 @@ for f in sorted(glob.glob('public/assets/enemies/enemy_*.webp')
     lo = min(g[0] for g in groups)
     hi = max(g[1] for g in groups)
     footW = w if key in ENEMY_BODY_SHADOW else hi - lo + 1
-    footCx = (lo + hi) / 2.0
+    if key in ENEMY_BODY_ANCHOR:
+        xs = [x for x in range(w) if any(px[(yy * w + x) * 4 + 3] > ALPHA for yy in range(h))]
+        footCx = (xs[0] + xs[-1]) / 2.0
+    else:
+        footCx = (lo + hi) / 2.0
     # An explicit height overrides the uniform scale, and the shadow follows it
     # so the two stay in proportion however the sprite is sized.
     scale = (fixed_h / h) if fixed_h else escale
@@ -283,6 +339,12 @@ for f in sorted(glob.glob('public/assets/enemies/enemy_*.webp')
     print(f'{"":20s} -> {key}: footprint x{lo}-{hi} ({footW}px), '
           f'on screen {round(w*scale,1)}x{round(h*scale,1)}, '
           f'anchorX {erender[key]["anchorX"]}, shadowWidth {erender[key]["shadowWidth"]}')
+    # Rule 7, printed for every enemy rather than only for the ones somebody
+    # remembered to check: source height must cover the on-screen height at
+    # full zoom on the densest screen the game supports.
+    want = erender[key]['displayHeight'] * 2.37 * 3
+    print(f'{"":20s}    rule 7 wants >= {want:.0f}px of source; has {h}px ({h / want:.2f}x)'
+          + ('' if h >= want else '   <-- SHORT'))
 json.dump({'files': efiles, 'render': erender}, open('/tmp/enemypatch.json', 'w'), indent=2)
 
 

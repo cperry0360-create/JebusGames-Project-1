@@ -11,6 +11,7 @@ import { applyGroundRender } from '../systems/Art.ts'
 import { facesLeft, mirroredFor } from '../systems/Facing.ts'
 import rulesData from '../data/rules.json'
 import { onBoard } from '../systems/Liveness.ts'
+import { NO_BLEED, type BleedState } from '../systems/Vampirism.ts'
 
 const RULES = rulesData
 
@@ -54,6 +55,30 @@ export class Enemy extends Phaser.GameObjects.Container {
   blocker: Blocker | null = null
   /** Armour stripped by Cory's Depreciation passive. */
   armorShred = 0
+  /**
+   * What the LEVEL is doing to this one's legs, set by the scene each frame.
+   *
+   * 1 everywhere except level 5, where a vampire is a quarter slower in
+   * daylight and 15% faster at night. It multiplies the DEF's speed before
+   * any slow is applied, so a Bramble's 45% still means 45% of whatever the
+   * sky has left it -- the two compose rather than fight.
+   */
+  speedScale = 1
+  /**
+   * True while something on the ENEMY'S OWN SIDE is stopping it -- Batula
+   * hunching over a puddle, and nothing else so far.
+   *
+   * Deliberately not a stun. A stun stops the swing as well, is subject to
+   * diminishing returns, and reads to the player as crowd control they earned.
+   * This is the boss doing it to himself, so it stops the walk and leaves
+   * everything else alone.
+   */
+  selfHeld = false
+  /**
+   * Bleed stacks and the clock on them. Untouched on every level with no
+   * bleed rules, which is every level but the fifth.
+   */
+  bleed: BleedState = NO_BLEED
   /** Seconds left on the "Cory is filing this one down" mark. Set by the
    *  passive and allowed to lapse, so one frame out of his radius does not
    *  make the mark flicker. */
@@ -72,6 +97,13 @@ export class Enemy extends Phaser.GameObjects.Container {
   readonly summonedBy: Enemy | null
   /** Counts down to the next burst. Only a summoner uses it. */
   private summonTimer = 0
+  /**
+   * True once `onHealthThreshold` has fired. ONCE PER ENEMY, not once per
+   * crossing: on level 5 a boss heals for everything it bites, so its health
+   * crosses 50% in both directions and a roar without a latch would summon
+   * without limit.
+   */
+  thresholdFired = false
   /**
    * The tower-disable clock, or null for the great majority of enemies that do
    * not have one.
@@ -626,6 +658,19 @@ export class Enemy extends Phaser.GameObjects.Container {
     this.scene.tweens.add({ targets: this, x: p.x, y: p.y, duration: 180, ease: 'Quad.easeOut' })
   }
 
+  /**
+   * Puts health back, capped at full, and redraws the bar.
+   *
+   * The only caller is lifesteal. It is a method rather than a write to
+   * `health` so the bar cannot be left showing the number before the drink --
+   * which is the one thing about this mechanic a player has to be able to see.
+   */
+  heal(amount: number): void {
+    if (amount <= 0 || !this.alive) return
+    this.health = Math.min(this.maxHealth, this.health + amount)
+    this.drawBar()
+  }
+
   shredArmor(amount: number, max: number): void {
     // Only counts as "being shredded" while there is armour left to take. A
     // Late Filer has none, and marking it would tell the player the passive is
@@ -684,7 +729,15 @@ export class Enemy extends Phaser.GameObjects.Container {
       // whether or not the target shuffled out of range in the middle of it.
       //
       // The field starts at 0, so a first engagement still lands immediately.
-      const step = slowedSpeed(this.def.speed, this.slowFactor, this.slowed) * dt
+      // THE SKY FIRST, THEN THE SLOW. `speedScale` is what the level's own
+      // rules are doing -- the day's 0.75 on a vampire, the night's 1.15 --
+      // and it multiplies the DEF's speed before `slowedSpeed` takes its cut,
+      // so a Bramble's 45% is 45% of whatever the sky has left. `selfHeld` is
+      // the boss stopping himself to be sick on the road, and it is a full
+      // stop rather than a very large slow.
+      const step = this.selfHeld
+        ? 0
+        : slowedSpeed(this.def.speed * this.speedScale, this.slowFactor, this.slowed) * dt
       if (this.controlled) {
         // BACK DOWN THE LANE IT CAME UP, on its own lane and no other.
         // Progress runs backwards with it, so nothing that sorts by "closest

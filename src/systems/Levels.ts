@@ -22,10 +22,12 @@ import mapLevel1 from '../data/map.json' with { type: 'json' }
 import mapLevel2 from '../data/map_level2.json' with { type: 'json' }
 import mapLevel3 from '../data/map_level3.json' with { type: 'json' }
 import mapLevel4 from '../data/map_level4.json' with { type: 'json' }
+import mapLevel5 from '../data/map_level5.json' with { type: 'json' }
 import wavesLevel1 from '../data/waves.json' with { type: 'json' }
 import wavesLevel2 from '../data/waves.level2.json' with { type: 'json' }
 import wavesLevel3 from '../data/waves.level3.json' with { type: 'json' }
 import wavesLevel4 from '../data/waves.level4.json' with { type: 'json' }
+import wavesLevel5 from '../data/waves.level5.json' with { type: 'json' }
 import rulesLevel5 from '../data/level5.json' with { type: 'json' }
 
 /** A row of levels.json: what the registry records about a level. */
@@ -109,6 +111,7 @@ const MAPS: Record<string, MapDef> = {
   level2: mapLevel2 as unknown as MapDef,
   level3: mapLevel3 as unknown as MapDef,
   level4: mapLevel4 as unknown as MapDef,
+  level5: mapLevel5 as unknown as MapDef,
 }
 
 /** Wave tables by the filename levels.json names them with. */
@@ -117,6 +120,7 @@ const WAVE_TABLES: Record<string, WavesDef> = {
   'waves.level2.json': wavesLevel2 as WavesDef,
   'waves.level3.json': wavesLevel3 as unknown as WavesDef,
   'waves.level4.json': wavesLevel4 as unknown as WavesDef,
+  'waves.level5.json': wavesLevel5 as unknown as WavesDef,
 }
 
 /** Rules blocks by the filename levels.json names them with. */

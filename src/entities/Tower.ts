@@ -403,6 +403,18 @@ export class Tower extends Phaser.GameObjects.Container {
 
 
 
+  /**
+   * What the LEVEL is doing to this tower's reload, set by the scene each
+   * frame. 1 everywhere but inside one of Batula's acid puddles, where the
+   * fire RATE is halved -- so the INTERVAL is doubled and this is 2.
+   *
+   * A multiplier on the interval rather than a subtraction from the cooldown,
+   * so a tower that is already reloading when a puddle lands under it does not
+   * get its current shot cancelled: it finishes this one and the NEXT one
+   * takes twice as long. That is what a player watching it would expect.
+   */
+  fireIntervalScale = 1
+
   tick(dt: number, enemies: Enemy[], fire: (tower: Tower, target: Enemy) => void): void {
     this.tickBuild(dt)
 
@@ -415,7 +427,7 @@ export class Tower extends Phaser.GameObjects.Container {
       this.disabledFor -= dt
       if (this.disabledFor <= 0) {
         this.disabledFor = 0
-        this.cooldown = this.fireInterval
+        this.cooldown = this.fireInterval * this.fireIntervalScale
       }
       return
     }
@@ -435,7 +447,7 @@ export class Tower extends Phaser.GameObjects.Container {
     const target = pickFirst(enemies, this.x, this.y, this.range, this.targets)
     if (!target) return
 
-    this.cooldown = this.fireInterval
+    this.cooldown = this.fireInterval * this.fireIntervalScale
     // Ramping specs reward staying on one target, so switching resets the
     // stack. Tracked on the tower rather than the enemy: the point is the
     // tower settling into a rhythm, and an enemy that dies takes it with it.

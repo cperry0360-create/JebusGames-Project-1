@@ -64,8 +64,15 @@ test('the migration reproduces exactly the levels the old save had open', () => 
   // would have UNLOCKED, the migrated save unlocks too. This is the check that
   // would fail if the level order or the thresholds were ever different from
   // what the migration assumes.
+  // LEVEL 5 IS IN THE TABLE EVEN THOUGH THE OLD SAVE FORMAT PREDATES IT, and
+  // the entry has to be here rather than defaulted. `?? 0` would say a level
+  // added after the migration was written was open at zero cleared runs, which
+  // is the whole campaign unlocked for anybody upgrading -- the exact failure
+  // `unlockedBy` replaced `runsClearedToUnlock` to prevent. The migration
+  // marks the first N levels cleared, so level 5 opens when level 4 is
+  // cleared, which is N >= 4.
   const oldThresholds: Record<string, number> = {
-    level1: 0, level2: 1, level3: 2, level4: 3,
+    level1: 0, level2: 1, level3: 2, level4: 3, level5: 4,
   }
   for (let n = 0; n <= 5; n++) {
     seed({ ...DEFAULT_SAVE, runsCleared: n, clearedLevels: undefined })

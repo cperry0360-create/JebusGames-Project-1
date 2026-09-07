@@ -495,6 +495,7 @@ test('each level\'s laneLengthPx is what its own map actually walks', () => {
   // which is why levels 1 and 2 read the same as they always did.
   const maps: Record<string, string> = {
     level1: 'map', level2: 'map_level2', level3: 'map_level3', level4: 'map_level4',
+    level5: 'map_level5',
   }
   const walk = (w: [number, number][]): number => {
     let d = 0
@@ -511,10 +512,22 @@ test('each level\'s laneLengthPx is what its own map actually walks', () => {
     const routes = branches.length === 0
       ? [trunk]
       : branches.map((b) => walk(b.waypoints) + trunk)
+    // `laneLengthPx` IS THE LONGEST ROUTE, and level 5 is the first level where
+    // that is a distinction worth making. Levels 1 to 4 have one route or
+    // several arranged to be equal, so every route was the recorded number and
+    // an exact match on all of them was the right check. Level 5's three gates
+    // walk 1436.4, 1217.3 and 1170.1 -- a spread that comes out of the
+    // painting and cannot be arranged away (see map_level5.json's `_lanes`).
+    // So: nothing walks further than the recorded figure, and something walks
+    // exactly it. A level whose routes ARE equal still has to match on all of
+    // them, because the longest is then also the shortest.
+    const longest = Math.max(...routes.map((r) => Math.round(r * 10) / 10))
     for (const r of routes) {
-      assert.equal(Math.round(r * 10) / 10, l.laneLengthPx,
+      assert.ok(Math.round(r * 10) / 10 <= l.laneLengthPx,
         `${l.id} records laneLengthPx ${l.laneLengthPx} but a route walks ${Math.round(r * 10) / 10}`)
     }
+    assert.equal(longest, l.laneLengthPx,
+      `${l.id} records laneLengthPx ${l.laneLengthPx} but its longest route walks ${longest}`)
   }
 })
 
