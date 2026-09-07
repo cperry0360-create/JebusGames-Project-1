@@ -6,7 +6,7 @@ Two commits on `main`.
 |---|---|---|
 | `862ecf7` | Level 2's Devil comes down to 5200 | **green**, covered by run 159 (pushed with `39cca69`) |
 | `39cca69` | Eleven blind harness scenarios, and the guard that let them stay blind | **green** — [run 159](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34114997057) |
-| `REPORT_SHA` | This report | **CI_REP** |
+| `41fb290` | This report | **green** — [run 160](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34115162300) |
 
 Tests **947 → 951**, all passing. `sh tools/tsdiff.sh 9172418`: 206 against a 205
 baseline, the one difference being the known `Cannot find module 'phaser'` for
