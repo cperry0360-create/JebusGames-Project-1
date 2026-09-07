@@ -237,3 +237,57 @@ test('nothing anywhere still gates on a count of cleared runs', () => {
   // And the Server Nuke's own gate is untouched.
   assert.match(src('systems/Save.ts'), /export function hasClearedARun/)
 })
+
+/* ------------------------------------- the world map falling through to a level */
+
+test('a release the world map never saw the press for cannot start a level', () => {
+  /*
+   * BUG A, AND IT WAS NEITHER OF THE TWO THINGS IT LOOKED LIKE.
+   *
+   * Pressing WORLD MAP on the title screen opened a level's loadout instead of
+   * the map. Not a pending route and not the save migration: `plateButton`
+   * fires on POINTERDOWN, so the title screen hands over on the press, the map
+   * builds its road under a finger that is still down, and the RELEASE lands
+   * on whatever node the layout has just put beneath it. `dragged` cannot
+   * catch that -- a press this scene never saw has travelled zero distance by
+   * definition, which reads as a clean tap.
+   *
+   * It looked intermittent and was not. The map opens scrolled to the furthest
+   * unlocked level: on a fresh save the road is clamped at slot one and
+   * nothing is under the button; the moment a level is beaten a node is
+   * centred exactly where the finger already is.
+   */
+  const map = src('scenes/WorldMapScene.ts')
+  assert.match(map, /private pressedHere = false/, 'the straddle guard is gone')
+  assert.match(map, /if \(!this\.pressedHere\) return/,
+    'a node acts on a release this screen never saw the press for')
+  assert.match(map, /this\.pressedHere = true/, 'nothing ever sets the guard')
+
+  // AND IT IS RESET IN create(), not only at the field. Phaser reuses the
+  // scene instance, so a field initialiser runs once in the lifetime of the
+  // game; BACK hands over on the press, so the scene shuts down with the flag
+  // still true and its delayed clear never fires. Fixing only the first entry
+  // left the SECOND one broken, which is how the bug was originally described.
+  const create = /\n  create\(\): void \{[\s\S]*?\n  \}/.exec(map)
+  assert.ok(create, 'WorldMapScene.create is gone')
+  assert.match(create[0], /this\.pressedHere = false/,
+    'the gesture state is not reset on re-entry, so the second visit is unguarded')
+  assert.match(create[0], /this\.dragged = 0/, 'the drag distance survives a re-entry')
+})
+
+test('the world map is a destination, not a router', () => {
+  // The prime suspect in the brief was a stored level or a pending route left
+  // behind by NEXT LEVEL. There is none, and this is what keeps it that way:
+  // the only thing that starts a level from this screen is a tap on a node.
+  const map = src('scenes/WorldMapScene.ts')
+  const create = /\n  create\(\): void \{[\s\S]*?\n  \}/.exec(map)![0]
+  assert.ok(!/scene\.start\('Loadout'\)|scene\.start\('Game'\)/.test(create),
+    'the world map routes onward as it opens')
+  // NEXT LEVEL sets the run state and goes straight to the loadout. It must
+  // not leave anything behind that a later visit to the map could replay.
+  const game = src('scenes/GameScene.ts')
+  const go = /private goToLevel\([\s\S]*?\n  \}/.exec(game)![0]
+  assert.match(go, /this\.scene\.start\('Loadout'\)/, 'NEXT LEVEL no longer opens the loadout')
+  assert.ok(!/pending|queued|nextRoute/i.test(go),
+    'NEXT LEVEL stores a pending route, which a later screen could replay')
+})

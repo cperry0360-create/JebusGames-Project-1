@@ -87,6 +87,28 @@ export class WorldMapScene extends Phaser.Scene {
   private grabScroll = 0
   private dragging = false
   private dragged = 0
+  /**
+   * Whether the press that is about to be released actually began on THIS
+   * screen.
+   *
+   * WHAT THIS FIXES: pressing WORLD MAP on the title screen opened a level's
+   * loadout instead of the map. `plateButton` fires on POINTERDOWN, so the
+   * title screen hands over on the press, this scene builds its road under a
+   * finger that is still down, and the RELEASE lands on whatever node the
+   * layout has just put beneath it -- with `dragged` at 0, which reads as a
+   * clean tap on a level.
+   *
+   * It looked intermittent and was not. The map opens scrolled to the furthest
+   * unlocked level, so on a fresh save the road is clamped at slot one and
+   * nothing sits under the button; the moment a level is beaten a node is
+   * centred exactly where the finger already is, and from then on it happens
+   * every single time. "It worked once, then started doing this every time" is
+   * the scroll position, not a flag.
+   *
+   * `dragged` alone could never have caught it: a press this scene never saw
+   * has travelled zero distance by definition.
+   */
+  private pressedHere = false
 
   constructor() {
     super('WorldMap')
@@ -98,6 +120,19 @@ export class WorldMapScene extends Phaser.Scene {
     // viewport, centred, nothing cropped at any shape. No gesture is bound to
     // it — see CameraRig for the one camera the player drives.
     fitCameraToDesign(this)
+
+    // GESTURE STATE IS RESET HERE, NOT ONLY AT THE FIELD.
+    //
+    // Phaser REUSES the scene instance: `scene.start` re-runs `create()` on
+    // the same object, so a field initialiser runs once in the lifetime of the
+    // game and never again. `pressedHere` is set on every press, and BACK
+    // hands over on the press -- so the scene shuts down with the flag still
+    // true and its `delayedCall` clear never fires. On the next visit the
+    // straddle guard was already defeated before the screen was drawn, which
+    // is why fixing the first entry did not fix the second.
+    this.pressedHere = false
+    this.dragging = false
+    this.dragged = 0
 
     const cleared = loadSave().clearedLevels
     const nodes = roadNodes()
@@ -306,6 +341,9 @@ export class WorldMapScene extends Phaser.Scene {
       // ON RELEASE, NOT ON PRESS. The same finger drags the map, so a press
       // that travelled is a scroll and must not also start a level.
       hit.on('pointerup', () => {
+        // A RELEASE THIS SCREEN NEVER SAW THE PRESS FOR IS NOT A TAP ON A
+        // LEVEL. See `pressedHere`.
+        if (!this.pressedHere) return
         if (this.dragged <= TAP_SLOP && node.level) this.startLevel(node.level.id)
       })
       this.road.add(hit)
@@ -484,6 +522,7 @@ export class WorldMapScene extends Phaser.Scene {
   private bindScroll(): void {
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       this.dragging = true
+      this.pressedHere = true
       this.dragged = 0
       this.grabX = p.worldX
       this.grabScroll = this.scroll
@@ -498,7 +537,10 @@ export class WorldMapScene extends Phaser.Scene {
     // this one, and it is what has to see how far the press travelled.
     this.input.on('pointerup', () => {
       this.dragging = false
-      this.time.delayedCall(0, () => { this.dragged = 0 })
+      // Cleared on the NEXT tick, not here: a node's own pointerup fires after
+      // this one, and it is what has to see how far the press travelled AND
+      // whether this screen saw the press at all.
+      this.time.delayedCall(0, () => { this.dragged = 0; this.pressedHere = false })
     })
     this.input.on('wheel', (
       _p: Phaser.Input.Pointer, _o: unknown, dx: number, dy: number,

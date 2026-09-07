@@ -206,29 +206,52 @@ const MIGRATION_ORDER = ['level1', 'level2', 'level3', 'level4']
 /**
  * The cake records a save holds, cleaned rather than trusted.
  *
- * THERE IS NO MIGRATION AND THERE CANNOT BE. A save from before cakes existed
- * knows which levels were beaten and nothing whatever about how many lives
- * were left when they were, and a guess would put a number on a map node that
- * the player never earned. So an older save arrives with no records, its map
- * nodes show empty cakes, and one replay of a level it has already beaten
- * fills them in. That is a smaller lie than crediting three cakes to a run
- * nobody watched.
+ * THE MIGRATION AWARDS ONE CAKE PER LEVEL ALREADY RECORDED AS BEATEN, and no
+ * more. This note used to say there could be no migration at all; that shipped
+ * a save full of green ticks over twelve dimmed cakes, which reads as "you
+ * beat these and got nothing". One cake is not a guess -- the bottom tier is
+ * "cleared the level at all" and `clearedLevels` is the claim that they did.
+ *
+ * Two and three still cannot be migrated and are not: how many lives were left
+ * was never recorded, and inventing it would put a number on a node nobody
+ * earned. A replay fills those in, and a replay can only improve a record.
  *
  * Unlike `clearedFrom`, a record for an unknown level is DROPPED rather than
  * kept: a dead entry in `clearedLevels` gates nothing, but a dead cake record
  * is a row in a table the world map iterates and would be carried forever with
  * nothing able to show or clear it.
  */
-function cakesFrom(parsed: Partial<SaveData>): Record<string, CakeRecord> {
+function cakesFrom(parsed: Partial<SaveData>, cleared: readonly string[]): Record<string, CakeRecord> {
   const raw = parsed.cakes
   const out: Record<string, CakeRecord> = {}
-  if (raw === null || typeof raw !== 'object') return out
-  for (const [id, rec] of Object.entries(raw as Record<string, unknown>)) {
-    if (id === '' || rec === null || typeof rec !== 'object') continue
-    const n = count((rec as CakeRecord).count)
-    if (n <= 0) continue
-    const mode = (rec as CakeRecord).difficultyId
-    out[id] = { count: n, difficultyId: typeof mode === 'string' ? mode : '' }
+  if (raw !== null && typeof raw === 'object') {
+    for (const [id, rec] of Object.entries(raw as Record<string, unknown>)) {
+      if (id === '' || rec === null || typeof rec !== 'object') continue
+      const n = count((rec as CakeRecord).count)
+      if (n <= 0) continue
+      const mode = (rec as CakeRecord).difficultyId
+      out[id] = { count: n, difficultyId: typeof mode === 'string' ? mode : '' }
+    }
+  }
+  // A LEVEL THAT IS RECORDED AS BEATEN HAS EARNED AT LEAST ONE CAKE.
+  //
+  // The note above used to say there could be no migration at all, and it was
+  // half right and shipped a visible bug: every save written before cakes
+  // existed showed four levels with green ticks and twelve dimmed cakes, which
+  // reads as "you have beaten this and been given nothing". The dimming was
+  // correct; the DATA said zero, because nothing had ever written a record.
+  //
+  // The bottom tier is literally "cleared the level at all" -- see cakes.json
+  // -- and `clearedLevels` is exactly the claim that they did. So one cake is
+  // not a guess, it is the tier the save already proves. TWO AND THREE STILL
+  // CANNOT BE MIGRATED and are not: how many lives were left was never
+  // recorded, and inventing it would put a number on a node nobody earned. A
+  // replay fills those in, and a replay can only ever improve the record.
+  //
+  // The difficulty is left EMPTY rather than guessed at for the same reason:
+  // the mode a legacy clear happened on is not knowable either.
+  for (const id of cleared) {
+    if (!out[id]) out[id] = { count: 1, difficultyId: '' }
   }
   return out
 }
@@ -254,6 +277,10 @@ export function loadSave(): SaveData {
     const raw = globalThis.localStorage?.getItem(KEY)
     if (!raw) return { ...DEFAULT_SAVE }
     const parsed = JSON.parse(raw) as Partial<SaveData>
+    // Read once and shared: the cake backfill below needs to know which levels
+    // this save counts as beaten, and deriving it twice is two chances to
+    // derive it differently.
+    const cleared = clearedFrom(parsed)
     return {
       volume: clamp01(parsed.volume, DEFAULT_SAVE.volume),
       // Both default to full rather than to the old single value. A save
@@ -276,12 +303,12 @@ export function loadSave(): SaveData {
       // the point of use rather than being repaired here, so one place decides
       // what an unknown id means.
       heroId: typeof parsed.heroId === 'string' ? parsed.heroId : '',
-      clearedLevels: clearedFrom(parsed),
+      clearedLevels: cleared,
       // Validated as a string and no further, like `heroId`: an id that is not
       // a mode resolves to the default at the point of use rather than being
       // repaired here.
       difficultyId: typeof parsed.difficultyId === 'string' ? parsed.difficultyId : '',
-      cakes: cakesFrom(parsed),
+      cakes: cakesFrom(parsed, cleared),
     }
   } catch {
     // Unreadable, unparseable or unavailable: start fresh rather than fail.

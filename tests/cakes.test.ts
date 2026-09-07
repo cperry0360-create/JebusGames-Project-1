@@ -276,3 +276,51 @@ test('the cake sizes are tuned in JSON, and the map is not drawn at 24', () => {
     }
   }
 })
+
+/* ------------------------------------- the legacy save that showed twelve dimmed cakes */
+
+test('a level already recorded as beaten carries at least one cake', () => {
+  /*
+   * BUG B, AND IT WAS NEITHER CANDIDATE EITHER.
+   *
+   * The live map showed four levels with green ticks and every one of their
+   * twelve cakes dimmed. The dim was not applied to the shared texture (the
+   * two textures measure 87.2 and 137.7 mean luma, so they are different
+   * pictures) and the earned test was not inverted. `cakesEarned` returned 0
+   * because the save held NO CAKE RECORDS -- every save written before cakes
+   * shipped is that save, and the loader deliberately refused to migrate them.
+   *
+   * The refusal was half right. Two and three cannot be migrated: how many
+   * lives were left was never recorded. ONE can, because the bottom tier is
+   * "cleared the level at all" and `clearedLevels` is precisely the claim that
+   * they did. It is the tier the save already proves rather than a guess.
+   */
+  const save = code('systems/Save.ts')
+  const from = /function cakesFrom[\s\S]*?\n\}/.exec(save)![0]
+  assert.match(from, /cakesFrom\(parsed: Partial<SaveData>, cleared: readonly string\[\]\)/,
+    'the cake loader cannot see which levels were beaten, so it cannot back-fill')
+  assert.match(from, /for \(const id of cleared\) \{\s*\n\s*if \(!out\[id\]\) out\[id\] = \{ count: 1, difficultyId: '' \}/,
+    'a level recorded as beaten no longer carries a cake')
+
+  // EXACTLY ONE, AND NO DIFFICULTY. Anything else is invented: the mode a
+  // legacy clear happened on was never written down either.
+  assert.ok(!/count: 2|count: 3|MAX_CAKES/.test(from),
+    'the back-fill awards more than the tier the save actually proves')
+
+  // AND A REAL RECORD ALWAYS WINS. The back-fill fills gaps; it must never
+  // overwrite a three-cake clear with a one.
+  assert.match(from, /if \(!out\[id\]\)/,
+    'the back-fill can overwrite a record the player actually earned')
+})
+
+test('the harness can tell an earned cake from an unearned one on the glass', () => {
+  // The assertion the brief asked for, and it has to be on a RENDERED map
+  // rather than in arithmetic: the bug was that every cake drew in the same
+  // state, which `cakesFor` alone would never have shown.
+  const harness = readFileSync(url('../tools/harness/index.html'), 'utf8')
+  assert.match(harness, /scenario === 'cakestate'/, 'the cakestate scenario is gone')
+  assert.match(harness, /NOT ONE cake on the whole road is drawn in the earned state/,
+    'the scenario no longer fails when every cake renders dimmed')
+  assert.match(harness, /the two cake textures are the same picture/,
+    'the scenario no longer distinguishes a shared-texture dim from a wrong count')
+})

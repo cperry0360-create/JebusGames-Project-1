@@ -464,6 +464,299 @@ async function run() {
   // The second thing is the fault that comes with dragging a screen whose
   // content is also its buttons: a drag that happens to end on top of a level
   // must not start that level.
+  if (scenario === 'cakestate') {
+    // BUG B. On the live map every cake is dimmed, on levels that are beaten.
+    //
+    // Two candidates were offered: the treatment is applied to the shared
+    // TEXTURE (so dimming one dims all), or the earned test is always false.
+    // This decides between them by reading the texture key off each drawn
+    // sprite -- an earned cake and an unearned one are different textures, so
+    // the keys ARE the answer -- and by sampling both textures' pixels.
+    const SAVE = await import('./js/systems/Save.js')
+    const RESM = await import('./js/systems/Resolution.js')
+    let faults = 0
+    const fail = (m) => { faults++; note('   *** ' + m) }
+
+    // A save shaped like the one in the screenshot: levels beaten, and no cake
+    // records, which is every save written before cakes shipped.
+    const save = { ...SAVE.DEFAULT_SAVE }
+    save.clearedLevels = ['level1', 'level2', 'level3']
+    if (arg === 'withcakes') save.cakes = { level1: { count: 3, difficultyId: 'normal' },
+      level2: { count: 1, difficultyId: 'normal' } }
+    SAVE.writeSave(save)
+    note('save: cleared=' + JSON.stringify(save.clearedLevels) +
+      ' cakes=' + JSON.stringify(save.cakes ?? {}))
+
+    for (const k of ['Title', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+    game.scene.start('WorldMap')
+    if (!(await until(() => running('WorldMap'), 8000))) { note('*** no map ***'); return }
+    await sleep(800)
+
+    // 1. THE TEXTURES THEMSELVES. If dimming mutated the shared texture, the
+    //    earned one would come back pale too.
+    const sample = (key) => {
+      if (!game.textures.exists(key)) return null
+      const img = game.textures.get(key).getSourceImage()
+      const cv = document.createElement('canvas')
+      cv.width = img.width; cv.height = img.height
+      cv.getContext('2d').drawImage(img, 0, 0)
+      const px = cv.getContext('2d').getImageData(0, 0, img.width, img.height).data
+      let lum = 0, a = 0, n = 0
+      for (let i = 0; i < px.length; i += 4) {
+        if (px[i + 3] < 16) continue
+        lum += px[i] * 0.299 + px[i + 1] * 0.587 + px[i + 2] * 0.114
+        a += px[i + 3]; n++
+      }
+      return { lum: lum / n, alpha: a / n }
+    }
+    const lit = sample('ui-cake'), pale = sample('ui-cake-unearned')
+    note('texture ui-cake:          ' + (lit ? 'luma ' + lit.lum.toFixed(1) + ' alpha ' + lit.alpha.toFixed(1) : 'MISSING'))
+    note('texture ui-cake-unearned: ' + (pale ? 'luma ' + pale.lum.toFixed(1) + ' alpha ' + pale.alpha.toFixed(1) : 'not built yet'))
+    if (lit && pale && Math.abs(lit.lum - pale.lum) < 5) {
+      fail('the two cake textures are the same picture -- the dim was applied to the SHARED texture')
+    }
+
+    // 2. WHAT EACH NODE ACTUALLY DREW.
+    const wm = scene('WorldMap')
+    const cakes = []
+    const visit = (o) => {
+      if (o.visible === false) return
+      if (o.texture && /^ui-cake/.test(o.texture.key)) {
+        const b = o.getBounds()
+        cakes.push({ key: o.texture.key, x: Math.round(b.centerX), y: Math.round(b.centerY) })
+      }
+      if (o.list) o.list.forEach(visit)
+    }
+    wm.children.list.forEach(visit)
+    // Group into rows of three by x, which is the order they were added.
+    const byNode = []
+    for (let i = 0; i < cakes.length; i += 3) byNode.push(cakes.slice(i, i + 3))
+    const LEVELS_M = await import('./js/systems/Levels.js')
+    note('nodes drawing cakes: ' + byNode.length)
+    byNode.forEach((row, i) => {
+      const id = LEVELS_M.LEVELS[i] ? LEVELS_M.LEVELS[i].id : '(unbuilt slot ' + i + ')'
+      const litN = row.filter((c) => c.key === 'ui-cake').length
+      const beaten = save.clearedLevels.includes(id)
+      const banked = SAVE.cakesEarned(id)
+      note('  ' + String(id).padEnd(8) + ' beaten=' + (beaten ? 'yes' : 'no ') +
+        ' banked=' + banked + '  drew ' + litN + ' lit of ' + row.length +
+        '  [' + row.map((c) => c.key.replace('ui-cake', '')).map((s) => s || 'LIT').join(',') + ']')
+      if (beaten && litN === 0) {
+        fail(id + ' is beaten and every one of its cakes is drawn in the unearned state')
+      }
+      if (!beaten && litN > 0) fail(id + ' has never been beaten and is showing a lit cake')
+    })
+
+    // 3. AND THE TWO STATES MUST NOT RENDER IDENTICALLY. This is the assertion
+    //    the brief asked for: whatever the counts are, a lit cake and a pale
+    //    one have to be tellable apart on the glass.
+    const anyLit = cakes.find((c) => c.key === 'ui-cake')
+    const anyPale = cakes.find((c) => c.key !== 'ui-cake')
+    note('a lit cake on the map: ' + (anyLit ? 'yes at ' + anyLit.x + ',' + anyLit.y : 'NONE') +
+      ' | a pale one: ' + (anyPale ? 'yes at ' + anyPale.x + ',' + anyPale.y : 'NONE'))
+    if (!anyLit) fail('NOT ONE cake on the whole road is drawn in the earned state')
+    if (!anyPale) fail('not one cake is drawn in the unearned state, so the two cannot be compared')
+    await shot('cakestate-' + (arg || 'default') + '-' + VP.w + 'x' + VP.h)
+
+    note('RESULT ' + (faults === 0
+      ? 'beaten levels show earned cakes and unbeaten ones do not, and the two states differ'
+      : '*** ' + faults + ' faults ***'))
+    return
+  }
+
+  if (scenario === 'maproute') {
+    // BUG A. Does WORLD MAP show the map, or fall through into a level?
+    //
+    // Driven with a REAL PRESS on the real button, which is the whole point:
+    // the `worldmap` scenario calls `scene.start('WorldMap')` by hand and so
+    // could never see this. `plateButton` fires on POINTERDOWN, the map builds
+    // under the finger, and the RELEASE lands on whatever is beneath it.
+    const SAVE = await import('./js/systems/Save.js')
+    const RESM = await import('./js/systems/Resolution.js')
+    let faults = 0
+    const fail = (m) => { faults++; note('   *** ' + m) }
+    const CASES = (arg || 'fresh,cleared1,cleared-all,legacy,legacy-4,half-nodiff,half-nocakes,junk').split(',')
+
+    // THE SAVE SHAPES A REAL PLAYER CAN ARRIVE WITH.
+    //
+    // `legacy` is the shape written by the build at 9172418, reconstructed
+    // from that commit's SaveData: nine fields, no `clearedLevels`, no
+    // `difficultyId`, no `cakes`. The two `half-` shapes are what a save
+    // looks like part-way through the rework. `junk` is the one nobody
+    // designs for and everybody eventually has.
+    //
+    // WRITTEN AS RAW JSON, not through `writeSave`, because writeSave would
+    // helpfully add the new fields and the whole point is a save that does
+    // not have them.
+    const KEY = 'courjahan.save.v1'
+    const legacy = (runsCleared) => ({
+      volume: 0.7, musicVolume: 1, voiceVolume: 1, muted: false,
+      runsCleared, bannerPoints: 240, lastReport: '', controlDrawer: false,
+      heroId: 'cory',
+    })
+    const RAW = {
+      legacy: legacy(1),
+      'legacy-4': legacy(4),
+      'half-nodiff': { ...legacy(2), clearedLevels: ['level1', 'level2'] },
+      'half-nocakes': { ...legacy(2), clearedLevels: ['level1', 'level2'], difficultyId: 'try-hard' },
+      junk: { ...legacy(2), clearedLevels: 'not-an-array', difficultyId: 7, cakes: [1, 2, 3] },
+    }
+
+    // `fitted` because the two screens draw in different units: Title and
+    // WorldMap are fitted to the design box and have to go through the camera,
+    // while GameScene's run-end dialog is SCREEN SPACE on the UI camera and
+    // its own coordinates are already CSS pixels. Converting the second
+    // through `cameras.main` uses the WORLD camera's zoom and aims the tap at
+    // a point no player could reach -- which is exactly what reported
+    // "NEXT LEVEL did not reach the loadout" on a button that works.
+    const findButton = (key, label, fitted = true) => {
+      const sc = scene(key)
+      if (!sc || !running(key)) return null
+      const cam = sc.cameras.main
+      let found = null
+      const visit = (o) => {
+        if (o.visible === false) return
+        if (o.text !== undefined && String(o.text) === label) found = o
+        if (o.list) o.list.forEach(visit)
+      }
+      sc.children.list.forEach(visit)
+      if (!found) return null
+      const b = found.getBounds()
+      const c = fitted ? RESM.worldToScreen(sc, b.centerX, b.centerY, cam)
+        : { x: b.centerX, y: b.centerY }
+      return { x: Math.round(c.x), y: Math.round(c.y) }
+    }
+
+    for (const label of CASES) {
+      // Set the save up for this case, then boot the title screen fresh.
+      if (RAW[label]) {
+        localStorage.setItem(KEY, JSON.stringify(RAW[label]))
+      } else {
+        const save = { ...SAVE.DEFAULT_SAVE }
+        if (label === 'cleared1') save.clearedLevels = ['level1']
+        if (label === 'cleared-all') save.clearedLevels = ['level1', 'level2', 'level3', 'level4']
+        SAVE.writeSave(save)
+      }
+      // WHAT THE MIGRATION MADE OF IT, before anything is drawn. A legacy save
+      // that loses its progress is a different failure from one that crashes,
+      // and both have to be visible here.
+      const loaded = SAVE.loadSave()
+      note(label + ': save loads as cleared=' + JSON.stringify(loaded.clearedLevels) +
+        ' difficulty="' + loaded.difficultyId + '" cakes=' + JSON.stringify(loaded.cakes) +
+        ' runsCleared=' + loaded.runsCleared + ' banner=' + loaded.bannerPoints)
+      for (const k of ['WorldMap', 'Loadout', 'Game', 'Hud', 'Cutscene']) game.scene.stop(k)
+      game.scene.start('Title')
+      await until(() => running('Title'), 8000)
+      await sleep(600)
+
+      const btn = findButton('Title', 'WORLD MAP')
+      if (!btn) { fail(label + ': no WORLD MAP button on the title screen'); continue }
+      note(label + ': pressing WORLD MAP at ' + btn.x + ',' + btn.y +
+        '  (cleared=' + JSON.stringify(SAVE.clearedLevels()) + ')')
+      await click(btn.x, btn.y)
+      await sleep(900)
+      const onMap = running('WorldMap')
+      const onLoadout = running('Loadout')
+      note('  -> WorldMap=' + onMap + ' Loadout=' + onLoadout +
+        ' Game=' + running('Game'))
+      await shot('maproute-' + label + '-' + VP.w + 'x' + VP.h)
+      if (!onMap || onLoadout) {
+        fail(label + ': WORLD MAP did not show the map (WorldMap=' + onMap +
+          ' Loadout=' + onLoadout + ')')
+      }
+      // AND THE PROGRESS SURVIVED. Somebody who beat four levels yesterday
+      // still has four levels beaten; a migration that silently wipes is not
+      // a fix. `legacy-4` is that player.
+      if (label === 'legacy-4' && SAVE.clearedLevels().length !== 4) {
+        fail('legacy-4: a save with four cleared runs migrated to ' +
+          JSON.stringify(SAVE.clearedLevels()) + ', losing progress')
+      }
+      if (label === 'legacy' && SAVE.clearedLevels().length !== 1) {
+        fail('legacy: a save with one cleared run migrated to ' +
+          JSON.stringify(SAVE.clearedLevels()))
+      }
+      // The node count is the visible half: a legacy player must see their
+      // beaten levels marked, not a fresh map.
+      if (onMap) {
+        const ticks = []
+        const visit = (o) => {
+          if (o.texture && /tick|check/.test(String(o.texture.key))) ticks.push(o.texture.key)
+          if (o.list) o.list.forEach(visit)
+        }
+        scene('WorldMap').children.list.forEach(visit)
+        note('  cleared markers drawn: ' + ticks.length)
+      }
+
+      // AND AGAIN, having gone in and come back out. The report says it works
+      // once and then does it every time, so once is not an answer.
+      if (onMap) {
+        const back = findButton('WorldMap', 'BACK')
+        if (back) {
+          await click(back.x, back.y)
+          await sleep(700)
+          const btn2 = findButton('Title', 'WORLD MAP')
+          if (btn2) {
+            await click(btn2.x, btn2.y)
+            await sleep(900)
+            note('  second entry -> WorldMap=' + running('WorldMap') +
+              ' Loadout=' + running('Loadout'))
+            if (!running('WorldMap') || running('Loadout')) {
+              fail(label + ': the SECOND entry to the world map fell through to a level')
+            }
+          }
+        }
+      }
+    }
+    // AND THE NEXT LEVEL PATH, which the brief named as the prime suspect.
+    // Beat a level, take NEXT LEVEL into the following loadout, come back to
+    // the title, and open the map. If anything about that hand-over were
+    // sticky -- a stored level, a pending route -- this is where it would
+    // fire.
+    {
+      SAVE.writeSave({ ...SAVE.DEFAULT_SAVE, clearedLevels: ['level1'] })
+      for (const k of ['Title', 'WorldMap', 'Loadout']) game.scene.stop(k)
+      game.scene.start('Game'); game.scene.start('Hud')
+      if (await until(() => running('Game') && scene('Game').hero, 15000)) {
+        await sleep(600)
+        const G = scene('Game')
+        G.status.wave = G.status.waveCount
+        G.status.lives = G.status.startingLives
+        G.endRun('won')
+        await sleep(900)
+        const nl = findButton('Game', 'NEXT LEVEL', false)
+        note('NEXT LEVEL button: ' + JSON.stringify(nl))
+        if (nl) {
+          await click(nl.x, nl.y)
+          await sleep(900)
+          note('  after NEXT LEVEL -> Loadout=' + running('Loadout') +
+            ' level=' + (await import('./js/systems/RunState.js')).runState().levelId)
+          if (!running('Loadout')) fail('NEXT LEVEL did not reach the loadout')
+          // Now out to the title and back into the map.
+          for (const k of ['Loadout', 'Game', 'Hud']) game.scene.stop(k)
+          game.scene.start('Title')
+          await until(() => running('Title'), 8000)
+          await sleep(600)
+          const b3 = findButton('Title', 'WORLD MAP')
+          if (b3) {
+            await click(b3.x, b3.y)
+            await sleep(900)
+            note('  world map after NEXT LEVEL -> WorldMap=' + running('WorldMap') +
+              ' Loadout=' + running('Loadout'))
+            await shot('maproute-afternext-' + VP.w + 'x' + VP.h)
+            if (!running('WorldMap') || running('Loadout')) {
+              fail('the world map fell through to a level after NEXT LEVEL had been used')
+            }
+          }
+        }
+      }
+    }
+
+    note('RESULT ' + (faults === 0
+      ? 'WORLD MAP shows the map, on every save shape, on re-entry, and after NEXT LEVEL'
+      : '*** ' + faults + ' faults ***'))
+    return
+  }
+
   if (scenario === 'worldmap') {
     const RESM = await import('./js/systems/Resolution.js')
     const WR = await import('./js/systems/WorldRoad.js')
