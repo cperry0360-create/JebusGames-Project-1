@@ -20,6 +20,7 @@ const PLATES = {
   level2: 'public/assets/maps/map_level2.webp',
   level3: 'public/assets/maps/map_level3.webp',
   level4: 'public/assets/maps/map_level4.webp',
+  level5: 'public/assets/maps/map_level5.webp',
 }
 
 async function load(path) {
@@ -50,6 +51,20 @@ const CROPS = {
   // the line where the grass turns white. Either half alone would be a card of
   // one texture with a road on it. Chosen off preview_level4.png.
   level4: [0.37, 0.04, 0.50, 0.59],
+  // THE CROSSROADS AND THE SEAM, the same test level 4's crop had to pass and
+  // for the same reason. The junction sits at canvas (624, 338) of 1280x720,
+  // which is 0.488, 0.469 of the plate, and the night/day seam runs through
+  // it -- so a crop up and to the left of it carries all four arms meeting,
+  // the graveyard's tombstones and indigo on the left, and the meadow's green
+  // on the right. A crop of any one arm would be a road on one texture, which
+  // is the card level 1 nearly got.
+  // THE FIRST TRY WAS [0.26, 0.10, 0.52, 0.62] AND WAS REJECTED ON THE
+  // PICTURE, not on the numbers: it framed the junction perfectly and was two
+  // fields and a road, with nothing in it that said WHERE. Pulling the frame
+  // left and up costs a little of the meadow and buys the graveyard's stones,
+  // which is the half of this level anybody would recognise. 1.50:1, so
+  // essentially nothing is centre-cropped away by the cover fit below.
+  level5: [0.14, 0.05, 0.60, 0.71],
 }
 
 const CARD_W = 300, CARD_H = 200

@@ -1,0 +1,93 @@
+{
+  "_note": "EVERYTHING LEVEL 5 ADDS TO THE RULES, in one file, and the reason it is a file rather than fields on rules.json is SCOPE. Lifesteal, bleed, the day/night phases, the acid puddles and the Humiliation meter are five new systems, and levels 1 to 4 are tuned numbers that must not move. `levels.json` names this file on level 5's row and on no other; `Levels.levelRules` returns null for every level that names nothing, and every one of the systems below is a no-op on null. That is a scoping a test can prove, rather than a claim about where an `if` was written.",
+  "_names": "WHERE THE DISPLAY NAMES ARE. `roster` below maps this level's five parts -- filler, the night rank and file, the fast one, the elite, the mini-boss and the boss -- onto entries in enemies.json, and the NAME lives on that entry, with every other enemy in the game. It is not repeated here, because a name in two files is two names as soon as one of them is edited. So renaming for the kids is: open enemies.json, find the six ids listed here, change `name` and `flavor`. Nothing else reads a level-5 enemy name; every UI string comes off the def.",
+  "roster": {
+    "filler": "thrall",
+    "night": "glider",
+    "fast": "babyFrank",
+    "elite": "vampireElite",
+    "miniBoss": "vampireLord",
+    "boss": "batula"
+  },
+  "_phases": "THE DAY/NIGHT FLIP, and it is the level's signature. Waves 1 to 4 are DAY. The flip happens PART WAY THROUGH wave 5 -- `flipWave` counted from 1, `flipAfterSeconds` into that wave -- and waves 6 to 12 are NIGHT.\nMEASURED IN SECONDS RATHER THAN AS A FRACTION OF THE WAVE. A wave has no length until it is over: it ends when the field is empty, which depends on how fast the board kills. A fraction would therefore fire at a different moment on every run and the soak could not reproduce it. Seconds from the wave's first spawn is a clock both the scene and the simulator have.\nTHE TINT IS AN OVERLAY, not a second plate. `dayTint`/`nightTint` are the colours, `dayAlpha`/`nightAlpha` the strengths, and they are deliberately low: the board art already has a moonlit half and a sunlit half and the overlay has to let that contrast through rather than flatten it.",
+  "phases": {
+    "flipWave": 5,
+    "flipAfterSeconds": 9,
+    "transitionSeconds": 2.5,
+    "day": {
+      "tint": "0xffb347",
+      "alpha": 0.14,
+      "vampireSpeedMultiplier": 0.75,
+      "vampireLifesteal": false,
+      "sunDamagePerSecond": 5
+    },
+    "night": {
+      "tint": "0x1a1a5e",
+      "alpha": 0.38,
+      "vampireSpeedMultiplier": 1.15,
+      "vampireLifesteal": true,
+      "sunDamagePerSecond": 0
+    }
+  },
+  "_conversions": "WHAT THE DUSK TURNS. Every LIVE Thrall on the board at the moment of the flip becomes a Glider where it stands.\nIT KEEPS ITS HEALTH AS A PERCENTAGE, which is the whole rule and the one thing that could quietly go wrong: a Thrall on its last sliver that healed to a full Glider would make the flip a reward for letting them through. `Vampirism.convertedHealth` is the one definition, it rounds up to a minimum of one so nothing converts into a corpse, and both the scene and the simulator call it.",
+  "conversions": [
+    {
+      "from": "thrall",
+      "to": "glider"
+    }
+  ],
+  "_lifesteal": "VAMPIRSON. When a vampire-type enemy damages a PLAYER UNIT it heals for a share of the damage it dealt, capped at its own maximum health.\nPLAYER UNIT MEANS the hero and anything deployed that can be hit: the two summoned fighters and the Ima Dummy Tower's soldiers. There is no wall entity in this game and one was not invented for this.\nTHE SHARE IS PER ENEMY and lives on the enemy's own row in enemies.json, because it is what tells the roster apart -- the Glider heals for the brief's 50%, the Elite for 80%, the Lord and Batula for the whole of it. What is here is the cap, and the pip.\nA BLEEDING VAMPIRE HEALS FOR NOTHING. That is `bleed.disablesLifesteal`, and it is the level's counterplay loop.",
+  "lifesteal": {
+    "cappedAtMaxHealth": true,
+    "pipSeconds": 0.7,
+    "pipRisePixels": 26
+  },
+  "_bleed": "BLEED, AND WHY THE TICK IS FLAT.\nDAMAGE IS FLAT PER STACK PER SECOND AND IS NOT A SHARE OF MAXIMUM HEALTH. Five stacks at one percent of max health a second kills any boss in twenty seconds whatever its health is, which would make the boss's health stop controlling the fight -- and a sensitivity table over a number that controls nothing comes back flat. Bleed's job on this level is to switch lifesteal off. It is not meant to be a damage source, so the tick is small on purpose: five stacks on Batula is 7.5 a second against a board that does hundreds.\nWHICH TOWERS APPLY IT, and why it is by ARCHETYPE. There is no `physical` damage type in this codebase; a tower carries an archetype, and two of the four cut.\n  single-target -- the Slingshot and the Grinder, aimed shots that puncture one body. The Slingshot's 0.65s interval is what actually builds a stack tower.\n  control -- the Bramble, which is thorns. Deadfall and Thicket are the same weapon.\n  aoe is EXCLUDED: the Mortar and the Longshot are explosives, and a blast crushes rather than cuts.\n  support is excluded because the Beacon does no damage at all, and so is the Ima Dummy for the same reason -- bleed applies on hit and a tower that deals none never lands one. Its soldiers are units and hit like the hero does; see `fromHeroBasic`.\nAnd the point of drawing the line there rather than everywhere: it makes bleed a property of sustained aimed fire rather than of splash, which is the counterplay the level is built on -- chip damage beats burst, because burst cannot hold a vampire's healing off.\nHERO BASIC ATTACKS AND HERO ABILITIES BOTH APPLY IT, which is the brief's default and nothing here breaks under it. It matters more than it looks: the hero is the thing a vampire is usually biting, so a hero who could not make one bleed would be feeding it.",
+  "bleed": {
+    "maxStacks": 5,
+    "secondsPerStack": 4,
+    "damagePerStackPerSecond": 1.5,
+    "disablesLifesteal": true,
+    "towerArchetypes": [
+      "single-target",
+      "control"
+    ],
+    "fromHeroBasic": true,
+    "fromHeroAbilities": true,
+    "dripTint": "0xb3121a"
+  },
+  "_glider": "WHAT GLIDING MEANS, MECHANICALLY. The Glider hovers a few pixels off the ground and drifts, so it is out of reach of things lying ON the ground. It is NOT an air unit and must not use the air layer: every tower can shoot it, and `layer` is absent from its row for exactly that reason.\n`ignoresGroundSlow` and `ignoresGroundHazards` are separate flags rather than one, because they are the open question in this brief and they are what the answer edits. See reports/2026-09-07-level-5.md: Cory's second ability is the Spike Strip, a ground hazard on the lane, and the Glider is the rank and file for waves 6 to 12 -- so with both flags true one of five heroes has a dead second ability for most of the level. Flipping `ignoresGroundHazards` to false is the whole of option (a): the strip still cuts, it just cannot slow. THE VALUE HERE IS THE BRIEF'S OWN LITERAL READING and not a decision made on Cory's behalf.",
+  "gliding": {
+    "ignoresGroundSlow": true,
+    "ignoresGroundHazards": true,
+    "bobPixels": 5,
+    "bobSeconds": 1.9,
+    "shadowAlpha": 0.22,
+    "shadowGapPixels": 7
+  },
+  "_acid": "PUBLIC HUMILIATION. `fx` is the puddle's art, named HERE and not in any .ts file -- art.json is the only place a filename lives and a level's data is the only place a sprite KEY does, which is the same rule the Spike Strip's `fx` in heroes.json already follows.\n Every `intervalSeconds` OF MOVEMENT -- not of wall clock, so a Batula held at a standstill is not quietly building a puddle -- he stops for `stopSeconds`, hunches, covers his face and drops a puddle centred under himself.\nWHAT A PUDDLE DOES: a player GROUND unit standing in it takes `damagePerSecond`, and a tower whose base is inside the radius keeps firing but at `towerFireRateMultiplier` of its rate. The tower itself takes nothing.\n`damagePerSecond` IS SET AGAINST THE SOLDIER. A base Ima Dummy lad has 90 health, and 60 a second kills one in 1.50s, which is the brief's `about 1.5 seconds`. It is measured against the BASE lad rather than an upgraded one deliberately: a tier-3 lad has 300 and survives five seconds in the same puddle, which is what upgrading him is for. Retune this if `soldierHealth` moves.\nPUDDLES DO NOT HARM BATULA OR ANY OTHER ENEMY, deliberately, and there is no flag to make them. Friendly fire was asked for and it breaks the level: Batula walks through his own trail, so a puddle that hurt him would make the fight a race he loses by standing still.\nTHEY DO NOT STACK. Overlapping puddles apply the HIGHEST tick, not the sum, which is what `AcidPuddle.damageAt` returns -- otherwise a boss who paused twice in one place would have made a spot that kills a soldier instantly.",
+  "acid": {
+    "fx": "fx-acid-puddle",
+    "intervalSeconds": 3.5,
+    "stopSeconds": 0.6,
+    "radius": 46,
+    "durationSeconds": 8,
+    "fadeSeconds": 1,
+    "damagePerSecond": 60,
+    "tickSeconds": 0.25,
+    "towerFireRateMultiplier": 0.5,
+    "harmsEnemies": false
+  },
+  "_humiliation": "THE PRESSURE CURVE. Every puddle he drops adds a stack, to a maximum of `maxStacks`, and every stack is +5% move speed and +5% damage. He gets angrier and faster the more he embarrasses himself, so the fight speeds up whether or not the player is winning it, and a board that cannot kill him in the first minute is fighting a worse Batula in the second.\nAT FULL STACKS he is 40% faster and 40% harder-hitting, which is the number the soak is against. The 50% roar grants one outright; see `batula`'s `onHealthThreshold` in enemies.json.\nThe cue is `laugh` in audio.json if it exists and silence if it does not -- `Audio.play` already no-ops on an unknown cue, so a missing crowd laugh is not a crash.",
+  "humiliation": {
+    "maxStacks": 8,
+    "speedPerStack": 0.05,
+    "damagePerStack": 0.05,
+    "shoutText": "HA HA HA",
+    "shoutSeconds": 1.6,
+    "shoutFromX": 1180,
+    "shoutSpreadY": 220,
+    "sound": "laugh"
+  },
+  "_cakes": "THERE ARE NO CAKE THRESHOLDS HERE AND THERE MUST NOT BE. cakes.json's tiers are a FRACTION OF THE RUN'S OWN STARTING LIVES and are shared by every story level on purpose -- see its `_percentNotCount`. A per-level copy would be a second opinion about what two cakes means, and the first time somebody edited one the same performance would pay differently on two levels. Level 5 is paid by being a story level, and nothing had to be added for it."
+}

@@ -189,11 +189,29 @@ test('the hero can survive the wave he is posted on', () => {
   // Not a balance claim, a sanity floor: with every attacker the design allows
   // on him at once, he has to last long enough for a player to react.
   const cory = heroes.cory
+  const dps = (e: any): number => (e.attackInterval > 0 ? e.damage / e.attackInterval : 0)
+  const isBoss = (e: any): boolean => e.tier === 'boss' || e.role === 'boss'
+  // MEASURED ON THE RANK AND FILE, because `blockCapacity` of the heaviest
+  // attacker is a statement about a CROWD and a boss does not arrive in one.
+  // It used to take the maximum over every enemy in the game, which was safe
+  // for as long as every boss had `damage: 0` -- they walked through the line
+  // and hit nothing. Level 5's Batula is held and hits for 55, so the old sum
+  // put three of him on Cory at once, which is not a board state that exists.
   const worst = Math.max(...Object.values(enemies as Record<string, any>)
-    .map((e) => (e.attackInterval > 0 ? e.damage / e.attackInterval : 0)))
+    .filter((e) => !isBoss(e)).map(dps))
   const seconds = cory.maxHealth / (worst * cory.blockCapacity)
   assert.ok(seconds >= 10,
     `${cory.name} lasts ${seconds.toFixed(1)}s against ${cory.blockCapacity} of the heaviest attacker`)
+
+  // ...and ONE of the heaviest boss, which is the board state that does exist.
+  // The floor is the same ten seconds: a hero who cannot stand in front of a
+  // boss long enough for a player to react to it is not a hero, he is a timer.
+  const boss = Math.max(...Object.values(enemies as Record<string, any>)
+    .filter(isBoss).map(dps))
+  if (boss > 0) {
+    const alone = cory.maxHealth / boss
+    assert.ok(alone >= 10, `${cory.name} lasts ${alone.toFixed(1)}s against one boss`)
+  }
 })
 
 test('a repeated stop on the same target gets shorter each time', () => {

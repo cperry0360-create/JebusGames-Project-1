@@ -31,16 +31,43 @@ export interface DisplayDef {
  * the target's terms: moving the branch cannot silently detach it, and moving
  * the target's waypoints moves the join with them.
  */
+/**
+ * One place a lane's walkers can go when they reach its end.
+ *
+ * `weight` only means anything where a lane has SEVERAL of these -- a split --
+ * and it is the share of traffic that takes this arm. Absent is 1, so a lane
+ * with two undeclared weights splits its traffic evenly.
+ */
+export interface MergeContinuation {
+  into: string
+  atIndex: number
+  weight?: number
+}
+
 export interface LaneDef {
   /** Unique within the map. "main" is taken by the map's own waypoints. */
   id: string
   waypoints: number[][]
-  /** Where this lane joins another. Absent means it runs to the exit itself,
-   *  which exactly one lane per map may do. */
-  merge?: {
-    into: string
-    atIndex: number
-  }
+  /**
+   * Where this lane's walkers go at its end. Absent means it runs to an exit.
+   *
+   * ONE ENTRY IS A MERGE and is what levels 3 and 4 declare: the branch ends
+   * and everything on it continues along the named lane. SEVERAL ENTRIES ARE
+   * A SPLIT, which level 5's crossroads needs: the trunk ends and each walker
+   * takes ONE of the arms, chosen once from its own `routePick` so the same
+   * enemy never flickers between them. The single-entry form is written
+   * unwrapped so levels 3 and 4 need no edit at all.
+   *
+   * A MAP MAY NOW HAVE MORE THAN ONE LANE WITHOUT A CONTINUATION. It could
+   * not before: `validateLanes` rejected a second terminal outright, with the
+   * message "branches must merge before it", because until level 5 every
+   * multi-lane map was a fork feeding one gate and a lane that reached the
+   * exit on its own was always a forgotten `merge`. Level 5 has two exits and
+   * both cost lives, so the rule that caught that typo would now reject a
+   * correct map. What replaces it is narrower and still catches the typo that
+   * matters: a lane nothing leads to and that leads nowhere is unreachable.
+   */
+  merge?: MergeContinuation | MergeContinuation[]
 }
 
 export interface MapDef {
@@ -69,6 +96,21 @@ export interface MapDef {
    * copies of it to drift. See systems/Lanes.ts.
    */
   lanes?: LaneDef[]
+  /**
+   * Where the lane `waypoints` describes CONTINUES, if it is not itself an
+   * exit. Absent on every map before level 5, and the shape of the field is
+   * `LaneDef.merge`'s exactly.
+   *
+   * IT IS HERE RATHER THAN IN `lanes` because the trunk is not repeated in
+   * that array -- it is `waypoints`, resolved as the lane "main" -- and there
+   * is therefore no row of it to hang a continuation on. Level 5's crossroads
+   * needs one: two roads in, a shared junction, two roads out, so the lane in
+   * the middle both receives merges and splits.
+   *
+   * A map whose main lane runs to the exit, which is all four built levels,
+   * simply leaves it out.
+   */
+  mainMerge?: MergeContinuation | MergeContinuation[]
   buildSpots: number[][]
   /** The blank painted boards, and the rectangle a lettering overlay is drawn
    *  in on each. See systems/SignPlacement.
@@ -427,7 +469,17 @@ export interface EnemyDef {
    *  peanuts instead of attacking anything. */
   tax?: TaxDef
   sprite: string
-  maxHealth: number
+  /**
+   * NULL FOR A BOSS WHOSE LEVEL HAS NOT BEEN SOAKED YET.
+   *
+   * A boss's health only means anything against the DPS the board it walks
+   * past can hold, so it is the last number a level gets rather than the
+   * first, and there is no honest placeholder for it -- level 4's 5200 was one
+   * and no board in the game could kill it. The Rooster carries null until
+   * level 6 has a map to be measured on, and `tests/level6.test.ts` refuses to
+   * let levels.json register a level that spawns an enemy with no health.
+   */
+  maxHealth: number | null
   /** Flat damage subtracted per hit, unless the attacker ignores armour. */
   armor: number
   speed: number
@@ -476,6 +528,95 @@ export interface EnemyDef {
    * summoner's own place on its own lane and carry on from there.
    */
   summons?: SummonsDef
+
+  /**
+   * What this one breaks into when it dies, if anything.
+   *
+   * DIFFERENT FROM `summons`, which is a burst on a clock while the summoner
+   * walks. This fires once, on death, at the place it died — the Vampire
+   * Lord's four Gliders. Kept as its own field rather than as a `summons`
+   * with an impossible interval because "what it does while alive" and "what
+   * is left when it dies" are two facts, and a reader of one should not have
+   * to work out which the other is.
+   */
+  splitsOnDeath?: {
+    enemy: string
+    count: number
+  }
+
+  /**
+   * The one-off that fires the first time this one drops below a share of its
+   * health. Batula's roar at 50%: six Baby Franks and a free Humiliation.
+   *
+   * ONCE PER ENEMY, not once per crossing. Health can cross a threshold twice
+   * — lifesteal is on this level and it heals — and a boss that re-roared
+   * every time a bleed lapsed would summon without limit.
+   */
+  onHealthThreshold?: {
+    belowHealth: number
+    summon?: { enemy: string; count: number }
+    /** Humiliation stacks granted outright. See level5.json. */
+    humiliation?: number
+  }
+
+  /**
+   * True for an enemy the sun bothers and the night helps: the day slow, the
+   * sun's damage per second and the night's speed bonus all key off it.
+   *
+   * NOT THE SAME QUESTION AS `lifesteal`, and they are separate fields for
+   * that reason. The Thrall is a villager mid-turn — it has no lifesteal and
+   * the sun does not burn it yet. Baby Frank is not a vampire at all.
+   */
+  vampiric?: boolean
+
+  /**
+   * True for an enemy that hovers a few pixels off the ground rather than
+   * standing on it, so things lying ON the ground miss it.
+   *
+   * WHAT THAT COSTS IT is not here: it is level5.json's `gliding`, which is
+   * one place and is where the open question about the Spike Strip gets
+   * answered. The enemy only declares that it glides.
+   *
+   * NOT `layer: 'air'`. A glider is a legal target for every tower, including
+   * the ground-only ones; the air layer is about what may SHOOT it and this is
+   * about what may TOUCH it.
+   */
+  glides?: boolean
+
+  /**
+   * The share of the damage it deals to a PLAYER unit that it heals for.
+   *
+   * Per enemy rather than one shared constant, because "high lifesteal" and
+   * "strong lifesteal" are what tells an Elite from a Lord. The brief's 50%
+   * is the Glider's; see level5.json's `_lifesteal` for the ladder.
+   *
+   * Absent on every enemy before level 5, which is what keeps levels 1 to 4
+   * out of this entirely.
+   */
+  lifesteal?: number
+
+  /**
+   * True for the one enemy that leaves acid behind it.
+   *
+   * A FLAG RATHER THAN AN ID, so the scene and the simulator both find "the
+   * enemy that does this" by asking rather than by knowing Batula's name.
+   * What the trail DOES -- the interval, the radius, the damage, the stop --
+   * is level5.json's `acid`, so a second boss with the same habit is one field
+   * here and no new code at all.
+   */
+  acidTrail?: boolean
+
+  /**
+   * True for the one enemy that breathes a line of fire ahead of itself.
+   *
+   * A FLAG RATHER THAN AN ID, like `acidTrail` and for the same reason: the
+   * scene and the simulator find "the enemy that does this" by asking rather
+   * than by knowing the Rooster's name. What the fire DOES -- the interval,
+   * the telegraph, the reach, the width, the damage and the scorch -- is
+   * level6.json's `flame`, so a second boss with the same habit is one field
+   * here and no new code.
+   */
+  flame?: boolean
   peanutReward: number
   livesCost: number
   damage: number

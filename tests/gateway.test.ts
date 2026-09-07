@@ -115,7 +115,9 @@ test('the enemy fades out through the gate, and nothing slams', () => {
   // that is falling rather than rising.
   assert.match(enemy, /if \(!this\.controlled && this\.leaked\(\)\) return true/,
     'the enemy no longer ends its walk through the leak check')
-  assert.match(enemy, /return this\.laneDistance >= this\.stopDistance/,
+  // `gatesHere()` and not a field: level 5 has two exits, so which distance
+  // ends the walk depends on WHICH lane is being walked.
+  assert.match(enemy, /return this\.laneDistance >= this\.gatesHere\(\)\.stopDistance/,
     'the enemy still walks to the end of the lane and off the plate')
   assert.doesNotMatch(enemy, /this\.distance >= this\.lane\.totalLength/,
     'the old walk-off-the-end condition is back')
@@ -123,7 +125,7 @@ test('the enemy fades out through the gate, and nothing slams', () => {
   // is gated on being past the gap's near edge.
   assert.equal((enemy.match(/emergeState\(/g) ?? []).length, 1,
     'the entrance emergence is applied in more than one place')
-  assert.match(enemy, /if \(this\.laneDistance <= this\.gateDistance\) return/,
+  assert.match(enemy, /if \(this\.laneDistance <= g\.gateDistance\) return/,
     'the exit fade is not gated on reaching the gate, so it runs over the whole lane')
 
   const leak = /private leak\(enemy: Enemy\)[\s\S]*?\n  \}/.exec(game)

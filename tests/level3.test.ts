@@ -53,8 +53,11 @@ test('both gates run to the exit, and neither strands its walkers', () => {
 
   for (const id of ['upper', 'lower']) {
     assert.equal(net.terminal(id).id, MAIN_LANE, `${id} does not end up on the shared tail`)
-    assert.equal(net.lane(id).merge!.into, MAIN_LANE)
-    assert.equal(net.lane(id).merge!.atIndex, 0, `${id} joins the tail somewhere other than its start`)
+    // ONE continuation, and it is the tail. `merge` became a list when level
+    // 5's crossroads needed a lane with two of them; a fork still has one.
+    assert.equal(net.lane(id).merge!.length, 1, `${id} has more than one continuation`)
+    assert.equal(net.lane(id).merge![0]!.into, MAIN_LANE)
+    assert.equal(net.lane(id).merge![0]!.atIndex, 0, `${id} joins the tail somewhere other than its start`)
   }
   // Exactly one lane may run to the exit, and it is the tail.
   assert.deepEqual(net.lanes.filter((l) => l.merge === null).map((l) => l.id), [MAIN_LANE])

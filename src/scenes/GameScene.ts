@@ -16,12 +16,15 @@ import {
 import abilitiesData from '../data/abilities.json'
 import draftData from '../data/draft.json'
 
-import { loadLevel, nextLevelId, type Level } from '../systems/Levels.ts'
+import { loadLevel, levelRules, nextLevelId, type Level } from '../systems/Levels.ts'
 import {
   DEFAULT_DIFFICULTY_ID, difficultyName, resolveDifficultyId,
   startingLives, startingPeanuts,
 } from '../systems/Difficulty.ts'
 import { LaneNetwork } from '../systems/Lanes.ts'
+import { NightRules } from '../systems/NightRules.ts'
+import { convertedHealth } from '../systems/Vampirism.ts'
+import { puddleAlpha } from '../systems/AcidPuddle.ts'
 import { Path } from '../systems/Path.ts'
 import { BuildSystem } from '../systems/BuildSystem.ts'
 import type { BuildSpot } from '../systems/BuildSystem.ts'
@@ -30,18 +33,18 @@ import { withinRadius, pickNearest } from '../systems/Targeting.ts'
 import { auraAt, darkCount, type AuraSource } from '../systems/Support.ts'
 import { GROUND_DEPTH } from '../systems/DepthSort.ts'
 import { boardBounds, coverZoom, openingView } from '../systems/CameraMath.ts'
-import { distanceAtX, type EmergeConfig } from '../systems/Gateway.ts'
+import { distanceAtX, laneGates, type EmergeConfig, type GateDistances } from '../systems/Gateway.ts'
 import { makeRng } from '../systems/Draft.ts'
 import { dashArcs, HeroMarkers, type MarkersDef } from '../systems/HeroMarkers.ts'
 import {
-  ART, applyRender, fitContentHeight, fitContentWidth, renderFor, soldierSprite,
+  ART, applyRender, fitContentHeight, fitContentWidth, fitInRect, renderFor, soldierSprite,
 } from '../systems/Art.ts'
 import { EFFECT_MS, playEffect, sizeForRadius } from '../systems/Effects.ts'
 import { Cooldowns } from '../systems/Cooldowns.ts'
 import { unlockedTowerCount } from '../systems/Draft.ts'
 import { runState, setRunState } from '../systems/RunState.ts'
 import { castAbility } from '../systems/AbilityRunner.ts'
-import { PRESENTATION, floatingDamage, hitPause } from '../systems/Presentation.ts'
+import { PRESENTATION, deathPuff, floatingDamage, hitPause } from '../systems/Presentation.ts'
 import { cueLeadInMs, play, playRotating, resetVoices } from '../systems/Audio.ts'
 import { Enemy } from '../entities/Enemy.ts'
 import type { Blocker } from '../entities/Enemy.ts'
@@ -118,6 +121,17 @@ const TOWERS = towersData as Record<string, TowerDef>
 // a string literal union in the type and a plain `string` in the JSON, and TS
 // will not bridge that in one step.
 const ENEMIES = enemiesData as unknown as Record<string, EnemyDef>
+/**
+ * An enemy's id, from its def.
+ *
+ * The wave table names enemies by id and `Enemy` carries the DEF, not the id
+ * -- which is right for everything the entity does, and useless for the one
+ * question the dusk flip has to ask: "is this a Thrall?". Built once, off the
+ * same object identities the scene spawns from, so a lookup cannot disagree
+ * with what is on the board.
+ */
+const ENEMY_ID_OF = new Map<EnemyDef, string>(
+  Object.entries(ENEMIES).map(([id, def]) => [def, id]))
 const ABILITIES = abilitiesData as Record<string, AbilityDef>
 const DRAFT = draftData as DraftDef
 
@@ -274,6 +288,21 @@ export class GameScene extends Phaser.Scene {
   /** Every lane this map has, and how they join. One lane on a single-lane
    *  map, which is every level that exists today. */
   private lanes!: LaneNetwork
+  /**
+   * Level 5's five extra systems, or null on every other level.
+   *
+   * ONE NULLABLE FIELD IS THE WHOLE SCOPING MECHANISM. The day/night flip,
+   * lifesteal, bleed, the acid puddles and the Humiliation meter all read
+   * their configuration off this object, and it is null unless the level names
+   * a rules file -- which only level 5 does. Four tuned win rates therefore
+   * cannot move, and that is a property of the data rather than of an `if`.
+   */
+  private night: NightRules | null = null
+  /** The full-board tint. A rectangle above the plate and below everything
+   *  that stands on it, so the painted contrast still reads through. */
+  private skyTint: Phaser.GameObjects.Rectangle | null = null
+  /** One sprite per live puddle, in the same order as `night.puddles`. */
+  private puddleArt: Phaser.GameObjects.Image[] = []
   private build!: BuildSystem
   /** Public so the probe can drive the bribe through the real swap. Undefined
    *  on a level whose map declares no signs — see `buildSign`. */
@@ -421,6 +450,7 @@ export class GameScene extends Phaser.Scene {
     mouthDistance: number
     gateDistance: number
     stopDistance: number
+    byLane?: Record<string, GateDistances>
     emerge: EmergeConfig
   }
   /** Cropped out of the map plate at scene start; see createArchOccluders. */
@@ -616,12 +646,27 @@ export class GameScene extends Phaser.Scene {
       mouthDistance: map.entrance ? distanceAtX(map.waypoints, map.entrance.emergeFromX) : 0,
       gateDistance: map.exit ? distanceAtX(map.waypoints, map.exit.gateX) : laneEnd,
       stopDistance: map.exit ? distanceAtX(map.waypoints, map.exit.vanishX) : laneEnd,
+      // The same three per lane, because level 5 has two exits at two
+      // different distances and one map-wide `stopDistance` is the trunk's
+      // length -- which would leak everything on the longer arm early. The
+      // three above stay as the fallback, so a lane the table does not name
+      // reads exactly what every map before this one read.
+      byLane: laneGates(
+        this.lanes.lanes.map((l) => ({
+          id: l.id, waypoints: l.path.points.map((p) => [p.x, p.y]), totalLength: l.path.totalLength,
+        })),
+        {
+          emergeFromX: map.entrance?.emergeFromX,
+          gateX: map.exit?.gateX,
+          vanishX: map.exit?.vanishX,
+        }),
       emerge: map.entrance
         ? { fadeMs: map.entrance.fadeMs, startScale: map.entrance.startScale }
         : { fadeMs: 0, startScale: 1 },
     }
     this.build = new BuildSystem(this.level.map.buildSpots, this.level.map.spotRadius)
     this.spawner = new WaveSpawner()
+    this.night = NightRules.from(levelRules(this.level.id))
 
     this.drawPlate()
     this.buildSign()
@@ -1022,6 +1067,43 @@ export class GameScene extends Phaser.Scene {
     const plate = this.add.image(0, 0, ART.map[this.level.map.plate]).setOrigin(0, 0).setDepth(GROUND_DEPTH)
     this.createArchOccluders()
     plate.setDisplaySize(displayData.width, displayData.height)
+    this.buildSkyTint()
+  }
+
+  /**
+   * The day/night overlay: one rectangle over the whole board.
+   *
+   * ABOVE THE PLATE AND BELOW THE SPRITES, at GROUND_DEPTH + 1, which is what
+   * makes it the light in the scene rather than a filter over the picture --
+   * the enemies and the towers stand in front of it, unwashed, and it is the
+   * GROUND that turns from gold to indigo underneath them.
+   *
+   * A RECTANGLE, NOT A SECOND PLATE. A painted night version of the board
+   * would be another 780 KB in the deploy and would cross-fade as a whole
+   * image, which flattens the one thing this plate already has: a moonlit half
+   * and a sunlit half. A translucent wash keeps that contrast and lets the
+   * colour and the alpha animate independently, which is what the two-and-a-
+   * half-second dusk actually is. Alpha is low on purpose for the same reason.
+   *
+   * It is a WORLD object, so it pans and zooms with the map -- it is painted
+   * onto the board, not onto the glass, and a fixed one would slide off the
+   * corner of a zoomed board.
+   */
+  private buildSkyTint(): void {
+    if (!this.night) return
+    const t = this.night.tint
+    this.skyTint = this.add.rectangle(
+      0, 0, displayData.width, displayData.height, t.tint, t.alpha)
+      .setOrigin(0, 0)
+      .setDepth(GROUND_DEPTH + 1)
+  }
+
+  /** The wash, one frame on. Cheap enough to write every frame and only
+   *  actually moving during the two and a half seconds of dusk. */
+  private updateSkyTint(): void {
+    if (!this.night || !this.skyTint) return
+    const t = this.night.tint
+    this.skyTint.setFillStyle(t.tint, t.alpha)
   }
 
   /**
@@ -3851,9 +3933,18 @@ export class GameScene extends Phaser.Scene {
       const ticks = tickHazard(h.state, dt)
       for (let t = 0; t < ticks; t++) {
         for (const e of this.enemiesNear(h.state.x, h.state.y, h.state.radius)) {
-          this.damageEnemy(e, h.state.def.damage, h.state.def.ignoresArmor, 0, false)
-          floatingDamage(this, e.x, e.centreY, h.state.def.damage, false)
-          e.applySlow(h.state.def.slowFactor, h.state.def.slowSeconds, RULES.combat.slowDiminish)
+          // A GLIDER IS OFF THE GROUND, so what is lying on it misses. Two
+          // separate questions and two separate flags, because they are the
+          // open decision on this level: with both true Cory's Spike Strip is
+          // a dead ability for waves 6 to 12. See level5.json's `_glider`.
+          const g = e.def.glides ? this.night?.gliding : null
+          if (!g?.ignoresGroundHazards) {
+            this.damageEnemy(e, h.state.def.damage, h.state.def.ignoresArmor, 0, false)
+            floatingDamage(this, e.x, e.centreY, h.state.def.damage, false)
+          }
+          if (!g?.ignoresGroundSlow) {
+            e.applySlow(h.state.def.slowFactor, h.state.def.slowSeconds, RULES.combat.slowDiminish)
+          }
         }
       }
       h.art.update(h.state.left / Math.max(0.0001, h.state.def.durationSeconds))
@@ -3869,6 +3960,187 @@ export class GameScene extends Phaser.Scene {
   private clearHazards(): void {
     for (const h of this.hazards) h.art.destroy()
     this.hazards.length = 0
+    for (const a of this.puddleArt) a.destroy()
+    this.puddleArt.length = 0
+    this.night?.clear()
+  }
+
+  /**
+   * Everything level 5 adds, one frame at a time. Returns immediately on every
+   * other level, because `night` is null there.
+   *
+   * ORDERED, and the order is load-bearing. The sky first, because the flip is
+   * what decides whether a vampire may heal at all and the conversions have to
+   * happen on the frame it turns. Then the boss's own cycle, because a puddle
+   * that goes down this frame should burn what is standing in it this frame.
+   * Then the puddles. Then the enemies, whose speed and blood loss both depend
+   * on all three.
+   */
+  private tickNight(dt: number): void {
+    const n = this.night
+    if (!n) return
+
+    if (n.tick(dt)) this.duskFlip()
+    this.updateSkyTint()
+
+    this.tickBatula(dt)
+    this.tickPuddles(dt)
+
+    for (const e of this.enemies) {
+      // What the sky is doing to its legs. Written every frame rather than on
+      // the flip, because an enemy that spawns after the flip has never seen
+      // one and would otherwise walk at its day speed all night.
+      e.speedScale = n.speedFor(e.def)
+      if (!e.alive) continue
+      // The sun, which is a flat rate per second and only ever burns a vampire.
+      const sun = n.sunFor(e.def) * dt
+      if (sun > 0) this.damageEnemy(e, sun, true, 0, false)
+      // ...and its own blood. Both bypass armour: neither is a hit.
+      const bled = n.bleedTick(e, dt)
+      if (bled > 0) this.damageEnemy(e, bled, true, 0, false)
+    }
+  }
+
+  /**
+   * The sun goes down. Every live Thrall becomes a Glider where it stands.
+   *
+   * IT KEEPS ITS HEALTH AS A PERCENTAGE, which is `Vampirism.convertedHealth`
+   * and is the one rule of this whole moment: a Thrall on its last sliver
+   * becomes a Glider on its last sliver, and does not heal to full by
+   * changing. Both this and the simulator call the same function.
+   *
+   * A CONVERTED ENEMY IS REPLACED, NOT MUTATED. `Enemy` reads its sprite,
+   * its anchor, its shadow and its lane offset off the def in its constructor,
+   * so a def swapped underneath a live one would leave a Thrall wearing a
+   * Thrall's picture with a Glider's numbers. The replacement carries the
+   * lane, the distance, the route pick and the health share across, so nothing
+   * about where it is or where it is going moves.
+   */
+  private duskFlip(): void {
+    const n = this.night
+    if (!n) return
+    logEvent('dusk', 'the sun goes down')
+    this.status.alert = 'The sun is down.'
+    play(this, 'last-stand', 0.7)
+    this.cameras.main.flash(700, 40, 30, 90)
+
+    const turned: Enemy[] = []
+    for (const e of this.enemies) {
+      if (!e.alive) continue
+      const id = ENEMY_ID_OF.get(e.def)
+      const to = id ? n.conversionFor(id) : null
+      if (!to) continue
+      const def = ENEMIES[to]
+      if (!def) continue
+      const at = e.summonPoint
+      const child = new Enemy(this, def, this.lanes.lane(at.laneId).path, this.gateway, {
+        lanes: this.lanes,
+        laneId: at.laneId,
+        startAt: { laneDistance: at.laneDistance, distance: at.distance },
+        routePick: e.routePick,
+      })
+      child.health = convertedHealth(e.health, e.maxHealth, child.maxHealth)
+      child.speedScale = n.speedFor(def)
+      deathPuff(this, e.x, e.centreY)
+      e.destroy()
+      turned.push(child)
+    }
+    if (turned.length) {
+      this.enemies = this.enemies.filter((e) => e.alive).concat(turned)
+      logEvent('dusk', `${turned.length} turned`)
+    }
+  }
+
+  /**
+   * Batula's own cycle: walk, stop, hunch, leave a puddle, get angrier.
+   *
+   * THE CLOCK RUNS ON MOVEMENT, not on the wall clock -- a Batula held on a
+   * line of soldiers is not quietly building a puddle to drop the instant he
+   * is free. What he does while held is bite, and heal off what he bites,
+   * which is the other half of the fight.
+   */
+  private tickBatula(dt: number): void {
+    const n = this.night
+    if (!n?.acid) return
+    const boss = this.enemies.find((e) => e.alive && e.def.acidTrail)
+    if (!boss) return
+
+    const moving = boss.status === 'walking' && !boss.selfHeld
+    const r = n.tickBoss(dt, moving, boss.x, boss.y)
+    boss.selfHeld = r.held
+    // The meter is read every frame rather than on the drop, so the roar's
+    // free stack reaches his legs on the frame it is granted.
+    boss.speedScale = n.speedFor(boss.def) * n.humiliation.speed
+    if (!r.dropped) return
+
+    const p = n.puddles[n.puddles.length - 1]!
+    // ON the ground, above the lane wash and under everything that stands on
+    // it, the same depth the Spike Strip uses. A puddle is paint on a road.
+    const art = this.add.image(p.x, p.y, n.acid.fx).setDepth(GROUND_DEPTH + 3)
+    // fitInRect and not fitInBox: the painting is 3:1 and a square fit would
+    // size it by its width and leave it a third of the radius deep.
+    fitInRect(art, n.acid.fx, n.acid.radius * 2, n.acid.radius * 2)
+    this.puddleArt.push(art)
+    play(this, n.humiliationRules?.sound ?? 'hit-a', 0.8)
+    this.shoutHaHa()
+  }
+
+  /** The crowd on the walls. Floating text, because the walls are painted. */
+  private shoutHaHa(): void {
+    const h = this.night?.humiliationRules
+    if (!h) return
+    const y = 120 + Math.random() * h.shoutSpreadY
+    const t = this.add.text(h.shoutFromX, y, h.shoutText, {
+      fontFamily: FONT_UI, fontSize: '26px', fontStyle: 'bold', color: '#ffe7a3',
+    }).setOrigin(0.5).setDepth(OVERLAY_DEPTH)
+    this.tweens.add({
+      targets: t, y: y - 40, alpha: 0, duration: h.shoutSeconds * 1000,
+      onComplete: () => t.destroy(),
+    })
+  }
+
+  /**
+   * Every live puddle, one frame on.
+   *
+   * WHAT A PUDDLE BURNS IS THE PLAYER'S SIDE AND ONLY THE PLAYER'S SIDE: the
+   * hero, the summoned fighters and the Ima Dummy's lads. It does not touch
+   * Batula and it does not touch any other enemy, deliberately and with no
+   * flag to change it -- he walks through his own trail, so friendly fire
+   * would make the fight a race he loses by standing still.
+   *
+   * A tower inside the radius takes no damage at all; it fires at half rate,
+   * and `towerSlowAt` is what its interval is multiplied by.
+   */
+  private tickPuddles(dt: number): void {
+    const n = this.night
+    if (!n?.acid) return
+    const before = n.puddles.length
+    const { ticks } = n.tickPuddles(dt)
+
+    for (let t = 0; t < ticks; t++) {
+      const heroDmg = n.acidAt(this.hero.x, this.hero.y)
+      if (heroDmg > 0 && !this.hero.down) this.damageHero(heroDmg)
+      for (const f of this.fighters) {
+        const d = n.acidAt(f.x, f.y)
+        if (d > 0) f.hurt(d)
+      }
+      for (const g of this.garrisons) {
+        for (const sol of g.soldiers) {
+          const d = n.acidAt(sol.x, sol.y)
+          if (d > 0 && sol.alive) sol.hurt(d)
+        }
+      }
+    }
+
+    // The art follows the state. Puddles only ever leave from the front of the
+    // list -- they expire in the order they were dropped -- so the two stay in
+    // step by trimming the same number off the front.
+    const gone = before - n.puddles.length
+    for (let i = 0; i < gone; i++) this.puddleArt.shift()?.destroy()
+    const acid = n.acid
+    for (let i = 0; i < n.puddles.length && i < this.puddleArt.length; i++) {
+      this.puddleArt[i]!.setAlpha(puddleAlpha(n.puddles[i]!, acid))
+    }
   }
 
   /**
@@ -4215,6 +4487,9 @@ export class GameScene extends Phaser.Scene {
     this.escapedThisWave = 0
     this.clearSelection()
     this.spawner.begin(this.level.waveTable.waves[this.status.wave])
+    // The dusk flip is timed from the wave's own first spawn, not from the run
+    // -- see DayNight.ts for why it is seconds rather than a fraction.
+    this.night?.beginWave(this.status.wave)
     logEvent('wave-start', `${this.status.wave + 1} ${this.level.waveTable.waves[this.status.wave].name} bonus=${bonus}`)
     this.status.phase = 'wave'
     play(this, 'wave-start')
@@ -4623,6 +4898,9 @@ export class GameScene extends Phaser.Scene {
 
     this.tickEngagement()
     this.tickControlled(dt)
+    // Level 5's own rules, and a no-op returning on the first line everywhere
+    // else. Before `tickEnemies` because it decides how fast they walk.
+    this.tickNight(dt)
     this.tickEnemies(dt)
     // WHAT THE PLAYER'S SIDE MAY SHOOT, which is not every enemy on the board.
     // A mind-controlled enemy is fighting for the player, and a tower or a
@@ -4631,17 +4909,30 @@ export class GameScene extends Phaser.Scene {
     // range rather than picking. Computed once and handed to all three, so
     // they cannot disagree about who is a target.
     const hostiles = this.enemies.filter((e) => !e.controlled)
-    for (const t of this.towers) t.tick(dt, hostiles, (tower, target) => this.fire(tower, target))
+    for (const t of this.towers) {
+      // A TOWER IN ACID TAKES NO DAMAGE AND FIRES AT HALF RATE, which is what
+      // `towerSlowAt` returns as an INTERVAL multiplier -- half the rate is
+      // twice the interval, and getting that the wrong way round would make a
+      // puddle a buff. 1 everywhere there is no puddle, so this multiplies
+      // into every tower on every level and finds nothing.
+      t.fireIntervalScale = this.night?.towerSlowAt(t.x, t.y) ?? 1
+      t.tick(dt, hostiles, (tower, target) => this.fire(tower, target))
+    }
     // A Beacon that has just come back relights everything it covers, and a
     // Beacon that has just gone dark drops it -- both read off the towers
     // themselves, one frame after their own tick, rather than off a timer.
     if (this.darkSupports !== this.towers.reduce(
       (n, t) => n + (t.isSupport && t.disabledFor > 0 ? 1 : 0), 0)) this.refreshSupport()
     this.shots = this.shots.filter((s) => !s.tick(dt))
+    // THE HERO AND HIS LADS BLEED WHAT THEY HIT, which is level5.json's
+    // `bleed.fromHeroBasic` and is the brief's default. It matters more than
+    // it looks: the hero is what a vampire is usually biting, so a hero who
+    // could not make one bleed would be feeding it with no way to stop.
     this.fighters = this.fighters.filter(
-      (f) => !f.tick(dt, hostiles, (e, dmg) => this.damageEnemy(e, dmg, false)),
+      (f) => !f.tick(dt, hostiles, (e, dmg) => this.meleeEnemy(e, dmg, false)),
     )
-    this.hero.tick(dt, hostiles, (e, dmg) => this.damageEnemy(e, dmg, this.hero.def.ignoresArmor))
+    this.hero.tick(dt, hostiles,
+      (e, dmg) => this.meleeEnemy(e, dmg, this.hero.def.ignoresArmor))
 
     if (this.selected) {
       // Redrawn every frame with the panel: the tower can finish an upgrade
@@ -4944,6 +5235,10 @@ export class GameScene extends Phaser.Scene {
           laneId: at.laneId,
           startAt: { laneDistance: at.laneDistance, distance: at.distance },
           summonedBy: parent,
+          // ITS PARENT'S ARM, not its own. A boss that took the upper road out
+          // of the crossroads and whose brood took the lower one would split
+          // a fight the player is standing in the middle of.
+          routePick: parent.routePick,
         })
         this.enemies.push(child)
         logEvent('summon', `${parent.def.name} -> ${def.name} lane=${at.laneId} at=${at.distance.toFixed(0)}`)
@@ -5288,6 +5583,10 @@ export class GameScene extends Phaser.Scene {
     const armoured = enemy.effectiveArmor > 0
     const amount = power * (armoured ? (b.bonusVsArmored ?? 1) : 1)
     this.damageEnemy(enemy, amount, tower.def.ignoresArmor || b.ignoresArmor === true, tower.armorPierce)
+    // BLEED IS BY ARCHETYPE, because this codebase has no `physical` damage
+    // type. The aimed guns and the thorns cut; the explosives crush. See
+    // level5.json's `_bleed` for the list and the reasoning.
+    if (this.night?.towerBleeds(tower.def.archetype)) this.night.bleedOne(enemy)
 
     const slow = tower.slowSeconds || (tower.splashRadius > 0 ? (b.splashSlowSeconds ?? 0) : 0)
     if (slow > 0) enemy.applySlow(tower.def.slowFactor || 0.5, slow, RULES.combat.slowDiminish)
@@ -5331,6 +5630,20 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
+  /**
+   * A hit from the player's own SIDE -- the hero, a gnome, a lad -- which
+   * bleeds where a tower's shot might not.
+   *
+   * Separate from `damageEnemy` rather than a flag on it, because
+   * `damageEnemy` is also how the sun, a bleed tick and a hazard are charged,
+   * and none of those is a hit. A bleed that bled would refresh itself
+   * forever.
+   */
+  private meleeEnemy(enemy: Enemy, damage: number, ignoresArmor: boolean): void {
+    if (this.night?.heroBasicBleeds) this.night.bleedOne(enemy)
+    this.damageEnemy(enemy, damage, ignoresArmor)
+  }
+
   private damageEnemy(
     enemy: Enemy,
     damage: number,
@@ -5355,10 +5668,80 @@ export class GameScene extends Phaser.Scene {
       this.status.kills++
       this.earn(enemy.def.peanutReward)
       this.rollRareDrop(enemy)
+      this.splitOnDeath(enemy)
     } else {
+      this.checkHealthThreshold(enemy)
       // Rotated, because a wave lands far more hits than one sample can carry
       // before it starts to sound like a stuck key.
       playRotating(this, 'hit', ['hit-a', 'hit-b', 'hit-c'])
+    }
+  }
+
+  /**
+   * What is left when something breaks apart: the Vampire Lord's four Gliders.
+   *
+   * At the place it died and on the lane it died on, carrying its route pick,
+   * so a Lord that took the north arm out of the crossroads does not scatter
+   * its brood down a road it never walked.
+   *
+   * THE CHILDREN ARE `summonedBy` THE PARENT, which is what keeps them out of
+   * the wave-over count -- a wave is over when its SCRIPTED spawns are gone.
+   * Without that, killing the Lord would extend the wave by however long its
+   * remains took to walk off, and wave 11 has two of him.
+   */
+  private splitOnDeath(enemy: Enemy): void {
+    const spec = enemy.def.splitsOnDeath
+    if (!spec) return
+    const def = ENEMIES[spec.enemy]
+    if (!def) return
+    const at = enemy.summonPoint
+    for (let i = 0; i < spec.count; i++) {
+      const child = new Enemy(this, def, this.lanes.lane(at.laneId).path, this.gateway, {
+        lanes: this.lanes,
+        laneId: at.laneId,
+        startAt: { laneDistance: at.laneDistance, distance: at.distance },
+        summonedBy: enemy,
+        routePick: enemy.routePick,
+      })
+      child.speedScale = this.night?.speedFor(def) ?? 1
+      this.enemies.push(child)
+    }
+    deathPuff(this, enemy.x, enemy.centreY)
+    logEvent('split', `${enemy.def.name} -> ${spec.count} x ${def.name}`)
+  }
+
+  /**
+   * Batula's roar at half health: six Baby Franks and a free Humiliation.
+   *
+   * ONCE PER ENEMY, not once per crossing, and on this level that distinction
+   * is not academic -- he heals for everything he bites, so his health crosses
+   * 50% in both directions and a boss that re-roared every time would summon
+   * without limit. `thresholdFired` is the latch.
+   */
+  private checkHealthThreshold(enemy: Enemy): void {
+    const t = enemy.def.onHealthThreshold
+    if (!t || enemy.thresholdFired) return
+    if (enemy.healthFraction > t.belowHealth) return
+    enemy.thresholdFired = true
+    if (t.humiliation) this.night?.addHumiliation(t.humiliation)
+    logEvent('boss', `${enemy.def.name} roars`)
+    this.status.alert = `${enemy.def.name} is not enjoying this.`
+    this.cameras.main.shake(360, 0.005)
+    const spec = t.summon
+    if (!spec) return
+    const def = ENEMIES[spec.enemy]
+    if (!def) return
+    const at = enemy.summonPoint
+    for (let i = 0; i < spec.count; i++) {
+      const child = new Enemy(this, def, this.lanes.lane(at.laneId).path, this.gateway, {
+        lanes: this.lanes,
+        laneId: at.laneId,
+        startAt: { laneDistance: at.laneDistance, distance: at.distance },
+        summonedBy: enemy,
+        routePick: enemy.routePick,
+      })
+      child.speedScale = this.night?.speedFor(def) ?? 1
+      this.enemies.push(child)
     }
   }
 
@@ -5488,11 +5871,38 @@ export class GameScene extends Phaser.Scene {
     return { x: mine.cx, y: mine.cy, height: mine.boxH }
   }
 
-  /** Routes an enemy's melee to whatever is actually holding it. */
+  /**
+   * Routes an enemy's melee to whatever is actually holding it, and lets a
+   * vampire drink what it took.
+   *
+   * THIS IS THE ONE PLACE LIFESTEAL HAPPENS, and it is here rather than in
+   * `Enemy` because here is where the damage is known to have LANDED. An enemy
+   * whose blocker died on the same frame deals nothing and should heal for
+   * nothing.
+   *
+   * PLAYER UNIT MEANS whatever was holding it: the hero, a summoned fighter or
+   * an Ima Dummy lad. There is no wall entity in this game and none was
+   * invented for level 5.
+   *
+   * `healFor` returns 0 in three cases and the caller does not have to know
+   * which: no lifesteal on the def, the sun up, or blood already running out
+   * of it. The last is the level's counterplay and is the one a call site
+   * would eventually forget.
+   */
   private damageBlocker(enemy: Enemy, damage: number): void {
     const target = enemy.blocker
-    if (target === this.hero) this.damageHero(damage)
-    else if (target) target.hurt(damage)
+    const boss = enemy.def.acidTrail && this.night ? this.night.humiliation.damage : 1
+    const dealt = damage * boss
+    if (target === this.hero) this.damageHero(dealt)
+    else if (target) target.hurt(dealt)
+    if (!target) return
+
+    const healed = this.night?.healFor(enemy, dealt) ?? 0
+    if (healed <= 0) return
+    enemy.heal(healed)
+    // A small red pip, so the player can SEE it happening rather than having
+    // to notice a bar that stopped falling.
+    floatingDamage(this, enemy.x, enemy.centreY, Math.round(healed), true)
   }
 
   private damageHero(damage: number): void {

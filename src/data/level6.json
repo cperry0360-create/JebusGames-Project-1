@@ -1,0 +1,33 @@
+{
+  "_note": "EVERYTHING LEVEL 6 ADDS TO THE RULES, in one file, scoped exactly the way level5.json is: `levels.json` names it on level 6's row and on no other, `Levels.levelRules` returns null for every level that names nothing, and the flame is a no-op on null. Five levels of tuned numbers cannot be moved by anything in here.\n\nTHE ROW IN levels.json IS NOT THERE YET, and that is deliberate rather than forgotten. `Levels.loadLevel` throws for a level with no map, and level 6's map cannot be built: its plate is a 2970x316 stitched proof at contact-sheet resolution with 8% clearance under the lower lane where the segment rules want 12%, and the normalized waypoints in tools/level6_geometry.json describe THAT plate and will not survive the re-render. See reports/2026-09-07-level-6-roster-and-plate-spec.md. The roster, the flame, the wave table and the simulator's model of all three are built and tested; the row, the map, the pads and the soak are the map pass.",
+
+  "_names": "WHERE THE DISPLAY NAMES ARE: on the four enemies.json rows this file's `roster` points at, and nowhere else. Renaming for the kids is four edits in enemies.json, starting at the row that carries the `_level6` note.",
+
+  "roster": {
+    "filler": "scrapper",
+    "fast": "sprinter",
+    "wall": "bruiser6",
+    "boss": "rooster"
+  },
+
+  "_theme": "LEVEL 6 IS AN UNFINISHED LEVEL AND IT KNOWS IT. White primitives, untextured cubes and cones, a wireframe unicorn, a blank billboard, and a workman holding a sign reading `Are we out of ideas?`. The three rank and file are grey mannequins with two dots for eyes, deliberately un-rendered, and the Rooster is the only fully finished thing in the level. That is the joke. There is no tint, no palette and no detail pass on the mannequins in this file, and there must not be one.",
+
+  "_flame": "THE ROOSTER'S BREATH, and the telegraph is the part that makes it fair rather than cheap.\nTHE CADENCE IS THE GLITCH BUG'S, field for field: a cooldown, a windup that is VISIBLE before anything lands, and the rule that a caster killed mid-windup lands nothing. An unavoidable hit that suppresses a row of towers with no warning reads as the game cheating; the same effect with 0.8 seconds of fire building in its throat is a mechanic the player can play around. systems/Flame.ts is that cadence applied to a CORRIDOR instead of to a locked tower, and its header says why it is not a branch inside Disabler.\nTHE STOP AND THE FIRE ARE TWO CLOCKS. The brief asks for a 1.0s stop with a 0.8s telegraph inside it, which leaves 0.2s of fire -- and 0.2s of a damage-over-time effect is a burst with extra steps. `flameSeconds` is therefore its own number: the warning keeps its full 0.8s, the fire lasts 1.0s, and the boss starts walking again while the tail of it is still out. Both are here so the map pass can retune them once the level can actually be played.\nWHAT IT TOUCHES: player GROUND units in the corridor take `damagePerSecond`. A tower in the corridor takes NOTHING and is scorched instead -- it keeps firing, at `towerFireRateMultiplier` of its rate, for `scorchSeconds` afterwards. `scorchFx` is `fx-burn`, which already exists and already means `this thing is on fire`; no art was added for it.\nWHAT IT DOES NOT TOUCH: other enemies, ever, and there is no flag to change that. And it cannot leave its lane -- the corridor runs along the heading the boss is walking and level 6's two lanes are parallel and never meet, so that is a property of the map rather than a check in code.\nWIDTH IS THE FULL CORRIDOR, not a radius. `Flame.inFlame` halves it. 64 is about a road's width, so the fire fills the lane it is in and nothing either side of it.",
+  "flame": {
+    "fx": "fx-rooster-flame",
+    "intervalSeconds": 6,
+    "stopSeconds": 1,
+    "telegraphSeconds": 0.8,
+    "flameSeconds": 1,
+    "reach": 300,
+    "width": 64,
+    "damagePerSecond": 90,
+    "tickSeconds": 0.2,
+    "scorchSeconds": 4,
+    "towerFireRateMultiplier": 0.5,
+    "scorchFx": "fx-burn",
+    "harmsEnemies": false
+  },
+
+  "_cakes": "NOTHING HERE, for the reason level5.json gives: cakes.json's tiers are a fraction of the run's own starting lives and are shared by every story level on purpose. A per-level copy would be a second opinion about what two cakes means. Level 6 is paid by being a story level, once its row exists."
+}

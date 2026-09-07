@@ -1,0 +1,456 @@
+{
+  "_note": "LEVEL 5, THE CROSSROADS. Twelve waves across THREE gates, and the first level whose enemies heal off the things holding them. HAND-AUTHORED, like level 4's and for the same reason: this table has positions rather than a distribution. Wave 5 has to be the one the sun goes down in, wave 7 has to be where armour arrives, waves 9 and 11 have to carry a Lord each, and wave 12 has to be Batula. tools/gen_waves3.py generates level 3's from a curve; nothing could generate this.",
+  "_health": "Total enemy health is 34,894 against level 4's 20,240 and level 3's 28,470, which makes it the heaviest table in the game -- and reading that as the hardest level would be wrong twice over. FIRST, THE ROUTES ARE THE SHORTEST IN THE GAME: 1436.4 px from the west gate, 1217.3 from the south and 1170.1 from the north, against level 4's 1479 and level 1's 1977. A point of health buys more here than anywhere. SECOND, LIFESTEAL MEANS THE POOL IS NOT THE POOL. A Glider heals for half of what it deals to the hero or a lad, an Elite for 80% and a Lord for all of it, so the health a board actually has to chew through is the pool PLUS everything it drinks back -- and how much that is depends entirely on whether anything is making it bleed. That is the level: the counterplay is not more damage, it is sustained damage. The run pays 0.174 peanuts per point of health, between level 4's 0.235 and the 0.13 floor, and it is above the floor rather than near it precisely because a board that cannot out-heal a vampire needs to be able to afford a second gun.",
+  "_curve": "Rank and file health, boss excluded: 280, 414, 620, 904, 1320, 1900, 2570, 3286, 4440, 5900, 7240, then wave 12's 1820 of trickle under Batula. Every step is upward and inside the 55% cap, and the steepest are at the front where the numbers are small. content.test.ts measures it that way for every level.",
+  "_lanes": "THREE GATES, AND THEY ARE NOT THE SAME DISTANCE AWAY. West walks 1436.4 px to the exit, south 1217.3 and north 1170.1 -- a 22.7% spread that is a property of the painting rather than a choice (see map_level5.json's `_lanes`). Levels 3 and 4 arranged EQUAL routes so that groups released on the same delay arrive together; here the delays do that job instead, and every `delay` in this file that is not 0 is either a deliberate stagger or one of these compensations:\n    enemy         speed   south +   north +\n    Thrall           46      4.76      5.79\n    Glider           74      2.96      3.60\n    Baby Frank      172      1.27      1.55\n    Vampire Elite    30      7.30      8.88\n    Vampire Lord     34      6.44      7.83\nEach is the extra distance divided by that enemy's own speed, which is why they are per-enemy rather than per-lane: a Baby Frank makes up the north gate's 266 px in a second and a half and a Thrall takes six. They are computed against BASE speed, so at night a Glider's +15% arrives about half a second early -- inside the spacing of the group it is in, and not worth a second table.\nTHE GATES ARE TAUGHT ONE AT A TIME. Wave 1 is north only, wave 2 adds south, wave 3 is the first with all three. The heavier side then alternates so a board committed to one gate is punished on a different wave each time.",
+  "_dusk": "WAVE 5 IS WHERE THE SUN GOES DOWN, nine seconds in -- level5.json's `phases.flipWave` and `flipAfterSeconds`, not a number in this file. Three things happen at once and the table is built around all of them. Every live Thrall becomes a Glider where it stands, keeping its health as a PERCENTAGE. The board turns from gold to indigo over two and a half seconds. And the vampires get their teeth back.\nTHE TWO GLIDERS FROM THE SOUTH GATE ARE RELEASED AT 3 SECONDS, BEFORE THE FLIP, AND THAT IS THE POINT. They are the only vampires in the level that walk in daylight: 25% slower, no lifesteal, and five damage a second of sun. Without them the day penalty would be a rule that never once fires, since waves 1 to 4 are Thralls and Baby Franks and neither is a vampire. The north pair at 13 seconds arrive after it and are the first thing the player sees at full strength.",
+  "_boss": "BATULA IS WAVE 12 AND HIS HEALTH IS NOT IN THIS FILE'S GIFT -- it is enemies.json's, and it came off the soak's sensitivity table rather than out of the brief. See reports/2026-09-07-level-5.md.\nTHE TRICKLE IS FIVE BABY FRANKS EVERY FEW SECONDS FROM A ROTATING GATE, not a wall of them, and it is timed against his walk rather than against the wave. He covers 1436 px at 22 px/s, so he is on the board for over a minute before Humiliation touches him -- and the trickle is what stops that minute being a player watching one slow enemy. His own roar at half health adds six more.",
+  "waves": [
+    {
+      "name": "Neighbourhood Watch",
+      "spawns": [
+        {
+          "enemy": "thrall",
+          "count": 4,
+          "interval": 1.4,
+          "delay": 0,
+          "lane": "north"
+        }
+      ]
+    },
+    {
+      "name": "The Other Road",
+      "spawns": [
+        {
+          "enemy": "thrall",
+          "count": 3,
+          "interval": 1.3,
+          "delay": 0,
+          "lane": "south"
+        },
+        {
+          "enemy": "babyFrank",
+          "count": 6,
+          "interval": 0.35,
+          "delay": 5,
+          "lane": "north"
+        }
+      ]
+    },
+    {
+      "name": "Playgroup",
+      "spawns": [
+        {
+          "enemy": "babyFrank",
+          "count": 4,
+          "interval": 0.32,
+          "delay": 0,
+          "lane": "west"
+        },
+        {
+          "enemy": "babyFrank",
+          "count": 3,
+          "interval": 0.32,
+          "delay": 1.27,
+          "lane": "south"
+        },
+        {
+          "enemy": "babyFrank",
+          "count": 3,
+          "interval": 0.32,
+          "delay": 1.55,
+          "lane": "north"
+        },
+        {
+          "enemy": "thrall",
+          "count": 4,
+          "interval": 1.3,
+          "delay": 3,
+          "lane": "west"
+        }
+      ]
+    },
+    {
+      "name": "Full Congregation",
+      "spawns": [
+        {
+          "enemy": "thrall",
+          "count": 4,
+          "interval": 1.2,
+          "delay": 0,
+          "lane": "west"
+        },
+        {
+          "enemy": "thrall",
+          "count": 3,
+          "interval": 1.2,
+          "delay": 4.76,
+          "lane": "south"
+        },
+        {
+          "enemy": "thrall",
+          "count": 3,
+          "interval": 1.2,
+          "delay": 5.79,
+          "lane": "north"
+        },
+        {
+          "enemy": "babyFrank",
+          "count": 6,
+          "interval": 0.32,
+          "delay": 8,
+          "lane": "south"
+        }
+      ]
+    },
+    {
+      "name": "Sundown",
+      "spawns": [
+        {
+          "enemy": "thrall",
+          "count": 3,
+          "interval": 1.2,
+          "delay": 0,
+          "lane": "west"
+        },
+        {
+          "enemy": "thrall",
+          "count": 3,
+          "interval": 1.2,
+          "delay": 4.76,
+          "lane": "south"
+        },
+        {
+          "enemy": "thrall",
+          "count": 2,
+          "interval": 1.2,
+          "delay": 5.79,
+          "lane": "north"
+        },
+        {
+          "enemy": "glider",
+          "count": 2,
+          "interval": 1.4,
+          "delay": 3,
+          "lane": "south"
+        },
+        {
+          "enemy": "glider",
+          "count": 2,
+          "interval": 1.4,
+          "delay": 13,
+          "lane": "north"
+        }
+      ]
+    },
+    {
+      "name": "First Night",
+      "spawns": [
+        {
+          "enemy": "glider",
+          "count": 4,
+          "interval": 1.2,
+          "delay": 0,
+          "lane": "west"
+        },
+        {
+          "enemy": "glider",
+          "count": 3,
+          "interval": 1.2,
+          "delay": 2.96,
+          "lane": "south"
+        },
+        {
+          "enemy": "glider",
+          "count": 3,
+          "interval": 1.2,
+          "delay": 3.6,
+          "lane": "north"
+        }
+      ]
+    },
+    {
+      "name": "Old Money",
+      "spawns": [
+        {
+          "enemy": "vampireElite",
+          "count": 1,
+          "interval": 2.2,
+          "delay": 0,
+          "lane": "west"
+        },
+        {
+          "enemy": "vampireElite",
+          "count": 1,
+          "interval": 2.2,
+          "delay": 8.88,
+          "lane": "north"
+        },
+        {
+          "enemy": "glider",
+          "count": 3,
+          "interval": 1.1,
+          "delay": 3,
+          "lane": "west"
+        },
+        {
+          "enemy": "glider",
+          "count": 2,
+          "interval": 1.1,
+          "delay": 5.96,
+          "lane": "south"
+        },
+        {
+          "enemy": "glider",
+          "count": 2,
+          "interval": 1.1,
+          "delay": 6.6,
+          "lane": "north"
+        }
+      ]
+    },
+    {
+      "name": "Nursery Rush",
+      "spawns": [
+        {
+          "enemy": "babyFrank",
+          "count": 8,
+          "interval": 0.28,
+          "delay": 0,
+          "lane": "west"
+        },
+        {
+          "enemy": "babyFrank",
+          "count": 8,
+          "interval": 0.28,
+          "delay": 1.27,
+          "lane": "south"
+        },
+        {
+          "enemy": "babyFrank",
+          "count": 8,
+          "interval": 0.28,
+          "delay": 1.55,
+          "lane": "north"
+        },
+        {
+          "enemy": "glider",
+          "count": 5,
+          "interval": 1.2,
+          "delay": 5,
+          "lane": "west"
+        },
+        {
+          "enemy": "glider",
+          "count": 4,
+          "interval": 1.2,
+          "delay": 7.96,
+          "lane": "south"
+        },
+        {
+          "enemy": "glider",
+          "count": 4,
+          "interval": 1.2,
+          "delay": 8.6,
+          "lane": "north"
+        }
+      ]
+    },
+    {
+      "name": "His Lordship",
+      "spawns": [
+        {
+          "enemy": "vampireLord",
+          "count": 1,
+          "interval": 2,
+          "delay": 0,
+          "lane": "west"
+        },
+        {
+          "enemy": "glider",
+          "count": 6,
+          "interval": 1.2,
+          "delay": 4,
+          "lane": "west"
+        },
+        {
+          "enemy": "glider",
+          "count": 5,
+          "interval": 1.2,
+          "delay": 6.96,
+          "lane": "south"
+        },
+        {
+          "enemy": "glider",
+          "count": 5,
+          "interval": 1.2,
+          "delay": 7.6,
+          "lane": "north"
+        }
+      ]
+    },
+    {
+      "name": "The Whole Court",
+      "spawns": [
+        {
+          "enemy": "vampireElite",
+          "count": 1,
+          "interval": 2.2,
+          "delay": 0,
+          "lane": "west"
+        },
+        {
+          "enemy": "vampireElite",
+          "count": 1,
+          "interval": 2.2,
+          "delay": 7.3,
+          "lane": "south"
+        },
+        {
+          "enemy": "vampireElite",
+          "count": 1,
+          "interval": 2.2,
+          "delay": 8.88,
+          "lane": "north"
+        },
+        {
+          "enemy": "glider",
+          "count": 6,
+          "interval": 1.1,
+          "delay": 4,
+          "lane": "west"
+        },
+        {
+          "enemy": "glider",
+          "count": 6,
+          "interval": 1.1,
+          "delay": 6.96,
+          "lane": "south"
+        },
+        {
+          "enemy": "glider",
+          "count": 5,
+          "interval": 1.1,
+          "delay": 7.6,
+          "lane": "north"
+        }
+      ]
+    },
+    {
+      "name": "Two Lords",
+      "spawns": [
+        {
+          "enemy": "vampireLord",
+          "count": 1,
+          "interval": 2,
+          "delay": 0,
+          "lane": "west"
+        },
+        {
+          "enemy": "vampireLord",
+          "count": 1,
+          "interval": 2,
+          "delay": 7.83,
+          "lane": "north"
+        },
+        {
+          "enemy": "glider",
+          "count": 5,
+          "interval": 1.2,
+          "delay": 4,
+          "lane": "west"
+        },
+        {
+          "enemy": "glider",
+          "count": 5,
+          "interval": 1.2,
+          "delay": 6.96,
+          "lane": "south"
+        },
+        {
+          "enemy": "glider",
+          "count": 4,
+          "interval": 1.2,
+          "delay": 7.6,
+          "lane": "north"
+        },
+        {
+          "enemy": "babyFrank",
+          "count": 4,
+          "interval": 0.3,
+          "delay": 12,
+          "lane": "south"
+        },
+        {
+          "enemy": "babyFrank",
+          "count": 4,
+          "interval": 0.3,
+          "delay": 12.3,
+          "lane": "north"
+        },
+        {
+          "enemy": "babyFrank",
+          "count": 4,
+          "interval": 0.3,
+          "delay": 14,
+          "lane": "west"
+        }
+      ]
+    },
+    {
+      "name": "Batula",
+      "boss": "batula",
+      "spawns": [
+        {
+          "enemy": "batula",
+          "count": 1,
+          "interval": 2,
+          "delay": 0,
+          "lane": "west"
+        },
+        {
+          "enemy": "babyFrank",
+          "count": 5,
+          "interval": 3.0,
+          "delay": 6,
+          "lane": "north"
+        },
+        {
+          "enemy": "babyFrank",
+          "count": 5,
+          "interval": 3.0,
+          "delay": 10,
+          "lane": "south"
+        },
+        {
+          "enemy": "babyFrank",
+          "count": 5,
+          "interval": 3.0,
+          "delay": 16,
+          "lane": "west"
+        },
+        {
+          "enemy": "babyFrank",
+          "count": 5,
+          "interval": 3.0,
+          "delay": 24,
+          "lane": "north"
+        },
+        {
+          "enemy": "glider",
+          "count": 3,
+          "interval": 2.0,
+          "delay": 20,
+          "lane": "south"
+        },
+        {
+          "enemy": "glider",
+          "count": 3,
+          "interval": 2.0,
+          "delay": 30,
+          "lane": "west"
+        }
+      ]
+    }
+  ]
+}

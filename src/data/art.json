@@ -134,7 +134,21 @@
     "fx-fireball-impact": "effects/fx_fireball_impact.webp",
     "fx-burn": "effects/fx_burn.webp",
     "fx-zoomies": "effects/fx_zoomies.webp",
-    "fx-bark": "effects/fx_bark.webp"
+    "fx-bark": "effects/fx_bark.webp",
+    "enemy-thrall": "enemies/enemy_thrall.webp",
+    "enemy-glider": "enemies/enemy_glider.webp",
+    "enemy-vampire-elite": "enemies/enemy_vampire_elite.webp",
+    "enemy-baby-frank": "enemies/enemy_baby_frank.webp",
+    "enemy-vampire-lord": "enemies/enemy_vampire_lord.webp",
+    "enemy-batula": "enemies/boss_batula.webp",
+    "map-level5": "maps/map_level5.webp",
+    "card-level5": "ui/card_level5.webp",
+    "fx-acid-puddle": "effects/fx_acid_puddle.webp",
+    "enemy-scrapper": "enemies/enemy_scrapper.webp",
+    "enemy-sprinter": "enemies/enemy_sprinter.webp",
+    "enemy-bruiser": "enemies/enemy_bruiser.webp",
+    "enemy-rooster": "enemies/boss_rooster.webp",
+    "fx-rooster-flame": "effects/fx_rooster_flame.webp"
   },
   "render": {
     "turret-escalation": {
@@ -936,13 +950,113 @@
       "anchorY": 0.5,
       "contentWidth": 305,
       "contentHeight": 260
+    },
+    "enemy-thrall": {
+      "anchorX": 0.5411,
+      "anchorY": 1.0,
+      "displayHeight": 76.2,
+      "shadowWidth": 49.6,
+      "contentWidth": 280,
+      "contentHeight": 344
+    },
+    "enemy-glider": {
+      "anchorX": 0.4986,
+      "anchorY": 1.0,
+      "displayHeight": 74.2,
+      "shadowWidth": 78.6,
+      "contentWidth": 355,
+      "contentHeight": 335
+    },
+    "enemy-vampire-elite": {
+      "anchorX": 0.5129,
+      "anchorY": 1.0,
+      "displayHeight": 85.0,
+      "shadowWidth": 58.0,
+      "contentWidth": 387,
+      "contentHeight": 384
+    },
+    "enemy-baby-frank": {
+      "anchorX": 0.4097,
+      "anchorY": 1.0,
+      "displayHeight": 54.7,
+      "shadowWidth": 36.3,
+      "contentWidth": 216,
+      "contentHeight": 247
+    },
+    "enemy-vampire-lord": {
+      "anchorX": 0.5297,
+      "anchorY": 1.0,
+      "displayHeight": 110.0,
+      "shadowWidth": 57.2,
+      "contentWidth": 572,
+      "contentHeight": 640
+    },
+    "enemy-batula": {
+      "anchorX": 0.5261,
+      "anchorY": 0.9987,
+      "displayHeight": 140.0,
+      "shadowWidth": 130.0,
+      "contentWidth": 956,
+      "contentHeight": 766
+    },
+    "fx-acid-puddle": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 320,
+      "contentHeight": 106
+    },
+    "enemy-scrapper": {
+      "anchorX": 0.4478,
+      "anchorY": 1.0,
+      "displayHeight": 68.0,
+      "shadowWidth": 47.7,
+      "contentWidth": 556,
+      "contentHeight": 611
+    },
+    "enemy-sprinter": {
+      "anchorX": 0.3732,
+      "anchorY": 1.0,
+      "displayHeight": 64.0,
+      "shadowWidth": 43.9,
+      "contentWidth": 611,
+      "contentHeight": 649
+    },
+    "enemy-bruiser": {
+      "anchorX": 0.5121,
+      "anchorY": 1.0,
+      "displayHeight": 85.0,
+      "shadowWidth": 65.1,
+      "contentWidth": 782,
+      "contentHeight": 692
+    },
+    "enemy-rooster": {
+      "anchorX": 0.5008,
+      "anchorY": 1.0,
+      "displayHeight": 145.0,
+      "shadowWidth": 148.6,
+      "contentWidth": 1251,
+      "contentHeight": 1224
+    },
+    "fx-rooster-flame": {
+      "anchorX": 0.0,
+      "anchorY": 0.5138,
+      "contentWidth": 181,
+      "contentHeight": 168,
+      "beamCoreHeight": 93,
+      "stretch": "line",
+      "sheet": {
+        "frameWidth": 181,
+        "frameHeight": 181,
+        "frames": 12
+      }
     }
   },
   "map": {
     "level1": "map-level1",
     "level2": "map-level2",
     "level3": "map-level3",
-    "level4": "map-level4"
+    "level4": "map-level4",
+    "level5": "map-level5"
   },
   "ui": {
     "titleBackdrop": "ui-title-bg",
@@ -1117,7 +1231,8 @@
       "level1": "card-level1",
       "level2": "card-level2",
       "level3": "card-level3",
-      "level4": "card-level4"
+      "level4": "card-level4",
+      "level5": "card-level5"
     }
   },
   "soldierTiers": {

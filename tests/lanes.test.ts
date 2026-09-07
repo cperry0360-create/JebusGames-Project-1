@@ -2,7 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
-  LaneNetwork, MAIN_LANE, advance, followMerges, validateLanes, type Walker,
+  LaneNetwork, MAIN_LANE, advance, chooseContinuation, followMerges, pickAt, validateLanes,
+  type Transfer, type Walker,
 } from '../src/systems/Lanes.ts'
 import { pickFirst, withinRadius } from '../src/systems/Targeting.ts'
 import map1 from '../src/data/map.json' with { type: 'json' }
@@ -262,9 +263,32 @@ test('a broken lane network is reported rather than walked', () => {
     /fewer than two waypoints/)
   assert.match(bad([{ id: 'a', waypoints: [[0, 0], [1, 1]], merge: { into: MAIN_LANE, atIndex: 9 } }]),
     /at waypoint 9, which that lane does not have/)
-  // Two lanes both running to the exit is a fork that never rejoins.
+  // A lane that reaches the exit and that nothing feeds is a forgotten merge.
+  // THIS USED TO READ /both run to the exit/, and that rule went when level 5
+  // arrived: a crossroads has two exits and both cost lives, so "exactly one
+  // terminal" now rejects a correct map. The typo it was really catching is
+  // still caught, by the property that actually distinguishes the two -- a
+  // second exit on a real map is FED BY something, and a forgotten merge is
+  // not.
   assert.match(bad([{ id: 'a', waypoints: [[0, 0], [1, 1]] }]),
-    /both run to the exit/)
+    /reaches an exit but nothing merges into it/)
+  // ...and a genuine split is accepted.
+  assert.deepEqual(validateLanes({
+    waypoints: FORK.waypoints,
+    mainMerge: [{ into: 'left', atIndex: 0 }, { into: 'right', atIndex: 0 }],
+    lanes: [
+      { id: 'left', waypoints: [[0, 0], [1, 1]] },
+      { id: 'right', waypoints: [[0, 0], [1, 1]] },
+    ],
+  } as never), [], 'a trunk splitting into two fed exits should be valid')
+  assert.match(bad([{ id: 'a', waypoints: [[0, 0], [1, 1]], merge: [] }]),
+    /empty merge list/)
+  assert.match(bad([{ id: 'a', waypoints: [[0, 0], [1, 1]],
+    merge: [{ into: MAIN_LANE, atIndex: 0 }, { into: MAIN_LANE, atIndex: 0 }] }]),
+    /continues into "main" twice/)
+  assert.match(bad([{ id: 'a', waypoints: [[0, 0], [1, 1]],
+    merge: [{ into: MAIN_LANE, atIndex: 0, weight: 0 }] }]),
+    /weight of 0; it must be above zero/)
   // A cycle would hang the walk.
   assert.match(
     validateLanes({ waypoints: FORK.waypoints, lanes: [
@@ -306,4 +330,141 @@ test('followMerges carries the overshoot rather than parking on the join', () =>
   const at = followMerges(net, { laneId: 'east', laneDistance: EAST_LEN + 250 })
   assert.equal(at.laneId, MAIN_LANE)
   assert.ok(Math.abs(at.laneDistance - 250) < 1e-9, `landed at ${at.laneDistance}, not 250`)
+})
+
+/* ------------------------------------------------------------- the crossroads */
+
+/**
+ * A crossroads: two gates in, one junction, two exits out.
+ *
+ * The shape level 5 needs, and the shape nothing before it had — every earlier
+ * multi-lane map was a fork feeding ONE exit. Deliberately UNEQUAL exits, for
+ * the same reason FORK's branches are unequal: equal ones would hide a walker
+ * being handed the wrong lane's end.
+ *
+ *   in-north (0,0)   -> (400,100)   ~412.3
+ *   in-south (0,200) -> (400,100)   ~412.3
+ *   main     (400,100) -> (600,100)              the junction, 200 long
+ *   out-up   (600,100) -> (900,0)                ~316.2
+ *   out-down (600,100) -> (1000,200)             ~412.3
+ */
+const CROSS = {
+  waypoints: [[400, 100], [600, 100]],
+  mainMerge: [
+    { into: 'out-up', atIndex: 0 },
+    { into: 'out-down', atIndex: 0 },
+  ],
+  lanes: [
+    { id: 'in-north', waypoints: [[0, 0], [400, 100]], merge: { into: MAIN_LANE, atIndex: 0 } },
+    { id: 'in-south', waypoints: [[0, 200], [400, 100]], merge: { into: MAIN_LANE, atIndex: 0 } },
+    { id: 'out-up', waypoints: [[600, 100], [900, 0]] },
+    { id: 'out-down', waypoints: [[600, 100], [1000, 200]] },
+  ],
+}
+const IN_LEN = Math.hypot(400, 100)
+const UP_LEN = Math.hypot(300, 100)
+const DOWN_LEN = Math.hypot(400, 100)
+
+test('a crossroads has two gates and two exits, and validates', () => {
+  assert.deepEqual(validateLanes(CROSS as never), [])
+  const net = new LaneNetwork(CROSS as never)
+  // Two lanes reach an exit, which no map before level 5 was allowed.
+  assert.deepEqual(net.lanes.filter((l) => l.merge === null).map((l) => l.id),
+    ['out-up', 'out-down'])
+  // And both are reachable from both gates.
+  for (const gate of ['in-north', 'in-south']) {
+    assert.deepEqual(net.terminals(gate).map((l) => l.id).sort(), ['out-down', 'out-up'],
+      `${gate} cannot reach both exits`)
+  }
+})
+
+test('a split sends a walker down one arm and only one', () => {
+  const net = new LaneNetwork(CROSS as never)
+  const walked = new Map<string, number>()
+  // Ten walkers spread across the pick range, each stepped the whole way.
+  for (let i = 0; i < 10; i++) {
+    let w: Walker = { laneId: 'in-north', laneDistance: 0, distance: 0, routePick: i / 10 }
+    const seen = new Set<string>()
+    for (let steps = 0; steps < 20000; steps++) {
+      const lane = net.lane(w.laneId)
+      if (lane.merge === null && w.laneDistance >= lane.path.totalLength) break
+      w = advance(net, w, 3)
+      seen.add(w.laneId)
+    }
+    const end = net.lane(w.laneId)
+    assert.equal(end.merge, null, `pick ${i / 10} did not finish on an exit`)
+    // It never touched the OTHER arm on the way.
+    const other = end.id === 'out-up' ? 'out-down' : 'out-up'
+    assert.ok(!seen.has(other), `pick ${i / 10} walked both arms`)
+    walked.set(end.id, (walked.get(end.id) ?? 0) + 1)
+  }
+  // Both arms are used. Equal weights, so neither should take all ten.
+  assert.equal(walked.size, 2, `every walker took the same arm: ${[...walked.keys()]}`)
+})
+
+test('the arm is settled by the walker own number, not by the frame', () => {
+  const net = new LaneNetwork(CROSS as never)
+  // The same walker asked twice gets the same answer, and a long frame that
+  // steps clean over the junction lands on the same arm as ten short ones.
+  for (const pick of [0.05, 0.31, 0.62, 0.94]) {
+    const long = followMerges(net, { laneId: MAIN_LANE, laneDistance: 200 + 90, routePick: pick })
+    let w: Walker = { laneId: MAIN_LANE, laneDistance: 0, distance: 0, routePick: pick }
+    for (let i = 0; i < 100; i++) w = advance(net, w, 2.9)
+    assert.equal(long.laneId, w.laneId, `pick ${pick} took different arms at different frame rates`)
+    assert.equal(followMerges(net, { laneId: MAIN_LANE, laneDistance: 290, routePick: pick }).laneId,
+      long.laneId, `pick ${pick} is not stable`)
+  }
+})
+
+test('the overshoot crosses a split as well as a merge', () => {
+  const net = new LaneNetwork(CROSS as never)
+  // 40 past the junction: 40 along whichever arm, not standing on the corner.
+  const at = followMerges(net, { laneId: MAIN_LANE, laneDistance: 240, routePick: 0.2 })
+  assert.ok(at.laneId !== MAIN_LANE, 'the walker never left the junction')
+  assert.ok(Math.abs(at.laneDistance - 40) < 1e-9, `landed at ${at.laneDistance}, not 40 along`)
+})
+
+test('routeLengths reports both ways out, and routeLength takes the longer', () => {
+  const net = new LaneNetwork(CROSS as never)
+  const both = net.routeLengths('in-north').sort((a, b) => a - b)
+  assert.equal(both.length, 2)
+  assert.ok(Math.abs(both[0]! - (IN_LEN + 200 + UP_LEN)) < 1e-9, `short route ${both[0]}`)
+  assert.ok(Math.abs(both[1]! - (IN_LEN + 200 + DOWN_LEN)) < 1e-9, `long route ${both[1]}`)
+  assert.equal(net.routeLength('in-north'), both[1])
+  // A map with no split still reports exactly one route, which is the number
+  // levels 1 to 4 were tuned against.
+  assert.equal(new LaneNetwork(FORK).routeLengths('west').length, 1)
+})
+
+test('the weights are shares of the traffic, not probabilities', () => {
+  const opts: Transfer[] = [
+    { lane: { id: 'a' } as never, distance: 0, weight: 3 },
+    { lane: { id: 'b' } as never, distance: 0, weight: 1 },
+  ]
+  // Three quarters of the pick range lands on the first arm.
+  let a = 0
+  for (let i = 0; i < 1000; i++) if (chooseContinuation(opts, i / 1000).lane.id === 'a') a++
+  assert.equal(a, 750)
+  // Degenerate inputs land somewhere rather than throwing: an enemy stuck on a
+  // junction is worse than one that all goes the same way.
+  assert.equal(chooseContinuation(opts, NaN).lane.id, 'a')
+  assert.equal(chooseContinuation(opts, -1).lane.id, 'a')
+  assert.equal(chooseContinuation(opts, 2).lane.id, 'b')
+})
+
+test('two junctions on one route do not send everything the same way', () => {
+  // The reason `pickAt` mixes the lane id in. Without it a walker that went
+  // left at the first junction goes left at every junction, and two of four
+  // exits get no traffic at all.
+  const picks = [...Array(200)].map((_, i) => i / 200)
+  const first = picks.map((p) => pickAt(p, 'main') < 0.5)
+  const second = picks.map((p) => pickAt(p, 'second-junction') < 0.5)
+  const agree = first.filter((v, i) => v === second[i]).length
+  assert.ok(agree > 40 && agree < 160,
+    `the two junctions agree ${agree} times in 200; they are correlated`)
+  // ...and each junction is still an even split on its own.
+  for (const [name, side] of [['first', first], ['second', second]] as const) {
+    const n = side.filter(Boolean).length
+    assert.ok(n > 70 && n < 130, `${name} junction sends ${n} of 200 one way`)
+  }
 })

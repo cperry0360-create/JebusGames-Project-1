@@ -22,10 +22,13 @@ import mapLevel1 from '../data/map.json' with { type: 'json' }
 import mapLevel2 from '../data/map_level2.json' with { type: 'json' }
 import mapLevel3 from '../data/map_level3.json' with { type: 'json' }
 import mapLevel4 from '../data/map_level4.json' with { type: 'json' }
+import mapLevel5 from '../data/map_level5.json' with { type: 'json' }
 import wavesLevel1 from '../data/waves.json' with { type: 'json' }
 import wavesLevel2 from '../data/waves.level2.json' with { type: 'json' }
 import wavesLevel3 from '../data/waves.level3.json' with { type: 'json' }
 import wavesLevel4 from '../data/waves.level4.json' with { type: 'json' }
+import wavesLevel5 from '../data/waves.level5.json' with { type: 'json' }
+import rulesLevel5 from '../data/level5.json' with { type: 'json' }
 
 /** A row of levels.json: what the registry records about a level. */
 export interface LevelDef {
@@ -55,6 +58,37 @@ export interface LevelDef {
    * -- and so levels 2 and 3 keep drawing exactly what they were tuned against.
    */
   extraTowerWeights?: Record<string, number>
+  /**
+   * Filename of this level's own rules block, resolved through `LEVEL_RULES`,
+   * or absent for a level that adds no rules of its own.
+   *
+   * THIS IS THE SCOPING MECHANISM, and it is the reason level 5's five new
+   * systems cannot reach levels 1 to 4. Lifesteal, bleed, the day/night
+   * phases, the acid puddles and the Humiliation meter all take their
+   * configuration from `levelRules(id)`, which returns null for a level that
+   * names nothing -- and every one of them is a no-op on null. So "levels 1 to
+   * 4 are unaffected" is a property of the data rather than a claim about
+   * where an `if` was written, and a test can hold it.
+   */
+  rules?: string
+}
+
+/**
+ * What a level adds to the rules, beyond rules.json.
+ *
+ * Deliberately loose in shape here: each system asserts the block it needs,
+ * and a level that carries no `acid` simply has no puddles. Making this a
+ * closed type would mean every future level's mechanic editing this file.
+ */
+export interface LevelRules {
+  phases?: unknown
+  conversions?: unknown
+  lifesteal?: unknown
+  bleed?: unknown
+  gliding?: unknown
+  acid?: unknown
+  humiliation?: unknown
+  roster?: Record<string, string>
 }
 
 /** A level with its data attached, which is what a scene actually wants. */
@@ -77,6 +111,7 @@ const MAPS: Record<string, MapDef> = {
   level2: mapLevel2 as unknown as MapDef,
   level3: mapLevel3 as unknown as MapDef,
   level4: mapLevel4 as unknown as MapDef,
+  level5: mapLevel5 as unknown as MapDef,
 }
 
 /** Wave tables by the filename levels.json names them with. */
@@ -85,6 +120,12 @@ const WAVE_TABLES: Record<string, WavesDef> = {
   'waves.level2.json': wavesLevel2 as WavesDef,
   'waves.level3.json': wavesLevel3 as unknown as WavesDef,
   'waves.level4.json': wavesLevel4 as unknown as WavesDef,
+  'waves.level5.json': wavesLevel5 as unknown as WavesDef,
+}
+
+/** Rules blocks by the filename levels.json names them with. */
+const LEVEL_RULES: Record<string, LevelRules> = {
+  'level5.json': rulesLevel5 as unknown as LevelRules,
 }
 
 export const LEVELS: LevelDef[] = (levelsData as unknown as { levels: LevelDef[] }).levels
@@ -120,6 +161,22 @@ export const DEFAULT_LEVEL_ID: string = LEVELS[0]!.id
  */
 export function towerWeightsFor(id: string, shared: Record<string, number>): Record<string, number> {
   return { ...shared, ...(levelDef(id)?.extraTowerWeights ?? {}) }
+}
+
+/**
+ * This level's own rules block, or null.
+ *
+ * NULL IS THE COMMON CASE and is what keeps four tuned levels tuned: levels 1
+ * to 4 name no rules file, so every system that reads this gets null and does
+ * nothing. A level naming a file this module does not import returns null too
+ * rather than throwing -- unlike the map and the wave table, which are the
+ * level and are fatal when missing, a rules block is an ADDITION to a level
+ * that is otherwise complete, and a run without one is a playable kind of
+ * wrong. A test catches the name that does not resolve.
+ */
+export function levelRules(id: string | null | undefined): LevelRules | null {
+  const def = levelDef(resolveLevelId(id))
+  return (def?.rules ? LEVEL_RULES[def.rules] : undefined) ?? null
 }
 
 export function levelDef(id: string): LevelDef | null {
