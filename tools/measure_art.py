@@ -894,3 +894,63 @@ print(f'  {checked} entries checked, {len(bad)} disagree with their own pixels'
       + (f', {len(absent)} have no file' if absent else ''))
 if absent:
     print('  no file: ' + ', '.join(absent))
+
+
+# ------------------------------------------------------- beam strips
+#
+# `beamCoreHeight` and the `anchorY` that goes with it, RE-MEASURED.
+#
+# A beam cell is mostly not beam. `fx_mind_laser` is a 225x200 cell holding a
+# core about 68px thick, with a muzzle glow at one end and a spray of shards at
+# the other filling the rest of the height -- so `contentHeight`, which is the
+# whole cell, is the wrong divisor for an ability whose `beamWidth` describes
+# the CORRIDOR that is damaged. Dividing by the cell squeezed the core to a
+# fifth of its drawn thickness and flattened the strip into a smooth gradient.
+#
+# Both numbers are read off the SUSTAIN frames -- the ones a held beam spends
+# its life on -- because the strip's registration drifts: the charge frames sit
+# on the cell's centre line and the sustain frames sit well above it, so an
+# anchor measured over the whole strip would put the beam that does the damage
+# off the line it damages.
+#
+# The middle 55% of a cell's width, so the muzzle and the impact burst, which
+# are several times the core's thickness, do not drag the median.
+print('\n\nbeam strips (recorded vs measured core)')
+_P = json.load(open('src/data/presentation.json'))
+_beams = [(k, c) for k, c in sorted(manifest['render'].items()) if 'beamCoreHeight' in c]
+if not _beams:
+    print('  none declared')
+for key, cfg in _beams:
+    rel = manifest['files'].get(key)
+    path = f'public/{manifest["assetRoot"]}{rel}' if rel else None
+    if not path or not os.path.exists(path):
+        print(f'  {key:22s} no file')
+        continue
+    w, h, px = img.read(path)
+    fw = cfg['sheet']['frameWidth']
+    L = _P['heroFx']['laser']
+    first, last = L['chargeFrames'], L['chargeFrames'] + L['sustainFrames'] - 1
+    heights, centres = [], []
+    for f in range(first, last + 1):
+        lo = f * fw + int(fw * 0.225)
+        for x in range(lo, lo + int(fw * 0.55)):
+            ys = [y for y in range(h) if px[(y * w + x) * 4 + 3] > ALPHA]
+            if ys:
+                heights.append(max(ys) - min(ys) + 1)
+                centres.append((min(ys) + max(ys)) / 2)
+    if not heights:
+        print(f'  {key:22s} no ink in the sustain frames')
+        continue
+    heights.sort()
+    centres.sort()
+    core = heights[len(heights) // 2]
+    centre = centres[len(centres) // 2]
+    anchor = round(centre / cfg['sheet']['frameHeight'], 4)
+    drift = ''
+    if abs(core - cfg['beamCoreHeight']) > 2:
+        drift += f'  <-- beamCoreHeight should be {core}'
+    if abs(anchor - cfg.get('anchorY', 0.5)) > 0.02:
+        drift += f'  <-- anchorY should be {anchor}'
+    print(f'  {key:22s} frames {first}-{last}  core {core}px of '
+          f'{cfg["sheet"]["frameHeight"]}  centre y{centre:g} -> anchorY {anchor}'
+          f'  (says {cfg["beamCoreHeight"]}px / {cfg.get("anchorY")}){drift}')

@@ -25,6 +25,9 @@ const IDS = Object.keys(HEROES).filter((k) => !k.startsWith('_'))
  * three -- so `skill` is the first and `power` is the second, which is what
  * those two fields were.
  */
+const ART_RENDER = JSON.parse(readFileSync(url('../src/data/art.json'), 'utf8')).render
+const PRESENTATION_LASER =
+  JSON.parse(readFileSync(url('../src/data/presentation.json'), 'utf8')).heroFx.laser
 const at = (id: string, i: number): HeroAbilityDef => HEROES[id].abilities[i]
 const skill = (id: string): HeroAbilityDef => at(id, 0)
 const power = (id: string): HeroAbilityDef => at(id, 1)
@@ -540,4 +543,114 @@ test('every number a hero power uses is in heroes.json', () => {
         `${id}'s power has no ${field}`)
     }
   }
+})
+
+/* ------------------------------------------ the held beam, and where it points */
+
+test('the held beam is never aimed at the HUD that started it', () => {
+  /*
+   * THE BUG THIS IS ABOUT. The Mind Laser is a HOLD, so the finger is on the
+   * ability medallion at the bottom of the screen for the whole first part of
+   * the gesture -- and every pointer sample was converted to the world and
+   * used as the aim point. The beam therefore left Courtland, crossed the
+   * board downwards and terminated on the third HUD button, and it did that
+   * for its full ten seconds while the wave walked the far end of the lane.
+   *
+   * Two halves to the fix and both are asserted here: a sample that lands on
+   * chrome is REFUSED (not clamped to the nearest board point, which is a
+   * different wrong answer with the same cause), and until a real board point
+   * arrives the beam points along the hero's facing rather than being
+   * suppressed -- a held button that draws nothing reads as a broken button.
+   */
+  const game = src('scenes/GameScene.ts')
+  const aim = game.slice(game.indexOf('aimHeldAbility(p: Phaser.Input.Pointer)'))
+  const body = aim.slice(0, aim.indexOf('\n  }'))
+
+  // REFUSED, and refused against the same predicate the board and the camera
+  // rig already use, so a control added tomorrow is covered the day it is laid
+  // out rather than the day somebody remembers this function.
+  assert.match(body, /hudBlocksGesture\(this\.layout, ui\.x, ui\.y\)/,
+    'the aim does not ask whether the finger is on the HUD at all')
+  assert.match(body, /if \(hudBlocksGesture\([^)]*\)\) return/,
+    'a point on the HUD is handled some way other than by refusing it')
+  // NOT CLAMPED. `return` before the world conversion is the whole point: the
+  // nearest board point to a button at the bottom of the screen is the strip
+  // just above it, which is not where the player meant either.
+  assert.ok(body.indexOf('hudBlocksGesture') < body.indexOf('this.worldAt(p)'),
+    'the point is converted to the world before it is judged, so it can be clamped')
+  assert.doesNotMatch(body, /Clamp|Math\.min|Math\.max/,
+    'the aim point is pushed onto the board rather than refused')
+
+  // AND THE BEAM FIRES MEANWHILE, along the hero's facing.
+  const begin = game.slice(game.indexOf('private beginHeldAbility('))
+  const beginBody = begin.slice(0, begin.indexOf('\n  }'))
+  assert.match(beginBody, /const aim = this\.facingAim\(a\)/,
+    'the press does not open aimed along the hero\'s facing')
+  assert.match(beginBody, /onBoard: false/,
+    'a beam opens believing the finger is already on the board')
+  const facing = game.slice(game.indexOf('private facingAim('))
+  assert.match(facing.slice(0, facing.indexOf('\n  }')),
+    /this\.hero\.facingLeft \? -a\.range : a\.range/,
+    'the facing aim does not point the way the hero is looking')
+
+  // The beam is not suppressed while it waits for one: `beginHeldAbility`
+  // still creates the sprite and plays the charge whatever the finger is on.
+  assert.match(beginBody, /art\.play\(`\$\{a\.fx\}-charge`\)/,
+    'the beam draws nothing until the finger reaches the board')
+
+  // MOVING ONTO THE BOARD RETARGETS, and the flag is what makes the follow
+  // frame stop overriding it.
+  assert.match(body, /h\.onBoard = true/, 'reaching the board is never recorded')
+  const update = game.slice(game.indexOf('private updateHeldBeam('))
+  assert.match(update.slice(0, update.indexOf('\n  }')),
+    /h\.onBoard \? \{ x: h\.aimX, y: h\.aimY \} : this\.facingAim\(h\.def\)/,
+    'the per-frame follow does not re-derive the facing aim while the finger is off the board')
+
+  // RELEASE STILL STOPS IT EARLY. Unchanged by any of the above, and the one
+  // thing that must not have been broken by it.
+  assert.match(game, /releaseHeldAbility\(\): void \{\s*\n\s*if \(this\.held\) this\.endHeldAbility\('released'\)/,
+    'letting go no longer stops the beam')
+})
+
+test('the held beam draws its own art at its own proportions', () => {
+  /*
+   * `fx_mind_laser` was loaded, sliced and animating the whole time -- the
+   * harness reads `texture=fx-mind-laser clip=fx-mind-laser-sustain
+   * playing=true` off the live sprite. What made it read as the procedural
+   * placeholder it replaced was the SCALE: `beamWidth` (56) divided by
+   * `contentHeight` (200, the whole cell) against `range` (520) divided by
+   * `contentWidth` (225) is 2.31 by 0.28, an anisotropy of 8.25:1, and no
+   * painted highlight survives that.
+   *
+   * The cell is mostly not beam. The core is 76 source pixels and the
+   * rest is muzzle glow and shard spray, so it is the CORE that has to measure
+   * `beamWidth` -- which is also the rule the ability already states: what is
+   * drawn is what is hit.
+   */
+  const game = src('scenes/GameScene.ts')
+  const aim = game.slice(game.indexOf('private aimHeld(x: number, y: number)'))
+  const body = aim.slice(0, aim.indexOf('\n  }'))
+  assert.match(body, /h\.def\.beamWidth \/ \(cfg\.beamCoreHeight \?\? cfg\.contentHeight \?\? frameH\)/,
+    'the beam is still squashed by the whole cell rather than by its core')
+
+  const laser = ART_RENDER['fx-mind-laser'] as Record<string, number>
+  assert.equal(typeof laser.beamCoreHeight, 'number',
+    'the strip does not declare how thick its beam actually is')
+  assert.ok(laser.beamCoreHeight > 0 && laser.beamCoreHeight < laser.contentHeight!,
+    'the core is not a fraction of the cell, which is the only thing it can be')
+  // The anchor goes with it: the core does not sit in the middle of the cell,
+  // so 0.5 would draw the painted beam parallel to the line that is damaged.
+  assert.ok(Math.abs(laser.anchorY! - 0.5) > 0.05,
+    'the beam is anchored on the cell\'s centre rather than on its core')
+  // And what comes out of this is a picture the eye can still read as art.
+  const anisotropy = (520 / laser.contentWidth!) / (56 / laser.beamCoreHeight)
+  assert.ok(anisotropy < 4,
+    `the Mind Laser still draws at ${anisotropy.toFixed(2)}:1, which flattens the strip`)
+
+  // OUT OF HIS HAND. Every character is base-anchored, so drawing at the
+  // hero's position puts the muzzle in the grass under his boots.
+  assert.match(body, /this\.hero\.y - this\.hero\.artHeight \* L\.castHeight/,
+    'the beam still leaves the hero at his feet')
+  assert.equal(typeof PRESENTATION_LASER.castHeight, 'number',
+    'the cast height is not in presentation.json')
 })

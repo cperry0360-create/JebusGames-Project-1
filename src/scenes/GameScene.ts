@@ -239,6 +239,15 @@ interface HeldBeam {
   /** Where the finger last was, in world coordinates. */
   aimX: number
   aimY: number
+  /**
+   * Whether the finger has ever reached a point on the BOARD.
+   *
+   * False while it is still on the medallion that started the cast, or on any
+   * other piece of chrome. The beam fires along the hero's facing until this
+   * turns true, and `aimX`/`aimY` are only ever written from a point the board
+   * actually owns -- see `aimHeldAbility`.
+   */
+  onBoard: boolean
 }
 
 /** One blue for both hero markers: they are two halves of one idea, and two
@@ -3434,11 +3443,20 @@ export class GameScene extends Phaser.Scene {
    * is a cancel and costs nothing. That is the same rule the targeting mode
    * already gives every placed ability: exactly one exit spends anything.
    *
-   * IT IS AIMED AT SOMETHING FROM THE FIRST FRAME. The finger is on a button
-   * at the bottom of the screen when this runs, and converting that point to
-   * the world would point the beam down into the HUD until the player moved.
-   * So it opens aimed at the nearest enemy, and at whatever the hero is
-   * looking at when the board is empty.
+   * IT IS AIMED ALONG THE HERO'S FACING FROM THE FIRST FRAME, and it fires.
+   *
+   * The finger is on a medallion at the bottom of the screen when this runs.
+   * Converting THAT point to the world is what pointed the beam into the HUD
+   * for its whole duration in the recording -- it left Courtland, crossed the
+   * board downwards and terminated on the third button, while the wave walked
+   * the far end of the lane untouched.
+   *
+   * So the press does not aim at the finger at all. It aims where the hero is
+   * looking, which on a hero holding a position is a reasonable guess at the
+   * lane, and `aimHeldAbility` takes over the moment the finger reaches a
+   * point the BOARD owns. Suppressing the beam until then was the other
+   * option and it is worse: a held button that draws nothing reads as a button
+   * that did not work.
    */
   private beginHeldAbility(slot: string, a: HeroAbilityDef): void {
     if (this.held) this.endHeldAbility('replaced')
@@ -3451,10 +3469,7 @@ export class GameScene extends Phaser.Scene {
       this.refuse(`${a.name} has no art loaded.`)
       return
     }
-    const seen = pickNearest(this.enemies, this.hero.x, this.hero.y, Infinity)
-    const aim = seen
-      ? { x: seen.x, y: seen.y }
-      : { x: this.hero.x + (this.hero.facingLeft ? -a.range : a.range), y: this.hero.y }
+    const aim = this.facingAim(a)
 
     const art = this.add.sprite(this.hero.x, this.hero.y, a.fx).setDepth(OVERLAY_DEPTH + 2)
     const cfg = renderFor(a.fx)
@@ -3465,6 +3480,7 @@ export class GameScene extends Phaser.Scene {
       until: 0,
       fired: false,
       aimX: aim.x, aimY: aim.y,
+      onBoard: false,
     }
     this.ensureLaserAnims(a.fx)
     if (this.anims.exists(`${a.fx}-charge`)) art.play(`${a.fx}-charge`)
@@ -3511,13 +3527,51 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * A point a beam may legally be aimed at: straight out from the hero, the
+   * way he is looking.
+   *
+   * `range` along the facing rather than at a nearby enemy. The reach is
+   * fixed, so the point only has to name a DIRECTION -- and a direction the
+   * player can predict from the sprite beats one picked off the enemy list,
+   * which changes under them between one press and the next.
+   */
+  private facingAim(a: HeroAbilityDef): { x: number; y: number } {
+    return {
+      x: this.hero.x + (this.hero.facingLeft ? -a.range : a.range),
+      y: this.hero.y,
+    }
+  }
+
+  /**
    * Where the finger is. Called by the HUD on every pointer move while the
    * button is down, in SCREEN coordinates, because the button that started
    * this lives on the UI camera and the board it is aimed at does not.
+   *
+   * A POINT ON THE HUD IS NOT AN AIM POINT, AND IT IS NOT CLAMPED TO ONE.
+   *
+   * This is a HOLD, so the finger is on the ability medallion for the whole
+   * first part of the gesture and passes back over the row on the way out.
+   * Every one of those samples used to become the beam's endpoint, which is
+   * how a ten-second beam came to be fired into the bottom of the screen.
+   *
+   * Rejected OUTRIGHT rather than pushed to the nearest board point: the
+   * nearest point to a button at the bottom of the screen is the strip of
+   * board just above it, which is not where the player meant either -- it is
+   * a different wrong answer with the same cause. Refusing the sample leaves
+   * the beam where it was, which is the last thing the player DID mean, or on
+   * the hero's facing if they have not aimed yet.
+   *
+   * `hudBlocksGesture` is the same question the board and the camera rig
+   * already ask -- every control plus every opaque plate. See
+   * `chromeUnderPointer`.
    */
   aimHeldAbility(p: Phaser.Input.Pointer): void {
-    if (!this.held) return
+    const h = this.held
+    if (!h) return
+    const ui = pointerToScreen(this, p, this.uiCam)
+    if (hudBlocksGesture(this.layout, ui.x, ui.y)) return
     const w = this.worldAt(p)
+    h.onBoard = true
     this.aimHeld(w.x, w.y)
   }
 
@@ -3535,21 +3589,40 @@ export class GameScene extends Phaser.Scene {
   private aimHeld(x: number, y: number): void {
     const h = this.held
     if (!h) return
+    const L = PRESENTATION.heroFx.laser
     h.aimX = x
     h.aimY = y
     const angle = Math.atan2(y - this.hero.y, x - this.hero.x)
     const cfg = renderFor(h.def.fx)
     const frameW = cfg.sheet?.frameWidth ?? h.art.width
     const frameH = cfg.sheet?.frameHeight ?? h.art.height
-    h.art.setPosition(this.hero.x, this.hero.y)
+    // OUT OF HIS HAND, NOT OUT OF THE GRASS. Every character on the board is
+    // base-anchored, so drawing at his position puts the muzzle under his
+    // boots. The ANGLE is still the ground angle the damage pass uses, so
+    // the picture is that corridor lifted by the 3/4 view's own offset rather
+    // than a second, differently-aimed beam. See presentation.json's
+    // `heroFx.castHeight`.
+    h.art.setPosition(this.hero.x, this.hero.y - this.hero.artHeight * L.castHeight)
     h.art.setRotation(angle)
     // Stretched along the line with its muzzle end anchored on the hero: the
     // strip is a fixed width and the reach is not, so the picture is scaled to
     // the reach rather than tiled. See HeroFx.alongLine, which does the same
     // thing for the one-shot beams.
+    //
+    // THE VERTICAL SCALE IS SET BY THE BEAM'S CORE, NOT BY THE WHOLE CELL.
+    //
+    // It used to divide `beamWidth` by `contentHeight`, and `contentHeight` is
+    // the whole 200-pixel cell -- of which the beam itself is 76 and the
+    // rest is muzzle glow and a spray of shards. Forcing all 200 into a 56px
+    // corridor drew the strip at 2.31 x 0.28, an anisotropy of 8.25:1, which
+    // is enough to flatten every painted highlight into a smooth blue gradient
+    // -- so the real art was on the glass the whole time and read as the
+    // procedural placeholder it replaced. Scaling by the CORE puts 56 world
+    // pixels of beam in the 56-pixel corridor, lets the spray spill outside it
+    // where it was drawn to be, and brings the anisotropy to 2.8:1.
     h.art.setScale(
       h.def.range / (cfg.contentWidth ?? frameW),
-      h.def.beamWidth / (cfg.contentHeight ?? frameH),
+      h.def.beamWidth / (cfg.beamCoreHeight ?? cfg.contentHeight ?? frameH),
     )
     h.art.setDepth(OVERLAY_DEPTH + 2)
   }
@@ -3582,7 +3655,12 @@ export class GameScene extends Phaser.Scene {
     }
     // It follows the hero: he keeps walking under his rally order while it
     // fires, and a beam that stayed where it was lit would come away from him.
-    this.aimHeld(h.aimX, h.aimY)
+    //
+    // AND IT FOLLOWS HIS FACING until the finger has reached the board. The
+    // aim is re-derived rather than held, so a hero who turns while the button
+    // is still under the thumb turns the beam with him.
+    const aim = h.onBoard ? { x: h.aimX, y: h.aimY } : this.facingAim(h.def)
+    this.aimHeld(aim.x, aim.y)
 
     h.left -= dt
     h.until -= dt

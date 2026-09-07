@@ -290,6 +290,12 @@ export class Hero extends Phaser.GameObjects.Container {
     return 0
   }
 
+  /** How tall he is drawn, in world pixels. Read by effects that have to come
+   *  out of him somewhere other than the ground -- see `heroFx.castHeight`. */
+  get artHeight(): number {
+    return this.body_.displayHeight
+  }
+
   hits(x: number, y: number): boolean {
     const b = this.pickBox
     return x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height

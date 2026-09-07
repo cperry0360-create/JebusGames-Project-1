@@ -931,6 +931,25 @@ export interface SpriteRender {
    * by the art rather than by a list of names in a test.
    */
   stretch?: 'line'
+  /**
+   * Beam strips only: how thick the beam's OWN CORE is inside its cell, in
+   * source pixels, and where the middle of that core sits.
+   *
+   * A beam cell is mostly not beam. `fx_mind_laser` is a 225x200 cell holding
+   * a core of 76 source pixels, with a muzzle glow and an impact spray of
+   * shards filling the rest -- so scaling the WHOLE cell down to the ability's
+   * `beamWidth` squeezes the core to a fifth of its drawn thickness and
+   * flattens every painted detail into a smooth gradient. The corridor that is
+   * damaged is `beamWidth`, so it is the CORE that has to measure `beamWidth`
+   * and the spray that is allowed to spill outside it.
+   *
+   * `beamCoreHeight` is measured off the sustain frames -- the ones a held beam
+   * spends its whole life on -- with `tools/measure_art.py`. `anchorY` goes
+   * with it: it is where that core's centre line sits in the cell, so the
+   * painted beam lands on the line the damage pass tests against rather than
+   * parallel to it.
+   */
+  beamCoreHeight?: number
   /** Button plates only: the end-cap sizes in source pixels. A plate is drawn
    *  by slicing at these, so the metal caps keep their proportions at any
    *  width and only the plain middle stretches. */

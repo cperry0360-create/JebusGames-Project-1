@@ -888,9 +888,10 @@
     },
     "fx-mind-laser": {
       "anchorX": 0.0,
-      "anchorY": 0.5,
+      "anchorY": 0.325,
       "contentWidth": 225,
       "contentHeight": 200,
+      "beamCoreHeight": 76,
       "stretch": "line",
       "sheet": {
         "frameWidth": 225,

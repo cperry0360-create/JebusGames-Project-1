@@ -222,7 +222,7 @@
     "headingGap": 4,
     "safeMargin": 40,
     "cardPad": 9,
-    "_cardProbeHeight": "A nominal card height, used only to ask the painted frame for its inset while MEASURING how tall a card needs to be. The inset barely varies with height and the real one is used when the card is drawn; this exists so the measurement has something to ask.",
+    "_cardProbeHeight": "THE HEIGHT A DEALT CARD'S PAINTED FRAME IS WEIGHTED FOR. `chromeFor` scales the nine-slice by min(width, height), and a tower or special card is always wider than it is tall -- so left to itself the frame's thickness, and the width of the text column padded against it, followed the card's HEIGHT. A card's height is whatever the content stack had left over, and the hero block above it is a line taller for a hero whose blurb wraps to five, so the specials re-wrapped their description when the player picked a different hero. Both `cardGeometry` and `cardRow` pin the weight to this number now, so the rail that is painted and the padding that is laid out against it are one answer and the answer depends only on the card's width. It began as a nominal height for the measurer alone, which is exactly how the measurer and the drawer came to disagree.",
     "cardProbeHeight": 140,
     "_floors": "The least each block may be squeezed to before the screen scrolls instead. heroMinHeight is solved through the hero row rather than applied to it, so the block still reports what it needs at that ceiling; cardMinHeight is a flat floor for a dealt card.",
     "heroMinHeight": 150,
@@ -495,6 +495,8 @@
     "_retired": "GONE WITH THE PLACEHOLDER SHAPES: ringMs, ringWidth, fillAlpha, rainRingMs, strikeMs, strikeWidth, hazardThickness, hazardTeeth and hazardToothHeight. They described a stroked circle, a two-line stab and a toothed rectangle, and there is real art in all three places now. `strikeLength` STAYED and is not one of them -- it is the 26px radius a single Star Rain strike actually damages, a gameplay number that the picture is now sized against rather than a property of the picture.",
     "laser": {
       "_note": "THE HELD BEAM'S STRIP, SPLIT INTO ITS THREE PHASES. `fx_mind_laser` is twelve 225x200 cells authored firing left to right: four of charge-up, five of sustain, three of fade-out. Which frames are which is a fact about how the picture was drawn rather than about lasers, so it lives here with the rest of the effect tuning and a re-authored strip with a different split is an edit to these three numbers. The charge plays once on the press, the sustain loops while the button is held, and the fade plays once on release. `fps` is the clip's rate: 18 puts the four-frame charge at 0.22s, which is fast enough not to feel like lag before the beam starts hurting anything.",
+      "_castHeight": "WHERE A BEAM LEAVES THE HERO, as a fraction of his drawn height above his feet. His art is base-anchored like everything else on the board, so an effect drawn at his position comes out of the grass under his boots -- which is where the Mind Laser came out in the recording while Courtland held it up in his hand. The DAMAGE line stays on the ground: the hero and every enemy are anchored at their feet, so the corridor `distanceToSegment` tests is a ground line, and this only lifts the PICTURE off it by the same amount the 3/4 view lifts a chest above a pair of boots. 0.55 is roughly hand height across the five characters.",
+      "castHeight": 0.55,
       "chargeFrames": 4,
       "sustainFrames": 5,
       "fadeFrames": 3,
