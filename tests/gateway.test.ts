@@ -108,7 +108,12 @@ test('the enemy fades out through the gate, and nothing slams', () => {
   // The test moved with the code: the walk still ends at the far edge of the
   // gap, but the check is now in `leaked()`, which also refuses to leak an
   // enemy that is only at the end of a BRANCH rather than at the exit.
-  assert.match(enemy, /if \(this\.leaked\(\)\) return true/,
+  //
+  // `!this.controlled &&` joined the condition with Mind Control: something
+  // walking BACK down the lane under the player's orders cannot reach the gate
+  // it is walking away from, and asking would be asking about a lane position
+  // that is falling rather than rising.
+  assert.match(enemy, /if \(!this\.controlled && this\.leaked\(\)\) return true/,
     'the enemy no longer ends its walk through the leak check')
   assert.match(enemy, /return this\.laneDistance >= this\.stopDistance/,
     'the enemy still walks to the end of the lane and off the plate')

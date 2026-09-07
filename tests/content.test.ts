@@ -35,9 +35,9 @@ test('every sprite key referenced anywhere resolves to a real file', () => {
   for (const [id, e] of Object.entries(enemies) as [string, any][]) refs.push([`enemy ${id}`, e.sprite])
   for (const [id, a] of Object.entries(abilities) as [string, any][]) refs.push([`ability ${id}`, a.icon])
   for (const [id, h] of heroEntries()) {
-    refs.push([`hero ${id} body`, h.bodySprite], [`hero ${id} ultimate`, h.ultimateSprite],
-      [`hero ${id} portrait`, h.portraitSprite],
-      [`hero ${id} slot 1`, h.slot1.icon], [`hero ${id} slot 2`, h.slot2.icon])
+    refs.push([`hero ${id} body`, h.bodySprite], [`hero ${id} powered`, h.poweredSprite],
+      [`hero ${id} portrait`, h.portraitSprite])
+    h.abilities.forEach((a: any, i: number) => refs.push([`hero ${id} ability ${i + 1}`, a.icon]))
     h.fighterSprites.forEach((s: string, i: number) => refs.push([`hero ${id} gnome ${i}`, s]))
   }
   refs.push([`map plate ${map.plate}`, art.map[map.plate]])
@@ -83,20 +83,22 @@ test('Cory is painted art in two forms, both standing on the ground', () => {
     assert.equal(cfg.anchorY, 1, `Cory ${what} must stand on his own base`)
     assert.ok(cfg.shadowWidth > 0, `Cory ${what} casts no shadow`)
   }
-  // ONE PICTURE FOR BOTH TRANSFORMATIONS, like the other four heroes. There
-  // used to be three: a man, a powered form he did not have, and a separate
-  // DAD MODE SUV. He has the Rivian for both now, and Last Stand still has a
-  // visual of its own -- the shake, the flash, the pause and the stats.
-  assert.equal(c.ultimateSprite, c.poweredSprite,
-    'the Last Stand form and the powered form are one picture for every hero')
+  // ONE PICTURE AND ONE FIELD. There used to be three sprites -- a man, a
+  // powered form he did not have, and a separate DAD MODE SUV -- and then two
+  // fields naming the same file. There is one transformation now, so
+  // `ultimateSprite` is gone rather than kept in step by hand.
+  for (const [id, h] of heroEntries()) {
+    assert.equal(h.ultimateSprite, undefined,
+      `${id} still carries a second sprite for a second transformation`)
+  }
 })
 
-test('the Last Stand form is sized by width, and is wider than the road', () => {
+test('the powered form is sized by width, and is wider than the road', () => {
   // It is a vehicle, not a bigger man. Matching its height to his would make
   // it a toy; the point is that it does not fit in the lane.
   const c = heroes.cory
   const onFoot = art.render[c.bodySprite]
-  const suv = art.render[c.ultimateSprite]
+  const suv = art.render[c.poweredSprite]
   // Measured on the STANCE, not on the canvas. contentWidth is the size of the
   // image file, and a re-export with different transparent margins moves it
   // without moving anything the player sees — which is exactly what happened
@@ -129,17 +131,22 @@ test('the Last Stand form is sized by width, and is wider than the road', () => 
     `the Rivian is ${suvW.toFixed(0)}px across; past about 160 it stops being a hero and becomes terrain`)
 })
 
-test('DAD MODE grows every number it is supposed to grow', () => {
-  const ls = heroes.cory.lastStand
+test('the powered form grows every number it is supposed to grow', () => {
+  const ls = heroes.cory.powered
   for (const k of ['attackRangeMultiplier', 'blockRangeMultiplier', 'moveSpeedMultiplier']) {
-    assert.ok(ls[k] > 1, `${k} is ${ls[k]}; the vehicle form should be bigger in every sense`)
+    assert.ok(ls[k] > 1, `${k} is ${ls[k]}; the powered form should be bigger in every sense`)
   }
-  assert.ok(ls.damageMultiplier > 1 && ls.damageTakenMultiplier > 1,
-    'DAD MODE should hit harder and take more')
+  assert.ok(ls.damageMultiplier > 1, 'the powered form should hit harder')
+  // AND TAKE LESS, NOT MORE. `damageTakenMultiplier` was 1.5 while this fired
+  // at a quarter health and the 40% reduction fired at a half; merged onto one
+  // moment the two compose to 0.9 and the reduction stops existing. See
+  // rules.test.ts, which owns that number now.
+  assert.equal(ls.damageTakenMultiplier, undefined,
+    'the powered form takes more damage again, which cancels its own reduction')
   assert.ok(ls.rammingDamage > 0 && ls.rammingKnockbackPixels > 0,
-    'driving through someone should hurt and shove them')
+    'charging through someone should hurt and shove them')
   assert.ok(ls.transformPauseMs >= 300 && ls.transformPauseMs <= 900,
-    'the pause before he reappears is the beat; it must be short but real')
+    'the pause before the hero reappears is the beat; it must be short but real')
   assert.ok(ls.transformShakeMs > 0 && ls.transformFlashMs > 0, 'the swap needs a shake and a flash')
 })
 
@@ -314,7 +321,7 @@ test('every icon the UI shows can be sized from the manifest', () => {
   const icons: Array<[string, string]> = []
   for (const [id, a] of Object.entries(abilities) as [string, any][]) icons.push([`ability ${id}`, a.icon])
   for (const [id, h] of heroEntries()) {
-    icons.push([`hero ${id} slot 1`, h.slot1.icon], [`hero ${id} slot 2`, h.slot2.icon])
+    h.abilities.forEach((a: any, i: number) => icons.push([`hero ${id} ability ${i + 1}`, a.icon]))
   }
   for (const [id, t] of Object.entries(towers) as [string, any][]) icons.push([`tower ${id}`, t.sprite])
 
@@ -582,102 +589,146 @@ test("Cory's kit matches the design doc", () => {
       `${name} calls Cory an auditor`)
   }
   assert.equal(c.passive.name, 'Depreciation')
-  assert.equal(c.slot1.name, 'Haymaker')
-  assert.equal(c.lastStand.name, 'DAD MODE')
+  assert.equal(c.abilities[0].name, 'Haymaker')
+  // The name of his powered form is still DAD MODE and it is still his alone.
+  // NOTHING PRINTS IT ON THE BOARD any more -- see interaction.test.ts, which
+  // is where that is enforced -- and the other four have their own.
+  assert.equal(c.powered.name, 'DAD MODE')
+  const modeNames = heroEntries().map(([, h]) => h.powered.name)
+  assert.equal(new Set(modeNames).size, modeNames.length,
+    'two heroes share a name for their powered form')
 })
 
 test('Haymaker is a real burst with knockback', () => {
   const c = heroes.cory
-  assert.equal(c.slot1.effect, 'punch')
-  assert.ok(c.slot1.damage > c.damage * 4, 'Haymaker should dwarf a normal swing')
-  assert.ok(c.slot1.knockbackPixels > 0, 'Haymaker needs knockback')
-  assert.ok(c.slot1.ignoresArmor, 'a haymaker should not be stopped by armour')
-  assert.ok(c.slot1.cooldown > 0)
+  const hay = c.abilities[0]
+  assert.equal(hay.effect, 'punch')
+  assert.ok(hay.damage > c.damage * 4, 'Haymaker should dwarf a normal swing')
+  assert.ok(hay.knockbackPixels > 0, 'Haymaker needs knockback')
+  assert.ok(hay.ignoresArmor, 'a haymaker should not be stopped by armour')
+  assert.ok(hay.cooldown > 0)
 })
 
-test('every hero declares a whole slot 1 and a whole slot 2', () => {
-  // ONE BLOCK OF FIELDS FOR ALL FIVE. Every skill declares every field, zeros
-  // included, so a reader can see what Bark does NOT do and a new hero cannot
-  // half-declare itself and read `undefined` as 0 at some later call site.
-  // `fx` sits beside `icon` in both shapes: the picture the ability DRAWS is
-  // as much a fact about the hero as the picture on its button, and putting it
-  // here rather than in a switch in the scene is what makes a new hero's two
-  // effects a data edit. It is in the required list because this test's whole
-  // point is that nothing may half-declare itself.
-  const FIELDS = ['name', 'icon', 'fx', 'effect', 'cooldown', 'range', 'radius', 'damage',
-    'ignoresArmor', 'knockbackPixels', 'stunSeconds', 'slowFactor', 'slowSeconds',
-    'burnPerSecond', 'burnSeconds', 'hits', 'gapSeconds', 'sound', 'voice']
-  const EFFECTS = ['punch', 'burst', 'burn', 'double', 'howl', 'rain']
-  const POWER_FIELDS = ['name', 'icon', 'fx', 'effect', 'cooldown', 'targeted', 'castRadius',
-    'radius', 'damage', 'ignoresArmor', 'hits', 'gapSeconds', 'durationSeconds',
-    'tickSeconds', 'slowFactor', 'slowSeconds', 'knockbackPixels', 'stunSeconds', 'sound']
-  const POWER_EFFECTS = ['hazard', 'burst', 'bomb', 'rain', 'dash', 'beam']
+test('every hero declares a whole list of whole abilities', () => {
+  // ONE BLOCK OF FIELDS FOR EVERY ABILITY. It used to be two blocks -- one for
+  // `slot1` and one for `slot2` -- and a hero had exactly one of each. That
+  // pair is gone: `abilities` is an ordered list of any length, `poweredOnly`
+  // carries the gate that used to be the slot's INDEX, and `activation`
+  // carries how the ability is asked for.
+  //
+  // Every ability declares every field, zeros included, so a reader can see
+  // what Bark does NOT do and a new ability cannot half-declare itself and
+  // read `undefined` as 0 at some later call site. `fx` sits beside `icon`:
+  // the picture an ability DRAWS is as much a fact about the hero as the
+  // picture on its button, and putting it here rather than in a switch in the
+  // scene is what makes a new hero's effects a data edit.
+  const FIELDS = ['name', 'icon', 'fx', 'effect', 'cooldown', 'poweredOnly', 'activation',
+    'castRadius', 'range', 'radius', 'damage', 'ignoresArmor', 'knockbackPixels',
+    'stunSeconds', 'slowFactor', 'slowSeconds', 'burnPerSecond', 'burnSeconds', 'hits',
+    'gapSeconds', 'durationSeconds', 'tickSeconds', 'targets', 'holdSeconds', 'beamWidth',
+    'sound', 'voice']
+  const INSTANT = ['punch', 'burst', 'burn', 'double', 'howl', 'rain']
+  const TARGETED = ['hazard', 'burst', 'bomb', 'rain', 'dash', 'beam', 'control']
+  const HELD = ['laser']
   const cues = Object.keys(read('audio').cues)
   const names = new Set<string>()
   for (const [id, h] of heroEntries()) {
-    assert.deepEqual(Object.keys(h.slot1), FIELDS, `${id}'s slot 1 is not the shared shape`)
-    assert.ok(EFFECTS.includes(h.slot1.effect), `${id}'s slot 1 has no known effect`)
-    assert.ok(h.slot1.cooldown > 0, `${id}'s slot 1 has no cooldown`)
-    // Reach in ONE of the two fields, never both and never neither: an area
-    // skill lands where the hero stands and a targeted one needs a target.
-    // `rain` joins the area effects: Star Rain is a volley dropped around the
-    // hero, so it declares a radius and no range, exactly as a burst does.
-    // systems/HeroSkills.ts's isAreaSkill is the one that decides at runtime;
-    // this list has to agree with it, and a third copy of the rule would be
-    // the thing to avoid rather than this second one -- so the import below
-    // checks them against each other.
-    const area = h.slot1.effect === 'burst' || h.slot1.effect === 'howl'
-      || h.slot1.effect === 'rain'
-    assert.equal(area, isAreaSkill(h.slot1 as never),
-      `${id}'s slot 1: this test and isAreaSkill disagree about whether it is an area skill`)
-    assert.ok(area ? h.slot1.radius > 0 && h.slot1.range === 0
-                   : h.slot1.range > 0 && h.slot1.radius === 0,
-      `${id}'s slot 1 declares its reach in the wrong field for a ${h.slot1.effect}`)
-    // Sounds have to exist. A cue that is not in audio.json warns at play
-    // time, and a warning is a soak failure.
-    assert.ok(cues.includes(h.slot1.sound), `${id}'s slot 1 plays "${h.slot1.sound}", which is not a cue`)
-    if (h.slot1.voice !== null) {
-      assert.ok(cues.includes(h.slot1.voice), `${id}'s voice line "${h.slot1.voice}" is not a cue`)
+    assert.ok(Array.isArray(h.abilities) && h.abilities.length >= 1,
+      `${id} declares no abilities`)
+    assert.equal(h.slot1, undefined, `${id} still carries the old slot1 field`)
+    assert.equal(h.slot2, undefined, `${id} still carries the old slot2 field`)
+
+    for (const [i, a] of (h.abilities as any[]).entries()) {
+      const at = `${id}'s ability ${i + 1}`
+      assert.deepEqual(Object.keys(a), FIELDS, `${at} is not the shared shape`)
+      assert.ok(a.cooldown > 0, `${at} has no cooldown`)
+      assert.equal(typeof a.poweredOnly, 'boolean', `${at} does not say whether it is gated`)
+      assert.ok(['instant', 'targeted', 'held'].includes(a.activation),
+        `${at} has no known activation`)
+      // Sounds have to exist. A cue that is not in audio.json warns at play
+      // time, and a warning is a soak failure.
+      assert.ok(cues.includes(a.sound), `${at} plays "${a.sound}", which is not a cue`)
+      if (a.voice !== null) {
+        assert.ok(cues.includes(a.voice), `${at}'s voice line "${a.voice}" is not a cue`)
+      }
+
+      if (a.activation === 'instant') {
+        assert.ok(INSTANT.includes(a.effect), `${at} has no known instant effect`)
+        assert.equal(a.castRadius, 0, `${at} is instant but declares a cast radius`)
+        // Reach in ONE of the two fields, never both and never neither: an
+        // area skill lands where the hero stands and a targeted one needs a
+        // target. `rain` joins the area effects: Star Rain is a volley dropped
+        // around the hero, so it declares a radius and no range, exactly as a
+        // burst does. systems/HeroSkills.ts's isAreaSkill decides at runtime;
+        // this list has to agree with it, and a third copy of the rule would
+        // be the thing to avoid rather than this second one -- so the call
+        // below checks them against each other.
+        const area = a.effect === 'burst' || a.effect === 'howl' || a.effect === 'rain'
+        assert.equal(area, isAreaSkill(a as never),
+          `${at}: this test and isAreaSkill disagree about whether it is an area skill`)
+        assert.ok(area ? a.radius > 0 && a.range === 0 : a.range > 0 && a.radius === 0,
+          `${at} declares its reach in the wrong field for a ${a.effect}`)
+      }
+
+      if (a.activation === 'targeted') {
+        assert.ok(TARGETED.includes(a.effect), `${at} has no known targeted effect`)
+        assert.ok(a.castRadius > 0, `${at} has no reach from the hero`)
+        assert.ok(a.radius > 0, `${at} has no size`)
+        // The one that persists is the one that says how long for, and it is
+        // the only one: `durationSeconds` on a burst would be a field nothing
+        // reads.
+        if (a.effect === 'hazard') {
+          assert.ok(a.durationSeconds > 0, `${at} does not last`)
+          assert.ok(a.tickSeconds > 0, `${at} never charges anything`)
+          assert.ok(a.slowFactor < 1, `${at} does not slow`)
+        }
+        if (a.effect === 'rain') {
+          assert.ok(a.hits > 1, 'a rain of one is a bomb')
+          assert.ok(a.gapSeconds > 0, 'a rain with no gap lands all at once')
+        }
+        if (a.effect === 'dash') {
+          assert.ok(a.knockbackPixels > 0, 'a dash that knocks nothing back is a walk')
+        }
+        if (a.effect === 'control') {
+          assert.ok(a.targets >= 1, `${at} turns nobody`)
+          assert.ok(a.durationSeconds > 0, `${at} controls for no time at all`)
+          assert.ok(a.damage > 0, `${at}: a turned enemy that hits for nothing is scenery`)
+        }
+        if (a.effect !== 'control') assert.ok(a.damage > 0, `${at} does nothing`)
+      }
+
+      if (a.activation === 'held') {
+        assert.ok(HELD.includes(a.effect), `${at} has no known held effect`)
+        assert.ok(a.holdSeconds > 0, `${at} may be held for no time at all`)
+        assert.ok(a.tickSeconds > 0, `${at} never charges what it is on`)
+        assert.ok(a.damage > 0, `${at} does nothing`)
+        assert.ok(a.range > 0, `${at} has no length`)
+        assert.ok(a.beamWidth > 0, `${at} has no thickness, so nothing can be under it`)
+      }
+
+      // Distinct names, or the bar has buttons the player cannot tell apart.
+      assert.ok(!names.has(a.name), `"${a.name}" is on two hero buttons`)
+      names.add(a.name)
     }
 
-    // SLOT 2 IS BUILT NOW, and this is the test that said it had to be
-    // finished all the way if it was ever filled in. The same shape for all
-    // five, the same rule for all five, and every field declared with zeros
-    // where a power does not use one.
-    assert.deepEqual(Object.keys(h.slot2), POWER_FIELDS, `${id}'s slot 2 is not the shared shape`)
-    assert.ok(POWER_EFFECTS.includes(h.slot2.effect), `${id}'s slot 2 has no known effect`)
-    assert.equal(h.slot2.cooldown, 12.5, `${id}'s power does not carry the shared cooldown`)
-    assert.equal(h.slot2.targeted, true, `${id}'s power is not placed on the map`)
-    assert.ok(h.slot2.castRadius > 0, `${id}'s power has no reach from the hero`)
-    assert.ok(h.slot2.radius > 0, `${id}'s power has no size`)
-    assert.ok(h.slot2.damage > 0, `${id}'s power does nothing`)
-    assert.ok(cues.includes(h.slot2.sound), `${id}'s power plays "${h.slot2.sound}", not a cue`)
-    // The one that persists is the one that says how long for, and it is the
-    // only one: `durationSeconds` on a burst would be a field nothing reads.
-    if (h.slot2.effect === 'hazard') {
-      assert.ok(h.slot2.durationSeconds > 0, `${id}'s hazard does not last`)
-      assert.ok(h.slot2.tickSeconds > 0, `${id}'s hazard never charges anything`)
-      assert.ok(h.slot2.slowFactor < 1, `${id}'s hazard does not slow`)
-    }
-    if (h.slot2.effect === 'rain') {
-      assert.ok(h.slot2.hits > 1, 'a rain of one is a bomb')
-      assert.ok(h.slot2.gapSeconds > 0, 'a rain with no gap lands all at once')
-    }
-    if (h.slot2.effect === 'dash') {
-      assert.ok(h.slot2.knockbackPixels > 0, 'a dash that knocks nothing back is a walk')
-    }
-    // The hero's own tint, used by every placeholder effect either button
-    // draws. On the hero, not on the power: it is a fact about the character.
+    // AT MOST ONE ALWAYS-AVAILABLE ABILITY, and it is the first. Everything
+    // after it is earned by transforming, which is the shape Courtland is a
+    // test of: one button in base form, the rest on the change.
+    const open = (h.abilities as any[]).filter((a) => !a.poweredOnly)
+    assert.equal(open.length, 1, `${id} has ${open.length} abilities available in base form`)
+    assert.equal(h.abilities[0].poweredOnly, false, `${id}'s first ability is gated`)
+
+    // The hero's own tint, used by every placeholder effect any button draws.
+    // On the hero, not on the ability: it is a fact about the character.
     assert.equal(typeof h.colour, 'number', `${id} has no colour`)
     assert.equal(typeof h.artFacing, 'string', `${id} does not say which way its art faces`)
     assert.ok(['left', 'right'].includes(h.artFacing), `${id}'s artFacing is not a side`)
-
-    // Distinct names, or the bar has two buttons the player cannot tell apart.
-    for (const n of [h.slot1.name, h.slot2.name]) {
-      assert.ok(!names.has(n), `"${n}" is on two hero buttons`)
-      names.add(n)
-    }
   }
+
+  // COURTLAND IS THE ONE WITH THREE, and the other four are untouched. If this
+  // shape is applied to them later it is this line that says so deliberately.
+  const counts = Object.fromEntries(heroEntries().map(([id, h]) => [id, h.abilities.length]))
+  assert.deepEqual(counts, { cory: 2, courtland: 3, han: 2, eli: 2, bailey: 2 })
 })
 
 test('Depreciation fully strips the cast it was tuned against, and dents the rest', () => {
@@ -730,12 +781,12 @@ test("the hero's own actives use ability art, not a tower or a placeholder", () 
   const heroes = JSON.parse(readFileSync(new URL('../src/data/heroes.json', import.meta.url), 'utf8'))
   const art = JSON.parse(readFileSync(new URL('../src/data/art.json', import.meta.url), 'utf8'))
   for (const [, hero] of heroEntries(heroes)) {
-    for (const slot of ['slot1', 'slot2'] as const) {
-      const key = hero[slot].icon
+    for (const [i, a] of (hero.abilities as any[]).entries()) {
+      const key = a.icon
       const path = art.files[key]
-      assert.ok(path, `${hero.name}'s ${slot} points at unknown art key "${key}"`)
+      assert.ok(path, `${hero.name}'s ability ${i + 1} points at unknown art key "${key}"`)
       assert.match(path, /^abilities\//,
-        `${hero.name}'s ${slot} draws ${path}, which is not an ability icon`)
+        `${hero.name}'s ability ${i + 1} draws ${path}, which is not an ability icon`)
     }
   }
 })
@@ -983,8 +1034,10 @@ test('the hero abilities point at their own icons, not at borrowed ones', () => 
   const art = JSON.parse(readFileSync(new URL('../src/data/art.json', import.meta.url), 'utf8'))
   const optional: string[] = art.optional ?? []
   for (const [id, h] of heroEntries()) {
-    for (const [slot, n] of [['slot1', 1], ['slot2', 2]] as const) {
-      const key = h[slot].icon
+    for (const [i, a] of (h.abilities as any[]).entries()) {
+      const n = i + 1
+      const slot = `ability ${n}`
+      const key = a.icon
       assert.equal(key, `ability-${id}-${n}`, `${id}'s ${slot} does not use its own icon`)
       assert.ok(art.files[key], `${key} is not in the manifest`)
       assert.equal(art.files[key], `abilities/ability_${id}_${n}.webp`,
@@ -1020,9 +1073,9 @@ test('the hero abilities point at their own icons, not at borrowed ones', () => 
   // art. That word is gone with the placeholders.
   const greyable: string[] = art.greyable ?? []
   for (const [id, h] of heroEntries()) {
-    for (const slot of ['slot1', 'slot2'] as const) {
-      assert.ok(greyable.includes(h[slot].icon),
-        `${id}'s ${slot} icon has no greyscale copy, so it cannot read as unavailable`)
+    for (const [i, a] of (h.abilities as any[]).entries()) {
+      assert.ok(greyable.includes(a.icon),
+        `${id}'s ability ${i + 1} icon has no greyscale copy, so it cannot read as unavailable`)
     }
   }
 })
@@ -1033,21 +1086,22 @@ test('every hero power draws real art, sized to the power', () => {
   // slot now names the picture it draws, and the picture is in the manifest.
   const art = JSON.parse(readFileSync(new URL('../src/data/art.json', import.meta.url), 'utf8'))
   for (const [id, h] of heroEntries()) {
-    for (const slot of ['slot1', 'slot2'] as const) {
-      const key = h[slot].fx
+    for (const [i, a] of (h.abilities as any[]).entries()) {
+      const slot = `ability ${i + 1}`
+      const key = a.fx
       assert.ok(key, `${id}'s ${slot} names no effect art`)
       assert.ok(art.files[key], `${id}'s ${slot} draws "${key}", which is not in the manifest`)
       assert.ok(existsSync(new URL(`../public/assets/${art.files[key]}`, import.meta.url)),
         `${art.files[key]} is not on disk`)
       const cfg = art.render[key]
       assert.ok(cfg?.contentWidth && cfg?.contentHeight,
-        `${key} has no content box, so HeroFx cannot size it to the power's radius`)
+        `${key} has no content box, so HeroFx cannot size it to the ability's radius`)
     }
   }
-  // THE TWO THAT ARE STRETCHED ALONG A LINE. Their length is whatever distance
-  // the player tapped, so they are anchored at the hero's END of the picture
-  // rather than at its middle, and both are authored travelling right.
-  for (const key of ['fx-ice-beam', 'fx-zoomies']) {
+  // THE THREE THAT ARE STRETCHED ALONG A LINE. Their length is whatever the
+  // player aimed at, so they are anchored at the hero's END of the picture
+  // rather than at its middle, and all three are authored travelling right.
+  for (const key of ['fx-ice-beam', 'fx-zoomies', 'fx-mind-laser']) {
     assert.equal(art.render[key].stretch, 'line', `${key} must declare that it is stretched`)
     assert.equal(art.render[key].anchorX, 0, `${key} must be anchored at the hero's end`)
   }
@@ -1062,8 +1116,8 @@ test('the hero medallions are round and the drafted plates are not', () => {
   // and the shape rule is the reason the set has to be checked rather than a
   // sample: a rectangular icon in a round socket is what says "this is a
   // drafted card" to a player reading the bar at a glance.
-  const medallions = heroEntries().flatMap(([, h]) => [h.slot1.icon, h.slot2.icon])
-  assert.equal(medallions.length, 10)
+  const medallions = heroEntries().flatMap(([, h]) => (h.abilities as any[]).map((a) => a.icon))
+  assert.equal(medallions.length, 11, 'the roster has eleven hero buttons: Courtland has three')
   for (const k of medallions) {
     assert.ok(Math.abs(ratio(k) - 1) < 0.15, `${k} is ${ratio(k).toFixed(2)}:1, not a square medallion`)
   }

@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import type { ScratchOutcome } from '../systems/Scratch.ts'
 import { NukeEarnedOverlay, NukeLaunchOverlay } from '../ui/NukeOverlays.ts'
 import type {
-  AbilityDef, DraftDef, EnemyDef, HeroDef, HeroPowerDef, HeroSkillDef, RulesDef, TowerDef,
+  AbilityDef, DraftDef, EnemyDef, HeroAbilityDef, HeroDef, RulesDef, TowerDef,
   TowerSpec, WavesDef,
 } from '../types.ts'
 import displayData from '../data/display.json'
@@ -11,7 +11,7 @@ import towersData from '../data/towers.json'
 import enemiesData from '../data/enemies.json'
 import { DEFAULT_HERO_ID, heroDef as heroDef_, resolveHeroId } from '../systems/Heroes.ts'
 import {
-  SLOT1, SLOT2, heroSlotDefs, isAreaSkill, isHeroSlot, slotContents,
+  abilityInSlot, heroSlotDefs, heroSlotId, isAreaSkill, isHeroSlot, slotContents,
 } from '../systems/HeroSkills.ts'
 import abilitiesData from '../data/abilities.json'
 import draftData from '../data/draft.json'
@@ -90,7 +90,7 @@ import {
 import { TargetingMode, type ExitReason } from '../systems/TargetingMode.ts'
 import {
   hazardExpired, makeHazard, powerRefusal, rainPoints, tickHazard,
-  withinCastRange, withinDash, type Hazard, type PowerRefusal,
+  distanceToSegment, withinCastRange, withinDash, type Hazard, type PowerRefusal,
 } from '../systems/HeroPowers.ts'
 import {
   alongLine, areaRing, burstAt, groundStrip, statusMarker,
@@ -139,7 +139,6 @@ export interface GameStatus {
   heroDown: boolean
   /** Seconds until he is back, or 0 when he is up. The HUD counts it down. */
   heroReviveIn: number
-  lastStand: boolean
   unlockedTowers: string[]
   abilities: string[]
   /** The rare drop, once it has dropped. Null before, and again after use. */
@@ -155,13 +154,12 @@ export interface GameStatus {
   /**
    * The health fractions worth marking on the hero's bar, ascending.
    *
-   * THERE ARE TWO THRESHOLDS AND THE BAR ONLY EVER SHOWED ONE. The tick was a
-   * hardcoded 0.25, and 0.25 is the LAST STAND threshold from the hero's own
-   * `lastStand.healthThreshold` -- still a live mechanic. The TRANSFORMATION
-   * is a separate rule at 0.5 (`heroTransform.belowHealth` in rules.json) and
-   * had no mark at all, so the more consequential of the two was the invisible
-   * one. Both are marked now, and both come from data: a hero with a different
-   * Last Stand threshold moves its own tick with no code change.
+   * IT WAS TWO AND IT IS ONE. The tick a player saw was hardcoded 0.25 and
+   * then read from every hero's `lastStand.healthThreshold`, which was 0.25 in
+   * all five; the transformation fires at `heroTransform.belowHealth`, which
+   * is 0.5. There is one transformation now and the mark is where it fires.
+   * Still a list, so a rule that wanted a second mark could have one without
+   * the HUD learning what either means.
    */
   heroMarks: number[]
   /** Seconds until the next wave starts by itself. 0 when nothing is counting. */
@@ -216,15 +214,32 @@ const PAD_SQUASH = 0.62
  */
 const HERO_START: readonly [number, number] = [displayData.width / 2, displayData.height / 2]
 
-/**
- * The clock on slot 2, until the power that goes in it has one of its own.
- *
- * It is registered rather than left unregistered so the slot draws like a slot
- * -- a button with no cooldown behind it is a button the bar cannot render the
- * same way as its neighbours. Nothing starts it yet.
- */
 /** Live Spike Strips, with the art each one owns. See `tickHazards`. */
 interface LiveHazard { state: Hazard; art: HazardArt }
+
+/**
+ * A held beam, live between the press and whatever stops it.
+ *
+ * The only thing in the game that spans input events, which is why every field
+ * it needs is here rather than spread over the scene: how much of the budget
+ * is left, where the finger last was, whether it has actually fired anything,
+ * and the sprite it is drawing through. See `beginHeldAbility`.
+ */
+interface HeldBeam {
+  slot: string
+  def: HeroAbilityDef
+  art: Phaser.GameObjects.Sprite
+  /** Seconds of `holdSeconds` still unspent. */
+  left: number
+  /** Seconds until the next damage tick. */
+  until: number
+  /** Whether a damage tick has landed. A beam that has not fired is a press
+   *  the player may still take back for free. */
+  fired: boolean
+  /** Where the finger last was, in world coordinates. */
+  aimX: number
+  aimY: number
+}
 
 /** One blue for both hero markers: they are two halves of one idea, and two
  *  blues would read as two systems. */
@@ -236,7 +251,6 @@ export class GameScene extends Phaser.Scene {
     phase: 'ready', mode: 'normal', enemiesLeft: 0,
     heroName: '', heroHealth: 0, heroMax: 0, heroDown: false, heroReviveIn: 0,
     heroPowered: false,
-    lastStand: false,
     unlockedTowers: [], abilities: [], rareAbility: null, pendingAbility: null,
     readyCountdown: 0, heroMarks: [],
     difficultyId: DEFAULT_DIFFICULTY_ID, startingLives: 0,
@@ -286,6 +300,17 @@ export class GameScene extends Phaser.Scene {
    * head. A sweep cannot do either -- an enemy has a marker or it does not.
    */
   private readonly statusMarkers = new Map<Enemy, { kind: string; art: StatusMarker }>()
+  /**
+   * The beam currently being held, or null.
+   *
+   * ONE AT A TIME BY CONSTRUCTION. A held ability is the only thing in the
+   * game that is live between two input events, so it is the only thing that
+   * can be left running by an event that never arrives -- a finger lifted over
+   * a dialog, a hero going down mid-beam, a wave ending. Everything that ends
+   * it goes through `endHeldAbility`, and `update` re-checks the conditions
+   * every frame rather than trusting the release to happen.
+   */
+  private held: HeldBeam | null = null
   /** The standing highlight over the area a tap is legal in. See
    *  `drawTargetArea`: on a touch device this is the ONLY thing that says the
    *  game is waiting, because there is no pointer to draw a cursor under. */
@@ -680,25 +705,28 @@ export class GameScene extends Phaser.Scene {
       logEvent('hero', 'revived where he fell')
       this.status.alert = `${heroDef.name} is back up.`
     })
-    // The DAD MODE sting, on the frame the SUV appears rather than on the
-    // frame he starts changing. Once per run by construction: the
-    // transformation cannot re-arm inside an encounter.
+    // The transformation sting, on the frame the new form appears rather than
+    // on the frame the hero starts changing.
     //
     // It follows the voice line rather than preceding it, which is what makes
     // it step back for it — the duck only reaches a cue that STARTS during a
-    // line. See announceLastStand for the timing, and the voice bus in
+    // line. See `announceTransform` for the timing, and the voice bus in
     // Audio.ts for the rule.
     this.hero.on('transformed', () => {
       play(this, 'last-stand', 0.85)
-      logEvent('hero', 'DAD MODE transformation complete')
+      logEvent('hero', `${heroDef.powered.name}: transformation complete`)
     })
-    // THE TRANSFORMATION HANDS THE POWER BACK. Slot 2 is gated on the powered
-    // form, so a hero who changes with the clock half-run has a button that
-    // has just become usable and is not usable yet — which reads as the gate
-    // being broken rather than as a cooldown. Changing IS the recharge.
+    // THE TRANSFORMATION HANDS THE POWER BACK. A `poweredOnly` ability is
+    // gated on the powered form, so a hero who changes with the clock half-run
+    // has a button that has just become usable and is not usable yet — which
+    // reads as the gate being broken rather than as a cooldown. Changing IS
+    // the recharge, for every gated ability rather than for slot 2.
     this.hero.on('powered', () => {
-      this.cooldowns.reset(SLOT2)
-      logEvent('hero-power', `${heroDef.slot2.name} ready: ${heroDef.name} powered up`)
+      heroDef.abilities.forEach((a, i) => {
+        if (!a.poweredOnly) return
+        this.cooldowns.reset(heroSlotId(i))
+        logEvent('hero-power', `${a.name} ready: ${heroDef.name} powered up`)
+      })
     })
 
     // THE DIFFICULTY, READ ONCE. Everything below derives from this rather
@@ -732,14 +760,12 @@ export class GameScene extends Phaser.Scene {
     this.status.heroHealth = heroDef.maxHealth
     this.status.heroDown = false
     this.status.heroPowered = false
-    // Ascending, so the HUD draws them without knowing what either one means.
-    // Both from data: the transformation from rules.json, Last Stand from this
-    // hero's own entry in heroes.json.
-    this.status.heroMarks = [heroDef.lastStand.healthThreshold, TRANSFORM_BELOW]
-      .filter((v) => v > 0 && v < 1)
-      .sort((a, b) => a - b)
+    // ONE MARK, and it is where the transformation fires. There were two --
+    // this and Last Stand's quarter — for what is one event now, and the
+    // quarter was the one a player noticed. Still a list, and still from data,
+    // so the HUD draws whatever it is given without knowing what it means.
+    this.status.heroMarks = [TRANSFORM_BELOW].filter((v) => v > 0 && v < 1)
     this.status.heroReviveIn = 0
-    this.status.lastStand = false
     this.status.pendingAbility = null
     this.casting = false
     this.castUntil = 0
@@ -769,10 +795,11 @@ export class GameScene extends Phaser.Scene {
 
     for (const id of this.status.abilities) this.cooldowns.register(id, ABILITIES[id].cooldown)
     this.cooldowns.register(RULES.serverNuke.abilityId, ABILITIES[RULES.serverNuke.abilityId].cooldown)
-    this.cooldowns.register(SLOT1, heroDef.slot1.cooldown)
-    // The hero's own number, not a constant in here. All five are 12.5s; the
-    // point is that changing it is a data edit.
-    this.cooldowns.register(SLOT2, heroDef.slot2.cooldown)
+    // ONE PER ABILITY THIS HERO HAS, walked rather than named. It registered
+    // exactly two, `SLOT1` and `SLOT2`, which is the assumption Courtland's
+    // third ability breaks: an unregistered slot is never ready and the button
+    // is dead. The hero's own numbers, not constants in here.
+    heroDef.abilities.forEach((a, i) => this.cooldowns.register(heroSlotId(i), a.cooldown))
 
     // THE WAY OUT OF EVERY MODE THE BOARD CAN BE IN.
     //
@@ -841,6 +868,8 @@ export class GameScene extends Phaser.Scene {
       this.clearHazards()
       // And the same for the flames over burning enemies, for the same reason.
       this.clearStatusMarkers()
+      // And a beam still being held when the player quit out of the run.
+      this.clearHeldBeam()
     })
     // WHERE THE RUN OPENS: the whole board, not the hero.
     //
@@ -1242,7 +1271,7 @@ export class GameScene extends Phaser.Scene {
    * second of play and would push out everything that led up to a crash.
    */
   private noteHeroState(): void {
-    const now = `${this.status.heroDown ? 'down' : 'up'}/${this.status.lastStand ? 'laststand' : 'normal'}`
+    const now = `${this.status.heroDown ? 'down' : 'up'}/${this.status.heroPowered ? 'powered' : 'base'}`
     if (now === this.lastHeroState) return
     this.lastHeroState = now
     logEvent('hero', now)
@@ -1742,7 +1771,10 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-W', () => this.armAbility(this.status.abilities[1]))
     // The rare drop gets its own key, since it arrives after the hand is dealt.
     this.input.keyboard?.on('keydown-F', () => this.armAbility(this.status.rareAbility ?? undefined))
-    this.input.keyboard?.on('keydown-E', () => this.castHeroSlot1())
+    // The hero's first ability, by slot rather than by a method name. There is
+    // no key for the rest: this is a touch game and the desktop keys are a
+    // convenience for the harness and for testing, not a control scheme.
+    this.input.keyboard?.on('keydown-E', () => this.castHeroSlot(heroSlotId(0)))
     this.input.keyboard?.on('keydown-R', () => {
       if (this.status.phase === 'won' || this.status.phase === 'lost') this.toTitle()
     })
@@ -1769,17 +1801,20 @@ export class GameScene extends Phaser.Scene {
     // backing out costs the ability nothing.
     const pending = this.targeting.request
     if (pending?.kind === 'power') {
-      const p = this.hero.def.slot2
+      // THE REQUEST CARRIES WHICH SLOT, and it used to carry the constant
+      // `SLOT2` because there was only one targeted ability a hero could have.
+      const p = abilityInSlot(this.hero.heroId, pending.id)
       const tap = this.targeting.resolveTap(
-        withinCastRange(p, { x: this.hero.x, y: this.hero.y }, w.x, w.y),
+        p !== null && withinCastRange(p, { x: this.hero.x, y: this.hero.y }, w.x, w.y),
       )
       if (tap?.reason === 'commit') {
         this.syncTargeting()
-        this.firePower(w.x, w.y)
+        this.firePower(pending.id, w.x, w.y)
         return
       }
       this.clearSelection('outside')
-      this.status.alert = `${p.name} only reaches so far. Still ready — tap the medallion again.`
+      this.status.alert =
+        `${p?.name ?? 'That'} only reaches so far. Still ready — tap the medallion again.`
       play(this, 'error')
       return
     }
@@ -2912,9 +2947,10 @@ export class GameScene extends Phaser.Scene {
       return
     }
     if (req.kind === 'power') {
-      // The disc the power reaches, centred on the hero. It is his reach, so
-      // it is drawn around him rather than under the finger.
-      const p = this.hero.def.slot2
+      // The disc the ability reaches, centred on the hero. It is the hero's
+      // reach, so it is drawn around them rather than under the finger.
+      const p = abilityInSlot(this.hero.heroId, req.id)
+      if (!p) return
       g.fillStyle(this.hero.def.colour, T.washAlpha)
       g.fillCircle(this.hero.x, this.hero.y, p.castRadius)
       g.lineStyle(T.edgeWidth, this.hero.def.colour, T.edgeAlpha)
@@ -3106,113 +3142,94 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * SLOT 1: the hero's own active, whoever the hero is.
+   * A HERO ABILITY BUTTON, PRESSED. Whichever slot, whichever hero.
    *
-   * One entry point for all five rather than a method each, because everything
-   * around the effect is the same for all of them -- the cooldown, the three
-   * ways it can be refused, the sound on the hit rather than on the press, and
-   * the message. Only the payload differs, and the payload is chosen by a
-   * field in the data, so a sixth hero is a JSON entry.
+   * ONE ENTRY POINT, and it used to be two: `castHeroSlot1` for the always-on
+   * instant and `castHeroSlot2` for the powered-form targeted power, with the
+   * HUD choosing between them by comparing the slot id against a constant. A
+   * hero with three abilities has no such pair, so what the button does is
+   * decided by the ability's own `activation` and `poweredOnly`.
+   *
+   * Everything around the effect is the same whichever it is -- the cooldown,
+   * the ways it can be refused, the sound on the effect rather than on the
+   * press. Only the payload differs, and the payload is chosen by a field in
+   * the data, so a sixth hero is a JSON entry.
    */
-  castHeroSlot1(): void {
-    const k = this.hero.def.slot1
-    if (!this.cooldowns.ready(SLOT1)) {
-      this.refuse(`${k.name} is still recharging.`)
-      return
-    }
-    if (this.hero.down) {
-      this.refuse(`${this.hero.def.name} is down.`)
+  castHeroSlot(slot: string): void {
+    const a = abilityInSlot(this.hero.heroId, slot)
+    if (!a) return
+    const why = powerRefusal(a, this.hero.powered, this.hero.down, this.cooldowns.ready(slot))
+    if (why !== null) {
+      this.refuse(this.powerRefusalText(a, why))
+      logEvent('hero-power', `${a.name} refused: ${why}`)
       return
     }
 
-    // An area skill lands wherever the hero is standing, so it cannot miss and
-    // is never refused for want of a target. A targeted one needs somebody.
-    const target = isAreaSkill(k)
-      ? null
-      : pickNearest(this.enemies, this.hero.x, this.hero.y, k.range)
-    if (!isAreaSkill(k) && !target) {
-      this.refuse(`${k.name}: nothing in reach.`)
+    if (a.activation === 'targeted') {
+      // The second press is the way out, exactly as it is for a drafted
+      // active. The request carries the SLOT, so the tap that commits knows
+      // which of a hero's abilities it is placing.
+      const armed = this.targeting.arm({ kind: 'power', id: slot })
+      if (armed === 'toggled') {
+        this.clearSelection('toggle')
+        play(this, 'click')
+        return
+      }
+      this.clearGhost()
+      this.ring?.close()
+      this.selected = null
+      this.heroSelected = false
+      this.syncTargeting()
+      this.status.alert =
+        `${a.name}: tap inside the ring. Tap outside it, or CANCEL, to back out.`
       return
     }
-    this.cooldowns.start(SLOT1)
+
+    if (a.activation === 'held') {
+      // NOTHING IS SPENT ON THE PRESS. `beginHeldAbility` starts the beam and
+      // the cooldown starts when it ENDS, so a press-and-release that fired
+      // for a tenth of a second costs a tenth of a second of the budget rather
+      // than the whole cooldown. See `endHeldAbility`.
+      this.beginHeldAbility(slot, a)
+      return
+    }
+
+    // INSTANT. An area skill lands wherever the hero is standing, so it cannot
+    // miss and is never refused for want of a target. A targeted one needs
+    // somebody.
+    const target = isAreaSkill(a)
+      ? null
+      : pickNearest(this.enemies, this.hero.x, this.hero.y, a.range)
+    if (!isAreaSkill(a) && !target) {
+      this.refuse(`${a.name}: nothing in reach.`)
+      return
+    }
+    this.cooldowns.start(slot)
 
     // The sounds go on the EFFECT, not on the press. Every way this can be
-    // refused -- cooldown, hero down, nothing in reach -- has already returned
-    // above, so a press that does nothing says nothing.
+    // refused -- cooldown, hero down, base form, nothing in reach -- has
+    // already returned above, so a press that does nothing says nothing.
     //
     // The voice line first and the impact second, because the duck only
     // reaches a cue that STARTS after a line: played the other way round the
     // punch would sit on top of the words rather than under them.
-    if (k.voice) play(this, k.voice)
-    play(this, k.sound)
+    if (a.voice) play(this, a.voice)
+    play(this, a.sound)
 
-    switch (k.effect) {
-      case 'punch': this.skillPunch(k, target!); break
-      case 'double': this.skillDouble(k, target!); break
-      case 'burn': this.skillBurn(k, target!); break
-      case 'burst': this.skillBurst(k); break
-      case 'howl': this.skillHowl(k); break
-      case 'rain': this.rainOver(this.hero.x, this.hero.y, k); break
+    switch (a.effect) {
+      case 'punch': this.skillPunch(a, target!); break
+      case 'double': this.skillDouble(a, target!); break
+      case 'burn': this.skillBurn(a, target!); break
+      case 'burst': this.skillBurst(a); break
+      case 'howl': this.skillHowl(a); break
+      case 'rain': this.rainOver(this.hero.x, this.hero.y, a); break
     }
-    logEvent('hero-skill', `${k.effect} ${k.name}`)
-    this.status.alert = `${k.name}!`
-  }
-
-  /**
-   * SLOT 2: the hero power. WIRED, GATED, AND NOT YET IMPLEMENTED.
-   *
-   * The button is in the bar, it is greyed and inert in base form, and it
-   * lights up the moment the hero transforms. What it does not do is anything
-   * at all, and it says so rather than pretending: it starts no cooldown and
-   * spends nothing, so nothing is lost by pressing it while the effect is
-   * being written.
-   */
-  /**
-   * SLOT 2: the hero power.
-   *
-   * One mechanic for all five — powered form only, one cooldown, and a point
-   * tapped on the map inside `castRadius` of the hero. The placement goes
-   * through the SAME targeting mode the Ima Dummy rally point uses, so it
-   * inherits all four ways out of it: the CANCEL control, pressing the
-   * medallion again, ESC, and a tap outside the disc. A power the player armed
-   * by accident costs nothing to put down.
-   */
-  castHeroSlot2(): void {
-    const p = this.hero.def.slot2
-    const why = powerRefusal(
-      p, this.hero.powered, this.hero.down, this.cooldowns.ready(SLOT2),
-    )
-    if (why !== null) {
-      this.refuse(this.powerRefusalText(p, why))
-      logEvent('hero-power', `${p.name} refused: ${why}`)
-      return
-    }
-    // An UNTARGETED power would land on the hero and be done. None of the five
-    // is one today; the branch is here rather than the field being ignored,
-    // because a config field nothing reads is a field that quietly stops being
-    // true — this repo has two dead ones on record.
-    if (!p.targeted) {
-      this.firePower(this.hero.x, this.hero.y)
-      return
-    }
-    // The second press is the way out, exactly as it is for a drafted active.
-    const armed = this.targeting.arm({ kind: 'power', id: SLOT2 })
-    if (armed === 'toggled') {
-      this.clearSelection('toggle')
-      play(this, 'click')
-      return
-    }
-    this.clearGhost()
-    this.ring?.close()
-    this.selected = null
-    this.heroSelected = false
-    this.syncTargeting()
-    this.status.alert =
-      `${p.name}: tap inside the ring. Tap outside it, or CANCEL, to back out.`
+    logEvent('hero-skill', `${a.effect} ${a.name}`)
+    this.status.alert = `${a.name}!`
   }
 
   /** Why the button did nothing, in words the player can act on. */
-  private powerRefusalText(p: HeroPowerDef, why: PowerRefusal): string {
+  private powerRefusalText(p: HeroAbilityDef, why: PowerRefusal): string {
     const who = this.hero.def.name
     if (why === 'unbuilt') return `${p.name} is not wired up yet.`
     if (why === 'down') return `${who} is down.`
@@ -3221,16 +3238,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * The power lands.
+   * A targeted ability lands.
    *
    * Reached only from a tap that resolved to `commit`, which is the one exit
    * from targeting that spends anything. The cooldown starts HERE and nowhere
    * else, so every way of backing out is free by construction.
    */
-  private firePower(x: number, y: number): void {
-    const p = this.hero.def.slot2
-    if (p.effect === null) return
-    this.cooldowns.start(SLOT2)
+  private firePower(slot: string, x: number, y: number): void {
+    const p = abilityInSlot(this.hero.heroId, slot)
+    if (!p || p.effect === null) return
+    this.cooldowns.start(slot)
     play(this, p.sound)
     logEvent('hero-power', `${p.name} at ${Math.round(x)},${Math.round(y)}`)
     switch (p.effect) {
@@ -3240,6 +3257,7 @@ export class GameScene extends Phaser.Scene {
       case 'rain': this.powerRain(p, x, y); break
       case 'dash': this.powerDash(p, x, y); break
       case 'beam': this.powerBeam(p, x, y); break
+      case 'control': this.powerControl(p, x, y); break
     }
     this.status.alert = `${p.name}!`
   }
@@ -3251,7 +3269,7 @@ export class GameScene extends Phaser.Scene {
    * different numbers — a wide, light, stunning one and a narrow, heavy one.
    * Splitting them would be two copies of four lines, drifting.
    */
-  private powerBurst(p: HeroPowerDef, x: number, y: number): void {
+  private powerBurst(p: HeroAbilityDef, x: number, y: number): void {
     const s = PRESENTATION.shake
     // FLATTENED WHEN IT IS SEISMIC AND NOT WHEN IT IS FIREBALL, and the two
     // powers share this method, so the decision is read off the art rather
@@ -3281,7 +3299,7 @@ export class GameScene extends Phaser.Scene {
    * that has walked out of the patch, and hit something that has walked into
    * it. Resolving them up front would make the spread cosmetic.
    */
-  private powerRain(p: HeroPowerDef, x: number, y: number): void {
+  private powerRain(p: HeroAbilityDef, x: number, y: number): void {
     this.rainOver(x, y, p)
   }
 
@@ -3340,7 +3358,7 @@ export class GameScene extends Phaser.Scene {
    * -- so a boss that resists crowd control takes the damage and keeps walking
    * without this method knowing anything about bosses.
    */
-  private powerBeam(p: HeroPowerDef, x: number, y: number): void {
+  private powerBeam(p: HeroAbilityDef, x: number, y: number): void {
     const colour = this.hero.def.colour
     // Narrow, because it is a beam rather than a corridor: the width says "a
     // line was drawn here", not "this much of the board was caught".
@@ -3376,7 +3394,7 @@ export class GameScene extends Phaser.Scene {
    * she arrives under her own rules, keeps facing the way she went, and does
    * not teleport through anything she is blocking.
    */
-  private powerDash(p: HeroPowerDef, x: number, y: number): void {
+  private powerDash(p: HeroAbilityDef, x: number, y: number): void {
     const from = { x: this.hero.x, y: this.hero.y }
     const to = { x, y }
     // Drawn at the corridor's REAL diameter, which is the band `withinDash`
@@ -3395,6 +3413,300 @@ export class GameScene extends Phaser.Scene {
       PRESENTATION.shake.haymakerIntensity * 0.5)
   }
 
+  /* ------------------------------------------------------- the held beam */
+
+  /**
+   * THE MIND LASER, PRESSED. Nothing is spent yet.
+   *
+   * A held ability is the only one in the game that is live between two input
+   * events, and the whole of its correctness is that every way it can end goes
+   * through `endHeldAbility`. The press starts the charge animation and the
+   * budget clock; the cooldown starts when it stops, and only if it actually
+   * fired -- a press released during the charge, before a single damage tick,
+   * is a cancel and costs nothing. That is the same rule the targeting mode
+   * already gives every placed ability: exactly one exit spends anything.
+   *
+   * IT IS AIMED AT SOMETHING FROM THE FIRST FRAME. The finger is on a button
+   * at the bottom of the screen when this runs, and converting that point to
+   * the world would point the beam down into the HUD until the player moved.
+   * So it opens aimed at the nearest enemy, and at whatever the hero is
+   * looking at when the board is empty.
+   */
+  private beginHeldAbility(slot: string, a: HeroAbilityDef): void {
+    if (this.held) this.endHeldAbility('replaced')
+    const seen = pickNearest(this.enemies, this.hero.x, this.hero.y, Infinity)
+    const aim = seen
+      ? { x: seen.x, y: seen.y }
+      : { x: this.hero.x + (this.hero.facingLeft ? -a.range : a.range), y: this.hero.y }
+
+    const art = this.add.sprite(this.hero.x, this.hero.y, a.fx).setDepth(OVERLAY_DEPTH + 2)
+    const cfg = renderFor(a.fx)
+    art.setOrigin(cfg.anchorX ?? 0, cfg.anchorY ?? 0.5)
+    this.held = {
+      slot, def: a, art,
+      left: a.holdSeconds,
+      until: 0,
+      fired: false,
+      aimX: aim.x, aimY: aim.y,
+    }
+    this.ensureLaserAnims(a.fx)
+    art.play(`${a.fx}-charge`)
+    // The sustain follows the charge by itself, so the two are one clip to the
+    // player rather than two the scene has to keep in step.
+    art.once(Phaser.Animations.Events.ANIMATION_COMPLETE_KEY + `${a.fx}-charge`, () => {
+      if (this.held?.art === art) art.play(`${a.fx}-sustain`)
+    })
+    this.aimHeld(aim.x, aim.y)
+    play(this, a.sound)
+    logEvent('hero-power', `${a.name} held: ${bothUnits(a.holdSeconds)} of beam`)
+    this.status.alert = `${a.name}: drag to aim, let go to stop.`
+  }
+
+  /**
+   * The three clips the strip carries, built once per texture.
+   *
+   * WHICH FRAMES ARE WHICH IS DATA. `fx_mind_laser` is authored as four frames
+   * of charge, five of sustain and three of fade-out, and that is a fact about
+   * the picture rather than about lasers -- so it lives in presentation.json
+   * beside the rest of the effect tuning, and a re-authored strip with a
+   * different split is an edit there.
+   */
+  private ensureLaserAnims(key: string): void {
+    if (this.anims.exists(`${key}-charge`)) return
+    const L = PRESENTATION.heroFx.laser
+    const make = (name: string, start: number, end: number, repeat: number): void => {
+      this.anims.create({
+        key: `${key}-${name}`,
+        frames: this.anims.generateFrameNumbers(key, { start, end }),
+        frameRate: L.fps,
+        repeat,
+      })
+    }
+    make('charge', 0, L.chargeFrames - 1, 0)
+    make('sustain', L.chargeFrames, L.chargeFrames + L.sustainFrames - 1, -1)
+    make('fade', L.chargeFrames + L.sustainFrames, L.chargeFrames + L.sustainFrames + L.fadeFrames - 1, 0)
+  }
+
+  /**
+   * Where the finger is. Called by the HUD on every pointer move while the
+   * button is down, in SCREEN coordinates, because the button that started
+   * this lives on the UI camera and the board it is aimed at does not.
+   */
+  aimHeldAbility(p: Phaser.Input.Pointer): void {
+    if (!this.held) return
+    const w = this.worldAt(p)
+    this.aimHeld(w.x, w.y)
+  }
+
+  /**
+   * Points the beam, and draws it.
+   *
+   * THE BEAM IS `range` LONG WHEREVER THE FINGER IS, not a line that stops at
+   * it. Two reasons, and the second is the one that decided it: a beam that
+   * ended under the thumb would be invisible on a phone exactly when it is
+   * being aimed, and a beam whose reach depended on how far the player
+   * happened to drag would be a different ability at every length. The finger
+   * chooses the DIRECTION; `def.range` is the reach, and it is the same reach
+   * the damage pass uses.
+   */
+  private aimHeld(x: number, y: number): void {
+    const h = this.held
+    if (!h) return
+    h.aimX = x
+    h.aimY = y
+    const angle = Math.atan2(y - this.hero.y, x - this.hero.x)
+    const cfg = renderFor(h.def.fx)
+    const frameW = cfg.sheet?.frameWidth ?? h.art.width
+    const frameH = cfg.sheet?.frameHeight ?? h.art.height
+    h.art.setPosition(this.hero.x, this.hero.y)
+    h.art.setRotation(angle)
+    // Stretched along the line with its muzzle end anchored on the hero: the
+    // strip is a fixed width and the reach is not, so the picture is scaled to
+    // the reach rather than tiled. See HeroFx.alongLine, which does the same
+    // thing for the one-shot beams.
+    h.art.setScale(
+      h.def.range / (cfg.contentWidth ?? frameW),
+      h.def.beamWidth / (cfg.contentHeight ?? frameH),
+    )
+    h.art.setDepth(OVERLAY_DEPTH + 2)
+  }
+
+  /** The far end of the beam right now. */
+  private heldEnd(h: HeldBeam): { x: number; y: number } {
+    const angle = Math.atan2(h.aimY - this.hero.y, h.aimX - this.hero.x)
+    return {
+      x: this.hero.x + Math.cos(angle) * h.def.range,
+      y: this.hero.y + Math.sin(angle) * h.def.range,
+    }
+  }
+
+  /**
+   * One frame of a held beam: the budget, the damage, and the ways it ends
+   * without anybody letting go.
+   *
+   * The re-checks are the point. A beam is live across frames, so the finger
+   * coming off is not the only way it can need to stop -- the hero can go
+   * down, the run can end, a dialog can open over the board -- and every one
+   * of those is a frame where nothing dispatches a pointer event.
+   */
+  private updateHeldBeam(dt: number): void {
+    const h = this.held
+    if (!h) return
+    if (this.hero.down || this.modalOpen
+        || this.status.phase === 'won' || this.status.phase === 'lost') {
+      this.endHeldAbility('interrupted')
+      return
+    }
+    // It follows the hero: he keeps walking under his rally order while it
+    // fires, and a beam that stayed where it was lit would come away from him.
+    this.aimHeld(h.aimX, h.aimY)
+
+    h.left -= dt
+    h.until -= dt
+    if (h.until <= 0) {
+      h.until += Math.max(0.02, h.def.tickSeconds)
+      h.fired = true
+      const from = { x: this.hero.x, y: this.hero.y }
+      const to = this.heldEnd(h)
+      // A CORRIDOR, NOT A CIRCLE AT THE END: what the ability is is the line,
+      // and `beamWidth` is the full thickness that is drawn -- so what is hit
+      // is what is painted.
+      for (const e of this.enemies) {
+        if (!e.alive || e.controlled) continue
+        if (distanceToSegment({ x: e.x, y: e.y }, from, to) > h.def.beamWidth / 2) continue
+        this.damageEnemy(e, h.def.damage, h.def.ignoresArmor, 0, false)
+        floatingDamage(this, e.x, e.centreY, h.def.damage, false)
+      }
+    }
+    if (h.left <= 0) this.endHeldAbility('spent')
+  }
+
+  /** The finger came off. */
+  releaseHeldAbility(): void {
+    if (this.held) this.endHeldAbility('released')
+  }
+
+  /**
+   * Every way a held beam stops, in one place.
+   *
+   * THE COOLDOWN STARTS HERE AND NOWHERE ELSE, and only when the beam
+   * actually fired. A press let go inside the charge-up has spent nothing and
+   * is handed back ready, which is the same promise the targeting mode makes
+   * about a placed ability that was cancelled.
+   */
+  private endHeldAbility(reason: 'released' | 'spent' | 'interrupted' | 'replaced'): void {
+    const h = this.held
+    if (!h) return
+    this.held = null
+    if (h.fired) this.cooldowns.start(h.slot)
+    const art = h.art
+    if (this.anims.exists(`${h.def.fx}-fade`)) {
+      art.play(`${h.def.fx}-fade`)
+      art.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => art.destroy())
+    } else {
+      art.destroy()
+    }
+    logEvent('hero-power',
+      `${h.def.name} ${reason}: ${bothUnits(Math.max(0, h.def.holdSeconds - h.left))} fired`)
+  }
+
+  /** Takes any held beam off the board. A run ending must not leave one
+   *  behind, and the scene is restarted rather than rebuilt. */
+  private clearHeldBeam(): void {
+    const h = this.held
+    if (!h) return
+    this.held = null
+    h.art.destroy()
+  }
+
+  /**
+   * MIND CONTROL: two enemies near the tap turn around and fight their own.
+   *
+   * `targets` of them, nearest the point first and inside `radius` of it, so
+   * a tap picks the pair the player was looking at rather than the pair the
+   * iteration order happened to reach. Anything unblockable refuses -- see
+   * `Enemy.takeControl` -- and refusing quietly is deliberate: the two nearest
+   * legal enemies are taken and a boss standing between them is skipped, which
+   * is what a player expects from "two enemies near that point".
+   *
+   * The marker over each one is NOT created here. `syncStatusMarkers` sweeps
+   * `Enemy.controlled` every frame and draws `fx-mind-control` over anything
+   * that has it, which is the shape that cannot leak a sprite when a
+   * controlled enemy is killed before its time is up.
+   */
+  private powerControl(p: HeroAbilityDef, x: number, y: number): void {
+    const near = this.enemiesNear(x, y, p.radius)
+      .filter((e) => !e.controlled && e.blockable)
+      .sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y))
+    let taken = 0
+    for (const e of near.slice(0, Math.max(0, p.targets))) {
+      if (!e.takeControl(p.durationSeconds)) continue
+      taken++
+      // A flash on the one that turned, so the moment is legible before the
+      // marker has had a frame to appear.
+      burstAt(this, p.fx, e.x, e.centreY, p.radius * 0.5, OVERLAY_DEPTH + 1)
+    }
+    if (taken === 0) {
+      this.status.alert = `${p.name}: nothing there will turn.`
+      return
+    }
+    logEvent('hero-power', `${p.name} turned ${taken}`)
+  }
+
+  /**
+   * Every controlled enemy, one frame on: its swings, and its ending.
+   *
+   * The SCENE does this rather than the enemy, because only the scene has the
+   * other enemies -- the same division `dueSummons` already uses for the
+   * summoners. `tickControl` answers "how much longer" and "swing now"; this
+   * answers "at whom".
+   *
+   * They fight but do not BLOCK. Nothing here touches `blocker`: an enemy
+   * being fought carries on walking, which is what makes Mind Control a source
+   * of damage rather than a second hero. `Enemy.blockable` is false while
+   * controlled, so the hero does not grab the thing fighting for him either.
+   *
+   * On expiry they die where they stand, and through `damageEnemy` rather than
+   * `die()` so the kill pays out, counts, and drops its peanuts exactly as any
+   * other death does.
+   */
+  private tickControlled(dt: number): void {
+    for (const e of [...this.enemies]) {
+      if (!e.controlled || !e.alive) continue
+      const out = e.tickControl(dt, e.def.attackInterval)
+      if (out.expired) {
+        // Whatever is left of it, so the hit lands and the death is real
+        // rather than a sprite being removed.
+        this.damageEnemy(e, e.health + e.effectiveArmor + 1, true, 0, false)
+        continue
+      }
+      if (!out.swing) continue
+      const control = this.controlDef()
+      if (!control) continue
+      // HOW FAR A TURNED ENEMY SWINGS IS THE ABILITY'S NUMBER, not the
+      // enemy's: an enemy has no reach of its own -- it fights whatever is
+      // holding it, at contact -- so `range` on Mind Control is where the
+      // reach it fights at lives.
+      const victim = this.enemiesNear(e.x, e.y, control.range)
+        .find((q) => q !== e && !q.controlled)
+      if (!victim) continue
+      this.damageEnemy(victim, control.damage, control.ignoresArmor, 0, false)
+      floatingDamage(this, victim.x, victim.centreY, control.damage, false)
+    }
+  }
+
+  /**
+   * The hero's `control` ability, if this hero has one.
+   *
+   * A controlled enemy hits for the ABILITY's damage rather than its own,
+   * because what a turned enemy is worth is a decision about the ability -- and
+   * `heroes.json` is where that decision is written. Looked up rather than
+   * stored on the enemy so a balance edit reaches enemies already turned.
+   */
+  private controlDef(): HeroAbilityDef | null {
+    return this.hero.def.abilities.find((a) => a.effect === 'control') ?? null
+  }
+
   /**
    * Live enemies within `r` of a point, STILL TYPED AS ENEMIES.
    *
@@ -3411,7 +3723,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Spike Strip: the only one that stays. See `tickHazards`. */
-  private powerHazard(p: HeroPowerDef, x: number, y: number): void {
+  private powerHazard(p: HeroAbilityDef, x: number, y: number): void {
     this.hazards.push({
       state: makeHazard(p, x, y),
       // Under the entities, like the lane wash: it is painted on the road.
@@ -3521,7 +3833,7 @@ export class GameScene extends Phaser.Scene {
    * 3. The shake, longer and harder than a tower's.
    * 4. The number, which is 130 and should look like 130.
    */
-  private skillPunch(k: HeroSkillDef, target: Enemy): void {
+  private skillPunch(k: HeroAbilityDef, target: Enemy): void {
     const s = PRESENTATION.shake
     this.damageEnemy(target, k.damage, k.ignoresArmor, 0, false)
     target.knockBack(k.knockbackPixels)
@@ -3544,7 +3856,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Quick Cut: two fast hits. The second is skipped if the first killed it,
    *  which is why the hits are separate rather than one doubled number. */
-  private skillDouble(k: HeroSkillDef, target: Enemy): void {
+  private skillDouble(k: HeroAbilityDef, target: Enemy): void {
     const land = (): void => {
       if (!target.alive) return
       this.damageEnemy(target, k.damage, k.ignoresArmor, 0, false)
@@ -3568,7 +3880,7 @@ export class GameScene extends Phaser.Scene {
    * is attached to the enemy: a timer that outlives its target is a leak, and
    * this one is checked against `alive` on every tick.
    */
-  private skillBurn(k: HeroSkillDef, target: Enemy): void {
+  private skillBurn(k: HeroAbilityDef, target: Enemy): void {
     this.damageEnemy(target, k.damage, k.ignoresArmor, 0, false)
     floatingDamage(this, target.x, target.centreY, k.damage, false)
     // The flame that says so, at the moment of the hit. The lasting half is
@@ -3598,7 +3910,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Shockwave: everything around him takes a hit and stops for a moment. */
-  private skillBurst(k: HeroSkillDef): void {
+  private skillBurst(k: HeroAbilityDef): void {
     const s = PRESENTATION.shake
     // The ground shatter, flattened onto the board and sized to the radius the
     // stun really reaches. It replaces the generic explosion sheet: that one
@@ -3633,7 +3945,7 @@ export class GameScene extends Phaser.Scene {
    * radius the rule actually uses, plus a mark on each enemy it caught. A slow
    * that nothing acknowledges is indistinguishable from a slow that missed.
    */
-  private skillHowl(k: HeroSkillDef): void {
+  private skillHowl(k: HeroAbilityDef): void {
     burstAt(this, k.fx, this.hero.x, this.hero.y, k.radius * 2, OVERLAY_DEPTH)
     play(this, 'hero-hit', 0.4)
     for (const e of this.enemiesNear(this.hero.x, this.hero.y, k.radius)) {
@@ -4133,6 +4445,10 @@ export class GameScene extends Phaser.Scene {
     this.pulseTargetArea()
     // The scaled clock, with the rest of the simulation.
     this.tickHazards(dt)
+    // Outside the phase gate for the same reason the markers are: a beam left
+    // burning by a wave ending underneath it is a sprite on the board and a
+    // cooldown that never starts.
+    this.updateHeldBeam(dt)
     // Every frame and outside the phase gate below, so a marker cannot be left
     // hanging over the board by a wave ending underneath it.
     this.syncStatusMarkers()
@@ -4205,8 +4521,16 @@ export class GameScene extends Phaser.Scene {
     this.trackBoss()
 
     this.tickEngagement()
+    this.tickControlled(dt)
     this.tickEnemies(dt)
-    for (const t of this.towers) t.tick(dt, this.enemies, (tower, target) => this.fire(tower, target))
+    // WHAT THE PLAYER'S SIDE MAY SHOOT, which is not every enemy on the board.
+    // A mind-controlled enemy is fighting for the player, and a tower or a
+    // hero swing that killed it on the frame it turned would make the ability
+    // read as broken -- especially the powered form, which hits everything in
+    // range rather than picking. Computed once and handed to all three, so
+    // they cannot disagree about who is a target.
+    const hostiles = this.enemies.filter((e) => !e.controlled)
+    for (const t of this.towers) t.tick(dt, hostiles, (tower, target) => this.fire(tower, target))
     // A Beacon that has just come back relights everything it covers, and a
     // Beacon that has just gone dark drops it -- both read off the towers
     // themselves, one frame after their own tick, rather than off a timer.
@@ -4214,9 +4538,9 @@ export class GameScene extends Phaser.Scene {
       (n, t) => n + (t.isSupport && t.disabledFor > 0 ? 1 : 0), 0)) this.refreshSupport()
     this.shots = this.shots.filter((s) => !s.tick(dt))
     this.fighters = this.fighters.filter(
-      (f) => !f.tick(dt, this.enemies, (e, dmg) => this.damageEnemy(e, dmg, false)),
+      (f) => !f.tick(dt, hostiles, (e, dmg) => this.damageEnemy(e, dmg, false)),
     )
-    this.hero.tick(dt, this.enemies, (e, dmg) => this.damageEnemy(e, dmg, this.hero.def.ignoresArmor))
+    this.hero.tick(dt, hostiles, (e, dmg) => this.damageEnemy(e, dmg, this.hero.def.ignoresArmor))
 
     if (this.selected) {
       // Redrawn every frame with the panel: the tower can finish an upgrade
@@ -4246,7 +4570,6 @@ export class GameScene extends Phaser.Scene {
     this.status.heroDown = this.hero.down
     this.status.heroReviveIn = this.hero.reviveIn
     this.status.heroPowered = this.hero.powered
-    this.status.lastStand = this.hero.lastStandActive
     this.noteHeroState()
     this.status.enemiesLeft = this.enemies.length + this.spawner.remaining
 
@@ -5074,7 +5397,7 @@ export class GameScene extends Phaser.Scene {
   private damageHero(damage: number): void {
     play(this, 'hero-hit')
     const result = this.hero.hurt(damage)
-    if (result === 'lastStand') this.announceLastStand()
+    if (result === 'transform') this.announceTransform()
     if (result === 'down') {
       this.status.alert =
         `${this.hero.def.name} is down. Back on the spot in ${realSeconds(this.hero.def.reviveSeconds)}s.`
@@ -5082,38 +5405,53 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private announceLastStand(): void {
-    const ls = this.hero.def.lastStand
+  /**
+   * The transformation, staged. NOTHING IS PRINTED ON THE BOARD.
+   *
+   * It used to announce `lastStand.name` across the map and put a second copy
+   * of it in the toast. That name is Cory's DAD MODE and its four siblings,
+   * and the concept came from one hero: a label naming a mode is a thing the
+   * player has to be taught to read, and what a transformation actually needs
+   * to say is said by the flash, the held beat, the sprite and the sting. A
+   * voice line will land here for each hero as the recordings arrive.
+   */
+  private announceTransform(): void {
+    const pf = this.hero.def.powered
     const s = PRESENTATION.shake
     this.cameras.main.flash(340, 255, 90, 60)
     this.cameras.main.shake(s.lastStandMs, s.lastStandIntensity)
 
-    // THE LINE LANDS ON THE SUV, not on the flash.
+    // THE LINE LANDS ON THE NEW FORM, not on the flash.
     //
-    // The sequence was: everything at once on the frame he drops to 25%, and
-    // the SUV appearing 500ms later. So the words were 240ms ahead of the only
-    // thing on screen they are about — he was still a man fading out while the
-    // line was already talking.
+    // The sequence was: everything at once on the frame the hero crosses the
+    // threshold, and the new sprite appearing `transformPauseMs` later. So the
+    // words were 240ms ahead of the only thing on screen they are about.
     //
-    // Measured off the recording in 20ms windows: 260ms of silence, then
+    // Measured off Cory's recording in 20ms windows: 260ms of silence, then
     // speech, and that first syllable is the loudest window in the whole line.
     // Starting the cue at transformPauseMs minus that lead-in puts the WORD on
-    // the frame the vehicle appears.
-    const lead = Math.max(0, ls.transformPauseMs - cueLeadInMs('dadmode-voice'))
-    this.time.delayedCall(lead, () => play(this, 'dadmode-voice'))
+    // the frame the new form appears.
+    //
+    // PER HERO, AND MOST OF THEM ARE SILENT. `dadmode-voice` is Cory saying
+    // DAD MODE and it played for whoever was standing there -- for Bailey, who
+    // is a dog. `powered.voice` is null for the four who have not recorded
+    // one, and null makes no sound rather than making Cory's.
+    if (pf.voice) {
+      const cue = pf.voice
+      const lead = Math.max(0, pf.transformPauseMs - cueLeadInMs(cue))
+      this.time.delayedCall(lead, () => play(this, cue))
+    }
 
     // The sting is not played here. It lands ON the transformation, which is
-    // 500ms away, so it hangs off the hero's own 'transformed' event —
+    // half a second away, so it hangs off the hero's own 'transformed' event —
     // registered in create() beside 'revived'. Two timers set to the same
     // number is not synchronisation, it is a coincidence maintained by hand.
     // The world stops for a moment. Everything else here — flash, shake,
-    // sting, banner — was already firing and it still went past unnoticed,
-    // because the wave carried on walking straight through it. A held beat is
-    // what turns a set of simultaneous effects into a moment.
+    // sting — was already firing and it still went past unnoticed, because the
+    // wave carried on walking straight through it. A held beat is what turns a
+    // set of simultaneous effects into a moment.
     hitPause(this, EFFECT_MS.lastStandHoldMs, (on) => { this.hitPaused = on })
-    this.announce(ls.name, COLOR.fire)
-    this.status.alert =
-      `${ls.name}! Damage doubled, defence gone. He cannot be touched for a moment.`
+    logEvent('hero', `${pf.name}: transformed at half health`)
   }
 
   /**
@@ -5211,6 +5549,13 @@ export class GameScene extends Phaser.Scene {
 
   heroDef(): HeroDef {
     return this.hero.def
+  }
+
+  /** Which hero this run is playing, for the roster lookups the HUD makes:
+   *  which ability is in which slot, and what its icon is. The def alone
+   *  cannot answer those -- two heroes could share a name. */
+  get heroId(): string {
+    return this.hero.heroId
   }
 
   /** Whether the hero is the current selection, so the HUD's portrait chip can

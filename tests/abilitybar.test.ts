@@ -191,7 +191,7 @@ test('Restructure is gone, and the machinery it forced into existence is not', (
     assert.doesNotMatch(code, /[Rr]estructure/, `${name} still has Restructure code in it`)
   }
   // Cory keeps Haymaker, in slot 1.
-  assert.equal(heroes.cory.slot1.name, 'Haymaker')
+  assert.equal(heroes.cory.abilities[0].name, 'Haymaker')
 
   // A free permanent MOVE is not the answer either, and never was.
   const code = game.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n')

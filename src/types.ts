@@ -482,15 +482,44 @@ export interface EnemyDef {
   attackInterval: number
 }
 
-export interface LastStandDef {
+/**
+ * What the powered form changes about a hero, and how the change is staged.
+ *
+ * THIS WAS `LastStandDef` AND IT CARRIED THREE NUMBERS IT NO LONGER DOES.
+ * `healthThreshold` said 0.25 in all five heroes while `rules.json
+ * heroTransform.belowHealth` said 0.5, which is how the health bar came to be
+ * ticked at a quarter for a rule that fires at a half; `damageTakenMultiplier`
+ * said 1.5 and composed with the transformation's own 0.6 to cancel most of
+ * it; and `invulnerableSeconds` was a second copy of the grace. All three
+ * belong to the transformation rather than to a hero, and all three live in
+ * `rules.json heroTransform` now. What is left here is what genuinely differs
+ * between heroes: how much harder this one hits, and how the swap is staged.
+ */
+export interface PoweredFormDef {
+  /**
+   * What this hero's powered form is called.
+   *
+   * NOT PRINTED ON THE BOARD. It was: the name was announced across the map
+   * on transforming, and the concept came from Cory's DAD MODE. It is a log
+   * label now -- `logEvent('hero', ...)` is its only reader -- so a diagnostic
+   * trace can say which hero changed without the game shouting a word at the
+   * player mid-fight.
+   */
   name: string
-  healthThreshold: number
+  /**
+   * The voice line this hero says on transforming, as an audio.json cue, or
+   * null for a hero who has not recorded one.
+   *
+   * PER HERO, BECAUSE THE RECORDING IS OF A PERSON. `dadmode-voice` is Cory's
+   * line and it used to play for whoever was standing there -- Bailey the dog
+   * included. A hero without a line makes no sound beyond the sting.
+   */
+  voice: string | null
   damageMultiplier: number
   attackIntervalMultiplier: number
-  damageTakenMultiplier: number
   hitsAllInRange: boolean
-  /** In the vehicle: reach, block radius and speed all grow, and contact with
-   *  the vehicle hurts and shoves. */
+  /** Powered: reach, block radius and speed all grow, and contact with a
+   *  charging hero hurts and shoves. */
   attackRangeMultiplier: number
   blockRangeMultiplier: number
   moveSpeedMultiplier: number
@@ -499,9 +528,6 @@ export interface LastStandDef {
   transformShakeMs: number
   transformFlashMs: number
   transformPauseMs: number
-  /** He cannot be hurt while the transformation plays. Without it the
-   *  transform is a cinematic he can be killed during. */
-  invulnerableSeconds: number
 }
 
 export interface PassiveDef {
@@ -512,29 +538,75 @@ export interface PassiveDef {
 }
 
 /**
- * What a hero's slot-1 active does.
+ * What one of a hero's abilities does.
  *
- * ONE BLOCK OF FIELDS FOR ALL FIVE, with `effect` choosing which of them are
- * read. Every skill declares every field, zeros included, so `damage: 0` on
- * Bark is a statement rather than an omission and a new hero is data rather
+ * THIS WAS TWO TYPES AND A FIXED PAIR OF SLOTS. `HeroSkillDef` was slot 1 --
+ * always available, instant -- and `HeroPowerDef` was slot 2, powered-form
+ * only and always placed with a second tap. A hero had exactly one of each,
+ * named `slot1` and `slot2`, and the bar, the cooldowns and the HUD's press
+ * handler all knew those two names. Courtland has three abilities, so the
+ * PAIR is gone: a hero declares an ordered `abilities` list of any length, and
+ * what used to be the difference between the two types is now two fields on
+ * one -- `poweredOnly` and `activation`.
+ *
+ * ONE BLOCK OF FIELDS FOR EVERY ABILITY, with `effect` choosing which of them
+ * are read. Every ability declares every field, zeros included, so `damage: 0`
+ * on Bark is a statement rather than an omission and a new hero is data rather
  * than a new shape. The alternative -- a discriminated union per effect --
  * would move the same decision into the type system and cost a code change
  * every time a hero is added.
  */
-export type HeroSkillEffect = 'punch' | 'burst' | 'burn' | 'double' | 'howl' | 'rain'
+export type HeroAbilityEffect =
+  /** Instant, at or near the hero. */
+  | 'punch' | 'burst' | 'burn' | 'double' | 'howl' | 'rain'
+  /** Placed with a second tap. */
+  | 'hazard' | 'bomb' | 'dash' | 'beam'
+  /** Placed with a second tap: turns `targets` enemies near the point around
+   *  for `durationSeconds`, after which they die. */
+  | 'control'
+  /** Held: a beam that fires from the hero along the aim while the button is
+   *  down, for at most `holdSeconds` of held time. */
+  | 'laser'
 
-export interface HeroSkillDef {
+/**
+ * How an ability is asked for.
+ *
+ * `instant` fires on the press. `targeted` arms the board and waits for a tap
+ * inside `castRadius`, through the same targeting mode the rally point uses
+ * and with the same ways out. `held` fires while the button is down and is
+ * aimed by dragging.
+ */
+export type HeroAbilityActivation = 'instant' | 'targeted' | 'held'
+
+export interface HeroAbilityDef {
   name: string
   icon: string
-  /** The art this skill draws when it lands, as an art.json key. Data rather
-   *  than a switch in the scene: a hero's two effects are as much a fact about
-   *  the hero as its two icons are, and adding one is an edit to heroes.json. */
+  /** The art this ability draws, as an art.json key. Data rather than a switch
+   *  in the scene: a hero's effects are as much a fact about the hero as its
+   *  icons are, and adding one is an edit to heroes.json. */
   fx: string
-  effect: HeroSkillEffect
+  /** Null means the slot is reserved: the button is drawn and pressing it
+   *  reports that it is not wired up, spending nothing. */
+  effect: HeroAbilityEffect | null
   cooldown: number
-  /** Reach, for a skill that picks a target. 0 for one centred on the hero. */
+  /**
+   * Whether the hero has to have transformed.
+   *
+   * THE GATE, AS DATA. It used to be the slot's index -- slot 2 was
+   * powered-only because it was slot 2 -- which is exactly the assumption that
+   * cannot survive a hero with three abilities, two of which are gated and one
+   * of which is not.
+   */
+  poweredOnly: boolean
+  activation: HeroAbilityActivation
+  /** `targeted` only: how far from the hero the point may be. The targeting
+   *  overlay draws it. 0 for anything else. */
+  castRadius: number
+  /** Reach, for an ability that picks a target itself, and the length of a
+   *  `laser`'s beam. 0 for one centred on the hero. */
   range: number
-  /** Blast radius, for a skill centred on the hero. 0 for a targeted one. */
+  /** The effect's own radius: the blast, the scatter, the dash corridor's
+   *  half-width, or how near the tapped point `control` looks for enemies. */
   radius: number
   damage: number
   ignoresArmor: boolean
@@ -550,63 +622,21 @@ export interface HeroSkillDef {
   hits: number
   /** Seconds between those hits. */
   gapSeconds: number
-  sound: string
-  /** A voice line on the hit, or null for a hero who has none recorded. */
-  voice: string | null
-}
-
-/**
- * The hero power in slot 2: reserved, gated on the powered form, and NOT YET
- * IMPLEMENTED. `effect` is null, which is what says so -- the button is wired
- * and drawn, and pressing it while powered does nothing but report that.
- */
-/**
- * What a hero power does. All five are placed by tapping the button and then
- * tapping the map; only `hazard` leaves anything behind.
- */
-export type HeroPowerEffect = 'hazard' | 'burst' | 'bomb' | 'rain' | 'dash' | 'beam'
-
-/**
- * SLOT 2: the hero power, one per hero, usable only in the powered form.
- *
- * The same shape for all five, like `HeroSkillDef`, with zeros where a power
- * does not use a field — so a reader can see what Seismic does NOT do, and a
- * new power cannot half-declare itself and read `undefined` as 0 somewhere
- * downstream. `effect: null` is still legal and still means reserved.
- */
-export interface HeroPowerDef {
-  name: string
-  icon: string
-  /** The art this power draws, as an art.json key. See `HeroSkillDef.fx`. */
-  fx: string
-  effect: HeroPowerEffect | null
-  /** Seconds. The same for all five, and reset by the transformation. */
-  cooldown: number
-  /** Whether it needs a point on the map. All five do today; the field is here
-   *  so an instant power does not have to be a special case in the scene. */
-  targeted: boolean
-  /** How far from the hero the point may be. The targeting overlay draws it. */
-  castRadius: number
-  /** The effect's own radius: the blast, the scatter, or the dash corridor's
-   *  half-width. */
-  radius: number
-  damage: number
-  ignoresArmor: boolean
-  /** `rain` only: how many small strikes. 1 elsewhere, 0 where damage is per
-   *  tick rather than per hit. */
-  hits: number
-  /** Seconds between those strikes. */
-  gapSeconds: number
-  /** `hazard`: how long the strip lives. `dash`: how long the run takes. */
+  /** `hazard`: how long the strip lives. `dash`: how long the run takes.
+   *  `control`: how long the enemies stay turned before they drop. */
   durationSeconds: number
-  /** `hazard` only: how often it charges what is standing in it. */
+  /** How often a continuous effect charges what it is on: the hazard strip,
+   *  and the laser's beam. */
   tickSeconds: number
-  /** Multiplier on enemy speed. 1 is no slow. */
-  slowFactor: number
-  slowSeconds: number
-  knockbackPixels: number
-  stunSeconds: number
+  /** How many separate things the ability takes hold of. `control` only. */
+  targets: number
+  /** `held` only: the most seconds of held time before it goes on cooldown. */
+  holdSeconds: number
+  /** `laser` only: the beam's thickness in world pixels. */
+  beamWidth: number
   sound: string
+  /** A voice line on the cast, or null for a hero who has none recorded. */
+  voice: string | null
 }
 
 
@@ -689,11 +719,17 @@ export interface HeroDef {
   }
   ignoresArmor: boolean
   passive: PassiveDef
-  /** Always available. */
-  slot1: HeroSkillDef
-  /** Powered form only, and not yet implemented. */
-  slot2: HeroPowerDef
-  lastStand: LastStandDef
+  /**
+   * This hero's abilities, in bar order. ANY LENGTH.
+   *
+   * It was `slot1` and `slot2`, two named fields, and every hero had exactly
+   * one of each. Courtland has three. The bar, the cooldown register and the
+   * HUD's press handler all walk this list now, so a hero with one ability or
+   * with four is data rather than a code change.
+   */
+  abilities: HeroAbilityDef[]
+  /** What changes when this hero transforms. */
+  powered: PoweredFormDef
 }
 
 export interface BrandingDef {

@@ -1,7 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { applyHit, shouldTrigger, atThreshold, outgoingDamage, attackInterval, incomingDamage } from '../src/systems/LastStand.ts'
+import {
+  TRANSFORM_BELOW, applyHit, atThreshold, attackInterval, damageToHero, outgoingDamage,
+  shouldTransform,
+} from '../src/systems/Transform.ts'
 import { damageAfterArmor, boostedDamage, slowedSpeed } from '../src/systems/Combat.ts'
 import { openingPurse } from '../src/systems/Economy.ts'
 
@@ -19,46 +22,93 @@ const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url),
 
 const towerList = Object.entries(towers) as [string, any][]
 const enemyList = Object.entries(enemies) as [string, any][]
-const ls = heroes.cory.lastStand
+const pf = heroes.cory.powered
 
 // ------------------------------------------------------------------ hero
 
-test('Last Stand threshold is 25%, as the design requires', () => {
-  assert.equal(ls.healthThreshold, 0.25)
+/*
+ * THE TRANSFORMATION WAS TWO TRANSFORMATIONS AND THESE TESTS DESCRIBED THE
+ * SECOND ONE.
+ *
+ * The powered form fired at half health from `rules.json heroTransform`, and
+ * Last Stand fired at a quarter from every hero's own `lastStand` block --
+ * with its own grace, its own damage multiplier, a once-per-ENCOUNTER rule
+ * that survived a revive, and a name shouted across the board that came from
+ * one hero. They are one event now: half health, once per life, and the
+ * threshold has exactly one home.
+ */
+
+test('the transformation threshold is half health, and it lives in rules.json', () => {
+  assert.equal(TRANSFORM_BELOW, 0.5)
+  assert.equal(rules.heroTransform.belowHealth, 0.5)
+  // AND NOWHERE ELSE. Two numbers for one moment is how the health bar came to
+  // be ticked at a quarter for a rule that fires at a half.
+  const raw = readFileSync(new URL('../src/data/heroes.json', import.meta.url), 'utf8')
+  assert.ok(!raw.includes('healthThreshold'),
+    'a hero carries its own transformation threshold again')
 })
 
-test('Last Stand fires at 25% and not before', () => {
+test('the transformation fires at half health and not before', () => {
   const max = heroes.cory.maxHealth
-  assert.equal(atThreshold(max * 0.26, max, ls), false)
-  assert.equal(atThreshold(max * 0.25, max, ls), true)
-  assert.equal(atThreshold(max * 0.1, max, ls), true)
-  assert.equal(atThreshold(0, max, ls), false, 'a downed hero is not transforming')
+  assert.equal(atThreshold(max * 0.51, max), false)
+  assert.equal(atThreshold(max * 0.5, max), true)
+  assert.equal(atThreshold(max * 0.1, max), true)
+  assert.equal(atThreshold(0, max), false, 'a downed hero is not transforming')
 })
 
-test('Last Stand is once per encounter', () => {
+test('the transformation is once per life', () => {
   const max = heroes.cory.maxHealth
-  assert.equal(shouldTrigger(max * 0.2, max, ls, false), true)
-  assert.equal(shouldTrigger(max * 0.2, max, ls, true), false)
-  assert.equal(shouldTrigger(max * 0.05, max, ls, true), false)
+  assert.equal(shouldTransform(max * 0.4, max, false), true)
+  assert.equal(shouldTransform(max * 0.4, max, true), false)
+  assert.equal(shouldTransform(max * 0.05, max, true), false)
 })
 
-test('DAD MODE hits harder, swings faster, and defends worse', () => {
+test('every hero transforms at the same half, once, and with the same grace', () => {
+  for (const [id, h] of Object.entries(heroes as Record<string, any>)) {
+    if (id.startsWith('_')) continue
+    const max = h.maxHealth
+    assert.equal(shouldTransform(max * 0.51, max, false), false, `${id} transforms too early`)
+    assert.equal(shouldTransform(max * 0.5, max, false), true, `${id} does not transform at half`)
+    assert.equal(shouldTransform(max * 0.5, max, true), false, `${id} transforms twice`)
+    assert.equal(h.powered.voice === null || typeof h.powered.voice === 'string', true,
+      `${id} declares no transformation voice line, not even null`)
+  }
+  // Cory's line is Cory's. It used to play for whoever was standing there.
+  assert.equal(heroes.cory.powered.voice, 'dadmode-voice')
+  for (const id of ['courtland', 'han', 'eli', 'bailey']) {
+    assert.equal((heroes as any)[id].powered.voice, null,
+      `${id} says Cory's DAD MODE line on transforming`)
+  }
+})
+
+test('the powered form hits harder, swings faster, and takes LESS', () => {
   const h = heroes.cory
-  assert.ok(outgoingDamage(h.damage, ls, true) > h.damage)
-  assert.ok(attackInterval(h.attackInterval, ls, true) < h.attackInterval)
-  assert.ok(incomingDamage(10, ls, true) > 10)
-  assert.equal(outgoingDamage(h.damage, ls, false), h.damage)
-  assert.equal(incomingDamage(10, ls, false), 10)
-  assert.equal(ls.hitsAllInRange, true, 'swings wildly at everything in range')
+  assert.ok(outgoingDamage(h.damage, pf, true) > h.damage)
+  assert.ok(attackInterval(h.attackInterval, pf, true) < h.attackInterval)
+  assert.equal(outgoingDamage(h.damage, pf, false), h.damage)
+  assert.equal(pf.hitsAllInRange, true, 'swings wildly at everything in range')
+  // ONE MULTIPLIER ON INCOMING DAMAGE, AND IT IS A REDUCTION. Last Stand's
+  // 1.5x lived at a different threshold; composed onto this one it would make
+  // the 40% cut a 10% cut, which is not what the soak or the design assume.
+  assert.equal(damageToHero(10, true, 0), 10 * rules.heroTransform.damageTaken)
+  assert.ok(damageToHero(10, true, 0) < 10, 'the powered form takes more, not less')
+  // `retreat.damageTakenMultiplier` is a different rule and stays: it is the
+  // cost of breaking off a fight, not a property of the powered form.
+  for (const [id, h] of Object.entries(heroes as Record<string, any>)) {
+    if (id.startsWith('_')) continue
+    assert.equal(h.powered.damageTakenMultiplier, undefined,
+      `${id}'s powered form carries a second incoming-damage multiplier again`)
+  }
 })
 
-test('Cory can be worn down, so Last Stand is reachable', () => {
+test('Cory can be worn down, so the transformation is reachable', () => {
   const h = heroes.cory
   const worst = enemyList.map(([, e]) => (e.damage / e.attackInterval)).sort((a, b) => b - a)[0]
   const dps = worst * h.blockCapacity
-  const seconds = (h.maxHealth * (1 - ls.healthThreshold)) / dps
-  assert.ok(seconds > 5 && seconds < 90, `Last Stand would take ${seconds.toFixed(1)}s under a full block`)
-  console.log(`   hero: full block of the hardest hitters reaches DAD MODE in ~${seconds.toFixed(0)}s`)
+  const seconds = (h.maxHealth * (1 - TRANSFORM_BELOW)) / dps
+  assert.ok(seconds > 2 && seconds < 90,
+    `the transformation would take ${seconds.toFixed(1)}s under a full block`)
+  console.log(`   hero: full block of the hardest hitters transforms in ~${seconds.toFixed(0)}s`)
 })
 
 // ------------------------------------------------------------------ combat
@@ -551,7 +601,10 @@ test('every sprite key referenced by data exists in the art manifest', () => {
     if (t.shot) referenced.push(t.shot)
   }
   for (const [, e] of enemyList) referenced.push(e.sprite)
-  referenced.push(heroes.cory.bodySprite, heroes.cory.ultimateSprite, ...heroes.cory.fighterSprites)
+  // `ultimateSprite` is gone: it was a second key naming the same picture as
+  // `poweredSprite` in all five heroes, and the second transformation that
+  // needed its own look is merged into the first.
+  referenced.push(heroes.cory.bodySprite, heroes.cory.poweredSprite, ...heroes.cory.fighterSprites)
   for (const k of referenced) assert.ok(keys.has(k), `data references unknown sprite key "${k}"`)
 })
 
@@ -724,38 +777,38 @@ test('the countdown runs on real seconds, not the scaled clock', () => {
 
 test('a hero never skips his transform, however big the hit', () => {
   // The bug: health was reduced, then death was checked, then the threshold.
-  // A hit that carried him from above 25% to zero or below therefore killed
-  // him outright and Last Stand never happened — which is what the testers
-  // meant by "he goes straight past 25%". At wave 8 with no towers, three
-  // Final Notices hitting for 12 each cross the whole 90hp band inside one
+  // A hit that carried him from above the threshold to zero or below therefore
+  // killed him outright and the transformation never happened — which is what
+  // the testers meant by "he goes straight past it". At wave 8 with no towers,
+  // three Final Notices hitting for 12 each cross the whole band inside one
   // exchange, so this was routine and not a corner case.
   const max = heroes.cory.maxHealth
-  const floor = max * ls.healthThreshold
+  const floor = max * TRANSFORM_BELOW
 
   // A hit that lands squarely inside the band: transforms, as it always did.
-  const inside = applyHit(max * 0.4, max, max * 0.2, ls, false)
+  const inside = applyHit(max * 0.8, max, max * 0.4, false)
   assert.equal(inside.triggers, true)
   assert.equal(inside.down, false)
 
   // A hit far bigger than the band. He stops at the threshold.
-  const huge = applyHit(max * 0.9, max, max * 5, ls, false)
+  const huge = applyHit(max * 0.9, max, max * 5, false)
   assert.equal(huge.down, false, 'a big enough hit still killed him through the transform')
   assert.equal(huge.triggers, true)
   assert.equal(huge.health, floor, 'he should be left standing exactly at the threshold')
 
   // Landing exactly on the threshold still counts as crossing it.
-  const exact = applyHit(max * 0.5, max, max * 0.25, ls, false)
+  const exact = applyHit(max * 0.75, max, max * 0.25, false)
   assert.equal(exact.triggers, true)
   assert.equal(exact.health, floor)
 
   // And the floor is not a permanent shield: once used, he dies normally.
-  const after = applyHit(floor, max, max * 5, ls, true)
+  const after = applyHit(floor, max, max * 5, true)
   assert.equal(after.down, true, 'the transform floor must not apply twice')
   assert.equal(after.health, 0)
   assert.equal(after.triggers, false)
 
   // A hit that leaves him above the band changes nothing.
-  const light = applyHit(max, max, 1, ls, false)
+  const light = applyHit(max, max, 1, false)
   assert.equal(light.triggers, false)
   assert.equal(light.down, false)
   assert.equal(light.health, max - 1)
@@ -765,13 +818,24 @@ test('the transformation cannot be interrupted by killing him during it', () => 
   // He leaves the board for half a second to change. Without a window the
   // wave standing on him simply carries on hitting the empty space, and the
   // one scripted beat the hero has is worth nothing.
-  const pause = ls.transformPauseMs / 1000
-  assert.ok(ls.invulnerableSeconds > pause,
-    `invulnerability lasts ${ls.invulnerableSeconds}s but the transformation takes ${pause}s`)
+  //
+  // ONE GRACE, FROM rules.json. Every hero used to carry its own
+  // `invulnerableSeconds` beside the transformation's, which is two numbers
+  // for one window. The pause is still per hero, because how a hero is staged
+  // is a fact about that hero, so this is checked against the longest of them.
+  const grace = rules.heroTransform.invulnerableSeconds
+  const heroIds = Object.keys(heroes).filter((k) => !k.startsWith('_'))
+  for (const id of heroIds) {
+    const h = (heroes as any)[id]
+    assert.equal(h.powered.invulnerableSeconds, undefined,
+      `${id} carries a second copy of the transformation's grace`)
+    const pause = h.powered.transformPauseMs / 1000
+    assert.ok(grace > pause,
+      `invulnerability lasts ${grace}s but ${id}'s transformation takes ${pause}s`)
+  }
   // Long enough to act on the other side of it, short enough not to be a
   // free second of combat.
-  assert.ok(ls.invulnerableSeconds <= 2,
-    `${ls.invulnerableSeconds}s of invulnerability is a phase, not a transition`)
+  assert.ok(grace <= 2, `${grace}s of invulnerability is a phase, not a transition`)
 })
 
 test('the hero holds a stated number of enemies and no more', () => {

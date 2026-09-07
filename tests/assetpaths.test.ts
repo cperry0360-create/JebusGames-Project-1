@@ -103,9 +103,12 @@ test('every ability and hero slot names an icon and an effect that exist', () =>
   }
   for (const [id, h] of Object.entries(heroes as Record<string, any>)) {
     if (id.startsWith('_')) continue
-    for (const slot of ['slot1', 'slot2']) {
-      hop(`${id}.${slot}`, 'icon', h[slot]?.icon)
-      hop(`${id}.${slot}`, 'fx', h[slot]?.fx)
+    // EVERY ABILITY THIS HERO HAS, walked rather than the two it used to be
+    // guaranteed. Courtland has three; a loop over `slot1` and `slot2` would
+    // have checked two of them and reported the third's art as fine.
+    for (const [i, a] of (h.abilities ?? []).entries()) {
+      hop(`${id}.abilities[${i}]`, 'icon', a?.icon)
+      hop(`${id}.abilities[${i}]`, 'fx', a?.fx)
     }
     hop(id, 'portraitSprite', h.portraitSprite)
     hop(id, 'poweredSprite', h.poweredSprite)

@@ -335,20 +335,76 @@ export class Enemy extends Phaser.GameObjects.Container {
   /**
    * Under somebody else's orders.
    *
-   * NOTHING SETS THIS YET and it is deliberately here anyway. `fx_mind_control`
-   * arrived with the hero art batch as "a marker drawn above a controlled
-   * enemy", and there is no power on the roster that controls one -- the icon
-   * named Mind Control is bound to a slot whose data says Seismic, which is a
-   * naming mismatch reported rather than resolved, because renaming an ability
-   * is not a visual change. So the STATE is declared, the art is bound, and
-   * the scene's marker pass draws it the moment anything sets this true. One
-   * line of gameplay away rather than one art pipeline away.
+   * DECLARED BEFORE ANYTHING SET IT, and something does now. `fx_mind_control`
+   * shipped with the hero art batch as "a marker drawn above a controlled
+   * enemy" and there was no power on the roster that controlled one; the scene's
+   * marker pass has drawn this state since, waiting for a caller.
+   * Courtland's Mind Control is it.
+   *
+   * A CONTROLLED ENEMY IS NOT AN ALLY, IT IS AN ENEMY POINTED THE OTHER WAY.
+   * It walks back down its own lane, swings at whatever it meets, holds
+   * nothing and is held by nothing, cannot leak, and drops dead when the
+   * control runs out.
    */
   controlled = false
+  /** Seconds of control left. Zero whenever `controlled` is false. */
+  private controlFor = 0
+  /** Its own swing clock while controlled, kept apart from `attackTimer` so
+   *  the fight it was in does not carry over into the one it starts. */
+  private controlSwing = 0
 
-  /** Nothing holds a boss: it walks through the line. */
+  /**
+   * Turns it around, or refuses.
+   *
+   * ANYTHING UNBLOCKABLE IS IMMUNE, which is every boss. A boss walks through
+   * the line rather than being held by it, and a boss walking back through the
+   * line under the player's orders would be the same rule broken from the
+   * other side -- as well as handing the player the wave's whole health bar as
+   * a weapon. Returns whether it took.
+   */
+  takeControl(seconds: number): boolean {
+    if (!this.alive || this.controlled || !this.def.blockable) return false
+    this.controlled = true
+    this.controlFor = seconds
+    this.controlSwing = 0
+    // It stops being held the moment it turns: the grip is released here
+    // rather than waiting for `tickEngagement` to notice, so the hero's block
+    // count is right on the frame the player sees it happen.
+    this.blocker = null
+    return true
+  }
+
+  /**
+   * One frame of being controlled: how much longer, and whether it swings now.
+   *
+   * The scene does the actual hitting, because only the scene has the other
+   * enemies -- the same division `dueSummons` already uses. `expired` is true
+   * on the ONE frame the control runs out, so the caller kills it once.
+   */
+  tickControl(dt: number, interval: number): { expired: boolean; swing: boolean } {
+    if (!this.controlled) return { expired: false, swing: false }
+    this.controlFor -= dt
+    let swing = false
+    // Stopped means stopped, here as everywhere else.
+    if (this.stunRemaining <= 0) {
+      this.controlSwing -= dt
+      if (this.controlSwing <= 0) { this.controlSwing = interval; swing = true }
+    }
+    if (this.controlFor <= 0) {
+      this.controlled = false
+      this.controlFor = 0
+      return { expired: true, swing: false }
+    }
+    return { expired: false, swing }
+  }
+
+  /**
+   * Nothing holds a boss: it walks through the line. NOR A CONTROLLED ENEMY,
+   * which is walking the other way and must not be grabbed by the hero it is
+   * fighting for -- being held would stop it dead in front of him.
+   */
   get blockable(): boolean {
-    return this.def.blockable
+    return this.def.blockable && !this.controlled
   }
 
   get healthFraction(): number {
@@ -567,7 +623,7 @@ export class Enemy extends Phaser.GameObjects.Container {
       return false
     }
 
-    if (this.blocker) {
+    if (this.blocker && !this.controlled) {
       this.status = 'fighting'
       this.attackTimer -= dt
       if (this.attackTimer <= 0) {
@@ -592,21 +648,38 @@ export class Enemy extends Phaser.GameObjects.Container {
       //
       // The field starts at 0, so a first engagement still lands immediately.
       const step = slowedSpeed(this.def.speed, this.slowFactor, this.slowed) * dt
-      // Progress only ever grows. The lane position is what a merge rewrites.
-      this.distance += step
-      this.laneDistance += step
-      this.followMerge()
+      if (this.controlled) {
+        // BACK DOWN THE LANE IT CAME UP, on its own lane and no other.
+        // Progress runs backwards with it, so nothing that sorts by "closest
+        // to the exit" treats a retreating enemy as the threat it is not.
+        //
+        // No `followMerge` and no leak check: merges are one-way -- a branch
+        // joins the trunk and there is no rule for which branch to come back
+        // out of -- and something walking away from the gate cannot reach it.
+        // Floored at 0 rather than despawning at the entrance: the control
+        // runs out long before, and a thing that vanishes at the spawn point
+        // reads as a bug rather than as an ending.
+        this.laneDistance = Math.max(0, this.laneDistance - step)
+        this.distance = Math.max(0, this.distance - step)
+      } else {
+        // Progress only ever grows. The lane position is what a merge rewrites.
+        this.distance += step
+        this.laneDistance += step
+        this.followMerge()
+      }
       const p = this.lane.pointAt(this.laneDistance)
       const a = this.lane.angleAt(this.laneDistance)
       // Offset along the lane's NORMAL, so the spread follows the road round a
       // bend instead of shearing across it. (-sin, cos) is the left-hand
       // normal to the direction (cos, sin).
       this.setPosition(p.x - Math.sin(a) * this.laneOffset, p.y + Math.cos(a) * this.laneOffset)
-      this.face(a)
+      // Facing follows the HEADING, so a turned enemy faces the way it is
+      // actually walking rather than the way the lane points.
+      this.face(this.controlled ? a + Math.PI : a)
       // The far side of the open gate's gap, not the end of the lane. The
       // enemy has been fading across the gap for the last few pixels, so by
       // here there is nothing left to see and the leak is bookkeeping.
-      if (this.leaked()) return true
+      if (!this.controlled && this.leaked()) return true
     }
 
     this.applyEmergence(dt)

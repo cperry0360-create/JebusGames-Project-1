@@ -9,7 +9,7 @@ import { facesLeft, mirroredFor } from '../src/systems/Facing.ts'
 import { isAreaSkill } from '../src/systems/HeroSkills.ts'
 import { withinRadius } from '../src/systems/Targeting.ts'
 import { Cooldowns } from '../src/systems/Cooldowns.ts'
-import type { HeroPowerDef, HeroSkillDef } from '../src/types.ts'
+import type { HeroAbilityDef } from '../src/types.ts'
 
 const url = (p: string) => new URL(p, import.meta.url)
 const src = (p: string) => readFileSync(url(`../src/${p}`), 'utf8')
@@ -17,8 +17,17 @@ const code = (p: string) =>
   src(p).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
 const HEROES = JSON.parse(readFileSync(url('../src/data/heroes.json'), 'utf8'))
 const IDS = Object.keys(HEROES).filter((k) => !k.startsWith('_'))
-const power = (id: string): HeroPowerDef => HEROES[id].slot2
-const skill = (id: string): HeroSkillDef => HEROES[id].slot1
+/**
+ * A hero's abilities, by position.
+ *
+ * `power` and `skill` used to read the `slot2` and `slot1` FIELDS, one of
+ * each per hero. There is an ordered `abilities` list now -- Courtland has
+ * three -- so `skill` is the first and `power` is the second, which is what
+ * those two fields were.
+ */
+const at = (id: string, i: number): HeroAbilityDef => HEROES[id].abilities[i]
+const skill = (id: string): HeroAbilityDef => at(id, 0)
+const power = (id: string): HeroAbilityDef => at(id, 1)
 
 /* --------------------------------------------------------------- facing */
 
@@ -149,10 +158,13 @@ test('the transformation hands the power straight back', () => {
 
   // And the scene actually wires it to the transformation.
   const game = code('scenes/GameScene.ts')
-  assert.match(game, /this\.hero\.on\('powered', \(\) => \{[\s\S]{0,200}?this\.cooldowns\.reset\(SLOT2\)/,
+  // EVERY GATED ABILITY, not slot 2 -- Courtland has two of them, and one of
+  // the pair still on cooldown when he transformed would read as the gate
+  // being broken rather than as a wait.
+  assert.match(game, /this\.hero\.on\('powered', \(\) => \{[\s\S]{0,300}?this\.cooldowns\.reset\(heroSlotId\(i\)\)/,
     'the cooldown is not reset when the hero powers up')
-  assert.match(game, /this\.cooldowns\.register\(SLOT2, heroDef\.slot2\.cooldown\)/,
-    'the power cooldown is a constant in the scene again')
+  assert.match(game, /heroDef\.abilities\.forEach\(\(a, i\) => this\.cooldowns\.register\(heroSlotId\(i\), a\.cooldown\)\)/,
+    'the ability cooldowns are not registered from the hero\'s own list')
 })
 
 /* ------------------------------------------------------------ the targeting */
@@ -174,11 +186,15 @@ test('a targeted power is refused outside its radius and cancels for free', () =
   // The scene resolves the tap through the shared targeting mode, so a power
   // gets the same four ways out that an ability does.
   const game = code('scenes/GameScene.ts')
-  assert.match(game, /this\.targeting\.arm\(\{ kind: 'power', id: SLOT2 \}\)/,
+  assert.match(game, /this\.targeting\.arm\(\{ kind: 'power', id: slot \}\)/,
     'the hero power does not go through the shared targeting mode')
   assert.match(game, /pending\?\.kind === 'power'/, 'a tap is not resolved for a power')
   assert.match(game, /withinCastRange\(p, \{ x: this\.hero\.x, y: this\.hero\.y \}, w\.x, w\.y\)/,
     'the legality of the tap is not the cast radius')
+  // AND THE REQUEST CARRIES WHICH SLOT. It used to carry the constant `SLOT2`,
+  // because there was only one targeted ability a hero could have.
+  assert.match(game, /const p = abilityInSlot\(this\.hero\.heroId, pending\.id\)/,
+    'the tap does not resolve which ability it is placing')
 })
 
 /* --------------------------------------------------------------- the effects */
@@ -238,8 +254,8 @@ test('Star Rain scatters evenly over its area, and lands over time', () => {
     'every strike lands on the same frame')
   // And it is centred on the hero when it is cast from slot 1, which is what
   // makes it a skill rather than a placed power.
-  assert.match(game, /case 'rain': this\.rainOver\(this\.hero\.x, this\.hero\.y, k\)/,
-    'the slot 1 rain is not dropped on the hero')
+  assert.match(game, /case 'rain': this\.rainOver\(this\.hero\.x, this\.hero\.y, a\)/,
+    'the instant rain is not dropped on the hero')
 })
 
 /* ------------------------------------------------------------ Eli's two */
@@ -256,15 +272,17 @@ test('Star Rain is Eli\'s slot 1, centred on him, on a slot 1 cooldown', () => {
 
   // A SLOT 1 COOLDOWN, which is what "short" means here: inside the band the
   // other four sit in, and nowhere near a slot 2's 12.5.
-  const others = ['cory', 'courtland', 'han', 'bailey'].map((id) => skill(id).cooldown)
+  const others = ['cory', 'courtland', 'han', 'bailey'].map((id) => skill(id).cooldown)  // eslint-disable-line
   assert.ok(k.cooldown >= Math.min(...others) && k.cooldown <= Math.max(...others),
     `Star Rain's ${k.cooldown}s is outside the ${Math.min(...others)}-${Math.max(...others)}s band the other slot 1s sit in`)
   assert.ok(k.cooldown < power('eli').cooldown, 'the slot 1 is slower than the slot 2')
 
   // And nothing anywhere still calls it Quick Cut.
-  for (const [id, h] of Object.entries(HEROES)) {
-    assert.notEqual(h.slot1?.name, 'Quick Cut', `${id} still carries Quick Cut`)
-    assert.notEqual(h.slot2?.name, 'Quick Cut', `${id} still carries Quick Cut`)
+  for (const [id, h] of Object.entries(HEROES as Record<string, any>)) {
+    if (id.startsWith('_')) continue
+    for (const a of h.abilities as Array<{ name: string }>) {
+      assert.notEqual(a.name, 'Quick Cut', `${id} still carries Quick Cut`)
+    }
   }
   assert.equal(skill('eli').effect === 'double', false, 'the double-hit effect is still in use')
 })
@@ -273,8 +291,9 @@ test('Ice Beam is powered-form only and resets with the transformation', () => {
   const p = power('eli')
   assert.equal(p.name, 'Ice Beam')
   assert.equal(p.effect, 'beam')
-  assert.equal(p.targeted, true, 'Ice Beam does not ask for a point')
-  assert.equal(p.cooldown, 12.5, 'Ice Beam is not on the shared slot 2 cooldown')
+  assert.equal(p.activation, 'targeted', 'Ice Beam does not ask for a point')
+  assert.equal(p.poweredOnly, true, 'Ice Beam is not gated on the powered form')
+  assert.equal(p.cooldown, 12.5, 'Ice Beam is not on the shared hero-power cooldown')
   assert.ok(p.castRadius > 0, 'Ice Beam can be dropped anywhere on the board')
 
   assert.equal(powerRefusal(p, false, false, true), 'base-form', 'Ice Beam fires in base form')
@@ -376,11 +395,11 @@ test('Ice Beam can be backed out of without being spent', () => {
   const game = code('scenes/GameScene.ts')
   const fire = game.slice(game.indexOf('private firePower('))
   const body = fire.slice(0, fire.indexOf('\n  }'))
-  assert.match(body, /this\.cooldowns\.start\(SLOT2\)/, 'firePower does not spend the cooldown')
-  const armed = game.slice(game.indexOf("this.targeting.arm({ kind: 'power', id: SLOT2 })") - 900,
-                           game.indexOf("this.targeting.arm({ kind: 'power', id: SLOT2 })"))
-  assert.doesNotMatch(armed, /cooldowns\.start\(SLOT2\)/,
-    'arming the targeting mode already spends the power')
+  assert.match(body, /this\.cooldowns\.start\(slot\)/, 'firePower does not spend the cooldown')
+  const arm = "this.targeting.arm({ kind: 'power', id: slot })"
+  const armed = game.slice(game.indexOf(arm) - 900, game.indexOf(arm))
+  assert.doesNotMatch(armed, /cooldowns\.start/,
+    'arming the targeting mode already spends the ability')
   // And Ice Beam goes through that shared path rather than a private one.
   assert.match(game, /case 'beam': this\.powerBeam\(p, x, y\); break/,
     'Ice Beam is not dispatched from firePower')
@@ -445,9 +464,10 @@ test('every hero button lands something the player can see', () => {
 
   // And all five run through one switch with one case each, so a new hero
   // cannot arrive with an effect nothing dispatches.
-  const cast = between('castHeroSlot1(): void {', 'private skillPunch(')
+  const cast = between('castHeroSlot(slot: string): void {', 'private skillPunch(')
   for (const effect of ['punch', 'double', 'burn', 'burst', 'howl']) {
-    assert.match(cast, new RegExp(`case '${effect}':`), `slot 1 does not dispatch ${effect}`)
+    assert.match(cast, new RegExp(`case '${effect}':`),
+      `the instant path does not dispatch ${effect}`)
   }
   const fire = between('private firePower(', 'private powerBurst(')
   for (const effect of ['hazard', 'burst', 'bomb', 'rain', 'dash']) {

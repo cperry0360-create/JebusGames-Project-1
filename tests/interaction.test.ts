@@ -382,15 +382,16 @@ test('a downed hero comes back, and says where and when', () => {
   assert.doesNotMatch(revive, /this\.rallyX = /, 'the revive still discards the standing order')
   assert.doesNotMatch(hero, /this\.homeX/, 'the home point is back')
   assert.match(hero, /this\.health = this\.def\.maxHealth/, 'he returns hurt')
-  // Last Stand is once per encounter, revive or no revive.
+  // THE TRANSFORMATION IS ONCE PER LIFE, so a revive RE-ARMS it. This test
+  // used to assert the opposite -- that `lastStandUsed` was deliberately not
+  // cleared here -- which is the once-per-ENCOUNTER rule that left a hero who
+  // went down at wave four with the climax spent for the rest of the level.
+  // There is one transformation now and dying is what earns it back.
   const body = hero.slice(hero.indexOf('private revive(): void {'), hero.indexOf('get returnPoint'))
-    // Comments stripped: one of them explains that `lastStandUsed` is
-    // deliberately NOT reset here, and deleting that reasoning to satisfy a
-    // regex would throw away the only record of why.
     .split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n')
   assert.ok(body.length > 0, 'revive() not found')
-  assert.ok(!/lastStandUsed/.test(body),
-    'the revive re-arms Last Stand, which makes it a cooldown rather than a climax')
+  assert.match(body, /this\.powered = false/,
+    'the revive leaves the hero powered, so the transformation cannot happen again')
 
   const game = src('scenes/GameScene.ts')
   assert.match(game, /reviveLabel/, 'nothing marks the spot he returns to')
@@ -420,7 +421,7 @@ test('a downed hero comes back, and says where and when', () => {
   // Comments stripped: the reasoning above is written into HudScene too, and
   // it has to be allowed to name the string it is explaining.
   const hudCode = hud.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
-  assert.ok(!/lastStand\.name|DAD MODE/.test(hudCode),
+  assert.ok(!/powered\.name|lastStand\.name|DAD MODE/.test(hudCode),
     'the mode label is back, and it is wrong for four heroes out of five')
   // AND THE DOWN STATE IS VISIBLE RATHER THAN INFERRED. A hero who is down is
   // drawn drained and dimmed rather than simply losing his health bar, because

@@ -621,11 +621,18 @@ export class LoadoutScene extends Phaser.Scene {
     // that the block exists to show. The state a reserved power is in goes in
     // the name's own string instead; see `heroBlurb`.
     const chipH = Math.max(descCfg.iconSize, this.probeHeight(descCfg.chipNameSize))
-    const chipsH = chipH * 2 + descCfg.gap
+    // HOW MANY CHIPS IS THE ROSTER'S ANSWER, NOT TWO. Courtland has three
+    // abilities and the other four have two, and this used to be the literal
+    // 2 -- which would have laid the block out one chip short and drawn his
+    // third over whatever was beneath it. The MAXIMUM rather than the selected
+    // hero's own count, so the block is the same height whoever is highlighted
+    // and the card does not jump as the player moves along the row.
+    const chipCount = Math.max(...roster.map((h) => h.def.abilities.length))
+    const chipsH = chipH * chipCount + descCfg.gap * (chipCount - 1)
     // The blurb's column, which the ladder never changes: it is a fraction of
     // the width, so the smallest size gives the shortest possible block.
     const blurbW = heroDescription(
-      { width: innerW, blurbHeight: 0, chipHeight: chipH, chips: 2 }, descCfg,
+      { width: innerW, blurbHeight: 0, chipHeight: chipH, chips: chipCount }, descCfg,
     ).blurb.width
     const sizes = LO.bodySizes
     const blurbHeightAt = (size: number): number => {
@@ -651,11 +658,11 @@ export class LoadoutScene extends Phaser.Scene {
     const roomForText = cap - padT - padB - row.height - LO.sectionGap
     let bodySize = sizes[sizes.length - 1]!
     let desc = heroDescription(
-      { width: innerW, blurbHeight: descFloor, chipHeight: chipH, chips: 2 }, descCfg,
+      { width: innerW, blurbHeight: descFloor, chipHeight: chipH, chips: chipCount }, descCfg,
     )
     for (const size of sizes) {
       const next = heroDescription(
-        { width: innerW, blurbHeight: blurbHeightAt(size), chipHeight: chipH, chips: 2 }, descCfg,
+        { width: innerW, blurbHeight: blurbHeightAt(size), chipHeight: chipH, chips: chipCount }, descCfg,
       )
       bodySize = size
       desc = next
@@ -881,9 +888,13 @@ export class LoadoutScene extends Phaser.Scene {
         wordWrap: { width: desc.blurb.width },
       }).setOrigin(0, 0))
 
-    const slots = [hero.slot1, hero.slot2]
-    for (const [i, slot] of slots.entries()) {
-      const box = desc.chips[i]!
+    // EVERY ABILITY THIS HERO HAS. It was `[hero.slot1, hero.slot2]`, a pair,
+    // which is one chip short for Courtland. `desc.chips` is laid out for the
+    // roster's longest list, so a hero with fewer simply leaves the last box
+    // empty rather than the block resizing under the row.
+    for (const [i, slot] of hero.abilities.entries()) {
+      const box = desc.chips[i]
+      if (!box) continue
       const x = left + box.x
       const y = top + box.y
       // A SLOT THAT IS RESERVED SAYS SO. Cory's second button read "Loophole"
@@ -901,7 +912,7 @@ export class LoadoutScene extends Phaser.Scene {
       const tx = x + D.iconSize + D.iconGap
       out.push(this.add.text(
         tx, y + (box.height - this.probeHeight(D.chipNameSize)) / 2,
-        i === 1 && !ready ? `${slot.name} (soon)` : slot.name, {
+        ready ? slot.name : `${slot.name} (soon)`, {
           fontFamily: FONT_UI, fontSize: `${D.chipNameSize}px`, fontStyle: 'bold',
           color: ready ? COLOR.good : COLOR.dim,
         }).setOrigin(0, 0))

@@ -2,7 +2,6 @@ import Phaser from 'phaser'
 import type { HeroDef } from '../types.ts'
 import { ySort } from '../systems/DepthSort.ts'
 import { pickNearest, withinRadius } from '../systems/Targeting.ts'
-import { applyHit, attackInterval, incomingDamage, outgoingDamage } from '../systems/LastStand.ts'
 import { HeroFrames, type FrameDef, type HeroPose } from '../systems/HeroFrames.ts'
 import { makeShadow, deathPuff } from '../systems/Presentation.ts'
 import { applyGroundRender } from '../systems/Art.ts'
@@ -11,7 +10,8 @@ import { restFacingTarget } from '../systems/HeroFacing.ts'
 import presentationData from '../data/presentation.json'
 import { attackFramesFor, heroHeight, heroSprite, walkFramesFor } from '../systems/Heroes.ts'
 import {
-  TRANSFORM_BELOW, TRANSFORM_INVULNERABLE_SECONDS, damageToHero, shouldTransform,
+  TRANSFORM_BELOW, TRANSFORM_INVULNERABLE_SECONDS, applyHit, attackInterval,
+  damageToHero, outgoingDamage,
 } from '../systems/Transform.ts'
 import { Enemy } from './Enemy.ts'
 
@@ -35,9 +35,12 @@ const BOB_SPEED = 11
  * when it was written — and it made the four added afterwards walk backwards.
  *
  * Three rules are load-bearing here:
- *   - Last Stand fires once at 25% health, and cannot re-arm inside an
- *     encounter — not even across a revive. It is the climax of a life, and a
- *     hero who could transform twice a wave would make it a rotation.
+ *   - THE TRANSFORMATION FIRES ONCE, AT HALF HEALTH, PER LIFE. There used to
+ *     be two of them: the powered form at half, and Last Stand at a quarter
+ *     with its own ceremony, its own sprite field and its own once-per-
+ *     ENCOUNTER flag that survived a revive — so a hero who went down at wave
+ *     four played the rest of the level with the climax spent. They are one
+ *     event now, and dying is what re-arms it.
  *   - Going down takes him off the board for `reviveSeconds`, then he comes
  *     back at full health ON THE SPOT HE FELL, still holding whatever rally
  *     order he was under. `down` gates movement, attacking and further damage
@@ -57,21 +60,23 @@ export class Hero extends Phaser.GameObjects.Container {
   readonly def: HeroDef
   health: number
   down = false
-  lastStandActive = false
   /** Seconds until he walks back on, or 0 whenever he is up. */
   reviveIn = 0
   /** Seconds left of the window where breaking off a fight costs extra
    *  damage. The scene draws a marker while this is running. */
   retreatVulnerableFor = 0
   /** Seconds left of the transformation window, during which nothing can hurt
-   *  him. Last Stand is the hero's one scripted moment and it was possible to
-   *  be killed in the middle of it. */
+   *  him. The transformation is the hero's one scripted moment and it was
+   *  possible to be killed in the middle of it. */
   invulnerableFor = 0
   /**
    * Powered form: entered the first time this life's health is at or below
-   * half, kept until he dies. Distinct from Last Stand, which is Cory's own
-   * once-per-encounter beat at 25% and changes how he FIGHTS -- this changes
-   * how much he takes, and every hero has it.
+   * half, kept until the hero dies.
+   *
+   * ONE FLAG, AND IT USED TO BE TWO. `lastStandActive` said the same thing
+   * about the same hero from a different threshold, and everything that
+   * changes in the powered form -- damage, reach, speed, hitting everything in
+   * range, the ramming, the incoming reduction -- was split across the pair.
    */
   powered = false
   /** Seconds of the bob's own clock. */
@@ -91,7 +96,6 @@ export class Hero extends Phaser.GameObjects.Container {
   private rallyX: number
   private rallyY: number
   private attackTimer = 0
-  private lastStandUsed = false
   /** Offset that puts the art's feet (or wheels) on his position; negated on
    *  a flip, exactly as the enemies do it. */
   private artOffset = 0
@@ -126,7 +130,7 @@ export class Hero extends Phaser.GameObjects.Container {
   arrivalPoints: Array<{ x: number; y: number }> = []
   /** Set while the transformation plays, so he neither moves nor fights. */
   private transforming = false
-  /** Enemies currently under the vehicle, so one pass is one hit each. */
+  /** Enemies currently under a charging hero, so one pass is one hit each. */
   private readonly rammed = new Set<Enemy>()
   /** Set when he is ordered away mid-fight, applied when he arrives: he
    *  cannot swing for a moment after pulling out of one fight and into
@@ -191,32 +195,40 @@ export class Hero extends Phaser.GameObjects.Container {
   }
 
   get damage(): number {
-    return outgoingDamage(this.def.damage, this.def.lastStand, this.lastStandActive)
+    return outgoingDamage(this.def.damage, this.def.powered, this.powered)
   }
 
   get attackInterval(): number {
-    return attackInterval(this.def.attackInterval, this.def.lastStand, this.lastStandActive)
+    return attackInterval(this.def.attackInterval, this.def.powered, this.powered)
   }
 
-  /** In the SUV his reach, his hold and his speed all grow. */
+  /** Powered, the hero's reach, hold and speed all grow. */
   get attackRange(): number {
-    return this.def.attackRange * (this.lastStandActive ? this.def.lastStand.attackRangeMultiplier : 1)
+    return this.def.attackRange * (this.powered ? this.def.powered.attackRangeMultiplier : 1)
   }
 
   get blockRange(): number {
-    return this.def.blockRange * (this.lastStandActive ? this.def.lastStand.blockRangeMultiplier : 1)
+    return this.def.blockRange * (this.powered ? this.def.powered.blockRangeMultiplier : 1)
   }
 
   get moveSpeed(): number {
-    return this.def.moveSpeed * (this.lastStandActive ? this.def.lastStand.moveSpeedMultiplier : 1)
+    return this.def.moveSpeed * (this.powered ? this.def.powered.moveSpeedMultiplier : 1)
   }
 
-  /** True once he is driving rather than walking. */
-  get inVehicle(): boolean {
-    return this.lastStandActive && !this.transforming
+  /**
+   * True once the powered form charges through the lane rather than standing
+   * beside it.
+   *
+   * IT WAS `inVehicle`, WHICH IS ONE HERO'S PICTURE. Cory's powered form is a
+   * spiked Rivian; Bailey's is a dog. All five ram -- every hero's `powered`
+   * block carries `rammingDamage` -- so the name is about what the rule does
+   * rather than about what Cory is driving.
+   */
+  get charging(): boolean {
+    return this.powered && !this.transforming
   }
 
-  /** Half the drawn footprint. The vehicle is wider than a person, so the
+  /** Half the drawn footprint. The powered form is wider than a person, so the
    *  hitbox and the ram both measure from the art rather than a constant. */
   get halfFootprint(): number {
     return this.body_.displayWidth / 2
@@ -357,13 +369,13 @@ export class Hero extends Phaser.GameObjects.Container {
       this.attackTimer -= dt
       if (this.attackTimer <= 0) {
         this.attackTimer = this.attackInterval
-        // DAD MODE swings wildly at everything in range rather than picking a
-        // target, which is the whole point of losing precision.
+        // The powered form swings wildly at everything in range rather than
+        // picking a target, which is the whole point of losing precision.
         // The swing STARTS here; it does not land here. Who it lands on is
         // chosen now, on the frame the player saw him commit, and the damage
         // is applied on the animation's impact frame — otherwise the hit
         // resolves before the axe has moved.
-        const victims = this.lastStandActive && this.def.lastStand.hitsAllInRange
+        const victims = this.powered && this.def.powered.hitsAllInRange
           ? withinRadius(enemies, this.x, this.y, this.attackRange)
           : [target]
         const damage = this.damage
@@ -405,7 +417,7 @@ export class Hero extends Phaser.GameObjects.Container {
     // which is what sets the resting position it works from.
     this.bob(dt, walking)
 
-    if (this.inVehicle) this.ram(enemies, onHit)
+    if (this.charging) this.ram(enemies, onHit)
 
     // Depreciation: anything standing near Cory quietly loses its armour.
     const p = this.def.passive
@@ -417,12 +429,12 @@ export class Hero extends Phaser.GameObjects.Container {
   }
 
   /**
-   * Contact damage. In the SUV he drives over the lane instead of standing
-   * beside it, so anything inside the vehicle's footprint is hit once and
-   * shoved back down the road rather than politely blocked.
+   * Contact damage. Powered, the hero goes over the lane instead of standing
+   * beside it, so anything inside the footprint is hit once and shoved back
+   * down the road rather than politely blocked.
    */
   private ram(enemies: Enemy[], onHit: (enemy: Enemy, damage: number) => void): void {
-    const ls = this.def.lastStand
+    const ls = this.def.powered
     for (const e of withinRadius(enemies, this.x, this.y, this.halfFootprint)) {
       if (this.rammed.has(e)) continue
       this.rammed.add(e)
@@ -437,26 +449,24 @@ export class Hero extends Phaser.GameObjects.Container {
     }
   }
 
-  /** Returns 'lastStand' or 'down' when this hit changed his state. */
-  hurt(amount: number): 'none' | 'lastStand' | 'down' {
+  /** Returns 'transform' or 'down' when this hit changed the hero's state. */
+  hurt(amount: number): 'none' | 'transform' | 'down' {
     if (this.down) return 'none'
     // The transformation is not a window to kill him in.
     if (this.invulnerableFor > 0) return 'none'
 
+    // POWERED FORM COMES OFF LAST, after the retreat penalty, so it is 40% off
+    // whatever the hit had become rather than 40% off the base and then
+    // multiplied back up. There is no second multiplier to compose with any
+    // more: Last Stand's 1.5x lived at a different threshold, and merged onto
+    // this one it cancelled most of the reduction. See Transform.ts.
     const exposed = this.retreatVulnerableFor > 0 ? this.def.retreat.damageTakenMultiplier : 1
-    // POWERED FORM COMES OFF LAST, after the retreat penalty and Last Stand's
-    // own multiplier, so it is 40% off whatever the hit had become rather than
-    // 40% off the base and then multiplied back up.
-    const damage = damageToHero(
-      incomingDamage(amount, this.def.lastStand, this.lastStandActive) * exposed,
-      this.powered, 0)
+    const damage = damageToHero(amount * exposed, this.powered, 0)
 
     // One rule, in one place, so death cannot be decided before the transform
-    // is. See `applyHit`: a hit that would carry him through the 25% band
-    // leaves him standing at it instead of killing him outright.
-    const out = applyHit(
-      this.health, this.def.maxHealth, damage, this.def.lastStand, this.lastStandUsed,
-    )
+    // is. See `applyHit`: a hit that would carry him through the band leaves
+    // him standing at it instead of killing him outright.
+    const out = applyHit(this.health, this.def.maxHealth, damage, this.powered)
     this.health = out.health
     this.drawBar()
 
@@ -464,63 +474,21 @@ export class Hero extends Phaser.GameObjects.Container {
       this.goDown()
       return 'down'
     }
-    if (out.triggers) {
-      this.triggerLastStand()
-      return 'lastStand'
-    }
     // CHECKED AFTER THE HIT LANDS, on the health that is left. Asking before
     // would power him up at 51% because the incoming blow was going to take
     // him under, which is a different moment from the one the player sees.
-    if (shouldTransform(this.health, this.def.maxHealth, this.powered)) {
-      this.transformToPowered()
+    if (out.triggers) {
+      this.transform()
+      return 'transform'
     }
     return 'none'
   }
 
-  /**
-   * Into the powered form: new art if the hero has any, a burst either way,
-   * and a second and a half of grace.
-   *
-   * THE GRACE IS NOT A REDUCTION. It is there so the hero cannot be deleted in
-   * the middle of the swap, and against a boss swinging for a third of his bar
-   * a 40% cut would not do that job.
-   */
-  private transformToPowered(): void {
-    this.powered = true
-    this.invulnerableFor = TRANSFORM_INVULNERABLE_SECONDS
-
-    const key = heroSprite(this.heroId, true)
-    if (key !== this.body_.texture.key && this.scene.textures.exists(key)) {
-      this.wearSprite(key)
-    }
-
-    // A ring that opens and fades, plus a white flash on the sprite itself.
-    // Two things rather than one: the ring says WHERE and the flash says it is
-    // him, and on a busy board either alone is missable.
-    const ring = this.scene.add.graphics().setDepth(this.y + 1)
-    this.scene.tweens.addCounter({
-      from: 0, to: 1, duration: 420,
-      // `tw` is left to contextual typing, and so is the getValue call. The
-      // annotation here said TweenChain, which addCounter does not hand out --
-      // it passes a Tween -- and the cast through `unknown` was what stopped
-      // anyone noticing. Local tsc could not see it either: without
-      // node_modules `Phaser` is `any`, so both the wrong type and the cast
-      // that hid it typechecked. This is how GameScene and AbilityRunner
-      // already write the same tween.
-      onUpdate: (tw) => {
-        const t = tw.getValue() ?? 0
-        ring.clear()
-        ring.lineStyle(4, 0xffd98a, 1 - t)
-        ring.strokeCircle(this.x, this.y - 20, 14 + t * 58)
-      },
-      onComplete: () => ring.destroy(),
-    })
-    this.body_.setTintFill(0xffffff)
-    this.scene.time.delayedCall(90, () => this.body_.clearTint())
-    this.scene.tweens.add({
-      targets: this, scaleX: 1.14, scaleY: 1.14, duration: 130, yoyo: true, ease: 'Quad.easeOut',
-    })
-    this.emit('powered')
+  /** Which way the hero is HEADING, whatever the art does about it. The held
+   *  beam opens pointing this way when there is nothing on the board to aim
+   *  at, which is the one case where the direction has no other source. */
+  get facingLeft(): boolean {
+    return this.headingLeft
   }
 
   /** Whether the sprite is mirrored right now: the heading, resolved against
@@ -544,7 +512,7 @@ export class Hero extends Phaser.GameObjects.Container {
    * The pose is a set of MULTIPLIERS, so it needs something to multiply. Read
    * back off the sprite each frame it would compound: a 3% squash applied to
    * an already-squashed sprite walks the scale down until he is a puddle.
-   * Called again after the DAD MODE swap, which replaces both objects.
+   * Called again after the transformation, which replaces both objects.
    */
   private captureRest(): void {
     this.baseScale = this.body_.scaleX
@@ -562,9 +530,9 @@ export class Hero extends Phaser.GameObjects.Container {
   private applyPose(dt: number, walking: boolean): void {
     const st = this.frames.advance(dt, walking)
 
-    // DAD MODE has its own sprite and no clips of its own. Swapping frames
-    // under it would put a walking Cory back on screen mid-transformation.
-    if (this.inVehicle) {
+    // The powered form has its own sprite and no clips of its own. Swapping
+    // frames under it would put a walking hero back on screen mid-change.
+    if (this.charging) {
       if (st.impact && this.pendingHit) { this.pendingHit(); this.pendingHit = null }
       return
     }
@@ -668,48 +636,75 @@ export class Hero extends Phaser.GameObjects.Container {
   }
 
   /**
-   * DAD MODE. He goes away for half a second and comes back in the SUV — the
-   * pause is the point, so the swap is a beat rather than a sprite change.
+   * THE TRANSFORMATION. At half health, once per life, for every hero.
+   *
+   * The hero goes away for half a second and comes back in the powered form —
+   * the pause is the point, so the swap is a beat rather than a sprite change.
+   *
+   * THIS IS THE MERGE OF TWO METHODS. `transformToPowered` fired at half
+   * health and did the quiet half — the flag, the sprite, a ring, the grace —
+   * and `triggerLastStand` fired at a quarter and did the loud half — the
+   * shake, the flash, the half-second pause, a SECOND sprite swap to
+   * `ultimateSprite`, which named the same picture, and a name shouted across
+   * the board. A player saw the hero change twice in one life and heard Cory's
+   * voice line whoever they were playing. There is one change now and this is
+   * it: the loud staging, the one sprite, and the grace and the reduction from
+   * rules.json.
+   *
+   * THE GRACE IS NOT A REDUCTION. It is there so the hero cannot be deleted
+   * mid-swap, and against a boss swinging for a third of the bar a 40% cut
+   * would not do that job.
    */
-  private triggerLastStand(): void {
-    const ls = this.def.lastStand
-    this.lastStandUsed = true
-    this.lastStandActive = true
+  private transform(): void {
+    const pf = this.def.powered
+    this.powered = true
     this.transforming = true
-    // He goes away for half a second to change. Nothing may kill him while he
-    // is off the board doing it, and he comes back with a moment to act — the
-    // transformation is the hero's one scripted beat and it is worth nothing
-    // if the wave standing on him simply carries on hitting the empty space.
-    this.invulnerableFor = ls.invulnerableSeconds
+    // Nothing may kill the hero while they are off the board changing, and
+    // they come back with a moment to act — the transformation is the hero's
+    // one scripted beat and it is worth nothing if the wave standing on them
+    // simply carries on hitting the empty space. ONE NUMBER, from rules.json:
+    // the grace belongs to the rule, not to a hero, and it was two.
+    this.invulnerableFor = TRANSFORM_INVULNERABLE_SECONDS
 
     const cam = this.scene.cameras.main
-    cam.shake(ls.transformShakeMs, 0.012)
-    cam.flash(ls.transformFlashMs, 255, 255, 255)
+    cam.shake(pf.transformShakeMs, 0.012)
+    cam.flash(pf.transformFlashMs, 255, 255, 255)
     this.scene.tweens.add({ targets: this.body_, alpha: 0, duration: 140 })
 
-    this.scene.time.delayedCall(ls.transformPauseMs, () => {
+    this.scene.time.delayedCall(pf.transformPauseMs, () => {
       if (this.down) return
-      // Through `wearSprite`, so the ultimate form is sized by the same rule
-      // the powered form is. For all five heroes these are the same key now,
-      // and Cory's carries a height that lives with the hero rather than with
-      // the art -- setting the texture by hand here bypassed that and drew the
-      // Rivian at whatever its art entry happened to say, which is nothing.
-      this.wearSprite(this.def.ultimateSprite, true)
-      // The shadow belongs to the vehicle now, not to the man.
-      this.shadow.destroy()
-      this.shadow = makeShadow(this.scene, this.def.ultimateSprite)
-      this.addAt(this.shadow, 0)
+      // THE ROSTER DECIDES WHICH PICTURE, not a field on the hero. It read
+      // `def.ultimateSprite`, a second key beside `poweredSprite` that named
+      // the same file in all five heroes; the roster in art.json is what
+      // `heroSprite` and every other form swap already ask.
+      const key = heroSprite(this.heroId, true)
+      if (this.scene.textures.exists(key)) {
+        // Through `wearSprite`, so the powered form is sized by the rule that
+        // sizes it everywhere else. Cory's carries a height that lives with
+        // the hero rather than with the art -- setting the texture by hand
+        // here bypassed that and drew the Rivian at whatever its art entry
+        // happened to say, which is nothing.
+        this.wearSprite(key, true)
+        // The shadow belongs to the new shape, not to the old one.
+        this.shadow.destroy()
+        this.shadow = makeShadow(this.scene, key)
+        this.addAt(this.shadow, 0)
+      }
       this.body_.setAlpha(0)
       this.scene.tweens.add({ targets: this.body_, alpha: 1, duration: 180 })
       this.scene.cameras.main.shake(160, 0.008)
       this.transforming = false
       this.drawBar()
       // THE MOMENT OF THE TRANSFORMATION, announced rather than left to two
-      // timers that happen to agree. Everything that has to land ON the SUV
-      // appearing — the sting, and the voice line's first word, which is
+      // timers that happen to agree. Everything that has to land ON the new
+      // form appearing — the sting, and a voice line's first word, which is
       // scheduled to arrive here — hangs off this.
       this.emit('transformed')
     })
+    // Separately from 'transformed', and half a second earlier: the cooldown
+    // reset and the HUD's gate belong to the DECISION, not to the picture, and
+    // a button that lights up when the animation finishes reads as lag.
+    this.emit('powered')
     this.drawBar()
   }
 
@@ -717,7 +712,7 @@ export class Hero extends Phaser.GameObjects.Container {
    * He leaves the map entirely.
    *
    * The old version tipped him on his side and faded to 35% alpha, which left
-   * a ghost of the DAD MODE sprite lying on the board for the rest of the
+   * a ghost of the powered sprite lying on the board for the rest of the
    * encounter — read as a rendering fault rather than a death, and sat on top
    * of build pads. The downed state belongs on the HUD, where the hero bar
    * already greys out and the label reads "— DOWN".
@@ -725,7 +720,6 @@ export class Hero extends Phaser.GameObjects.Container {
   private goDown(): void {
     this.down = true
     this.reviveIn = this.def.reviveSeconds
-    this.lastStandActive = false
     this.invulnerableFor = 0
     this.blocking = 0
     // THE SWING DIES WITH HIM.
@@ -761,8 +755,12 @@ export class Hero extends Phaser.GameObjects.Container {
    * that just killed him would put him straight back down, and the walk from
    * the entrance is the part of the cost the timer alone does not carry.
    *
-   * Last Stand does not re-arm — `lastStandUsed` is not cleared — so the
-   * transformation stays a once-per-encounter beat rather than a cooldown.
+   * ONCE PER LIFE, SO DYING RE-ARMS IT. `powered` is cleared here and the
+   * hero walks back on in base form with the transformation to earn again.
+   * Last Stand used to be the opposite — its own flag was deliberately NOT
+   * cleared, which meant a hero who went down at wave four played the rest of
+   * the level with the beat spent and no way to get it back. There is one
+   * transformation now and this is its rule.
    */
   private revive(): void {
     this.reviveIn = 0
@@ -776,10 +774,8 @@ export class Hero extends Phaser.GameObjects.Container {
     this.pendingHit = null
     this.frames.reset()
     this.health = this.def.maxHealth
-    this.lastStandActive = false
     // BACK TO BASE, and it has to be earned again. The powered form is a fact
-    // about one life, not about the run -- Last Stand is the opposite, and
-    // `lastStandUsed` staying set just below is what keeps them different.
+    // about one life, not about the run.
     this.powered = false
     this.transforming = false
     this.retreatVulnerableFor = 0
@@ -787,8 +783,8 @@ export class Hero extends Phaser.GameObjects.Container {
     this.lastTarget = null
     this.rammed.clear()
 
-    // Back on foot. If he went down in the SUV the vehicle art is still on the
-    // sprite, and the vehicle without its Last Stand stats would be a lie.
+    // Back on foot. If he went down powered the powered art is still on the
+    // sprite, and that shape without the powered stats would be a lie.
     if (this.body_.texture.key !== this.def.bodySprite) {
       // `powered` is already false by here, so the base form is sized as the
       // base form -- the height override is asked for the form he is IN.
@@ -870,14 +866,13 @@ export class Hero extends Phaser.GameObjects.Container {
     const ratio = Phaser.Math.Clamp(this.health / this.def.maxHealth, 0, 1)
     this.bar.clear()
     this.bar.fillStyle(0x14181f, 0.9).fillRect(-w / 2 - 1, y - 1, w + 2, 7)
-    this.bar.fillStyle(this.lastStandActive ? 0xff5a3c : 0x4fa3e3, 1).fillRect(-w / 2, y, w * ratio, 5)
-    // BOTH THRESHOLDS. Last Stand from this hero's own entry, the
-    // transformation from rules.json -- the second one had no mark at all, and
-    // it is the one that fires first and matters more.
-    for (const mark of [this.def.lastStand.healthThreshold, TRANSFORM_BELOW]) {
-      const markX = -w / 2 + w * mark
-      this.bar.lineStyle(1, 0xf6ecd9, 0.7).lineBetween(markX, y, markX, y + 5)
-    }
+    this.bar.fillStyle(this.powered ? 0xff5a3c : 0x4fa3e3, 1).fillRect(-w / 2, y, w * ratio, 5)
+    // ONE THRESHOLD, AND IT IS THE ONE THAT FIRES. There were two marks --
+    // this hero's `lastStand.healthThreshold` at a quarter and rules.json's
+    // transformation at a half -- for what is now one event, and the quarter
+    // was the one a player noticed.
+    const markX = -w / 2 + w * TRANSFORM_BELOW
+    this.bar.lineStyle(1, 0xf6ecd9, 0.7).lineBetween(markX, y, markX, y + 5)
 
     // How many of his hands are full.
     //

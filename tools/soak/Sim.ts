@@ -65,9 +65,9 @@ import {
   DEFAULT_DIFFICULTY_ID, startingLives, startingPeanuts,
 } from '../../src/systems/Difficulty.ts'
 import { DEFAULT_HERO_ID, HERO_IDS, resolveHeroId } from '../../src/systems/Heroes.ts'
-import { SLOT1, isAreaSkill } from '../../src/systems/HeroSkills.ts'
+import { heroSlotId, isAreaSkill } from '../../src/systems/HeroSkills.ts'
 import {
-  TRANSFORM_INVULNERABLE_SECONDS, damageToHero, shouldTransform,
+  TRANSFORM_INVULNERABLE_SECONDS, applyHit, attackInterval, damageToHero, outgoingDamage,
 } from '../../src/systems/Transform.ts'
 import { Path } from '../../src/systems/Path.ts'
 import { LaneNetwork, MAIN_LANE, advance, type Walker } from '../../src/systems/Lanes.ts'
@@ -84,9 +84,6 @@ import {
   stunLockoutFor,
 } from '../../src/systems/Combat.ts'
 import { auraAt, NO_AURA, type Aura, type AuraSource } from '../../src/systems/Support.ts'
-import {
-  applyHit, attackInterval, incomingDamage, outgoingDamage,
-} from '../../src/systems/LastStand.ts'
 import {
   atSpecChoice, BASE_TIER, isMaxed, maxTier, nextStep, specById, statAt,
 } from '../../src/systems/Upgrades.ts'
@@ -318,7 +315,12 @@ export function simulate(
   const spawner = new WaveSpawner()
   const cooldowns = new Cooldowns()
   for (const id of draftedAbilities) cooldowns.register(id, ABILITIES[id].cooldown)
-  cooldowns.register(SLOT1, hero.slot1.cooldown)
+  // SLOT 1 IS WHATEVER IS FIRST, not a named field. Only the first ability is
+  // modelled here: the rest are gated on the powered form, cast by tapping the
+  // map, and a soak that guessed where the player would tap would be measuring
+  // its own guess. See `_modelled` in the report.
+  const SLOT1 = heroSlotId(0)
+  cooldowns.register(SLOT1, hero.abilities[0]!.cooldown)
 
   // The same two calls the scene makes, in the same order: the difficulty
   // scales the base and the opening-purse floor is applied to the result, so
@@ -351,8 +353,6 @@ export function simulate(
     // simulation without it would be measuring a different game.
     powered: false,
     poweredGrace: 0,
-    lastStand: false,
-    lastStandUsed: false,
     invulnerable: 0,
     attackTimer: 0,
     blocking: 0,
@@ -744,7 +744,7 @@ export function simulate(
     // just Cory's punch: the soak picks a hero per run, and a Bailey run whose
     // Bark did nothing would report a hero that is weaker than the one the
     // player has.
-    const k = hero.slot1
+    const k = hero.abilities[0]!
     if (mode !== 'noabilities' && cooldowns.ready(SLOT1) && !heroState.down) {
       const area = isAreaSkill(k)
       const target = area ? null : pickNearest(
@@ -941,7 +941,7 @@ export function simulate(
       } else {
         if (heroState.invulnerable > 0) heroState.invulnerable -= DT
         if (heroState.poweredGrace > 0) heroState.poweredGrace -= DT
-        const blockRange = hero.blockRange * (heroState.lastStand ? hero.lastStand.blockRangeMultiplier : 1)
+        const blockRange = hero.blockRange * (heroState.powered ? hero.powered.blockRangeMultiplier : 1)
         const near = withinRadius(
           enemies.filter((e) => e.alive && e.def.blockable) as any, heroState.x, heroState.y, blockRange,
         ) as SimEnemy[]
@@ -955,11 +955,11 @@ export function simulate(
         if (heroState.attackTimer <= 0) {
           const target = pickNearest(
             enemies.filter((e) => e.alive) as any, heroState.x, heroState.y,
-            hero.attackRange * (heroState.lastStand ? hero.lastStand.attackRangeMultiplier : 1),
+            hero.attackRange * (heroState.powered ? hero.powered.attackRangeMultiplier : 1),
           ) as SimEnemy | null
           if (target) {
-            heroState.attackTimer = attackInterval(hero.attackInterval, hero.lastStand, heroState.lastStand)
-            hurtEnemy(target, outgoingDamage(hero.damage, hero.lastStand, heroState.lastStand), hero.ignoresArmor)
+            heroState.attackTimer = attackInterval(hero.attackInterval, hero.powered, heroState.powered)
+            hurtEnemy(target, outgoingDamage(hero.damage, hero.powered, heroState.powered), hero.ignoresArmor)
           }
         }
         // Depreciation.
@@ -1002,25 +1002,22 @@ export function simulate(
             e.attackTimer = e.def.attackInterval
             if (heroState.invulnerable <= 0) {
               const dmg = damageToHero(
-                incomingDamage(e.def.damage, hero.lastStand, heroState.lastStand),
-                heroState.powered, heroState.poweredGrace)
+                e.def.damage, heroState.powered, heroState.poweredGrace)
               const out = applyHit(
-                heroState.health, hero.maxHealth, dmg, hero.lastStand, heroState.lastStandUsed,
+                heroState.health, hero.maxHealth, dmg, heroState.powered,
               )
               heroState.health = finite('hero.health', out.health)
-              // Checked on what is LEFT, as the scene does it.
-              if (shouldTransform(heroState.health, hero.maxHealth, heroState.powered)) {
+              // ONE TRANSFORMATION, at half health, once per life. It was two
+              // -- the powered form here and Last Stand at a quarter -- and
+              // the soak modelled both because the game had both.
+              if (out.triggers) {
                 heroState.powered = true
                 heroState.poweredGrace = TRANSFORM_INVULNERABLE_SECONDS
-              }
-              if (out.triggers) {
-                heroState.lastStand = true
-                heroState.lastStandUsed = true
-                heroState.invulnerable = hero.lastStand.invulnerableSeconds
+                heroState.invulnerable = TRANSFORM_INVULNERABLE_SECONDS
               }
               if (out.down) {
                 heroState.down = true
-                heroState.lastStand = false
+                heroState.powered = false
                 heroState.reviveIn = hero.reviveSeconds
               }
             }

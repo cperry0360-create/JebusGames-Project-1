@@ -51,6 +51,7 @@
     "ability-cory-2": "abilities/ability_cory_2.webp",
     "ability-courtland-1": "abilities/ability_courtland_1.webp",
     "ability-courtland-2": "abilities/ability_courtland_2.webp",
+    "ability-courtland-3": "abilities/ability_courtland_3.webp",
     "ability-han-1": "abilities/ability_han_1.webp",
     "ability-han-2": "abilities/ability_han_2.webp",
     "ability-eli-1": "abilities/ability_eli_1.webp",
@@ -127,6 +128,7 @@
     "fx-spike-strip": "effects/fx_spike_strip.webp",
     "fx-seismic": "effects/fx_seismic.webp",
     "fx-mind-control": "effects/fx_mind_control.webp",
+    "fx-mind-laser": "effects/fx_mind_laser.webp",
     "fx-star-rain": "effects/fx_star_rain.webp",
     "fx-ice-beam": "effects/fx_ice_beam.webp",
     "fx-fireball-impact": "effects/fx_fireball_impact.webp",
@@ -818,6 +820,12 @@
       "contentWidth": 256,
       "contentHeight": 256
     },
+    "ability-courtland-3": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 256,
+      "contentHeight": 256
+    },
     "ability-han-1": {
       "anchorX": 0.5,
       "anchorY": 0.5,
@@ -877,6 +885,18 @@
       "anchorY": 1.0,
       "contentWidth": 226,
       "contentHeight": 180
+    },
+    "fx-mind-laser": {
+      "anchorX": 0.0,
+      "anchorY": 0.5,
+      "contentWidth": 225,
+      "contentHeight": 200,
+      "stretch": "line",
+      "sheet": {
+        "frameWidth": 225,
+        "frameHeight": 200,
+        "frames": 12
+      }
     },
     "fx-star-rain": {
       "anchorX": 0.5,
@@ -1015,6 +1035,7 @@
     "ability-cory-2",
     "ability-courtland-1",
     "ability-courtland-2",
+    "ability-courtland-3",
     "ability-han-1",
     "ability-han-2",
     "ability-eli-1",
@@ -1106,7 +1127,7 @@
     ]
   },
   "_optional": "Art that may legitimately be absent. A key here is skipped by the loader with a console warning rather than a missing-texture error, and every one belongs to a family with a named fallback -- tests/boot.test.ts enforces that. IT IS NOT A LICENCE TO SHIP WITHOUT THE FILE. `queueArt` requests every key in `files`, optional or not -- it cannot know which are absent without asking the server -- so a listed key whose file is missing is a 404 on every boot for every player, and three of them shipped that way. tests/assets.test.ts now fails on exactly that. The eight icons left here are the tower-panel glyphs, which have a generated stand-in.",
-  "_greyable": "A greyscale copy is built for each of these at boot (BootScene, systems/Desaturate.ts) and the HUD swaps to it when the thing is unavailable. THE TEN HERO ICONS ARE HERE BECAUSE OF SLOT 2. It is greyed out until the hero transforms, and a tint cannot say that -- Phaser's tint multiplies, so a tinted icon reads as \"in shadow\" rather than as \"switched off\". It used to read as neither: the key was absent from this list, `greyKey` named a texture that had never been built, the swap was skipped and the button kept its full colour with only a dim tint on it. The word LOCKED being painted into the placeholder art was what made that survivable, and that word is gone with the placeholders.",
-  "_fx": "EFFECTS THE GAME DRAWS FOR ITSELF, by role. `spark`, `blast`, `puff` and `muzzle` are combat feedback; `bossBolt` is one boss's projectile; `stunned`, `burn` and `mindControl` are STATUS MARKERS drawn over an enemy for as long as the status lasts, which is why they are here rather than in heroes.json beside the ability that applied them -- a burn is a fact about the enemy, and anything that can set something alight draws the same flame. NOTHING CONTROLS AN ENEMY TODAY: `mindControl` is bound so its art ships and is named, and `enemyMarker` in GameScene draws it the day a power sets `Enemy.controlled`.",
+  "_greyable": "A greyscale copy is built for each of these at boot (BootScene, systems/Desaturate.ts) and the HUD swaps to it when the thing is unavailable. EVERY HERO ABILITY ICON IS HERE BECAUSE OF THE POWERED-FORM GATE. An ability with `poweredOnly` is greyed out until the hero transforms, and a tint cannot say that -- Phaser's tint multiplies, so a tinted icon reads as \"in shadow\" rather than as \"switched off\". It used to read as neither: the key was absent from this list, `greyKey` named a texture that had never been built, the swap was skipped and the button kept its full colour with only a dim tint on it. The word LOCKED being painted into the placeholder art was what made that survivable, and that word is gone with the placeholders.",
+  "_fx": "EFFECTS THE GAME DRAWS FOR ITSELF, by role. `spark`, `blast`, `puff` and `muzzle` are combat feedback; `bossBolt` is one boss's projectile; `stunned`, `burn` and `mindControl` are STATUS MARKERS drawn over an enemy for as long as the status lasts, which is why they are here rather than in heroes.json beside the ability that applied them -- a burn is a fact about the enemy, and anything that can set something alight draws the same flame. `mindControl` is live now: Courtland's Mind Control sets `Enemy.controlled` and `enemyMarker` in GameScene draws this over every enemy it turns, which is what keeps two enemies fighting each other from reading as a bug.",
   "_heroHeight": "WHY hero-cory-power CARRIES NO displayHeight. Every other sprite's on-screen height is a manifest field, and CLAUDE.md rule 7 says so. The Rivian is the exception because its height is a decision about ONE HERO rather than about one picture: it is 1.51:1, so at the roster's height it would be wider than the road, and the number that fixes that belongs beside the hero it is about. `heroes.json cory.poweredHeight` is it, and it is the only copy -- a second one here is how the two come to disagree. Hero.ts asks the roster first and falls back to this entry, so a hero with no `poweredHeight` is sized by its art exactly as before, and tests/heroes.test.ts fails if a powered form has a height from neither."
 }

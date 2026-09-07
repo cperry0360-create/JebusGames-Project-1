@@ -1652,6 +1652,427 @@ async function run() {
     return
   }
 
+  if (scenario === 'bars') {
+    // THE ABILITY BAR, FOR EVERY HERO, IN BOTH FORMS.
+    //
+    // The bar carried two drafted plates and two hero medallions for the whole
+    // of its life, and "it fits" was a claim measured against four controls.
+    // Courtland has three abilities, so his bar carries FIVE -- and the widest
+    // case is the only one worth measuring. Every hero is walked rather than
+    // just him, because the point of the change is that the bar is laid out
+    // from the hero's own list and a hero with two must still be right.
+    //
+    // BOTH FORMS, because a `poweredOnly` button swaps to its greyscale copy
+    // in base form. That is a different texture at a different size and it has
+    // been the thing that was wrong before: a 256px stand-in drawn in a 56px
+    // slot, on an iPad, because the grey copy did not exist.
+    //
+    // Measured in CSS PIXELS, which is what 44pt means. The region carries the
+    // pitch and the box height the layout actually used, so this is the
+    // rectangle the finger lands on rather than a recomputation of it.
+    const RS3 = await import('./js/systems/RunState.js')
+    const HJ3 = (await import('./js/data/heroes.json', { with: { type: 'json' } })).default
+    const ids3 = Object.keys(HJ3).filter((k) => !k.startsWith('_'))
+    const fmt3 = (r) => r ? (Math.round(r.x) + ',' + Math.round(r.y) + ' '
+      + Math.round(r.width) + 'x' + Math.round(r.height)) : 'none'
+    const overlap = (a, b) => a && b && a.x < b.x + b.width && b.x < a.x + a.width
+      && a.y < b.y + b.height && b.y < a.y + a.height
+    let faults3 = 0
+    note('viewport ' + VP.w + 'x' + VP.h)
+
+    for (const hid of ids3) {
+      for (const form of ['base', 'powered']) {
+        RS3.setRunState({ heroId: hid })
+        game.scene.stop('Game'); game.scene.stop('Hud')
+        game.scene.start('Game'); game.scene.start('Hud')
+        if (!await until(() => running('Game') && scene('Game').hero && running('Hud'), 15000)) {
+          note('*** ' + hid + ': the run did not build'); faults3++; continue
+        }
+        const G3 = scene('Game')
+        // Set directly rather than earned: what is under test is the bar, and
+        // half-killing five heroes in turn is a different scenario.
+        if (form === 'powered') G3.hero.powered = true
+        await sleep(650)
+        const hud3 = game.scene.getScene('Hud')
+        const slots3 = hud3.slots || []
+        const L3 = hud3.layout
+
+        const sizes = slots3.map((v) => ({
+          id: v.region.id,
+          w: v.region.pitch,
+          h: v.region.boxH,
+          key: v.icon.texture.key,
+          grey: /-grey$/.test(v.icon.texture.key),
+        }))
+        note(hid + '/' + form + ': ' + slots3.length + ' controls  bar=' + fmt3(L3.abilities)
+          + '  chip=' + fmt3(L3.heroChip) + '  cancel=' + fmt3(L3.cancel)
+          + '  scale=' + (L3.abilityScale || 1).toFixed(3))
+        for (const z of sizes) {
+          note('   ' + z.id + ' ' + Math.round(z.w) + 'x' + Math.round(z.h)
+            + '  ' + z.key + (z.grey ? '  (locked)' : ''))
+          if (z.w < 44 || z.h < 44) {
+            note('   *** SMALL ' + z.id + ' is ' + Math.round(z.w) + 'x' + Math.round(z.h)
+              + 'pt, under the 44pt floor'); faults3++
+          }
+        }
+        // NO TWO CONTROLS MAY TOUCH. The regions are laid out left to right and
+        // the bar as a whole is reserved away from CANCEL and from the chip, so
+        // all three of these are claims the layout makes and none is free.
+        for (let i = 0; i < slots3.length - 1; i++) {
+          const a = slots3[i].region, b = slots3[i + 1].region
+          if (a.x + a.pitch > b.x + 0.01) {
+            note('   *** OVER ' + a.id + ' and ' + b.id + ' overlap'); faults3++
+          }
+        }
+        if (overlap(L3.abilities, L3.cancel)) {
+          note('   *** OVER the ability bar runs under CANCEL'); faults3++
+        }
+        if (overlap(L3.abilities, L3.heroChip)) {
+          note('   *** OVER the ability bar runs under the hero chip'); faults3++
+        }
+        if (L3.abilities.x < 0 || L3.abilities.x + L3.abilities.width > VP.w + 0.01) {
+          note('   *** OFF the ability bar is past the edge of the screen'); faults3++
+        }
+        // The gate itself: a powered-only button is grey in base form and
+        // colour once the hero has changed. A button that never greys is a
+        // gate the player cannot see.
+        const want = HJ3[hid].abilities.map((a) => a.poweredOnly && form === 'base')
+        const got = sizes.filter((z) => /^heroSlot/.test(z.id)).map((z) => z.grey)
+        if (JSON.stringify(want) !== JSON.stringify(got)) {
+          note('   *** GATE expected locked=' + JSON.stringify(want)
+            + ' but the bar drew ' + JSON.stringify(got)); faults3++
+        }
+        await shot('bars-' + hid + '-' + form + '-' + VP.w + 'x' + VP.h)
+      }
+    }
+    note('RESULT ' + (faults3 === 0
+      ? 'the ability bar is clean for all ' + ids3.length + ' heroes in both forms at '
+        + VP.w + 'x' + VP.h
+      : '*** ' + faults3 + ' ability-bar fault(s) at ' + VP.w + 'x' + VP.h + ' ***'))
+    return
+  }
+
+  if (scenario === 'transform') {
+    // THE TRANSFORMATION, FOR EVERY HERO: when it fires, what it swaps to, and
+    // that it says nothing.
+    //
+    // There used to be two of them. The powered form fired at half health from
+    // rules.json and Last Stand fired at a QUARTER from every hero's own
+    // block, with its own shake, its own sprite field, a name shouted across
+    // the board and Cory's voice line played whoever was standing there. So
+    // three things are measured here and each one was wrong in a different
+    // way: the health it fires at (a quarter, marked on the bar as a quarter,
+    // for a rule that fires at a half), the picture afterwards, and the words
+    // on the glass.
+    //
+    // Driven through `hero.hurt`, which is the game's own damage path -- the
+    // only thing that decides all three -- rather than by setting `powered`.
+    const RS4 = await import('./js/systems/RunState.js')
+    const HJ4 = (await import('./js/data/heroes.json', { with: { type: 'json' } })).default
+    const RJ4 = (await import('./js/data/rules.json', { with: { type: 'json' } })).default
+    const TR = RJ4.heroTransform
+    const ids4 = Object.keys(HJ4).filter((k) => !k.startsWith('_'))
+    let faults4 = 0
+    note('rules.json heroTransform: below ' + TR.belowHealth + ', takes '
+      + TR.damageTaken + 'x, ' + TR.invulnerableSeconds + 's of grace')
+
+    // Anything the game prints on the board goes through one banner and one
+    // toast, and both are Text. Counted before and after, so a label that
+    // appears for half a second is caught even if it has faded by the shot.
+    const texts = () => {
+      const out = []
+      for (const sc of game.scene.scenes) {
+        if (!game.scene.isActive(sc.scene.key)) continue
+        const walk = (o) => {
+          if (o.type === 'Text' && o.text) out.push(o.text)
+          if (o.list) for (const c of o.list) walk(c)
+        }
+        for (const o of sc.children.list) walk(o)
+      }
+      return out
+    }
+
+    for (const hid of ids4) {
+      RS4.setRunState({ heroId: hid })
+      game.scene.stop('Game'); game.scene.stop('Hud')
+      game.scene.start('Game'); game.scene.start('Hud')
+      if (!await until(() => running('Game') && scene('Game').hero && running('Hud'), 15000)) {
+        note('*** ' + hid + ': the run did not build'); faults4++; continue
+      }
+      const G4 = scene('Game')
+      const hero4 = G4.hero
+      await sleep(500)
+      await lookAt(hero4.x, hero4.y)
+      const before = hero4.list[1].texture.key
+      const wantAfter = HJ4[hid].poweredSprite
+      const seenBefore = new Set(texts())
+
+      // ONE POINT ABOVE THE THRESHOLD, then a single point of damage. If the
+      // rule fired at a quarter this would do nothing at all, which is the
+      // whole shape of the bug.
+      const max4 = hero4.def.maxHealth
+      hero4.health = max4 * TR.belowHealth + 1
+      const firedAtHalf = hero4.hurt(1)
+      note(hid + ': at ' + Math.round(max4 * TR.belowHealth + 1) + '/' + max4
+        + ' a 1-point hit returned "' + firedAtHalf + '"'
+        + '  powered=' + hero4.powered)
+      if (firedAtHalf !== 'transform') {
+        note('   *** the transformation did not fire at half health'); faults4++
+      }
+
+      // ONCE PER LIFE: a second crossing does nothing.
+      hero4.health = max4 * TR.belowHealth + 1
+      const again = hero4.hurt(1)
+      if (again !== 'none') {
+        note('   *** it fired a second time in one life ("' + again + '")'); faults4++
+      }
+
+      // THE GRACE, and it is absolute rather than a reduction.
+      const midHealth = hero4.health
+      hero4.hurt(9999)
+      if (hero4.health !== midHealth) {
+        note('   *** a hit landed during the transformation'); faults4++
+      }
+      await shot('transform-' + hid + '-1-flash')
+
+      // THE PICTURE, after the pause the hero stages the swap over.
+      await sleep(HJ4[hid].powered.transformPauseMs + 500)
+      const after = hero4.list[1].texture.key
+      note('   sprite ' + before + ' -> ' + after + ' (want ' + wantAfter + ')')
+      if (after !== wantAfter) {
+        note('   *** the powered art did not go on'); faults4++
+      }
+
+      // AND NOT A WORD. Every text on the glass, before and after, and any new
+      // one that is a mode name is the label this brief exists to delete.
+      const added = texts().filter((t) => !seenBefore.has(t))
+      const names = ids4.map((k) => HJ4[k].powered.name)
+      const shouted = added.filter((t) => names.some((n) => t.toUpperCase().includes(n)))
+      note('   new text on the glass: ' + (added.length ? JSON.stringify(added) : 'none'))
+      if (shouted.length) {
+        note('   *** the mode label is on the board: ' + JSON.stringify(shouted)); faults4++
+      }
+      // The bar's marks come from the status, which is data. One, at the half.
+      note('   health-bar marks: ' + JSON.stringify(G4.status.heroMarks))
+      if (JSON.stringify(G4.status.heroMarks) !== JSON.stringify([TR.belowHealth])) {
+        note('   *** the bar is marked somewhere other than the threshold'); faults4++
+      }
+      await shot('transform-' + hid + '-2-powered')
+
+      // AND A DEATH RE-ARMS IT. Once per LIFE, not once per encounter: the old
+      // rule left a hero who went down at wave four with the beat spent.
+      hero4.hurt(99999)
+      await until(() => !hero4.down, (hero4.def.reviveSeconds + 4) * 1000)
+      await sleep(300)
+      note('   after a death and a revive: powered=' + hero4.powered
+        + ' health=' + Math.round(hero4.health) + '/' + max4
+        + ' sprite=' + hero4.list[1].texture.key)
+      if (hero4.powered) {
+        note('   *** the hero came back still powered'); faults4++
+      }
+      hero4.health = max4 * TR.belowHealth + 1
+      if (hero4.hurt(1) !== 'transform') {
+        note('   *** the transformation did not re-arm on the revive'); faults4++
+      }
+    }
+    note('RESULT ' + (faults4 === 0
+      ? 'all ' + ids4.length + ' heroes transform at half health, once per life, silently'
+      : '*** ' + faults4 + ' transformation fault(s) ***'))
+    return
+  }
+
+  if (scenario === 'courtland') {
+    // COURTLAND'S THREE, driven the way a player drives them, and measured on
+    // the claims the brief makes rather than on whether a sprite appeared.
+    //
+    // Six claims, and none of them is visible in a screenshot:
+    //   1. Seismic works in BOTH forms.
+    //   2. Mind Control and the Mind Laser are refused in base form.
+    //   3. Mind Control turns exactly two, they walk BACK, they do not block,
+    //      and they die when it runs out.
+    //   4. A boss cannot be controlled.
+    //   5. The laser fires only while held, damages along its line, and stops
+    //      on release.
+    //   6. It expires after `holdSeconds` of HELD time, and a press let go
+    //      before it has fired anything costs nothing.
+    const RS5 = await import('./js/systems/RunState.js')
+    const HJ5 = (await import('./js/data/heroes.json', { with: { type: 'json' } })).default
+    const EJ5 = (await import('./js/data/enemies.json', { with: { type: 'json' } })).default
+    let faults5 = 0
+    const fail5 = (m) => { faults5++; note('   *** ' + m) }
+    RS5.setRunState({ heroId: 'courtland' })
+    const G5 = await startRun()
+    G5.status.peanuts = 999999
+    G5.status.lives = 9999
+    const hero5 = G5.hero
+    const AB = HJ5.courtland.abilities
+    const [SEISMIC, CONTROL, LASER] = ['heroSlot1', 'heroSlot2', 'heroSlot3']
+    note('Courtland: ' + AB.map((a) => a.name + '/' + a.activation).join('  '))
+
+    // --- 1 and 2: the gate, in base form -----------------------------------
+    const refusals = []
+    const origRefuse = G5.refuse ? G5.refuse.bind(G5) : null
+    G5.cooldowns.reset(SEISMIC); G5.cooldowns.reset(CONTROL); G5.cooldowns.reset(LASER)
+    hero5.powered = false
+    G5.castHeroSlot(CONTROL)
+    const controlArmedInBase = G5.targeting.active
+    G5.castHeroSlot(LASER)
+    const laserLitInBase = !!G5.held
+    note('base form: Mind Control armed=' + controlArmedInBase
+      + '  Mind Laser firing=' + laserLitInBase)
+    if (controlArmedInBase) fail5('Mind Control arms in base form')
+    if (laserLitInBase) fail5('the Mind Laser fires in base form')
+    G5.clearSelection ? G5.clearSelection('button') : null
+    void origRefuse; void refusals
+
+    // Seismic works in BOTH forms, so it has to work here.
+    G5.startWave()
+    const mid5 = G5.lane.pointAt(G5.lane.totalLength * 0.45)
+    hero5.setRally(mid5.x, mid5.y)
+    await until(() => Math.hypot(hero5.x - mid5.x, hero5.y - mid5.y) < 8, 15000)
+    await lookAt(hero5.x, hero5.y)
+    await until(() => G5.enemies.some((e) => e.alive
+      && Math.hypot(e.x - hero5.x, e.y - hero5.y) < AB[0].radius), 45000)
+    let hpBefore = G5.enemies.filter((e) => e.alive)
+      .reduce((n, e) => n + e.health, 0)
+    G5.cooldowns.reset(SEISMIC)
+    G5.castHeroSlot(SEISMIC)
+    await sleep(120)
+    let hpAfter = G5.enemies.filter((e) => e.alive).reduce((n, e) => n + e.health, 0)
+    note('base-form Seismic took ' + Math.round(hpBefore - hpAfter) + ' health off the board'
+      + ' (data says ' + AB[0].damage + ' each)')
+    if (hpAfter >= hpBefore) fail5('Seismic did nothing in base form')
+    await shot('courtland-1-seismic-base')
+
+    // --- 3: Mind Control ---------------------------------------------------
+    hero5.powered = true
+    G5.cooldowns.reset(CONTROL)
+    await until(() => G5.enemies.filter((e) => e.alive && e.blockable).length >= 3, 60000)
+    const crowd = G5.enemies.filter((e) => e.alive && e.blockable)
+    const at5 = crowd[0]
+    const distBefore = new Map(crowd.map((e) => [e, e.laneDistance]))
+    G5.castHeroSlot(CONTROL)
+    G5.firePower(CONTROL, at5.x, at5.y)
+    await sleep(120)
+    const turned = G5.enemies.filter((e) => e.controlled)
+    note('Mind Control turned ' + turned.length + ' (data says ' + AB[1].targets + ')')
+    if (turned.length !== AB[1].targets) {
+      fail5('it turned ' + turned.length + ' rather than ' + AB[1].targets)
+    }
+    // BACK DOWN THE LANE. Sampled over a second of real time, which at the
+    // game's own clock is more than a second of walking.
+    await sleep(1200)
+    for (const e of turned) {
+      const moved = e.laneDistance - (distBefore.get(e) ?? 0)
+      note('   turned enemy moved ' + moved.toFixed(1) + ' along the lane'
+        + '  at ' + Math.round(e.x) + ',' + Math.round(e.y)
+        + '  alpha=' + e.alpha.toFixed(2) + '  visible=' + e.visible
+        + '  blocker=' + (e.blocker ? 'held' : 'none') + '  blockable=' + e.blockable)
+      if (moved >= 0) fail5('a controlled enemy is still walking towards the gate')
+      if (e.blockable) fail5('a controlled enemy can still be blocked')
+      if (e.blocker) fail5('a controlled enemy is being held by the hero it fights for')
+    }
+    // FRAMED ON ONE OF THEM. The camera was left on Courtland and they walk
+    // away from him, so a shot centred on the hero can be a picture of an
+    // empty lane -- which is a bad photograph, not a missing marker.
+    if (turned[0]) await lookAt(turned[0].x, turned[0].y)
+    await shot('courtland-2-control')
+    // AND THEY DIE WHEN IT RUNS OUT.
+    // IN REAL SECONDS. `durationSeconds` is in game seconds and the clock runs
+    // at `pacing.gameSpeed`, so waiting the raw number would give up early.
+    const RJ5 = (await import('./js/data/rules.json', { with: { type: 'json' } })).default
+    const deadline = AB[1].durationSeconds * 1000 / RJ5.pacing.gameSpeed + 6000
+    const ok5 = await until(() => turned.every((e) => !e.alive || !e.controlled), deadline)
+    await sleep(400)
+    note('after the duration: alive=' + turned.filter((e) => e.alive).length
+      + ' of ' + turned.length + ' (waited=' + ok5 + ')')
+    if (turned.some((e) => e.alive)) fail5('a controlled enemy outlived its own duration')
+
+    // --- 4: a boss cannot be turned ----------------------------------------
+    // SYNTHESIZED RATHER THAN WAITED FOR. Level 1's unblockable enemy is its
+    // wave-13 boss, and playing thirteen waves to ask one question is a
+    // different scenario. `def` is a plain property at runtime, so a live
+    // enemy is given the one flag that matters -- which is exactly the flag
+    // `takeControl` and `powerControl` both read, and the only thing that
+    // makes a boss immune.
+    const bossDefId = Object.keys(EJ5).find((k) => !k.startsWith('_') && EJ5[k].blockable === false)
+    // Something has to be on the board first: the twelve seconds of control
+    // above outlast whatever was there when it was cast.
+    if (!G5.enemies.some((e) => e.alive)) {
+      if (G5.status.phase !== 'wave') G5.startWave()
+      await until(() => G5.enemies.some((e) => e.alive), 60000)
+    }
+    const subject = G5.enemies.find((e) => e.alive && !e.controlled)
+    if (bossDefId && subject) {
+      subject.def = { ...subject.def, blockable: false }
+      const took = subject.takeControl(AB[1].durationSeconds)
+      note('an enemy flagged blockable=false refused control: ' + (took === false)
+        + '  (the roster\'s own unblockable enemy is ' + EJ5[bossDefId].name + ')')
+      if (took !== false) fail5('an unblockable enemy was mind-controlled')
+      if (subject.controlled) fail5('it is marked controlled anyway')
+      // And `powerControl` skips it too, which is the other half of the rule:
+      // the pass filters on `blockable` before it ever calls `takeControl`.
+      const pc = G5.enemies.filter((e) => e.alive && e.blockable && !e.controlled)
+      if (pc.includes(subject)) fail5('the cast pass would still pick an unblockable enemy')
+    } else {
+      note('*** no live enemy to flag unblockable'); faults5++
+    }
+
+    // --- 5 and 6: the Mind Laser -------------------------------------------
+    G5.cooldowns.reset(LASER)
+    await until(() => G5.enemies.some((e) => e.alive), 60000)
+    const victim = G5.enemies.find((e) => e.alive)
+    G5.castHeroSlot(LASER)
+    note('held: ' + !!G5.held + '  budget=' + (G5.held ? G5.held.left.toFixed(2) : '-')
+      + 's (data says ' + AB[2].holdSeconds + ')')
+    if (!G5.held) fail5('the laser did not light in powered form')
+    // AIMED BY DRAGGING, which is what the HUD forwards. Pointed straight at
+    // something so the corridor has a target in it.
+    if (G5.held && victim) {
+      G5.held.aimX = victim.x; G5.held.aimY = victim.y
+      const hp0 = victim.health
+      await sleep(700)
+      note('   after 0.7s of beam the target went ' + Math.round(hp0) + ' -> '
+        + Math.round(victim.health) + ' (alive=' + victim.alive + ')')
+      if (victim.alive && victim.health >= hp0) fail5('the beam damaged nothing under it')
+      await shot('courtland-3-laser-sustain')
+      const spent = AB[2].holdSeconds - G5.held.left
+      note('   budget spent after 0.7s of holding: ' + spent.toFixed(2) + 's')
+    }
+    // RELEASE STOPS IT.
+    G5.releaseHeldAbility()
+    note('after release: held=' + !!G5.held
+      + '  cooldown ready=' + G5.cooldowns.ready(LASER))
+    if (G5.held) fail5('releasing did not stop the beam')
+    if (G5.cooldowns.ready(LASER)) fail5('a beam that fired did not go on cooldown')
+    await sleep(500)
+    await shot('courtland-4-laser-released')
+
+    // A PRESS TAKEN BACK COSTS NOTHING. Released inside the charge-up, before
+    // a single damage tick, so nothing was spent and nothing is owed.
+    G5.cooldowns.reset(LASER)
+    G5.castHeroSlot(LASER)
+    G5.releaseHeldAbility()
+    note('pressed and let go instantly: cooldown ready=' + G5.cooldowns.ready(LASER))
+    if (!G5.cooldowns.ready(LASER)) fail5('a cancelled press spent the whole cooldown')
+
+    // AND THE BUDGET RUNS OUT ON ITS OWN. Wound forward rather than held for
+    // ten seconds: what is under test is that the budget ends it, and a
+    // ten-second wait would be testing `sleep`.
+    G5.cooldowns.reset(LASER)
+    G5.castHeroSlot(LASER)
+    if (G5.held) G5.held.left = 0.05
+    await sleep(400)
+    note('with the budget wound to 0.05s: held=' + !!G5.held
+      + '  cooldown ready=' + G5.cooldowns.ready(LASER))
+    if (G5.held) fail5('the beam outlived its own hold budget')
+
+    note('RESULT ' + (faults5 === 0
+      ? "Courtland's three behave as specified"
+      : '*** ' + faults5 + ' fault(s) in Courtland\'s abilities ***'))
+    return
+  }
+
   if (scenario === 'diag') {
     // The diagnostics, which only matter if they work when everything else
     // does not. Three things to prove: the hidden screen opens, a thrown
@@ -2392,7 +2813,7 @@ async function run() {
     await key('Space')
     // Take him to just above the threshold, then let the enemies finish it.
     g.hero.health = Math.ceil(g.hero.def.maxHealth * 0.26)
-    await until(() => g.hero.lastStandActive, 90000)
+    await until(() => g.hero.powered, 90000)
     await sleep(120); await shot('u-02-flash')
     await sleep(520); await shot('u-03-transformed')
     note('in SUV: h=' + Math.round(g.hero.body_.displayHeight) + ' w=' + Math.round(g.hero.body_.displayWidth)
@@ -3283,8 +3704,9 @@ async function run() {
       G.status.peanuts = 999999
       G.status.lives = 9999
       const h = HEROES[id]
-      note(id + ': slot1 ' + h.slot1.name + ' (' + h.slot1.effect + ', ' + h.slot1.fx +
-        ')  slot2 ' + h.slot2.name + ' (' + h.slot2.effect + ', ' + h.slot2.fx + ')')
+      note(id + ': ' + h.abilities.length + ' abilities  ' + h.abilities
+        .map((a, i) => (i + 1) + ' ' + a.name + ' (' + a.effect + ', ' + a.activation
+          + (a.poweredOnly ? ', powered' : '') + ', ' + a.fx + ')').join('  '))
 
       // On the lane, so enemies reach him and so the effect is drawn over the
       // road rather than over empty grass where it is hard to judge.
@@ -3293,7 +3715,7 @@ async function run() {
       await until(() => Math.hypot(G.hero.x - mid.x, G.hero.y - mid.y) < 8, 15000)
       await lookAt(G.hero.x, G.hero.y)
       G.startWave()
-      const reach = Math.max(h.slot1.range, h.slot1.radius) || 120
+      const reach = Math.max(h.abilities[0].range, h.abilities[0].radius) || 120
       await until(() => G.enemies.some((e) => e.alive
         && Math.hypot(e.x - G.hero.x, e.y - G.hero.y) < reach), 40000)
 
@@ -3313,48 +3735,81 @@ async function run() {
         return n
       }
 
-      G.cooldowns.clear ? G.cooldowns.clear() : null
-      G.castHeroSlot1()
-      await sleep(90)
-      let n1 = drawn(h.slot1.fx)
-      // Star Rain scatters its strikes over `gapSeconds`, so the first frame
-      // after the cast has one of fourteen on screen. Sampled again a little
-      // later rather than assumed.
-      if (n1 === 0) { await sleep(220); n1 = drawn(h.slot1.fx) }
-      note('   slot 1 drew ' + n1 + ' x ' + h.slot1.fx + (n1 ? '' : '   *** NOTHING ***'))
-      if (n1 === 0) missing.push(id + ' slot 1 (' + h.slot1.fx + ')')
-      await shot('power-' + id + '-1-' + h.slot1.effect)
+      // EVERY ABILITY THIS HERO HAS, not the two it used to be guaranteed.
+      // Courtland has three and the loop that walked `slot1` and `slot2` would
+      // have reported his third as fine without ever drawing it.
+      //
+      // POWERED is set directly rather than earned: what is under test is the
+      // drawing, and half-killing five heroes in turn is a different scenario.
+      for (let i = 0; i < h.abilities.length; i++) {
+        const a = h.abilities[i]
+        const slot = 'heroSlot' + (i + 1)
+        if (a.poweredOnly) G.hero.powered = true
+        G.cooldowns.reset(slot)
 
-      // POWERED, which is the gate on slot 2 and is reached by taking damage
-      // in a real run. Set directly here: what is under test is the drawing,
-      // and half-killing five heroes in turn is a different scenario.
-      G.hero.powered = true
-      const p = h.slot2
-      // A point inside the cast radius, down the lane from him, so a beam or a
-      // dash has a real distance to be stretched over rather than a few pixels.
-      const to = G.lane.pointAt(Math.min(G.lane.totalLength * 0.45 + p.castRadius * 0.8,
-        G.lane.totalLength - 10))
-      G.firePower(to.x, to.y)
-      await sleep(120)
-      let n2 = drawn(p.fx)
-      if (n2 === 0) { await sleep(260); n2 = drawn(p.fx) }
-      note('   slot 2 drew ' + n2 + ' x ' + p.fx + (n2 ? '' : '   *** NOTHING ***'))
-      if (n2 === 0) missing.push(id + ' slot 2 (' + p.fx + ')')
-      await shot('power-' + id + '-2-' + p.effect)
+        if (a.activation === 'instant') {
+          G.castHeroSlot(slot)
+        } else if (a.activation === 'targeted') {
+          // AT AN ENEMY WHEN THERE IS ONE INSIDE THE RADIUS, and at a point
+          // down the lane otherwise.
+          //
+          // The lane point alone was the first version and it reported Mind
+          // Control as drawing nothing -- correctly, because a power that
+          // turns the enemies NEAR the tap has nothing to turn when the tap
+          // lands on empty road. That is a bad aim, not a bad power: the
+          // scenario posts the hero on the lane and waits for something to
+          // walk into HIS reach, so the crowd is around him and not at the far
+          // end of the cast radius. The far point is still used for the ones
+          // that want a distance to be stretched over.
+          const near = G.enemies.filter((e) => e.alive
+            && Math.hypot(e.x - G.hero.x, e.y - G.hero.y) <= a.castRadius)
+          const far = G.lane.pointAt(Math.min(G.lane.totalLength * 0.45 + a.castRadius * 0.8,
+            G.lane.totalLength - 10))
+          const to = (a.effect === 'control' && near.length) ? near[0] : far
+          G.castHeroSlot(slot)
+          G.firePower(slot, to.x, to.y)
+        } else {
+          // HELD: pressed, aimed down the lane, and released. The beam is live
+          // between two input events, so both of them are driven here.
+          const to = G.lane.pointAt(Math.min(G.lane.totalLength * 0.45 + a.range * 0.8,
+            G.lane.totalLength - 10))
+          G.castHeroSlot(slot)
+          if (G.held) { G.held.aimX = to.x; G.held.aimY = to.y }
+        }
+        await sleep(140)
+        let n = drawn(a.fx)
+        if (n === 0) { await sleep(280); n = drawn(a.fx) }
+        note('   ability ' + (i + 1) + ' drew ' + n + ' x ' + a.fx + (n ? '' : '   *** NOTHING ***'))
+        if (n === 0) missing.push(id + ' ability ' + (i + 1) + ' (' + a.fx + ')')
+        await shot('power-' + id + '-' + (i + 1) + '-' + a.effect)
+        if (a.activation === 'held') {
+          G.releaseHeldAbility()
+          await sleep(200)
+        }
 
-      // The Spike Strip is the one that persists, so it gets a second frame a
-      // few seconds in: "it appeared" and "it is still there" are different
-      // claims and only one of them is what an 8-second hazard promises.
-      if (p.effect === 'hazard') {
-        await sleep(2500)
-        note('   ' + Math.round(p.durationSeconds) + 's strip, 2.5s in: ' +
-          drawn(p.fx) + ' on the board')
-        await shot('power-' + id + '-2-hazard-later')
+        // The Spike Strip is the one that persists, so it gets a second frame
+        // a few seconds in: "it appeared" and "it is still there" are
+        // different claims and only one of them is what an 8-second hazard
+        // promises.
+        if (a.effect === 'hazard') {
+          await sleep(2500)
+          note('   ' + Math.round(a.durationSeconds) + 's strip, 2.5s in: ' +
+            drawn(a.fx) + ' on the board')
+          await shot('power-' + id + '-' + (i + 1) + '-hazard-later')
+        }
+        // MIND CONTROL: the marker over each turned enemy is the whole point
+        // of the ability reading as an ability rather than as a bug, so it is
+        // counted separately from the flash on the cast.
+        if (a.effect === 'control') {
+          const turned = G.enemies.filter((e) => e.controlled).length
+          note('   turned ' + turned + ' of a possible ' + a.targets +
+            '; markers on the board: ' + drawn(a.fx))
+        }
       }
     }
 
     note('RESULT ' + (missing.length === 0
-      ? 'all ten powers drew their own art'
+      ? 'every hero ability drew its own art'
       : '*** nothing drawn for: ' + missing.join(', ') + ' ***'))
     return
   }
@@ -3589,7 +4044,7 @@ async function run() {
     g.hero.health = g.hero.def.maxHealth * 0.3
     g.damageHero(20)
     await sleep(1400)
-    note('last stand: ' + g.hero.lastStandActive + ' sprite=' + g.hero.list[1].texture.key)
+    note('last stand: ' + g.hero.powered + ' sprite=' + g.hero.list[1].texture.key)
     await until(() => g.hero.engaged, 30000)
     const vFrom = [Math.round(g.hero.x), Math.round(g.hero.y)]
     g.orderHero(vFrom[0] - 200, vFrom[1] - 120)
@@ -3756,7 +4211,7 @@ async function run() {
     // against re-arming it.
     g.damageHero(g.hero.def.maxHealth * 0.8)
     await sleep(900)
-    note('last stand on this life: ' + g.hero.lastStandActive +
+    note('last stand on this life: ' + g.hero.powered +
       ' sprite=' + g.hero.list[1].texture.key)
     const fell = [Math.round(g.hero.x), Math.round(g.hero.y)]
     g.damageHero(9999)
@@ -3792,8 +4247,8 @@ async function run() {
     note('takes orders again: moved=' + (Math.round(g.hero.x) !== Math.round(home.x)))
     g.damageHero(g.hero.def.maxHealth * 0.8)
     await sleep(900)
-    note('after dropping him to ' + Math.round(g.hero.health) + ': lastStand=' +
-      g.hero.lastStandActive + ' sprite=' + g.hero.list[1].texture.key +
+    note('after dropping him to ' + Math.round(g.hero.health) + ': powered=' +
+      g.hero.powered + ' sprite=' + g.hero.list[1].texture.key +
       ' (must be false and on foot — one transformation per encounter)')
     return
   }
@@ -4075,7 +4530,7 @@ async function run() {
     // 2. Haymaker.
     g.cooldowns.reset('heroSlot1')
     const before = g.enemies.map((e) => ({ e, x: e.x, y: e.y, hp: e.health }))
-    g.castHeroSlot1()
+    g.castHeroSlot('heroSlot1')
     await sleep(60)
     note('haymaker: hitPaused=' + g.hitPaused)
     await shot('herofx-02-haymaker')
@@ -4085,24 +4540,24 @@ async function run() {
       .map((b) => Math.round(Math.hypot(b.e.x - b.x, b.e.y - b.y)))
       .filter((d) => d > 4)
     note('haymaker: knocked back ' + moved.join(',') + 'px (data says ' +
-      hero.def.slot1.knockbackPixels + '); hitPaused now ' + g.hitPaused)
+      hero.def.abilities[0].knockbackPixels + '); hitPaused now ' + g.hitPaused)
 
-    // 4. Last Stand, forced, and the invulnerability that makes it happen.
+    // 4. The transformation, forced, and the invulnerability that makes it happen.
     await lookAt(hero.x, hero.y)
-    hero.health = hero.def.maxHealth * 0.3
+    hero.health = hero.def.maxHealth * 0.6
     const killed = hero.hurt(hero.def.maxHealth * 4)
-    note('a hit four times his total health at 30%: result=' + killed +
+    note('a hit four times his total health at 60%: result=' + killed +
       ' health=' + Math.round(hero.health) + '/' + hero.def.maxHealth +
-      ' (threshold ' + Math.round(hero.def.maxHealth * hero.def.lastStand.healthThreshold) + ')' +
-      ' lastStandActive=' + hero.lastStandActive + ' down=' + hero.down)
+      ' (threshold ' + Math.round(hero.def.maxHealth * 0.5) + ')' +
+      ' powered=' + hero.powered + ' down=' + hero.down)
     note('invulnerable for ' + hero.invulnerableFor.toFixed(2) + 's; a further huge hit: ' +
       hero.hurt(9999) + ' health=' + Math.round(hero.health))
     await sleep(200)
-    await shot('herofx-04-laststand-flash')
+    await shot('herofx-04-transform-flash')
     await sleep(900)
-    await shot('herofx-05-dadmode')
+    await shot('herofx-05-powered')
     note('after the transform: sprite=' + hero.list[1].texture.key +
-      ' active=' + hero.lastStandActive + ' down=' + hero.down)
+      ' powered=' + hero.powered + ' down=' + hero.down)
     return
   }
 
@@ -4190,17 +4645,17 @@ async function run() {
     const hudState = async (label) => {
       let fired = 0
       const orig = g.armAbility.bind(g)
-      const origH = g.castHeroSlot1.bind(g)
+      const origH = g.castHeroSlot.bind(g)
       const origW = g.startWave.bind(g)
       g.armAbility = (id) => { fired++; return orig(id) }
-      g.castHeroSlot1 = () => { fired++; return origH() }
+      g.castHeroSlot = (slot) => { fired++; return origH(slot) }
       g.startWave = () => { fired++; return origW() }
       for (const sl of hud.slots) {
         const b = sl.hit.getBounds()
         await click(b.centerX, b.centerY)
         await sleep(50)
       }
-      g.armAbility = orig; g.castHeroSlot1 = origH; g.startWave = origW
+      g.armAbility = orig; g.castHeroSlot = origH; g.startWave = origW
       note('  ' + label + ': HUD camera visible=' + hud.cameras.main.visible +
         ' scene input=' + (hud.input ? hud.input.enabled : 'n/a') +
         ' | tapped all ' + hud.slots.length + ' ability slots -> ' + fired +
@@ -4888,7 +5343,7 @@ async function run() {
 
     // --- HAYMAKER, refused. A press that lands no punch says nothing.
     const before = got('haymaker-voice').length
-    g.castHeroSlot1()   // no wave yet, so nothing is in reach
+    g.castHeroSlot('heroSlot1')   // no wave yet, so nothing is in reach
     note('refused press (nothing in reach): line played ' +
       (got('haymaker-voice').length - before) + ' time(s)' +
       (got('haymaker-voice').length === before ? '  correct — silent' : '  *** IT TALKED ***'))
@@ -4905,7 +5360,7 @@ async function run() {
     note('an enemy came into haymaker range: ' + reached +
       '  (hero at ' + Math.round(g.hero.x) + ',' + Math.round(g.hero.y) + ')')
     const tPunch = performance.now()
-    g.castHeroSlot1()
+    g.castHeroSlot('heroSlot1')
     const hv = got('haymaker-voice')[0]
     note('haymaker: line played ' + got('haymaker-voice').length + ' time(s)' +
       (hv ? '  at volume ' + hv.vol.toFixed(3) : '  *** SILENT ***'))
@@ -4923,14 +5378,14 @@ async function run() {
           : 'not heard'))
     }
 
-    // --- DAD MODE. Through the game's own damage path, which is the only
+    // --- THE TRANSFORMATION. Through the game's own damage path, which is the only
     // route into announceLastStand.
     const tDad = performance.now()
     g.damageHero(99999)
     await sleep(120)
     const dv = got('dadmode-voice')[0]
     const sting = since(tDad).find((h) => h.key === 'last-stand')
-    note('DAD MODE: lastStandActive=' + g.hero.lastStandActive +
+    note('transformed: powered=' + g.hero.powered +
       '  line ' + (dv ? 'played at ' + dv.vol.toFixed(3) : '*** SILENT ***') +
       '  sting ' + (sting ? 'played at ' + sting.vol.toFixed(3) : 'MISSING'))
     if (dv && sting) {
@@ -5274,7 +5729,7 @@ async function run() {
   }
 
   if (scenario === 'dadsync') {
-    // WHEN the DAD MODE line lands, against WHEN the SUV appears.
+    // WHEN Cory's transformation line lands, against WHEN the Rivian appears.
     //
     // The visual transformation is not the flash: he fades out on the frame he
     // drops to 25%, and the vehicle appears transformPauseMs later. The line
@@ -5282,7 +5737,7 @@ async function run() {
     // vehicle in order for the WORD to land on it.
     const AJ = (await import('./js/data/audio.json', { with: { type: 'json' } })).default
     const HJ = (await import('./js/data/heroes.json', { with: { type: 'json' } })).default
-    const ls = HJ.cory.lastStand
+    const ls = HJ.cory.powered
     const cue = AJ.cues['dadmode-voice']
     note('transformPauseMs ' + ls.transformPauseMs + '   line lead-in ' + cue.leadInMs +
       'ms   so the cue should start at ' + (ls.transformPauseMs - cue.leadInMs) + 'ms')
@@ -5813,7 +6268,7 @@ async function run() {
     }
     note('B2. hero down = ' + hero.down + '   (took ' +
       Math.round(performance.now() - t0) + 'ms, through ' +
-      (hero.lastStandActive ? 'DAD MODE' : 'the transformation') + ')')
+      (hero.powered ? 'powered' : 'base form') + ')')
     if (!hero.down) { note('*** could not get him down ***'); return }
     const held = hero.pendingHit !== null
     note('    pendingHit after goDown: ' + (held ? '*** STILL SET ***' : 'null — cleared'))
@@ -10002,13 +10457,18 @@ async function run() {
     // How many enemies does one man actually hold, and what does that cost him?
     // Measured before anything is changed, because the data says 3 and the
     // tester says "all of them".
+    // THE TRANSFORMATION'S NUMBERS COME FROM rules.json, which is the one
+    // place they live now -- they used to be per hero in heroes.json and there
+    // were two thresholds for what is one event.
+    const TRANSFORM_RULES =
+      (await import('./js/data/rules.json', { with: { type: 'json' } })).default.heroTransform
     g.status.peanuts = 0                       // no towers: the hero alone
     const hero = g.hero
     const def = hero.def
     note('data: maxHealth=' + def.maxHealth + ' blockCapacity=' + def.blockCapacity +
-      ' blockRange=' + def.blockRange + ' lastStand at ' +
-      Math.round(def.lastStand.healthThreshold * 100) + '% (' +
-      Math.round(def.maxHealth * def.lastStand.healthThreshold) + 'hp)')
+      ' blockRange=' + def.blockRange + ' transforms at ' +
+      Math.round(TRANSFORM_RULES.belowHealth * 100) + '% (' +
+      Math.round(def.maxHealth * TRANSFORM_RULES.belowHealth) + 'hp)')
 
     // Park him on the lane so a whole wave walks into him.
     const spot = g.lane.pointAt(g.lane.totalLength * 0.55)
@@ -10043,7 +10503,7 @@ async function run() {
     let samples = 0, heldSum = 0, inRangeSum = 0, maxHeld = 0
     let dmg = 0, lastHp = hero.health
     const t0 = performance.now()
-    let lastStandAt = -1, deadAt = -1, passedBy = 0
+    let transformedAt = -1, deadAt = -1, passedBy = 0
     const seenPast = new Set()
 
     while (performance.now() - t0 < 26000) {
@@ -10060,7 +10520,7 @@ async function run() {
       if (held.length > maxHeld) maxHeld = held.length
       if (hero.health < lastHp) dmg += lastHp - hero.health
       lastHp = hero.health
-      if (lastStandAt < 0 && hero.lastStandActive) lastStandAt = performance.now() - t0
+      if (transformedAt < 0 && hero.powered) transformedAt = performance.now() - t0
       if (deadAt < 0 && !hero.alive) deadAt = performance.now() - t0
       // Anything that got past his block ring and kept walking.
       // Only while he is alive: once he is down everything walks past and the
@@ -10090,10 +10550,10 @@ async function run() {
     note('  damage taken: ' + Math.round(dmg) + ' over ' + secs.toFixed(1) + 's = ' +
       (dmg / secs).toFixed(1) + '/s real, ' + (dmg / (secs * GAME_SPEED)).toFixed(1) + '/s game')
     note('  health ' + Math.round(hero.health) + '/' + def.maxHealth)
-    note('  Last Stand fired: ' + (lastStandAt >= 0 ? 'yes at ' + Math.round(lastStandAt) + 'ms' : 'NO'))
+    note('  transformation fired: ' + (transformedAt >= 0 ? 'yes at ' + Math.round(transformedAt) + 'ms' : 'NO'))
     note('  died: ' + (deadAt >= 0 ? 'yes at ' + Math.round(deadAt) + 'ms' : 'no'))
-    if (lastStandAt >= 0 && deadAt >= 0) {
-      note('  window between Last Stand and death: ' + Math.round(deadAt - lastStandAt) + 'ms');
+    if (transformedAt >= 0 && deadAt >= 0) {
+      note('  window between the transformation and death: ' + Math.round(deadAt - transformedAt) + 'ms');
     }
     note('  while he was alive: ' + reachedHim.size + ' enemies reached him, ' +
       passedBy + ' got past (' +
@@ -10102,7 +10562,7 @@ async function run() {
     note('  distinct enemies that ever held a block slot: ' + heldEver.size +
       ' (capacity is ' + def.blockCapacity + ')')
     note('  the held set changed on ' + churn + ' of ' + samples + ' samples')
-    note('  invulnerable window: ' + def.lastStand.invulnerableSeconds + 's')
+    note('  invulnerable window: ' + TRANSFORM_RULES.invulnerableSeconds + 's')
     note('  attacks landed on him: ' + attacks + '; ceiling for ' + def.blockCapacity +
       ' concurrent Late Filers over ' + (secs * GAME_SPEED).toFixed(1) + ' game-seconds is ' +
       Math.round(def.blockCapacity * secs * GAME_SPEED / 1.0))
@@ -10146,18 +10606,18 @@ async function run() {
       if (!slot) return 'no slot ' + i
       let fired = 0
       const orig = g.armAbility.bind(g)
-      const origH = g.castHeroSlot1.bind(g)
-      const origP = g.castHeroSlot2.bind(g)
+      const origH = g.castHeroSlot.bind(g)
+      
       g.armAbility = (id) => { fired++; return orig(id) }
-      g.castHeroSlot1 = () => { fired++; return origH() }
-      g.castHeroSlot2 = () => { fired++; return origP() }
+      g.castHeroSlot = (slot) => { fired++; return origH(slot) }
+      
       const b = slot.hit.getBounds()
       await click(b.centerX, b.centerY)
       await sleep(160)
       // Disarm, so the next probe tap cannot be read as casting this one.
       g.status.pendingAbility = null
       g.status.mode = 'normal'
-      g.armAbility = orig; g.castHeroSlot1 = origH; g.castHeroSlot2 = origP
+      g.armAbility = orig; g.castHeroSlot = origH
       return fired > 0 ? 'REACHED' : 'DEAD'
     }
 

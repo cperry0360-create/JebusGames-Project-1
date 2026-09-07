@@ -496,19 +496,23 @@ test('every hero and every hero button is called one thing, everywhere', () => {
    * Cut, which is gone from the game. Slot 2 is Ice Beam, which is new.
    */
   const heroes = read('heroes') as Record<string, any>
-  const expected: Record<string, [string, string, string]> = {
-    cory: ['Cory', 'Haymaker', 'Spike Strip'],
-    courtland: ['Courtland', 'Shockwave', 'Seismic'],
-    han: ['Han', 'Ember', 'Fireball'],
-    eli: ['Eli', 'Star Rain', 'Ice Beam'],
-    bailey: ['Bailey', 'Bark', 'Zoomies'],
+  // COURTLAND HAS THREE. He is the roster's first hero with more than two
+  // abilities and the reason `abilities` is a list; the other four are
+  // unchanged, which is what this checks.
+  const expected: Record<string, [string, string[]]> = {
+    cory: ['Cory', ['Haymaker', 'Spike Strip']],
+    courtland: ['Courtland', ['Seismic', 'Mind Control', 'Mind Laser']],
+    han: ['Han', ['Ember', 'Fireball']],
+    eli: ['Eli', ['Star Rain', 'Ice Beam']],
+    bailey: ['Bailey', ['Bark', 'Zoomies']],
   }
   const ids = Object.keys(heroes).filter((k) => !k.startsWith('_'))
   assert.deepEqual(ids.sort(), Object.keys(expected).sort(), 'the roster changed')
-  for (const [id, [name, one, two]] of Object.entries(expected)) {
+  for (const [id, [name, buttons]] of Object.entries(expected)) {
     assert.equal(heroes[id].name, name, `${id} is not called ${name}`)
-    assert.equal(heroes[id].slot1.name, one, `${id}'s first button is not ${one}`)
-    assert.equal(heroes[id].slot2.name, two, `${id}'s second button is not ${two}`)
+    assert.deepEqual(
+      (heroes[id].abilities as Array<{ name: string }>).map((a) => a.name), buttons,
+      `${id}'s buttons are not ${buttons.join(', ')}`)
   }
 
   // And no retired name survives anywhere the player or the log can see it.

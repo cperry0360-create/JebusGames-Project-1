@@ -261,9 +261,9 @@ test('the Politician speaks when he appears, once, and is never cut off', () => 
   // is still first and the sting still steps back for it. The duck only
   // reaches what STARTS during a line.
   const dad = (audio.cues as any)['dadmode-voice']
-  const ls = read('heroes').cory.lastStand
-  assert.ok(dad.leadInMs < ls.transformPauseMs,
-    `a ${dad.leadInMs}ms lead-in against a ${ls.transformPauseMs}ms transformation would `
+  const pf = read('heroes').cory.powered
+  assert.ok(dad.leadInMs < pf.transformPauseMs,
+    `a ${dad.leadInMs}ms lead-in against a ${pf.transformPauseMs}ms transformation would `
     + 'start the line at or before the sting')
   assert.match(game, /this\.hero\.on\('transformed', \(\) => \{\s*\n\s*play\(this, 'last-stand'/,
     'the sting no longer waits for the transformation')
@@ -399,51 +399,66 @@ test('a voice line wins when something else plays over it', () => {
 test('each line is wired to the moment it describes, not to the button', () => {
   const game = src('scenes/GameScene.ts')
 
-  // SLOT 1: after the ability has committed, never on the press.
+  // AN INSTANT ABILITY: after it has committed, never on the press.
   //
-  // There are five of these now, one per hero, and they run through one entry
-  // point -- so the ordering is checked once, against that. Both cues fire
-  // after `cooldowns.start`, which every refusal returns before: a press that
-  // is refused for cooldown, for the hero being down, or for nothing being in
-  // reach makes no sound at all.
+  // Every hero button runs through one entry point -- one that used to be two,
+  // and is one because Courtland's third ability has no pair to belong to --
+  // so the ordering is checked once, against that. Both cues fire after
+  // `cooldowns.start`, which every refusal returns before: a press that is
+  // refused for cooldown, for the hero being down, for the hero being in base
+  // form, or for nothing being in reach makes no sound at all.
   //
   // The voice line comes before the effect and the effect's own cue, because
   // the duck only reaches a cue that STARTS after a line. Played the other way
   // round the punch would sit on top of the words rather than under them.
-  const cast = game.slice(game.indexOf('castHeroSlot1(): void {'))
+  const cast = game.slice(game.indexOf('castHeroSlot(slot: string): void {'))
   const body = cast.slice(0, cast.indexOf('\n  }'))
-  const committed = body.indexOf('this.cooldowns.start(SLOT1)')
-  assert.ok(committed > 0, 'slot 1 no longer starts its own cooldown')
-  assert.ok(body.indexOf('if (k.voice) play(this, k.voice)') > committed,
+  const committed = body.indexOf('this.cooldowns.start(slot)')
+  assert.ok(committed > 0, 'the instant path no longer starts its own cooldown')
+  assert.ok(body.indexOf('if (a.voice) play(this, a.voice)') > committed,
     'the line plays before the ability has committed, so a refused press talks')
-  assert.ok(body.indexOf('play(this, k.sound)') > committed,
+  assert.ok(body.indexOf('play(this, a.sound)') > committed,
     'the effect cue plays before the ability has committed')
-  assert.ok(body.indexOf('play(this, k.sound)') > body.indexOf('if (k.voice) play(this, k.voice)'),
+  assert.ok(body.indexOf('play(this, a.sound)') > body.indexOf('if (a.voice) play(this, a.voice)'),
     'the effect cue starts before the voice line, so the duck cannot reach it')
-  assert.ok(body.indexOf('switch (k.effect)') > body.indexOf('play(this, k.sound)'),
+  assert.ok(body.indexOf('switch (a.effect)') > body.indexOf('play(this, a.sound)'),
     'the payload runs before its own sound')
 
-  // And every refusal really is above the commit.
-  for (const refusal of ['is still recharging', 'is down', 'nothing in reach']) {
+  // And the refusal this path raises itself really is above the commit. The
+  // other three -- cooldown, down, base form -- are `powerRefusal`, which
+  // returns before any of this.
+  assert.ok(body.indexOf('this.refuse(this.powerRefusalText(a, why))') < committed
+    && body.indexOf('this.refuse(this.powerRefusalText(a, why))') > 0,
+    'the shared refusal is below the commit, so a refused press would sound')
+  for (const refusal of ['nothing in reach']) {
     assert.ok(body.indexOf(refusal) < committed && body.indexOf(refusal) > 0,
       `the "${refusal}" refusal is below the commit, so it would sound`)
   }
 
-  // DAD MODE: ON THE TRANSFORMATION, not on the frame he drops to 25%.
+  // THE LINE LANDS ON THE TRANSFORMATION, not on the frame the hero crosses
+  // the threshold.
   //
-  // The SUV appears `transformPauseMs` after the trigger — half a second — and
-  // everything used to fire at once at the start, so the line was talking
-  // while he was still a man fading out. The cue is started early by exactly
-  // the silence at the head of the recording, so the first WORD lands on the
-  // frame the vehicle appears.
-  const ann = game.slice(game.indexOf('private announceLastStand()'))
+  // The new form appears `transformPauseMs` after the trigger — half a second
+  // — and everything used to fire at once at the start, so the line was
+  // talking while the hero was still fading out. The cue is started early by
+  // exactly the silence at the head of the recording, so the first WORD lands
+  // on the frame the new form appears.
+  //
+  // AND WHICH LINE IS PER HERO. `dadmode-voice` is Cory's and it used to play
+  // for whoever was standing there; the cue is read off `powered.voice` now,
+  // which is null for the four heroes who have not recorded one.
+  const ann = game.slice(game.indexOf('private announceTransform()'))
   const annBody = ann.slice(0, ann.indexOf('\n  }'))
-  assert.match(annBody, /cueLeadInMs\('dadmode-voice'\)/,
+  assert.match(annBody, /cueLeadInMs\(cue\)/,
     'the line is not aligned to the recording, so its first word lands early')
-  assert.match(annBody, /ls\.transformPauseMs - cueLeadInMs/,
+  assert.match(annBody, /pf\.transformPauseMs - cueLeadInMs/,
     'the line is not aligned to the transformation')
-  assert.match(annBody, /delayedCall\(lead, \(\) => play\(this, 'dadmode-voice'\)\)/,
-    'DAD MODE does not say anything')
+  assert.match(annBody, /delayedCall\(lead, \(\) => play\(this, cue\)\)/,
+    'the transformation does not say anything')
+  assert.match(annBody, /pf\.voice/,
+    'the transformation line is not read off the hero, so one hero speaks for five')
+  assert.doesNotMatch(annBody, /'dadmode-voice'/,
+    "Cory's line is named in code again, so every hero says it")
   const audioSrc = src('systems/Audio.ts')
   assert.match(audioSrc, /export function cueLeadInMs\(/, 'nothing reads a cue lead-in')
   const voice = (audio.cues as any)['dadmode-voice']
@@ -472,15 +487,14 @@ test('each line is wired to the moment it describes, not to the button', () => {
   // recorded line and the impact -- the code's ordering of voice before sound
   // is asserted above, once, against the shared entry point.
   const cory = read('heroes').cory
-  assert.equal(cory.slot1.voice, 'haymaker-voice', 'the punch lost its line')
-  assert.equal(cory.slot1.sound, 'haymaker', 'the punch lost its impact')
+  assert.equal(cory.abilities[0].voice, 'haymaker-voice', 'the punch lost its line')
+  assert.equal(cory.abilities[0].sound, 'haymaker', 'the punch lost its impact')
   // 2.2s, and the invulnerability window is shorter than that — so the line is
   // still talking after the moment it belongs to has passed, which is exactly
-  // why nothing may cut it.
-  const heroes = read('heroes')
-  const inv = Object.values(heroes as Record<string, any>)
-    .map((h) => h.lastStand?.invulnerableSeconds).filter((v) => typeof v === 'number')
-  assert.ok(inv.length > 0, 'no hero declares an invulnerability window')
-  assert.ok(audio.cues['dadmode-voice'].durationMs > Math.max(...inv) * 1000,
+  // why nothing may cut it. ONE WINDOW, from rules.json: every hero used to
+  // carry a copy of it.
+  const inv = read('rules').heroTransform.invulnerableSeconds
+  assert.ok(typeof inv === 'number' && inv > 0, 'no invulnerability window is declared')
+  assert.ok(audio.cues['dadmode-voice'].durationMs > inv * 1000,
     'the line is shorter than the window it plays over, so this proves nothing')
 })

@@ -481,7 +481,14 @@
     "_markerHeight": "Status markers -- the flame over a burning enemy, and the marker over a controlled one -- in world pixels, and how far above the enemy's head they float. Small: a marker the size of the enemy is a second enemy.",
     "strikeArtWidth": 2.4,
     "_strikeArtWidth": "Each of Star Rain's fourteen strikes is drawn `strikeLength` x this wide, so the picture covers the 26px disc that strike actually damages with enough overhang to read as a falling star rather than as a dot. The volley is fourteen small pictures, not one big one, because THE SCATTER IS THE POWER: one image over the whole radius would say a blast landed.",
-    "_retired": "GONE WITH THE PLACEHOLDER SHAPES: ringMs, ringWidth, fillAlpha, rainRingMs, strikeMs, strikeWidth, hazardThickness, hazardTeeth and hazardToothHeight. They described a stroked circle, a two-line stab and a toothed rectangle, and there is real art in all three places now. `strikeLength` STAYED and is not one of them -- it is the 26px radius a single Star Rain strike actually damages, a gameplay number that the picture is now sized against rather than a property of the picture."
+    "_retired": "GONE WITH THE PLACEHOLDER SHAPES: ringMs, ringWidth, fillAlpha, rainRingMs, strikeMs, strikeWidth, hazardThickness, hazardTeeth and hazardToothHeight. They described a stroked circle, a two-line stab and a toothed rectangle, and there is real art in all three places now. `strikeLength` STAYED and is not one of them -- it is the 26px radius a single Star Rain strike actually damages, a gameplay number that the picture is now sized against rather than a property of the picture.",
+    "laser": {
+      "_note": "THE HELD BEAM'S STRIP, SPLIT INTO ITS THREE PHASES. `fx_mind_laser` is twelve 225x200 cells authored firing left to right: four of charge-up, five of sustain, three of fade-out. Which frames are which is a fact about how the picture was drawn rather than about lasers, so it lives here with the rest of the effect tuning and a re-authored strip with a different split is an edit to these three numbers. The charge plays once on the press, the sustain loops while the button is held, and the fade plays once on release. `fps` is the clip's rate: 18 puts the four-frame charge at 0.22s, which is fast enough not to feel like lag before the beam starts hurting anything.",
+      "chargeFrames": 4,
+      "sustainFrames": 5,
+      "fadeFrames": 3,
+      "fps": 18
+    }
   },
   "targeting": {
     "_note": "What the board looks like while it is waiting for a tap. On a touch device there is no hover, so a targeting mode that only draws under the pointer draws NOTHING until the player has already committed — which is how a mode with no visible state came to be reported as a soft-lock. These numbers are the standing affordance: a breathing wash over the area a tap is legal in, drawn from the moment the mode is entered.",

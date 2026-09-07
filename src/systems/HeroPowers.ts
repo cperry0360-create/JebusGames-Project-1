@@ -1,55 +1,59 @@
-// The rules behind slot 2, kept free of Phaser.
+// The rules behind the hero's abilities, kept free of Phaser.
 //
 // "May this be cast?", "is that point legal?", "which enemies does a dash run
 // through?" and "where does a scatter of small strikes land?" are all
 // decisions, and decisions that gate a button should be testable without a
 // canvas. What is left in the scene is drawing and damage.
 //
-// ONE MECHANIC, FIVE POWERS. Every hero's slot 2 is gated on the powered form,
-// carries the same cooldown number, resets that cooldown on transformation, and
-// is placed by tapping the button and then tapping the map inside a radius of
-// the hero. Only the effect differs. That is deliberate: five powers with five
-// different activation rules would be five things to learn before the second
-// half of a hero is usable at all.
+// IT WAS "ONE MECHANIC, FIVE POWERS" and it is not any more. Every hero's slot
+// 2 was gated on the powered form, carried the same cooldown number, reset
+// that cooldown on transformation, and was placed by tapping the button and
+// then tapping the map inside a radius of the hero -- one activation rule so
+// that five powers were not five things to learn. Courtland has three
+// abilities with two different activation rules between them, so the rule is
+// per ABILITY now (`activation`, `poweredOnly`) rather than per slot. What has
+// not changed is that a targeted ability is placed exactly like every other
+// one, through the same targeting mode and with the same four ways out.
 
-import type { HeroPowerDef } from '../types.ts'
-import { slot2Usable } from './HeroSkills.ts'
+import type { HeroAbilityDef } from '../types.ts'
+import { abilityUsable } from './HeroSkills.ts'
 
 export interface Point {
   x: number
   y: number
 }
 
-/** Why a hero power was refused, or null when it may be cast. */
+/** Why an ability was refused, or null when it may be cast. */
 export type PowerRefusal = 'unbuilt' | 'down' | 'base-form' | 'cooling'
 
 /**
- * Whether slot 2 may be pressed right now.
+ * Whether an ability may be pressed right now.
  *
- * Ordered so the player is told the most useful thing: a power that does not
- * exist is not "on cooldown", and a hero who is down is not "in base form".
+ * Ordered so the player is told the most useful thing: an ability that does
+ * not exist is not "on cooldown", and a hero who is down is not "in base
+ * form".
  */
 export function powerRefusal(
-  def: HeroPowerDef, powered: boolean, heroDown: boolean, ready: boolean,
+  def: HeroAbilityDef, powered: boolean, heroDown: boolean, ready: boolean,
 ): PowerRefusal | null {
   if (def.effect === null) return 'unbuilt'
   // THE SAME PREDICATE THE HUD DRAWS THE BUTTON FROM, called rather than
-  // restated. The bar greys slot 2 out with `slot2Usable`; a cast path that
-  // re-derived that rule is a second copy of it, and a second copy of a gate
-  // is how a button comes to look pressable and refuse.
-  if (!slot2Usable(powered, heroDown)) return heroDown ? 'down' : 'base-form'
+  // restated. The bar greys a locked ability out with `abilityUsable`; a cast
+  // path that re-derived that rule is a second copy of it, and a second copy
+  // of a gate is how a button comes to look pressable and refuse.
+  if (!abilityUsable(def, powered, heroDown)) return heroDown ? 'down' : 'base-form'
   if (!ready) return 'cooling'
   return null
 }
 
 /**
- * Whether a tap is a legal place to put this power.
+ * Whether a tap is a legal place to put this ability.
  *
- * A DISC AROUND THE HERO, for all five. The power is his reach, not the
- * board's: a hero power that could be dropped anywhere would make where the
- * hero is standing irrelevant, which is the one decision the hero has.
+ * A DISC AROUND THE HERO. The ability is the hero's reach, not the board's:
+ * one that could be dropped anywhere would make where the hero is standing
+ * irrelevant, which is the one decision the hero has.
  */
-export function withinCastRange(def: HeroPowerDef, hero: Point, x: number, y: number): boolean {
+export function withinCastRange(def: HeroAbilityDef, hero: Point, x: number, y: number): boolean {
   return Math.hypot(x - hero.x, y - hero.y) <= def.castRadius
 }
 
@@ -61,7 +65,7 @@ export function withinCastRange(def: HeroPowerDef, hero: Point, x: number, y: nu
  * player did not choose. This exists for the harness and for the dash, which
  * needs the end of its run as a point rather than as a yes or no.
  */
-export function clampToCastRange(def: HeroPowerDef, hero: Point, x: number, y: number): Point {
+export function clampToCastRange(def: HeroAbilityDef, hero: Point, x: number, y: number): Point {
   const dx = x - hero.x
   const dy = y - hero.y
   const d = Math.hypot(dx, dy)
@@ -146,10 +150,10 @@ export interface Hazard {
   left: number
   /** Seconds until it next charges what is standing in it. */
   until: number
-  def: HeroPowerDef
+  def: HeroAbilityDef
 }
 
-export function makeHazard(def: HeroPowerDef, x: number, y: number): Hazard {
+export function makeHazard(def: HeroAbilityDef, x: number, y: number): Hazard {
   return {
     x, y, radius: def.radius, def,
     left: def.durationSeconds,

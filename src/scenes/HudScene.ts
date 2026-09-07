@@ -18,7 +18,7 @@ import {
   barWidth, iconBox, regions, slotDefs, slotSignature,
   type BarMetrics, type SlotDef, type SlotRegion,
 } from '../systems/AbilityBar.ts'
-import { SLOT2, heroSlotDefs, slot2Usable } from '../systems/HeroSkills.ts'
+import { abilityInSlot, abilityUsable, heroSlotDefs, isHeroSlot } from '../systems/HeroSkills.ts'
 import { difficultyName } from '../systems/Difficulty.ts'
 import { onSceneResize, sceneIsLive } from '../systems/SceneEvents.ts'
 import { fitUiCamera, viewH, viewW } from '../systems/Resolution.ts'
@@ -127,8 +127,6 @@ export class HudScene extends Phaser.Scene {
   settings?: SettingsPanel
   slots: SlotView[] = []
   private slotsBuilt = false
-  /** Last frame's DAD MODE state, so the arrival of a new option can be
-   *  announced once rather than every frame. */
   /** Which abilities the slots were built for, so a rare drop rebuilds them. */
   private slotKeys = ''
   /** Last drawn values, so a change can be shown rather than just displayed. */
@@ -152,6 +150,7 @@ export class HudScene extends Phaser.Scene {
     // is paused, so it is the better witness of the two: if even this stops
     // hearing taps, the whole UI has gone, not just the board.
     this.input.on('pointerdown', () => noteInputAccepted())
+    this.wireHeldAbility()
 
     // The HUD is laid out in CSS pixels — typography floors, plate sizes and
     // the safe-area insets are all in them — and drawn at device resolution.
@@ -575,13 +574,43 @@ export class HudScene extends Phaser.Scene {
         // handler that trusts the frame before it to have run is exactly the
         // kind of gap this bar has now been through twice.
         if (!this.slotShown(region, this.world.status)) return
+        // ONE CALL FOR EVERY HERO SLOT. It used to compare the slot id against
+        // `SLOT2` and dispatch to one of two methods, which is the assumption
+        // a hero with three abilities breaks: the third would have been read
+        // as slot 1 and cast the wrong thing.
         if (region.kind === 'ability') this.world.armAbility(region.id)
-        else if (region.id === SLOT2) this.world.castHeroSlot2()
-        else this.world.castHeroSlot1()
+        else this.world.castHeroSlot(region.id)
       })
 
       this.slots.push({ region, frame, sweep, icon, timer, hit })
     }
+  }
+
+  /**
+   * THE HELD ABILITY'S DRAG, wired once for the whole scene rather than once
+   * per button.
+   *
+   * A held beam is pressed on a 76px medallion at the bottom of the screen and
+   * AIMED by dragging out over the board, so the pointer leaves the rectangle
+   * that started it on the first frame of the gesture. A `pointermove` on the
+   * hit rectangle would stop firing the moment the aim became interesting, and
+   * a `pointerup` on it would never arrive at all -- the finger comes up over
+   * the map. Both therefore belong to the scene's input plugin, which hears
+   * the pointer wherever it is.
+   *
+   * `pointerupoutside` is the one a phone actually delivers when the finger
+   * leaves the canvas, and `gameout` covers a mouse dragged off the window.
+   * All three land on the same call, and `releaseHeldAbility` is a no-op when
+   * nothing is held -- an escape that has to check first is an escape somebody
+   * will forget to check for.
+   */
+  private wireHeldAbility(): void {
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      if (p.isDown) this.world.aimHeldAbility(p)
+    })
+    this.input.on('pointerup', () => this.world.releaseHeldAbility())
+    this.input.on('pointerupoutside', () => this.world.releaseHeldAbility())
+    this.input.on('gameout', () => this.world.releaseHeldAbility())
   }
 
   update(): void {
@@ -949,13 +978,17 @@ export class HudScene extends Phaser.Scene {
   /** Castable at all, ignoring cooldown: the hero has to be up for his own
    *  actives, and a rare drop is only usable while it is held. */
   private slotUsable(slot: SlotRegion, s: GameScene['status']): boolean {
-    // SLOT 2 IS GREY UNTIL THE HERO HAS TRANSFORMED. Not hidden: the player
-    // should be able to see that the power exists and read its icon while it
-    // is out of reach, which is the difference between a locked door and a
-    // wall. `slotUsable` false swaps the icon for its greyscale copy and takes
-    // the tap with it, so it cannot be pressed by accident either.
-    if (slot.id === SLOT2) return slot2Usable(s.heroPowered, s.heroDown)
-    if (slot.kind !== 'ability') return !s.heroDown
+    // A `poweredOnly` ABILITY IS GREY UNTIL THE HERO HAS TRANSFORMED. Not
+    // hidden: the player should be able to see that the ability exists and
+    // read its icon while it is out of reach, which is the difference between
+    // a locked door and a wall. `slotUsable` false swaps the icon for its
+    // greyscale copy and takes the tap with it, so it cannot be pressed by
+    // accident either. It was keyed on the slot INDEX -- slot 2 and only slot
+    // 2 -- and Courtland has two gated abilities in slots 2 and 3.
+    if (isHeroSlot(slot.id)) {
+      const a = abilityInSlot(this.world.heroId, slot.id)
+      return a ? abilityUsable(a, s.heroPowered, s.heroDown) : false
+    }
     if (slot.id === s.rareAbility) return true
     return s.abilities.includes(slot.id)
   }
@@ -1101,12 +1134,13 @@ export class HudScene extends Phaser.Scene {
       const ratio = Phaser.Math.Clamp(s.heroHealth / Math.max(s.heroMax, 1), 0, 1)
       this.chipBar.fillStyle(0x14181f, 0.92)
       this.chipBar.fillRoundedRect(bx - 1, by - 1, bw + 2, bh + 2, 3)
-      this.chipBar.fillStyle(s.lastStand ? 0xff5a3c : 0x4fa3e3, 1)
+      this.chipBar.fillStyle(s.heroPowered ? 0xff5a3c : 0x4fa3e3, 1)
       this.chipBar.fillRect(bx, by, bw * ratio, bh)
-      // BOTH THRESHOLDS, from `status.heroMarks`, which is data both ways --
-      // the transformation at half and Last Stand at a quarter. They were on
-      // the bar this chip replaces and they are the reason a player can see a
-      // transformation coming.
+      // THE THRESHOLD, from `status.heroMarks`, which is data. There were two
+      // marks -- the transformation at half and Last Stand at a quarter -- for
+      // what is one event now, and the quarter was the one a player noticed.
+      // Still a list, so this draws whatever it is given without knowing what
+      // any of it means.
       for (const mark of s.heroMarks) {
         this.chipBar.lineStyle(1, COLOR.panelEdge, 0.9)
           .lineBetween(bx + bw * mark, by, bx + bw * mark, by + bh)
