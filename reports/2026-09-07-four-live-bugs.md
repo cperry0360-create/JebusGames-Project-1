@@ -4,7 +4,7 @@
 |---|---|---|
 | `3d4dea3` | BUG A and B — logic | **green**, covered by run 162 (pushed with `c03af43`) |
 | `c03af43` | BUG D — layout; BUG C — not reproduced | **green** — [run 162](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34117165358) |
-| `REPORT_SHA` | This report | **CI_REP** |
+| `89ca48d` | This report | **green** — [run 163](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34117388582) |
 
 **Deployed.** `deploy / build` and `deploy / deploy` both ran inside run 162 — read off
 the run's job list, not inferred from the run being green, because `deploy.yml` is
