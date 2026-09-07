@@ -581,9 +581,20 @@ export class GameScene extends Phaser.Scene {
    * "A problem repeatedly occurred" the player sees.
    *
    * So one plate, for the level about to be played, and `shutdown` below frees
-   * it again. The cost is a load screen on the way in: a plate is about a
-   * megabyte and one decode, this game does not stream, and the file comes
-   * back out of the HTTP cache on every entry after the first.
+   * it again. The cost is the loader's own pause on the way in: a plate is
+   * about a megabyte and one decode, this game does not stream, and the file
+   * comes back out of the HTTP cache on every entry after the first.
+   *
+   * NOTHING IS DRAWN HERE, deliberately, and it took two attempts to decide
+   * that. A progress bar wants the 1280x720 design box, and the only thing
+   * that fits a scene to it -- `fitCameraToDesign` -- binds a resize handler
+   * that would still be re-fitting `cameras.main` long after `create()` had
+   * handed that camera to the rig. Laying one out by hand instead means
+   * reading the physical canvas size, which is the mistake `viewW`/`viewH`
+   * exist to prevent and which camera.test.ts catches by name. So the gap is
+   * one or two frames of the canvas clear colour -- the same #10161d as every
+   * letterbox in the game -- rather than a load screen built out of a rule
+   * violation. A real one belongs in a shared fitted component.
    *
    * `loadLevel` is called again in `create()` rather than stashed here. The
    * lookup is pure, and a field written in `preload` and read in `create` is a
@@ -592,26 +603,7 @@ export class GameScene extends Phaser.Scene {
    */
   preload(): void {
     const level = loadLevel(runState().resumeFrom?.level ?? runState().levelId)
-    if (!queuePlate(this, ART.map[level.map.plate])) return
-
-    // Something on the glass while it lands, because `scene.start('Game')`
-    // has already stopped whatever the player was looking at and a silent
-    // black frame reads as the crash this change exists to fix. Destroyed on
-    // COMPLETE, so nothing here survives into `create()` and the two-camera
-    // rule is never in question.
-    const cam = this.cameras.main
-    const label = this.add.text(cam.centerX, cam.centerY, 'LOADING THE BOARD', {
-      fontFamily: FONT_UI, fontSize: '20px', color: COLOR.ink, letterSpacing: 2,
-    }).setOrigin(0.5)
-    const bar = this.add.rectangle(cam.centerX - 120, cam.centerY + 26, 0, 8, 0x6cc24a)
-      .setOrigin(0, 0.5)
-    const onProgress = (v: number): void => bar.setSize(240 * v, 8)
-    this.load.on(Phaser.Loader.Events.PROGRESS, onProgress)
-    this.load.once(Phaser.Loader.Events.COMPLETE, () => {
-      this.load.off(Phaser.Loader.Events.PROGRESS, onProgress)
-      label.destroy()
-      bar.destroy()
-    })
+    queuePlate(this, ART.map[level.map.plate])
   }
 
   create(): void {
