@@ -208,6 +208,17 @@ test('anchors stay well inside the frame', () => {
   // onto the prop instead of the feet.
   for (const [key, cfg] of Object.entries(art.render) as [string, any][]) {
     if (cfg.anchorX === undefined) continue
+    // AN EFFECT DRAWN ALONG A LINE IS THE ONE EXEMPTION, and it is declared by
+    // the art rather than by a list of names here. The ice beam and the dash
+    // trail are stretched from the hero to a tapped point, so their anchorX
+    // says which end of the picture is the hero's -- 0, the left edge, since
+    // both are authored travelling right. That is an authored fact, not a
+    // measurement that latched onto a prop, and `stretch` is what says so.
+    if (cfg.stretch === 'line') {
+      assert.ok(cfg.anchorX === 0 || cfg.anchorX === 1,
+        `${key} is stretched along a line, so it must be anchored at one END`)
+      continue
+    }
     assert.ok(cfg.anchorX > 0.2 && cfg.anchorX < 0.8,
       `${key} anchorX ${cfg.anchorX} is out at the frame edge; check the measurement`)
   }
@@ -221,9 +232,26 @@ test('a ground shadow covers the footprint and not the whole sprite', () => {
   // leaf blower must never do that, or the measurement caught the blower.
   let characters = 0
   let buildings = 0
+  // THE ON-SCREEN HEIGHT IS NOT ALWAYS IN THIS FILE. Almost every sprite's is
+  // -- `render.displayHeight` -- but Cory's powered Rivian is sized by
+  // `heroes.json cory.poweredHeight` instead, because how big that vehicle is
+  // drawn is a decision about the hero rather than about the picture, and
+  // art.json deliberately carries no second copy. Resolved the same way the
+  // game resolves it, so this test measures the sprite that is actually drawn:
+  // without this the height came back undefined and the share was NaN, which
+  // `> 0.20` answers false to while reporting a shadow that is fine.
+  const heroes = JSON.parse(readFileSync(url('../src/data/heroes.json'), 'utf8'))
+  const poweredHeights = new Map<string, number>()
+  for (const def of Object.values(heroes) as any[]) {
+    if (def && typeof def === 'object' && def.poweredSprite && def.poweredHeight) {
+      poweredHeights.set(def.poweredSprite, def.poweredHeight)
+    }
+  }
   for (const [key, cfg] of Object.entries(art.render) as [string, any][]) {
     if (cfg.shadowWidth === undefined || !cfg.contentWidth || !cfg.contentHeight) continue
-    const onScreenWidth = (cfg.contentWidth / cfg.contentHeight) * cfg.displayHeight
+    const height = cfg.displayHeight ?? poweredHeights.get(key)
+    assert.ok(height, `${key} has a shadow but no on-screen height anywhere`)
+    const onScreenWidth = (cfg.contentWidth / cfg.contentHeight) * height
     const share = cfg.shadowWidth / onScreenWidth
     // The floor catches a shadow measured off one stray pixel rather than a
     // stance. It was 0.25 while every character's reach was about its stance;
@@ -246,8 +274,18 @@ test('a ground shadow covers the footprint and not the whole sprite', () => {
     // the tip of its stinger -- and a shadow the width of a stinger under a
     // wingspan is the mismeasurement this test exists to catch, arrived at from
     // the other direction. Its shadow is its body's, like the vehicle's.
-    const BODY_SHADOWED = new Set(['enemy-zamboni', 'enemy-glitch-bug'])
-    const isCharacter = /^enemies\/|^hero\/hero_cory\.webp$/.test(art.files[key])
+    //
+    // The Rivian is the third, and the first on the hero side. It is a vehicle
+    // drawn in 3/4 receding, so only its near front wheel reaches the ground
+    // line at all and a shadow measured from that would be one wheel wide
+    // under a whole truck. Same rule, same reason as the Zamboni.
+    const BODY_SHADOWED = new Set(['enemy-zamboni', 'enemy-glitch-bug', 'hero-cory-power'])
+    // `heroes/` as well as `enemies/`. It used to name one file --
+    // `hero/hero_cory.webp` -- because Cory was the only hero whose art this
+    // script had measured; the other four lived in `heroes/` and were checked
+    // by nothing. Cory's new art is in `heroes/` too, so the pattern that
+    // named him would have quietly stopped matching anybody at all.
+    const isCharacter = /^enemies\/|^heroes\//.test(art.files[key])
       && !BODY_SHADOWED.has(key)
     if (isCharacter) {
       characters++

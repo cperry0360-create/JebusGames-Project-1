@@ -29,7 +29,9 @@ import { boardBounds, coverZoom, openingView } from '../systems/CameraMath.ts'
 import { distanceAtX, type EmergeConfig } from '../systems/Gateway.ts'
 import { makeRng } from '../systems/Draft.ts'
 import { dashArcs, HeroMarkers, type MarkersDef } from '../systems/HeroMarkers.ts'
-import { ART, applyRender, fitContentHeight, fitContentWidth, soldierSprite } from '../systems/Art.ts'
+import {
+  ART, applyRender, fitContentHeight, fitContentWidth, renderFor, soldierSprite,
+} from '../systems/Art.ts'
 import { EFFECT_MS, playEffect, sizeForRadius } from '../systems/Effects.ts'
 import { Cooldowns } from '../systems/Cooldowns.ts'
 import { unlockedTowerCount } from '../systems/Draft.ts'
@@ -80,7 +82,10 @@ import {
   hazardExpired, makeHazard, powerRefusal, rainPoints, tickHazard,
   withinCastRange, withinDash, type Hazard, type PowerRefusal,
 } from '../systems/HeroPowers.ts'
-import { expandingRing, hazardBand, lineSweep, strike, type HazardArt } from '../systems/HeroFx.ts'
+import {
+  alongLine, areaRing, burstAt, groundStrip, statusMarker,
+  type HazardArt, type StatusMarker,
+} from '../systems/HeroFx.ts'
 import { cameraAcceptsGestures, LAYER } from '../systems/Layers.ts'
 import { barWidth, regions, slotDefs, type BarMetrics } from '../systems/AbilityBar.ts'
 import { safeAreaInsets } from '../systems/SafeArea.ts'
@@ -239,6 +244,18 @@ export class GameScene extends Phaser.Scene {
   /** Spike Strips on the board. Plain data plus its art, ticked in `update`
    *  rather than on a timer each: a timer outlives the run that made it. */
   private readonly hazards: LiveHazard[] = []
+  /**
+   * The status markers currently on the board, one per enemy that has a
+   * status worth drawing.
+   *
+   * A MAP KEYED ON THE ENEMY, rebuilt by a sweep every frame rather than by
+   * each ability remembering to add and remove one. Two things go wrong with
+   * the remembering version and both have happened in this file: a marker
+   * whose owner died between the status starting and ending is a sprite left
+   * on the board forever, and a status applied twice stacks two markers on one
+   * head. A sweep cannot do either -- an enemy has a marker or it does not.
+   */
+  private readonly statusMarkers = new Map<Enemy, { kind: string; art: StatusMarker }>()
   /** The standing highlight over the area a tap is legal in. See
    *  `drawTargetArea`: on a touch device this is the ONLY thing that says the
    *  game is waiting, because there is no pointer to draw a cursor under. */
@@ -772,9 +789,11 @@ export class GameScene extends Phaser.Scene {
     // on a menu after the scene stops.
     this.events.once('shutdown', () => {
       this.rig?.destroy()
-      // A Spike Strip is scene state with a Graphics behind it; the scene is
+      // A Spike Strip is scene state with a sprite behind it; the scene is
       // restarted rather than rebuilt, so anything left here outlives the run.
       this.clearHazards()
+      // And the same for the flames over burning enemies, for the same reason.
+      this.clearStatusMarkers()
     })
     // WHERE THE RUN OPENS: the whole board, not the hero.
     //
@@ -3177,7 +3196,15 @@ export class GameScene extends Phaser.Scene {
    */
   private powerBurst(p: HeroPowerDef, x: number, y: number): void {
     const s = PRESENTATION.shake
-    expandingRing(this, x, y, p.radius, this.hero.def.colour, OVERLAY_DEPTH)
+    // FLATTENED WHEN IT IS SEISMIC AND NOT WHEN IT IS FIREBALL, and the two
+    // powers share this method, so the decision is read off the art rather
+    // than off the effect name. `fx_seismic` is a ground shatter drawn head-on
+    // and has to be squashed to lie flat on a board seen from three quarters
+    // above; `fx_fireball_impact` is a column of flame that is SUPPOSED to
+    // stand up out of the map, and squashing it would put the fire on its side.
+    // The height of a fireball is the one thing about it that reads.
+    const flat = renderFor(p.fx).anchorY === 1 ? 1 : PRESENTATION.heroFx.seismicFlatten
+    burstAt(this, p.fx, x, y, p.radius * 2, OVERLAY_DEPTH, { flattenY: flat })
     this.cameras.main.shake(s.haymakerMs * 0.8, s.haymakerIntensity * 0.8)
     for (const e of this.enemiesNear(x, y, p.radius)) {
       this.damageEnemy(e, p.damage, p.ignoresArmor, 0, false)
@@ -3212,14 +3239,25 @@ export class GameScene extends Phaser.Scene {
    */
   private rainOver(
     x: number, y: number,
-    p: { hits: number; radius: number; damage: number; gapSeconds: number; ignoresArmor: boolean },
+    p: {
+      hits: number; radius: number; damage: number; gapSeconds: number
+      ignoresArmor: boolean; fx: string
+    },
   ): void {
+    const fx = p.fx
     const points = rainPoints(p, { x, y }, () => Math.random())
-    expandingRing(this, x, y, p.radius, this.hero.def.colour, OVERLAY_DEPTH,
-      PRESENTATION.heroFx.rainRingMs)
+    // NO RING OVER THE WHOLE DISC ANY MORE. The placeholder drew one, because
+    // a scatter of two-line stabs could not say how far the volley reached.
+    // The real art can: fourteen falling stars ARE the shape, and a circle
+    // drawn round them would say a blast landed inside it, which is the exact
+    // misreading `_slot1` in heroes.json spends a paragraph warning about.
     points.forEach((pt, i) => {
       const land = (): void => {
-        strike(this, pt.x, pt.y, this.hero.def.colour, OVERLAY_DEPTH + 1)
+        // Sized to `strikeLength`, which is the radius this one strike really
+        // damages -- so a star lands on what it hits rather than near it.
+        burstAt(this, fx, pt.x, pt.y,
+          PRESENTATION.heroFx.strikeLength * PRESENTATION.heroFx.strikeArtWidth,
+          OVERLAY_DEPTH + 1)
         // A small blast per strike, so a scatter over a crowd spreads its
         // damage instead of all of it landing on one unlucky enemy.
         for (const e of this.enemiesNear(pt.x, pt.y, PRESENTATION.heroFx.strikeLength)) {
@@ -3252,8 +3290,15 @@ export class GameScene extends Phaser.Scene {
     // From his feet rather than from his chest: Hero has no mid-body accessor,
     // and everything else on this board -- the cast circle, the rally line,
     // the targeting overlay -- is measured at ground level too.
-    lineSweep(this, { x: this.hero.x, y: this.hero.y }, { x, y }, 5, colour, OVERLAY_DEPTH)
-    expandingRing(this, x, y, p.radius, colour, OVERLAY_DEPTH + 1)
+    // The beam art is authored firing left to right with its muzzle end on the
+    // left, so it is anchored there and stretched to wherever the tap landed.
+    // Its THICKNESS is not the power's radius -- see `beamHeight` in
+    // presentation.json -- because the radius is the area that freezes at the
+    // far end and a corridor that wide would claim to have caught everything
+    // it crossed. The ring is what says how big that area really is.
+    alongLine(this, p.fx, { x: this.hero.x, y: this.hero.y }, { x, y },
+      PRESENTATION.heroFx.beamHeight, OVERLAY_DEPTH)
+    areaRing(this, x, y, p.radius, colour, OVERLAY_DEPTH + 1)
     for (const e of this.enemiesNear(x, y, p.radius)) {
       this.damageEnemy(e, p.damage, p.ignoresArmor, 0, false)
       floatingDamage(this, e.x, e.centreY, p.damage, true)
@@ -3277,7 +3322,11 @@ export class GameScene extends Phaser.Scene {
   private powerDash(p: HeroPowerDef, x: number, y: number): void {
     const from = { x: this.hero.x, y: this.hero.y }
     const to = { x, y }
-    lineSweep(this, from, to, p.radius, this.hero.def.colour, OVERLAY_DEPTH)
+    // Drawn at the corridor's REAL diameter, which is the band `withinDash`
+    // tests against -- so a dash that misses looks like a dash that missed.
+    // The art is authored travelling right with the burst at its tail, so the
+    // tail lands on Bailey and the arrowhead on the point she was sent to.
+    alongLine(this, p.fx, from, to, p.radius * 2, OVERLAY_DEPTH)
     for (const e of this.enemies.filter((q) => q.alive && withinDash({ x: q.x, y: q.y }, from, to, p.radius))) {
       this.damageEnemy(e, p.damage, p.ignoresArmor, 0, false)
       floatingDamage(this, e.x, e.centreY, p.damage, true)
@@ -3309,7 +3358,9 @@ export class GameScene extends Phaser.Scene {
     this.hazards.push({
       state: makeHazard(p, x, y),
       // Under the entities, like the lane wash: it is painted on the road.
-      art: hazardBand(this, x, y, p.radius, this.hero.def.colour, GROUND_DEPTH + 3),
+      // Turned to the road it is laid on. See Path.headingNear.
+      art: groundStrip(this, p.fx, x, y, p.radius, GROUND_DEPTH + 3,
+        this.lane.headingNear(x, y)),
     })
   }
 
@@ -3351,6 +3402,58 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * One marker over every enemy that has a status, and none over any that does
+   * not.
+   *
+   * A SWEEP RATHER THAN BOOKKEEPING. The alternative is each ability creating
+   * a marker when it applies a status and destroying it when the status ends,
+   * and that version leaks: an enemy that dies mid-burn never reaches the
+   * "status ended" branch, so its flame stays on the board for the rest of the
+   * run. Ember's own damage timer already has to check `alive` on every tick
+   * for the same reason. Asking the enemies what is true of them each frame
+   * cannot leak, cannot double up, and needs nothing from the ability at all.
+   *
+   * Ordered: a burning enemy that is also controlled shows the fire, because
+   * the fire is the one that is killing it.
+   */
+  private syncStatusMarkers(): void {
+    const g = PRESENTATION.heroFx
+    for (const e of this.enemies) {
+      const kind = !e.alive ? '' : e.burning ? 'burn' : e.controlled ? 'control' : ''
+      const held = this.statusMarkers.get(e)
+      if (kind === '') {
+        if (held) { held.art.destroy(); this.statusMarkers.delete(e) }
+        continue
+      }
+      if (held && held.kind !== kind) {
+        held.art.destroy()
+        this.statusMarkers.delete(e)
+      }
+      let entry = this.statusMarkers.get(e)
+      if (!entry) {
+        const key = kind === 'burn' ? ART.fx.burn : ART.fx.mindControl
+        entry = { kind, art: statusMarker(this, key, g.markerHeight, OVERLAY_DEPTH) }
+        this.statusMarkers.set(e, entry)
+      }
+      // Over its head rather than at its feet: `centreY` is mid-body, and the
+      // marker is anchored at ITS OWN base, so this sits it just clear of the
+      // top of the sprite.
+      entry.art.moveTo(e.x, e.y - (e.y - e.centreY) * 2 - g.markerGap)
+    }
+    // Anything that has left the board entirely -- destroyed, or the wave
+    // cleared -- is no longer in `this.enemies` to be asked about.
+    for (const [e, entry] of this.statusMarkers) {
+      if (!this.enemies.includes(e)) { entry.art.destroy(); this.statusMarkers.delete(e) }
+    }
+  }
+
+  /** Every marker off the board, for the same reason `clearHazards` exists. */
+  private clearStatusMarkers(): void {
+    for (const [, entry] of this.statusMarkers) entry.art.destroy()
+    this.statusMarkers.clear()
+  }
+
+  /**
    * Haymaker, unchanged: the biggest hit in the game, and it used to read as a
    * slightly larger spark. Four things carry an impact and it had one of them.
    *
@@ -3368,6 +3471,13 @@ export class GameScene extends Phaser.Scene {
     floatingDamage(this, target.x, target.centreY, k.damage, true, undefined,
       EFFECT_MS.haymakerNumberScale)
     this.cameras.main.shake(s.haymakerMs, s.haymakerIntensity)
+    // THE BURST IS AT HIM, NOT AT WHAT HE HIT. Haymaker is a punch he throws
+    // rather than something that lands over there, and the art is drawn as one
+    // -- so it is placed at the hero and sized to the reach the skill actually
+    // has. The spark stays ON THE TARGET underneath it: the burst says he
+    // swung, the spark says what he connected with, and at 130 damage both are
+    // worth saying.
+    burstAt(this, k.fx, this.hero.x, this.hero.y, k.range, OVERLAY_DEPTH)
     playEffect(this, ART.fx.spark, target.x, target.centreY, {
       size: EFFECT_MS.haymakerSparkSize, depth: target.y + 8,
       durationMs: EFFECT_MS.hitSparkMs + 140,
@@ -3404,6 +3514,13 @@ export class GameScene extends Phaser.Scene {
   private skillBurn(k: HeroSkillDef, target: Enemy): void {
     this.damageEnemy(target, k.damage, k.ignoresArmor, 0, false)
     floatingDamage(this, target.x, target.centreY, k.damage, false)
+    // The flame that says so, at the moment of the hit. The lasting half is
+    // `setBurning`: the enemy carries the state and `syncStatusMarkers` draws
+    // a marker over it for as long as it holds, so the fire follows it about
+    // and goes when it does. The damage below is untouched -- same timer, same
+    // tick, same numbers.
+    burstAt(this, k.fx, target.x, target.centreY, k.range * 0.5, OVERLAY_DEPTH)
+    target.setBurning(k.burnSeconds)
     let left = k.burnSeconds
     const tick = this.time.addEvent({
       delay: 1000,
@@ -3426,9 +3543,12 @@ export class GameScene extends Phaser.Scene {
   /** Shockwave: everything around him takes a hit and stops for a moment. */
   private skillBurst(k: HeroSkillDef): void {
     const s = PRESENTATION.shake
-    playEffect(this, ART.fx.blast, this.hero.x, this.hero.y, {
-      size: sizeForRadius(k.radius), depth: this.hero.y + 6, durationMs: EFFECT_MS.blastMs,
-    })
+    // The ground shatter, flattened onto the board and sized to the radius the
+    // stun really reaches. It replaces the generic explosion sheet: that one
+    // is what every tower and every Molotov draws, so the hero's own skill
+    // looked like a tower firing.
+    burstAt(this, k.fx, this.hero.x, this.hero.y, k.radius * 2, OVERLAY_DEPTH,
+      { flattenY: PRESENTATION.heroFx.seismicFlatten })
     this.cameras.main.shake(s.haymakerMs * 0.6, s.haymakerIntensity * 0.7)
     // Inferred rather than given as `withinRadius<Enemy>`: with node_modules
     // absent the Enemy class loses its Phaser base and satisfies neither form,
@@ -3457,7 +3577,7 @@ export class GameScene extends Phaser.Scene {
    * that nothing acknowledges is indistinguishable from a slow that missed.
    */
   private skillHowl(k: HeroSkillDef): void {
-    expandingRing(this, this.hero.x, this.hero.y, k.radius, this.hero.def.colour, OVERLAY_DEPTH)
+    burstAt(this, k.fx, this.hero.x, this.hero.y, k.radius * 2, OVERLAY_DEPTH)
     play(this, 'hero-hit', 0.4)
     for (const e of this.enemiesNear(this.hero.x, this.hero.y, k.radius)) {
       e.applySlow(k.slowFactor, k.slowSeconds, RULES.combat.slowDiminish)
@@ -3869,6 +3989,9 @@ export class GameScene extends Phaser.Scene {
     this.pulseTargetArea()
     // The scaled clock, with the rest of the simulation.
     this.tickHazards(dt)
+    // Every frame and outside the phase gate below, so a marker cannot be left
+    // hanging over the board by a wave ending underneath it.
+    this.syncStatusMarkers()
 
     if (this.status.phase === 'won' || this.status.phase === 'lost') return
 

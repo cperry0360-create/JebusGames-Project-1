@@ -4,8 +4,10 @@
     "title": "The Optimizer",
     "blurb": "Holds the line in person and shreds armour nearby.",
     "bodySprite": "hero-cory",
+    "poweredSprite": "hero-cory-power",
+    "poweredHeight": 95,
     "portraitSprite": "hero-cory",
-    "artFacing": "left",
+    "artFacing": "right",
     "colour": 7323487,
     "maxHealth": 360,
     "reviveSeconds": 25,
@@ -30,6 +32,7 @@
     "slot1": {
       "name": "Haymaker",
       "icon": "ability-cory-1",
+      "fx": "fx-haymaker",
       "effect": "punch",
       "cooldown": 12,
       "range": 120,
@@ -47,10 +50,10 @@
       "sound": "haymaker",
       "voice": "haymaker-voice"
     },
-    "_slot1": "Unchanged, down to the last number. Cory's Haymaker is what every other slot 1 is modelled on and it is the one the game was tuned against, so it keeps its own icon -- real art rather than the marked placeholder in ability_cory_1.png.",
     "slot2": {
       "name": "Spike Strip",
       "icon": "ability-cory-2",
+      "fx": "fx-spike-strip",
       "effect": "hazard",
       "cooldown": 12.5,
       "targeted": true,
@@ -86,12 +89,12 @@
       "transformPauseMs": 500,
       "invulnerableSeconds": 1.2
     },
-    "ultimateSprite": "hero-cory-ultimate",
+    "ultimateSprite": "hero-cory-power",
     "fighterSprites": [
       "unit-gnome-trowel",
       "unit-gnome-rake"
     ],
-    "poweredSprite": null
+    "_slot1": "Unchanged, down to the last number. Cory's Haymaker is what every other slot 1 is modelled on and it is the one the game was tuned against. It has real art in both places now: `icon` is the painted fist that replaced the marked placeholder, and `fx` is the impact burst drawn at him when it lands."
   },
   "courtland": {
     "name": "Courtland",
@@ -126,6 +129,7 @@
     "slot1": {
       "name": "Shockwave",
       "icon": "ability-courtland-1",
+      "fx": "fx-seismic",
       "effect": "burst",
       "cooldown": 8,
       "range": 0,
@@ -147,6 +151,7 @@
     "slot2": {
       "name": "Seismic",
       "icon": "ability-courtland-2",
+      "fx": "fx-seismic",
       "effect": "burst",
       "cooldown": 12.5,
       "targeted": true,
@@ -220,6 +225,7 @@
     "slot1": {
       "name": "Ember",
       "icon": "ability-han-1",
+      "fx": "fx-burn",
       "effect": "burn",
       "cooldown": 9,
       "range": 150,
@@ -241,6 +247,7 @@
     "slot2": {
       "name": "Fireball",
       "icon": "ability-han-2",
+      "fx": "fx-fireball-impact",
       "effect": "bomb",
       "cooldown": 12.5,
       "targeted": true,
@@ -314,6 +321,7 @@
     "slot1": {
       "name": "Star Rain",
       "icon": "ability-eli-1",
+      "fx": "fx-star-rain",
       "effect": "rain",
       "cooldown": 8,
       "range": 0,
@@ -335,6 +343,7 @@
     "slot2": {
       "name": "Ice Beam",
       "icon": "ability-eli-2",
+      "fx": "fx-ice-beam",
       "effect": "beam",
       "cooldown": 12.5,
       "targeted": true,
@@ -409,6 +418,7 @@
     "slot1": {
       "name": "Bark",
       "icon": "ability-bailey-1",
+      "fx": "fx-bark",
       "effect": "howl",
       "cooldown": 6,
       "range": 0,
@@ -430,6 +440,7 @@
     "slot2": {
       "name": "Zoomies",
       "icon": "ability-bailey-2",
+      "fx": "fx-zoomies",
       "effect": "dash",
       "cooldown": 12.5,
       "targeted": true,
@@ -470,8 +481,8 @@
       "unit-gnome-rake"
     ]
   },
-  "_artFacing": "WHICH WAY THE ART IS DRAWN, per hero, because the roster does not agree. Cory -- every frame of him, walk, attack and the SUV -- faces LEFT. The four heroes added after him all face RIGHT. The renderer used to carry `both hero sprites are drawn facing LEFT` as a blanket rule with the flip inverted to match, which was true of the only hero there was when it was written and made all four of the others walk backwards. It is a property of the art, so it lives with the hero. `colour` sits beside it for the same reason: it is the hero's own tint, used by every placeholder effect either of that hero's two buttons draws, and it is a fact about the character rather than about one ability.",
-  "_note": "THE FIVE HEROES. Cory is first and is the default: a save with no choice in it preselects him, so a player who never touches the row plays exactly the game that was tuned. `poweredSprite` is the form a hero wears once its health has been below half; CORY'S IS NULL ON PURPOSE -- he has no powered art, and `ultimateSprite` is already his DAD MODE look, so giving the powered form that art would spend Last Stand's only visual before Last Stand arrives. He transforms with the burst and the damage reduction and keeps his own picture.",
+  "_artFacing": "WHICH WAY THE ART IS DRAWN, per hero. ALL FIVE ARE 'right', AND THE FIELD IS STILL HERE. Cory used to be the exception -- every frame of him, walk, attack and the SUV, faced LEFT -- and the renderer once carried `both hero sprites are drawn facing LEFT` as a blanket rule with the flip inverted to match, which was true of the only hero there was when it was written and made the four added after him walk backwards. His new art faces right like everyone else's, so there is no per-hero correction left to apply and `mirroredFor` now resolves every hero the same way. The field stays because it is a property of the ART rather than of the roster: the enemies still disagree with each other (five of the twenty are drawn facing left) and they read the same function, so deleting it here would leave one rule with two shapes. `colour` sits beside it for the same reason -- it is a fact about the character.",
+  "_note": "THE FIVE HEROES. Cory is first and is the default: a save with no choice in it preselects him, so a player who never touches the row plays exactly the game that was tuned. `poweredSprite` is the form a hero wears once its health has been below half. CORY'S USED TO BE NULL and is not any more: he had no powered art, so he transformed with the burst and the damage reduction and kept his own picture, and `ultimateSprite` carried his DAD MODE look separately. He has the spiked Rivian now, and it is BOTH -- powered form and DAD MODE, exactly as it is for the other four, where `ultimateSprite` and `poweredSprite` have always been the same key. Last Stand still has a visual of its own: the shake, the flash, the half-second pause and the stat change are what say so, for all five.\n`poweredHeight` IS CORY'S ALONE and is the reason it lives here rather than in art.json's `displayHeight`. The Rivian is 1.51:1 -- at the roster's 120px it would be 181px wide, wider than the road it drives over and half again the widest hero. 95 makes it 144 across, which still reads as a vehicle among people. It is a decision about this hero, so it sits with this hero; a hero without the field takes the height its art entry asks for, which is what the other four do.",
   "_stats": "DAMAGE PER SECOND IS DELIBERATELY FLAT across the roster: 19 to 24 against Cory's 21.2, a spread of about 12%. Level 1 is tuned to 45 of 60 with Cory, and a hero twice as strong would throw that away the first time anyone picked him. What differs is everything else -- Eli holds four enemies where Bailey holds two, Han reaches 122 where Bailey reaches 70, Bailey moves at 142 where Eli moves at 90 -- so the choice is about how you want to play rather than about which hero is better.",
   "_slots": "TWO BUTTONS PER HERO, in the two hero slots the ability bar has always reserved. SLOT 1 is always available and is a short-range active on a low cooldown, one per hero, all modelled on Haymaker's shape: the same block of fields with a different `effect`, so a new hero is data rather than code. Every skill declares EVERY field, with zeros where it does not use one -- Bark's `damage: 0` is a statement rather than an omission. The five slot-1 effects: `punch` hits the nearest enemy hard and throws it back; `burst` damages and briefly stuns everything around the hero; `burn` hits one target and sets it alight for a few seconds; `double` lands two fast hits on the nearest enemy; `howl` damages nothing and slows everything nearby. SLOT 2 is the hero power. All five share one mechanic -- powered form only, one cooldown number, and the cooldown RESETS on transformation so a hero who has just changed can cast immediately -- and all five are placed by tapping the button and then tapping the map, inside `castRadius` of the hero, through the same targeting mode the Ima Dummy rally point uses and with the same four ways out of it. The five slot-2 effects: `hazard` leaves a strip on the lane that damages and slows everything crossing it for `durationSeconds`, ticking every `tickSeconds`, and is the only one that persists; `burst` is a single ring of damage at the point; `bomb` is one heavy hit in a small radius; `rain` is `hits` small strikes scattered over `radius`, `gapSeconds` apart; `dash` sends the hero along the line to the point, hurting and throwing back everything within `radius` of it. `colour` is the hero's tint for the placeholder effect art -- see systems/HeroFx.ts -- and every visual is sized to the power's real radius so the numbers can be judged before the art exists. BALANCE IS A FIRST PASS."
 }

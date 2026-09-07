@@ -287,79 +287,20 @@ json.dump({'files': efiles, 'render': erender}, open('/tmp/enemypatch.json', 'w'
 
 
 # ------------------------------------------------------------------- hero
-
-# Cory is drawn at the same scale as the enemies, so he reuses their factor
-# rather than getting one of his own. His Last Stand form is a vehicle and is
-# sized by WIDTH instead: it is meant to be wider than the road it drives over,
-# and matching its height to his would make it a toy.
-ULTIMATE_WIDTH_MULTIPLE = 2.2
-
-HERO_KEY = {
-    'hero_cory.webp':          ('hero-cory', 0.80, None),
-    'hero_cory_ultimate.webp': ('hero-cory-ultimate', 0.82, 'body'),
-}
-# The Politician is an entourage, not a figure: two aides trail him carrying
-# the briefcase. His band reaches high enough to catch their feet too, so the
-# group is anchored and shadowed as one unit and walks the lane together.
 #
-# As with the enemies, the second value is where the foot band starts. Cory
-# stands in a wide lunge, so the cut has to reach up past his trailing shoe.
+# CORY'S OWN SECTION IS GONE, and so are the files it measured.
 #
-# The third is a footprint rule. The vehicle needs one, and not the one you
-# would guess: sized to its wheelbase the shadow is invisible, because unlike
-# a pair of legs the body overhangs the contact patches and covers it whole.
-# A vehicle's shadow is cast by its body anyway, so 'body' spans the full
-# artwork and the shadow reads at the front and rear where it should.
-
-
-def footprint(w, h, px, band, rule):
-    """Where the art stands, and how wide a shadow it casts.
-
-    They are the same span for a person and different for a vehicle: it stands
-    on its wheels but shadows under its whole body.
-    """
-    low = ground_silhouette(w, h, px)
-    deepest = foot_groups(low, int(h * 0.94))
-    groups = foot_groups(low, int(h * band))
-    lo = min(g[0] for g in groups)
-    hi = max(g[1] for g in groups)
-    if rule == 'body':
-        # The ram hangs below the axle line ahead of the front wheel, so the
-        # stance runs from the front wheel to the rear one.
-        lo = min(g[0] for g in deepest)
-    stand = (lo, hi)
-    shadow = (0, w - 1) if rule == 'body' else stand
-    return stand, shadow, groups
-
-
-print('\n\nhero')
-hfiles, hrender = {}, {}
-bw, bh, bpx = img.read('public/assets/hero/hero_cory.webp')
-base_on_screen_w = bw * escale
-print(f'base hero: {bw}x{bh} -> {round(bw * escale, 1)}x{round(bh * escale, 1)} at the enemy scale {escale:.4f}')
-
-for name in ('hero_cory.webp', 'hero_cory_ultimate.webp'):
-    key, band, rule = HERO_KEY[name]
-    path = f'public/assets/hero/{name}'
-    w, h, px = img.read(path)
-    (lo, hi), (slo, shi), groups = footprint(w, h, px, band, rule)
-    scale = escale if name == 'hero_cory.webp' else (base_on_screen_w * ULTIMATE_WIDTH_MULTIPLE) / w
-    bot = max(ground_silhouette(w, h, px))
-
-    hfiles[key] = f'hero/{name}'
-    hrender[key] = {
-        'anchorX': round(((lo + hi) / 2) / w, 4),
-        'anchorY': round((bot + 1) / h, 4),
-        'displayHeight': round(h * scale, 1),
-        'shadowWidth': round((shi - slo + 1) * scale, 1),
-        'contentWidth': w,
-        'contentHeight': h,
-    }
-    print(f'{name:24s} {w}x{h} cut y{int(h * band)} groups {groups}')
-    print(f'{"":24s} -> {key}: stands x{lo}-{hi}, shadow x{slo}-{shi}, scale {scale:.4f}, '
-          f'on screen {round(w * scale, 1)}x{round(h * scale, 1)}, {hrender[key]}')
-json.dump({'files': hfiles, 'render': hrender}, open('/tmp/heropatch.json', 'w'), indent=2)
-
+# It read `hero/hero_cory.webp` and `hero/hero_cory_ultimate.webp` and gave
+# them a scale of their own -- the man at the enemies' factor, the SUV sized to
+# 2.2x his width. Both files were deleted when his new art landed: he is a
+# single picture in `heroes/` now, like the other four, and the walk and attack
+# sheets went with them. A section that reads deleted files does not fail
+# quietly, it raises and takes every section below it down with it, which is
+# why this is a deletion rather than a skip.
+#
+# The whole roster is measured together in the "hero roster" section at the
+# bottom of this file. `escale` is still computed above and is still used by
+# the gnomes, so nothing else moved.
 
 # -------------------------------------------------------------- HUD plates
 
@@ -706,3 +647,247 @@ for name, (key, on_screen, band) in DEMON_ON_SCREEN.items():
     print(f'{"":26s}    rule 7 wants >= {want:.0f}px of source; has {h}px '
           f'({h / want:.1f}x)')
 json.dump({'files': dfiles, 'render': drender}, open('/tmp/demonpatch.json', 'w'), indent=2)
+
+
+# ============================================================= the hero update
+#
+# Everything below measures art that arrived as one batch: Cory's two new
+# pictures, the ten ability icons and the ten power effects. It is written as
+# one generic pass rather than as three more hand-tuned tables, because the
+# thing that goes wrong at this scale is not a subtle anchor -- it is somebody
+# copying a canvas size into a field that wants an ink size, twenty-two times.
+
+def ink_box(w, h, px):
+    """The artwork's own bounds inside its canvas: (x0, y0, x1, y1), or None.
+
+    THIS IS WHAT contentWidth/contentHeight MEAN, and the distinction is the
+    whole reason this helper exists. `fitInBox` and `fitInRect` DIVIDE by those
+    two numbers, so an entry carrying the canvas instead of the ink draws its
+    art small by exactly the ratio of the transparent margin -- silently, at
+    every size, forever. hud-peanut shipped with 512x512 against a 498x400
+    painting and rendered 3% small with a 1.25:1 shape fitted as a square.
+    """
+    xs = [x for x in range(w) if any(px[(y * w + x) * 4 + 3] > ALPHA for y in range(h))]
+    if not xs:
+        return None
+    ys = [y for y in range(h) if any(px[(y * w + x) * 4 + 3] > ALPHA for x in range(w))]
+    return xs[0], ys[0], xs[-1], ys[-1]
+
+
+def measured(path, band=0.90, feet=False):
+    """Everything art.json can be told about one file, from its pixels."""
+    w, h, px = img.read(path)
+    box = ink_box(w, h, px)
+    x0, y0, x1, y1 = box
+    out = {
+        'canvas': (w, h),
+        'ink': (x0, y0, x1, y1),
+        'contentWidth': x1 - x0 + 1,
+        'contentHeight': y1 - y0 + 1,
+    }
+    if feet:
+        low = ground_silhouette(w, h, px)
+        groups = foot_groups(low, int(h * band))
+        lo = min(g[0] for g in groups)
+        hi = max(g[1] for g in groups)
+        out['anchorX'] = round(((lo + hi) / 2) / w, 4)
+        out['anchorY'] = round((max(low) + 1) / h, 4)
+        out['stance'] = (lo, hi)
+        out['footWidth'] = hi - lo + 1
+    return out
+
+
+# ------------------------------------------------------------ the five heroes
+
+# THE WHOLE ROSTER, in one table, because Cory has stopped being the exception.
+#
+# He arrived with a walk sheet and an attack sheet and a hand-tuned section of
+# his own above; the other four were single pictures. He is a single picture
+# now too, so all five are measured the same way and the roster is a list
+# rather than a special case plus a loop.
+#
+# `displayHeight` is the size the game draws them at and is a DESIGN number,
+# not a measurement -- it is in art.json already and survives a re-export
+# untouched (CLAUDE.md rule 7). It is repeated here only so the rule-7 check
+# below has something to check against.
+HERO_ART = {
+    # key: (path, on-screen height, foot band, footprint rule)
+    'hero-cory':            ('heroes/hero_cory_base.webp',       78.0, 0.85, 'feet'),
+    'hero-cory-power':      ('heroes/hero_cory_power.webp',      95.0, 0.94, 'body'),
+    'hero-courtland':       ('heroes/hero_courtland_base.webp',  78.0, 0.85, 'feet'),
+    'hero-courtland-power': ('heroes/hero_courtland_power.webp', 78.0, 0.85, 'feet'),
+    'hero-han':             ('heroes/hero_han_base.webp',        78.0, 0.85, 'feet'),
+    'hero-han-power':       ('heroes/hero_han_power.webp',       78.0, 0.85, 'feet'),
+    'hero-eli':             ('heroes/hero_eli_base.webp',        78.0, 0.85, 'feet'),
+    'hero-eli-power':       ('heroes/hero_eli_power.webp',       78.0, 0.85, 'feet'),
+    'hero-bailey':          ('heroes/hero_bailey_base.webp',     78.0, 0.85, 'feet'),
+    'hero-bailey-power':    ('heroes/hero_bailey_power.webp',    78.0, 0.85, 'feet'),
+}
+# CORY'S BAND IS 0.85 AND THAT IS NOT A ROUNDING CHOICE. He stands in a wide
+# lunge with his trailing shoe raised: at 0.90 the cut is below that shoe
+# entirely, only the leading one is found, and the anchor lands at 0.848 -- 35%
+# of his width off centre, which would walk him with the lane under his elbow.
+# At 0.85 both shoes are found (x69-170 and x361-489) and the anchor is 0.557.
+# The lesson is the one the enemy table already carries: the band is the
+# deepest cut that still catches BOTH feet, and it is read off the silhouette
+# rather than guessed.
+#
+# THE RIVIAN IS 'body', the same rule DAD MODE's SUV uses and for the same
+# reason. It is drawn in 3/4 receding, so only the near front wheel reaches the
+# ground line at all -- the rear wheel bottoms 100px higher up the canvas -- and
+# anchoring on the contact patch would hang the whole vehicle off its front
+# axle. A vehicle's shadow is cast by its body, so the body is what it is
+# anchored and shadowed by: anchorX 0.5, shadow the full width. The retired
+# hero-cory-ultimate entry used 0.5384 and a full-width shadow, which is the
+# same answer arrived at the same way.
+
+# Rule 7, in one place: source height must cover the on-screen height at full
+# zoom on the densest screen the game supports.
+MAX_ZOOM, MAX_DPR = 2.37, 3
+
+print('\n\nhero roster')
+_shipped = json.load(open('src/data/art.json'))['render']
+rfiles, rrender = {}, {}
+for key, (rel, on_screen, band, rule) in HERO_ART.items():
+    path = f'public/assets/{rel}'
+    if not os.path.exists(path):
+        print(f'  {key:22s} {rel} is not on disk; skipped')
+        continue
+    w, h, px = img.read(path)
+    m = measured(path, band=band, feet=True)
+    scale = on_screen / h
+    if rule == 'body':
+        anchor_x = round(((m['ink'][0] + m['ink'][2]) / 2) / w, 4)
+        shadow_px = m['ink'][2] - m['ink'][0] + 1
+    else:
+        anchor_x = m['anchorX']
+        shadow_px = m['footWidth']
+    rfiles[key] = rel
+    rrender[key] = {
+        'anchorX': anchor_x,
+        'anchorY': m['anchorY'],
+        'displayHeight': on_screen,
+        'shadowWidth': round(shadow_px * scale, 1),
+        'contentWidth': m['contentWidth'],
+        'contentHeight': m['contentHeight'],
+    }
+    want = on_screen * MAX_ZOOM * MAX_DPR
+    x0, y0, x1, y1 = m['ink']
+    print(f'  {key:22s} canvas {w}x{h}  ink x{x0}-{x1} y{y0}-{y1}'
+          f'  {rule} x{m["stance"][0]}-{m["stance"][1]}')
+    print(f'  {"":22s} -> on screen {round(w * scale, 1)}x{on_screen}, {rrender[key]}')
+    print(f'  {"":22s}    rule 7 wants >= {want:.0f}px of source; has {h}px ({h / want:.1f}x)')
+    # WHAT SHIPPED, BESIDE WHAT THE PIXELS SAY -- reported, never applied.
+    #
+    # `displayHeight` and `shadowWidth` are on-screen figures that were tuned
+    # by looking at the game, and CLAUDE.md rule 7 says to keep them; only the
+    # content box is re-derived from a re-export. `anchorX` is measured here
+    # and the four heroes added before this batch disagree with their own
+    # silhouettes by a lot, which is worth knowing and is NOT worth changing on
+    # the strength of a script in a batch about somebody else's art.
+    old = _shipped.get(key)
+    if old:
+        diffs = [f'{f}: {old.get(f)} -> {rrender[key][f]}'
+                 for f in ('anchorX', 'contentWidth', 'contentHeight')
+                 if old.get(f) is not None and old.get(f) != rrender[key][f]]
+        if diffs:
+            print(f'  {"":22s}    art.json currently says  ' + ';  '.join(diffs))
+
+
+# ------------------------------------------------- ability icons and effects
+#
+# Both families are drawn CENTRED at a point rather than standing on the
+# ground, so neither gets a foot band: the anchor is 0.5, 0.5 and the only
+# numbers that matter are the ink extents `fitInBox` divides by.
+#
+# The effects additionally need their ASPECT, because two of them -- the ice
+# beam and the dash trail -- are drawn stretched along a line whose length the
+# power decides, and the code that stretches them has to know how long the
+# picture is against how tall.
+
+print('\n\nability icons')
+afiles, arender = {}, {}
+for rel in sorted(os.path.basename(p) for p in glob.glob('public/assets/abilities/ability_*.webp')):
+    hero_slot = rel[len('ability_'):-len('.webp')]
+    if '_' not in hero_slot:
+        continue                     # ability_molotov and friends: not hero icons
+    key = 'ability-' + hero_slot.replace('_', '-')
+    m = measured(f'public/assets/abilities/{rel}')
+    w, h = m['canvas']
+    x0, y0, x1, y1 = m['ink']
+    afiles[key] = f'abilities/{rel}'
+    arender[key] = {
+        'anchorX': 0.5, 'anchorY': 0.5,
+        'contentWidth': m['contentWidth'], 'contentHeight': m['contentHeight'],
+    }
+    print(f'  {key:22s} canvas {w}x{h}  ink x{x0}-{x1} y{y0}-{y1}'
+          f' -> {m["contentWidth"]}x{m["contentHeight"]}'
+          f'  ({m["contentWidth"] / m["contentHeight"]:.3f}:1)')
+json.dump({'files': afiles, 'render': arender}, open('/tmp/abilitypatch.json', 'w'), indent=2)
+
+print('\n\npower effects')
+xfiles, xrender = {}, {}
+for rel in sorted(os.path.basename(p) for p in glob.glob('public/assets/effects/fx_*.webp')):
+    key = 'fx-' + rel[len('fx_'):-len('.webp')].replace('_', '-')
+    m = measured(f'public/assets/effects/{rel}')
+    w, h = m['canvas']
+    x0, y0, x1, y1 = m['ink']
+    xfiles[key] = f'effects/{rel}'
+    xrender[key] = {
+        'anchorX': 0.5, 'anchorY': 0.5,
+        'contentWidth': m['contentWidth'], 'contentHeight': m['contentHeight'],
+    }
+    print(f'  {key:22s} canvas {w}x{h}  ink x{x0}-{x1} y{y0}-{y1}'
+          f' -> {m["contentWidth"]}x{m["contentHeight"]}'
+          f'  ({m["contentWidth"] / m["contentHeight"]:.3f}:1)')
+json.dump({'files': xfiles, 'render': xrender}, open('/tmp/effectpatch.json', 'w'), indent=2)
+
+
+# ------------------------------------------------- the canvas-vs-ink audit
+#
+# EVERY entry in art.json that records a content box, checked against the
+# pixels of the file it describes.
+#
+# This is the generalisation of the hud-peanut bug. That entry carried its
+# 512x512 canvas where its 498x400 ink belonged, and the only reason anybody
+# found out is that somebody looked at the peanut and thought it small. There
+# was no way to ask the question of the other hundred entries at once. Now
+# there is, and it runs every time this script does.
+#
+# A SHEET IS EXEMPT. `render.sheet` entries are strips of frames: their content
+# box describes one frame's grid cell, not the ink inside it, and measuring the
+# ink of a six-frame strip would report the union of all six.
+print('\n\ncontent box audit (recorded vs measured ink)')
+manifest = json.load(open('src/data/art.json'))
+bad, checked, absent = [], 0, []
+for key, cfg in sorted(manifest['render'].items()):
+    if 'contentWidth' not in cfg and 'contentHeight' not in cfg:
+        continue
+    if 'sheet' in cfg:
+        continue
+    rel = manifest['files'].get(key)
+    path = f'public/{manifest["assetRoot"]}{rel}' if rel else None
+    if not path or not os.path.exists(path):
+        absent.append(key)
+        continue
+    w, h, px = img.read(path)
+    box = ink_box(w, h, px)
+    if box is None:
+        continue
+    checked += 1
+    iw, ih = box[2] - box[0] + 1, box[3] - box[1] + 1
+    rw, rh = cfg.get('contentWidth', w), cfg.get('contentHeight', h)
+    # A pixel or two either way is the alpha threshold, not an error.
+    if abs(rw - iw) <= 2 and abs(rh - ih) <= 2:
+        continue
+    note = ''
+    if (rw, rh) == (w, h):
+        note = '  <-- THE CANVAS, not the ink'
+    bad.append((key, rw, rh, iw, ih, w, h, note))
+for key, rw, rh, iw, ih, w, h, note in bad:
+    print(f'  {key:26s} says {rw}x{rh}, ink is {iw}x{ih} on a {w}x{h} canvas'
+          f'  ({100 * (1 - min(iw / rw, ih / rh)):.1f}% small){note}')
+print(f'  {checked} entries checked, {len(bad)} disagree with their own pixels'
+      + (f', {len(absent)} have no file' if absent else ''))
+if absent:
+    print('  no file: ' + ', '.join(absent))

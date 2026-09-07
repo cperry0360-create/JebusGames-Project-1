@@ -249,10 +249,18 @@ export function renderFor(key: string): SpriteRender {
 export function applyGroundRender(
   sprite: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image,
   key: string,
+  height?: number,
 ): number {
   const cfg = renderFor(key)
   sprite.setOrigin(0.5, cfg.anchorY)
-  if (cfg.displayHeight !== undefined) sprite.setScale(cfg.displayHeight / sprite.height)
+  // `height` OVERRIDES THE MANIFEST, for the one case where the size is a fact
+  // about the character rather than about the picture: Cory's powered Rivian
+  // is 1.51:1, so the height the roster draws people at would make it wider
+  // than the road. That number lives beside the hero in heroes.json and is
+  // passed in here; art.json carries no `displayHeight` for that key at all,
+  // so there is one copy of it rather than two that can disagree.
+  const h = height ?? cfg.displayHeight
+  if (h !== undefined) sprite.setScale(h / sprite.height)
   const offset = (0.5 - cfg.anchorX) * sprite.displayWidth
   sprite.x = offset
   return offset

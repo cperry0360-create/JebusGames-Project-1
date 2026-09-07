@@ -446,19 +446,29 @@
     "counterAlpha": 0.65
   },
   "heroFx": {
-    "_note": "PLACEHOLDER effect art for the five hero powers, in numbers rather than in pictures. None of the five has art yet and waiting for it would mean shipping abilities nobody can judge -- the question a first balance pass has to answer is whether a radius is right, and that is a question about a shape on the board. Every shape is tinted to the hero (heroes.json `colour`) and sized to the power's real radius, so what the player sees is what the rule uses. See systems/HeroFx.ts; when the art lands, that file and this block go together.",
-    "ringMs": 480,
-    "ringWidth": 3,
-    "fillAlpha": 0.34,
+    "_note": "HOW THE TEN HERO POWERS DRAW THEMSELVES. This block was the placeholder art itself -- ring widths, fill alphas and tooth counts for five procedural shapes -- and it is now the numbers that FIT REAL PICTURES to the powers. The rule that survived the swap is the one that mattered: nothing invents a size, every effect is scaled to the radius, reach or corridor the power actually uses (heroes.json), so tuning a radius moves its picture with it. See systems/HeroFx.ts.",
     "sweepMs": 420,
-    "rainRingMs": 700,
-    "strikeMs": 260,
     "strikeLength": 26,
-    "strikeWidth": 3,
-    "hazardThickness": 0.32,
-    "hazardTeeth": 9,
-    "hazardToothHeight": 6,
-    "hazardPulseMs": 1100
+    "hazardPulseMs": 1100,
+    "pointMs": 480,
+    "growFrom": 0.72,
+    "_growFrom": "An effect ARRIVES at its size rather than appearing at it, which is the one idea kept from the expanding ring it replaces: a picture that grows into place is what makes the extent legible in the half second it is up.",
+    "seismicFlatten": 0.62,
+    "_seismicFlatten": "fx_seismic is drawn HEAD-ON and the board is seen from three quarters above, so at 1:1 it reads as a wall of rock standing up out of the map rather than as a crater lying flat on it. 0.62 is the same foreshortening the painted map uses on its own ground detail. It is a per-effect number because it is a fact about how that one picture was drawn.",
+    "stripFlatten": 0.7,
+    "stripAlpha": 0.62,
+    "stripPulse": 0.38,
+    "beamHeight": 54,
+    "_beamHeight": "THE BEAM'S THICKNESS IS NOT ITS POWER'S RADIUS, and this is the one effect where the two come apart. Ice Beam's `radius` is the 96px area that freezes at the far end; the line drawn from Eli to that point is scenery and touches nothing it crosses, which a test enforces. Drawing the picture 192px thick would say the whole corridor was caught. 54 reads as a beam. The AREA still gets a ring at its true radius on top -- see `areaRing` -- because a fixed-thickness picture cannot say how big a circle is, and that circle is what the power was tuned against.",
+    "areaRingWidth": 3,
+    "areaRingAlpha": 0.8,
+    "markerHeight": 24,
+    "markerGap": 8,
+    "markerDepthBias": 900,
+    "_markerHeight": "Status markers -- the flame over a burning enemy, and the marker over a controlled one -- in world pixels, and how far above the enemy's head they float. Small: a marker the size of the enemy is a second enemy.",
+    "strikeArtWidth": 2.4,
+    "_strikeArtWidth": "Each of Star Rain's fourteen strikes is drawn `strikeLength` x this wide, so the picture covers the 26px disc that strike actually damages with enough overhang to read as a falling star rather than as a dot. The volley is fourteen small pictures, not one big one, because THE SCATTER IS THE POWER: one image over the whole radius would say a blast landed.",
+    "_retired": "GONE WITH THE PLACEHOLDER SHAPES: ringMs, ringWidth, fillAlpha, rainRingMs, strikeMs, strikeWidth, hazardThickness, hazardTeeth and hazardToothHeight. They described a stroked circle, a two-line stab and a toothed rectangle, and there is real art in all three places now. `strikeLength` STAYED and is not one of them -- it is the 26px radius a single Star Rain strike actually damages, a gameplay number that the picture is now sized against rather than a property of the picture."
   },
   "targeting": {
     "_note": "What the board looks like while it is waiting for a tap. On a touch device there is no hover, so a targeting mode that only draws under the pointer draws NOTHING until the player has already committed — which is how a mode with no visible state came to be reported as a soft-lock. These numbers are the standing affordance: a breathing wash over the area a tap is legal in, drawn from the moment the mode is entered.",
@@ -615,35 +625,95 @@
   "worldMap": {
     "_note": "THE ROAD ON THE LEVEL-SELECT SCREEN, and every number that shapes it. The screen used to be four full-size cards scattered across the design box at hand-authored positions: it had run out of room at four levels, the cards were different apparent sizes because the pictures were, and the path drawn between them in level order ran the width of the screen backwards. It is one winding road of identical nodes now, laid out by level order, long enough to carry every planned level -- so it is wider than the design box and scrolls sideways.",
     "_band": "The vertical space the road may use, in design units: under the title and above the scrollbar. The wave is centred so that the DEEPEST node's name still lands inside it, which is what puts the road in the middle of the screen instead of in the top half with the bottom empty.",
-    "band": { "top": 100, "bottom": 596 },
+    "band": {
+      "top": 100,
+      "bottom": 596
+    },
     "_node": "IDENTICAL FOR EVERY LEVEL, built and unbuilt alike -- which is the fix for four cards that read as four different sizes. 160x107 is 3:2, the aspect the card art is cropped at, so no picture is stretched to fit. `framePad` is the painted border, and it is the border rather than the picture that has to clear the next node.",
-    "node": { "width": 160, "height": 107, "framePad": 8, "radius": 10 },
+    "node": {
+      "width": 160,
+      "height": 107,
+      "framePad": 8,
+      "radius": 10
+    },
     "_pitch": "Distance between node centres along the road, and the side margin at each end of it. 210 against a 168-wide framed node leaves 42 units of road showing between neighbours, and holds two names apart at the narrowest viewport the game runs at.",
     "pitch": 210,
     "margin": 80,
     "_sway": "The road's wave: a node's centre is `centre + amplitude * sin(index * step)`. The step is deliberately not a neat fraction of a turn, so the road does not repeat itself over twenty nodes and no two neighbours land at the same height. The amplitude is as large as the band allows once the longest name and its unlock line are reserved for.",
-    "sway": { "amplitude": 105, "step": 0.75 },
+    "sway": {
+      "amplitude": 105,
+      "step": 0.75
+    },
     "_label": "The name under a node, wrapped to the node's width. `reserve` is the room kept for it when the road is centred, and it is MEASURED off a rendered frame rather than counted in lines: SPORTS COMPLEX AT DUSK wraps to three lines and its unlock line to two, which comes to 147 design units, and that is the worst case any node can be. A short reserve does not clip the text -- it pushes the deepest node down until its last line lands under the scrollbar, which is exactly what a first pass at 118 did. 22 is the floor for a screen that is fitted from the design box down onto a phone; below it this text is seven real pixels.",
-    "label": { "gap": 10, "size": 22, "reserve": 152 },
+    "label": {
+      "gap": 10,
+      "size": 22,
+      "reserve": 152
+    },
     "_badge": "The level number, top-left of every node. It is the one thing on the screen that says where in the campaign a node sits, which is the whole point of a road.",
-    "badge": { "radius": 21, "size": 24, "inset": 6 },
+    "badge": {
+      "radius": 21,
+      "size": 24,
+      "inset": 6
+    },
     "_path": "The road: a bed, a lighter surface over it, and evenly spaced steps along the middle, drawn as ONE polyline through every node in level order. It passes BEHIND the nodes, which is what makes it read as a single road rather than as a set of links between cards.",
-    "path": { "bedWidth": 17, "bedColour": 2759950, "bedAlpha": 0.55, "surfaceWidth": 9, "surfaceColour": 14271642, "surfaceAlpha": 0.22, "dotSpacing": 26, "dotRadius": 4.5, "dotColour": 15786168, "dotAlpha": 0.9 },
+    "path": {
+      "bedWidth": 17,
+      "bedColour": 2759950,
+      "bedAlpha": 0.55,
+      "surfaceWidth": 9,
+      "surfaceColour": 14271642,
+      "surfaceAlpha": 0.22,
+      "dotSpacing": 26,
+      "dotRadius": 4.5,
+      "dotColour": 15786168,
+      "dotAlpha": 0.9
+    },
     "_scrollbar": "SHOWN ONLY WHEN THE ROAD IS LONGER THAN THE SCREEN, and horizontal, because that is the axis the road runs on. Drawn rather than made a control: the map itself is dragged, so the bar reports where you are and there is no thin target to miss.",
-    "scrollbar": { "y": 610, "height": 12, "width": 620, "minThumb": 64, "trackColour": 2759950, "trackAlpha": 0.55, "trackEdge": 7034682, "thumbColour": 14268530, "thumbEdge": 5916208 },
+    "scrollbar": {
+      "y": 610,
+      "height": 12,
+      "width": 620,
+      "minThumb": 64,
+      "trackColour": 2759950,
+      "trackAlpha": 0.55,
+      "trackEdge": 7034682,
+      "thumbColour": 14268530,
+      "thumbEdge": 5916208
+    },
     "_states": "THREE, AND THEY HAVE TO BE TELLABLE APART AT A GLANCE. cleared: full colour, a green frame, a tick. open: full colour, an amber frame and a ring, nothing over the picture -- this is the one to play. locked: the picture darkened to a cool grey under a padlock, or a bare plate where the level is not built yet.",
     "states": {
-      "cleared": { "edge": 7323507, "label": "#8fd07a" },
-      "open": { "edge": 15771696, "label": "#f2d06b" },
-      "locked": { "edge": 5916208, "label": "#a4b0bd", "tint": 9079434, "alpha": 0.5 },
+      "cleared": {
+        "edge": 7323507,
+        "label": "#8fd07a"
+      },
+      "open": {
+        "edge": 15771696,
+        "label": "#f2d06b"
+      },
+      "locked": {
+        "edge": 5916208,
+        "label": "#a4b0bd",
+        "tint": 9079434,
+        "alpha": 0.5
+      },
       "hover": 16777215
     },
     "_plate": "The node's own backing, which every node has and only an unbuilt one shows: a level that is not built yet has no picture to crop a card from, so its slot is the plate, the number on its badge, a padlock and `unbuiltLabel`. The label is there because a padlock alone reads as YOU HAVE NOT EARNED THIS when the truth is THIS DOES NOT EXIST YET, and a player who reads the first goes looking for what they missed. Sixteen invented level names would be inventing the campaign, so it carries none.",
-    "plate": { "fill": 2759950, "unbuiltFill": 1906186, "unbuiltLabel": "COMING SOON" },
+    "plate": {
+      "fill": 2759950,
+      "unbuiltFill": 1906186,
+      "unbuiltLabel": "COMING SOON"
+    },
     "_lockHeight": "The padlock over a locked node, as a fraction of the node's height.",
     "lockHeight": 0.42,
     "_ring": "The pulse around the one level that is open and unplayed. It is the only thing on the screen that moves, so it cannot be missed and nothing else competes with it.",
-    "ring": { "width": 4, "spread": 10, "alpha": 0.55, "periodMs": 1400 }
+    "ring": {
+      "width": 4,
+      "spread": 10,
+      "alpha": 0.55,
+      "periodMs": 1400
+    }
   },
   "safeArea": {
     "housingAtAngle90": "left",

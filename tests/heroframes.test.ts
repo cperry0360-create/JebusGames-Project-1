@@ -20,13 +20,24 @@ const run = (fr: HeroFrames, seconds: number, walking: boolean, step = 1 / 60) =
   return { seen, impacts }
 }
 
-test('the clips are four frames each and the impact is frame 3', () => {
+test('the swing clock outlived the art it was drawn for', () => {
+  // THE FRAMES ARE GONE AND THE CLOCK IS NOT, and the distinction is the whole
+  // reason this file still exists. Cory's walk and attack sheets were deleted
+  // when his new art landed -- all five heroes are single pictures now -- so
+  // nothing swaps a texture on frame 3 any more.
+  //
+  // What frame 3 still decides is WHEN THE DAMAGE LANDS. `HeroFrames` runs the
+  // same clock, `applyPose` still fires `pendingHit` on the impact tick, and
+  // 250ms after a swing starts is a tuned number that a player feels. Deleting
+  // the clock with the pictures would have moved every hero's damage to the
+  // instant of the button press.
   assert.equal(DEF.walkFrames, 4)
   assert.equal(DEF.attackFrames, 4)
   assert.equal(DEF.impactFrame, 3, 'the swing lands on the wrong frame')
   assert.equal(ART.hero.attackImpactFrame, 3, 'the manifest and the clock disagree')
-  assert.equal(ART.hero.walk.length, 4)
-  assert.equal(ART.hero.attack.length, 4)
+  // And the manifest no longer carries frame lists for a hero that has none.
+  assert.equal(ART.hero.walk, undefined, 'the deleted walk sheet is still in the manifest')
+  assert.equal(ART.hero.attack, undefined, 'the deleted attack sheet is still in the manifest')
 })
 
 test('walk loops while moving and stops dead when it stops', () => {
@@ -115,11 +126,16 @@ test('the fake motion is gone from the hero that has real frames', () => {
   assert.equal(P.heroMotion, undefined, 'the bob and bounce numbers are still in the data')
 
   const bob = /private bob\([\s\S]*?\n  \}/.exec(hero)
-  assert.ok(bob, 'the sheetless heroes have nothing stopping them sliding')
-  assert.match(bob[0], /if \(walkFramesFor\(this\.heroId\)\)/,
-    'the bob is not conditioned on the walk sheet, so an animated hero can be bobbed too')
+  assert.ok(bob, 'the heroes have nothing stopping them sliding')
+  // NO SHEET EXEMPTION LEFT. It was conditioned on the walk sheet's presence
+  // rather than on a flag, so that drawing four more sheets would turn the bob
+  // off by itself; it went the other way instead, and the one sheet was
+  // deleted. A branch that can only answer one way is a branch that misleads
+  // the next reader about what the roster contains.
+  assert.doesNotMatch(bob[0], /walkFramesFor/,
+    'the bob still asks about a walk sheet no hero has')
   assert.match(bob[0], /this\.body_\.y = this\.restingBodyY/,
-    'an animated hero is not put back on its resting line')
+    'a hero standing still is not put back on its resting line')
 
   // The frame swap sets a texture and an anchor. It must not set y or
   // rotation: the bob owns the vertical, and two writers is how the double
@@ -130,35 +146,48 @@ test('the fake motion is gone from the hero that has real frames', () => {
   assert.ok(!/setRotation/.test(fn[0]), 'the frame swap rotates the sprite')
 })
 
-test('each clip carries its own anchor, because they do not share a canvas', () => {
-  // Measured off the files: walk is 557x704 and attack 787x720, their feet sit
-  // at different fractions of their canvases, and their figures are 677 and
-  // 690 source px tall. One shared anchor would step the hero sideways on
-  // every swing, which is the thing this was asked to avoid.
-  const walk = ART.hero.walk.map((k: string) => ART.render[k])
-  const attack = ART.hero.attack.map((k: string) => ART.render[k])
-  for (const set of [walk, attack]) {
-    assert.ok(set.every((r: unknown) => r), 'a frame has no render entry, so it has no anchor')
-    const xs = new Set(set.map((r: { anchorX: number }) => r.anchorX))
-    const ys = new Set(set.map((r: { anchorY: number }) => r.anchorY))
-    assert.equal(xs.size, 1, 'frames within one clip disagree on the anchor')
-    assert.equal(ys.size, 1, 'frames within one clip disagree on the anchor')
-  }
-  assert.notEqual(walk[0].anchorX, attack[0].anchorX,
-    'both clips share an anchorX; they are different canvases and cannot')
+test('a pose change re-reads the anchor AND the height', () => {
+  // WHAT THIS TEST USED TO BE. Cory's two clips did not share a canvas -- walk
+  // was 557x704 and attack 787x720, with their feet at different fractions of
+  // each -- so every frame carried its own anchor and this checked that the
+  // anchor was re-read on each swap, or he stepped sideways when he swung.
+  //
+  // Both clips are deleted. What replaces the question is the same question
+  // one level up: a hero still changes texture, on a POSE change rather than a
+  // frame change and on transforming, and the two forms still do not share a
+  // canvas or a foot fraction. So the swap still has to re-anchor -- and it
+  // now has to re-SIZE as well, which is the new way to get this wrong.
+  //
+  // Cory's powered Rivian is sized from `heroes.json cory.poweredHeight`,
+  // because how big that vehicle is drawn is a decision about the hero; its
+  // art entry deliberately carries no `displayHeight`. `applyGroundRender`
+  // called directly takes the height from the manifest and would therefore
+  // apply NO scale at all, drawing the Rivian at its 700px source height.
+  // Everything that changes his texture goes through `wearSprite`, which is
+  // the one place that asks the roster.
+  const hero = src('entities/Hero.ts')
+  const wear = /private wearSprite\([\s\S]*?\n  \}/.exec(hero)
+  assert.ok(wear, 'there is no single place that changes the hero\'s picture')
+  assert.match(wear[0], /applyGroundRender\(this\.body_, key, heroHeight\(this\.heroId/,
+    'the sprite swap does not ask the roster how tall this hero should be')
 
-  // Same rendered figure height, so he does not resize between clips. Figure
-  // heights are 677 and 690 source px on 704 and 720 canvases.
-  const onScreen = (r: { displayHeight: number }, canvas: number, figure: number) =>
-    (r.displayHeight / canvas) * figure
-  const w = onScreen(walk[0], 704, 677)
-  const a = onScreen(attack[0], 720, 690)
-  assert.ok(Math.abs(w - a) < 1.5, `walk renders ${w.toFixed(1)}px and attack ${a.toFixed(1)}px`)
-  assert.ok(Math.abs(w - 75.8) < 1.5, `the clips render ${w.toFixed(1)}px; the idle is 75.8`)
+  // And nothing else calls the raw renderer on the body sprite. The
+  // constructor is the one exception: it runs before `powered` can be true, so
+  // there is no override to apply and the base art is sized by its own entry.
+  const calls = [...hero.matchAll(/applyGroundRender\(this\.body_[^)]*\)/g)].map((m) => m[0])
+  assert.equal(calls.length, 2,
+    `applyGroundRender is called on the body in ${calls.length} places: ${calls.join(' | ')}`)
 
-  // Re-anchored on every swap, or the per-clip anchors do nothing.
-  assert.match(src('entities/Hero.ts'), /this\.artOffset = applyGroundRender\(this\.body_, key\)/,
-    'the anchor is not re-read when the frame changes')
+  // The two forms really do differ in shape, which is why re-anchoring matters
+  // at all rather than being ceremony.
+  const heroes = read('heroes')
+  const base = ART.render[heroes.cory.bodySprite]
+  const powered = ART.render[heroes.cory.poweredSprite]
+  assert.notEqual(base.anchorX, powered.anchorX, 'the two forms share an anchorX')
+  const ratio = (r: { contentWidth: number; contentHeight: number }) =>
+    r.contentWidth / r.contentHeight
+  assert.ok(ratio(powered) > ratio(base) * 1.5,
+    'the powered form is not meaningfully wider than the man, so nothing here is being tested')
 })
 
 test('a missing frame falls back to the idle rather than blanking the hero', () => {
@@ -171,9 +200,14 @@ test('a missing frame falls back to the idle rather than blanking the hero', () 
   // picture rather than reverting to base art for the length of one frame.
   assert.match(fn[0], /return heroSprite\(this\.heroId, this\.powered\)/,
     'it does not fall back to the hero\'s own static art')
-  for (const k of [...ART.hero.walk, ...ART.hero.attack]) {
-    assert.ok(ART.optional.includes(k), `${k} is not optional, so a miss would fail loudly`)
-    assert.ok(ART.files[k], `${k} is not in the manifest`)
+  // AND THERE ARE NO CLIPS TO MISS. Every roster entry's `walk` and `attack`
+  // are null, so `frameKey` takes the fallback path on every single call --
+  // which means the path is exercised constantly rather than only when a file
+  // is absent, and the roster still has somewhere to put a sheet drawn later.
+  for (const id of Object.keys(ART.hero.roster)) {
+    const entry = ART.hero.roster[id]
+    assert.equal(entry.walk, null, `${id} has a walk clip that no art backs`)
+    assert.equal(entry.attack, null, `${id} has an attack clip that no art backs`)
   }
 })
 

@@ -37,9 +37,15 @@ test('every hero faces the way it is going, in both forms', () => {
     assert.ok(['left', 'right'].includes(HEROES[id].artFacing),
       `${id} does not declare which way its art is drawn`)
   }
-  assert.equal(HEROES.cory.artFacing, 'left', 'Cory is drawn facing left')
-  for (const id of IDS.filter((i) => i !== 'cory')) {
-    assert.equal(HEROES[id].artFacing, 'right', `${id} is drawn facing right`)
+  // ALL FIVE FACE RIGHT NOW. Cory was the exception the bug was written
+  // against; his new art faces right like everyone else's, so there is no
+  // per-hero correction left to apply and the roster agrees with itself for
+  // the first time. THE MECHANISM STAYS TESTED BELOW: the enemies still
+  // disagree with each other -- five of the twenty are drawn facing left --
+  // and they read the same `mirroredFor`, so the rule has to keep working for
+  // an input no hero supplies today.
+  for (const id of IDS) {
+    assert.equal(HEROES[id].artFacing, 'right', `${id} is not drawn facing right`)
   }
 
   // The rule itself: mirrored exactly when the heading disagrees with the art.
@@ -84,9 +90,24 @@ test('the renderer asks the hero which way its art faces, and nothing else does'
   assert.match(body, /setFlipX\(this\.mirrored\)/)
   assert.match(body, /this\.mirrored \? -this\.artOffset : this\.artOffset/,
     'the anchor correction does not follow the mirror')
-  // Both forms go through it — the base sprite, the powered swap and the SUV.
-  assert.ok((hero.match(/this\.applyFacing\(\)/g) ?? []).length >= 5,
-    'some sprite swap sets the texture without re-applying the facing')
+  // EVERY SPRITE SWAP GOES THROUGH ONE FUNCTION, which is a stronger statement
+  // than the one this used to make. It counted `applyFacing()` call sites and
+  // required at least five, on the reasoning that each swap needed its own --
+  // and a count is a proxy that gets weaker every time the code improves: the
+  // swaps were consolidated into `wearSprite` (so the powered form's height
+  // override could not be forgotten by one of them), the count fell to three,
+  // and the test failed on a change that removed the very risk it guarded.
+  //
+  // So ask the real question. Every `setTexture` on the body sprite is inside
+  // `wearSprite`, and `wearSprite` re-applies the facing.
+  const wear = /private wearSprite\([\s\S]*?\n  \}/.exec(hero)
+  assert.ok(wear, 'there is no single place that changes the picture')
+  assert.match(wear[0], /this\.applyFacing\(\)/, 'the one sprite swap does not re-apply the facing')
+  const swaps = [...hero.matchAll(/this\.body_\.setTexture\(/g)]
+  assert.equal(swaps.length, 1,
+    `${swaps.length} places set the body texture; there must be exactly one, inside wearSprite`)
+  assert.ok(wear[0].includes('this.body_.setTexture('),
+    'the one texture swap is not the one inside wearSprite')
   // And nothing hardcodes a hero's side.
   assert.doesNotMatch(hero, /'left'|'right'/, 'a facing side is hardcoded in the renderer')
 })
@@ -295,8 +316,20 @@ test('Ice Beam hits the area it is aimed at, and nothing on the way there', () =
     'Ice Beam does not resolve on an area at the point tapped')
   assert.doesNotMatch(body, /withinDash|distanceToSegment/,
     'Ice Beam damages the line it is drawn along, which makes it a dash')
-  assert.match(body, /lineSweep\(this, \{ x: this\.hero\.x/,
+  assert.match(body, /alongLine\(this, p\.fx, \{ x: this\.hero\.x/,
     'nothing is drawn from Eli to the point, so it is not a beam at all')
+  // AND THE PICTURE IS NOT THE POWER'S RADIUS WIDE. This is the same property
+  // as "the beam is scenery", said in the drawing rather than in the damage: a
+  // 192px-thick bolt down the middle of the board claims to have caught
+  // everything it crossed, which is exactly the reading the rest of this test
+  // exists to prevent. `beamHeight` is a fixed thickness that reads as a beam;
+  // the ring at `p.radius` is what says how big the frozen area is.
+  assert.match(body, /PRESENTATION\.heroFx\.beamHeight/,
+    'the beam is drawn at some width other than the one chosen to read as a beam')
+  assert.doesNotMatch(body, /alongLine\([^)]*p\.radius/,
+    'the beam picture is drawn at the power\'s radius, so it claims the corridor')
+  assert.match(body, /areaRing\(this, x, y, p\.radius/,
+    'the area that actually freezes is not drawn at its real radius')
   assert.match(body, /applySlow\(p\.slowFactor, p\.slowSeconds/, 'Ice Beam does not slow')
 })
 
@@ -400,7 +433,7 @@ test('every hero button lands something the player can see', () => {
     game.slice(game.indexOf(from), game.indexOf(to))
 
   const howl = between('private skillHowl(', 'private tickReadyCountdown(')
-  assert.match(howl, /expandingRing\(/, 'Bark still draws its own thin ring')
+  assert.match(howl, /burstAt\(this, k\.fx/, 'Bark draws no effect art')
   assert.match(howl, /'SLOW'/, 'nothing marks the enemies Bark caught')
 
   const burst = between('private skillBurst(', 'private skillHowl(')
@@ -422,18 +455,44 @@ test('every hero button lands something the player can see', () => {
   }
 })
 
-test('every effect the placeholder art draws is sized to the real radius', () => {
-  // The whole point of drawing them procedurally: the shapes exist so the
-  // radii can be judged before the art does, which only works if the picture
-  // is the rule. Nothing in HeroFx invents a size.
+test('every effect is real art, and it is still sized to the real radius', () => {
+  // THE PICTURES REPLACED THE PLACEHOLDER SHAPES AND THE SIZING RULE SURVIVED,
+  // which is the half of the placeholder worth keeping. The shapes existed so
+  // the radii could be judged before the art did, and that only ever worked
+  // because nothing invented a size: every effect took its extent from
+  // heroes.json, so tuning a radius moved its picture with it. A picture drawn
+  // at a fixed pixel size would break that the first time anything was tuned.
   const fx = code('systems/HeroFx.ts')
-  assert.doesNotMatch(fx, /\b(radius|halfWidth) = \d/, 'a placeholder invents its own size')
-  for (const fn of ['expandingRing', 'strike', 'lineSweep', 'hazardBand']) {
+  assert.doesNotMatch(fx, /\b(radius|halfWidth|worldWidth|height) = \d/,
+    'an effect invents its own size instead of taking the power\'s')
+  for (const fn of ['burstAt', 'alongLine', 'groundStrip', 'statusMarker']) {
     assert.match(fx, new RegExp(`export function ${fn}\\(`), `${fn} is gone`)
   }
-  // Tinted to the hero, and the tint is the hero's rather than the power's.
+  // The procedural shapes are gone, all four of them.
+  for (const fn of ['expandingRing', 'strike', 'lineSweep', 'hazardBand']) {
+    assert.doesNotMatch(fx, new RegExp(`export function ${fn}\\(`),
+      `${fn} is still here; the placeholder shapes were supposed to go`)
+  }
+  // ONE SURVIVOR, and it is named and explained: the Ice Beam's area cannot be
+  // expressed by a picture stretched along a line, because that picture has
+  // one thickness for its whole length.
+  assert.match(fx, /export function areaRing\(/, 'the ice beam has no way to show its area')
+
+  // EVERY CALL SITE PASSES A NUMBER OUT OF THE DATA. This is the assertion the
+  // sizing rule actually rests on: `burstAt` takes a world width, and if a
+  // caller passed a constant the picture would stop tracking the power.
   const game = code('scenes/GameScene.ts')
-  assert.match(game, /this\.hero\.def\.colour/, 'the effects are not tinted to the hero')
+  const calls = [...game.matchAll(/burstAt\(this,[^;]*?\)\n/g)].map((m) => m[0])
+  assert.ok(calls.length >= 4, `only ${calls.length} effects are drawn as art`)
+  for (const c of calls) {
+    assert.match(c, /\b[kp]\.(radius|range)\b|strikeLength/,
+      `an effect is drawn at a size that comes from nowhere: ${c.trim()}`)
+  }
+
+  // The hero's colour is still a fact about the hero and is still used -- the
+  // ice beam's area ring is drawn in it, and the tint is what tells two
+  // heroes' powers apart on a busy board.
+  assert.match(game, /this\.hero\.def\.colour/, 'the hero\'s own colour is no longer used at all')
   for (const id of IDS) {
     assert.equal(typeof HEROES[id].colour, 'number', `${id} has no colour`)
   }

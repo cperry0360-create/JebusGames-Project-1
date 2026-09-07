@@ -2157,94 +2157,233 @@ async function run() {
   }
 
   if (scenario === 'towerpanel') {
-    // PROTOTYPE-GAP 11: the panel was covering the range ring it was asking
-    // about. Non-modal, anchored, rings visible.
-    g.status.peanuts = 99999
-    const cam0 = g.cameras.main
-    const spot = SPOTS.findIndex((p) => cam0.worldView.contains(p[0], p[1]))
-    const [px, py] = toScreen(SPOTS[spot][0], SPOTS[spot][1])
-    await click(px, py); await sleep(350)
-    const b = g.menu.hitAreas[0].getBounds()
-    await move(b.centerX, b.centerY)
-    mouse('mousedown', b.centerX, b.centerY); await sleep(300)
-    mouse('mouseup', b.centerX, b.centerY); await sleep(700)
+    // PROTOTYPE-GAP 11, RE-AIMED AT THE COMPONENT THAT EXISTS.
+    //
+    // This scenario was written against `TowerPanel` and drove it through
+    // `g.menu.hitAreas` and `g.panel.layer`. BOTH OF THOSE WERE DELETED when
+    // the radial ring landed (src/ui/TowerRing.ts, reports/2026-09-02-the-ring.md):
+    // `BuildMenu`, `TowerPanel` and `TowerIcon` all went, and nothing in the
+    // scene answers to `menu` or `panel` any more. So the very first line that
+    // touched the old API threw, and every check after it -- all of them --
+    // never ran. The run still exited 0 and still wrote a report, which is why
+    // it read as "broken" rather than as "measuring nothing".
+    //
+    // The QUESTION it was asking is still live and is asked by nothing else:
+    // `ring` proves every button is on screen and `towerring` proves SELL and
+    // UPGRADE never trade places, but neither asks whether the menu COVERS THE
+    // THING IT IS ABOUT. That was the original complaint -- the panel sat on
+    // the range ring it was asking you to judge -- so that is what this keeps.
+    const dpr = window.devicePixelRatio || 1
+    g.status.peanuts = 999999
+    g.status.lives = 9999
+    // No waves. The board under test is a tower on a pad; the fight is not
+    // part of it, and a leak mid-sweep ends the run with the ring simply
+    // "not opening" as the only symptom. Same reason `towerring` does it.
+    g.startWave = () => {}
+    await sleep(400)
+    // CSS PIXELS. `game.scale.width` is the canvas, which is device pixels at
+    // dpr 3 -- 4200 wide on a 1400px viewport -- and every rectangle compared
+    // against it below (hit boxes, panel bounds, panelArea) is in CSS pixels.
+    const W = VP.w, H = VP.h
+    note('viewport ' + VP.w + 'x' + VP.h + '  dpr ' + dpr)
+
+    const settle = async () => {
+      let last = ''
+      for (let i = 0; i < 40; i++) {
+        const b = g.ring?.bounds
+        const now = b ? `${Math.round(b.x)},${Math.round(b.y)}` : 'none'
+        if (now === last) return
+        last = now
+        await new Promise((r) => requestAnimationFrame(r))
+      }
+    }
+    // WHAT THE MENU ACTUALLY OCCUPIES: its BUTTONS, plus the description panel
+    // beside them. Deliberately not `g.ring.bounds`.
+    //
+    // `bounds` is the box AROUND the ring, and a ring is a ring: the tower sits
+    // in the hole in the middle of it, by design. Measuring coverage against
+    // that box says the menu covers its own tower every single time, which is
+    // a true statement about a rectangle and a false one about what a player
+    // can see. The first draft of this rewrite asserted exactly that and
+    // reported two faults that were the assertion being wrong, not the ring.
+    //
+    // The buttons and the panel are the opaque parts. Those are the things
+    // that can hide a tower or a range ring, so those are what is asked about.
+    const chrome = () => {
+      const out = []
+      for (const b of (g.ring ? g.ring.hitBoxes : [])) out.push({ what: 'button ' + b.id, r: b.rect })
+      if (g.ring?.panelBounds) out.push({ what: 'panel', r: g.ring.panelBounds })
+      return out
+    }
+    const contains = (r, x, y) => x >= r.x && y >= r.y && x <= r.x + r.width && y <= r.y + r.height
+    // `toScreen`, NOT a local copy of the camera arithmetic. The camera works
+    // in canvas pixels, which are DEVICE pixels now that the canvas renders at
+    // full resolution, and mouse events carry CSS pixels -- so a hand-rolled
+    // world-to-screen is off by the device ratio and every click lands three
+    // times too far out at dpr 3. This scenario wrote that copy and the tap on
+    // the tower missed the board entirely; `g.ring.bounds` and `hitBoxes` are
+    // already CSS pixels, so everything below is in one space.
+    const screenOf = (wx, wy) => toScreen(wx, wy)
+
+    let faults = 0
+    const fail = (m) => { faults++; note('   *** ' + m) }
+
+    // BUILD ONE, through the two presses the ring requires. `g.place` would be
+    // one line, and it would also mean this scenario never touches the real
+    // purchase path -- which is how the old one came to be driving an API that
+    // had not existed for three commits.
+    const sp = g.build.freeSpots()[0]
+    await lookAt(sp.x, sp.y)
+    g.openPadRing(sp)
+    await sleep(200)
+    await settle()
+    if (!g.ring) { fail('the build ring did not open on a free pad'); await shot('panel-00-noring'); return }
+    const first = g.ring.hitBoxes[0]
+    await click(first.rect.x + first.rect.width / 2, first.rect.y + first.rect.height / 2)
+    await sleep(200)
+    const confirm = g.ring.hitBoxes.find((b) => b.id === 'ring:confirm')
+    if (!confirm) { fail('no confirm button after picking a tower'); await shot('panel-00-noconfirm'); return }
+    await click(confirm.rect.x + confirm.rect.width / 2, confirm.rect.y + confirm.rect.height / 2)
+    await sleep(400)
     const t = g.towers[0]
+    if (!t) { fail('the confirm press bought nothing'); await shot('panel-00-nobuy'); return }
     note('built ' + t.def.name + ' range=' + Math.round(t.range))
 
-    await click(...toScreen(t.x, t.y))
+    // THE TOWER'S OWN MENU, opened the way a tap opens it.
+    await lookAt(t.x, t.y)
+    await click(...screenOf(t.x, t.y))
     await sleep(500)
-    note('panel open=' + !!g.panel + ' modalOpen=' + g.modalOpen +
-      ' (must be false — the board stays live)')
-    const pl = g.panel.layer
-    const pb = pl.getBounds()
-    const W = game.scale.width, H = game.scale.height
-    const area = g.layout.panelArea
-    note('panel ' + Math.round(pb.width) + 'x' + Math.round(pb.height) + ' at ' +
-      Math.round(pb.x) + ',' + Math.round(pb.y) + ' in ' + W + 'x' + H)
-    note('inside the free area (' + Math.round(area.x) + ',' + Math.round(area.y) + ' ' +
-      Math.round(area.width) + 'x' + Math.round(area.height) + '): ' +
-      (pb.x >= area.x - 1 && pb.y >= area.y - 1 &&
-       pb.right <= area.x + area.width + 1 && pb.bottom <= area.y + area.height + 1))
+    await settle()
+    note('ring open=' + !!g.ring + '  modalOpen=' + g.modalOpen +
+      ' (must be false -- the board stays live)')
+    if (!g.ring) fail('tapping the tower did not open its ring')
+    if (g.modalOpen) fail('the tower ring went modal; the board is meant to stay live')
 
-    // The tower's own screen position, and whether the panel covers it.
-    const cam = g.cameras.main
-    const tsx = (t.x - cam.worldView.x) * cam.zoom + cam.x
-    const tsy = (t.y - cam.worldView.y) * cam.zoom + cam.y
-    note('tower on screen at ' + Math.round(tsx) + ',' + Math.round(tsy) +
-      ' — panel covers its base: ' + pb.contains(tsx, tsy) + ' (must be false)')
-    // The ring is the thing the panel must not hide.
-    const ringR = t.range * cam.zoom
+    const area = g.layout.panelArea
+    for (const { what, r } of chrome()) {
+      const inside = r.x >= area.x - 1 && r.y >= area.y - 1
+        && r.x + r.width <= area.x + area.width + 1 && r.y + r.height <= area.y + area.height + 1
+      note(what + ' ' + Math.round(r.width) + 'x' + Math.round(r.height) + ' at ' +
+        Math.round(r.x) + ',' + Math.round(r.y) + ' in ' + W + 'x' + H +
+        ' -- inside the free area (' + Math.round(area.x) + ',' + Math.round(area.y) + ' ' +
+        Math.round(area.width) + 'x' + Math.round(area.height) + '): ' + inside)
+      if (!inside) fail(what + ' is outside the area the HUD guarantees is free')
+    }
+
+    // THE ORIGINAL COMPLAINT: the menu must not sit on the tower, and must not
+    // sit on the range ring it is asking you to judge.
+    const [tsx, tsy] = screenOf(t.x, t.y)
+    for (const { what, r } of chrome()) {
+      const on = contains(r, tsx, tsy)
+      note(what + ' covers the tower base at ' + Math.round(tsx) + ',' + Math.round(tsy) +
+        ': ' + on + ' (must be false)')
+      if (on) fail(what + ' is drawn on top of the tower it belongs to')
+    }
+    const ringR = t.range * g.cameras.main.zoom
     let covered = 0
     for (let i = 0; i < 36; i++) {
       const a = (i / 36) * Math.PI * 2
-      if (pb.contains(tsx + Math.cos(a) * ringR, tsy + Math.sin(a) * ringR)) covered++
+      const px = tsx + Math.cos(a) * ringR, py = tsy + Math.sin(a) * ringR
+      if (chrome().some(({ r }) => contains(r, px, py))) covered++
     }
-    note('range ring: ' + covered + ' of 36 points on it are behind the panel')
+    note('range ring: ' + covered + ' of 36 points on it are behind the menu')
+    // A menu beside a circle will clip a corner of it at some zooms and that is
+    // survivable; swallowing half of it is the bug this scenario is named for.
+    if (covered > 12) fail('the menu hides ' + covered + '/36 of the range ring')
 
-    // The rings. Solid = now, dashed = what the upgrade buys.
     note('range ring drawn: ' + (g.rangeRing.commandBuffer.length > 0) +
       ' | projected ring drawn: ' + (g.projectedRing.commandBuffer.length > 0) +
-      ' | covered lane drawn: ' + (g.pathBand.commandBuffer.length > 0))
+      ' | covered lane drawn: ' + (g.laneWash.commandBuffer.length > 0))
+    if (g.rangeRing.commandBuffer.length === 0) fail('no range ring is drawn for the selected tower')
     await shot('panel-01-open')
 
-    // Hovering the upgrade button brightens the projected ring.
-    const up = g.panel.layer.list.find((o) => o.text && o.text.startsWith('UPGRADE'))
+    // PICKING an upgrade brightens the projected ring -- the FIRST press, which
+    // on this ring opens the option's description rather than buying it.
+    //
+    // Not hovering. The old panel previewed on hover and this scenario kept
+    // that, which on the ring measures nothing: `pointerover` there only
+    // brightens the button's own plate (TowerRing.ts), and `previewingUpgrade`
+    // hangs off the ring's selection callback. Hovering reported `false`
+    // forever, correctly, about the wrong gesture.
+    const up = g.ring.hitBoxes.find((b) => /upgrade/i.test(b.id))
     if (up) {
-      const ub = up.getBounds()
-      await move(ub.centerX, ub.centerY)
+      await click(up.rect.x + up.rect.width / 2, up.rect.y + up.rect.height / 2)
       await sleep(300)
-      note('previewing on hover: ' + g.previewingUpgrade)
+      await settle()
+      note('previewing the upgrade: ' + g.previewingUpgrade +
+        '  description panel: ' + (g.ring?.panelBounds ? 'open' : 'none'))
+      if (!g.previewingUpgrade) fail('picking UPGRADE did not preview the range it buys')
+      // With the description open the menu is at its widest -- the state most
+      // likely to cover the tower, so it is re-asked here rather than only in
+      // the bare-ring state above.
+      for (const { what, r } of chrome()) {
+        if (contains(r, ...screenOf(t.x, t.y))) fail(what + ' covers the tower with the description open')
+      }
       await shot('panel-02-preview')
-      await move(W / 2, 10)
-      await sleep(200)
+    } else {
+      note('no upgrade option on this ring (tier ' + t.tier + ')')
     }
 
-    // Panning must keep it stuck to its tower.
-    const beforePan = g.panel.layer.x
-    mouse('mousedown', W * 0.5, H * 0.5)
-    for (let i = 0; i < 8; i++) { mouse('mousemove', W * 0.5 - i * 12, H * 0.5); await sleep(30) }
-    mouse('mouseup', W * 0.5 - 96, H * 0.5)
+    // Panning must keep the menu stuck to its tower.
+    // ESTABLISH THAT THE BOARD CAN MOVE BEFORE REPORTING THAT THE MENU DID NOT.
+    // A drag that the camera gate refuses -- because it started on chrome, or
+    // because panning is locked -- moves nothing, and a ring that correctly
+    // stayed put over a board that never moved looks exactly like a ring that
+    // failed to follow. Three of the four faults the input harness first found
+    // were this shape.
+    // ZOOMED IN FIRST, or there is nothing to pan. At the zoom a run opens at
+    // the whole 1280x720 board is inside a 1400px viewport, so the rig clamps
+    // the camera to the middle and a drag moves it precisely nowhere. The
+    // first version of this check dragged at the default zoom, measured no
+    // movement, and blamed the ring.
+    const DISP = (await import('./js/data/display.json', { with: { type: 'json' } })).default
+    g.rig.setTargetZoom(DISP.camera.maxZoom * dpr)
+    await until(() => Math.abs(g.cameras.main.zoom - DISP.camera.maxZoom * dpr) < 0.05, 5000)
+    await lookAt(t.x, t.y)
+    await settle()
+    const camBefore = Math.round(g.cameras.main.worldView.centerX)
+    const beforePan = g.ring?.bounds ? Math.round(g.ring.bounds.x) : null
+    // Started off the HUD's own furniture: a drag beginning on a counter plate
+    // or the ability row is taken by the HUD and never reaches the board.
+    const dragY = Math.round((g.layout.panelArea.y + g.layout.panelArea.height / 2))
+    // Primed with a move before the press, and moved on both axes. A press with
+    // no prior pointer position and a purely horizontal path is the one shape
+    // the drag detector can read as a tap.
+    mouse('mousemove', W * 0.5, dragY); await sleep(40)
+    mouse('mousedown', W * 0.5, dragY); await sleep(60)
+    for (let i = 1; i <= 8; i++) {
+      mouse('mousemove', W * 0.5 - i * 14, dragY - i * 6); await sleep(28)
+    }
+    mouse('mouseup', W * 0.5 - 112, dragY - 48)
     await sleep(700)
-    note('panel followed the pan: ' + (Math.round(g.panel.layer.x) !== Math.round(beforePan)) +
-      ' (' + Math.round(beforePan) + ' -> ' + Math.round(g.panel.layer.x) + ')')
+    const camAfter = Math.round(g.cameras.main.worldView.centerX)
+    const afterPan = g.ring?.bounds ? Math.round(g.ring.bounds.x) : null
+    note('the board panned: ' + (camBefore !== camAfter) + ' (' + camBefore + ' -> ' + camAfter + ')')
+    note('menu followed the pan: ' + (beforePan !== null && afterPan !== null && beforePan !== afterPan) +
+      ' (' + beforePan + ' -> ' + afterPan + ')')
+    if (camBefore === camAfter) {
+      note('   (the drag moved nothing, so this says nothing about the menu)')
+    } else if (afterPan === null) fail('panning closed the tower ring')
+    else if (beforePan === afterPan) fail('the ring did not move with its tower')
 
     // Zoomed out, so both rings fit on the glass and can be told apart.
     for (let i = 0; i < 26; i++) {
       game.canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, clientX: 422, clientY: 195, bubbles: true }))
     }
     await sleep(1200)
-    note('zoomed to ' + g.cameras.main.zoom.toFixed(2) + ' — both rings on screen')
+    note('zoomed to ' + (g.cameras.main.zoom / dpr).toFixed(2) + ' -- both rings on screen')
     await shot('panel-02b-both-rings')
 
-    // A tap off the panel closes it.
+    // A tap off the menu closes it.
     await click(W * 0.86, H * 0.28)
     await sleep(400)
-    note('tap off the panel closed it: ' + !g.panel + ' selected=' + !!g.selected)
+    note('tap off the menu closed it: ' + !g.ring + ' selected=' + !!g.selected)
     note('rings cleared: ' + (g.projectedRing.commandBuffer.length === 0))
+    if (g.ring) fail('a tap on empty board left the tower ring open')
     await shot('panel-03-closed')
 
-    // And a tower near the bottom must flip the panel above itself.
-    const low = g.build.spots.reduce((a, c) => (c.y > a.y ? c : a))
+    // And a tower near the bottom must put its menu somewhere it still fits.
+    const low = g.build.freeSpots().reduce((a, c) => (c.y > a.y ? c : a))
     g.cameras.main.centerOn(low.x, low.y - 60)
     await sleep(600)
     g.place('withholding', low)
@@ -2252,13 +2391,126 @@ async function run() {
     const t2 = g.towers[g.towers.length - 1]
     g.selectTower(t2)
     await sleep(500)
-    const c2 = g.cameras.main
-    const t2y = (t2.y - c2.worldView.y) * c2.zoom + c2.y
-    const p2 = g.panel.layer.getBounds()
-    note('low tower at y=' + Math.round(t2y) + ', panel at y=' + Math.round(p2.y) +
-      '..' + Math.round(p2.bottom) + ' — clear of the tower: ' +
-      !g.panel.coversAnchor({ x: (t2.x - c2.worldView.x) * c2.zoom + c2.x, base: t2y, top: 0, halfWidth: 0 }))
+    await settle()
+    const [t2x, t2y] = screenOf(t2.x, t2.y)
+    for (const { what, r } of chrome()) {
+      note('low tower at y=' + Math.round(t2y) + ', ' + what + ' at y=' +
+        Math.round(r.y) + '..' + Math.round(r.y + r.height) +
+        ' -- clear of the tower: ' + !contains(r, t2x, t2y))
+      if (contains(r, t2x, t2y)) fail(what + ' covers a tower at the bottom of the board')
+    }
     await shot('panel-04-flipped')
+
+    note('RESULT ' + (faults === 0
+      ? 'the tower menu stayed off its tower and off its range ring, at both ends of the board'
+      : '*** ' + faults + ' faults ***'))
+    return
+  }
+
+  if (scenario === 'powerart') {
+    // ALL TEN HERO POWERS, CAST AND PHOTOGRAPHED.
+    //
+    // The ten procedural placeholder shapes were replaced with painted art,
+    // and "the art is wired up" is not a claim the numbers can settle: a key
+    // that resolves, a scale that computes and a tween that runs all report
+    // success for a sprite drawn at the wrong size, in the wrong place, or
+    // underneath the map. So each one is cast through the real path and a
+    // frame is captured while it is on screen.
+    //
+    // Slot 1 needs a target for three of the five effects (punch, double,
+    // burn), so a wave is started and the hero is posted on the lane until
+    // something walks into reach. Slot 2 is placed by tapping a point, and is
+    // driven through `firePower` rather than through the targeting mode --
+    // the mode has its own scenario, and what is under test here is what gets
+    // DRAWN once a point has been chosen.
+    const RS = await import('./js/systems/RunState.js')
+    const HEROES = (await import('./js/data/heroes.json', { with: { type: 'json' } })).default
+    const ids = Object.keys(HEROES).filter((k) => !k.startsWith('_'))
+    const missing = []
+
+    for (const id of ids) {
+      RS.setRunState({ heroId: id })
+      game.scene.stop('Game'); game.scene.stop('Hud')
+      game.scene.start('Game'); game.scene.start('Hud')
+      await until(() => running('Game') && scene('Game').hero, 12000)
+      const G = scene('Game')
+      await sleep(400)
+      G.status.peanuts = 999999
+      G.status.lives = 9999
+      const h = HEROES[id]
+      note(id + ': slot1 ' + h.slot1.name + ' (' + h.slot1.effect + ', ' + h.slot1.fx +
+        ')  slot2 ' + h.slot2.name + ' (' + h.slot2.effect + ', ' + h.slot2.fx + ')')
+
+      // On the lane, so enemies reach him and so the effect is drawn over the
+      // road rather than over empty grass where it is hard to judge.
+      const mid = G.lane.pointAt(G.lane.totalLength * 0.45)
+      G.hero.setRally(mid.x, mid.y)
+      await until(() => Math.hypot(G.hero.x - mid.x, G.hero.y - mid.y) < 8, 15000)
+      await lookAt(G.hero.x, G.hero.y)
+      G.startWave()
+      const reach = Math.max(h.slot1.range, h.slot1.radius) || 120
+      await until(() => G.enemies.some((e) => e.alive
+        && Math.hypot(e.x - G.hero.x, e.y - G.hero.y) < reach), 40000)
+
+      // Counted rather than trusted: an effect that resolved its key and drew
+      // nothing is the failure this whole scenario exists to catch, and the
+      // scene dump can see it where a screenshot cannot say which sprite is
+      // which.
+      const drawn = (key) => {
+        let n = 0
+        const walk2 = (list) => {
+          for (const o of list) {
+            if (o.texture && o.texture.key === key && o.visible !== false) n++
+            if (o.list) walk2(o.list)
+          }
+        }
+        walk2(G.children.list)
+        return n
+      }
+
+      G.cooldowns.clear ? G.cooldowns.clear() : null
+      G.castHeroSlot1()
+      await sleep(90)
+      let n1 = drawn(h.slot1.fx)
+      // Star Rain scatters its strikes over `gapSeconds`, so the first frame
+      // after the cast has one of fourteen on screen. Sampled again a little
+      // later rather than assumed.
+      if (n1 === 0) { await sleep(220); n1 = drawn(h.slot1.fx) }
+      note('   slot 1 drew ' + n1 + ' x ' + h.slot1.fx + (n1 ? '' : '   *** NOTHING ***'))
+      if (n1 === 0) missing.push(id + ' slot 1 (' + h.slot1.fx + ')')
+      await shot('power-' + id + '-1-' + h.slot1.effect)
+
+      // POWERED, which is the gate on slot 2 and is reached by taking damage
+      // in a real run. Set directly here: what is under test is the drawing,
+      // and half-killing five heroes in turn is a different scenario.
+      G.hero.powered = true
+      const p = h.slot2
+      // A point inside the cast radius, down the lane from him, so a beam or a
+      // dash has a real distance to be stretched over rather than a few pixels.
+      const to = G.lane.pointAt(Math.min(G.lane.totalLength * 0.45 + p.castRadius * 0.8,
+        G.lane.totalLength - 10))
+      G.firePower(to.x, to.y)
+      await sleep(120)
+      let n2 = drawn(p.fx)
+      if (n2 === 0) { await sleep(260); n2 = drawn(p.fx) }
+      note('   slot 2 drew ' + n2 + ' x ' + p.fx + (n2 ? '' : '   *** NOTHING ***'))
+      if (n2 === 0) missing.push(id + ' slot 2 (' + p.fx + ')')
+      await shot('power-' + id + '-2-' + p.effect)
+
+      // The Spike Strip is the one that persists, so it gets a second frame a
+      // few seconds in: "it appeared" and "it is still there" are different
+      // claims and only one of them is what an 8-second hazard promises.
+      if (p.effect === 'hazard') {
+        await sleep(2500)
+        note('   ' + Math.round(p.durationSeconds) + 's strip, 2.5s in: ' +
+          drawn(p.fx) + ' on the board')
+        await shot('power-' + id + '-2-hazard-later')
+      }
+    }
+
+    note('RESULT ' + (missing.length === 0
+      ? 'all ten powers drew their own art'
+      : '*** nothing drawn for: ' + missing.join(', ') + ' ***'))
     return
   }
 
@@ -3867,16 +4119,29 @@ async function run() {
   }
 
   if (scenario === 'facing') {
-    // WHICH WAY CORY IS POINTING, watched rather than reasoned about.
+    // WHICH WAY THE HERO IS POINTING, watched rather than reasoned about.
     //
     // The rule asked for: face the direction of travel while moving, face the
     // target while attacking, target beats movement, and keep the last facing
-    // when idle. The art is drawn facing LEFT — checked by eye against
-    // hero_cory_walk_1.png — so `flipX` true means he is facing RIGHT.
+    // when idle.
+    //
+    // WHICH WAY `flipX` MEANS IS DATA, and this scenario used to hardcode it:
+    // "the art is drawn facing LEFT -- checked by eye against
+    // hero_cory_walk_1.png -- so `flipX` true means he is facing RIGHT". That
+    // was true of the only hero there was, and of a walk sheet that has since
+    // been deleted. Cory's new art faces right like the other four, so every
+    // sample came back inverted and this scenario reported the whole rule
+    // broken: four faults, all of them the ruler being upside down. It reads
+    // `artFacing` now, the same field `mirroredFor` reads, so it is correct
+    // for a hero drawn either way and cannot go stale behind an art swap.
     const hero = g.hero
+    const artFacesRight = hero.def.artFacing !== 'left'
+    note('art faces ' + (artFacesRight ? 'RIGHT' : 'LEFT') +
+      ', so flipX=' + (!artFacesRight) + ' is facing right')
+    const facingRightNow = () => (hero.body_.flipX === true) !== artFacesRight
     const wrong = []
     const sample = (label, expectRight, extra) => {
-      const right = hero.body_.flipX === true
+      const right = facingRightNow()
       const ok = expectRight === null || right === expectRight
       if (!ok) wrong.push(label)
       note('  ' + label.padEnd(34) + 'facing ' + (right ? 'RIGHT' : 'LEFT ') +
@@ -3891,11 +4156,11 @@ async function run() {
       g.orderHero(hx + dx, hy)
       await sleep(120)
       let flips = 0
-      let last = hero.body_.flipX
+      let last = facingRightNow()
       let backwards = 0
       const t0 = performance.now()
       while (performance.now() - t0 < 2600 && Math.abs(hero.x - (hx + dx)) > 4) {
-        const moving = hero.body_.flipX
+        const moving = facingRightNow()
         if (moving !== last) { flips++; last = moving }
         // Walking backwards: facing right while travelling left, or the
         // reverse. Sampled every frame, not at the ends.
@@ -3934,7 +4199,7 @@ async function run() {
         const t = hero.lastTarget
         if (t && t.alive) {
           const targetRight = t.x > hero.x
-          const facingRight = hero.body_.flipX === true
+          const facingRight = facingRightNow()
           // Only judged where the target is clearly to one side: within the
           // dead zone either answer is right and snapping would be the bug.
           const dx2 = Math.abs(t.x - hero.x)

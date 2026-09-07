@@ -37,8 +37,8 @@
     "brand-cpplays": "branding/logo_cpplays.webp",
     "map-level1": "maps/map_level1_v2.webp",
     "map-level2": "maps/map_level2.webp",
-    "hero-cory": "hero/hero_cory.webp",
-    "hero-cory-ultimate": "hero/hero_cory_ultimate.webp",
+    "hero-cory": "heroes/hero_cory_base.webp",
+    "hero-cory-power": "heroes/hero_cory_power.webp",
     "ui-title-bg": "ui/title_bg.webp",
     "ability-molotov": "abilities/ability_molotov.webp",
     "ability-gnomes": "abilities/ability_gnomes.webp",
@@ -88,14 +88,6 @@
     "icon-range": "ui/icon_range.webp",
     "icon-firerate": "ui/icon_firerate.webp",
     "icon-armor": "ui/icon_armor.webp",
-    "hero-cory-walk-1": "hero/hero_cory_walk_1.webp",
-    "hero-cory-walk-2": "hero/hero_cory_walk_2.webp",
-    "hero-cory-walk-3": "hero/hero_cory_walk_3.webp",
-    "hero-cory-walk-4": "hero/hero_cory_walk_4.webp",
-    "hero-cory-attack-1": "hero/hero_cory_attack_1.webp",
-    "hero-cory-attack-2": "hero/hero_cory_attack_2.webp",
-    "hero-cory-attack-3": "hero/hero_cory_attack_3.webp",
-    "hero-cory-attack-4": "hero/hero_cory_attack_4.webp",
     "map-bg": "ui/map_background.webp",
     "card-level1": "ui/card_level1.webp",
     "card-level2": "ui/card_level2.webp",
@@ -129,7 +121,17 @@
     "hero-eli": "heroes/hero_eli_base.webp",
     "hero-eli-power": "heroes/hero_eli_power.webp",
     "hero-bailey": "heroes/hero_bailey_base.webp",
-    "hero-bailey-power": "heroes/hero_bailey_power.webp"
+    "hero-bailey-power": "heroes/hero_bailey_power.webp",
+    "fx-haymaker": "effects/fx_haymaker.webp",
+    "fx-spike-strip": "effects/fx_spike_strip.webp",
+    "fx-seismic": "effects/fx_seismic.webp",
+    "fx-mind-control": "effects/fx_mind_control.webp",
+    "fx-star-rain": "effects/fx_star_rain.webp",
+    "fx-ice-beam": "effects/fx_ice_beam.webp",
+    "fx-fireball-impact": "effects/fx_fireball_impact.webp",
+    "fx-burn": "effects/fx_burn.webp",
+    "fx-zoomies": "effects/fx_zoomies.webp",
+    "fx-bark": "effects/fx_bark.webp"
   },
   "render": {
     "turret-escalation": {
@@ -247,20 +249,19 @@
       "contentHeight": 697
     },
     "hero-cory": {
-      "anchorX": 0.5725,
+      "anchorX": 0.5569,
       "anchorY": 1.0,
-      "displayHeight": 75.8,
-      "shadowWidth": 48.1,
-      "contentWidth": 386,
-      "contentHeight": 470
+      "displayHeight": 78.0,
+      "shadowWidth": 46.9,
+      "contentWidth": 501,
+      "contentHeight": 700
     },
-    "hero-cory-ultimate": {
-      "anchorX": 0.5384,
+    "hero-cory-power": {
+      "anchorX": 0.4995,
       "anchorY": 1.0,
-      "displayHeight": 104.0,
-      "shadowWidth": 159.1,
-      "contentWidth": 704,
-      "contentHeight": 460
+      "shadowWidth": 143.6,
+      "contentWidth": 1058,
+      "contentHeight": 700
     },
     "ability-molotov": {
       "anchorX": 0.5,
@@ -551,46 +552,6 @@
       "contentWidth": 256,
       "contentHeight": 256
     },
-    "hero-cory-walk-1": {
-      "anchorX": 0.5653,
-      "anchorY": 0.9844,
-      "displayHeight": 78.8
-    },
-    "hero-cory-walk-2": {
-      "anchorX": 0.5653,
-      "anchorY": 0.9844,
-      "displayHeight": 78.8
-    },
-    "hero-cory-walk-3": {
-      "anchorX": 0.5653,
-      "anchorY": 0.9844,
-      "displayHeight": 78.8
-    },
-    "hero-cory-walk-4": {
-      "anchorX": 0.5653,
-      "anchorY": 0.9844,
-      "displayHeight": 78.8
-    },
-    "hero-cory-attack-1": {
-      "anchorX": 0.3974,
-      "anchorY": 0.9778,
-      "displayHeight": 79.1
-    },
-    "hero-cory-attack-2": {
-      "anchorX": 0.3974,
-      "anchorY": 0.9778,
-      "displayHeight": 79.1
-    },
-    "hero-cory-attack-3": {
-      "anchorX": 0.3974,
-      "anchorY": 0.9778,
-      "displayHeight": 79.1
-    },
-    "hero-cory-attack-4": {
-      "anchorX": 0.3974,
-      "anchorY": 0.9778,
-      "displayHeight": 79.1
-    },
     "prop-pad-flagstone": {
       "anchorX": 0.5,
       "anchorY": 0.518,
@@ -828,7 +789,7 @@
       "anchorX": 0.5,
       "anchorY": 0.5,
       "contentWidth": 256,
-      "contentHeight": 256
+      "contentHeight": 252
     },
     "ability-cory-2": {
       "anchorX": 0.5,
@@ -852,25 +813,25 @@
       "anchorX": 0.5,
       "anchorY": 0.5,
       "contentWidth": 256,
-      "contentHeight": 256
+      "contentHeight": 248
     },
     "ability-han-2": {
       "anchorX": 0.5,
       "anchorY": 0.5,
       "contentWidth": 256,
-      "contentHeight": 256
+      "contentHeight": 250
     },
     "ability-eli-1": {
       "anchorX": 0.5,
       "anchorY": 0.5,
       "contentWidth": 256,
-      "contentHeight": 256
+      "contentHeight": 253
     },
     "ability-eli-2": {
       "anchorX": 0.5,
       "anchorY": 0.5,
       "contentWidth": 256,
-      "contentHeight": 256
+      "contentHeight": 254
     },
     "ability-bailey-1": {
       "anchorX": 0.5,
@@ -882,7 +843,69 @@
       "anchorX": 0.5,
       "anchorY": 0.5,
       "contentWidth": 256,
-      "contentHeight": 256
+      "contentHeight": 252
+    },
+    "fx-haymaker": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 661,
+      "contentHeight": 400
+    },
+    "fx-spike-strip": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 902,
+      "contentHeight": 300
+    },
+    "fx-seismic": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 380,
+      "contentHeight": 380
+    },
+    "fx-mind-control": {
+      "anchorX": 0.5,
+      "anchorY": 1.0,
+      "contentWidth": 226,
+      "contentHeight": 180
+    },
+    "fx-star-rain": {
+      "anchorX": 0.5,
+      "anchorY": 1.0,
+      "contentWidth": 233,
+      "contentHeight": 400
+    },
+    "fx-ice-beam": {
+      "anchorX": 0.0,
+      "anchorY": 0.5,
+      "contentWidth": 480,
+      "contentHeight": 220,
+      "stretch": "line"
+    },
+    "fx-fireball-impact": {
+      "anchorX": 0.5,
+      "anchorY": 1.0,
+      "contentWidth": 234,
+      "contentHeight": 400
+    },
+    "fx-burn": {
+      "anchorX": 0.5,
+      "anchorY": 1.0,
+      "contentWidth": 130,
+      "contentHeight": 180
+    },
+    "fx-zoomies": {
+      "anchorX": 0.0,
+      "anchorY": 0.5,
+      "contentWidth": 678,
+      "contentHeight": 200,
+      "stretch": "line"
+    },
+    "fx-bark": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 305,
+      "contentHeight": 260
     }
   },
   "map": {
@@ -941,7 +964,9 @@
     "puff": "fx-death-puff",
     "muzzle": "fx-muzzle",
     "bossBolt": "fx-boss-bolt",
-    "stunned": "fx-stunned"
+    "stunned": "fx-stunned",
+    "burn": "fx-burn",
+    "mindControl": "fx-mind-control"
   },
   "decor": [
     "decor-bush",
@@ -975,7 +1000,17 @@
     "ability-meteor",
     "ability-chain",
     "ability-scratchticket",
-    "ability-servernuke"
+    "ability-servernuke",
+    "ability-cory-1",
+    "ability-cory-2",
+    "ability-courtland-1",
+    "ability-courtland-2",
+    "ability-han-1",
+    "ability-han-2",
+    "ability-eli-1",
+    "ability-eli-2",
+    "ability-bailey-1",
+    "ability-bailey-2"
   ],
   "prop": {
     "signDefault": "prop-sign-moes",
@@ -1004,51 +1039,17 @@
     "icon-damage",
     "icon-range",
     "icon-firerate",
-    "icon-armor",
-    "hero-cory-walk-1",
-    "hero-cory-walk-2",
-    "hero-cory-walk-3",
-    "hero-cory-walk-4",
-    "hero-cory-attack-1",
-    "hero-cory-attack-2",
-    "hero-cory-attack-3",
-    "hero-cory-attack-4",
-    "ability-bailey-1",
-    "ability-eli-1",
-    "ability-eli-2"
+    "icon-armor"
   ],
   "hero": {
-    "_note": "Frame lists for the hero animations. Anchors and displayHeight are per SET, not shared: walk is 557x704 and attack is 787x720, their feet sit at different fractions of their canvases, and their figures are 677 and 690 source px tall. One anchor for both would step the hero sideways on every swing. Frame 1 of each set is the registration reference; frames 2-4 move relative to it, which is the animation.",
-    "idle": "hero-cory",
-    "walk": [
-      "hero-cory-walk-1",
-      "hero-cory-walk-2",
-      "hero-cory-walk-3",
-      "hero-cory-walk-4"
-    ],
-    "attack": [
-      "hero-cory-attack-1",
-      "hero-cory-attack-2",
-      "hero-cory-attack-3",
-      "hero-cory-attack-4"
-    ],
+    "_note": "THE ROSTER AND NOTHING ELSE. This section used to carry Cory's own frame lists as well -- `idle`, `walk`, `attack` and their per-set anchors -- because he was the only hero and his walk sheet was the animation system. All five heroes are single pictures now, so the lists are gone with the sheet and `roster` is the whole of it. `attackImpactFrame` stays: the swing still lands on a frame of a clock even though nothing swaps a texture on it, and the damage timing is a tuned number.",
     "attackImpactFrame": 3,
     "roster": {
       "cory": {
         "base": "hero-cory",
-        "powered": null,
-        "walk": [
-          "hero-cory-walk-1",
-          "hero-cory-walk-2",
-          "hero-cory-walk-3",
-          "hero-cory-walk-4"
-        ],
-        "attack": [
-          "hero-cory-attack-1",
-          "hero-cory-attack-2",
-          "hero-cory-attack-3",
-          "hero-cory-attack-4"
-        ]
+        "powered": "hero-cory-power",
+        "walk": null,
+        "attack": null
       },
       "courtland": {
         "base": "hero-courtland",
@@ -1094,6 +1095,8 @@
       "unit-dummy-3"
     ]
   },
-  "_optional": "Art that may legitimately be absent. A key here is skipped by the loader with a console warning rather than a missing-texture error, and every one belongs to a family with a named fallback -- tests/boot.test.ts enforces that. ability-bailey-1 and ability-eli-1 are the two hero slot-1 icons that were not in the upload. ability-eli-2 joined them deliberately: the file WAS present, a hatched stand-in reading STAR / LOCKED, and it was deleted when Star Rain moved to slot 1 and Ice Beam took slot 2 -- a placeholder naming the wrong ability and calling it locked is worse than the neutral stand-in. Every other ability_<hero>_<slot>.webp is present. They fall back to the generated missing-icon stand-in, and dropping the real files in later needs no code change.",
-  "_haymakerIcon": "abilities/ability_haymaker.webp is still in the repo and is no longer bound to anything. The ten ability_<hero>_<slot>.webp icons replaced it: every hero's two buttons now draw their own icon, Cory's included, so the whole bar is one scheme rather than one hero's real art beside four placeholders. The placeholders are marked as such and are to be replaced by files with the same names, at which point Cory's button improves with everyone else's. Re-binding the old icon is one line here plus one in heroes.json."
+  "_optional": "Art that may legitimately be absent. A key here is skipped by the loader with a console warning rather than a missing-texture error, and every one belongs to a family with a named fallback -- tests/boot.test.ts enforces that. IT IS NOT A LICENCE TO SHIP WITHOUT THE FILE. `queueArt` requests every key in `files`, optional or not -- it cannot know which are absent without asking the server -- so a listed key whose file is missing is a 404 on every boot for every player, and three of them shipped that way. tests/assets.test.ts now fails on exactly that. The eight icons left here are the tower-panel glyphs, which have a generated stand-in.",
+  "_greyable": "A greyscale copy is built for each of these at boot (BootScene, systems/Desaturate.ts) and the HUD swaps to it when the thing is unavailable. THE TEN HERO ICONS ARE HERE BECAUSE OF SLOT 2. It is greyed out until the hero transforms, and a tint cannot say that -- Phaser's tint multiplies, so a tinted icon reads as \"in shadow\" rather than as \"switched off\". It used to read as neither: the key was absent from this list, `greyKey` named a texture that had never been built, the swap was skipped and the button kept its full colour with only a dim tint on it. The word LOCKED being painted into the placeholder art was what made that survivable, and that word is gone with the placeholders.",
+  "_fx": "EFFECTS THE GAME DRAWS FOR ITSELF, by role. `spark`, `blast`, `puff` and `muzzle` are combat feedback; `bossBolt` is one boss's projectile; `stunned`, `burn` and `mindControl` are STATUS MARKERS drawn over an enemy for as long as the status lasts, which is why they are here rather than in heroes.json beside the ability that applied them -- a burn is a fact about the enemy, and anything that can set something alight draws the same flame. NOTHING CONTROLS AN ENEMY TODAY: `mindControl` is bound so its art ships and is named, and `enemyMarker` in GameScene draws it the day a power sets `Enemy.controlled`.",
+  "_heroHeight": "WHY hero-cory-power CARRIES NO displayHeight. Every other sprite's on-screen height is a manifest field, and CLAUDE.md rule 7 says so. The Rivian is the exception because its height is a decision about ONE HERO rather than about one picture: it is 1.51:1, so at the roster's height it would be wider than the road, and the number that fixes that belongs beside the hero it is about. `heroes.json cory.poweredHeight` is it, and it is the only copy -- a second one here is how the two come to disagree. Hero.ts asks the roster first and falls back to this entry, so a hero with no `poweredHeight` is sized by its art exactly as before, and tests/heroes.test.ts fails if a powered form has a height from neither."
 }

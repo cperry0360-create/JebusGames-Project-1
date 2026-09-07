@@ -8,7 +8,7 @@ import { makeShadow, deathPuff } from '../systems/Presentation.ts'
 import { applyGroundRender } from '../systems/Art.ts'
 import { facesLeft, mirroredFor } from '../systems/Facing.ts'
 import presentationData from '../data/presentation.json'
-import { attackFramesFor, heroSprite, walkFramesFor } from '../systems/Heroes.ts'
+import { attackFramesFor, heroHeight, heroSprite, walkFramesFor } from '../systems/Heroes.ts'
 import {
   TRANSFORM_BELOW, TRANSFORM_INVULNERABLE_SECONDS, damageToHero, shouldTransform,
 } from '../systems/Transform.ts'
@@ -16,8 +16,8 @@ import { Enemy } from './Enemy.ts'
 
 const PRESENTATION = presentationData
 
-/** The stand-in walk cycle for a hero with no sheet: how far, and how fast.
- *  Two pixels reads as steps; four reads as a hovercraft. */
+/** The procedural walk cycle: how far, and how fast. Two pixels reads as
+ *  steps; four reads as a hovercraft. */
 const BOB_PIXELS = 2.5
 const BOB_SPEED = 11
 
@@ -25,12 +25,13 @@ const BOB_SPEED = 11
  * Cory. Rally-point control, not free movement: select him, tap a spot, he
  * walks there and fights whatever arrives.
  *
- * He has two forms. On foot he is a man with a rolled-up newspaper; at 25%
- * health he gets into an armoured SUV, which is wider than the road and does
- * not care about it. Both are drawn facing LEFT — but the four heroes added
- * after him are drawn facing right, so which way the art points is a property
- * of the hero (`artFacing`) and not a rule in here. It was a rule in here, and
- * it made the other four walk backwards everywhere they went.
+ * He has two forms. On foot he is a man with a rolled-up newspaper; powered,
+ * he is in a spiked Rivian that is wider than the road and does not care about
+ * it. ALL FIVE HEROES ARE DRAWN FACING RIGHT and none of them needs a
+ * correction: which way the art points is still a property of the hero
+ * (`artFacing`) rather than a rule in here, because it was a rule in here —
+ * "both hero sprites are drawn facing LEFT", true of the only hero there was
+ * when it was written — and it made the four added afterwards walk backwards.
  *
  * Three rules are load-bearing here:
  *   - Last Stand fires once at 25% health, and cannot re-arm inside an
@@ -72,7 +73,7 @@ export class Hero extends Phaser.GameObjects.Container {
    * how much he takes, and every hero has it.
    */
   powered = false
-  /** Seconds of the bob's own clock. Only a hero with no walk sheet uses it. */
+  /** Seconds of the bob's own clock. */
   private bobPhase = 0
   /** How many enemies he is holding right now, and the most he may hold. The
    *  scene sets the first every frame; both are read by the HUD and by the
@@ -97,10 +98,12 @@ export class Hero extends Phaser.GameObjects.Container {
   /** Where the sprite sits when it is not bobbing. */
   private restingBodyY = 0
   /**
-   * Which way he is HEADING, not which way the sprite is drawn. The two are
-   * the same question only for a hero whose art faces right, which is four of
-   * the five — and the one it is not true of is the one the old code was
-   * written against.
+   * Which way he is HEADING, not which way the sprite is drawn.
+   *
+   * The two are the same question for every hero on the roster today, since
+   * all five face right — but they are still two questions, and the code that
+   * assumed otherwise is what made four heroes walk backwards. `mirrored`
+   * resolves this against the hero's own `artFacing`.
    */
   private headingLeft = false
   /** Whatever he swung at last frame, so `engaged` can be asked before the
@@ -540,22 +543,34 @@ export class Hero extends Phaser.GameObjects.Container {
     this.shownIndex = st.index
     const key = this.frameKey(st.pose, st.index)
     if (!key || !this.scene.textures.exists(key)) return
-    this.body_.setTexture(key)
-    // Re-anchored on every swap, because the two clips do NOT share a canvas
-    // or a foot fraction: walk is 557x704 and attack 787x720. Taking the
-    // anchor from the manifest per FRAME is what keeps his feet in one place
-    // across a transition.
-    this.artOffset = applyGroundRender(this.body_, key)
-    this.applyFacing()
+    if (key === this.body_.texture.key) return
+    // THROUGH `wearSprite`, so the anchor AND the height are both re-read.
+    // This used to call `applyGroundRender` directly, which takes its height
+    // from the manifest -- and Cory's powered art deliberately has none there,
+    // because the Rivian's size is a fact about the hero and lives in
+    // heroes.json. No hero has frame clips any more, so `frameKey` returns the
+    // hero's current form and this branch now fires on a pose CHANGE rather
+    // than on a frame change: starting to walk while powered would have
+    // re-anchored the Rivian at its unscaled 700px source height.
+    this.wearSprite(key)
   }
 
-  /** Puts on a different picture and re-anchors, the same way a frame swap
-   *  does -- the two forms do not share a canvas or a foot fraction. */
-  private wearSprite(key: string): void {
+  /**
+   * Puts on a different picture and re-anchors.
+   *
+   * The two forms share neither a canvas nor a foot fraction, so the anchor is
+   * re-read from the manifest on every swap. The HEIGHT is asked of the roster
+   * first: Cory's powered Rivian is sized by `heroes.json cory.poweredHeight`
+   * rather than by its art entry, because how big that vehicle is drawn is a
+   * decision about him and not about the picture. Every other hero gets
+   * `undefined` and is sized by its art exactly as before.
+   */
+  private wearSprite(key: string, powered = this.powered): void {
     this.body_.setTexture(key)
-    this.artOffset = applyGroundRender(this.body_, key)
+    this.artOffset = applyGroundRender(this.body_, key, heroHeight(this.heroId, powered))
     this.applyFacing()
     this.restingBodyY = this.body_.y
+    this.captureRest()
   }
 
   /**
@@ -577,17 +592,20 @@ export class Hero extends Phaser.GameObjects.Container {
   }
 
   /**
-   * The stand-in for a walk cycle: a couple of pixels, up and down.
+   * The walk cycle: a couple of pixels, up and down.
    *
-   * Only for a hero with no walk sheet. Four of the five are single pictures
-   * and would otherwise slide across the field like a chess piece; two pixels
-   * of vertical travel is enough to read as steps without pretending to be
-   * animation. It turns itself off for a hero that HAS a sheet -- the
-   * condition is the sheet's presence, not a flag someone has to set -- so
-   * dropping real frames into art.json's roster is all it takes.
+   * ALL FIVE HEROES GET IT NOW. It used to be the stand-in for the four with
+   * no walk sheet, skipped for the one that had one -- and the condition was
+   * the sheet's presence rather than a flag, precisely so that dropping real
+   * frames in would turn it off by itself. That went the other way in the end:
+   * Cory's sheet was deleted rather than four more being drawn, so there is no
+   * hero left for the exemption to apply to and the branch that tested for it
+   * could only ever answer the same way.
+   *
+   * Two pixels of vertical travel is enough to read as steps without
+   * pretending to be animation.
    */
   private bob(dt: number, moving: boolean): void {
-    if (walkFramesFor(this.heroId)) { this.body_.y = this.restingBodyY; return }
     if (!moving) {
       this.bobPhase = 0
       this.body_.y = this.restingBodyY
@@ -632,15 +650,16 @@ export class Hero extends Phaser.GameObjects.Container {
 
     this.scene.time.delayedCall(ls.transformPauseMs, () => {
       if (this.down) return
-      this.body_.setTexture(this.def.ultimateSprite)
-      this.artOffset = applyGroundRender(this.body_, this.def.ultimateSprite)
-      this.applyFacing()
+      // Through `wearSprite`, so the ultimate form is sized by the same rule
+      // the powered form is. For all five heroes these are the same key now,
+      // and Cory's carries a height that lives with the hero rather than with
+      // the art -- setting the texture by hand here bypassed that and drew the
+      // Rivian at whatever its art entry happened to say, which is nothing.
+      this.wearSprite(this.def.ultimateSprite, true)
       // The shadow belongs to the vehicle now, not to the man.
       this.shadow.destroy()
       this.shadow = makeShadow(this.scene, this.def.ultimateSprite)
       this.addAt(this.shadow, 0)
-      // Both objects the pose multiplies have just been replaced.
-      this.captureRest()
       this.body_.setAlpha(0)
       this.scene.tweens.add({ targets: this.body_, alpha: 1, duration: 180 })
       this.scene.cameras.main.shake(160, 0.008)
@@ -732,12 +751,12 @@ export class Hero extends Phaser.GameObjects.Container {
     // Back on foot. If he went down in the SUV the vehicle art is still on the
     // sprite, and the vehicle without its Last Stand stats would be a lie.
     if (this.body_.texture.key !== this.def.bodySprite) {
-      this.body_.setTexture(this.def.bodySprite)
-      this.artOffset = applyGroundRender(this.body_, this.def.bodySprite)
+      // `powered` is already false by here, so the base form is sized as the
+      // base form -- the height override is asked for the form he is IN.
+      this.wearSprite(this.def.bodySprite, false)
       this.shadow.destroy()
       this.shadow = makeShadow(this.scene, this.def.bodySprite)
       this.addAt(this.shadow, 0)
-      this.captureRest()
     }
     this.applyFacing()
 

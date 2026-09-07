@@ -72,14 +72,23 @@ test('the sprite keys the scenes ask for by role are all in the manifest', () =>
 })
 
 test('Cory is painted art in two forms, both standing on the ground', () => {
+  // `heroes/`, not `hero/`. He used to be the only hero and had a directory to
+  // himself with a walk sheet, an attack sheet, an idle and an SUV in it; the
+  // sheets are deleted and his two pictures live with the other four's now.
   const c = heroes.cory
-  for (const [what, key] of [['on foot', c.bodySprite], ['in the SUV', c.ultimateSprite]] as [string, string][]) {
-    assert.match(art.files[key], /^hero\//, `Cory ${what} is not using the painted hero art`)
+  for (const [what, key] of [['on foot', c.bodySprite], ['powered', c.poweredSprite]] as [string, string][]) {
+    assert.match(art.files[key], /^heroes\//, `Cory ${what} is not using the painted hero art`)
     const cfg = art.render[key]
     assert.ok(cfg, `Cory ${what} has no render entry`)
     assert.equal(cfg.anchorY, 1, `Cory ${what} must stand on his own base`)
     assert.ok(cfg.shadowWidth > 0, `Cory ${what} casts no shadow`)
   }
+  // ONE PICTURE FOR BOTH TRANSFORMATIONS, like the other four heroes. There
+  // used to be three: a man, a powered form he did not have, and a separate
+  // DAD MODE SUV. He has the Rivian for both now, and Last Stand still has a
+  // visual of its own -- the shake, the flash, the pause and the stats.
+  assert.equal(c.ultimateSprite, c.poweredSprite,
+    'the Last Stand form and the powered form are one picture for every hero')
 })
 
 test('the Last Stand form is sized by width, and is wider than the road', () => {
@@ -94,12 +103,30 @@ test('the Last Stand form is sized by width, and is wider than the road', () => 
   // when Cory's source went from 199x208 to 386x470 and this read 2.56x for a
   // pair of sprites whose on-screen relationship had not changed at all.
   // shadowWidth is the measured width he actually stands on.
-  const suvW = (suv.contentWidth / suv.contentHeight) * suv.displayHeight
+  // THE HEIGHT IS NOT IN art.json FOR THIS ONE KEY. The Rivian is sized by
+  // `heroes.json cory.poweredHeight`, because how big that vehicle is drawn is
+  // a decision about the hero rather than about the picture -- see the note
+  // there. Read from the same place the game reads it, so this measures the
+  // sprite that is actually drawn.
+  assert.ok(heroes.cory.poweredHeight, 'the Rivian has no height anywhere')
+  assert.equal(suv.displayHeight, undefined,
+    'a second copy of the height in art.json is how the two come to disagree')
+  const suvW = (suv.contentWidth / suv.contentHeight) * heroes.cory.poweredHeight
+  // MEASURED ON THE SHADOW, which for a vehicle is its whole body: it is drawn
+  // in 3/4 receding, so only the near front wheel reaches the ground line and
+  // a stance measured from that is one wheel wide under a whole truck. On foot
+  // he stands on both shoes, which is a stance.
   const multiple = suv.shadowWidth / onFoot.shadowWidth
   assert.ok(multiple > 2.5,
-    `the SUV is only ${multiple.toFixed(2)}x his stance; it is supposed to be a vehicle`)
+    `the Rivian is only ${multiple.toFixed(2)}x his stance; it is supposed to be a vehicle`)
   assert.ok(suvW > map.roadWidth,
-    `the SUV is ${suvW.toFixed(0)}px against a ${map.roadWidth}px road; it is supposed to not fit`)
+    `the Rivian is ${suvW.toFixed(0)}px against a ${map.roadWidth}px road; it is supposed to not fit`)
+  // AND NOT SO WIDE THAT IT STOPS READING AS A VEHICLE AMONG PEOPLE. At the
+  // 120px the brief first suggested it would be 181px across, half again the
+  // widest hero on the roster; 95 makes it 144. The ceiling is what stops the
+  // next re-export quietly turning him into scenery.
+  assert.ok(suvW < 160,
+    `the Rivian is ${suvW.toFixed(0)}px across; past about 160 it stops being a hero and becomes terrain`)
 })
 
 test('DAD MODE grows every number it is supposed to grow', () => {
@@ -572,11 +599,16 @@ test('every hero declares a whole slot 1 and a whole slot 2', () => {
   // ONE BLOCK OF FIELDS FOR ALL FIVE. Every skill declares every field, zeros
   // included, so a reader can see what Bark does NOT do and a new hero cannot
   // half-declare itself and read `undefined` as 0 at some later call site.
-  const FIELDS = ['name', 'icon', 'effect', 'cooldown', 'range', 'radius', 'damage',
+  // `fx` sits beside `icon` in both shapes: the picture the ability DRAWS is
+  // as much a fact about the hero as the picture on its button, and putting it
+  // here rather than in a switch in the scene is what makes a new hero's two
+  // effects a data edit. It is in the required list because this test's whole
+  // point is that nothing may half-declare itself.
+  const FIELDS = ['name', 'icon', 'fx', 'effect', 'cooldown', 'range', 'radius', 'damage',
     'ignoresArmor', 'knockbackPixels', 'stunSeconds', 'slowFactor', 'slowSeconds',
     'burnPerSecond', 'burnSeconds', 'hits', 'gapSeconds', 'sound', 'voice']
   const EFFECTS = ['punch', 'burst', 'burn', 'double', 'howl', 'rain']
-  const POWER_FIELDS = ['name', 'icon', 'effect', 'cooldown', 'targeted', 'castRadius',
+  const POWER_FIELDS = ['name', 'icon', 'fx', 'effect', 'cooldown', 'targeted', 'castRadius',
     'radius', 'damage', 'ignoresArmor', 'hits', 'gapSeconds', 'durationSeconds',
     'tickSeconds', 'slowFactor', 'slowSeconds', 'knockbackPixels', 'stunSeconds', 'sound']
   const POWER_EFFECTS = ['hazard', 'burst', 'bomb', 'rain', 'dash', 'beam']
@@ -958,31 +990,67 @@ test('the hero abilities point at their own icons, not at borrowed ones', () => 
       assert.equal(art.files[key], `abilities/ability_${id}_${n}.webp`,
         `${key} points at the wrong file`)
       assert.ok(art.render[key], `${key} has no render entry, so it cannot be fitted`)
-      // On disk, unless it is one of the two the upload did not include -- and
-      // those have to be declared optional, or a missing file is a hard error
-      // at boot rather than a stand-in icon.
-      const there = existsSync(new URL(`../public/assets/${art.files[key]}`, import.meta.url))
-      if (!there) {
-        assert.ok(optional.includes(key),
-          `${art.files[key]} is not on disk and ${key} is not marked optional`)
-      }
+      // ON DISK. NO EXEMPTION. This used to accept a missing file as long as
+      // the key was marked optional, and that is precisely how three icons
+      // came to 404 on the live build with all four CI jobs green: `optional`
+      // stops BootScene showing a banner, and does not stop the loader asking
+      // the server for the file. All ten are here now. See tests/assets.test.ts,
+      // which asks the same question of the whole manifest.
+      assert.ok(existsSync(new URL(`../public/assets/${art.files[key]}`, import.meta.url)),
+        `${art.files[key]} is not on disk; the loader will request it and get a 404`)
       // And nothing borrows a drafted ability's icon.
       assert.doesNotMatch(key, /meteor|gnomes|molotov|glacier|chain|scratch/,
         `${key} is still a borrowed icon`)
     }
   }
-  // The three that are missing, named so that the day they land is a data
-  // change and nothing else. If this list is ever empty, drop them from
-  // `optional`.
-  //
-  // ability-eli-2 was added to it deliberately rather than by neglect. Its
-  // file existed -- a hatched stand-in reading STAR / LOCKED -- and it was
-  // drawn for Star Rain while Star Rain was Eli's locked slot 2. Star Rain is
-  // his slot 1 now and slot 2 is Ice Beam, so that placeholder named the wrong
-  // ability AND called it locked. It was deleted: the generated stand-in says
-  // nothing, which is better than a picture that says something false.
-  assert.deepEqual(optional.filter((k: string) => k.startsWith('ability-')).sort(),
-    ['ability-bailey-1', 'ability-eli-1', 'ability-eli-2'])
+  // AND NONE OF THEM IS OPTIONAL ANY MORE. This list held three icons -- two
+  // that were never uploaded and one deleted for naming the wrong ability --
+  // and every one of them was a 404 on every boot for every player while this
+  // test passed. The real art landed for all ten, so the exemption is gone and
+  // the assertion is inverted: an ability icon on the optional list is now the
+  // failure, not the accommodation.
+  assert.deepEqual(optional.filter((k: string) => k.startsWith('ability-')), [],
+    'an ability icon marked optional is a file the loader will 404 on')
+
+  // EVERY HERO ICON GETS A GREYSCALE COPY, and slot 2 is why. It is greyed out
+  // until the hero transforms, and the copies are built at boot from this list
+  // -- the ten were missing from it, so `greyKey` named a texture that had
+  // never been made, the swap was skipped, and the only thing on screen saying
+  // the button was locked was the word LOCKED painted into the placeholder
+  // art. That word is gone with the placeholders.
+  const greyable: string[] = art.greyable ?? []
+  for (const [id, h] of heroEntries()) {
+    for (const slot of ['slot1', 'slot2'] as const) {
+      assert.ok(greyable.includes(h[slot].icon),
+        `${id}'s ${slot} icon has no greyscale copy, so it cannot read as unavailable`)
+    }
+  }
+})
+
+test('every hero power draws real art, sized to the power', () => {
+  // The ten procedural placeholder shapes are gone: a stroked ring, a two-line
+  // stab, a swept band and a toothed rectangle, tinted to the hero. Every
+  // slot now names the picture it draws, and the picture is in the manifest.
+  const art = JSON.parse(readFileSync(new URL('../src/data/art.json', import.meta.url), 'utf8'))
+  for (const [id, h] of heroEntries()) {
+    for (const slot of ['slot1', 'slot2'] as const) {
+      const key = h[slot].fx
+      assert.ok(key, `${id}'s ${slot} names no effect art`)
+      assert.ok(art.files[key], `${id}'s ${slot} draws "${key}", which is not in the manifest`)
+      assert.ok(existsSync(new URL(`../public/assets/${art.files[key]}`, import.meta.url)),
+        `${art.files[key]} is not on disk`)
+      const cfg = art.render[key]
+      assert.ok(cfg?.contentWidth && cfg?.contentHeight,
+        `${key} has no content box, so HeroFx cannot size it to the power's radius`)
+    }
+  }
+  // THE TWO THAT ARE STRETCHED ALONG A LINE. Their length is whatever distance
+  // the player tapped, so they are anchored at the hero's END of the picture
+  // rather than at its middle, and both are authored travelling right.
+  for (const key of ['fx-ice-beam', 'fx-zoomies']) {
+    assert.equal(art.render[key].stretch, 'line', `${key} must declare that it is stretched`)
+    assert.equal(art.render[key].anchorX, 0, `${key} must be anchored at the hero's end`)
+  }
 })
 
 test('the hero medallions are round and the drafted plates are not', () => {

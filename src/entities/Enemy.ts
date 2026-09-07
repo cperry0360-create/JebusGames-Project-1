@@ -307,6 +307,45 @@ export class Enemy extends Phaser.GameObjects.Container {
     return this.stunRemaining > 0
   }
 
+  /**
+   * On fire, and for how much longer.
+   *
+   * A VISIBLE STATE FOR A DAMAGE SOURCE THAT ALREADY EXISTED. Han's Ember has
+   * always ticked its burn from a timer in the scene; nothing on the enemy
+   * knew about it, so nothing could draw a flame over one. This is that fact,
+   * on the enemy where it belongs — the marker follows the enemy, survives the
+   * enemy being knocked back, and goes when the enemy does, none of which a
+   * sprite owned by a timer would.
+   *
+   * It carries NO DAMAGE. The burn's damage is still the scene's timer, down
+   * to the tick, because moving it here would change when it lands and this
+   * change is a visual one.
+   */
+  private burnRemaining = 0
+
+  get burning(): boolean {
+    return this.burnRemaining > 0
+  }
+
+  /** Sets it alight for `seconds`, or extends a burn already running. */
+  setBurning(seconds: number): void {
+    this.burnRemaining = Math.max(this.burnRemaining, seconds)
+  }
+
+  /**
+   * Under somebody else's orders.
+   *
+   * NOTHING SETS THIS YET and it is deliberately here anyway. `fx_mind_control`
+   * arrived with the hero art batch as "a marker drawn above a controlled
+   * enemy", and there is no power on the roster that controls one -- the icon
+   * named Mind Control is bound to a slot whose data says Seismic, which is a
+   * naming mismatch reported rather than resolved, because renaming an ability
+   * is not a visual change. So the STATE is declared, the art is bound, and
+   * the scene's marker pass draws it the moment anything sets this true. One
+   * line of gameplay away rather than one art pipeline away.
+   */
+  controlled = false
+
   /** Nothing holds a boss: it walks through the line. */
   get blockable(): boolean {
     return this.def.blockable
@@ -511,6 +550,7 @@ export class Enemy extends Phaser.GameObjects.Container {
       if (this.slowRemaining <= 0) this.slowFactor = 0
     }
     if (this.stunRemaining > 0) this.stunRemaining -= dt
+    if (this.burnRemaining > 0) this.burnRemaining -= dt
     if (this.shreddingFor > 0) this.shreddingFor -= dt
     this.sinceStun += dt
     this.sinceSlow += dt

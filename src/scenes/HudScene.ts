@@ -811,13 +811,41 @@ export class HudScene extends Phaser.Scene {
       const armed = s.pendingAbility === r.id
       const left = this.world.cooldowns.secondsLeft(r.id)
 
+      // THE STATE COMES FROM THE GAME, NEVER FROM THE PICTURE.
+      //
+      // It used to come from both, and the picture was winning. The ten hero
+      // icons were placeholders with the words TEMP and LOCKED painted into
+      // them, so slot 2 read as locked in every state there is -- including
+      // the one where the hero has transformed and the power is ready, which
+      // is the moment the button exists for. Worse, it read as locked while
+      // being pressable, because what actually gates the tap is `slotUsable`
+      // and that was answering correctly the whole time.
+      //
+      // Nothing in the art says anything now. Three states, three treatments:
+      //
+      //   unavailable  the greyscale copy, at full brightness. A real
+      //                desaturation, because Phaser's tint MULTIPLIES: a
+      //                tinted colour icon goes dark and stays colourful, which
+      //                reads as "in shadow" rather than as "switched off".
+      //                The copies are built at boot from art.json's `greyable`
+      //                list -- the ten hero icons were missing from it, so
+      //                `greyKey` named a texture that had never been made, the
+      //                swap was skipped, and the only thing saying LOCKED was
+      //                the word painted into the placeholder.
+      //   cooling      the colour icon, dimmed, under the sweep and a count.
+      //   ready        the colour icon, undimmed.
       const base = this.world.abilityIcon(r.id) ?? slot.icon.texture.key
       const wantKey = usable ? base : greyKey(base)
       if (this.textures.exists(wantKey) && slot.icon.texture.key !== wantKey) {
         slot.icon.setTexture(wantKey)
         fitInBox(slot.icon, base, r.boxH)
       }
-      slot.icon.setTint(ready && usable ? 0xffffff : 0x8a8a8a)
+      // The greyscale copy is already the "off" state; dimming it as well
+      // makes an unavailable button darker than a cooling one, which inverts
+      // the reading -- the thing you cannot use at all looked further away
+      // than the thing that is nearly back.
+      const greyed = slot.icon.texture.key !== base
+      slot.icon.setTint(ready || greyed ? 0xffffff : 0x8a8a8a)
 
       // Armed reads as a glow around the card rather than a plate behind it,
       // and it follows the card's own shape: a ring for the round hero

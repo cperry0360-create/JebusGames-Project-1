@@ -64,6 +64,28 @@ export function hasPoweredArt(id: string): boolean {
 }
 
 /**
+ * How tall this hero's art should be drawn, in world pixels, or undefined to
+ * take whatever its art entry asks for.
+ *
+ * ONE HERO USES IT AND THAT IS THE POINT. Every other sprite in the game is
+ * sized by the manifest, because how big a picture is drawn is a fact about
+ * the picture. Cory's powered form is the exception: the Rivian is 1.51:1, so
+ * at the height the other nine hero pictures are drawn at it would be 181px
+ * across -- wider than the road it drives over and half again the widest hero
+ * -- and shrinking it is a decision about THIS HERO rather than about that
+ * file. So the number sits with the hero, art.json carries no `displayHeight`
+ * for that key, and there is exactly one copy of it.
+ *
+ * A hero with no `poweredHeight` gets undefined and is sized by its art, which
+ * is what the other four do and what every hero did before this.
+ */
+export function heroHeight(id: string, powered: boolean): number | undefined {
+  if (!powered) return undefined
+  const def = DATA[resolveHeroId(id)]
+  return def?.poweredHeight
+}
+
+/**
  * A hero's walk frames, or null when it has none.
  *
  * NULL IS WHAT DRIVES THE BOB. A hero with no sheet is one picture that would

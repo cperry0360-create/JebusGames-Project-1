@@ -71,6 +71,34 @@ export class Path {
     return Math.atan2(b.y - a.y, b.x - a.x)
   }
 
+  /**
+   * Which way the lane runs at the point of it nearest to (x, y).
+   *
+   * FOR SOMETHING PUT ON THE ROAD RATHER THAN SOMETHING WALKING IT. The Spike
+   * Strip is dropped at a tapped point and is meant to lie ACROSS the traffic,
+   * so it has to know which way the traffic is going -- and the tap is a place
+   * on the map, not a distance along the lane, which is what `angleAt` takes.
+   *
+   * Falls back to the nearest segment's own heading, which is the honest
+   * answer for a tap beside the lane as well as on it: a strip laid a little
+   * off the road still wants to be square to the road.
+   */
+  headingNear(x: number, y: number): number {
+    let best = Infinity
+    let angle = 0
+    for (let i = 1; i < this.points.length; i++) {
+      const a = this.points[i - 1]!
+      const b = this.points[i]!
+      const dx = b.x - a.x
+      const dy = b.y - a.y
+      const len2 = dx * dx + dy * dy
+      const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / len2))
+      const d = Math.hypot(x - (a.x + dx * t), y - (a.y + dy * t))
+      if (d < best) { best = d; angle = Math.atan2(dy, dx) }
+    }
+    return angle
+  }
+
   /** Shortest distance from a point to the lane, for checking clearances. */
   distanceTo(x: number, y: number): number {
     let best = Infinity

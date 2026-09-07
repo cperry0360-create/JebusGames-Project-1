@@ -526,6 +526,10 @@ export type HeroSkillEffect = 'punch' | 'burst' | 'burn' | 'double' | 'howl' | '
 export interface HeroSkillDef {
   name: string
   icon: string
+  /** The art this skill draws when it lands, as an art.json key. Data rather
+   *  than a switch in the scene: a hero's two effects are as much a fact about
+   *  the hero as its two icons are, and adding one is an edit to heroes.json. */
+  fx: string
   effect: HeroSkillEffect
   cooldown: number
   /** Reach, for a skill that picks a target. 0 for one centred on the hero. */
@@ -573,6 +577,8 @@ export type HeroPowerEffect = 'hazard' | 'burst' | 'bomb' | 'rain' | 'dash' | 'b
 export interface HeroPowerDef {
   name: string
   icon: string
+  /** The art this power draws, as an art.json key. See `HeroSkillDef.fx`. */
+  fx: string
   effect: HeroPowerEffect | null
   /** Seconds. The same for all five, and reset by the transformation. */
   cooldown: number
@@ -609,21 +615,42 @@ export interface HeroDef {
   title: string
   blurb: string
   bodySprite: string
-  /** The Last Stand form. Cory does not get angrier; he gets into an SUV. */
+  /** The Last Stand form. For all five this is the same key as
+   *  `poweredSprite`: the transformation is told by the shake, the flash, the
+   *  half-second pause and the stat change rather than by a third picture. */
   ultimateSprite: string
   /**
-   * The form worn once health has been at or below half, or null for a hero
-   * with no powered art. Cory is the null: `ultimateSprite` is already his DAD
-   * MODE look, and spending it here would leave Last Stand nothing to show.
+   * The form worn once health has been at or below half.
+   *
+   * It was optional because Cory had no powered art and kept his own picture.
+   * He has the spiked Rivian now and all five heroes have both forms, so the
+   * `null` branch is dead data-wise -- the type keeps it because `heroSprite`
+   * still falls back to the base key, and a hero added tomorrow with only one
+   * picture should be a data edit rather than a crash.
    */
   poweredSprite?: string | null
+  /**
+   * How tall the POWERED form is drawn, in world pixels, or absent to take
+   * whatever its art entry asks for.
+   *
+   * ONE HERO SETS IT. The Rivian is 1.51:1, so at the height the other nine
+   * hero pictures are drawn at it would be 181px across -- wider than the road
+   * and half again the widest hero. That is a decision about this character
+   * rather than about that file, so it lives here and art.json carries no
+   * `displayHeight` for the key at all: one number, one place.
+   */
+  poweredHeight?: number
   portraitSprite: string
   /**
    * Which way this hero's art is drawn, before any mirroring.
    *
-   * Cory faces LEFT — every frame, and the SUV. The four heroes added after
-   * him face right. It was a blanket rule in the renderer and it made all four
-   * of them walk backwards; it is a property of the art, so it lives here.
+   * ALL FIVE ARE 'right' NOW. Cory was the exception — every frame of him and
+   * the SUV faced left — and it was once a blanket rule in the renderer, which
+   * made the four heroes added after him walk backwards. His new art faces
+   * right like everyone else's, so no hero needs a correction any more. The
+   * field stays because it is a property of the ART: the enemies still
+   * disagree with each other and read the same `mirroredFor`, so removing it
+   * from one side would leave one rule with two shapes.
    */
   artFacing: 'left' | 'right'
   /** The hero's own tint. Every placeholder effect either of the two hero
@@ -854,6 +881,20 @@ export interface SpriteRender {
    * fixed display size and the frames do the growing.
    */
   sheet?: { frameWidth: number; frameHeight: number; frames: number }
+  /**
+   * Effects drawn along a LINE rather than at a point.
+   *
+   * The ice beam and the dash trail are fixed-width pictures drawn over a
+   * distance the power decides, so they are stretched from the hero to the
+   * point tapped. That makes their `anchorX` a statement about which END of
+   * the picture is the hero's -- 0, the left edge, because both are authored
+   * travelling right -- and not, as it is everywhere else in this manifest,
+   * a measurement of where a character's feet are. `manifest.test.ts` exempts
+   * these from the "an anchor near an edge means the measurement latched onto
+   * a prop" rule on the strength of this field, so the exemption is declared
+   * by the art rather than by a list of names in a test.
+   */
+  stretch?: 'line'
   /** Button plates only: the end-cap sizes in source pixels. A plate is drawn
    *  by slicing at these, so the metal caps keep their proportions at any
    *  width and only the plain middle stretches. */
@@ -937,6 +978,13 @@ export interface ArtDef {
     bossBolt: string
     /** Drawn over a tower the boss has switched off. Six frames. */
     stunned: string
+    /** Drawn over an enemy that is alight, for as long as it burns. A ROLE
+     *  RATHER THAN A FIELD ON HAN'S EMBER: a burn is a fact about the enemy,
+     *  and anything that sets something alight draws the same flame. */
+    burn: string
+    /** Drawn over an enemy under someone else's orders. Bound so the art
+     *  ships and is named; nothing sets that state yet. */
+    mindControl: string
   }
   decor: string[]
   /** Keys that get a greyscale copy built at boot, for unavailable states. */
@@ -947,18 +995,28 @@ export interface ArtDef {
     cpPlays: string
   }
   /**
-   * The hero's animation clips.
+   * WHICH PICTURE EACH HERO WEARS, in each of its two forms.
    *
-   * Frame lists rather than a spritesheet, because the two clips are not on
-   * one canvas: walk is 557x704 and attack 787x720, with their feet at
-   * different fractions of each. Each frame carries its own render entry, so
-   * the anchor is re-read on every swap.
+   * This used to be Cory's frame lists -- `idle`, `walk`, `attack` -- because
+   * he was the only hero and his walk sheet was the animation system. All five
+   * are single pictures now and the sheet is deleted, so what is left is the
+   * roster: a base, a powered form, and two nulls kept so a sheet can be
+   * dropped back in per hero without a shape change here.
    */
   hero: {
-    idle: string
-    walk: string[]
-    attack: string[]
-    /** 1-based, matching the filenames. The swing's damage fires on it. */
+    roster: Record<string, {
+      base: string
+      /** What it wears once health has been at or below half. */
+      powered: string | null
+      /** Frame lists, or null. NULL IS WHAT DRIVES THE BOB: a hero with no
+       *  sheet is one picture that would slide across the field, so Hero.ts
+       *  bobs it instead. All five are null today. */
+      walk: string[] | null
+      attack: string[] | null
+    }>
+    /** 1-based. The frame of the swing clock on which the damage fires. It
+     *  outlived the frames: nothing swaps a texture on it any more, but WHEN
+     *  a swing lands is a tuned number and is still read from here. */
     attackImpactFrame: number
   }
   /** Textures the game draws for itself, named here so code never does. */

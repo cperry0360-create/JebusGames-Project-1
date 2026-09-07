@@ -76,11 +76,12 @@ test('every hero can be selected and spawns with the correct art', () => {
     }
   }
 
-  // Cory is the one with no powered art, and that is deliberate rather than
-  // missing: his ultimate sprite is already DAD MODE, so the powered form
-  // would take Last Stand's only visual away from it.
-  assert.equal(hasPoweredArt('cory'), false)
-  for (const id of HERO_IDS.filter((h) => h !== 'cory')) {
+  // ALL FIVE HAVE POWERED ART NOW. Cory was the exception -- he had none, so
+  // he transformed and kept his own picture, and `ultimateSprite` carried his
+  // DAD MODE look separately so the powered form would not spend it. He has
+  // the spiked Rivian for both since the hero art batch, which is what the
+  // other four have always done.
+  for (const id of HERO_IDS) {
     assert.equal(hasPoweredArt(id), true, `${id} has no powered art`)
   }
 
@@ -90,7 +91,11 @@ test('every hero can be selected and spawns with the correct art', () => {
   assert.equal(resolveHeroId(null), DEFAULT_HERO_ID)
   assert.equal(heroDef('nobody'), null)
   assert.equal(heroDef('_note'), null, 'a note key in heroes.json must not read as a hero')
-  assert.equal(heroSprite('nobody', true), HEROES.cory.bodySprite)
+  // An unknown id resolves to the DEFAULT HERO and then answers the question
+  // that was asked, which for `powered: true` is Cory's powered art. It used
+  // to be his base art, because he had no powered form to fall back from.
+  assert.equal(heroSprite('nobody', true), HEROES.cory.poweredSprite)
+  assert.equal(heroSprite('nobody', false), HEROES.cory.bodySprite)
 })
 
 test('the hero is no longer randomised and reroll does not change it', () => {
@@ -443,27 +448,46 @@ test('Cory otherwise behaves as before', () => {
   assert.equal(cory.blockCapacity, 3)
   assert.equal(cory.attackRange, 86)
   assert.equal(cory.ignoresArmor, false)
-  assert.equal(cory.ultimateSprite, 'hero-cory-ultimate', 'DAD MODE lost its own look')
+  // DAD MODE AND THE POWERED FORM ARE ONE PICTURE, as they are for the other
+  // four. He used to have a third: an SUV that only Last Stand ever showed,
+  // kept separate so the powered form would not spend its visual. The Rivian
+  // replaced both, and Last Stand still has the shake, the flash, the pause
+  // and every stat multiplier below to say it happened.
+  assert.equal(cory.ultimateSprite, cory.poweredSprite)
+  assert.equal(cory.ultimateSprite, 'hero-cory-power')
 
-  // His sheets are still his, and are still what turn the bob off.
-  assert.deepEqual(walkFramesFor('cory'), ART.hero.walk)
-  assert.deepEqual(attackFramesFor('cory'), ART.hero.attack)
-  assert.equal(walkFramesFor('cory')!.length, 4)
-  assert.equal(attackFramesFor('cory')!.length, 4)
+  // AND NO SHEETS. His walk and attack clips are deleted, so he is a single
+  // picture like everybody else -- which is what put every hero on the same
+  // procedural bob.
+  assert.equal(walkFramesFor('cory'), null, 'the walk sheet is back')
+  assert.equal(attackFramesFor('cory'), null, 'the attack sheet is back')
 })
 
-test('a hero with no walk sheet bobs, and one with a sheet does not', () => {
-  // The condition is the SHEET, not a flag, so dropping real frames into the
-  // roster later turns the bob off by itself.
-  for (const id of HERO_IDS.filter((h) => h !== 'cory')) {
+test('every hero bobs, because no hero has a walk sheet any more', () => {
+  // THE EXEMPTION IS GONE BECAUSE THE SHEET IS. The bob used to be the
+  // stand-in for the four heroes drawn as single pictures and was skipped for
+  // the one that had frames, conditioned on the sheet's presence rather than
+  // on a flag precisely so that drawing four more sheets would turn it off by
+  // itself. It went the other way: Cory's sheet was deleted when his new art
+  // landed, so there is no hero left for the exemption to apply to and a
+  // branch testing for it could only ever answer the same way.
+  for (const id of HERO_IDS) {
     assert.equal(walkFramesFor(id), null, `${id} unexpectedly has a walk sheet`)
     assert.equal(attackFramesFor(id), null)
   }
   const bob = code(HERO_TS.slice(HERO_TS.indexOf('private bob(')))
-  assert.match(bob, /if \(walkFramesFor\(this\.heroId\)\)/,
-    'the bob is no longer conditioned on the walk sheet being absent')
-  assert.match(bob, /this\.restingBodyY/, 'a hero with a sheet is not returned to its resting position')
-  // An empty frame list reads as no sheet, so a half-added roster entry bobs
-  // rather than standing perfectly still.
-  assert.deepEqual(walkFramesFor('nobody'), ART.hero.walk, 'an unknown id resolves to the default hero')
+  assert.doesNotMatch(bob, /walkFramesFor/,
+    'the bob still asks about a walk sheet that no hero has')
+  assert.match(bob, /this\.restingBodyY/, 'a hero that is not moving is not returned to its resting position')
+  // An unknown id still resolves to the default hero rather than throwing.
+  assert.equal(walkFramesFor('nobody'), null)
+
+  // AND THE ROSTER STILL HAS SOMEWHERE TO PUT ONE. The `walk` and `attack`
+  // fields are kept, at null, so a sheet drawn for one hero tomorrow is a data
+  // edit: `frameKey` already falls back to the hero's current form when a clip
+  // is absent, and `Hero.applyPose` already swaps textures off it.
+  for (const id of HERO_IDS) {
+    const entry = ART.hero.roster[id]
+    assert.ok('walk' in entry && 'attack' in entry, `${id}'s roster entry cannot carry a sheet`)
+  }
 })
