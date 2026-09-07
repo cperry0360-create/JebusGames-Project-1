@@ -6,7 +6,9 @@ shares it with Level 5).
 
 | commit | what | CI |
 |---|---|---|
-| `b217803` | Level 6's roster, its flame, and the gate that stops it shipping untuned | **green** (run 190) |
+| `b217803` | Level 6's roster, its flame, and the gate that stops it shipping untuned | **green, run 190** |
+| `a6a0a8f` | This report and level 5's | **green, run 193** |
+| `5c83e70` | Merge `origin/main` (the level 8 art upload) | **green, run 194** |
 
 **Dependency check first.** The brief says to stop if Level 5 has not landed on
 `main`. **It has not.** Level 5 is on this branch, pushed and green, and `main`
@@ -589,6 +591,18 @@ here. They still throw on their first line and report success.
   from the Level 5 report.
 - Level 5's whole cast is 18–37% short of the 7× rule — carried forward.
 - The Spike Strip / Glider question on Level 5 is still open — carried forward.
+
+**How to land it**
+
+The branch is a clean fast-forward from `main` as of `249c215`:
+
+```
+git checkout main && git merge --ff-only claude/courjahan-defense-level-5-pto190 && git push
+```
+
+That lands Level 5 *and* Level 6's first pass together, which also clears
+Level 6's own dependency — the two-spawn/two-exit capability reaches `main` in
+the same merge.
 
 **Not in this pass, by instruction**
 
