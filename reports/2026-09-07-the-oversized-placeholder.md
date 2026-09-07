@@ -3,7 +3,7 @@
 | commit | what it is | CI |
 |---|---|---|
 | `ee0ea6c` | The missing-icon stand-in is fitted to the slot it stands in for | **green** — run 165 |
-| `REPORT_SHA` | This report | **CI_REP** |
+| `2153319` | This report | **green** — [run](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34119116656) |
 
 Deployed: `deploy / build` and `deploy / deploy` both ran inside run 165 — read off the
 job list, not inferred — and github-pages deployment `6308111818` for `ee0ea6c` reached
