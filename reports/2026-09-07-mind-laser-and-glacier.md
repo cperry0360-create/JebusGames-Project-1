@@ -6,7 +6,10 @@
 | Commit | What | CI |
 | --- | --- | --- |
 | `9847c84` | Both fixes, their tests, and two harness repairs | **green** — run 207, `test` success, `typecheck` success, `deploy` skipped (branch) |
-| `<this commit>` | This report | inherits `9847c84`; docs only |
+| `c532f4c` | This report | **green** — run 208, `test` success, `typecheck` success |
+
+Any commit after `c532f4c` on this branch is an edit to this file and nothing
+else; the source is exactly `9847c84`.
 
 Baseline for every comparison in this document is `12258d7`, which is `main`
 and which CI accepted (run 206, `success`).
