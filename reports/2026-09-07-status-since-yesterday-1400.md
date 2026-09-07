@@ -7,7 +7,9 @@ CI runs, seven reports. Nothing is failing and nothing is in flight.
 
 ## Waiting on you — three things
 
-**1. A merge. This is the one that matters.**
+**1. A merge. This is the one that matters.** — **DONE 2026-09-07 10:07. `main` is now
+`622086d`, Checks run 157 is green and the github-pages deployment succeeded. See
+`reports/2026-09-07-merge-and-deploy.md`. The rest of this section stands.**
 
 Twelve commits sit on `claude/hero-art-hud-rework-tqd10v`, green, and **none of it is
 on `main` or on the live site.** `main` has not moved since 21:41 yesterday, and
