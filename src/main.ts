@@ -12,6 +12,7 @@ import { disableMusic, installMusicGesture, refreshMusicVolume, unlockMusic } fr
 import { onAudioGesture, onAudioMixChanged, onAudioUnavailable } from './systems/Audio.ts'
 import { VERSION_LABEL } from './systems/Build.ts'
 import { installCrashContext, installGameContext } from './systems/CrashContext.ts'
+import { guardGameLoop, resetGuards } from './systems/Guard.ts'
 
 // First, before anything can throw. A game that dies on the way up has to say
 // so; the alternative is the black screen this replaces.
@@ -58,6 +59,12 @@ async function waitForFonts(): Promise<void> {
  */
 function boot(): Phaser.Game {
   const game = new Phaser.Game(gameConfig)
+  // BEFORE THE FIRST FRAME. Wrapping `Game.step` covers every scene's update
+  // and the whole render pass, which is where a throw would otherwise reach
+  // `window.onerror` as a bare "Script error." with no stack. It rethrows;
+  // this only makes the fault describable, it does not make it survivable.
+  resetGuards()
+  guardGameLoop(game)
   // Before any scene measures anything. The scale mode is NONE, so nothing
   // else sizes the canvas and the first frame would otherwise be drawn at the
   // 1280x720 config size regardless of the device.

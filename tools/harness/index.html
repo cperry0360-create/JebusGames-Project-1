@@ -145,6 +145,12 @@ window.isPortrait = isPortrait
 // point of a safety net is that it has been dropped on.
 const { installGameStuckGuard } = await import('./js/systems/StuckWatch.js')
 installGameStuckGuard(game)
+// The loop guard, for the same reason as everything else installed here: a
+// wrapper that only existed on main.ts's boot path is one no scenario could
+// exercise, and a crash reporter never seen to catch anything is not evidence.
+const GUARD = await import('./js/systems/Guard.js')
+GUARD.resetGuards()
+GUARD.guardGameLoop(game)
 // The crash-report context, for the same reason as the gate and the guard: a
 // provider that only existed on main.ts's boot path is one no scenario could
 // check, and an empty STATE section is the thing being fixed.
@@ -694,6 +700,165 @@ async function run() {
     window.__screensDump = { texmem: TEXDUMP }
     return
   }
+  if (scenario === 'loopthrow') {
+    /*
+     * THE GUARD, PROVEN BY THROWING AT IT. A crash reporter never seen to
+     * catch anything is not evidence.
+     *
+     * Two parts, because they answer different questions:
+     *   A. does a guarded call produce a report carrying the REAL message and
+     *      the REAL stack? Read off the guard's own report, uncontaminated.
+     *   B. is the game loop actually wrapped? Thrown from inside a real scene
+     *      update step, which is where a real fault would come from.
+     */
+    const DG = await import('./js/systems/Diagnostics.js')
+    const GD = await import('./js/systems/Guard.js')
+    const g0 = await startRun()
+    await sleep(500)
+
+    let faults = 0
+    const bad = (m) => { faults++; note('*** ' + m) }
+    note('loop wrapped: ' + (game.loop && game.loop.__guarded === true)
+      + '  Game active=' + game.scene.isActive('Game'))
+
+    // ---- A. the guard's own report, with nothing else writing over it ----
+    DG.setLastReport(null)
+    GD.resetGuards()
+    try {
+      GD.guarded('a probe site', () => { throw new TypeError('deliberate: undefined is not an object') })
+      bad('guarded() swallowed the throw instead of rethrowing it')
+    } catch (e) {
+      note('guarded() rethrew, as it must: ' + e.message)
+    }
+    const own = DG.lastReport()
+    if (!own) bad('a guarded call produced no report')
+    else {
+      note('--- the report a guarded call produces ---')
+      for (const line of DG.formatReport(own).split('\n').slice(0, 12)) note('  ' + line)
+      if (!/caught inside a probe site/.test(own.cause)) bad('wrong cause: ' + own.cause)
+      if (!/TypeError: deliberate: undefined is not an object/.test(own.message)) {
+        bad('THE MESSAGE WAS LOST: ' + own.message)
+      }
+      if (!own.stack) bad('THE STACK WAS LOST -- which is the entire point of this file')
+      else note('  first stack frame: ' + own.stack.split('\n')[1])
+    }
+
+    // ---- B. the loop, thrown into for real ----
+    //
+    // NOT by reassigning `scene.update`: Phaser caches it as `sys.sceneUpdate`
+    // when the scene starts, so a later assignment is never read. The scene's
+    // UPDATE event is emitted by `Systems.step`, inside the loop callback this
+    // session wrapped, and Phaser's emitter does not catch listener errors.
+    GD.resetGuards()
+    const before = log.filter((l) => l.startsWith('PAGE ERROR')).length
+    g0.events.once('update', () => {
+      throw new Error('deliberate throw from inside the scene update step')
+    })
+    await sleep(900)
+
+    const counts = GD.guardCounts()
+    note('guard counts after the loop throw: ' + JSON.stringify(counts))
+    note('page errors raised by the rethrow: '
+      + (log.filter((l) => l.startsWith('PAGE ERROR')).length - before)
+      + '  (1 is correct -- nothing is swallowed)')
+    if (!counts[GD.LOOP_LABEL]) bad('the loop guard did not fire; the loop is not wrapped')
+    // The guard's own record of it, in the event log, which is where a phone's
+    // report would carry it. `lastReport` is not checked here because the
+    // global handler fires after the rethrow and overwrites it -- in Chromium
+    // it is not muted, so it wins. On Safari it is muted and this line is the
+    // only readable record, which is the whole reason for the guard.
+    const caught = DG.recentEvents().filter((e) => e.kind === 'guard'
+      && /deliberate throw from inside the scene update step/.test(e.detail))
+    note('the guard logged: ' + (caught[0] ? caught[0].detail : 'NOTHING'))
+    if (!caught.length) bad('the loop guard did not record the real message')
+    if (log.filter((l) => l.startsWith('PAGE ERROR')).length === before) {
+      bad('the rethrow never reached the browser -- something swallowed it')
+    }
+
+    note('RESULT ' + (faults === 0
+      ? 'a guarded throw is named, stacked and rethrown, and the game loop is wrapped'
+      : '*** ' + faults + ' fault(s) ***'))
+    return
+  }
+
+  if (scenario === 'shortviewport') {
+    /*
+     * 956x305, WHICH IS WHERE THE CRASH ACTUALLY HAPPENED.
+     *
+     * The fourth crash report gives the viewport at the moment of the throw:
+     * 956x305 CSS, dpr 3, canvas 2868x915, insets 0/62/20/62, angle 90, Title
+     * scene up, no gates held. 305 CSS pixels tall is 85px SHORTER than the
+     * shortest viewport anything in this repository has ever been run at, and
+     * the loadout already logs an overflow at 390.
+     *
+     * Two things are checked, and they are different questions:
+     *   1. does the RESTING size throw?
+     *   2. does the TRANSITION throw -- stepping down from a normal landscape
+     *      height to 305 and back, which is what Safari's Share sheet does?
+     */
+    const DG2 = await import('./js/systems/Diagnostics.js')
+    const GD2 = await import('./js/systems/Guard.js')
+    const SA2 = await import('./js/systems/SafeArea.js')
+    const box = document.getElementById('game')
+    const errAt = () => log.filter((l) => l.startsWith('PAGE ERROR') || l.startsWith('REJECT')).length
+
+    let faults = 0
+    const bad = (m) => { faults++; note('*** ' + m) }
+    const say = (label) => {
+      note('  ' + label + ': ' + box.clientWidth + 'x' + box.clientHeight
+        + '  canvas ' + game.scale.width + 'x' + game.scale.height
+        + '  insets ' + JSON.stringify(SA2.safeAreaInsets())
+        + '  scenes ' + game.scene.getScenes(true).map((s) => s.scene.key).join(',')
+        + '  errors ' + errAt()
+        + '  guards ' + JSON.stringify(GD2.guardCounts()))
+    }
+
+    note('viewport ' + VP.w + 'x' + VP.h + '  dpr=' + RES.deviceScale())
+    note('insets raw ' + JSON.stringify(SA2.rawSafeAreaInsets())
+      + '  resolved ' + JSON.stringify(SA2.safeAreaInsets()))
+
+    // 1. THE RESTING SIZE, on Title, which is the scene the report names.
+    const base = errAt()
+    say('at rest on Title')
+    await shot('shortviewport-1-title-' + VP.w + 'x' + VP.h)
+    if (errAt() > base) bad('the resting 956x305 Title screen threw: ' + log[base])
+
+    // 2. THE TRANSITION. Down from a normal landscape height to 305 and back,
+    // in steps, with a resize event each time -- the Share sheet animates, so
+    // the viewport passes through a range of heights rather than snapping.
+    const resize = async (w, h, frames) => {
+      box.style.width = w + 'px'
+      box.style.height = h + 'px'
+      window.dispatchEvent(new Event('resize'))
+      for (let i = 0; i < (frames || 3); i++) await new Promise((r) => requestAnimationFrame(r))
+      await sleep(120)
+    }
+    const beforeSteps = errAt()
+    for (const h of [390, 360, 330, 305, 290, 305, 330, 360, 390, VP.h]) {
+      await resize(VP.w, h)
+      note('  stepped to ' + VP.w + 'x' + h + '  errors ' + errAt()
+        + '  guards ' + JSON.stringify(GD2.guardCounts()))
+    }
+    await sleep(600)
+    say('after the sweep')
+    await shot('shortviewport-2-swept-' + VP.w + 'x' + VP.h)
+
+    const newErrors = log.slice(0).filter((l) => l.startsWith('PAGE ERROR') || l.startsWith('REJECT'))
+    if (errAt() > beforeSteps) {
+      bad('the height sweep threw: ' + newErrors[newErrors.length - 1])
+    }
+    const last = DG2.lastReport()
+    if (last) bad('a crash report was recorded: ' + last.cause + ' | ' + last.message)
+    const counts = GD2.guardCounts()
+    if (Object.keys(counts).length) bad('a guarded site threw: ' + JSON.stringify(counts))
+    if (!running('Title') && !running('Game')) bad('no scene survived the sweep')
+
+    note('RESULT ' + (faults === 0
+      ? '956x305 and the sweep down to it did NOT reproduce a throw in Chromium'
+      : '*** ' + faults + ' fault(s) ***'))
+    return
+  }
+
   if (scenario === 'sharesheet') {
     /*
      * THE SHARE BUTTON, WHICH IS THE RELIABLE REPRODUCTION.

@@ -30,6 +30,7 @@
 
 import { NO_INSETS, housingSide, resolveInsets, type Insets } from './HudLayout.ts'
 import presentation from '../data/presentation.json'
+import { guarded } from './Guard.ts'
 
 const PROBE_ID = 'safe-area'
 const SAFE = presentation.safeArea
@@ -68,6 +69,12 @@ function screenAngle(): number | null {
 /** The insets every layout should use: per edge, resolved onto the edge that
  *  has the hardware. */
 export function safeAreaInsets(): Insets {
-  const side = housingSide(screenAngle(), SAFE.housingAtAngle90 as 'left' | 'right')
-  return resolveInsets(rawSafeAreaInsets(), side)
+  // GUARDED because every HUD and menu layout starts here and it is re-read on
+  // every viewport change, which is the only thing Safari's Share sheet does.
+  // `rawSafeAreaInsets` already has its own catch — that one is a fallback, and
+  // it hides what went wrong. This one records and rethrows.
+  return guarded('safeAreaInsets', () => {
+    const side = housingSide(screenAngle(), SAFE.housingAtAngle90 as 'left' | 'right')
+    return resolveInsets(rawSafeAreaInsets(), side)
+  })
 }

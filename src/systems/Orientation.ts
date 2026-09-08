@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { applyResolution } from './Resolution.ts'
 import { type GateHost, OrientationGate } from './OrientationGate.ts'
+import { guard, guarded } from './Guard.ts'
 
 /**
  * The orientation gate.
@@ -214,7 +215,7 @@ export function installOrientationGate(game: Phaser.Game): void {
    * Now the same call both raises and lowers the gate, so whatever a frame
    * does the next frame can undo.
    */
-  const sync = (): void => {
+  const sync = (): void => guarded('the orientation sync (per frame)', () => {
     const change = gate.sync(isPortrait(), host)
     if (change === null) return
     try {
@@ -223,7 +224,7 @@ export function installOrientationGate(game: Phaser.Game): void {
     } catch {
       // The sound system may not exist yet on the very first measurement.
     }
-  }
+  })
 
   /**
    * Catches scenes that start while the overlay is up.
@@ -250,7 +251,13 @@ export function installOrientationGate(game: Phaser.Game): void {
    * numbers stop moving.
    */
   const settle = (): void => {
-    const measure = (): void => {
+    // GUARDED, and this is the one that matters most. Safari's Share sheet
+    // crashes the game and touches no game code: it resizes the viewport. So
+    // everything below runs on the way in and on the way out of that sheet,
+    // and a throw here is exactly the shape of the reported fault. Wrapped
+    // rather than defended -- it rethrows, so behaviour is unchanged and the
+    // only difference is that the report can name the line.
+    const measure = (): void => guarded('a viewport settle (resize/rotate)', () => {
       // Under NONE the scale manager does not size anything by itself, so
       // `refresh()` is no longer enough — it re-reads bounds without resizing
       // the canvas. applyResolution measures the parent (still the parent, not
@@ -258,7 +265,7 @@ export function installOrientationGate(game: Phaser.Game): void {
       // device resolution.
       applyResolution(game)
       sync()
-    }
+    })
     measure()
     requestAnimationFrame(measure)
     // iOS reports the old viewport for a frame or two either side of a
@@ -268,12 +275,20 @@ export function installOrientationGate(game: Phaser.Game): void {
     for (const ms of [60, 180, 400]) window.setTimeout(measure, ms)
   }
 
-  window.addEventListener('resize', settle)
-  window.addEventListener('orientationchange', settle)
+  // EACH LISTENER NAMED SEPARATELY. They all call `settle`, but which event
+  // fired is the first thing a reader wants to know: a crash on
+  // `visualViewport resize` and one on `orientationchange` point at different
+  // things, and the Share sheet fires the former without the latter.
+  window.addEventListener('resize', guard('the window resize listener', settle))
+  window.addEventListener('orientationchange', guard('the orientationchange listener', settle))
   // The one that actually fires on iOS when the URL bar collapses or the
   // keyboard closes, neither of which raises a plain resize event.
-  window.visualViewport?.addEventListener('resize', settle)
-  screen.orientation?.addEventListener?.('change', settle)
+  window.visualViewport?.addEventListener(
+    'resize', guard('the visualViewport resize listener', settle),
+  )
+  screen.orientation?.addEventListener?.(
+    'change', guard('the screen.orientation change listener', settle),
+  )
 
   settle()
 }

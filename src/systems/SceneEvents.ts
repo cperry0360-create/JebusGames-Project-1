@@ -31,6 +31,17 @@
 // import, and reaching for it would make the thing that must be tested
 // untestable.
 import type Phaser from 'phaser'
+import { guard } from './Guard.ts'
+
+/** Which scene a handler belongs to, for the crash report. Read structurally
+ *  and defensively: this runs while things are being torn down. */
+function sceneKey(scene: Phaser.Scene): string {
+  try {
+    return (scene as unknown as { scene?: { key?: string } }).scene?.key ?? 'unknown scene'
+  } catch {
+    return 'unreadable scene'
+  }
+}
 
 /** Phaser's own names for these. Kept as literals; see above. */
 const SHUTDOWN = 'shutdown'
@@ -64,8 +75,19 @@ export function onSceneEvent(
   event: string,
   handler: (...args: never[]) => void,
 ): void {
-  emitter.on(event, handler, scene)
-  const remove = (): void => { emitter.off(event, handler, scene) }
+  // GUARDED, because this is the choke point every scene's resize handler goes
+  // through and a resize is the one thing the reported crash is known to
+  // involve — Safari's Share sheet resizes the viewport and nothing else. A
+  // throw in any of these reaches `window.onerror` as a bare "Script error."
+  // with no stack; caught here it arrives with both. It is rethrown
+  // immediately, so nothing is swallowed and the behaviour is unchanged.
+  //
+  // The wrapper is stored and registered by reference, because `off` matches
+  // on identity: registering the guarded function and unregistering the raw
+  // one would leak exactly the listener this module exists to stop leaking.
+  const guarded = guard(`a scene "${event}" handler (${sceneKey(scene)})`, handler)
+  emitter.on(event, guarded, scene)
+  const remove = (): void => { emitter.off(event, guarded, scene) }
   scene.events.once(SHUTDOWN, remove)
   scene.events.once(DESTROY, remove)
 }
