@@ -633,6 +633,16 @@ async function run() {
       }
       note('  ' + SHEETS.length + ' effect animations cut against live textures')
 
+      // WHAT THIS LEVEL COSTS. `texmem` walks level 1 because that is the
+      // path a player takes; the peak is whichever level is dearest, and the
+      // enemy rosters are not the same size. Same cost model as texmem's.
+      {
+        const m = texBytes()
+        const en = m.list.filter((t) => LA.ENEMY_SPRITE_KEYS.includes(t.key))
+        note('  ' + label + ' costs ' + MB(m.bytes) + ' MB over ' + m.n + ' textures'
+          + '  (its enemies ' + MB(en.reduce((a, t) => a + t.bytes, 0)) + ' MB)')
+      }
+
       // ONE PLAYED FOR REAL, since "has frames" and "draws something" are not
       // the same claim.
       const FXM = await import('./js/systems/Effects.js')
@@ -646,11 +656,15 @@ async function run() {
     }
     function s_len(spr) { return spr.anims.currentAnim.frames.length }
 
-    await checkLevel('level1', 'level 1')
-    // A DIFFERENT ROSTER, which is the case that proves the freeing works: if
-    // level 1's enemies were still resident this would report them foreign.
-    await checkLevel('level3', 'level 3')
-    // AND BACK, which re-loads what the last shutdown freed.
+    // EVERY LEVEL, not just the one a player reaches first. The rosters are
+    // different sizes -- level 1 fields four enemy pictures and level 3 fields
+    // five much larger ones -- so the peak is not level 1's, and each hop is
+    // also the case that proves the freeing works: if the level before it were
+    // still resident, its enemies would be reported foreign here.
+    for (const id of ['level1', 'level2', 'level3', 'level4', 'level5']) {
+      await checkLevel(id, id.replace('level', 'level '))
+    }
+    // AND BACK TO THE FIRST, which re-loads what four shutdowns have freed.
     await checkLevel('level1', 'level 1 again')
 
     // OFF THE BOARD ENTIRELY: everything given back.
