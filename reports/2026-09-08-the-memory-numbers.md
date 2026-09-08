@@ -12,10 +12,16 @@ on.**
 | `9d91ffe` | Walk every level in the levelart scenario, and say what each one costs | **green** — `test` and `typecheck` both pass ([run 235](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34240908206)) |
 | `a7045f8` | This report, and 79.4 MB corrected to 90.8 | **green** — `test` and `typecheck` both pass ([run 236](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34241361906)) |
 | `4beda26` | Fill in the report's own CI rows, and the second screenshot diff | **green** — `test` and `typecheck` both pass ([run 237](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34242432538)) |
+| `0c11c7b` | Fill in run 237's row, which is the report's own head | **green** — `test` and `typecheck` both pass ([run 238](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34242554517)) |
 
 CI runs per push rather than per commit, so run 235 covers the first three
-commits, 236 the fourth and 237 the head. The typecheck job is
-`npx tsc --noEmit` with
+commits and 236, 237 and 238 the three after them. **All three code commits are
+green.** The tail of the table is the usual regress — a commit that records a CI
+result cannot record its own — and it stops here: the commit adding run 238's
+row is documentation only, touches no file the build reads, and its result is
+reported in the reply that carried this file rather than by a further commit.
+
+The typecheck job is `npx tsc --noEmit` with
 `node_modules` present, which is the check `tools/tsdiff.sh` exists to
 approximate and the one that has caught real errors here before.
 
