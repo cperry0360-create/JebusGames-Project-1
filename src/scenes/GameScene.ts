@@ -11,7 +11,7 @@ import towersData from '../data/towers.json'
 import enemiesData from '../data/enemies.json'
 import { DEFAULT_HERO_ID, heroDef as heroDef_, resolveHeroId } from '../systems/Heroes.ts'
 import {
-  abilityInSlot, heroSlotDefs, heroSlotId, isAreaSkill, isHeroSlot, slotContents,
+  abilityInSlot, heroSlotDefs, heroSlotId, isAreaSkill, isHeroSlot, skillReach, slotContents,
 } from '../systems/HeroSkills.ts'
 import abilitiesData from '../data/abilities.json'
 import draftData from '../data/draft.json'
@@ -89,7 +89,7 @@ import { logEvent, provideState } from '../systems/Diagnostics.ts'
 import { heartbeat, setRunActive } from '../systems/Watchdog.ts'
 import { enterGate, leaveGate, noteInputAccepted } from '../systems/InputGates.ts'
 import {
-  hudBlocksGesture, hudLayout, NO_INSETS, type HudLayout, type Rect,
+  hudBlocksGesture, hudLayout, insideRect, NO_INSETS, type HudLayout, type Rect,
 } from '../systems/HudLayout.ts'
 import { TargetingMode, type ExitReason } from '../systems/TargetingMode.ts'
 import {
@@ -414,6 +414,9 @@ export class GameScene extends Phaser.Scene {
   private readonly screenSpace: Phaser.GameObjects.GameObject[] = []
   /** Set at press time when the press belonged to a menu, ticket or dialog. */
   private pressTakenByUi = false
+  /** Set at press time when that press lit a held beam, so its release stops
+   *  the beam and is not also read as a tap on the board. */
+  private pressFiredBeam = false
   /** Held still for a beat on a big impact. See `skillPunch`. Public so a
    *  harness run can assert the pause happened rather than infer it. */
   hitPaused = false
@@ -1019,7 +1022,14 @@ export class GameScene extends Phaser.Scene {
       momentumMinSpeed: displayData.camera.momentumMinSpeed,
       // The gate. See `chromeUnderPointer` for why the rig has to ask rather
       // than each overlay having to remember to switch the rig off.
-      claims: (p, over) => this.chromeUnderPointer(p, over),
+      //
+      // AN ARMED HELD ABILITY CLAIMS THE PRESS TOO, and it has to be claimed
+      // HERE rather than by switching the rig off: `claims` is asked once per
+      // pointer at the press, so the finger that fires the beam can never
+      // become half of a pinch, while a second finger arriving later still
+      // finds a live rig. Without it the drag that aims the beam would also
+      // pan the map out from under the aim.
+      claims: (p, over) => this.armedHold !== null || this.chromeUnderPointer(p, over),
     })
 
     this.refreshMenuOptions()
@@ -1918,8 +1928,15 @@ export class GameScene extends Phaser.Scene {
         || this.nukeEarned?.owns(over) === true
         || this.nukeLaunch?.owns(over) === true
         || this.chromeUnderPointer(p, over)
+      this.pressFiredBeam = false
+      this.pressArmedHold(p, ui)
     })
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
+      // THE PRESS THAT LIT A BEAM OWNS ITS OWN RELEASE. The release is what
+      // stops the beam -- HudScene's scene-level `pointerup` is already wired
+      // to `releaseHeldAbility` -- and it must not ALSO land on the board as a
+      // tap, or letting go over a build pad would open the drawer on it.
+      if (this.pressFiredBeam) return
       if (this.pressTakenByUi) return
       // A drag that moved the camera is a pan, not a tap. Without this the
       // release at the end of every pan would build, select or order.
@@ -3110,12 +3127,20 @@ export class GameScene extends Phaser.Scene {
     if (req.kind === 'power') {
       // The disc the ability reaches, centred on the hero. It is the hero's
       // reach, so it is drawn around them rather than under the finger.
+      //
+      // `skillReach` rather than `castRadius`, so the HELD ability gets the
+      // same disc rather than a circle of radius zero: a beam carries its
+      // reach in `range`, and a beam is `range` long whichever way it is
+      // pointed. The disc is therefore how FAR it goes rather than a boundary
+      // the press has to land inside -- the press names a direction, and a
+      // hold past the edge of the disc still fires, it just stops at the edge.
       const p = abilityInSlot(this.hero.heroId, req.id)
       if (!p) return
+      const reach = skillReach(p)
       g.fillStyle(this.hero.def.colour, T.washAlpha)
-      g.fillCircle(this.hero.x, this.hero.y, p.castRadius)
+      g.fillCircle(this.hero.x, this.hero.y, reach)
       g.lineStyle(T.edgeWidth, this.hero.def.colour, T.edgeAlpha)
-      g.strokeCircle(this.hero.x, this.hero.y, p.castRadius)
+      g.strokeCircle(this.hero.x, this.hero.y, reach)
       return
     }
     const def = ABILITIES[req.id]
@@ -3326,7 +3351,20 @@ export class GameScene extends Phaser.Scene {
       return
     }
 
-    if (a.activation === 'targeted') {
+    // TARGETED AND HELD BOTH ARM, AND ARM THE SAME WAY.
+    //
+    // The held one used to fire straight off the press and be aimed by
+    // dragging the finger out over the board -- the only control in the game
+    // that asked for a drag, and one nothing taught. A hero with two powers
+    // where one is tap-tap and the other is press-drag is two control schemes
+    // on one row of identical medallions.
+    //
+    // So the press arms, and the BOARD fires: `onClick` for a targeted
+    // ability, the press in `setupInput` for a held one. Both spend nothing
+    // here, both light the same medallion, both paint the same disc around the
+    // hero, and both are backed out of the same three ways -- the medallion
+    // again, CANCEL, or a press that is not on the board.
+    if (a.activation === 'targeted' || a.activation === 'held') {
       // The second press is the way out, exactly as it is for a drafted
       // active. The request carries the SLOT, so the tap that commits knows
       // which of a hero's abilities it is placing.
@@ -3341,25 +3379,9 @@ export class GameScene extends Phaser.Scene {
       this.selected = null
       this.heroSelected = false
       this.syncTargeting()
-      this.status.alert =
-        `${a.name}: tap inside the ring. Tap outside it, or CANCEL, to back out.`
-      return
-    }
-
-    if (a.activation === 'held') {
-      // ANYTHING ELSE WAITING FOR A TAP IS DROPPED FIRST, unspent.
-      //
-      // A held ability is aimed by dragging out over the board and released
-      // there, and an armed targeting mode would read that release as the tap
-      // it was waiting for -- so arming Mind Control and then firing the beam
-      // would place Mind Control wherever the finger came off. Leaving is
-      // free: `clearSelection` spends nothing.
-      this.clearSelection('replaced')
-      // NOTHING IS SPENT ON THE PRESS EITHER. `beginHeldAbility` starts the
-      // beam and the cooldown starts when it ENDS, so a press taken back
-      // before the beam has fired anything costs nothing at all. See
-      // `endHeldAbility`.
-      this.beginHeldAbility(slot, a)
+      this.status.alert = a.activation === 'held'
+        ? `${a.name}: hold on the board. Tap the medallion again, or CANCEL, to back out.`
+        : `${a.name}: tap inside the ring. Tap outside it, or CANCEL, to back out.`
       return
     }
 
@@ -3585,7 +3607,73 @@ export class GameScene extends Phaser.Scene {
   /* ------------------------------------------------------- the held beam */
 
   /**
-   * THE MIND LASER, PRESSED. Nothing is spent yet.
+   * The armed request, when what is armed is a HELD ability.
+   *
+   * Asked of the REQUEST rather than of `status.pendingAbility`, for the same
+   * reason `updateHover` does: the mirror carries a slot id that is not in
+   * `ABILITIES`, and looking it up there hands back undefined.
+   */
+  private get armedHold(): { slot: string; def: HeroAbilityDef } | null {
+    const req = this.targeting.request
+    if (req?.kind !== 'power') return null
+    const a = abilityInSlot(this.hero.heroId, req.id)
+    return a !== null && a.activation === 'held' ? { slot: req.id, def: a } : null
+  }
+
+  /**
+   * A PRESS, WITH A HELD ABILITY ARMED. This is the ability's trigger.
+   *
+   * A targeted ability commits on the RELEASE, through `onClick`, because a
+   * tap has nothing to say between its two halves. A held one does: the beam
+   * is live for as long as the finger is down, so it has to start on the press
+   * and end on the release, and the release is already wired -- HudScene's
+   * scene-level `pointerup` calls `releaseHeldAbility`.
+   *
+   * WHICH IS WHY THE CAMERA RIG IS TOLD TO IGNORE THIS POINTER. See the
+   * `claims` callback: while a held ability is armed a press on the board
+   * belongs to the beam, so the drag that aims it must not also pan the map
+   * out from under the aim.
+   *
+   * THE REFUSALS ARE ASKED AGAIN HERE. They were asked when the medallion was
+   * pressed, and arming spends nothing and takes no time off the clock -- so
+   * between the arm and the press the hero can have gone down, been healed
+   * back out of his powered form, or (by arming a second time during a live
+   * beam) put the ability on cooldown. One re-check closes all three.
+   */
+  private pressArmedHold(p: Phaser.Input.Pointer, ui: { x: number; y: number }): void {
+    const hold = this.armedHold
+    if (hold === null) return
+    if (this.pressTakenByUi) {
+      // A PRESS THAT IS NOT ON THE BOARD DISARMS, and costs nothing -- the
+      // same answer `onClick` gives a targeted ability tapped outside its
+      // ring. The ability row is the exception: HudScene handles the press
+      // first, so the medallion has ALREADY toggled or re-armed by the time
+      // this runs, and disarming here would undo it.
+      if (!insideRect(this.layout.abilities, ui.x, ui.y)) this.clearSelection('outside')
+      return
+    }
+    const why = powerRefusal(
+      hold.def, this.hero.powered, this.hero.down, this.cooldowns.ready(hold.slot))
+    if (why !== null) {
+      this.clearSelection('outside')
+      this.refuse(this.powerRefusalText(hold.def, why))
+      return
+    }
+    // COMMIT. The one exit that acts on the request -- and acting on it still
+    // spends nothing here, because the beam's cooldown starts in
+    // `endHeldAbility` and only when it fired.
+    this.targeting.resolveTap(true)
+    this.syncTargeting()
+    this.pressFiredBeam = true
+    this.beginHeldAbility(hold.slot, hold.def)
+    // The finger is on the board, so it is a legal aim point from the first
+    // frame. `aimHeldAbility` is the only thing that may write one, and it
+    // still refuses the point if it turns out to be over chrome.
+    this.aimHeldAbility(p)
+  }
+
+  /**
+   * THE MIND LASER, FIRED. Nothing is spent yet.
    *
    * A held ability is the only one in the game that is live between two input
    * events, and the whole of its correctness is that every way it can end goes
@@ -3597,18 +3685,22 @@ export class GameScene extends Phaser.Scene {
    *
    * IT IS AIMED ALONG THE HERO'S FACING FROM THE FIRST FRAME, and it fires.
    *
-   * The finger is on a medallion at the bottom of the screen when this runs.
-   * Converting THAT point to the world is what pointed the beam into the HUD
-   * for its whole duration in the recording -- it left Courtland, crossed the
-   * board downwards and terminated on the third button, while the wave walked
-   * the far end of the lane untouched.
+   * That was written when the finger was still on a medallion at the bottom of
+   * the screen when this ran, and converting THAT point to the world is what
+   * pointed the beam into the HUD for its whole duration in the recording --
+   * it left Courtland, crossed the board downwards and terminated on the third
+   * button, while the wave walked the far end of the lane untouched. So the
+   * press does not aim at the finger; it aims where the hero is looking, and
+   * `aimHeldAbility` takes over the moment a point the BOARD owns arrives.
    *
-   * So the press does not aim at the finger at all. It aims where the hero is
-   * looking, which on a hero holding a position is a reasonable guess at the
-   * lane, and `aimHeldAbility` takes over the moment the finger reaches a
-   * point the BOARD owns. Suppressing the beam until then was the other
-   * option and it is worse: a held button that draws nothing reads as a button
-   * that did not work.
+   * THE REASONING SURVIVES THE ARMING CHANGE, which is why the facing aim is
+   * still here. `pressArmedHold` now calls this with the finger already on the
+   * board and hands the point straight to `aimHeldAbility`, so the facing is
+   * usually one frame long -- but `aimHeldAbility` is still free to REFUSE
+   * that point, and a beam that has not been given a legal aim yet has to
+   * point somewhere. Suppressing it until then was the other option and it is
+   * worse: a held button that draws nothing reads as a button that did not
+   * work.
    */
   private beginHeldAbility(slot: string, a: HeroAbilityDef): void {
     if (this.held) this.endHeldAbility('replaced')
@@ -3644,7 +3736,6 @@ export class GameScene extends Phaser.Scene {
     this.aimHeld(aim.x, aim.y)
     play(this, a.sound)
     logEvent('hero-power', `${a.name} held: ${bothUnits(a.holdSeconds)} of beam`)
-    this.status.alert = `${a.name}: drag to aim, let go to stop.`
   }
 
   /**

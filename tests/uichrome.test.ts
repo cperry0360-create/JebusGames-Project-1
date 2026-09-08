@@ -161,7 +161,11 @@ test('the board and the rig ask the SAME question, in one place', () => {
   const game = code('scenes/GameScene.ts')
   assert.match(game, /chromeUnderPointer\(p: Phaser\.Input\.Pointer, over/,
     'there is no single ownership question')
-  assert.match(game, /claims: \(p, over\) => this\.chromeUnderPointer\(p, over\)/,
+  // The rig's gate is the ownership question OR'd with the one case that is
+  // not about chrome at all: an armed held ability, whose press belongs to the
+  // beam it is about to aim. The ownership question is still the only thing
+  // that decides whether a press belongs to a piece of UI.
+  assert.match(game, /claims: \(p, over\) => this\.armedHold !== null \|\| this\.chromeUnderPointer\(p, over\)/,
     'the camera rig is not wired to the ownership question')
   assert.match(game, /this\.chromeUnderPointer\(p, over\)/,
     'the board does not ask the ownership question at press time')
