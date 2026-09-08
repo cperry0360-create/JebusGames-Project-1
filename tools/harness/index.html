@@ -975,6 +975,165 @@ async function run() {
     return
   }
 
+  if (scenario === 'ctxsurvive') {
+    /*
+     * DOES THE GAME SURVIVE A CONTEXT LOSS -- not "does it notice one".
+     *
+     * `webglwatch` already proves the loss is RECORDED and reaches the crash
+     * report. That is a different question from whether the game is still
+     * playable afterwards, and only the second one decides whether Phaser 4's
+     * built-in context restoration is worth a migration.
+     *
+     * Written to run IDENTICALLY on Phaser 3 and Phaser 4 so the two results
+     * are comparable. Nothing in here touches a version-specific API: it uses
+     * `renderer.type`, `renderer.gl`, `game.loop.frame` and the canvas, all of
+     * which exist unchanged in both.
+     *
+     * MUST be run with GL=1. Under the default `--disable-gpu` Phaser falls
+     * back to Canvas2D, and you cannot lose a context that was never created;
+     * the scenario refuses rather than reporting a meaningless pass.
+     */
+    let faults = 0
+    const bad = (m) => { faults++; note('*** ' + m) }
+    const errAt = () => log.filter((l) => l.startsWith('PAGE ERROR') || l.startsWith('REJECT')).length
+
+    await startRun()
+    await sleep(800)
+
+    const R = () => game.renderer
+    const kind = R() ? (R().type === 2 ? 'webgl' : R().type === 1 ? 'canvas' : String(R().type)) : 'none'
+    note('phaser ' + (window.Phaser && Phaser.VERSION) + '  renderer=' + kind)
+    if (kind !== 'webgl') {
+      note('*** NOT a WebGL renderer. Re-run with GL=1 -- nothing below would be evidence.')
+      note('RESULT *** skipped: renderer is ' + kind + ' ***')
+      return
+    }
+    const gl = R().gl
+    const ext = gl && gl.getExtension('WEBGL_lose_context')
+    if (!ext) {
+      note('RESULT *** skipped: WEBGL_lose_context unavailable ***')
+      return
+    }
+
+    // THE FRAME COUNTER IS THE LIVENESS TEST. A game that threw inside its
+    // render loop stops stepping, and every other symptom follows from that.
+    const frame = () => (game.loop && game.loop.frame) || 0
+
+    // AND THE DRAWING TEST GOES THROUGH `renderer.snapshot`, NOT `toDataURL`.
+    //
+    // The first version of this scenario measured `canvas.toDataURL().length`
+    // and reported "still drawing" on both engines. It was measuring a
+    // constant: under GL=1 the canvas has no `preserveDrawingBuffer`, so
+    // toDataURL reads an already-presented buffer and comes back BLANK. The
+    // tell was 81702 bytes, identical before, after, and across two different
+    // renderers -- and the saved screenshot was solid black. Every screenshot
+    // this harness has ever taken under GL=1 is black for the same reason;
+    // the default (Canvas2D) runs are unaffected, which is why it went unseen.
+    //
+    // `snapshot` hooks the renderer's own post-render step, which is the only
+    // moment the buffer is readable. It exists on both v3 and v4. It fires
+    // only if a frame is actually RENDERED, so a renderer sitting out the
+    // frame resolves the timeout instead -- which is itself the answer.
+    const snapInk = () => new Promise((resolve) => {
+      let settled = false
+      const finish = (v) => { if (!settled) { settled = true; resolve(v) } }
+      // AND A SNAPSHOT THAT NEVER FIRED MUST BE DISARMED.
+      //
+      // `snapshot` arms `renderer.snapshotState` and the renderer disarms it
+      // when it takes the shot. Ask while the context is lost and it is never
+      // taken, so the request is still armed when the context comes back --
+      // and on BOTH v3 and v4 that froze the game loop at the exact frame the
+      // request was made, which read as "the engine did not survive". It was
+      // the probe that did not survive. Clearing the flag removes the side
+      // effect and keeps the during-loss control.
+      const timer = setTimeout(() => {
+        try {
+          const st = R() && R().snapshotState
+          if (st) { st.active = false; st.getPixel = false; st.callback = null }
+        } catch (e) { /* nothing to disarm */ }
+        finish(-1)
+      }, 3000)
+      try {
+        R().snapshot((img) => {
+          clearTimeout(timer)
+          try {
+            const c = document.createElement('canvas')
+            c.width = 160; c.height = 90
+            const cx = c.getContext('2d')
+            cx.drawImage(img, 0, 0, c.width, c.height)
+            const d = cx.getImageData(0, 0, c.width, c.height).data
+            let lit = 0
+            // The clear colour is #10161d, so anything appreciably brighter
+            // than that is something the game actually drew.
+            for (let i = 0; i < d.length; i += 4) {
+              if (d[i] > 40 || d[i + 1] > 40 || d[i + 2] > 40) lit++
+            }
+            finish(Math.round((lit / (c.width * c.height)) * 1000) / 10)
+          } catch (e) { finish(-2) }
+        })
+      } catch (e) { clearTimeout(timer); finish(-3) }
+    })
+
+    const errBefore = errAt()
+    const f0 = frame(), b0 = await snapInk()
+    note('before loss: frame=' + f0 + ' ink=' + b0 + '% contextLost=' + R().contextLost)
+    if (b0 <= 0) {
+      bad('the drawing probe reads nothing even BEFORE the loss (' + b0
+        + '). Everything below would be meaningless, so this run is not evidence.')
+      note('RESULT *** the probe is broken, not the engine ***')
+      return
+    }
+
+    ext.loseContext()
+    await sleep(900)
+    const fLost = frame()
+    // SAMPLED DURING THE LOSS ON PURPOSE. A probe that reads the same number
+    // with the context dead is not measuring the context, and the previous
+    // version of this scenario did exactly that. This is the control.
+    const bLost = await snapInk()
+    note('during loss: frame=' + fLost + ' ink=' + bLost + '% renderer.contextLost=' + R().contextLost
+      + ' gl.isContextLost=' + gl.isContextLost())
+    if (bLost === b0) {
+      bad('the drawing probe reads IDENTICALLY with the context lost (' + bLost
+        + '); it is not measuring the canvas, so "still drawing" below proves nothing')
+    }
+
+    ext.restoreContext()
+    // Restoration is asynchronous and re-uploads every texture, so this waits
+    // generously and then samples the loop TWICE -- one reading cannot tell a
+    // running loop from a stopped one.
+    await sleep(2000)
+    const fA = frame()
+    await sleep(1200)
+    const fB = frame()
+    const b1 = await snapInk()
+    note('after restore: frame=' + fA + '->' + fB + ' ink=' + b1 + '%'
+      + ' renderer.contextLost=' + R().contextLost + ' gl.isContextLost=' + gl.isContextLost())
+
+    if (fB <= fA) bad('the game loop STOPPED after the context came back (' + fA + ' -> ' + fB + ')')
+    if (R().contextLost === true) bad('renderer still reports contextLost after restore')
+    if (gl.isContextLost()) bad('the GL context is still lost after restoreContext()')
+    // Half the original ink is a deliberately loose floor: the frame
+    // legitimately differs (enemies moved), and the point is blank vs drawn.
+    if (b1 < b0 / 2) bad('the canvas is drawing (almost) nothing after restore: ink '
+      + b1 + '% vs ' + b0 + '% before')
+    const newErrors = log.filter((l) => l.startsWith('PAGE ERROR') || l.startsWith('REJECT')).slice(errBefore)
+    if (newErrors.length) bad(newErrors.length + ' page error(s) after the loss: ' + JSON.stringify(newErrors.slice(0, 4)))
+
+    // AND IS IT STILL A GAME? A restored renderer that lost the run is not a
+    // survival. This reads the same run state the HUD does.
+    const gm = scene('Game')
+    const alive = !!gm && running('Game') && gm.status && gm.status.heroName !== ''
+    note('run still live: ' + alive + (gm && gm.status ? '  hero=' + gm.status.heroName
+      + ' wave=' + gm.status.wave + ' lives=' + gm.status.lives : ''))
+    if (!alive) bad('the run did not survive: GameScene is gone or has no hand')
+
+    note('RESULT ' + (faults === 0
+      ? 'SURVIVED a real WEBGL_lose_context: loop still stepping, canvas still drawing, run intact'
+      : '*** ' + faults + ' fault(s) -- did NOT survive cleanly ***'))
+    return
+  }
+
   if (scenario === 'listenerguard') {
     /*
      * THE LISTENER PATCH, PROVEN RATHER THAN ASSERTED.
