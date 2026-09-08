@@ -66,7 +66,17 @@ print('%d,%d' % (w, h))
 PYEOF
 )"
 fi
-"${CHROMIUM:-/opt/pw-browsers/chromium}" --headless=new --disable-gpu --no-sandbox --hide-scrollbars --autoplay-policy=no-user-gesture-required \
+# GL=1 asks for a REAL WebGL context instead of the Canvas2D fallback.
+#
+# The default passes --disable-gpu, and under it Phaser falls back to the
+# canvas renderer -- every report from this harness says `renderer = canvas`.
+# That is fine for layout and logic, and useless for anything about the drawing
+# CONTEXT: you cannot lose a WebGL context that was never created. SwiftShader
+# gives a real software GL context, which is enough to drive
+# WEBGL_lose_context for real.
+GLFLAGS="--disable-gpu"
+[ -n "$GL" ] && GLFLAGS="--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader"
+"${CHROMIUM:-/opt/pw-browsers/chromium}" --headless=new $GLFLAGS --no-sandbox --hide-scrollbars --autoplay-policy=no-user-gesture-required \
   --window-size="$WIN" --enable-logging=stderr --v=0 $DPRFLAG \
   --user-data-dir="$H/profile" \
   "http://127.0.0.1:8899/index.html?s=$S$QS" > "$H/shots/$S.err" 2>&1 &

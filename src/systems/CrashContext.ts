@@ -31,6 +31,7 @@ import type Phaser from 'phaser'
 import { provideContext } from './Diagnostics.ts'
 import { gateSummary, openGates } from './InputGates.ts'
 import { gateHolding, isPortrait, overlayVisible } from './Orientation.ts'
+import { graphicsState } from './GraphicsWatch.ts'
 import { deviceScale } from './Resolution.ts'
 import { rawSafeAreaInsets, safeAreaInsets } from './SafeArea.ts'
 
@@ -139,6 +140,11 @@ function environment(): Record<string, unknown> {
     openGates: attempt(() => openGates().join(',') || 'none', 'unreadable'),
     visibility: globalThis.document?.visibilityState ?? 'unknown',
     ...bundle(),
+    // THE DRAWING SURFACE, asked directly rather than inferred from an event.
+    // See GraphicsWatch.ts: a WebGL context loss is the one candidate that fits
+    // all six reports, and `webglContextLost` is a live answer no report has
+    // ever carried.
+    ...graphicsState(),
   }
 }
 

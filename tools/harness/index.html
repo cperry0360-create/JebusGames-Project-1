@@ -707,6 +707,128 @@ async function run() {
     window.__screensDump = { texmem: TEXDUMP }
     return
   }
+  if (scenario === 'webglwatch') {
+    /*
+     * THE CONTEXT-LOSS CANDIDATE, DRIVEN FOR REAL.
+     *
+     * Run with GL=1, which swaps --disable-gpu for SwiftShader so Phaser gets a
+     * real WebGL context. Without it the harness runs Canvas2D and you cannot
+     * lose a context that was never created.
+     *
+     * THE HARNESS IS CHROMIUM AND THE CRASH IS SAFARI-ONLY. Nothing here can
+     * reproduce the fault. What it can prove is that if the same thing happens
+     * on the phone, the report will say so -- which is the whole point.
+     */
+    const DG = await import('./js/systems/Diagnostics.js')
+    const GD = await import('./js/systems/Guard.js')
+    const GW = await import('./js/systems/GraphicsWatch.js')
+    const LGs = await import('./js/systems/ListenerGuard.js')
+    await startRun()
+    await sleep(600)
+
+    let faults = 0
+    const bad = (m) => { faults++; note('*** ' + m) }
+    const canvas = game.canvas
+    note('renderer: ' + (game.renderer && game.renderer.type === 2 ? 'webgl' : 'canvas/other'))
+    note('graphics state at rest: ' + JSON.stringify(GW.graphicsState()))
+    if (GW.graphicsState().contextLossGuard !== 'attached') {
+      bad('the context-loss listeners did NOT attach: ' + GW.graphicsState().contextLossGuard)
+    }
+
+    // ---- 1. THE webglcontextlost LISTENER IS WRAPPED ----
+    // Both Phaser and Lifecycle register one on the canvas, and both were
+    // registered after the addEventListener patch. A throwing probe at the same
+    // target and type proves the wrapper covers that pair.
+    GD.resetGuards()
+    const boom = () => { throw new Error('deliberate: from a webglcontextlost listener') }
+    canvas.addEventListener('webglcontextlost', boom)
+    canvas.dispatchEvent(new Event('webglcontextlost'))
+    canvas.removeEventListener('webglcontextlost', boom)
+    await sleep(200)
+    const c1 = GD.guardCounts()
+    note('after a synthetic webglcontextlost, guard counts: ' + JSON.stringify(c1))
+    if (!Object.keys(c1).some((k) => /webglcontextlost/.test(k))) {
+      bad('the webglcontextlost listener is NOT wrapped')
+    }
+    note('  our handler ran too? contextLostEvents=' + GW.graphicsState().contextLostEvents)
+
+    // ---- 2. A REAL CONTEXT LOSS, through the driver ----
+    const gl = canvas.getContext('webgl2') || canvas.getContext('webgl')
+    const ext = gl && gl.getExtension('WEBGL_lose_context')
+    if (!ext) {
+      note('WEBGL_lose_context is not available; run with GL=1 for the real check')
+      note('*** SKIPPED the real context-loss check -- this is not evidence either way')
+      faults++
+    } else {
+      GD.resetGuards()
+      const before = GW.graphicsState()
+      note('before loseContext: ' + JSON.stringify(before))
+      ext.loseContext()
+      await sleep(700)
+      const during = GW.graphicsState()
+      note('AFTER loseContext: ' + JSON.stringify(during))
+      if (String(during.webglContextLost) !== 'true') {
+        bad('gl.isContextLost() did not report the loss: ' + during.webglContextLost)
+      }
+      if (!(Number(during.contextLostEvents) > Number(before.contextLostEvents))) {
+        bad('the webglcontextlost event was not recorded')
+      }
+      // And it reaches the crash report, which is where it has to appear.
+      const probe = DG.buildReport('harness probe', 'not a real fault')
+      note('crash report would say: webglContextLost = ' + probe.state.webglContextLost
+        + ' | contextLostEvents = ' + probe.state.contextLostEvents
+        + ' | drawingBuffer = ' + probe.state.drawingBuffer)
+      if (String(probe.state.webglContextLost) !== 'true') {
+        bad('the crash report does NOT carry the context loss')
+      }
+      // Give it back, so the rest of the run is not on a dead context.
+      ext.restoreContext()
+      await sleep(900)
+      const after = GW.graphicsState()
+      note('after restoreContext: ' + JSON.stringify(after))
+    }
+
+    // ---- 3. THE GUARD-COUNT TABLE for the categories the brief named ----
+    //
+    // Each is a throwing probe at the target and type Phaser uses. Phaser
+    // registered its own listeners AFTER the patch, so a wrapper that covers
+    // the pair covers Phaser's registration of it.
+    GD.resetGuards()
+    const probes = [
+      ['ScaleManager', window, 'resize'],
+      ['ScaleManager', window, 'orientationchange'],
+      ['InputManager (canvas)', canvas, 'mousedown'],
+      ['InputManager (canvas)', canvas, 'touchstart'],
+      ['InputPlugin (canvas)', canvas, 'pointerdown'],
+      ['visibility', document, 'visibilitychange'],
+      ['focus/blur', window, 'blur'],
+      ['context', canvas, 'webglcontextrestored'],
+    ]
+    const table = []
+    for (const [what, tgt, type] of probes) {
+      const before2 = Object.keys(GD.guardCounts()).length
+      const f = () => { throw new Error('probe:' + type) }
+      tgt.addEventListener(type, f)
+      tgt.dispatchEvent(new Event(type))
+      tgt.removeEventListener(type, f)
+      await sleep(60)
+      const caught = Object.keys(GD.guardCounts()).length > before2
+      table.push({ what, type, caught })
+      if (!caught) bad('a "' + type + '" listener was NOT wrapped (' + what + ')')
+    }
+    note('GUARD-COUNT TABLE:')
+    for (const row of table) {
+      note('  ' + (row.caught ? 'CAUGHT ' : 'MISSED ') + row.type.padEnd(20) + row.what)
+    }
+    note('full guard counts: ' + JSON.stringify(GD.guardCounts()))
+    note('listener stats: ' + JSON.stringify(LGs.listenerStats()))
+
+    note('RESULT ' + (faults === 0
+      ? 'a real context loss is recorded and reaches the crash report, and every listener category is wrapped'
+      : '*** ' + faults + ' fault(s) ***'))
+    return
+  }
+
   if (scenario === 'listenerguard') {
     /*
      * THE LISTENER PATCH, PROVEN RATHER THAN ASSERTED.

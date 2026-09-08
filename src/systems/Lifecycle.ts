@@ -19,6 +19,7 @@
 
 import Phaser from 'phaser'
 import { logEvent } from './Diagnostics.ts'
+import { noteContextGuard, noteContextLost, noteContextRestored } from './GraphicsWatch.ts'
 import { enterGate, leaveGate } from './InputGates.ts'
 import { audioUnavailable, onAudioUnavailable, resumeAudio, suspendAudio } from './Audio.ts'
 import { pauseMusic, resumeMusic } from './Music.ts'
@@ -277,17 +278,28 @@ function installContextLossGuard(
   handlers: { onLost: () => void; onRestored: () => void },
 ): void {
   const canvas = game.canvas as HTMLCanvasElement | undefined
-  if (!canvas?.addEventListener) return
+  if (!canvas?.addEventListener) {
+    // RECORDED RATHER THAN SILENT. This used to return with no trace, so a
+    // session where the listeners never went on looked identical to one where
+    // they did and the context simply never dropped. A silent gap in the
+    // diagnostic being relied on is the mistake this investigation has already
+    // made twice.
+    noteContextGuard(false, null)
+    return
+  }
+  noteContextGuard(true, canvas)
 
   canvas.addEventListener('webglcontextlost', (e) => {
     // Preventing the default is what makes the loss recoverable at all.
     e.preventDefault()
     logEvent('lifecycle', 'webgl context lost')
+    noteContextLost()
     handlers.onLost()
   })
 
   canvas.addEventListener('webglcontextrestored', () => {
     logEvent('lifecycle', 'webgl context restored')
+    noteContextRestored()
     handlers.onRestored()
     toast('Graphics were reset by the browser. Carry on.')
   })
