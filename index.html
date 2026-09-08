@@ -169,6 +169,24 @@
         } catch (e) {}
       })();
     </script>
-    <script type="module" src="/src/main.ts"></script>
+    <!--
+      crossorigin, so a thrown exception arrives with its message and stack.
+
+      An iPhone crash report came back reading `error  Script error.` with no
+      file, no line and no stack, which is the browser withholding details from
+      a script it is treating as cross-origin. Every step of a diagnosis is
+      guesswork until that is fixed.
+
+      This bundle IS same-origin with the page on Pages, so in principle the
+      details should already arrive -- which is exactly why the attribute is
+      here rather than a theory about why they did not. It costs nothing when
+      the script is same-origin, and GitHub Pages answers
+      `Access-Control-Allow-Origin: *`, so it also costs nothing if the page is
+      ever served from somewhere the bundle is not.
+
+      Vite adds this attribute to entry scripts it injects itself; this tag is
+      hand-authored, so it is spelled out rather than assumed.
+    -->
+    <script type="module" crossorigin="anonymous" src="/src/main.ts"></script>
   </body>
 </html>

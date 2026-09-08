@@ -105,8 +105,49 @@ export function setBuildLabel(label: string): void {
   buildLabel = label
 }
 
+/**
+ * Extra state sources, merged into every report.
+ *
+ * WHY THIS EXISTS: an iPhone crash report came back with an EMPTY STATE
+ * section. That is not a bug in the formatter, it is the design — `state` came
+ * from `stateProvider`, only GameScene ever set one, and the crash happened
+ * during boot. So the one report anybody has of this fault cannot say what the
+ * viewport was, whether the rotate gate was up, what the safe-area insets were
+ * or which scene was on screen, and every one of those was a live suspect.
+ *
+ * A registry rather than a second hard-coded provider, because the things
+ * worth knowing live in modules Diagnostics must not import: InputGates
+ * imports THIS file, so a reciprocal import would be a cycle. The owner of
+ * each fact registers it instead. See CrashContext.ts.
+ */
+const contexts = new Map<string, () => Record<string, unknown>>()
+
+export function provideContext(name: string, fn: (() => Record<string, unknown>) | null): void {
+  if (fn) contexts.set(name, fn)
+  else contexts.delete(name)
+}
+
+function gatherContexts(): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [name, fn] of contexts) {
+    try {
+      Object.assign(out, fn())
+    } catch (err) {
+      // One broken source must not cost the report every other fact in it.
+      out[`${name}Failed`] = safeString(err)
+    }
+  }
+  return out
+}
+
+/**
+ * Everything known about the moment, context first and the run over the top.
+ *
+ * The run wins on a key collision: it is the more specific answer, and a
+ * report about a live run should describe that run.
+ */
 export function currentState(): Record<string, unknown> {
-  return stateProvider ? gather() : lastKnown
+  return { ...gatherContexts(), ...(stateProvider ? gather() : lastKnown) }
 }
 
 function gather(): Record<string, unknown> {
@@ -174,6 +215,13 @@ export function formatReport(r: CrashReport): string {
   }
   lines.push('')
   lines.push('STATE')
+  // An empty STATE used to be the normal outcome of a crash outside a run, and
+  // it made the one report of the iPhone fault useless. It should now be
+  // impossible: CrashContext registers the viewport, the gate and the scenes
+  // whether or not a run exists. If this line ever prints, that wiring is gone.
+  if (Object.keys(r.state).length === 0) {
+    lines.push('  (empty — the context providers are not installed, which is itself a fault)')
+  }
   for (const [k, v] of Object.entries(r.state)) lines.push(`  ${k} = ${safeString(v)}`)
   lines.push('')
   lines.push(`EVENTS (${r.events.length}, oldest first, ms since load)`)

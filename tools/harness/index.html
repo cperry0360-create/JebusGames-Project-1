@@ -50,6 +50,45 @@ if (angleArg !== null) {
     })
   } catch (e) { console.log('NOTE could not fake orientation: ' + e.message) }
 }
+/*
+ * ?portrait=startMs,durationMs FAKES THE LAUNCH TRANSIENT.
+ *
+ * The iPhone crash report shows the rotate gate raising at 4796ms and lowering
+ * 21ms later, holding nothing, with the exception immediately after. The gate
+ * needs ENTER_FRAMES consecutive portrait readings to rise, so the device
+ * really did report portrait for several frames while the boot loader ran --
+ * which is what a standalone home-screen app does when it launches in the
+ * device's natural orientation and rotates into landscape a moment later.
+ *
+ * `isPortrait()` asks `matchMedia('(orientation: portrait)')`, so that is what
+ * is shadowed, and DELIBERATELY NOT the CSS. The stylesheet keeps answering
+ * honestly, which reproduces the real pairing: the script believes portrait
+ * while the overlay stays hidden. Everything else -- window.inner*, the probe,
+ * the canvas -- is left alone.
+ *
+ * This has to be installed here, at the top of the file, because the gate is
+ * installed during the harness's own boot and a stub set up inside a scenario
+ * would arrive minutes too late.
+ */
+const portraitArg = q.get('portrait')
+if (portraitArg) {
+  const [startMs, durMs] = portraitArg.split(',').map(Number)
+  const t0 = Date.now()
+  const real = window.matchMedia.bind(window)
+  window.__portraitWindow = { startMs, durMs, forced: 0 }
+  window.matchMedia = (query) => {
+    const mql = real(query)
+    if (!/orientation:\s*portrait/.test(query)) return mql
+    const dt = Date.now() - t0
+    if (dt < startMs || dt >= startMs + durMs) return mql
+    window.__portraitWindow.forced++
+    // A stand-in with the same shape, so anything that adds a listener or
+    // reads `.media` still works.
+    return { matches: true, media: query, addEventListener() {}, removeEventListener() {},
+      addListener() {}, removeListener() {}, onchange: null, dispatchEvent() { return false } }
+  }
+}
+
 const insetArg = q.get('insets')
 if (insetArg) {
   const [t, r, b, l] = insetArg.split(',').map(Number)
@@ -106,6 +145,14 @@ window.isPortrait = isPortrait
 // point of a safety net is that it has been dropped on.
 const { installGameStuckGuard } = await import('./js/systems/StuckWatch.js')
 installGameStuckGuard(game)
+// The crash-report context, for the same reason as the gate and the guard: a
+// provider that only existed on main.ts's boot path is one no scenario could
+// check, and an empty STATE section is the thing being fixed.
+const { installErrorPanel } = await import('./js/systems/ErrorPanel.js')
+installErrorPanel()
+const CTX = await import('./js/systems/CrashContext.js')
+CTX.installCrashContext()
+CTX.installGameContext(game)
 note('visibilityState at boot: ' + document.visibilityState)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const scene = (k) => game.scene.getScene(k)
@@ -647,6 +694,111 @@ async function run() {
     window.__screensDump = { texmem: TEXDUMP }
     return
   }
+  if (scenario === 'standalone') {
+    /*
+     * THE iPHONE STANDALONE LAUNCH, AS REPORTED.
+     *
+     * Nothing is forced by hand here. `toTitle()` above has already waited on
+     * the real boot chain, and the portrait window (if PORTRAIT= was given)
+     * was applied by matchMedia at the top of this file while that boot was
+     * running. So this scenario reports what a launch DID, rather than driving
+     * one.
+     *
+     * What it has to establish, in order: did the gate raise and lower during
+     * boot the way the report shows; did anything throw; and did the game
+     * reach a playable title afterwards.
+     */
+    const DG = await import('./js/systems/Diagnostics.js')
+    const OR = await import('./js/systems/Orientation.js')
+    const IG = await import('./js/systems/InputGates.js')
+    const SA = await import('./js/systems/SafeArea.js')
+    const pw = window.__portraitWindow
+    note('viewport ' + VP.w + 'x' + VP.h + '  dpr=' + RES.deviceScale())
+    note('portrait window: ' + (pw ? pw.startMs + 'ms for ' + pw.durMs + 'ms, '
+      + pw.forced + ' forced readings served' : 'none requested'))
+    note('insets raw ' + JSON.stringify(SA.rawSafeAreaInsets())
+      + ' resolved ' + JSON.stringify(SA.safeAreaInsets()))
+    note('overlay visible now: ' + OR.overlayVisible()
+      + '  isPortrait() ' + window.isPortrait()
+      + '  gate holding ' + JSON.stringify(OR.gateHolding(game))
+      + '  open gates ' + IG.gateSummary())
+
+    // THE GAME'S OWN EVENT LOG, which is the thing the crash report shows.
+    // Reading it here means the harness and the phone are quoting the same
+    // source rather than two different ones.
+    const evts = DG.recentEvents()
+    note('game event log (' + evts.length + ' entries):')
+    for (const e of evts) note('  ' + String(e.t).padStart(6) + '  ' + e.kind
+      + (e.detail ? '  ' + e.detail : ''))
+
+    const raised = evts.filter((e) => /gate raised/.test(e.detail)).length
+    const lowered = evts.filter((e) => /gate lowered/.test(e.detail)).length
+    note('gate raised ' + raised + ' time(s), lowered ' + lowered + ' time(s)')
+
+    // Did anything throw? PAGE ERROR and REJECT are recorded at the top of
+    // this file, and the game's own ErrorPanel records into lastReport().
+    const pageErrors = log.filter((l) => l.startsWith('PAGE ERROR') || l.startsWith('REJECT'))
+    const last = DG.lastReport()
+    note('page errors: ' + pageErrors.length
+      + (pageErrors.length ? '  ' + JSON.stringify(pageErrors.slice(0, 6)) : ''))
+    note('game crash report: ' + (last ? last.cause + ' | ' + last.message : 'none'))
+
+    // And it has to be PLAYABLE afterwards, not merely un-thrown. A gate that
+    // raised during boot and left a scene paused is the soft lock, and it
+    // looks identical to a healthy title screen from the outside.
+    note('after boot: Title=' + running('Title') + ' Boot=' + running('Boot')
+      + ' Splash=' + running('Splash')
+      + '  Title paused=' + game.scene.isPaused('Title'))
+    await shot('standalone-1-title-' + VP.w + 'x' + VP.h)
+
+    // Into a level, because a boot that survives and a run that survives are
+    // two different claims.
+    scene('Title').scene.start('WorldMap')
+    await until(() => running('WorldMap'), 10000)
+    await sleep(600)
+    scene('WorldMap').scene.start('Loadout')
+    await until(() => running('Loadout'), 10000)
+    await sleep(600)
+    scene('Loadout').scene.start('Game')
+    const ran = await until(() => running('Game') && scene('Game').status.heroName !== '', 20000)
+    await until(() => running('Hud'), 8000)
+    await sleep(900)
+    note('reached a run: ' + ran + '  Game paused=' + game.scene.isPaused('Game')
+      + '  Hud=' + running('Hud'))
+    await shot('standalone-2-game-' + VP.w + 'x' + VP.h)
+
+    let faults = 0
+    const bad = (m) => { faults++; note('*** ' + m) }
+    if (pageErrors.length) bad('the boot threw: ' + pageErrors[0])
+    if (last) bad('the game recorded a crash report: ' + last.message)
+    if (!running('Title') && !ran) bad('the game did not reach the title screen')
+    if (OR.gateHolding(game).length) bad('the gate is still holding ' + OR.gateHolding(game).join(','))
+    // THE LEAK THIS SCENARIO FOUND. The gate announced itself to InputGates on
+    // the way up and never took the claim back on the way down, so one boot
+    // transient disabled the stuck guard for the life of the page --
+    // `shouldRecover` is `stuck && owner === null`, and `owner` is the first
+    // open gate. Checked here as well as in orientation.test.ts because the
+    // unit test drives the state machine and this drives a real boot.
+    if (raised > 0 && IG.openGates().includes('portrait') && !OR.overlayVisible()) {
+      bad('the portrait gate is still claiming input with the overlay down: ' + IG.gateSummary())
+    }
+    // And the report a phone would send has to be worth reading. An empty
+    // STATE section is what made the real one useless.
+    const probe = DG.buildReport('harness probe', 'not a real fault')
+    const keys = Object.keys(probe.state)
+    note('crash-report STATE would carry ' + keys.length + ' fields: ' + keys.join(', '))
+    for (const [k, v] of Object.entries(probe.state)) note('    ' + k + ' = ' + String(v))
+    if (keys.length === 0) bad('a crash report from here would carry an empty STATE section')
+    for (const want of ['display', 'viewportCss', 'insetsResolved', 'gates', 'scenesRunning']) {
+      if (!(want in probe.state)) bad('the crash report cannot say "' + want + '"')
+    }
+    if (!ran) bad('the game did not reach a playable run')
+    note('RESULT ' + (faults === 0
+      ? 'a standalone-shaped launch booted, survived the gate transient and reached a run'
+      : '*** ' + faults + ' fault(s) ***'))
+    return
+  }
+
   if (scenario === 'realboot') {
     // The whole path, with nothing forced. Boot -> Splash -> Title -> Loadout
     // -> Game -> Hud, each one waited for rather than started by hand. This is

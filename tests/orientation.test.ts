@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
 import { ENTER_FRAMES, OrientationGate } from '../src/systems/OrientationGate.ts'
+import { clearGates, openGates } from '../src/systems/InputGates.ts'
 
 /**
  * The game renders at the device's actual orientation, always.
@@ -199,6 +200,60 @@ test('the pause and the overlay ask the same question', () => {
   const post = gate.slice(gate.indexOf('POST_STEP'))
   assert.doesNotMatch(post.slice(0, 200), /pauseRunning/,
     'the per-frame hook must run the whole decision, not just the pausing half')
+})
+
+/**
+ * THE GATE HAS TO ANNOUNCE LETTING GO, NOT ONLY TAKING HOLD.
+ *
+ * The raise called `enterGate('portrait')`; the ordinary lowering path called
+ * nothing. Only `forceRelease` — which runs after the stuck guard has already
+ * decided something is wrong — ever called `leaveGate`. So one portrait
+ * transient left the gate open forever.
+ *
+ * That is not cosmetic. `shouldRecover` in StuckGuard is
+ * `v.stuck && v.owner === null`, and `owner` is `openGates()[0]`. A gate stuck
+ * open is a permanent claim on input by something the player cannot see and
+ * cannot dismiss, and it disables the guard for the life of the page — so the
+ * next genuine freeze would never be recovered.
+ *
+ * An iPhone crash report shows exactly this transient during boot: raised at
+ * 4796ms holding nothing, lowered 21ms later. Every launch on that device was
+ * arming the failure.
+ */
+test('a raise and a lower leave no gate claiming to hold input', () => {
+  clearGates()
+  const g = new OrientationGate()
+  const h = fakeHost(['Game', 'Hud'])
+
+  portraitFor(g, h, ENTER_FRAMES)
+  assert.deepEqual(openGates(), ['portrait'], 'the raise did not announce itself')
+
+  g.sync(false, h.host)
+  assert.deepEqual(openGates(), [],
+    'the gate lowered but still claims to hold input, which disables the stuck guard')
+})
+
+/**
+ * And the same for the shape the iPhone actually reported: the gate rises
+ * during boot with NOTHING running that it may pause, and comes straight back
+ * down. Holding nothing is the path least likely to be exercised by hand and
+ * it is the one the device took.
+ */
+test('a gate that raised holding nothing still lets go of the claim', () => {
+  clearGates()
+  const g = new OrientationGate()
+  // Boot alone: NEVER_PAUSE, so the gate rises having paused nothing at all.
+  const h = fakeHost(['Boot'])
+
+  portraitFor(g, h, ENTER_FRAMES)
+  assert.equal(g.raised, true, 'the gate did not rise')
+  assert.deepEqual(g.holding, [], 'the gate paused the loader')
+  assert.deepEqual(openGates(), ['portrait'])
+
+  g.sync(false, h.host)
+  assert.equal(g.raised, false)
+  assert.deepEqual(openGates(), [],
+    'a gate that held nothing still leaked its claim on input')
 })
 
 test('the gate can be made to hand everything back', () => {

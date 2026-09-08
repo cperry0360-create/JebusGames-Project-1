@@ -11,11 +11,17 @@ import { installLifecycle } from './systems/Lifecycle.ts'
 import { disableMusic, installMusicGesture, refreshMusicVolume, unlockMusic } from './systems/Music.ts'
 import { onAudioGesture, onAudioMixChanged, onAudioUnavailable } from './systems/Audio.ts'
 import { VERSION_LABEL } from './systems/Build.ts'
+import { installCrashContext, installGameContext } from './systems/CrashContext.ts'
 
 // First, before anything can throw. A game that dies on the way up has to say
 // so; the alternative is the black screen this replaces.
 installErrorPanel()
 ;(globalThis as unknown as { __errorPanelReady?: boolean }).__errorPanelReady = true
+// IMMEDIATELY AFTER the handler and before anything else, because the report
+// this exists for was written during boot and came back with an empty STATE
+// section. Nothing here needs the game, so a crash on the way up is described
+// too. See CrashContext.ts.
+installCrashContext()
 // Before the game exists, so the engine's own audio calls are already covered
 // by the time it makes any. Sound must never be able to take the game down.
 guardAudioPromises()
@@ -98,6 +104,9 @@ function boot(): Phaser.Game {
   // different frame from the one the browser reports them in.
   installOrientationGate(game)
   installGameStuckGuard(game)
+  // After the gate, so a report can say what the gate was holding. Re-run on a
+  // rebuild, which replaces the provider rather than stacking a second one.
+  installGameContext(game)
   return game
 }
 

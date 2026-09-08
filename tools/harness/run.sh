@@ -7,6 +7,9 @@ QS=""; [ -n "$VP" ] && QS="&vp=$VP"
 [ -n "$ARG" ] && QS="$QS&arg=$ARG"
 # INSETS=t,r,b,l fakes a notch, e.g. INSETS=0,0,0,64 for one on the left.
 [ -n "$INSETS" ] && QS="$QS&insets=$INSETS"
+# PORTRAIT=startMs,durMs makes matchMedia report portrait for that window, which
+# is the standalone-launch transient the iPhone crash report shows.
+[ -n "$PORTRAIT" ] && QS="$QS&portrait=$PORTRAIT"
 # ANGLE=90|270 fakes a landscape turn; HOUSING=left|right asserts the edge.
 [ -n "$ANGLE" ] && QS="$QS&angle=$ANGLE"
 [ -n "$HOUSING" ] && QS="$QS&housing=$HOUSING"

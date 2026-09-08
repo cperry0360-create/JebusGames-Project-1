@@ -105,6 +105,21 @@ export class OrientationGate {
     if (!this.up) return null
     this.up = false
     logEvent('orientation', `gate lowered; resumed ${released.join(',') || 'nothing'}`)
+    // THE OTHER HALF OF `enterGate`, and its absence was a real fault.
+    //
+    // The raise announced itself to InputGates and this path never took it
+    // back — only `forceRelease` did, and that runs only when the stuck guard
+    // has already decided something is wrong. So one portrait transient left
+    // the `portrait` gate open forever, and `shouldRecover` is
+    // `v.stuck && v.owner === null`: with a gate permanently claiming to hold
+    // input, the stuck guard could never recover this page again.
+    //
+    // That is the exact failure InputGates was written to prevent, in
+    // InputGates' own words — "some path out is not paired with a path in" —
+    // and it is reproducible in the harness at any viewport: force three
+    // portrait frames during boot and `gateSummary()` still reads
+    // `portrait(...)` seconds later with the overlay down and nothing held.
+    leaveGate('portrait', { resumed: released.join(',') || 'nothing' })
     return 'lowered'
   }
 
