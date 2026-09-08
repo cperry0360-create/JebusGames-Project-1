@@ -10,9 +10,10 @@ on.**
 | `12ce6c7` | Size the world map's ground to the camera, not to the world | covered by run 235 on the branch head |
 | `351177d` | Load a level's enemies and effects with the level, not at boot | covered by run 235 on the branch head |
 | `9d91ffe` | Walk every level in the levelart scenario, and say what each one costs | **green** — `test` and `typecheck` both pass ([run 235](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34240908206)) |
+| `a7045f8` | This report, and 79.4 MB corrected to 90.8 | **green** — `test` and `typecheck` both pass ([run 236](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34241361906)) |
 
-CI runs per push rather than per commit, so run 235 is the head's result and the
-three commits were pushed together. The typecheck job is `npx tsc --noEmit` with
+CI runs per push rather than per commit, so run 235 covers the first three
+commits and run 236 the head. The typecheck job is `npx tsc --noEmit` with
 `node_modules` present, which is the check `tools/tsdiff.sh` exists to
 approximate and the one that has caught real errors here before.
 
@@ -104,8 +105,17 @@ map down again, to 87.2 MB.
 ### Is the picture the same? Nearly, and the remainder is explained
 
 Screenshot-diffed against a control run of the unmodified tree at 844x390,
-667x375 and 1400x820. Every screen but the world map is **bit-identical** —
-title, all six loadout states, cutscene, game, 0 pixels different.
+667x375 and 1400x820. Every screen but the world map and the board is
+**bit-identical** — title, all six loadout states, cutscene: 0 pixels
+different at every size. The board differs by about 1% of pixels, which is the
+hero and the water animating between two runs and is the same on two runs of
+the unmodified tree.
+
+**That diff was repeated after the level-art change as well**, against the same
+control set, and it comes back the same: every menu screen still 0 pixels
+different. That is the useful check on section 2 too — a texture that boot
+stopped loading and a level did not pick up would show as a magenta box on one
+of those screens, and none of them moved by a pixel.
 
 The world map is not, and the first version of the change was worse: sizing
 straight off the camera put the sprite's left edge on world x = -140.5 at
@@ -115,10 +125,13 @@ world units fixed that half. What is left:
 | viewport | pixels differing | max channel difference | two control runs differ by |
 |---|---|---|---|
 | 667x375 | 50.4% | **6** of 255 | max 6 |
-| 844x390 | 50.9% | **6** of 255 | max 6 |
-| 1400x820 | 50.8% | **27** of 255 | max 15 |
+| 844x390 | 50.9% | **7** of 255 | max 6 |
+| 1400x820 | 50.8% | **6** of 255 (27 on one run) | max 15 |
 
-At both phone sizes the difference is inside the harness's own run-to-run noise.
+At every size the difference is at or near the harness's own run-to-run noise;
+the 27 is one run at 1400x820 and a repeat of the same diff after the level-art
+change gave 6 there, so the desktop figure is somewhere in 6-27 and is not
+stable enough to quote tighter.
 The mechanism is `roundPixels: true` in `src/config.ts`: Phaser rounds a
 sprite's draw position to a whole device pixel, and this sprite now sits
 somewhere else, so the ground is sampled up to half a pixel across from where it
@@ -394,9 +407,9 @@ on them.
 
 ## Where this leaves the repository
 
-**In flight.** Branch `claude/memory-tilesprite-level-art-6460up`, three
-commits, head `9d91ffe`, CI green on both jobs. **Not merged.** `origin/main` is
-at `8385d8e` and the branch is that plus these three, fast-forward:
+**In flight.** Branch `claude/memory-tilesprite-level-art-6460up`, four
+commits, head `a7045f8`, CI green on both jobs. **Not merged.** `origin/main` is
+at `8385d8e` and the branch is that plus these four, fast-forward:
 
 ```
 git checkout main && git merge --ff-only claude/memory-tilesprite-level-art-6460up && git push origin main
