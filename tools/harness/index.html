@@ -123,6 +123,13 @@ setRunState({
 const RES = await import('./js/systems/Resolution.js')
 const { guardAudioPromises } = await import('./js/systems/Audio.js')
 guardAudioPromises()
+// BEFORE THE GAME IS CONSTRUCTED, exactly as main.ts does it. This patches
+// addEventListener, so it only covers listeners registered after it -- and
+// Phaser registers its own during construction, which are the ones being
+// hunted. Installed here rather than in a scenario for the usual reason: a
+// guard only present on main.ts's boot path is one no scenario could check.
+const LG = await import('./js/systems/ListenerGuard.js')
+LG.installListenerGuard()
 const game = new Phaser.Game(gameConfig)
 window.game = game
 // The scale mode is NONE, so nothing sizes the canvas by itself. main.ts does
@@ -700,6 +707,157 @@ async function run() {
     window.__screensDump = { texmem: TEXDUMP }
     return
   }
+  if (scenario === 'listenerguard') {
+    /*
+     * THE LISTENER PATCH, PROVEN RATHER THAN ASSERTED.
+     *
+     * The brief for this pass is explicit and it is the right rule: "a guard
+     * that reports itself installed and catches nothing is worse than none."
+     * Last pass wrapped `game.step`, reported itself installed, and caught
+     * nothing, because TimeStep had captured a bound reference. So every claim
+     * below is a throw driven through the wrapper, or a behaviour check that
+     * fails loudly if the patch broke it.
+     *
+     * The regression risk is `removeEventListener`. Registration now installs a
+     * WRAPPER, so removal has to find that wrapper -- get it wrong and every
+     * listener in the game leaks, which is precisely the bug SceneEvents.ts
+     * exists to prevent. That is checked before anything else.
+     */
+    const DG = await import('./js/systems/Diagnostics.js')
+    const GD = await import('./js/systems/Guard.js')
+    const LGm = await import('./js/systems/ListenerGuard.js')
+
+    let faults = 0
+    const bad = (m) => { faults++; note('*** ' + m) }
+    note('stats at start: ' + JSON.stringify(LGm.listenerStats()))
+    if (!LGm.listenerStats().installed) bad('the listener guard is not installed at all')
+
+    // ---- 1. REMOVAL STILL WORKS. The thing most likely to be broken. ----
+    let calls = 0
+    const target = document.createElement('div')
+    const handler = () => { calls++ }
+    target.addEventListener('ping', handler)
+    target.dispatchEvent(new Event('ping'))
+    if (calls !== 1) bad('a wrapped listener did not fire at all (calls=' + calls + ')')
+    target.removeEventListener('ping', handler)
+    target.dispatchEvent(new Event('ping'))
+    if (calls !== 1) bad('removeEventListener did NOT remove the wrapper -- listeners leak')
+    else note('add/remove round trip: listener fired once and stopped. calls=' + calls)
+
+    // Capture and bubble are separate registrations and must stay separate.
+    let cap = 0, bub = 0
+    const capH = () => { cap++ }
+    const bubH = () => { bub++ }
+    target.addEventListener('ping', capH, true)
+    target.addEventListener('ping', bubH, false)
+    target.dispatchEvent(new Event('ping'))
+    target.removeEventListener('ping', capH, true)
+    target.dispatchEvent(new Event('ping'))
+    if (!(cap === 1 && bub === 2)) bad('capture/bubble removal is confused: cap=' + cap + ' bub=' + bub)
+    else note('capture and bubble tracked separately: cap=' + cap + ' bub=' + bub)
+
+    // `once` is the browser's business, but the wrapper must not defeat it.
+    let onceN = 0
+    target.addEventListener('pong', () => { onceN++ }, { once: true })
+    target.dispatchEvent(new Event('pong'))
+    target.dispatchEvent(new Event('pong'))
+    if (onceN !== 1) bad('{ once: true } broke: fired ' + onceN + ' times')
+    else note('{ once: true } still fires exactly once')
+
+    // A handleEvent object, which is a legal listener and not a function.
+    let objN = 0
+    const objListener = { handleEvent() { objN++ } }
+    target.addEventListener('obj', objListener)
+    target.dispatchEvent(new Event('obj'))
+    target.removeEventListener('obj', objListener)
+    target.dispatchEvent(new Event('obj'))
+    if (objN !== 1) bad('a handleEvent object listener misbehaved: ' + objN)
+    else note('handleEvent objects work and remove cleanly')
+
+    // ---- 2. A THROW THROUGH A WRAPPED LISTENER ----
+    DG.setLastReport(null)
+    GD.resetGuards()
+    const thrower = () => { throw new TypeError('deliberate: from inside a window listener') }
+    window.addEventListener('harness-boom', thrower)
+    let escaped = false
+    try {
+      window.dispatchEvent(new Event('harness-boom'))
+    } catch (e) {
+      escaped = true
+    }
+    window.removeEventListener('harness-boom', thrower)
+    // CHECKED VIA guardCounts AND THE EVENT LOG, not via lastReport.
+    //
+    // `dispatchEvent` does not rethrow to its caller: the browser reports a
+    // throwing listener to window.onerror and carries on. So the global handler
+    // always writes a report AFTER the wrapper's and `lastReport` is its, not
+    // ours -- which is what the first version of this check tripped over. What
+    // proves the wrapper fired is that it COUNTED the throw and LOGGED the real
+    // message. The report's own content is proven in `loopthrow`, off a
+    // `guarded()` call that nothing overwrites.
+    const counts1 = GD.guardCounts()
+    note('guard counts: ' + JSON.stringify(counts1))
+    note('did the throw escape dispatchEvent to the caller? ' + escaped
+      + '   (false is correct -- the browser reports it and continues)')
+    if (!counts1['a "harness-boom" listener on window']) {
+      bad('the window listener wrapper did not fire')
+    }
+    const logged1 = DG.recentEvents().filter((e) => e.kind === 'guard'
+      && /deliberate: from inside a window listener/.test(e.detail))
+    note('the wrapper logged: ' + (logged1[0] ? logged1[0].detail : 'NOTHING'))
+    if (!logged1.length) bad('the wrapper did not record the real message')
+
+    // ---- 3. A THROW THROUGH A requestAnimationFrame CALLBACK ----
+    GD.resetGuards()
+    requestAnimationFrame(() => { throw new RangeError('deliberate: from inside rAF') })
+    await sleep(400)
+    const counts2 = GD.guardCounts()
+    note('rAF guard counts: ' + JSON.stringify(counts2))
+    if (!counts2['a requestAnimationFrame callback']) bad('the rAF wrapper did not fire')
+    const logged2 = DG.recentEvents().filter((e) => e.kind === 'guard'
+      && /deliberate: from inside rAF/.test(e.detail))
+    note('the rAF wrapper logged: ' + (logged2[0] ? logged2[0].detail : 'NOTHING'))
+    if (!logged2.length) bad('the rAF wrapper did not record the real message')
+
+    // ---- 4. PHASER'S OWN LISTENERS, which is the point of the whole patch ----
+    //
+    // The game was constructed AFTER the patch, so anything Phaser registered
+    // went through it. Proven by dispatching a mouse event at the canvas and
+    // reading the beacon back: nothing in src/ registers a mouse listener on
+    // the canvas, so a canvas entry there can only be Phaser's.
+    await startRun()
+    await sleep(600)
+    const canvas = game.canvas
+    canvas.dispatchEvent(new MouseEvent('mousedown', {
+      bubbles: true, clientX: 100, clientY: 100,
+    }))
+    await sleep(200)
+    const stats = LGm.listenerStats()
+    note('stats after boot: wrapped=' + stats.wrappedListeners)
+    note('  lastEvent: ' + stats.lastEvent)
+    note('  recent: ' + stats.recentEvents)
+    if (!(Number(stats.wrappedListeners) > 10)) {
+      bad('only ' + stats.wrappedListeners + ' listeners wrapped; the patch is not catching Phaser')
+    }
+    if (!/canvas|CANVAS/i.test(String(stats.recentEvents))) {
+      bad("no canvas listener was dispatched through the wrapper -- Phaser's input is NOT wrapped")
+    } else {
+      note("a canvas listener ran through the wrapper, so Phaser's own input handlers are covered")
+    }
+
+    // ---- 5. THE BEACON, which is what names the trigger with no stack ----
+    window.dispatchEvent(new Event('resize'))
+    await sleep(300)
+    const s2 = LGm.listenerStats()
+    note('after a real resize -> lastEvent: ' + s2.lastEvent)
+    if (!/resize/.test(String(s2.lastEvent))) bad('the beacon did not record a resize')
+
+    note('RESULT ' + (faults === 0
+      ? "every listener is wrapped, Phaser's included, removal still works, and throws are named"
+      : '*** ' + faults + ' fault(s) ***'))
+    return
+  }
+
   if (scenario === 'loopthrow') {
     /*
      * THE GUARD, PROVEN BY THROWING AT IT. A crash reporter never seen to

@@ -13,6 +13,7 @@ import { onAudioGesture, onAudioMixChanged, onAudioUnavailable } from './systems
 import { VERSION_LABEL } from './systems/Build.ts'
 import { installCrashContext, installGameContext } from './systems/CrashContext.ts'
 import { guardGameLoop, resetGuards } from './systems/Guard.ts'
+import { installListenerGuard } from './systems/ListenerGuard.ts'
 
 // First, before anything can throw. A game that dies on the way up has to say
 // so; the alternative is the black screen this replaces.
@@ -23,6 +24,12 @@ installErrorPanel()
 // section. Nothing here needs the game, so a crash on the way up is described
 // too. See CrashContext.ts.
 installCrashContext()
+// BEFORE PHASER EXISTS, and that ordering is the whole point: this patches
+// `addEventListener`, so only listeners registered AFTER it are wrapped. Phaser
+// registers its own window, document and canvas listeners during construction,
+// and those are the ones the last report ruled everything else out in favour
+// of. See ListenerGuard.ts.
+installListenerGuard()
 // Before the game exists, so the engine's own audio calls are already covered
 // by the time it makes any. Sound must never be able to take the game down.
 guardAudioPromises()
