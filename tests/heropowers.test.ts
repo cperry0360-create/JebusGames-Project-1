@@ -581,10 +581,16 @@ test('the Mind Laser is armed by a tap and fired by the board, like everything e
   assert.match(arming, /if \(armed === 'toggled'\) \{\s*\n\s*this\.clearSelection\('toggle'\)/,
     'tapping the armed medallion again does not disarm')
 
-  // THE STRING THAT TAUGHT THE DRAG IS GONE. If the interaction needs it, the
-  // interaction is still wrong.
+  // THE STRING THAT TAUGHT THE DRAG IS GONE, and no second one replaced it.
+  // The medallion's glow and the disc round the hero are the armed state; a
+  // line of text saying how to work the button is the signal the button is
+  // wrong, and the first replacement for it was still on the glass while the
+  // beam was firing.
   assert.doesNotMatch(game, /drag to aim/, 'the drag instruction is still on the screen')
   assert.doesNotMatch(game, /drag onto the board/, 'the drag instruction is still on the screen')
+  assert.doesNotMatch(game, /hold on the board/, 'a second gesture instruction took its place')
+  assert.match(arming, /if \(a\.activation === 'targeted'\) \{\s*\n\s*this\.status\.alert =/,
+    'the arming toast is no longer the targeted ability\'s alone')
 
   // THE PRESS ON THE BOARD FIRES IT, and it is the press rather than the
   // release because the beam is live between the two.

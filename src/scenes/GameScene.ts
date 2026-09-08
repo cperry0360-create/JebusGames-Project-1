@@ -3379,9 +3379,21 @@ export class GameScene extends Phaser.Scene {
       this.selected = null
       this.heroSelected = false
       this.syncTargeting()
-      this.status.alert = a.activation === 'held'
-        ? `${a.name}: hold on the board. Tap the medallion again, or CANCEL, to back out.`
-        : `${a.name}: tap inside the ring. Tap outside it, or CANCEL, to back out.`
+      // AND THE HELD ONE SAYS NOTHING, which is not an oversight.
+      //
+      // The targeted line names a LEGALITY -- `castRadius` can refuse a tap,
+      // so "tap inside the ring" is telling the player something the picture
+      // alone cannot. A beam has no such boundary: a press anywhere on the
+      // board fires it. So the only thing a line here could say is how to work
+      // the button, which is what the drag instruction said, and needing to
+      // say it is the signal the button is wrong. The glow on the medallion
+      // and the disc round the hero are the armed state; a sentence over the
+      // board would be a third of the same thing, and it outlived the arm --
+      // it was still on the glass while the beam was firing.
+      if (a.activation === 'targeted') {
+        this.status.alert =
+          `${a.name}: tap inside the ring. Tap outside it, or CANCEL, to back out.`
+      }
       return
     }
 
