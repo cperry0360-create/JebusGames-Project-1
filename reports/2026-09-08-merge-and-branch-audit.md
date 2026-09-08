@@ -8,7 +8,7 @@ sitting on the shelf waiting for a decision that is not mine to make.
 | commit | what | CI |
 |---|---|---|
 | `c580e7f` | `main` fast-forwarded to `claude/ios-safari-crash-diagnosis-hwyevk` (10 commits) | **green** — test, typecheck, `deploy / build`, `deploy / deploy` all success |
-| this report | markdown only | see the bottom of this file |
+| `c1a2153` | this report, markdown only | **green** — test, typecheck, `deploy / build`, `deploy / deploy` all success (run 222) |
 
 Pushing to `main` worked. That was not the obstacle.
 
@@ -259,7 +259,7 @@ because of the merge performed here; before it, it was a clean fast-forward.
 
 ## Where this leaves the repository
 
-**Done.** `main` is `c580e7f`, green, deployed. The crash diagnostics and the
+**Done.** `main` is `c1a2153` (`c580e7f` plus this report), green, deployed. The crash diagnostics and the
 map-plate memory fix are live for the first time — every previous crash report
 came from `12258d7`, which had none of it.
 
