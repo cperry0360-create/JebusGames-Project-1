@@ -13,7 +13,7 @@
     "pretest": "node -e \"const f=require('fs').readdirSync('tests').filter(n=>n.endsWith('.test.ts'));if(!f.length){console.error('no test files found in tests/');process.exit(1)}console.log('test files: '+f.join(', '))\""
   },
   "dependencies": {
-    "phaser": "^3.90.0"
+    "phaser": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.7.5",

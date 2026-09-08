@@ -28,6 +28,18 @@ const CELLS_X = 14
 const CELLS_Y = 8
 const SC = presentationData.scratchCard
 
+/**
+ * Runs a RenderTexture's queued draw commands, where the engine has any.
+ *
+ * Phaser 3 executed `draw`/`erase` on the spot. Phaser 4 buffers them into a
+ * command list that only `render()` runs, so every v3 call site needs one
+ * after it. The optional call is what lets this branch build against either
+ * engine, which the migration spike needs in order to compare them at all.
+ */
+function renderNow(rt: Phaser.GameObjects.RenderTexture): void {
+  ;(rt as unknown as { render?: () => void }).render?.()
+}
+
 export interface ScratchCardOptions {
   outcome: ScratchOutcome
   autoRevealSeconds: number
@@ -202,6 +214,12 @@ export class ScratchCard {
       { key: ART.ui.scratchCard.covered, add: false },
     ).setOrigin(0, 0).setDisplaySize(w, h)
     this.foil.draw(img, 0, 0)
+    // PHASER 4 BUFFERS DRAW COMMANDS. In v3 `draw` executed immediately; in v4
+    // a DynamicTexture queues commands and `render()` is what runs them, so
+    // without this the coating is never laid down and the prize is visible
+    // from the start. Called defensively because this branch has to run on
+    // BOTH engines to produce the spike's comparison -- v3.90 has no `render`.
+    renderNow(this.foil)
     img.destroy()
   }
 
@@ -219,6 +237,9 @@ export class ScratchCard {
     const fx = local.x - this.foil.x
     const fy = local.y - this.foil.y
     this.foil.erase(this.nibArt, fx - this.nib, fy - this.nib)
+    // Same as in `paintFoil`: on Phaser 4 the erase is a queued command and
+    // nothing is scratched off until the buffer is run.
+    renderNow(this.foil)
     // Voice-capped in audio.json, so a fast drag rasps rather than roars.
     play(this.scene, 'scratching')
     this.hint.setText('keep going')

@@ -10,7 +10,11 @@ SRC="${SRC:-$(cd "$H/../.." && pwd)}"
 # environment, and there was no way to create one: npm answers 403 for every
 # package and the CDNs are blocked at the proxy. Five sessions of rendering
 # fixes shipped unseen because of that one line. See vendor/README.md.
-PHASER="${PHASER_DIST:-$SRC/vendor/phaser.min.js}"
+# ON THIS BRANCH THE DEFAULT IS PHASER 4. The spike has to run the same source
+# on both engines to compare them, so both dists are vendored; see
+# vendor/README.md. Phaser 3.90.0 is still one variable away:
+#   PHASER_DIST=$PWD/vendor/phaser.min.js sh tools/harness/build.sh
+PHASER="${PHASER_DIST:-$SRC/vendor/phaser4.min.js}"
 if [ ! -f "$PHASER" ]; then
   echo "no Phaser dist at $PHASER" >&2
   echo "expected vendor/phaser.min.js — see vendor/README.md to restore it" >&2
