@@ -14,6 +14,7 @@
 import Phaser from 'phaser'
 import type { ArtDef, SpriteRender } from '../types.ts'
 import artData from '../data/art.json'
+import { isLevelArtKey } from './LevelArt.ts'
 
 const art = artData as ArtDef
 
@@ -23,6 +24,9 @@ export const ART = {
   /** Logical key -> path under assetRoot. Only the loader should need this. */
   files: art.files,
   map: art.map,
+  /** Art that arrives with a level rather than at boot. `shared` is what any
+   *  level might need; the enemies are computed per level — see LevelArt.ts. */
+  levelArt: art.levelArt,
   /** The world map screen: one tiling background and one card per level. The
    *  cards are keyed by level id, so adding a level adds one entry here and
    *  nothing else. */
@@ -90,28 +94,19 @@ export function hasTierArt(baseKey: string): boolean {
 export const SPRITE_KEYS = Object.keys(art.files)
 
 /**
- * The map plates, by manifest key.
+ * WHICH ART IS LEVEL ART lives in `systems/LevelArt.ts`, not here, and is
+ * re-exported so callers still have one front door for the manifest.
  *
- * THE ONLY ART THIS GAME LOADS PER LEVEL RATHER THAN ONCE AT BOOT, and the
- * reason there is a list at all.
- *
- * Four of the five are 3840x2160. A WebP is small on disk and irrelevant in
- * memory: the moment it is uploaded it is width x height x 4 bytes of RGBA, so
- * each of those four is 31.6 MB and the set is 134.5 MB — held for the life of
- * the tab, on a phone, to draw four boards nobody is playing. Measured at
- * 365.6 MB total on the world map, which is where iOS Safari was killing the
- * tab. See reports/2026-09-07-the-crash.md.
- *
- * `Object.values` rather than a hand-written list, so a sixth level is one row
- * in `art.map` and nothing here.
+ * The reason it moved is that it needs a test that runs. `npm install` does
+ * not work in the agent environment, so anything importing this module —
+ * which imports Phaser — cannot be executed by a test at all, only read as
+ * text. The plates were a five-key list where that was survivable. The split
+ * is 79.4 MB of enemies, effects and props now, with one failure mode that
+ * puts a magenta box on the title screen, and it needed better than a regex.
  */
-export const PLATE_KEYS: string[] = [...new Set(Object.values(art.map))]
-
-/** Whether this key is a map plate, and so loaded with a level and freed with
- *  it rather than living at boot. */
-export function isPlateKey(key: string): boolean {
-  return PLATE_KEYS.includes(key)
-}
+export {
+  ENEMY_SPRITE_KEYS, LEVEL_ART_KEYS, PLATE_KEYS, isLevelArtKey, isPlateKey,
+} from './LevelArt.ts'
 
 /**
  * Keys whose file may legitimately not be there.
@@ -141,16 +136,16 @@ export const OPTIONAL_SPRITE_KEYS: string[] = (art as { optional?: string[] }).o
  * a player looking at Phaser's magenta placeholder can at least tell you what
  * is wrong, and a player looking at a green screen cannot.
  *
- * MAP PLATES ARE NOT ON THIS LIST, and that is not a downgrade of how required
- * they are. It is that this list answers "did boot load everything it asked
- * for", and boot does not ask for plates any more — one arrives with its level
- * and is freed when that level ends. A plate on this list would be reported
- * absent on every single boot, which is how a warning banner becomes
- * wallpaper. GameScene owns the plate's own absence, on the one board it
- * affects.
+ * LEVEL ART IS NOT ON THIS LIST, and that is not a downgrade of how required
+ * it is. It is that this list answers "did boot load everything it asked
+ * for", and boot does not ask for a plate, an enemy or an effect any more —
+ * they arrive with a level and are freed when that level ends. Any of them on
+ * this list would be reported absent on every single boot, which is how a
+ * warning banner becomes wallpaper. GameScene owns its own level's absences,
+ * on the one board they affect — see `reportMissingLevelArt`.
  */
 export const REQUIRED_SPRITE_KEYS = SPRITE_KEYS.filter(
-  (k) => !OPTIONAL_SPRITE_KEYS.includes(k) && !PLATE_KEYS.includes(k),
+  (k) => !OPTIONAL_SPRITE_KEYS.includes(k) && !isLevelArtKey(k),
 )
 
 /** True when this key is allowed to be absent. */

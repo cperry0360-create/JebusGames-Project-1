@@ -1116,6 +1116,15 @@ export interface ArtDef {
   render: Record<string, Partial<SpriteRender>>
   /** Painted level plates, one per level. */
   map: Record<string, string>
+  /**
+   * Art that only exists inside a level, and so is not loaded at boot.
+   *
+   * `shared` is what any level might need — effects, props, soldiers,
+   * projectiles, the two in-play panels. The enemies are deliberately absent:
+   * they are computed per level from enemies.json and the wave tables. See the
+   * note in art.json and systems/LevelArt.ts.
+   */
+  levelArt: { shared: string[] }
   ui: {
     /** The painted peanut, for every place the currency is shown: the sell
      *  button, the drawer's prices, and the counter plate's own end. */
