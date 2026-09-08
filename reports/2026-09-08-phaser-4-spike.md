@@ -20,9 +20,14 @@ masks from working in WebGL.
 |---|---|---|
 | `5bc8b39` | Ask whether the game SURVIVES a context loss, not just whether it notices | no own run — pushed together with `d30e218`, which CI ran on as the tip |
 | `d30e218` | Run the game on Phaser 4.0.0 | test **green**, typecheck **RED** — one error, fixed by `d439f2b` |
-| `d439f2b` | Build the scratch-card foil without `make.image`'s config | **green** — test and typecheck both pass; this is the branch head |
+| `d439f2b` | Build the scratch-card foil without `make.image`'s config | **green** — test and typecheck both pass |
+| `ae711b5` | This report | **green** — test and typecheck both pass |
+| *(branch head)* | This report's own CI row | markdown only; see the note below |
 
-`main` is `8385d8e` and this branch is three commits ahead of it, fast-forwardable.
+`main` is `8385d8e` and this branch is ahead of it and fast-forwardable, with
+nothing behind. The last row is the row that fills itself in: it can only
+record what CI said about the commit before it, since it *is* the commit that
+records it. It changes one table in one markdown file and touches no code.
 
 ---
 
