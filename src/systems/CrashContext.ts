@@ -66,6 +66,52 @@ function displayMode(): string {
   return mq ? 'standalone' : 'browser'
 }
 
+/**
+ * The bundle, as the DEVICE sees it.
+ *
+ * THIS SETTLES AN ARGUMENT THAT DOCUMENTATION CANNOT. "Script error." with no
+ * message, file, line or stack is what a browser reports for an exception in a
+ * script it treats as cross-origin — but the bundle is served from the same
+ * origin as the page on GitHub Pages, so in principle it should never be muted
+ * at all. Three reports say otherwise and there is no way to check from a
+ * sandbox that cannot reach the site.
+ *
+ * So the page reports on itself. `script.src` is the resolved absolute URL, so
+ * comparing its origin to the page's answers "is this actually cross-origin"
+ * on the device that is actually crashing. And `script.crossOrigin` is the
+ * reflected attribute as it exists in the SHIPPED html, which is the other
+ * thing nobody can verify from here: whether Vite kept the attribute through
+ * the build or dropped it.
+ *
+ * If the next report says `bundleSameOrigin = true` and
+ * `scriptCrossOrigin = anonymous` and the error is STILL "Script error.", then
+ * CORS is not the mechanism and that whole line of enquiry is closed.
+ */
+function bundle(): Record<string, unknown> {
+  const doc = globalThis.document
+  const el = attempt(
+    () => doc?.querySelector('script[type="module"]') as HTMLScriptElement | null,
+    null,
+  )
+  const pageOrigin = attempt(() => globalThis.location?.origin ?? 'unknown', 'unreadable')
+  const src = el?.src ?? ''
+  let bundleOrigin = 'none'
+  if (src) bundleOrigin = attempt(() => new URL(src).origin, 'unparseable')
+  return {
+    pageOrigin,
+    // Three states, not two: no module script at all, an INLINE one (which is
+    // what the harness page uses, and which has no origin to compare), or a
+    // real external bundle. Collapsing the first two reads as "the page has no
+    // script", which would be alarming and wrong.
+    bundleUrl: src || (el ? '(inline module script, no src)' : '(no module script in the DOM)'),
+    bundleOrigin,
+    bundleSameOrigin: src ? String(bundleOrigin === pageOrigin) : 'no bundle',
+    // null when the attribute is absent, which is exactly the thing that has
+    // to be checked on the shipped page rather than in the repository.
+    scriptCrossOrigin: el ? (el.crossOrigin ?? 'absent') : 'no script element',
+  }
+}
+
 /** The environment, with no game in it. Safe before Phaser exists at all. */
 function environment(): Record<string, unknown> {
   const w = globalThis as { innerWidth?: number; innerHeight?: number }
@@ -92,6 +138,7 @@ function environment(): Record<string, unknown> {
     gates: attempt(() => gateSummary(), 'unreadable'),
     openGates: attempt(() => openGates().join(',') || 'none', 'unreadable'),
     visibility: globalThis.document?.visibilityState ?? 'unknown',
+    ...bundle(),
   }
 }
 

@@ -5,6 +5,9 @@ import { readFileSync, existsSync } from 'node:fs'
 const url = (p: string) => new URL(p, import.meta.url)
 const src = (p: string) => readFileSync(url(`../src/${p}`), 'utf8')
 const art = JSON.parse(readFileSync(url('../src/data/art.json'), 'utf8'))
+/** The shipped page, which carries the pre-boot error handler and the script
+ *  tag whose attributes decide whether a crash report says anything. */
+const page = readFileSync(url('../index.html'), 'utf8')
 
 /**
  * The outage, as tests.
@@ -116,4 +119,53 @@ test('the missing-art banner cannot be hidden behind the game', () => {
   assert.match(boot, /z-index:99998/, 'the banner has no stacking order of its own')
   assert.ok(!/this\.scene\.bringToTop\('Boot'\)/.test(boot),
     'the banner is still trying to win a scene-order fight it cannot win')
+})
+
+/**
+ * THE ATTRIBUTE THAT DECIDES WHETHER A CRASH REPORT SAYS ANYTHING.
+ *
+ * Three iPhone reports came back reading `error  Script error.` with no
+ * message, no file, no line and no stack. That is what a browser reports for
+ * an exception in a script it treats as cross-origin, and the module script
+ * had no `crossorigin` attribute.
+ *
+ * This checks the SOURCE. It cannot check the build — `npm install` answers
+ * 403 in the agent environment so Vite never runs there, and Vite rewrites
+ * this exact tag on its way to `dist/index.html`. That half is asserted in
+ * `.github/workflows/deploy.yml`, on the real output, by the machine that
+ * actually builds it; and the page reports its own `scriptCrossOrigin` at
+ * runtime so the next crash report says it too. Three checks because the
+ * attribute is invisible when it works and costs a diagnosis when it does not.
+ */
+test('the module script asks for cross-origin error detail', () => {
+  const tag = /<script[^>]*type="module"[^>]*>/.exec(page)?.[0]
+  assert.ok(tag, 'index.html has no module script tag at all')
+  assert.match(tag, /crossorigin/,
+    'without crossorigin an exception reports as a bare "Script error." with no stack')
+})
+
+/**
+ * Both handlers, and they must not be the same handler.
+ *
+ * A rejected promise surfaces differently from a thrown error and may be the
+ * real source here, so the two are labelled apart — a report that says
+ * "unhandled rejection" points somewhere different from one that says
+ * "uncaught exception", and the early queue in index.html has to carry the
+ * distinction too or it is lost exactly where it is hardest to reproduce.
+ */
+test('a thrown error and a rejected promise are reported as different things', () => {
+  const panel = src('systems/ErrorPanel.ts')
+  assert.match(panel, /addEventListener\?\.\('error'/, 'no handler for uncaught exceptions')
+  assert.match(panel, /addEventListener\?\.\('unhandledrejection'/, 'no handler for rejections')
+  assert.match(panel, /'unhandled rejection'/, 'rejections are not labelled apart from throws')
+
+  // The location, which was being thrown away: ErrorEvent carries it whether
+  // or not a stack survives, so it is the one detail a muted script might
+  // still yield on some other build.
+  assert.match(panel, /e\.filename/, 'the error location is not captured')
+  assert.match(panel, /e\.lineno/, 'the error line is not captured')
+
+  // And the early queue keeps the distinction rather than flattening it.
+  assert.match(page, /kind: kind \|\| 'error'/, 'the pre-boot queue loses the kind')
+  assert.match(page, /'rejection'/, 'the pre-boot handler does not mark rejections')
 })

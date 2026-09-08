@@ -694,6 +694,182 @@ async function run() {
     window.__screensDump = { texmem: TEXDUMP }
     return
   }
+  if (scenario === 'sharesheet') {
+    /*
+     * THE SHARE BUTTON, WHICH IS THE RELIABLE REPRODUCTION.
+     *
+     * Tapping Share in Safari on an iPhone crashes the game every time. It
+     * does not crash in Chrome on the same phone and does not crash on an
+     * iPad. Share touches no game code: it resizes the viewport and animates a
+     * sheet in that briefly makes the layout portrait-shaped, then puts it
+     * back.
+     *
+     * So this drives that shape and nothing else -- the #game box is squeezed
+     * to a portrait aspect for one or two frames WHILE A RUN IS LIVE and a
+     * scene is held, then restored, with a resize event either side because
+     * that is what a real viewport change fires. Everything the game hangs off
+     * a resize runs: `settle`, `applyResolution`, the gate's POST_STEP sync,
+     * and every scene's `onSceneResize` relayout.
+     *
+     * Deliberately NOT a diagnosis. The task is to make the message readable;
+     * this exists so that if the sequence throws in Chromium too, the new
+     * handler is proven on the real thing rather than on a synthetic error.
+     */
+    const box = document.getElementById('game')
+    const before = { w: box.clientWidth, h: box.clientHeight }
+    note('viewport ' + before.w + 'x' + before.h + '  dpr=' + RES.deviceScale())
+
+    const g0 = await startRun()
+    g0.startWave()
+    await until(() => (g0.enemies || []).length > 0, 12000)
+    await sleep(600)
+    note('run live: enemies=' + (g0.enemies || []).length
+      + ' wave=' + g0.status.wave + ' phase=' + g0.status.phase)
+
+    const errorsBefore = log.filter((l) => l.startsWith('PAGE ERROR') || l.startsWith('REJECT')).length
+
+    // THE SHEET. Portrait-shaped for a moment, then back, several times --
+    // Safari animates it, so the viewport passes through a range of shapes
+    // rather than snapping to one.
+    const squeeze = async (w, h, frames) => {
+      box.style.width = w + 'px'
+      box.style.height = h + 'px'
+      window.dispatchEvent(new Event('resize'))
+      for (let i = 0; i < frames; i++) await new Promise((r) => requestAnimationFrame(r))
+    }
+    for (const [i, [w, h]] of [[before.w, Math.round(before.w * 1.3)],
+      [Math.round(before.w * 0.8), before.h], [before.w, Math.round(before.w * 1.1)]].entries()) {
+      note('  sheet step ' + (i + 1) + ': ' + w + 'x' + h
+        + '  portrait=' + (h > w))
+      await squeeze(w, h, 2)
+      await squeeze(before.w, before.h, 2)
+      await sleep(400)
+    }
+    // And settle, because the real thing ends with the sheet dismissed.
+    box.style.width = before.w + 'px'
+    box.style.height = before.h + 'px'
+    window.dispatchEvent(new Event('resize'))
+    await sleep(1200)
+
+    const OR2 = await import('./js/systems/Orientation.js')
+    const IG2 = await import('./js/systems/InputGates.js')
+    const DG2 = await import('./js/systems/Diagnostics.js')
+    const after = log.filter((l) => l.startsWith('PAGE ERROR') || l.startsWith('REJECT'))
+    note('page errors during the sheet: ' + (after.length - errorsBefore))
+    for (const e of after.slice(errorsBefore)) note('  ' + e)
+    const last = DG2.lastReport()
+    note('game crash report: ' + (last ? last.cause + ' | ' + last.message : 'none'))
+    note('after the sheet: Game=' + running('Game') + ' paused=' + game.scene.isPaused('Game')
+      + '  Hud=' + running('Hud')
+      + '  gate holding ' + JSON.stringify(OR2.gateHolding(game))
+      + '  open gates ' + IG2.gateSummary())
+    note('game event log:')
+    for (const e of DG2.recentEvents().slice(-12)) {
+      note('  ' + String(e.t).padStart(6) + '  ' + e.kind + (e.detail ? '  ' + e.detail : ''))
+    }
+    await shot('sharesheet-' + before.w + 'x' + before.h)
+
+    let faults = 0
+    if (after.length > errorsBefore) { faults++; note('*** the share-sheet shape threw: ' + after[errorsBefore]) }
+    if (last) { faults++; note('*** the game recorded a crash report: ' + last.message) }
+    if (!running('Game')) { faults++; note('*** the run did not survive the share sheet') }
+    if (game.scene.isPaused('Game') && !OR2.overlayVisible()) {
+      faults++; note('*** the run is paused with no overlay: a soft lock')
+    }
+    note('RESULT ' + (faults === 0
+      ? 'the share-sheet viewport shape did NOT reproduce a crash in Chromium'
+      : '*** ' + faults + ' fault(s) ***'))
+    return
+  }
+
+  if (scenario === 'crashreport') {
+    /*
+     * THE HANDLER ITSELF, PROVEN BY THROWING AT IT.
+     *
+     * Every field added this session is worthless if the handler that fills it
+     * in no longer fires. So a real exception is thrown from a real event
+     * callback, the report it produces is read back, and each field the brief
+     * asked for is checked by name.
+     *
+     * Both paths, because a rejected promise surfaces differently from a
+     * thrown error and the whole point of labelling them apart is that one of
+     * them may be the real source.
+     */
+    const DG3 = await import('./js/systems/Diagnostics.js')
+    const EP = await import('./js/systems/ErrorPanel.js')
+    await startRun()
+    await sleep(600)
+
+    let faults = 0
+    const bad = (m) => { faults++; note('*** ' + m) }
+
+    // 1. A GENUINE UNCAUGHT THROW, dispatched the way the browser does it, so
+    //    the window 'error' listener is what catches it rather than a direct
+    //    call to report().
+    DG3.setLastReport(null)
+    const boom = new Error('deliberate harness explosion')
+    window.dispatchEvent(new ErrorEvent('error', {
+      message: boom.message, error: boom,
+      filename: 'http://127.0.0.1:8899/js/scenes/GameScene.js', lineno: 4242, colno: 17,
+    }))
+    await sleep(300)
+    const thrown = DG3.lastReport()
+    if (!thrown) bad('the window error handler did not produce a report at all')
+    else {
+      note('--- report from an uncaught exception ---')
+      for (const line of DG3.formatReport(thrown).split('\n')) note('  ' + line)
+      if (thrown.cause !== 'uncaught exception') bad('wrong cause: ' + thrown.cause)
+      if (!/deliberate harness explosion/.test(thrown.message)) bad('the message was lost')
+      if (!thrown.stack) bad('error.stack was not captured')
+      if (thrown.at !== 'http://127.0.0.1:8899/js/scenes/GameScene.js:4242:17') {
+        bad('file/line/column not captured: at = ' + JSON.stringify(thrown.at))
+      }
+      // Every field the brief named, by name.
+      for (const want of ['scenesRunning', 'viewportCss', 'dpr', 'insetsRaw', 'insetsResolved',
+        'display', 'visibility', 'scene']) {
+        if (!(want in thrown.state)) bad('STATE is missing "' + want + '"')
+      }
+      if (thrown.events.length === 0) bad('the report carries no log lines')
+      note('  STATE fields: ' + Object.keys(thrown.state).length
+        + ' | events: ' + thrown.events.length)
+    }
+
+    // 2. A REJECTED PROMISE, labelled differently. A DOMException on purpose:
+    //    it is what iOS rejects audio and canvas work with, and it is the case
+    //    that used to stringify to "{}" because its fields are not enumerable.
+    DG3.setLastReport(null)
+    const reason = new DOMException('the operation is not allowed', 'NotAllowedError')
+    window.dispatchEvent(new PromiseRejectionEvent('unhandledrejection', {
+      promise: Promise.reject(reason).catch(() => {}), reason,
+    }))
+    await sleep(300)
+    const rejected = DG3.lastReport()
+    if (!rejected) bad('the unhandledrejection handler did not produce a report')
+    else {
+      note('--- report from a rejected promise ---')
+      note('  cause   ' + rejected.cause)
+      note('  error   ' + rejected.message)
+      if (rejected.cause !== 'unhandled rejection') {
+        bad('a rejection was not labelled apart from a throw: ' + rejected.cause)
+      }
+      if (!/NotAllowedError/.test(rejected.message) || /^\{\}$/.test(rejected.message)) {
+        bad('the DOMException did not describe itself: ' + rejected.message)
+      }
+    }
+
+    // 3. THE PANEL still draws, because a report nobody can read is no better
+    //    than no report.
+    const panel = document.getElementById('crash')
+    note('crash panel on screen: ' + !!panel)
+    if (!panel) bad('the crash panel did not appear')
+    await shot('crashreport-panel-' + VP.w + 'x' + VP.h)
+
+    note('RESULT ' + (faults === 0
+      ? 'the handler fires on both paths and carries every field the brief asked for'
+      : '*** ' + faults + ' fault(s) ***'))
+    return
+  }
+
   if (scenario === 'standalone') {
     /*
      * THE iPHONE STANDALONE LAUNCH, AS REPORTED.

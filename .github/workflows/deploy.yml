@@ -39,6 +39,31 @@ jobs:
 
       - run: npm run build
 
+      # THE ATTRIBUTE HAS TO SURVIVE THE BUILD, and nothing local can check it.
+      #
+      # `npm install` answers 403 in the agent environment, so Vite cannot be
+      # run there and "the crossorigin attribute is in index.html" is only ever
+      # a claim about the SOURCE. What ships is `dist/index.html`, which Vite
+      # rewrites: it replaces the hand-authored `src="/src/main.ts"` with the
+      # hashed bundle. If it dropped the attribute while doing that, three more
+      # crash reports would come back reading "Script error." and nobody would
+      # know why.
+      #
+      # So it is asserted here, on the real build output, by the machine that
+      # actually runs Vite. A deploy that would silently un-mute nothing fails
+      # instead. The page also reports its own `scriptCrossOrigin` at runtime
+      # (see CrashContext.ts), so the next crash report says it too.
+      - name: the module script keeps its crossorigin attribute
+        run: |
+          tag=$(grep -o '<script[^>]*type="module"[^>]*>' dist/index.html | head -1)
+          echo "emitted module script tag: $tag"
+          case "$tag" in
+            *crossorigin*) echo "OK: crossorigin survived the build" ;;
+            *) echo "FAIL: Vite emitted the module script WITHOUT crossorigin."
+               echo "An exception in it would report as a bare 'Script error.'"
+               exit 1 ;;
+          esac
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3

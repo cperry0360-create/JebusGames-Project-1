@@ -32,6 +32,12 @@ export interface CrashReport {
   preBoot: boolean
   message: string
   stack: string
+  /**
+   * Where the browser said it happened: `file:line:col`, straight off the
+   * ErrorEvent. Empty when it withheld them — which is the same condition that
+   * empties `stack`, and is therefore worth seeing rather than inferring.
+   */
+  at: string
   when: string
   /** Build id and version, so a report can be tied to a deploy. */
   build: string
@@ -160,7 +166,9 @@ function gather(): Record<string, unknown> {
   }
 }
 
-export function buildReport(cause: string, message: string, stack = ''): CrashReport {
+export function buildReport(
+  cause: string, message: string, stack = '', at = '',
+): CrashReport {
   return {
     cause,
     // An empty event log means one of two very different things, and a reader
@@ -169,6 +177,7 @@ export function buildReport(cause: string, message: string, stack = ''): CrashRe
     preBoot: cause.includes('before boot'),
     message,
     stack,
+    at,
     when: new Date().toISOString(),
     build: buildLabel,
     state: currentState(),
@@ -176,8 +185,10 @@ export function buildReport(cause: string, message: string, stack = ''): CrashRe
   }
 }
 
-export function recordError(cause: string, message: string, stack = ''): CrashReport {
-  const report = buildReport(cause, message, stack)
+export function recordError(
+  cause: string, message: string, stack = '', at = '',
+): CrashReport {
+  const report = buildReport(cause, message, stack, at)
   lastError = report
   logEvent('error', `${cause}: ${message}`)
   return report
@@ -202,16 +213,22 @@ export function formatReport(r: CrashReport): string {
   lines.push(`build  ${r.build}`)
   lines.push(`cause  ${r.cause}`)
   lines.push(`error  ${r.message || '(none)'}`)
+  // THE LINE THAT WOULD HAVE ENDED THIS DAYS AGO, if it had been captured.
+  // Printed even when empty, because "the browser withheld it" is a finding
+  // and a missing row reads as an oversight.
+  lines.push(`at     ${r.at || '(withheld — the script is being treated as cross-origin)'}`)
   if (r.preBoot) {
     lines.push('')
     lines.push('This happened BEFORE the game booted, so the state and event')
     lines.push('sections below are empty by definition — nothing had run yet.')
     lines.push('That is expected here and is not a second fault.')
   }
+  lines.push('')
+  lines.push('STACK')
   if (r.stack) {
-    lines.push('')
-    lines.push('STACK')
     for (const line of r.stack.split('\n').slice(0, 24)) lines.push(`  ${line.trim()}`)
+  } else {
+    lines.push('  (none — see `at` above; a muted script has neither)')
   }
   lines.push('')
   lines.push('STATE')

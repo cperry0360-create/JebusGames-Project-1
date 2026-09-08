@@ -116,8 +116,15 @@
         // name its build is a report nobody can act on.
         window.__buildId = '__BUILD_ID__'
         window.__earlyErrors = []
-        function note(message, stack) {
-          window.__earlyErrors.push({ message: String(message), stack: stack || '' })
+        // `kind` and `where` ride along so ErrorPanel can label a rejection as
+        // a rejection and print a file and line. Without them every early
+        // record was drained as "uncaught exception (before boot)" with no
+        // location, which is the shape of the three reports in hand.
+        function note(message, stack, kind, where) {
+          window.__earlyErrors.push({
+            message: String(message), stack: stack || '',
+            kind: kind || 'error', where: where || '',
+          })
           // If the module never loads, nothing else will ever show this.
           setTimeout(function () {
             if (window.__errorPanelReady) return
@@ -130,16 +137,22 @@
             el.style.textAlign = 'left'
             el.textContent = 'Courjahan Defense could not start\n\n' +
               window.__earlyErrors.map(function (e) {
-                return e.message + (e.stack ? '\n' + e.stack : '')
+                return (e.kind === 'rejection' ? '[rejected promise] ' : '') + e.message +
+                  (e.where ? '\n  at ' + e.where : '') +
+                  (e.stack ? '\n' + e.stack : '')
               }).join('\n\n')
           }, 2500)
         }
         window.addEventListener('error', function (e) {
-          note(e.message, e.error && e.error.stack)
+          var at = e.filename
+            ? e.filename + ':' + (e.lineno || '?') + ':' + (e.colno || '?')
+            : ''
+          note(e.message, e.error && e.error.stack, 'error', at)
         })
         window.addEventListener('unhandledrejection', function (e) {
           var r = e.reason
-          note(r && r.message ? r.message : String(r), r && r.stack)
+          var name = r && typeof r.name === 'string' ? r.name + ': ' : ''
+          note(r && r.message ? name + r.message : String(r), r && r.stack, 'rejection')
         })
       })();
 

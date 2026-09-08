@@ -43,29 +43,88 @@ export function installErrorPanel(): void {
   installed = true
   const w = globalThis as unknown as {
     addEventListener?: (t: string, f: (e: never) => void) => void
-    __earlyErrors?: Array<{ message: string; stack?: string }>
+    __earlyErrors?: Array<EarlyError>
   }
 
   w.addEventListener?.('error', ((e: ErrorEvent) => {
     const err = e.error as Error | undefined
-    report('uncaught exception', e.message || safeString(err), err?.stack ?? '')
+    report('uncaught exception', e.message || safeString(err),
+      err?.stack ?? '', where(e.filename, e.lineno, e.colno))
   }) as never)
 
   w.addEventListener?.('unhandledrejection', ((e: PromiseRejectionEvent) => {
-    const r = e.reason as Error | string | undefined
-    const message = r instanceof Error ? r.message : safeString(r)
-    report('unhandled rejection', message, r instanceof Error ? (r.stack ?? '') : '')
+    const r = e.reason as unknown
+    report('unhandled rejection', describeReason(r), stackOf(r))
   }) as never)
 
   for (const early of w.__earlyErrors ?? []) {
-    report('uncaught exception (before boot)', early.message, early.stack ?? '')
+    // THE KIND IS PRESERVED. This used to label every early record
+    // "uncaught exception (before boot)" including the rejections, so a
+    // rejected promise during boot was reported as a thrown error — which is
+    // the one distinction (c) of the brief asked for, quietly undone at the
+    // only point where it is hard to reproduce.
+    const kind = early.kind === 'rejection' ? 'unhandled rejection' : 'uncaught exception'
+    report(`${kind} (before boot)`, early.message, early.stack ?? '', early.where ?? '')
   }
   w.__earlyErrors = []
 }
 
+/** What the inline handler in index.html queues before this module exists. */
+interface EarlyError {
+  message: string
+  stack?: string
+  kind?: 'error' | 'rejection'
+  where?: string
+}
+
+/**
+ * WHERE THE BROWSER SAYS IT HAPPENED.
+ *
+ * `ErrorEvent` carries `filename`, `lineno` and `colno` and this handler threw
+ * all three away, which mattered: three iPhone reports came back reading
+ * "Script error." with no stack, and the reason a stack is absent is the same
+ * reason these are blank — the browser is treating the script as cross-origin
+ * and withholding detail. But they are withheld INDEPENDENTLY of the stack, so
+ * on any build where the muting is not in play they name the file and the line
+ * for free, and nothing was reading them.
+ *
+ * Empty when the browser withheld them, and that emptiness is itself the
+ * finding: a report with a message and no location is a muted script, and a
+ * report with a location is not.
+ */
+function where(file?: string, line?: number, col?: number): string {
+  if (!file) return ''
+  return `${file}:${line ?? '?'}:${col ?? '?'}`
+}
+
+/**
+ * A rejection reason, which is not necessarily an Error.
+ *
+ * `reason` is whatever was passed to `reject()` — an Error, a string, a
+ * DOMException, a Response, an object, undefined. The old code checked only
+ * `instanceof Error` and dropped everything else through `safeString`, which
+ * turns a DOMException into "{}" because its fields are not enumerable. iOS
+ * rejects audio and canvas work with DOMExceptions, so that was the case most
+ * likely to matter here and the one that read as an empty object.
+ */
+function describeReason(r: unknown): string {
+  if (r instanceof Error) return `${r.name}: ${r.message}`
+  const o = r as { name?: unknown; message?: unknown } | null | undefined
+  if (o && typeof o === 'object' && typeof o.message === 'string') {
+    return typeof o.name === 'string' ? `${o.name}: ${o.message}` : o.message
+  }
+  return safeString(r)
+}
+
+/** A stack from anything that carries one, Error or not. */
+function stackOf(r: unknown): string {
+  const o = r as { stack?: unknown } | null | undefined
+  return o && typeof o === 'object' && typeof o.stack === 'string' ? o.stack : ''
+}
+
 /** Builds a report, remembers it across a reload, and puts it on screen. */
-export function report(cause: string, message: string, stack = ''): CrashReport {
-  const r = recordError(cause, message, stack)
+export function report(cause: string, message: string, stack = '', at = ''): CrashReport {
+  const r = recordError(cause, message, stack, at)
   rememberReport(formatReport(r))
   show(r)
   return r
