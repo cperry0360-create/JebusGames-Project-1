@@ -11,9 +11,11 @@ on.**
 | `351177d` | Load a level's enemies and effects with the level, not at boot | covered by run 235 on the branch head |
 | `9d91ffe` | Walk every level in the levelart scenario, and say what each one costs | **green** — `test` and `typecheck` both pass ([run 235](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34240908206)) |
 | `a7045f8` | This report, and 79.4 MB corrected to 90.8 | **green** — `test` and `typecheck` both pass ([run 236](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34241361906)) |
+| `4beda26` | Fill in the report's own CI rows, and the second screenshot diff | **green** — `test` and `typecheck` both pass ([run 237](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34242432538)) |
 
 CI runs per push rather than per commit, so run 235 covers the first three
-commits and run 236 the head. The typecheck job is `npx tsc --noEmit` with
+commits, 236 the fourth and 237 the head. The typecheck job is
+`npx tsc --noEmit` with
 `node_modules` present, which is the check `tools/tsdiff.sh` exists to
 approximate and the one that has caught real errors here before.
 
@@ -407,9 +409,9 @@ on them.
 
 ## Where this leaves the repository
 
-**In flight.** Branch `claude/memory-tilesprite-level-art-6460up`, four
-commits, head `a7045f8`, CI green on both jobs. **Not merged.** `origin/main` is
-at `8385d8e` and the branch is that plus these four, fast-forward:
+**In flight.** Branch `claude/memory-tilesprite-level-art-6460up`, five
+commits, head `4beda26`, CI green on both jobs. **Not merged.** `origin/main` is
+at `8385d8e` and the branch is that plus these five, fast-forward:
 
 ```
 git checkout main && git merge --ff-only claude/memory-tilesprite-level-art-6460up && git push origin main
