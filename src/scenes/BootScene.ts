@@ -60,7 +60,7 @@ export class BootScene extends Phaser.Scene {
     // NEITHER LIST NAMES LEVEL ART any more, and that is deliberate rather
     // than an oversight: boot stopped loading it. Five plates resident is
     // 134.5 MB and the enemies, effects, signs and soldiers behind them are
-    // another 79.4 MB, on a phone that has already spent the rest of its
+    // another 90.8 MB, on a phone that has already spent the rest of its
     // budget on everything else in the manifest. All of it arrives with a
     // level and is freed when that level ends — see GameScene.preload — so
     // reporting any of it missing here would be a false alarm on every single

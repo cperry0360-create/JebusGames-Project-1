@@ -101,7 +101,7 @@ export const SPRITE_KEYS = Object.keys(art.files)
  * not work in the agent environment, so anything importing this module —
  * which imports Phaser — cannot be executed by a test at all, only read as
  * text. The plates were a five-key list where that was survivable. The split
- * is 79.4 MB of enemies, effects and props now, with one failure mode that
+ * is 90.8 MB of enemies, effects and props now, with one failure mode that
  * puts a magenta box on the title screen, and it needed better than a regex.
  */
 export {

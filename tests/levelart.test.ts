@@ -1,6 +1,6 @@
 // WHICH ART IS LEVEL ART, and whether the split can be trusted.
 //
-// The split is worth 79.4 MB off the title screen and it has exactly two ways
+// The split is worth 90.8 MB off the title screen and it has exactly two ways
 // to go wrong. One is cheap: a key that belongs with a level stays in the boot
 // manifest, and the game is correct and fatter than it needs to be. The other
 // is not: a key a MENU draws is classified as level art, boot stops loading it

@@ -24,7 +24,7 @@
 // NO PHASER, AND NOT BY ACCIDENT. `npm install` does not work in the agent
 // environment, so a test that imports anything reaching `phaser` cannot run at
 // all — which is why the classification below lives here rather than beside
-// the rest of the manifest in Art.ts. The split is worth 79.4 MB and has one
+// the rest of the manifest in Art.ts. The split is worth 90.8 MB and has one
 // failure mode that puts a magenta box on the title screen; it needs a test
 // that actually executes it, not one that reads the source as text.
 // `systems/Art.ts` imports what it needs from here.
