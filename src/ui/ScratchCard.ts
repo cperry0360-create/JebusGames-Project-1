@@ -210,8 +210,16 @@ export class ScratchCard {
 
   /** Lays the coating down: the covered sprite, at card size. */
   private paintFoil(w: number, h: number): void {
-    const img = this.scene.make.image(
-      { key: ART.ui.scratchCard.covered, add: false },
+    // CONSTRUCTED RATHER THAN `make.image({ key, add: false })`, because
+    // Phaser 4's `GameObjectConfig` type no longer declares `key` and the
+    // whole build fails on it -- the ONE type error the real v4 typings found
+    // in this codebase. It is a typings gap and not a behaviour change: the v4
+    // creator still reads `key` off the config at runtime. Constructing the
+    // Image directly sidesteps it, says the same thing more plainly, and is
+    // identical on both engines -- an Image built this way is not on the
+    // display list, which is exactly what `add: false` was asking for.
+    const img = new Phaser.GameObjects.Image(
+      this.scene, 0, 0, ART.ui.scratchCard.covered,
     ).setOrigin(0, 0).setDisplaySize(w, h)
     this.foil.draw(img, 0, 0)
     // PHASER 4 BUFFERS DRAW COMMANDS. In v3 `draw` executed immediately; in v4
