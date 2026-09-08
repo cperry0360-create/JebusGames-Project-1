@@ -9,7 +9,7 @@ budget, the cooldown — is byte-for-byte what it was.
 |---|---|---|
 | `b425f21` | Arm the Mind Laser with a tap, and fire it from the board | **green** — test + typecheck success (run 226); `deploy` skipped, which is correct off `main` |
 | `6f76749` | Say nothing when the beam is armed, and let the picture say it | **green** — test + typecheck success (run 227) |
-| _this report_ | markdown only | filled in below once its own run lands |
+| `b40f037` | this report, markdown only | **green** — test + typecheck success (run 228) |
 
 **`main` is `b99e413`. This work is on `claude/mind-laser-activation-b7lzrh`,
 two commits ahead, zero behind — a fast-forward.** Merge command at the bottom
