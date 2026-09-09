@@ -16,6 +16,23 @@ masks from working in WebGL.
 
 **Not recommended for merge.** Branch `claude/phaser-4-migration-spike-hage91`.
 
+> **The branch is gone; this file is the record.** The answer was no and the
+> branch was deleted on 2026-09-09 — see
+> `reports/2026-09-09-branch-cleanup.md`. Its head was
+> `ad62fab0afd08bd3169014126675bba7abbc6253`, and the five commits are listed
+> in the table below; restore with
+> `git push origin ad62fab:refs/heads/claude/phaser-4-migration-spike-hage91`
+> if the question is ever reopened.
+>
+> **Two things were salvaged onto `main` first** and are live there: the
+> `ctxsurvive` harness scenario (commit `5bc8b39`, engine-agnostic, no Phaser 4
+> with it), and the finding that every `GL=1` screenshot this harness takes is
+> black for want of `preserveDrawingBuffer` — written up in
+> `tools/harness/README.md`, with the `renderer.snapshot` fix and the pending-
+> snapshot disarm. **This report was salvaged too, so the reasoning survives the
+> branch.** Nothing else from the branch reached `main`: no `phaser4.min.js`, no
+> `build.sh` default change, no `package.json` bump.
+
 | commit | what | CI |
 |---|---|---|
 | `5bc8b39` | Ask whether the game SURVIVES a context loss, not just whether it notices | no own run — pushed together with `d30e218`, which CI ran on as the tip |
