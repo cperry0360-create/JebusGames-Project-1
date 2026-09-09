@@ -74,6 +74,19 @@ export class OrientationGate {
   }
 
   /**
+   * Consecutive portrait readings seen so far, for the trace.
+   *
+   * READ-ONLY, and it is the number the whole question turns on: this counts
+   * CALLS to `sync`, and the caller runs it from a per-frame hook AND from a
+   * settle burst that fires five times per event. `ENTER_FRAMES`'s comment
+   * reasons in frames; this counter has never known what a frame is. See
+   * systems/OrientationTrace.ts.
+   */
+  get portraitStreak(): number {
+    return this.streak
+  }
+
+  /**
    * One reading, one answer.
    *
    * Call this on every frame with the same predicate the OVERLAY uses. The

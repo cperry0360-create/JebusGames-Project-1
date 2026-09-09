@@ -31,6 +31,9 @@ import type Phaser from 'phaser'
 import { provideContext } from './Diagnostics.ts'
 import { gateSummary, openGates } from './InputGates.ts'
 import { gateHolding, isPortrait, overlayVisible } from './Orientation.ts'
+import {
+  fastestRaiseMs, formatSyncTrace, syncBursts,
+} from './OrientationTrace.ts'
 import { graphicsState } from './GraphicsWatch.ts'
 import { deviceScale } from './Resolution.ts'
 import { rawSafeAreaInsets, safeAreaInsets } from './SafeArea.ts'
@@ -137,6 +140,17 @@ function environment(): Record<string, unknown> {
     insetsRaw: attempt(() => JSON.stringify(rawSafeAreaInsets()), 'unreadable'),
     insetsResolved: attempt(() => JSON.stringify(safeAreaInsets()), 'unreadable'),
     gates: attempt(() => gateSummary(), 'unreadable'),
+    // WHICH CLOCK CALLED THE GATE, AND WHEN. `portrait` and `rotateOverlay`
+    // above are a single instant; these are the run-up to it. A gate that
+    // raised and lowered 21ms apart is impossible if the streak counts frames
+    // and ordinary if it counts settle-burst calls, and only the trace tells
+    // the two apart. See systems/OrientationTrace.ts.
+    syncBurstsSeen: attempt(() => syncBursts().length, -1),
+    fastestRaiseMs: attempt(() => {
+      const ms = fastestRaiseMs()
+      return ms === null ? 'never raised' : `${ms.toFixed(1)}ms`
+    }, 'unreadable'),
+    syncTrace: attempt(() => formatSyncTrace(24), ['unreadable']),
     openGates: attempt(() => openGates().join(',') || 'none', 'unreadable'),
     visibility: globalThis.document?.visibilityState ?? 'unknown',
     ...bundle(),

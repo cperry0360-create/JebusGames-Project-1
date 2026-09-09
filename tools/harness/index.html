@@ -70,7 +70,7 @@ const SCENARIO_NAMES = [
   'nodefirst', 'noderings', 'notch', 'nuke', 'nukeseq', 'opening', 'padart',
   'pausedismiss', 'pauseresume', 'phone', 'pixels', 'plate', 'playrun',
   'politician', 'powerart', 'proximity', 'realboot', 'regressions',
-  'results', 'retreat', 'revive', 'ring', 'rockets', 'rollspeed',
+  'results', 'retreat', 'rotationburst', 'revive', 'ring', 'rockets', 'rollspeed',
   'scheduleguard', 'screens', 'scrim', 'settings', 'sharesheet',
   'shortviewport', 'signs', 'skilled', 'softlock', 'spec', 'spot5',
   'sprites', 'standalone', 'startrun', 'stuckcast', 'stuckguard', 'stun',
@@ -109,7 +109,7 @@ const ASSERTS_NOTHING = new Set([
  * scenario joins this list when its checks go through `expect`.
  */
 const USES_EXPECT = new Set([
-  'typegame',
+  'typegame', 'rotationburst',
 ])
 
 /** How many checks this run actually EVALUATED, pass or fail. */
@@ -4500,6 +4500,317 @@ async function run() {
     return
   }
   g = await startRun()
+
+  if (scenario === 'rotationburst') {
+    /*
+     * WHAT THE GATE'S STREAK COUNTER IS ACTUALLY COUNTING, DURING A ROTATION.
+     *
+     * `ENTER_FRAMES` is 3 and its comment reasons in frames: "three frames is
+     * under 50ms at 60fps". The counter has never known what a frame is. It
+     * increments once per `sync()` CALL, and `sync()` runs from two clocks --
+     * `POST_STEP` once a frame, and `settle()` five times per event
+     * (immediately, on rAF, and at 60/180/400ms). A rotation fires `resize`,
+     * `orientationchange` and a `visualViewport resize`.
+     *
+     * So this is built around the ROTATION and its settle burst rather than
+     * around a resting viewport size. 956x305 was tried as a resting state by
+     * an earlier pass and did not reproduce anything, which is the expected
+     * result if the fault lives in the transition.
+     *
+     * WHAT IS REAL HERE AND WHAT IS A MODEL. The events are real and `settle`
+     * is the shipping function, so the BURST is real and the call counting is
+     * measured rather than argued. Chromium cannot be made to rotate, and it
+     * does not lie about `matchMedia` the way iOS does around a rotation, so
+     * the stale-reading half is MODELLED by overriding the one predicate both
+     * the script and the stylesheet ask. That models the reported state; it
+     * does not reproduce iOS.
+     */
+    const OT = await import('./js/systems/OrientationTrace.js')
+    const OR = await import('./js/systems/Orientation.js')
+    const SGm = await import('./js/systems/ScheduleGuard.js')
+    const GD = await import('./js/systems/Guard.js')
+    const DG = await import('./js/systems/Diagnostics.js')
+
+    // --- 1: THE BURST IS REAL, AND THE STREAK COUNTS IT AS FRAMES ----------
+    OT.clearSyncTrace()
+    const t0 = performance.now()
+    // A real rotation on iOS fires all three, close together and in no
+    // guaranteed order. Dispatched here in the order Safari is documented to
+    // use, with no delay between them, because the whole question is what
+    // lands inside one frame.
+    window.dispatchEvent(new Event('resize'))
+    window.dispatchEvent(new Event('orientationchange'))
+    if (window.visualViewport) window.visualViewport.dispatchEvent(new Event('resize'))
+    // Long enough for the 400ms leg of every burst to have fired.
+    await sleep(700)
+
+    const trace = OT.syncTrace()
+    const bursts = OT.syncBursts()
+    const bySource = {}
+    for (const r of trace) bySource[r.source] = (bySource[r.source] || 0) + 1
+    note('sync() calls in ' + (performance.now() - t0).toFixed(0) + 'ms: ' + trace.length)
+    note('  by source: ' + JSON.stringify(bySource))
+    note('  bursts (2+ calls inside 8ms): ' + bursts.length)
+    for (const b of bursts.slice(0, 4)) {
+      note('    burst of ' + b.calls.length + ': '
+        + b.calls.map((c) => c.source).join(', ')
+        + '  spanning ' + (b.calls[b.calls.length - 1].at - b.calls[0].at).toFixed(2) + 'ms')
+    }
+    for (const line of OT.formatSyncTrace(14)) note('    ' + line)
+
+    // THE CLAIM, MEASURED. A frame at 60fps is 16.7ms, so three frames cannot
+    // land inside 8ms. Any burst at all is the streak counting something that
+    // is not a frame.
+    expect(trace.length > 0, 'no sync() calls were traced at all -- the instrument is dead')
+    expect(bursts.length > 0,
+      'no sync() burst: three events produced no calls closer together than a frame')
+    const settleCalls = trace.filter((r) => r.source !== 'post-step').length
+    note('  calls from settle rather than from a frame: ' + settleCalls
+      + ' of ' + trace.length)
+    expect(settleCalls >= 3,
+      'fewer than three settle-driven sync() calls -- the burst did not happen')
+
+    // --- 2: AND THE GATE CAN RAISE IN LESS THAN THREE FRAMES ---------------
+    //
+    // MODELLED, and said so above. `isPortrait()` asks
+    // `matchMedia('(orientation: portrait)')`, which is the same predicate the
+    // overlay's CSS asks -- that is the earlier fix that removed the
+    // disagreement between script and stylesheet. Forcing it true is what iOS
+    // does to itself for a frame or two around a rotation.
+    // ONLY MEANINGFUL FROM A GATE THAT IS DOWN. At a portrait viewport the
+    // window really is portrait, so the gate is already up before anything is
+    // forced and there is no raise left to time. Reported rather than skipped
+    // silently: a section that cannot run must say so, or its silence reads as
+    // a pass.
+    const gateStartsDown = !OR.isPortrait()
+    note('gate is ' + (gateStartsDown ? 'down' : 'ALREADY UP')
+      + ' at ' + VP.w + 'x' + VP.h
+      + (gateStartsDown ? '' : ' -- section 2 needs a landscape viewport, skipping'))
+
+    const realMatchMedia = window.matchMedia.bind(window)
+    let forcePortrait = false
+    window.matchMedia = (qs) => {
+      const mq = realMatchMedia(qs)
+      if (forcePortrait && /orientation:\s*portrait/.test(qs)) {
+        return { ...mq, matches: true, media: mq.media,
+          addEventListener: () => {}, removeEventListener: () => {},
+          addListener: () => {}, removeListener: () => {} }
+      }
+      return mq
+    }
+    try {
+      if (!gateStartsDown) throw { skip: true }
+      OT.clearSyncTrace()
+      forcePortrait = true
+      // ALL THREE EVENTS AT ONCE, which is what a rotation does. Their `:now`
+      // legs run synchronously inside this tick, so three `sync()` calls land
+      // inside a millisecond or two -- and the streak counter cannot tell them
+      // from three rendered frames, because it counts calls.
+      //
+      // The first version of this forced the predicate across ONE event for
+      // 60ms and measured a 70.70ms raise, which looked like the hysteresis
+      // working. It was not: two of that event's legs read portrait and the
+      // third came after the window closed, so the raise came from ordinary
+      // POST_STEP frames and the burst was never tested. The experiment has to
+      // put three readings inside one burst or it is measuring the frame loop.
+      window.dispatchEvent(new Event('resize'))
+      window.dispatchEvent(new Event('orientationchange'))
+      if (window.visualViewport) window.visualViewport.dispatchEvent(new Event('resize'))
+      // Read BEFORE releasing the predicate, so the trace still holds the
+      // portrait calls rather than the landscape ones that follow.
+      const burstTrace = OT.syncTrace()
+      const fastest = OT.fastestRaiseMs()
+      const raised = burstTrace.filter((r) => r.change === 'raised')
+      const portraitCalls = burstTrace.filter((r) => r.portrait)
+
+      note('three events dispatched in one tick with the predicate forced portrait:')
+      note('  sync() calls before the tick ended: ' + burstTrace.length
+        + '  of which read portrait: ' + portraitCalls.length
+        + '  raises: ' + raised.length)
+      for (const line of OT.formatSyncTrace(10)) note('    ' + line)
+      note('  fastest streak-0-to-raised: '
+        + (fastest === null ? 'never raised' : fastest.toFixed(2) + 'ms')
+        + '   (three rendered frames at 60fps would be 33.3ms)')
+
+      // THE FINDING, ASSERTED AS THE FINDING. This does not check that the
+      // hysteresis works -- it checks that a settle burst defeats it, which is
+      // what the crash report's 21ms raise-and-lower implies and what nobody
+      // could account for. If this ever starts failing because the raise takes
+      // longer than three frames, the counter has been fixed and this scenario
+      // is the thing that should be rewritten.
+      expect(portraitCalls.length >= 3,
+        'fewer than three portrait readings inside the burst, so this run did '
+        + 'not test the claim: got ' + portraitCalls.length)
+      expect(fastest !== null,
+        'the gate never raised despite ' + portraitCalls.length
+        + ' portrait readings -- ENTER_FRAMES is ' + 3 + ', so this is a different bug')
+      if (fastest !== null) {
+        expect(fastest < 33.3,
+          'the gate took ' + fastest.toFixed(2) + 'ms to raise, which is longer than '
+          + 'three rendered frames -- the streak may have been fixed to count frames')
+        note('  >>> the gate raised in ' + fastest.toFixed(2) + 'ms, from ONE tick of '
+          + 'settle bursts. ENTER_FRAMES=3 is documented as "under 50ms at 60fps".')
+      }
+
+      forcePortrait = false
+      await sleep(700)
+      note('  after releasing the predicate: gate holding='
+        + JSON.stringify(OR.gateHolding(game)))
+    } catch (e) {
+      if (!e || !e.skip) throw e
+    } finally {
+      window.matchMedia = realMatchMedia
+    }
+
+    // --- 3: THE OVERLAY AND THE GATE ARE NOT THE SAME QUESTION -------------
+    //
+    // The overlay is pure CSS and has no hysteresis; the gate has three
+    // readings of it. So there is a window in which the overlay is up and the
+    // game is still running behind it, and a crash report carrying one of
+    // those two states says nothing about the other.
+    note('at rest: isPortrait()=' + OR.isPortrait()
+      + '  overlayVisible()=' + OR.overlayVisible()
+      + '  gate holding=' + JSON.stringify(OR.gateHolding(game)))
+
+    // --- 3b: WHAT THE PREDICATE CONTROLS, AND WHAT IT DOES NOT --------------
+    //
+    // The video shows the world map laid out for LANDSCAPE inside a portrait
+    // window with the rotate overlay HIDDEN, and the crash report agrees:
+    // portrait=false, rotateOverlay=hidden. The obvious reading is "the
+    // predicate went stale and everything followed it". This section takes
+    // that reading apart, because it is only half right.
+    //
+    // CHROMIUM CANNOT REPRODUCE THE REPORTED STATE, AND THE REASON IS ITSELF A
+    // FINDING. `overlayVisible()` reads `getComputedStyle`, so the overlay is
+    // driven by the stylesheet's own `@media (orientation: portrait)`, which
+    // the engine evaluates and which no JavaScript stub can reach. Overriding
+    // `window.matchMedia` moves the SCRIPT and leaves the STYLESHEET where it
+    // was. On iOS both derive from one stale viewport and go wrong together,
+    // which is why the report has portrait=false AND overlay=hidden; here they
+    // cannot be desynchronised from userland at all. So this measures what the
+    // predicate governs rather than pretending to have reproduced the state.
+    {
+      const portraitWindow = VP.h > VP.w
+      note('viewport ' + VP.w + 'x' + VP.h + ' is '
+        + (portraitWindow ? 'PORTRAIT' : 'landscape')
+        + ' -- the predicate governs the GATE; the canvas governs the LAYOUT')
+      if (portraitWindow) {
+        let forceLandscape = false
+        const mm2 = window.matchMedia.bind(window)
+        window.matchMedia = (qs) => {
+          const mq = mm2(qs)
+          if (forceLandscape && /orientation:\s*portrait/.test(qs)) {
+            return { ...mq, matches: false, media: mq.media,
+              addEventListener: () => {}, removeEventListener: () => {},
+              addListener: () => {}, removeListener: () => {} }
+          }
+          return mq
+        }
+        try {
+          forceLandscape = true
+          OT.clearSyncTrace()
+          window.dispatchEvent(new Event('resize'))
+          window.dispatchEvent(new Event('orientationchange'))
+          await sleep(700)
+          const holding = OR.gateHolding(game)
+          const cam = game.scene.getScene('Game')?.cameras?.main
+          const camW = cam ? Math.round(cam.width) : 0
+          const camH = cam ? Math.round(cam.height) : 0
+          note('  script predicate forced landscape in a ' + VP.w + 'x' + VP.h + ' window:')
+          note('    isPortrait()=' + OR.isPortrait()
+            + '   overlayVisible()=' + OR.overlayVisible()
+            + '   gate holding=' + JSON.stringify(holding))
+          note('    canvas ' + game.canvas.width + 'x' + game.canvas.height
+            + '   camera ' + camW + 'x' + camH
+            + (cam ? ' zoom ' + cam.zoom.toFixed(3) : ''))
+          await shot('rotationburst-predicate-vs-canvas')
+
+          // THE GATE FOLLOWED THE PREDICATE. It let go of every scene it was
+          // holding on the strength of a reading alone.
+          expect(holding.length === 0,
+            'the gate is still holding ' + JSON.stringify(holding)
+            + ' -- it did not follow the predicate')
+          note('    >>> the gate released every scene on the predicate alone.')
+
+          // AND THE LAYOUT DID NOT. `applyResolution` measures the parent
+          // element, so the canvas and the camera stay the shape of the real
+          // window whatever the predicate says. That is the important half:
+          // a stale predicate on its own produces a RUNNING game in a portrait
+          // window, not a landscape layout squeezed into one. The sideways
+          // render in the video therefore needs a stale CANVAS as well, which
+          // is a different measurement in a different function.
+          expect(camH > camW,
+            'the camera went landscape-shaped off a predicate change alone, at '
+            + camW + 'x' + camH + ' -- if this ever fails, the predicate DOES '
+            + 'drive layout and the sideways render is explained here')
+          note('    >>> the camera stayed ' + camW + 'x' + camH
+            + ', the shape of the real window. A stale predicate alone does NOT'
+            + ' produce the sideways layout -- that needs a stale canvas too.')
+        } finally {
+          window.matchMedia = mm2
+          forceLandscape = false
+          window.dispatchEvent(new Event('resize'))
+          await sleep(600)
+        }
+      } else {
+        note('  (a portrait viewport is needed for this section:'
+          + ' run.sh rotationburst 150 390x844)')
+      }
+    }
+
+    // --- 4: ARE settle()'s OWN TIMERS WRAPPED? -----------------------------
+    //
+    // settle() arms at 60ms, 180ms and 400ms through `window.setTimeout`.
+    // ScheduleGuard patches `globalThis.setTimeout`, and in a browser `window`
+    // IS `globalThis` -- but that is an argument, and this is the measurement.
+    // Read off the guard's own pending record, during a real resize.
+    expect(!!SGm.scheduleStats().installed, 'the schedule guard is not installed at all')
+    SGm.resetScheduleGuard()
+    window.dispatchEvent(new Event('resize'))
+    // Read before the 60ms leg fires, so all three are still pending.
+    await sleep(20)
+    const st = SGm.scheduleState()
+    note('immediately after a resize: ' + JSON.stringify(st))
+    const detail = String(st.pendingDetail || '')
+    expect(Number(st.timersArmed) >= 3,
+      'a resize armed ' + st.timersArmed + ' timers; settle() schedules three')
+    expect(Number(st.pendingDuringAnEvent) >= 3,
+      'the guard did not record settle\'s timers as armed DURING a DOM event, '
+      + 'so a throw in one would not name the event that armed it')
+    for (const ms of ['60', '180', '400']) {
+      expect(detail.includes(ms + 'ms'),
+        'no pending timer at ' + ms + 'ms -- settle\'s ' + ms + 'ms leg is not '
+        + 'going through the wrapped setTimeout')
+    }
+    await sleep(600)
+
+    // --- 5: AND WOULD A THROW IN ONE BE DESCRIBED? -------------------------
+    //
+    // The question this whole investigation turns on is what throws, so a
+    // guard that is installed and silent is worth nothing. Driven, not
+    // asserted: a real throw through the same path settle's legs use.
+    GD.resetGuards()
+    const before = DG.recentEvents().length
+    window.setTimeout(() => {
+      throw new TypeError('deliberate: a throw from settle\'s own scheduling path')
+    }, 60)
+    await sleep(300)
+    const counts = GD.guardCounts()
+    const named = DG.recentEvents().slice(before).filter((e) => e.kind === 'guard'
+      && /deliberate: a throw from settle/.test(e.detail))
+    note('a throw through window.setTimeout(60): counts=' + JSON.stringify(counts))
+    note('  described as: ' + (named[0] ? named[0].detail.slice(0, 120) : 'NOTHING'))
+    expect(Object.keys(counts).some((k) => /timeout/.test(k)),
+      'a throw through window.setTimeout was not caught by any guard')
+    expect(named.length > 0,
+      'the throw was caught but never described, so it would still reach a '
+      + 'crash report as a bare "Script error."')
+
+    note('RESULT ' + (ASSERT_FAILS === 0
+      ? 'the burst is real, the streak counts it, and settle\'s timers are wrapped'
+      : '*** ' + ASSERT_FAILS + ' fault(s) in the rotation burst ***'))
+    return
+  }
 
   if (scenario === 'softlock') {
     // THE iOS ROTATION TRANSIENT, REPRODUCED.

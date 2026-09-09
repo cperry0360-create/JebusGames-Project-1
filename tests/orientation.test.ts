@@ -274,8 +274,16 @@ test('an orientation change re-measures more than once', () => {
   // canvas in a portrait window and every pointer coordinate scaled wrong.
   assert.match(gate, /orientationchange/, 'no orientation change listener')
   assert.match(gate, /visualViewport/, "iOS's URL bar collapse raises no plain resize event")
-  assert.match(gate, /requestAnimationFrame\(measure\)/, 'only one measurement is taken')
-  assert.match(gate, /setTimeout\(measure/, 'no late re-measure, so a slow rotate is missed')
+  // MATCHED LOOSELY ENOUGH TO SURVIVE A LABEL. These were
+  // `requestAnimationFrame(measure)` and `setTimeout(measure`, which stopped
+  // matching the day each leg was given a name for the sync trace -- the
+  // re-measures were all still there and the test failed anyway. What is being
+  // asserted is that a rAF re-measure and a late re-measure exist, not how the
+  // callback is spelled. See systems/OrientationTrace.ts.
+  assert.match(gate, /requestAnimationFrame\(\s*\(?\)?\s*(=>\s*)?measure/,
+    'only one measurement is taken')
+  assert.match(gate, /setTimeout\(\s*\(?\)?\s*(=>\s*)?measure/,
+    'no late re-measure, so a slow rotate is missed')
   assert.match(gate, /applyResolution\(game\)/, 'nothing tells the scale manager to re-read')
   // refresh() no longer resizes anything: under NONE it re-reads bounds and
   // stops. Calling it here would look right and do nothing.
