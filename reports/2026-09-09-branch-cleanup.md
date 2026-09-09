@@ -4,9 +4,10 @@
 > another Claude session (`session_01QmdALpNHLqZULyggPqL4ZS`) pushed `dc0cdb5`
 > —`ScheduleGuard` plus the *implementation* of the GL=1 snapshot fix this
 > report only documents. It fast-forwards cleanly on top of everything here, so
-> nothing below was lost or overwritten. **`main`'s head is therefore `dc0cdb5`
-> and not `f925718`**, and its Checks run 247 belongs to that session, not this
-> one. The two passes reached the same GL=1 conclusion independently and by
+> nothing below was lost or overwritten. **`dc0cdb5` sits between this pass's
+> last code commit and the commit carrying this file**, so `main`'s head is not
+> this pass's `f925718`, and Checks run 247 belongs to that session rather than
+> this one. The two passes reached the same GL=1 conclusion independently and by
 > different routes; §5 has the detail.
 
 **`main` went `8385d8e` → `f925718`, 21 commits, and deployed green.** Two of
