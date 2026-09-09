@@ -71,6 +71,21 @@ const CAKES = presentation.cakes
 const CHIP = presentation.difficultyChip
 const TAP_SLOP = 10
 
+/**
+ * The world point the background pattern's first tile starts on.
+ *
+ * This is the top-left corner the OLD world-sized tile sprite had — its centre
+ * was the design box's centre and it was `roadWidth() + WORLD_W * 2` by
+ * `WORLD_H * 3`. The sprite is the camera's size now (see `fitBackground`), and
+ * a tile sprite starts its pattern at its own corner, so without this the
+ * seamless texture would be drawn from a different phase: the same grass, a
+ * different arrangement of it, and no screenshot of the old screen to check the
+ * new one against. Nothing else depends on the number; it exists to hold the
+ * picture still.
+ */
+const BG_ORIGIN_X = WORLD_W / 2 - (roadWidth() + WORLD_W * 2) / 2
+const BG_ORIGIN_Y = WORLD_H / 2 - (WORLD_H * 3) / 2
+
 export class WorldMapScene extends Phaser.Scene {
   /**
    * Everything that scrolls. The camera never moves; this does.
@@ -83,6 +98,9 @@ export class WorldMapScene extends Phaser.Scene {
   road!: Phaser.GameObjects.Container
   /** The scrollbar, drawn only when the road is longer than the screen. */
   private bar!: Phaser.GameObjects.Graphics
+  /** The tiling ground and the wash over it, both sized to the camera's view. */
+  private bg!: Phaser.GameObjects.TileSprite
+  private wash!: Phaser.GameObjects.Rectangle
   private scroll = 0
   /** Where a press started, and how far it has travelled since. */
   private grabX = 0
@@ -156,9 +174,15 @@ export class WorldMapScene extends Phaser.Scene {
     this.setScroll(scrollToNode(Math.max(0, at), this.scrollWindow().width))
 
     // A rotate or a URL-bar collapse changes how much road is on screen, which
-    // changes both the clamp and whether the bar is drawn at all. Through the
-    // helper so it comes off on DESTROY as well as SHUTDOWN.
-    onSceneResize(this, () => { if (sceneIsLive(this)) this.setScroll(this.scroll) })
+    // changes both the clamp and whether the bar is drawn at all — and, now
+    // that the ground is the size of the camera rather than the size of the
+    // world, how much ground there has to be. Through the helper so it comes
+    // off on DESTROY as well as SHUTDOWN.
+    onSceneResize(this, () => {
+      if (!sceneIsLive(this)) return
+      this.fitBackground()
+      this.setScroll(this.scroll)
+    })
 
     unlockAudio(this)
   }
@@ -215,21 +239,70 @@ export class WorldMapScene extends Phaser.Scene {
    * repeating it costs one draw and looks the same at every size, where
    * stretching one 1254px square across a 1024-wide iPad would soften it.
    *
-   * Drawn WIDER THAN THE ROAD on purpose. The camera fits the design box and
+   * Drawn WIDER THAN THE DESIGN BOX on purpose. The camera fits the box and
    * centres it, and whatever is left over at a different aspect would
    * otherwise be the dark chrome colour — a map screen with black bars down
-   * the sides.
+   * the sides. Both of those reasons survive the change below; what does not
+   * survive is sizing it to the ROAD.
+   *
+   * SIZED TO THE CAMERA, NOT TO THE WORLD, and this is the whole point.
+   * `map-bg` is 1254x1254 and so non-power-of-two, which means Phaser cannot
+   * hand the repeat to the sampler: it allocates a fill canvas at the sprite's
+   * DISPLAY size and paints the pattern into it. At `roadWidth() + WORLD_W * 2`
+   * by `WORLD_H * 3` that canvas was 6870x2160 — 56.6 MB of RGBA, the single
+   * largest texture in the game once the plates went per-level, and 24.5% of
+   * what the world map cost. See reports/2026-09-07-the-crash.md.
+   *
+   * The camera can never show more than its own view of it, and THE CAMERA
+   * NEVER MOVES on this screen — the road container is what scrolls (see the
+   * header). So a sprite the size of the camera's view shows exactly the same
+   * pixels for about a twentieth of the memory. `fitBackground` re-runs on
+   * resize, because a rotate changes how much world the camera sees.
    */
   private drawBackground(): void {
-    const w = roadWidth() + WORLD_W * 2
-    const bg = this.add.tileSprite(
-      WORLD_W / 2, WORLD_H / 2, w, WORLD_H * 3, ART.worldMap.background,
-    )
-    bg.setDepth(-100)
+    this.bg = this.add.tileSprite(0, 0, 1, 1, ART.worldMap.background).setDepth(-100)
     // A wash, so the nodes and the type on top of them stay readable against a
-    // texture that is deliberately busy at close range.
-    this.add.rectangle(WORLD_W / 2, WORLD_H / 2, w, WORLD_H * 3, 0x1a1208, 0.18)
-      .setDepth(-99)
+    // texture that is deliberately busy at close range. Kept in step with the
+    // sprite: it covered the same rectangle before and it covers it now.
+    this.wash = this.add.rectangle(0, 0, 1, 1, 0x1a1208, 0.18).setDepth(-99)
+    this.fitBackground()
+  }
+
+  /**
+   * Puts the background over exactly what the camera can see.
+   *
+   * `worldView` is not filled in until the first render and this runs in
+   * `create`, so the rect is derived the same way `scrollWindow` derives its
+   * own: `midPoint` and `zoom`, both set by `fitCameraToDesign`. One world unit
+   * of slack on each side so a rounding error cannot show a hairline of chrome
+   * along an edge.
+   *
+   * THE PATTERN IS ANCHORED WHERE IT ALWAYS WAS. A TileSprite starts its
+   * pattern at its own top-left corner, so moving that corner would slide a
+   * seamless texture under the road — no worse a picture, but a different one,
+   * and a different one cannot be verified against a screenshot of the old one.
+   * `tilePosition` is the offset from the corner the world-sized sprite had, so
+   * the frame this draws is the frame it drew before, to the pixel.
+   *
+   * THE CORNERS ARE ROUNDED TO WHOLE WORLD UNITS, and that is not tidiness. A
+   * TileSprite paints its pattern into a canvas one canvas pixel per world
+   * unit, so the canvas only samples the texture the way the old one did while
+   * its edges sit on the same integer lattice. Sizing straight off the camera
+   * put the left edge on x = -140.5 at 844x390, which moved every texel half a
+   * pixel and left a faint difference over the whole screen — small (max 12 of
+   * 255) but real, and it is the kind of thing that gets argued about in a
+   * screenshot instead of being ruled out. Integer edges make the diff zero.
+   */
+  private fitBackground(): void {
+    const cam = this.cameras.main
+    const left = Math.floor(cam.midPoint.x - cam.width / cam.zoom / 2) - 1
+    const top = Math.floor(cam.midPoint.y - cam.height / cam.zoom / 2) - 1
+    const w = Math.ceil(cam.midPoint.x + cam.width / cam.zoom / 2) + 1 - left
+    const h = Math.ceil(cam.midPoint.y + cam.height / cam.zoom / 2) + 1 - top
+
+    this.bg.setPosition(left + w / 2, top + h / 2).setSize(w, h)
+    this.wash.setPosition(left + w / 2, top + h / 2).setSize(w, h)
+    this.bg.setTilePosition(left - BG_ORIGIN_X, top - BG_ORIGIN_Y)
   }
 
   /* ----------------------------------------------------------------- the road */

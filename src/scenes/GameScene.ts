@@ -39,8 +39,11 @@ import { dashArcs, HeroMarkers, type MarkersDef } from '../systems/HeroMarkers.t
 import {
   ART, applyRender, fitContentHeight, fitContentWidth, fitInRect, renderFor, soldierSprite,
 } from '../systems/Art.ts'
-import { queuePlate } from '../systems/ArtLoader.ts'
-import { EFFECT_MS, playEffect, sizeForRadius } from '../systems/Effects.ts'
+import { queueLevelArt } from '../systems/ArtLoader.ts'
+import { levelArtKeys } from '../systems/LevelArt.ts'
+import {
+  EFFECT_MS, forgetEffectAnims, playEffect, registerEffectAnims, sizeForRadius,
+} from '../systems/Effects.ts'
 import { Cooldowns } from '../systems/Cooldowns.ts'
 import { unlockedTowerCount } from '../systems/Draft.ts'
 import { runState, setRunState } from '../systems/RunState.ts'
@@ -571,19 +574,25 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * THE LEVEL'S PLATE, FETCHED HERE AND NOWHERE ELSE.
+   * THE LEVEL'S OWN ART, FETCHED HERE AND NOWHERE ELSE.
    *
-   * Boot used to load all five with the rest of the manifest, which meant a
-   * phone on the title screen already held 134.5 MB of board art for levels
-   * nobody had picked, and 365.6 MB in total by the time it reached the world
-   * map — measured, not estimated; see reports/2026-09-07-the-crash.md. iOS
-   * Safari kills the web process rather than reporting that, which is the
-   * "A problem repeatedly occurred" the player sees.
+   * Boot used to load the whole manifest, which meant a phone on the title
+   * screen already held 134.5 MB of board art for levels nobody had picked and
+   * 124.7 MB of enemies, effects, signs and soldiers for a run nobody had
+   * started — measured, not estimated, at 365.6 MB in total on the world map;
+   * see reports/2026-09-07-the-crash.md and
+   * reports/2026-09-08-the-memory-numbers.md. iOS Safari kills the web process
+   * rather than reporting that, which is the "A problem repeatedly occurred"
+   * the player sees.
    *
-   * So one plate, for the level about to be played, and `shutdown` below frees
-   * it again. The cost is the loader's own pause on the way in: a plate is
-   * about a megabyte and one decode, this game does not stream, and the file
+   * So: this level's plate, this level's enemies, and the effects and props
+   * any board needs — and `shutdown` below frees all of it again. The cost is
+   * the loader's own pause on the way in. The whole set is about 2.5 MB on the
+   * wire against the plate's 1 MB, this game does not stream, and every file
    * comes back out of the HTTP cache on every entry after the first.
+   *
+   * WHICH ENEMIES is computed rather than listed — see systems/LevelArt.ts.
+   * Level 1 fields four of the twenty-eight enemy pictures and loads four.
    *
    * NOTHING IS DRAWN HERE, deliberately, and it took two attempts to decide
    * that. A progress bar wants the 1280x720 design box, and the only thing
@@ -602,11 +611,21 @@ export class GameScene extends Phaser.Scene {
    * out of step.
    */
   preload(): void {
-    const level = loadLevel(runState().resumeFrom?.level ?? runState().levelId)
-    queuePlate(this, ART.map[level.map.plate])
+    // Anything that does not arrive is reported by the loader itself — see
+    // `queueLevelArt`, which is also where the reason it is not BootScene's
+    // banner is written down.
+    queueLevelArt(this, runState().resumeFrom?.level ?? runState().levelId)
   }
 
   create(): void {
+    // THE EFFECT SHEETS ARE CUT HERE, not at boot, because they are not at
+    // boot any more. Every animated sheet in the manifest is an `fx-` key and
+    // every `fx-` key arrives with the level, so BootScene's call finds
+    // nothing to register and this one finds all of it. Idempotent and
+    // skip-if-missing, so a restart re-cuts the frames the shutdown dropped
+    // and neither call can register an animation with no frames in it.
+    registerEffectAnims(this)
+
     // Before anything else: everything below reads this. A resumed run plays
     // the level it was saved on, a fresh one plays whatever the title screen
     // picked, and an id neither recognises falls back to the default rather
@@ -1101,28 +1120,39 @@ export class GameScene extends Phaser.Scene {
     this.events.once('shutdown', () => {
       setRunActive(false)
       provideState(null)
-      this.freePlate()
+      this.freeLevelArt()
     })
   }
 
   /**
-   * Gives the level's plate back, and the arch crop taken out of it.
+   * Gives the level's art back, and the arch crop taken out of its plate.
    *
-   * THE HALF OF THE FIX THAT ACTUALLY RECLAIMS ANYTHING. Loading one plate
-   * instead of five is worth nothing if the four a session walks through are
-   * still resident at the end of it: nothing anywhere in `src/` called
-   * `TextureManager.remove` before this, so every texture a tab ever touched
-   * lived until the tab died — which on iOS Safari is what it did.
+   * THE HALF OF THE FIX THAT ACTUALLY RECLAIMS ANYTHING. Loading one level's
+   * art instead of every level's is worth nothing if what a session walks
+   * through is still resident at the end of it: nothing anywhere in `src/`
+   * called `TextureManager.remove` before this, so every texture a tab ever
+   * touched lived until the tab died — which on iOS Safari is what it did.
    *
    * Runs on shutdown, which Phaser fires after the display list has been torn
-   * down, so nothing on screen is holding the texture when it goes. `preload`
-   * fetches it again on the way back in, out of the HTTP cache.
+   * down, so nothing on screen is holding a texture when it goes. `preload`
+   * fetches them again on the way back in, out of the HTTP cache.
+   *
+   * THE ANIMATIONS GO WITH THE TEXTURES. Phaser's animation manager is global
+   * and outlives this scene, so an effect animation whose sheet has just been
+   * removed would be reused — frames and all — by the next level, which is an
+   * explosion that plays nothing. See Effects.forgetEffectAnims.
    */
-  private freePlate(): void {
+  private freeLevelArt(): void {
     // Defensive about `this.level`: shutdown can fire on a scene that threw on
     // the way up, and failing to free memory must never become a second fault.
-    const key = this.level ? ART.map[this.level.map.plate] : undefined
-    if (key && this.textures.exists(key)) this.textures.remove(key)
+    // Asked for by id rather than read off the loaded level for the same
+    // reason — `levelArtKeys` falls back to the default level, and freeing the
+    // wrong level's art is a smaller fault than freeing none of it.
+    const keys = levelArtKeys(this.level?.id ?? runState().levelId)
+    forgetEffectAnims(this, keys)
+    for (const key of keys) {
+      if (this.textures.exists(key)) this.textures.remove(key)
+    }
     if (this.textures.exists(ARCH_NEAR_KEY)) this.textures.remove(ARCH_NEAR_KEY)
   }
 

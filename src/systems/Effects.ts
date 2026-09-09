@@ -39,14 +39,29 @@ export interface EffectOptions {
 }
 
 /**
- * Registers one animation per sheet in the manifest. Phaser's animation
- * manager is global, so this runs once at boot and every scene can play them.
+ * Registers one animation per sheet whose texture is loaded.
+ *
+ * Phaser's animation manager is global, so an animation registered anywhere
+ * can be played everywhere — which is why this used to run once at boot and
+ * never again.
+ *
+ * IT RUNS TWICE NOW, and the second time is the one that matters. Every sheet
+ * in the manifest is an `fx-` key and every `fx-` key is level art, so at boot
+ * there is nothing here to register: the textures arrive with the level. The
+ * skip below is what makes calling it again safe rather than merely harmless —
+ * `generateFrameNumbers` on a key the texture manager does not hold produces
+ * an animation with no frames, and an effect that plays no frames is invisible
+ * rather than loud. GameScene calls this after its own load completes.
  */
 export function registerEffectAnims(scene: Phaser.Scene): void {
   for (const key of Object.keys(ART.files)) {
     const sheet = renderFor(key).sheet
     if (!sheet) continue
     if (scene.anims.exists(key)) continue
+    // The texture is what the frames are cut from. Without this an animation
+    // registered before its art lands is an empty one, and it would then be
+    // skipped for the rest of the session by the line above.
+    if (!scene.textures.exists(key)) continue
     scene.anims.create({
       key,
       frames: scene.anims.generateFrameNumbers(key, { start: 0, end: sheet.frames - 1 }),
@@ -55,6 +70,24 @@ export function registerEffectAnims(scene: Phaser.Scene): void {
       frameRate: (sheet.frames * 1000) / FX.blastMs,
       repeat: 0,
     })
+  }
+}
+
+/**
+ * Drops the animations cut from textures that are about to be freed.
+ *
+ * AN ANIMATION OUTLIVES ITS TEXTURE, and that is the trap in freeing effect
+ * art. `anims.create` stores frame objects belonging to the texture they were
+ * cut from; removing the texture leaves those frames dangling, and because
+ * `registerEffectAnims` skips a key `anims.exists` already knows, the next
+ * level would reuse the dangling animation rather than cutting fresh frames
+ * from the texture it just loaded. The effect plays, and plays nothing.
+ *
+ * Called from the same shutdown that frees the textures, with the same keys.
+ */
+export function forgetEffectAnims(scene: Phaser.Scene, keys: readonly string[]): void {
+  for (const key of keys) {
+    if (renderFor(key).sheet && scene.anims.exists(key)) scene.anims.remove(key)
   }
 }
 

@@ -57,13 +57,16 @@ export class BootScene extends Phaser.Scene {
     // So: optional keys are a warning, required keys are an error and a
     // banner, and in both cases the game boots.
     //
-    // NEITHER LIST NAMES A MAP PLATE any more, and that is deliberate rather
-    // than an oversight: boot stopped loading them, because five resident is
-    // 134.5 MB on a phone that has already spent the rest of its budget on
-    // everything else in the manifest. A plate arrives with its level and is
-    // freed when that level ends — see GameScene.preload — so reporting one
-    // missing here would be a false alarm on every single boot, which is how a
-    // banner becomes wallpaper. See REQUIRED_SPRITE_KEYS.
+    // NEITHER LIST NAMES LEVEL ART any more, and that is deliberate rather
+    // than an oversight: boot stopped loading it. Five plates resident is
+    // 134.5 MB and the enemies, effects, signs and soldiers behind them are
+    // another 90.8 MB, on a phone that has already spent the rest of its
+    // budget on everything else in the manifest. All of it arrives with a
+    // level and is freed when that level ends — see GameScene.preload — so
+    // reporting any of it missing here would be a false alarm on every single
+    // boot, which is how a banner becomes wallpaper. GameScene reports its own
+    // level's absences, on the one board they affect. See
+    // REQUIRED_SPRITE_KEYS and Art.isLevelArtKey.
     const absent = (keys: string[]): string[] => keys.filter((k) => !this.textures.exists(k))
     const missingOptional = absent(OPTIONAL_SPRITE_KEYS)
     const missingRequired = absent(REQUIRED_SPRITE_KEYS)
@@ -91,8 +94,13 @@ export class BootScene extends Phaser.Scene {
     ensureShadowTexture(this)
     ensureBuildGlowTexture(this)
     ensureIconFallbackTexture(this)
-    // Phaser's animation manager is global, so the effect animations are
-    // registered once and every scene can play them.
+    // Phaser's animation manager is global, so an effect animation registered
+    // anywhere can be played everywhere. This call registers nothing today —
+    // every animated sheet in the manifest is an `fx-` key and every one of
+    // those arrives with a level, so GameScene.create is where the frames are
+    // actually cut. It is kept because "the manifest gains a sheet that is not
+    // level art" is a thing that can happen, and the call costs one pass over
+    // the manifest at boot.
     registerEffectAnims(this)
     // Greyed copies of anything the UI shows as unavailable, built once rather
     // than per frame.

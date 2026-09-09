@@ -350,12 +350,28 @@ async function edgeCheck(label) {
 
 let bootBroken = false
 async function toTitle() {
-  // NOT A MAP PLATE. This waited on `map-level1`, and plates are no longer
-  // loaded at boot -- they arrive with a level and are freed with it, which is
-  // the iOS memory fix. A wait on a plate here would have hung every scenario
-  // in this file for its full 60s and then reported that the game did not
-  // boot. Two boot-time textures from opposite ends of the manifest instead.
-  await until(() => game.textures.exists('ui-title-bg') && game.textures.exists('enemy-notice'), 60000)
+  // ASKED FOR RATHER THAN NAMED, and this is the second time round.
+  //
+  // This gate waited on `map-level1` until the plates went per-level, and was
+  // then changed to `ui-title-bg` and `enemy-notice` -- "two boot-time
+  // textures from opposite ends of the manifest". The enemies went per-level
+  // next, and `enemy-notice` is one of them, so every scenario in this file
+  // hung for its full 60s and reported TIMEOUT. Nothing was wrong with the
+  // game either time; the harness was waiting for something boot had stopped
+  // loading, which looks exactly like a boot that never finished.
+  //
+  // So it does not name a key any more. `REQUIRED_SPRITE_KEYS` IS boot's own
+  // list -- the manifest minus what may be absent minus what a level brings --
+  // so waiting on all of it cannot go stale, and what is missing when it does
+  // time out is worth printing rather than guessing at.
+  const { REQUIRED_SPRITE_KEYS } = await import('./js/systems/Art.js')
+  const loaded = await until(
+    () => REQUIRED_SPRITE_KEYS.every((k) => game.textures.exists(k)), 60000)
+  if (!loaded) {
+    const absent = REQUIRED_SPRITE_KEYS.filter((k) => !game.textures.exists(k))
+    note('*** BOOT ART NEVER ARRIVED: ' + absent.length + ' of '
+      + REQUIRED_SPRITE_KEYS.length + ' -- ' + absent.slice(0, 10).join(', '))
+  }
   // Generous, because a software rasteriser at device resolution runs the
   // whole boot at a few frames a second and 15s is not enough to distinguish
   // 'did not boot' from 'is still booting'.
@@ -535,6 +551,136 @@ async function run() {
     return m
   }
 
+  if (scenario === 'levelart') {
+    /*
+     * DOES A LEVEL STILL HAVE ITS ART, now that boot does not load it?
+     *
+     * `texmem` counts megabytes. This asks the question the megabytes cannot:
+     * a number going down is also what a broken level looks like. Four things
+     * have to hold, and each has a way of failing quietly.
+     *
+     *   1. Every key the level asks for is resident while it plays. A missing
+     *      one is Phaser's magenta box, six waves in, on a phone.
+     *   2. The effect ANIMATIONS have frames. The sheets are cut at boot no
+     *      longer -- an animation registered before its texture arrives has
+     *      zero frames, plays instantly and draws nothing, and nothing
+     *      anywhere reports it.
+     *   3. Both survive a second level and a restart. Freeing a texture leaves
+     *      its animation behind, and `anims.exists` would then skip re-cutting
+     *      it against the sheet the next level just loaded.
+     *   4. A level does NOT hold another level's enemies. That is the saving.
+     */
+    const LA = await import('./js/systems/LevelArt.js')
+    const RSx = await import('./js/systems/RunState.js')
+    const SHEETS = Object.entries((await import('./js/data/art.json', { with: { type: 'json' } })).default.render)
+      .filter(([, v]) => v && v.sheet).map(([k, v]) => ({ key: k, frames: v.sheet.frames }))
+    note('animated sheets in the manifest: ' + SHEETS.length + ' ('
+      + SHEETS.map((s) => s.key).join(', ') + ')')
+
+    let faults = 0
+    const bad = (m) => { note('*** ' + m); faults++ }
+
+    // AT BOOT: none of it, and the animations not yet cut.
+    for (const k of LA.LEVEL_ART_KEYS) {
+      if (game.textures.exists(k)) bad('boot loaded level art: ' + k)
+    }
+    note('after boot: 0 of ' + LA.LEVEL_ART_KEYS.length + ' level-art keys resident'
+      + (faults ? ' -- NO, see above' : ''))
+
+    const playLevel = async (levelId) => {
+      for (const k of ['Title', 'Splash', 'Credits', 'Boot', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+      RSx.setRunState({
+        heroId: 'cory', abilities: ['molotov', 'glacier'],
+        openingTowers: ['withholding', 'writeoff'], reserveTowers: [], levelId,
+      })
+      game.scene.start('Game')
+      if (!(await until(() => running('Game') && scene('Game').status.heroName !== '', 25000))) {
+        bad(levelId + ': the level did not build'); return null
+      }
+      await until(() => running('Hud'), 12000)
+      await sleep(900)
+      return scene('Game')
+    }
+
+    const checkLevel = async (levelId, label) => {
+      const g = await playLevel(levelId)
+      if (!g) return
+      const want = LA.levelArtKeys(levelId)
+      const absent = want.filter((k) => !game.textures.exists(k))
+      if (absent.length) bad(label + ': ' + absent.length + ' key(s) missing -- ' + absent.join(', '))
+      note(label + ': ' + want.length + ' keys asked for, ' + (want.length - absent.length) + ' resident')
+
+      // WHOSE ENEMIES. The whole point of computing the set per level.
+      const mine = new Set(want)
+      const foreign = LA.ENEMY_SPRITE_KEYS.filter((k) => !mine.has(k) && game.textures.exists(k))
+      if (foreign.length) bad(label + ': holding another level\'s enemies -- ' + foreign.join(', '))
+      note('  enemy pictures: ' + LA.ENEMY_SPRITE_KEYS.filter((k) => mine.has(k)).length
+        + ' of ' + LA.ENEMY_SPRITE_KEYS.length + ' loaded, ' + foreign.length + ' foreign resident')
+
+      // THE ANIMATIONS, AND THAT THEY HAVE FRAMES IN THEM.
+      for (const s of SHEETS) {
+        const anim = g.anims.get(s.key)
+        if (!anim) { bad(label + ': no animation for ' + s.key); continue }
+        if (anim.frames.length !== s.frames) {
+          bad(label + ': ' + s.key + ' has ' + anim.frames.length + ' frames, manifest says ' + s.frames)
+          continue
+        }
+        // The frames must point at the texture that is loaded NOW, not at one
+        // a previous level freed underneath them.
+        const live = anim.frames.every((f) => f.frame && f.frame.texture
+          && f.frame.texture === game.textures.get(s.key))
+        if (!live) bad(label + ': ' + s.key + ' frames point at a texture that is gone')
+      }
+      note('  ' + SHEETS.length + ' effect animations cut against live textures')
+
+      // WHAT THIS LEVEL COSTS. `texmem` walks level 1 because that is the
+      // path a player takes; the peak is whichever level is dearest, and the
+      // enemy rosters are not the same size. Same cost model as texmem's.
+      {
+        const m = texBytes()
+        const en = m.list.filter((t) => LA.ENEMY_SPRITE_KEYS.includes(t.key))
+        note('  ' + label + ' costs ' + MB(m.bytes) + ' MB over ' + m.n + ' textures'
+          + '  (its enemies ' + MB(en.reduce((a, t) => a + t.bytes, 0)) + ' MB)')
+      }
+
+      // ONE PLAYED FOR REAL, since "has frames" and "draws something" are not
+      // the same claim.
+      const FXM = await import('./js/systems/Effects.js')
+      const ARTM = await import('./js/systems/Art.js')
+      const spr = FXM.playEffect(g, ARTM.ART.fx.blast, 400, 300, { size: 90, depth: 9999, durationMs: 400 })
+      await sleep(120)
+      const playing = spr.anims && spr.anims.currentAnim && spr.anims.currentFrame
+      if (!playing) bad(label + ': the blast played no frame')
+      else note('  blast played frame ' + spr.anims.currentFrame.index + ' of ' + s_len(spr))
+      await shot('levelart-' + levelId + '-' + VP.w + 'x' + VP.h)
+    }
+    function s_len(spr) { return spr.anims.currentAnim.frames.length }
+
+    // EVERY LEVEL, not just the one a player reaches first. The rosters are
+    // different sizes -- level 1 fields four enemy pictures and level 3 fields
+    // five much larger ones -- so the peak is not level 1's, and each hop is
+    // also the case that proves the freeing works: if the level before it were
+    // still resident, its enemies would be reported foreign here.
+    for (const id of ['level1', 'level2', 'level3', 'level4', 'level5']) {
+      await checkLevel(id, id.replace('level', 'level '))
+    }
+    // AND BACK TO THE FIRST, which re-loads what four shutdowns have freed.
+    await checkLevel('level1', 'level 1 again')
+
+    // OFF THE BOARD ENTIRELY: everything given back.
+    for (const k of ['Game', 'Hud']) game.scene.stop(k)
+    game.scene.start('WorldMap')
+    await until(() => running('WorldMap'), 10000)
+    await sleep(700)
+    const held = LA.LEVEL_ART_KEYS.filter((k) => game.textures.exists(k))
+    if (held.length) bad('left on the world map: ' + held.join(', '))
+    note('back on the world map: ' + held.length + ' of ' + LA.LEVEL_ART_KEYS.length
+      + ' level-art keys still resident')
+
+    note('RESULT ' + (faults === 0 ? 'level art is complete on every level checked'
+      : '*** ' + faults + ' fault(s) ***'))
+    return
+  }
   if (scenario === 'texmem') {
     note('viewport ' + VP.w + 'x' + VP.h)
     const after = texPoint('1 after boot (Title live)')
