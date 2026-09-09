@@ -4806,6 +4806,94 @@ async function run() {
       'the throw was caught but never described, so it would still reach a '
       + 'crash report as a bare "Script error."')
 
+    // --- 6: SO WHAT DOES THE BURST ACTUALLY DO, DONE OVER AND OVER? --------
+    //
+    // The question is what throws. A raise pauses every running scene, pauses
+    // all audio and claims an input gate; a lower resumes all three. The burst
+    // can drive that whole cycle inside a millisecond, from a POST_STEP hook
+    // and from three settle legs at once, and `applyResolution` resizes the
+    // canvas on every one of the fifteen calls.
+    //
+    // Rapidly pausing and resuming scenes mid-frame is the kind of thing that
+    // is safe until it is not, so this drives it hard and watches. It asserts
+    // that nothing throws -- if that ever fails, this is the reproduction.
+    {
+      const beforeCounts = JSON.stringify(GD.guardCounts())
+      // The harness logs every page error into `log` as a 'PAGE ERROR' line
+      // (see the listener at the top of this file), so the count before and
+      // after is the count of throws this section caused.
+      const errLines = () => log.filter((l) => l.startsWith('PAGE ERROR')
+        || l.startsWith('REJECT'))
+      const beforeErrors = errLines().length
+      OT.clearSyncTrace()
+      const mm3 = window.matchMedia.bind(window)
+      let flip = false
+      window.matchMedia = (qs) => {
+        const mq = mm3(qs)
+        if (/orientation:\s*portrait/.test(qs)) {
+          return { ...mq, matches: flip, media: mq.media,
+            addEventListener: () => {}, removeEventListener: () => {},
+            addListener: () => {}, removeListener: () => {} }
+        }
+        return mq
+      }
+      try {
+        // Twelve whole rotations' worth of events, alternating the predicate,
+        // with no pause between them. Each iteration raises and lowers the
+        // gate and resizes the canvas several times.
+        for (let i = 0; i < 12; i++) {
+          flip = i % 2 === 0
+          window.dispatchEvent(new Event('resize'))
+          window.dispatchEvent(new Event('orientationchange'))
+          if (window.visualViewport) window.visualViewport.dispatchEvent(new Event('resize'))
+          await sleep(30)
+        }
+        flip = false
+        await sleep(900)
+      } finally {
+        window.matchMedia = mm3
+        window.dispatchEvent(new Event('resize'))
+        await sleep(500)
+      }
+      const t6 = OT.syncTrace()
+      const raises = t6.filter((r) => r.change === 'raised').length
+      const lowers = t6.filter((r) => r.change === 'lowered').length
+      const afterCounts = GD.guardCounts()
+      const newErrors = errLines().slice(beforeErrors)
+      note('twelve alternating rotations: ' + t6.length + ' sync() calls, '
+        + raises + ' raises, ' + lowers + ' lowers')
+      note('  guard counts before: ' + beforeCounts)
+      note('  guard counts after:  ' + JSON.stringify(afterCounts))
+      note('  page errors during:  ' + (newErrors.length
+        ? JSON.stringify(newErrors.slice(0, 3)) : 'none'))
+      note('  scenes still held:   ' + JSON.stringify(OR.gateHolding(game))
+        + '   overlay=' + OR.overlayVisible() + '  isPortrait=' + OR.isPortrait())
+
+      // AT LEAST ONE FULL CYCLE. From a landscape window the gate starts down
+      // and every alternation is a raise; from a portrait one it starts UP, so
+      // the first flip has nothing to raise and the count is one lower. The
+      // claim is that the cycle ran, not how many times.
+      expect(raises >= 1, 'the hammer did not raise the gate at all')
+
+      // THE ONE THAT MATTERS. Nothing here is defended or swallowed; if a
+      // rapid raise/lower cycle throws, this is where it shows up, named.
+      expect(newErrors.length === 0,
+        'a burst cycle threw: ' + JSON.stringify(newErrors.slice(0, 2)))
+
+      // AND IT MUST NOT LATCH -- but only where a lowered gate is the RIGHT
+      // answer. In a genuinely portrait window the gate holding every scene is
+      // the gate working, and asserting otherwise measures the viewport rather
+      // than the code. The first version of this reported "that is the soft
+      // lock" at 390x844 against a gate doing exactly its job.
+      if (!OR.isPortrait()) {
+        expect(OR.gateHolding(game).length === 0,
+          'the gate is still holding ' + JSON.stringify(OR.gateHolding(game))
+          + ' with the window landscape again -- that is the soft lock')
+      } else {
+        note('  (the window really is portrait, so a held gate is correct here)')
+      }
+    }
+
     note('RESULT ' + (ASSERT_FAILS === 0
       ? 'the burst is real, the streak counts it, and settle\'s timers are wrapped'
       : '*** ' + ASSERT_FAILS + ' fault(s) in the rotation burst ***'))
