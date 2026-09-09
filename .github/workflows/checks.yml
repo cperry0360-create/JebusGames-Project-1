@@ -44,11 +44,72 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npx tsc --noEmit
 
+  # DOES THIS PUSH CHANGE THE GAME, OR ONLY THE WRITING ABOUT IT?
+  #
+  # Every commit to main used to republish Pages, and this repository writes a
+  # lot of markdown: one recent pass produced four deploys where one was
+  # needed, each a two-minute build and a 32 MB artifact upload publishing a
+  # byte-identical game.
+  #
+  # WHY THIS IS NOT `paths-ignore` ON THE TRIGGER. That would skip the whole
+  # workflow, so `test` and `typecheck` would not run at all on a docs commit
+  # and the commit would carry no checks -- which is a worse thing to explain
+  # to a branch protection rule than a wasted deploy. The checks still run on
+  # everything; only the publish is gated.
+  #
+  # FAIL-SAFE IS TO DEPLOY. If the before-SHA is missing -- a first push, a
+  # force-push, a manual dispatch -- this says `true` and the game republishes.
+  # A needless deploy costs two minutes; a skipped one costs a stale site
+  # nobody notices.
+  #
+  # Nothing the build reads is markdown: every `.md` and `reports/` mention in
+  # src/ is inside a comment or a JSON `_note`, checked when this was written.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      code: ${{ steps.check.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: the before-SHA of a multi-commit push is not
+          # reachable from a shallow clone, and an unreachable SHA here would
+          # silently mean "docs only".
+          fetch-depth: 0
+      - id: check
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "${{ github.event_name }}" != "push" ]; then
+            echo "not a push (${{ github.event_name }}) -- deploying"
+            echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            echo "no usable before-SHA ($BEFORE) -- deploying"
+            echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          files=$(git diff --name-only "$BEFORE" "${{ github.sha }}")
+          echo "changed files:"; echo "$files" | sed 's/^/  /'
+          # Anything that is NOT a markdown file and NOT under reports/.
+          code=$(echo "$files" | grep -v -E '(\.md$|^reports/)' || true)
+          if [ -n "$code" ]; then
+            echo "code changed -- deploying:"; echo "$code" | sed 's/^/  /'
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "documentation only -- Pages keeps serving what it has"
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # The gate. `needs` means a failed or cancelled check leaves this skipped,
   # and Pages keeps serving whatever it served before.
   deploy:
-    needs: [test, typecheck]
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: [test, typecheck, changes]
+    if: >-
+      github.event_name != 'pull_request'
+      && github.ref == 'refs/heads/main'
+      && needs.changes.outputs.code == 'true'
     permissions:
       contents: read
       pages: write
