@@ -55,9 +55,36 @@ export class AudioToggle {
     // around it carries the touch. `tapFloor` only grows it where the fit is
     // small, so a desktop window is untouched.
     const tap = tapFloor(scene, size)
-    this.plate = iconPlate(scene, x, y, size, size)
+
+    // AND GROWING IT IS WHAT PUT IT UNDER THE HOME INDICATOR.
+    //
+    // `tapFloor` grows the touch rectangle around the SAME centre, so a
+    // control authored to sit `size / 2` above the bottom of its box ends up
+    // with `tap / 2` below that centre instead -- and `tap` is more than twice
+    // `size` once the fit is small. At 956x305 with a 21px bottom inset, which
+    // is the viewport Safari serves while its Share sheet is open, the three
+    // 44pt rectangles reached 12 design units past the bottom of the design
+    // box and the audit reported all three as NOTCH.
+    //
+    // The design box is fitted onto the SAFE area, so its own bottom edge is
+    // the last row a finger can reach. Lifting the whole control by the
+    // overhang keeps the art, the glyphs and the readout together -- clamping
+    // only the rectangles would have left the speaker painted under the
+    // hardware with its tap target somewhere else.
+    //
+    // WITH BREATHING ROOM, not flush. Clamping the rectangle's bottom edge to
+    // exactly `bottomLimit` put it on the safe-area boundary to the pixel, and
+    // these are floats off a camera transform: the audit's test is
+    // `y + h > viewport - inset`, so a control landing on 284.4 against a
+    // limit of 284 is still reported. The same 6 units the readout below
+    // already reserves.
+    const EDGE_PAD = 6
+    const half = tap / 2
+    const cy = Math.min(y, bottomLimit - half - EDGE_PAD)
+
+    this.plate = iconPlate(scene, x, cy, size, size)
     this.glyph = scene.add.graphics()
-    const hit = scene.add.rectangle(x, y, tap, tap, 0xffffff, 0.001)
+    const hit = scene.add.rectangle(x, cy, tap, tap, 0xffffff, 0.001)
       .setName('audio:mute')
       .setInteractive({ useHandCursor: true })
     hit.on('pointerdown', () => {
@@ -71,12 +98,12 @@ export class AudioToggle {
     hit.on('pointerout', () => this.plate.setActive(!isMuted()))
 
     const step = (dx: number, label: string, delta: number): Phaser.GameObjects.Text => {
-      const t = scene.add.text(x + dx, y, label, {
+      const t = scene.add.text(x + dx, cy, label, {
         fontFamily: FONT_UI, fontSize: '22px', color: COLOR.ink,
         fontStyle: 'bold', stroke: '#0d1016', strokeThickness: 4,
       }).setOrigin(0.5)
       // The glyph draws; a rectangle the size of a fingertip takes the tap.
-      const box = scene.add.rectangle(x + dx, y, tap, tap, 0xffffff, 0.001)
+      const box = scene.add.rectangle(x + dx, cy, tap, tap, 0xffffff, 0.001)
         .setName(`audio:${delta < 0 ? 'down' : 'up'}`)
         .setInteractive({ useHandCursor: true })
       box.on('pointerdown', () => {
@@ -100,7 +127,7 @@ export class AudioToggle {
     // On the same line as the two step buttons rather than under them. Below
     // them it ran into the minus sign at small plate sizes, and cost a second
     // row of height in a band that does not have one.
-    this.readout = scene.add.text(x + tap * 3.0, y, '', {
+    this.readout = scene.add.text(x + tap * 3.0, cy, '', {
       fontFamily: FONT_UI, fontSize: '15px', color: COLOR.dim,
       stroke: '#0d1016', strokeThickness: 3,
     }).setOrigin(0, 0.5)

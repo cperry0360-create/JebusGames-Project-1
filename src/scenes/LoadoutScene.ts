@@ -1383,8 +1383,22 @@ export class LoadoutScene extends Phaser.Scene {
       g.setAlpha(0.72)
     }
 
+    // THE CARD IS THE ART; THE TAP TARGET IS AT LEAST A FINGERTIP.
+    //
+    // The hero row is laid out to fit five cards across, so at a short
+    // viewport the card is as short as the row allows -- 48x42 CSS at
+    // 956x305, which is Safari with its Share sheet open, and 42 is under the
+    // 44pt floor both platforms publish. Five cards, five faults, and the
+    // audit reported them on every hero state.
+    //
+    // Grown on the axis that is short rather than uniformly: the cards are a
+    // horizontal row 51 CSS apart, so a wider hit box would overlap the
+    // neighbour and a tap on Eli would select Han. Height has the whole
+    // description block below it and nothing to collide with. Same trade as
+    // AudioToggle: the painted card keeps its authored size.
+    const hitH = tapFloor(this, card.height)
     const hit = this.add.rectangle(card.width / 2, card.height / 2,
-      card.width, card.height, 0xffffff, 0.001)
+      card.width, hitH, 0xffffff, 0.001)
       .setInteractive({ useHandCursor: true })
     hit.on('pointerdown', () => this.pickHero(id))
     g.add(hit)
