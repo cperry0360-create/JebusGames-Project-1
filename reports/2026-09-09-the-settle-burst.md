@@ -16,10 +16,15 @@ hidden — turns out to need something the stale predicate alone does not supply
 | commit | what | CI |
 |---|---|---|
 | `850fc24` | Trace which clock calls the orientation sync, and measure the burst | **green** — all five jobs success ([run 256](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34344578061)) |
-| `c5e185c` | Hammer the burst cycle and watch, and stop asserting a held gate is a lock | **run 257**, reported in the reply that carried this file |
+| `c5e185c` | Hammer the burst cycle and watch, and stop asserting a held gate is a lock | **green** — all five jobs success ([run 257](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34345164319)) |
+| `2e6ecc2` | This report | **green** — checks ran, `deploy` **skipped** (markdown only) ([run 258](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34345555523)) |
+| `2a1624a` | Name the stale-canvas suspect, and stop ENTER_FRAMES claiming frames | **green** — all five jobs success (run 259) |
 
-Both are code changes, so both deploy; the commit carrying this file is
-markdown only and should be skipped by the filter added in `326700c`.
+Run 258 is the deploy filter working as designed: a markdown-only commit ran
+`test`, `typecheck` and `changes`, and the `deploy` job's conclusion is
+`skipped`. Run 259 deployed, correctly — the filter is path-based, so a
+comment-only change to a `.ts` file is still a code change and still publishes.
+The commit adding run 259's row is markdown and stops the regress there.
 
 Nothing here is a fix. No hysteresis was added, nothing is swallowed, and no
 decision reads the new instrument. Item 4 of the brief, kept.
