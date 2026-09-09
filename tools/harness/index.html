@@ -3805,6 +3805,11 @@ async function run() {
         else {
           G5.cooldowns.reset(LASER)
           await click(bx, by)
+          // HELD ARMED FOR A MEASURED BEAT BEFORE THE BOARD IS PRESSED. This
+          // dwell is what makes the budget check below mean anything: see the
+          // note on it.
+          const ARMED_DWELL_MS = 1000
+          await sleep(ARMED_DWELL_MS)
           await press(spot.x, spot.y)
           note('armed, then pressed the board: beam lit=' + !!G5.held
             + '  onBoard=' + (G5.held ? G5.held.onBoard : '-')
@@ -3816,13 +3821,35 @@ async function run() {
           // THE ARMED PHASE COSTS NO BUDGET, which is the surviving half of
           // the old step 6c ("a beam that reached the board spends ONLY its
           // board time"). Under the old press-and-drag gesture the beam
-          // existed while it waited for an aim, so 6c had to prove that the
-          // waiting did not drain it. Arming does not light a beam at all
-          // now, so the equivalent claim is that the beam is born with its
-          // budget whole: anything less means time was charged for the arm.
-          if (G5.held && G5.held.left !== AB[2].holdSeconds) {
-            fail5('the beam started with ' + G5.held.left + 's of '
-              + AB[2].holdSeconds + 's -- the armed phase spent budget')
+          // existed while it waited for an aim, so 6c had to prove the waiting
+          // did not drain it. Arming lights no beam now, so the equivalent
+          // claim is that the time spent armed is not charged for.
+          //
+          // NOT `left === holdSeconds`, AND THAT MATTERS. The beam is created
+          // already `onBoard`, so it starts being charged the instant it
+          // exists -- and `press` moves the pointer and waits a beat before
+          // the button goes down, so a couple of hundred ms of real board time
+          // has always elapsed by the time this line reads the budget. The
+          // strict form reported "the armed phase spent budget" at 9.79s of
+          // 10s on a tree where `updateHeldBeam` provably returns before
+          // touching `left` unless `onBoard` is set. That was the harness
+          // measuring its own latency, which is the fault this file's own
+          // step 6 comment already warns about for the aim.
+          //
+          // So the dwell above is the signal and the latency is the noise: a
+          // charged armed phase would cost at least ARMED_DWELL_MS on top of
+          // the latency, and an uncharged one costs only the latency. The
+          // threshold sits at the dwell, which is a 4x margin on what this
+          // actually measures.
+          if (G5.held) {
+            const lost = AB[2].holdSeconds - G5.held.left
+            note('   held armed for ' + ARMED_DWELL_MS + 'ms before the press: '
+              + 'budget at first read ' + G5.held.left.toFixed(2) + 's of '
+              + AB[2].holdSeconds + 's (lost ' + lost.toFixed(2) + 's to press latency)')
+            if (lost >= ARMED_DWELL_MS / 1000) {
+              fail5('the armed phase spent budget: ' + lost.toFixed(2)
+                + 's gone after ' + (ARMED_DWELL_MS / 1000) + 's armed')
+            }
           }
           if (G5.held) {
             // The aim point names a DIRECTION -- the beam is `range` long
