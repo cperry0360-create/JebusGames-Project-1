@@ -30,6 +30,107 @@ const SPOTS = MAP.buildSpots
 const q = new URLSearchParams(location.search)
 const GAME_SPEED = 1.4
 const scenario = q.get('s') || 'game'
+
+/**
+ * WHAT A SCENARIO IS ALLOWED TO GET AWAY WITH.
+ *
+ * This harness reported success for a scenario that does not exist. `run.sh
+ * poor` exits 0; so does `run.sh totally-made-up-name`. There is no `poor`
+ * block in this file and there has not been for some time, so every green
+ * `poor` run in every report was the director falling off the end of the
+ * dispatch chain and posting a clean report about nothing.
+ *
+ * Three separate holes, and they are not the same hole:
+ *
+ *   1. AN UNKNOWN NAME. A typo, or a scenario someone deleted. Nothing
+ *      matched, nothing ran, exit 0.
+ *   2. A SCENARIO THAT CHECKS NOTHING. It drives the game, prints numbers and
+ *      takes screenshots, and has no way to fail. Seven of them are listed
+ *      below. A green run means the run finished, not that the game is right.
+ *   3. A SCENARIO WHOSE CHECKS NEVER RAN. It threw past them, or an early
+ *      `return` skipped them, and the fault counter it never reached is still
+ *      zero. `ui` did exactly this the day the build menu was deleted.
+ *
+ * server.py already caught a throw, a timeout and a reported fault. These are
+ * the three it could not see.
+ */
+
+const SCENARIO_NAMES = [
+  'abilitybar', 'abilityicons', 'afford', 'arch', 'archplate', 'background',
+  'bars', 'beacon', 'boot', 'boss', 'bossability', 'bossleak', 'buildall',
+  'cakes', 'cakestate', 'chromepan', 'combat', 'contain', 'courtland',
+  'crashreport', 'crashw5', 'credits', 'creditsroll', 'ctxsurvive',
+  'dadsync', 'diag', 'difficulty', 'draft', 'drawer', 'edges',
+  'enemyfacing', 'everyloadout', 'facing', 'fps', 'full', 'full13', 'fx',
+  'game', 'gateway', 'gestures', 'glacier', 'gnomes', 'goblin', 'heroanim',
+  'heroblock', 'herochip', 'herofx', 'herohp', 'lane', 'leak', 'ledger',
+  'lettering', 'levelart', 'levels', 'listenerguard', 'loadout', 'locked',
+  'loopthrow', 'looptrack', 'lost', 'mapedge', 'maproute', 'markers',
+  'meteor', 'mix', 'modal', 'moes', 'music', 'muzzle', 'nightfall',
+  'nodefirst', 'noderings', 'notch', 'nuke', 'nukeseq', 'opening', 'padart',
+  'pausedismiss', 'pauseresume', 'phone', 'pixels', 'plate', 'playrun',
+  'politician', 'powerart', 'proximity', 'realboot', 'regressions',
+  'results', 'retreat', 'revive', 'ring', 'rockets', 'rollspeed',
+  'scheduleguard', 'screens', 'scrim', 'settings', 'sharesheet',
+  'shortviewport', 'signs', 'skilled', 'softlock', 'spec', 'spot5',
+  'sprites', 'standalone', 'startrun', 'stuckcast', 'stuckguard', 'stun',
+  'stunlock', 'texmem', 'ticket', 'title', 'towerpanel', 'towerring',
+  'towertiers', 'transform', 'type', 'typegame', 'ui', 'ultimate', 'voices',
+  'wave1', 'webglwatch', 'worldmap'
+]
+
+/** Every scenario this file actually dispatches. Kept honest by
+ *  tests/harness-scenarios.test.ts, which re-derives it from the source and
+ *  fails when the two disagree -- otherwise this list rots the same way the
+ *  nine did. */
+const KNOWN_SCENARIOS = new Set(SCENARIO_NAMES)
+
+/**
+ * Scenarios that drive the game and check nothing.
+ *
+ * These are DESCRIPTIVE: they print measurements and save screenshots, which
+ * is genuinely useful when a person reads them and worth nothing when CI does.
+ * Running one now fails on purpose, so the number in a report cannot be
+ * mistaken for a passing check. Repair one by giving it `expect()` calls and
+ * taking it off this list, or delete the scenario.
+ */
+const ASSERTS_NOTHING = new Set([
+  'muzzle', 'rockets', 'retreat', 'regressions', 'meteor',
+])
+
+/**
+ * Scenarios migrated to `expect()`, and therefore held to "you must have
+ * reached at least one check".
+ *
+ * Deliberately a list rather than "everything not in ASSERTS_NOTHING". Most
+ * scenarios still count faults through their own local helper and report
+ * through `RESULT *** n ***`, which server.py already gates on; holding those
+ * to a counter they never touch would fail every one of them at once. A
+ * scenario joins this list when its checks go through `expect`.
+ */
+const USES_EXPECT = new Set([
+  'typegame',
+])
+
+/** How many checks this run actually EVALUATED, pass or fail. */
+let ASSERTIONS = 0
+/** How many of them failed. */
+let ASSERT_FAILS = 0
+
+/**
+ * The assertion primitive: one check, counted whether it passes or fails.
+ *
+ * Counting only failures is what let a scenario whose checks never ran look
+ * identical to one whose checks all passed. This counts the EVALUATION, so
+ * "nothing was checked" and "everything was fine" stop being the same report.
+ *
+ * Returns the condition, so it can be used inline in a guard.
+ */
+function expect(cond, msg) {
+  ASSERTIONS++
+  if (!cond) { ASSERT_FAILS++; note('   *** ' + msg) }
+  return !!cond
+}
 /** Optional scenario argument, e.g. ?s=heroblock&arg=7 */
 const arg = q.get('arg')
 // The window is sized by --window-size, and the canvas follows it through
@@ -13879,20 +13980,66 @@ async function run() {
     // now and `openSettings()` is what raises it. The old call threw on the
     // first line, so neither screenshot this scenario exists to take had been
     // taken since.
+    //
+    // AND IT NOW CHECKS WHAT IT PHOTOGRAPHS. It took two screenshots and
+    // asserted nothing, so the run that proved the old `openPause()` had been
+    // throwing for weeks looked identical to the run that proved the fix. Both
+    // panels either appear or they do not, and that is the whole claim this
+    // scenario exists to make -- so it is made through `expect`, which counts
+    // the check whether it passes or fails. See KNOWN_SCENARIOS at the top.
     const hud = scene('Hud')
     hud.openSettings()
     await until(() => !!hud.settings, 5000)
     await sleep(700)
+    expect(!!hud.settings, 'openSettings() did not raise the settings panel')
+    note('settings raised: ' + !!hud.settings + '  paused=' + hud.paused)
     await shot('type-5-pause')
-    hud.settings?.close()
+
+    // DISMISSED THE WAY A PLAYER DISMISSES IT, and the first version of this
+    // was not. `hud.settings.close()` closes the PANEL object and leaves the
+    // HUD's own bookkeeping alone: `hud.settings` stays set and `hud.paused`
+    // stays true, because the thing that clears both is `closeSettings()` plus
+    // `resumeGame()`, and those hang off the panel's CONTINUE button. Calling
+    // the panel's own close reported two faults that say nothing about the
+    // game -- the instrument was pressing something no player can press.
+    // FROM `children.list`, not `.list`: `hud` is a Scene and a Scene has no
+    // `.list`. The first version walked `undefined`, found no CONTINUE and
+    // reported that the panel had none -- an instrument fault that reads
+    // exactly like a missing button.
+    const findText = (root, want) => {
+      for (const o of (root.list || root.children?.list || [])) {
+        if (o.type === 'Text' && String(o.text || '').toUpperCase().includes(want)) return o
+        if (o.list) { const hit = findText(o, want); if (hit) return hit }
+      }
+      return null
+    }
+    const cont = findText(hud, 'CONTINUE')
+    expect(!!cont, 'the settings panel has no CONTINUE button to press')
+    if (cont) {
+      const cb = cont.getBounds()
+      await click(cb.centerX, cb.centerY)
+    }
     await until(() => !hud.settings, 5000)
     await sleep(500)
-    note('settings raised and dismissed; paused=' + hud.paused)
+    expect(!hud.settings, 'the settings panel would not close')
+    note('settings dismissed; paused=' + hud.paused)
+    // THE PAUSE HAS TO COME BACK OFF WITH IT. A settings panel that closes and
+    // leaves the run paused is the soft lock the stuckguard scenario exists
+    // for, and it would have photographed identically.
+    expect(!hud.paused, 'the run was left paused after the settings panel closed')
+
     g.status.wave = 6
     g.status.lives = 0
     g.endRun('lost')
     await sleep(800)
+    expect(g.status.phase === 'lost',
+      'endRun(\'lost\') left the run in phase ' + g.status.phase)
+    expect(!!g.dialog, 'the results panel never appeared after the run was lost')
+    note('results panel up: ' + !!g.dialog + '  phase=' + g.status.phase)
     await shot('type-6-results')
+    note('RESULT ' + (ASSERT_FAILS === 0
+      ? 'both panels raised, dismissed and reported'
+      : '*** ' + ASSERT_FAILS + ' fault(s) in the two title panels ***'))
     return
   }
 
@@ -14193,6 +14340,12 @@ const gs = scene('Game')
 if (bootBroken) log.unshift('*** BOOT FAILED — see below ***')
 await post('/done', JSON.stringify({
   scenario, bootFailed: bootBroken, directorError, log,
+  // THE THREE HOLES, ANSWERED IN THE REPORT so server.py can act on them.
+  scenarioKnown: KNOWN_SCENARIOS.has(scenario),
+  assertsNothing: ASSERTS_NOTHING.has(scenario),
+  assertions: ASSERTIONS,
+  assertFails: ASSERT_FAILS,
+  assertionsExpected: USES_EXPECT.has(scenario),
   status: gs?.status ?? null,
   towers: gs?.towers?.length, enemies: gs?.enemies?.length, spots: SPOTS.length,
   heroAt: gs?.hero ? [Math.round(gs.hero.x), Math.round(gs.hero.y)] : null,
