@@ -187,6 +187,107 @@ resuming all audio, and resizing the canvas on each of the fifteen calls:
 raise/lower cycling is not the crash, at least not in Chromium. The burst
 explains the 21 ms raise-and-lower; it does not yet explain the failure.
 
+## 6. The stale-canvas lead: `applyResolution`, and where to break on it
+
+**The function is `applyResolution(game)` in `src/systems/Resolution.ts`.** It is
+the only thing in the game that sizes the canvas, and it is the other half the
+sideways render needs. This section names it precisely and stops there — it is
+a lead, not a diagnosis, and confirming or killing it needs a device.
+
+### What it measures
+
+```ts
+const parent = game.scale.parent as HTMLElement | null   // config.ts: parent: 'game'
+const box    = parent?.getBoundingClientRect?.()
+const cssW   = Math.max(1, Math.round(box?.width  || g.innerWidth  || 1))
+const cssH   = Math.max(1, Math.round(box?.height || g.innerHeight || 1))
+if (game.scale.zoom !== 1 / dpr) game.scale.setZoom(1 / dpr)
+game.scale.resize(cssW * dpr, cssH * dpr)
+```
+
+It measures **`#game`'s bounding box**, not the window. `#game` is styled
+`width: 100vw; height: 100vh; height: 100dvh`, so its box is resolved from the
+**layout viewport**. The canvas is then set to that box times the latched device
+ratio, with the scale manager's zoom at `1/dpr`.
+
+### When it runs
+
+**From exactly one call site**: `measure()`, inside `settle()` in
+`Orientation.ts`. Nowhere else — `git grep applyResolution` finds the import,
+the comment and that one call.
+
+`settle()` runs it five times per event — immediately, on the next rAF, and at
+60 ms, 180 ms and 400 ms — and is bound to `resize`, `orientationchange`,
+`visualViewport resize` and `screen.orientation change`, plus once at install.
+A rotation therefore re-measures the canvas about **fifteen times in 400 ms**
+and then **stops**.
+
+**`POST_STEP` does not call it.** The per-frame hook calls `sync()` only, so the
+gate is re-evaluated every frame forever while the canvas is re-measured only
+inside a 400 ms window after a DOM event. That asymmetry is the shape of the
+bug: a gate that keeps thinking, over a canvas that stopped measuring.
+
+### What would make it stale, ranked
+
+1. **The layout viewport lags the rotation.** `100vw`/`100dvh` resolve against
+   the layout viewport, which iOS updates asynchronously around a rotation. A
+   `getBoundingClientRect()` taken inside that window returns the
+   **pre-rotation, landscape-shaped** box, and `resize()` makes a landscape
+   canvas inside a portrait window. That is the sideways render, and it is the
+   first thing to look at.
+2. **The ladder ends at 400 ms and nothing re-measures after it.** If iOS
+   settles later than that, the last measurement stands until the next DOM
+   event. The reports already show gate holds of **3162 ms**, so iOS is
+   demonstrably capable of being slower than the ladder is long.
+3. **The `||` fallbacks are per-axis and can mix two moments into one canvas.**
+   `box?.width || g.innerWidth` and `box?.height || g.innerHeight` are
+   independent expressions, and `||` (not `??`) means a legitimately-zero
+   dimension falls through. A box that is momentarily 0-wide but has a height
+   takes its width from `innerWidth` and its height from `box.height` — two
+   different sources, possibly two different moments, in one `resize()` call.
+4. **`dpr` can be latched wrong.** `refreshDeviceScale()` returns early without
+   re-reading while `document.visibilityState === 'hidden'`, so a rotation
+   performed while the app is backgrounding keeps the old ratio and the canvas
+   is sized `css * dpr` against it. `Resolution.ts` already documents a crash
+   report that recorded **`dpr = 1` on a phone whose ratio is 3**. This does not
+   produce a sideways canvas, but it does produce a wrong one.
+
+### Where to put the breakpoint
+
+`src/systems/Resolution.ts`, in `applyResolution`, on:
+
+```ts
+const box = parent?.getBoundingClientRect?.()
+```
+
+Break there, rotate the phone, and step the five legs of each event. At each
+one, read:
+
+| read | why |
+|---|---|
+| `box.width`, `box.height` | what the canvas is about to be sized from |
+| `window.innerWidth/innerHeight` | the fallback, and whether it agrees |
+| `window.visualViewport.width/height` | the third viewport, which can differ from both |
+| `screen.orientation.angle` | ground truth for which way the phone is |
+| `matchMedia('(orientation: portrait)').matches` | what the gate and the overlay both believe |
+| `game.scale.width/height` after the call | what actually landed |
+
+**The signature of the fault is a leg where `box` is landscape-shaped while
+`screen.orientation.angle` says the phone is portrait** — and, if the lead is
+right, no further leg after 400 ms to correct it.
+
+The coherent story to test: on iOS the media query, the box and `innerWidth`
+all go stale **together** — which is exactly why the crash report carries
+`portrait=false` *and* `rotateOverlay=hidden` — so inside that window the gate
+stays down, the overlay stays hidden, and the canvas is sized landscape. If iOS
+settles the layout viewport after the 400 ms ladder has finished, nothing
+re-measures and the landscape canvas stays in the portrait window until the next
+DOM event. That is the video.
+
+**Not fixed, and deliberately not.** Every candidate above has an obvious
+one-line repair and all of them are guesses until someone watches the numbers on
+the device.
+
 ---
 
 ## Verification
@@ -251,12 +352,17 @@ leg was given a name, with every re-measure still in place.
    event that armed it.
 3. **A stale predicate releases the gate but does not move the layout.**
 
-**The next measurement, and it is a different function:**
+**The next measurement, and it is a different function — see section 6:**
 
 4. **The sideways render needs a stale CANVAS, not just a stale predicate.**
-   `applyResolution` measures the parent element; the question is whether that
-   measurement can come back landscape-shaped while the window is portrait. That
-   is where the video's frame comes from, and nothing in this pass touched it.
+   The function is **`applyResolution` in `src/systems/Resolution.ts`**. It
+   measures `#game`'s bounding box — `100vw`/`100dvh`, so the layout viewport —
+   and sizes the canvas to it. It runs from one call site, `settle()`'s
+   `measure()`, about fifteen times per rotation, and **stops 400 ms after the
+   last event**; `POST_STEP` never re-runs it, so nothing corrects a stale
+   canvas afterwards. Section 6 names the four things that could make it stale,
+   the line to break on, and the six values to read at each leg. **This is
+   Cory's to confirm with Safari Web Inspector; it cannot be settled here.**
 5. **The existing crash reports can be read for this today.** `CrashContext`
    already carries `viewportCss` (`innerWidth x innerHeight`) *and* `portrait`
    (the predicate) *and* `screenAngle`. A report with a portrait-shaped
@@ -270,8 +376,18 @@ leg was given a name, with every re-measure still in place.
 6. **No hysteresis was added and nothing is swallowed.** The obvious repair —
    count frames, or debounce the burst — is a behaviour change on a code path
    whose failure is not yet understood, and it would destroy the evidence the
-   trace was added to collect. `ENTER_FRAMES`'s comment is now wrong in a
-   documented way, which is better than a counter that is quietly right.
+   trace was added to collect. **`ENTER_FRAMES`'s comment now says what actually
+   happens** rather than claiming three frames: that the streak counts `sync()`
+   calls, that `settle()` contributes about fifteen per rotation, that the
+   measured raise was 1.0 ms, and that the hysteresis is therefore weakest
+   during the rotation it exists for. The behaviour is untouched.
+
+**And this is where it parks.** The harness cannot reproduce the reported state
+— `overlayVisible()` reads `getComputedStyle` and no JavaScript stub reaches the
+stylesheet's media query, so script and stylesheet cannot be desynchronised from
+userland the way iOS desynchronises them from itself. Further off-device work on
+this crash is guessing. The next move is a Mac with Safari Web Inspector
+attached to the phone, breaking where section 6 says.
 
 **Carried forward, still open:**
 

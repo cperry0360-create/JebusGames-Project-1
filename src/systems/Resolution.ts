@@ -124,6 +124,27 @@ export function viewH(scene: Phaser.Scene): number {
  * because the parent is `100dvh` and those two disagree for several frames
  * while Safari's URL bar collapses. Forcing `innerHeight` there makes the
  * canvas taller than the box it sits in.
+ *
+ * OPEN LEAD, NOT A DIAGNOSIS: this is the suspect for the iPhone rotation
+ * crash's sideways frame, and it has not been confirmed on a device.
+ *
+ * A stale orientation predicate on its own does NOT produce a landscape layout
+ * in a portrait window -- measured; the gate follows the predicate and the
+ * layout follows this function. So the sideways render needs this measurement
+ * to come back landscape-shaped while the window is portrait, which the
+ * layout viewport lagging a rotation would do: `#game` is `100vw`/`100dvh`.
+ *
+ * Two properties of the call worth knowing before changing anything here:
+ *
+ *   - It runs from ONE place, `settle()`'s `measure()` in Orientation.ts, five
+ *     times per event and about fifteen times per rotation -- and then STOPS
+ *     400ms after the last event. `POST_STEP` re-runs the gate every frame but
+ *     never re-runs this, so nothing corrects a stale canvas afterwards.
+ *   - The `||` fallbacks below are per-axis, so width and height can come from
+ *     different sources, and `||` (not `??`) also swallows a legitimate zero.
+ *
+ * Where to break, and what to read at each leg:
+ * reports/2026-09-09-the-settle-burst.md section 6.
  */
 export function applyResolution(game: Phaser.Game): void {
   // The one place a ratio change is acted on. Everything else in the game

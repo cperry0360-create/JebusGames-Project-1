@@ -40,16 +40,43 @@ export interface GateHost {
 export const NEVER_PAUSE = 'Boot'
 
 /**
- * How many consecutive portrait readings it takes to put the gate up.
+ * How many consecutive portrait READINGS it takes to put the gate up.
  *
  * Leaving portrait is immediate; entering it is not. iOS reports the old
  * viewport for a frame or two around a rotation, and the cost of believing one
- * of those frames used to be a permanently frozen run. Three frames is under
- * 50ms at 60fps — invisible to a player turning a phone, and longer than any
- * transient measured.
+ * of those frames used to be a permanently frozen run.
  *
- * The asymmetry is deliberate and it points the safe way: the gate is slow to
- * take control and instant to give it back.
+ * THE NAME SAYS FRAMES AND THE COUNTER DOES NOT COUNT THEM. This comment used
+ * to claim "three frames is under 50ms at 60fps". That is false, and it is
+ * false in the direction that matters. `sync` increments the streak once per
+ * CALL, and the caller runs it from two clocks:
+ *
+ *   - `POST_STEP`, once per rendered frame;
+ *   - `settle()`, FIVE times per event -- immediately, on the next rAF, and at
+ *     60ms, 180ms and 400ms.
+ *
+ * A rotation fires `resize`, `orientationchange` and a `visualViewport resize`,
+ * so it produces about FIFTEEN settle-driven calls on top of the per-frame
+ * ones. Each event's `:now` leg runs synchronously inside its own dispatch, so
+ * three of them land in the same tick.
+ *
+ * MEASURED, in `run.sh rotationburst`: the gate went from streak 0 to raised in
+ * **1.0ms**, off three `:now` legs 0.5ms apart. Three rendered frames would be
+ * 33.3ms. Of the 26 sync calls one rotation produced, 15 came from settle, and
+ * the tightest three spanned 0.30ms.
+ *
+ * So the hysteresis is WEAKEST DURING A ROTATION, which is the only time it is
+ * needed. That is also why a crash report can carry "gate raised" and "gate
+ * lowered" 21ms apart -- a gap that is impossible if this counted frames and
+ * ordinary once it counts calls.
+ *
+ * LEFT AS IT IS, DELIBERATELY. Making this count frames, or debouncing the
+ * burst, is a behaviour change on a path whose failure is not yet understood,
+ * and it would destroy the evidence the trace was added to collect. See
+ * systems/OrientationTrace.ts and reports/2026-09-09-the-settle-burst.md.
+ *
+ * The raise/lower asymmetry is still deliberate and still points the safe way:
+ * the gate is slow to take control and instant to give it back.
  */
 export const ENTER_FRAMES = 3
 
