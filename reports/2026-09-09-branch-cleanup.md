@@ -1,6 +1,15 @@
 # Branch cleanup: two merged, one salvaged, one that would not delete
 
-**`main` went `8385d8e` → `dc86e0f`, 20 commits, and deployed green.** Two of
+> **Concurrent session, read this first.** While this pass was finishing,
+> another Claude session (`session_01QmdALpNHLqZULyggPqL4ZS`) pushed `dc0cdb5`
+> —`ScheduleGuard` plus the *implementation* of the GL=1 snapshot fix this
+> report only documents. It fast-forwards cleanly on top of everything here, so
+> nothing below was lost or overwritten. **`main`'s head is therefore `dc0cdb5`
+> and not `f925718`**, and its Checks run 247 belongs to that session, not this
+> one. The two passes reached the same GL=1 conclusion independently and by
+> different routes; §5 has the detail.
+
+**`main` went `8385d8e` → `f925718`, 21 commits, and deployed green.** Two of
 the three branches merged. The third — the two-step Mind Laser activation —
 **conflicts and was not merged**, per the brief's own instruction to stop rather
 than resolve by guess. The Phaser 4 spike was salvaged onto `main` but **could
@@ -20,10 +29,12 @@ and the test suite caught: `fx-glacier` was still loading at boot. One line.
 | `03b9c38` | GL=1 does not boot; `ctxsurvive`'s loop check is one frame wide | **green** — `test`, `typecheck`, `deploy / build`, `deploy / deploy` all success ([run 244](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34296457539)) |
 | `2b2b8a3` `7ad85ba` | The Phaser 4 spike report, salvaged so it outlives its branch | covered by run 245 |
 | `dc86e0f` | Head that report with the branch's fate and what was salvaged | **green** — all four jobs success ([run 245](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34296515541)) |
+| `f925718` | This report | **green** — `test`, `typecheck`, `deploy / build`, `deploy / deploy` all success ([run 246](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34296847945)) |
 
 CI runs per push, not per commit: run 244 covers the first six commits, run 245
-the last three. This file is the usual tail of the regress — a commit cannot
-record its own result — and its run is reported in the reply that carried it.
+the next three, run 246 this file. The regress stops here — the commit adding
+run 246's row and the note above is documentation only, touches no file the
+build reads, and its result is reported in the reply that carried this file.
 
 ---
 
@@ -201,6 +212,16 @@ requested while the context is lost is never taken and fires on restore at the
 frame it was made, freezing the loop in a way that reads exactly like an engine
 that did not survive.
 
+**Independently confirmed and then implemented, in the same hour.** The
+concurrent session reached the identical conclusion from the other end —
+chasing the iPhone crash rather than salvaging a branch — and landed the actual
+fix in `dc0cdb5`: `index.html` now goes through `renderer.snapshot` with a 2 s
+disarm and a `toDataURL` fallback. Their measurement is the sharpest evidence
+either pass produced: **the old path wrote a 61,259-byte PNG for the title
+screen and the game screen, byte-identical**, where `renderer.snapshot` writes
+3.4 MB and 6.6 MB. Two sessions, two routes, one answer — and the README
+section written here now points at the implementation rather than proposing it.
+
 **(c) The report itself — `2b2b8a3`, `7ad85ba`, `dc86e0f`. Beyond the brief's
 "two things", deliberately.** `reports/2026-09-08-phaser-4-spike.md` existed
 only on the branch, and deleting the branch would have destroyed the only record
@@ -293,9 +314,11 @@ run 226 from 2026-09-04, because everything since has come through Checks.
 |---|---|---|---|---|---|
 | [244](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34296457539) | `03b9c38` | success | success | **success** | **success** |
 | [245](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34296515541) | `dc86e0f` | success | success | **success** | **success** |
+| [246](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34296847945) | `f925718` | success | success | **success** | **success** |
 
-Both runs also passed the `the module script keeps its crossorigin attribute`
-step inside `deploy / build`.
+All three runs also passed the `the module script keeps its crossorigin
+attribute` step inside `deploy / build`. Run 247 (`dc0cdb5`) is the concurrent
+session's and is not reported here.
 
 **Pages artifact size:**
 
@@ -304,20 +327,22 @@ step inside `deploy / build`.
 | previous ([run 234](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34225906608)) | `8385d8e` | 31,702,238 B (30.23 MiB) | — |
 | run 244 | `03b9c38` | **32,189,455 B (30.70 MiB)** | **+487,217 B** |
 | run 245 | `dc86e0f` | 32,187,872 B (30.70 MiB) | −1,583 B vs 244 |
+| run 246 | `f925718` | 32,189,159 B (30.70 MiB) | +1,287 B vs 245 |
 
 The +487 KB is `public/assets/effects/fx_glacier.webp` at 476,598 bytes plus a
 little source. **The memory work does not shrink the artifact and was never
 going to** — it changes *when* art is loaded into GPU memory, not what ships.
-The −1,583 B between 244 and 245 is zip nondeterminism on a markdown-only
-commit: `reports/` is not in the Pages build at all.
+The ±1.5 KB wobble across 244, 245 and 246 is zip nondeterminism on
+markdown-only commits: `reports/` is not in the Pages build at all, so those
+three artifacts are the same game three times.
 
 ### Redundant deploys, and the path filter
 
 Markdown-only commits trigger a full build and deploy. This pass produced
-**three deploys, two of them redundant**: run 244 carried the actual code, run
-245 carried only the spike-report salvage, and the push carrying this file makes
-a third. Each is roughly a two-minute build plus a 32 MB artifact upload
-publishing a byte-identical game.
+**four deploys, three of them redundant**: run 244 carried the actual code, run
+245 carried only the spike-report salvage, run 246 this file, and the commit
+adding run 246's row makes a fourth. Each is roughly a two-minute build plus a
+32 MB artifact upload publishing a byte-identical game.
 
 **A `paths-ignore` on `checks.yml` for `**.md` and `reports/**` would fix it.**
 Flagged, not done — it is outside this brief, and it needs care: the `deploy`
@@ -418,7 +443,9 @@ iPhone crash is gone is still Cory's to confirm on his phone.
 
 ## Where this leaves the repository
 
-**`main` is at `dc86e0f`, green, deployed.**
+**`main` is at `dc0cdb5`, green, deployed.** This pass's own last commit is
+`f925718` (run 246, all four jobs green); `dc0cdb5` is the concurrent session's
+`ScheduleGuard` push sitting on top of it, and run 247 is theirs to report.
 
 **Waiting on a decision:**
 

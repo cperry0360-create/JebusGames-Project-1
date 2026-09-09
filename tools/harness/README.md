@@ -87,17 +87,23 @@ The default runs pass `--disable-gpu` and fall back to Canvas2D, where
 `toDataURL` is fine. That is why this went unseen: it is only wrong on the runs
 that were added to answer questions about the drawing context itself.
 
-**The fix: go through `renderer.snapshot`**, which hooks the renderer's own
-post-render step and therefore reads the buffer before it is presented.
+**The fix — now implemented in `index.html`** — is to go through
+`renderer.snapshot`, which hooks the renderer's own post-render step and
+therefore reads the buffer before it is presented. Measured on the way in: the
+old path wrote a **61,259-byte PNG for both the title screen and the game
+screen, byte-identical**; `renderer.snapshot` writes 3.4 MB and 6.6 MB.
 
-**And disarm a pending snapshot on timeout.** A snapshot requested while the
-context is lost is never taken, so the request stays armed; when the context
-comes back it fires at the frame it was made and freezes the loop — which reads
-exactly like "the engine did not survive the loss". That false negative was
-produced on two different engines before it was understood to be the
-instrument.
+**A pending snapshot is disarmed on a 2 s timeout**, falling back to
+`toDataURL` and letting the run continue. A snapshot requested while the
+context is lost is never taken, so the request would otherwise stay armed and
+hang the run on an `await` — or fire on restore at the frame it was made and
+freeze the loop, which reads exactly like "the engine did not survive the
+loss". That false negative was produced on two different engines before it was
+understood to be the instrument.
 
 This is engine-agnostic and has nothing to do with which Phaser is vendored.
+The finding came off the Phaser 4 spike; the fix landed separately in
+`dc0cdb5` alongside `ScheduleGuard`.
 
 ### Two more things about GL=1, found while salvaging `ctxsurvive`
 
