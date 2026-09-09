@@ -121,6 +121,59 @@ Use `sh tools/tsdiff.sh <known-green-commit>` instead. It typechecks the
 working tree and a commit CI already accepted, and reports only the
 difference. Two real errors reached CI before this existed.
 
+## Standing facts
+
+Things established at cost that are not discoverable from the code, and that a
+session will otherwise re-derive or, worse, assume the opposite of.
+
+### The test suite cannot see Phaser at all
+
+**A green test run is not evidence about anything rendered.** No test in
+`tests/` imports the engine — verify with:
+
+```bash
+grep -rnE "^\s*import .*from 'phaser'|require\('phaser'\)" tests/   # no hits
+```
+
+About 25 test files do *mention* Phaser, which is why this looks better covered
+than it is. Every one of those mentions is either a comment or an assertion
+that reads a source file **as text** and matches a regex against it —
+`screenspace.test.ts` checks that `worldToScreen` still takes a
+`Phaser.Scene`, `camera.test.ts` checks the config string says `Phaser.Scale.NONE`,
+`diagnostics.test.ts` asserts the crash reporter does **not** import Phaser.
+Those catch a rename or a deleted line. None of them constructs a scene, runs a
+frame, or looks at a pixel.
+
+So "993 passing" — or whatever the number is this week — says nothing about a
+sprite's size, a camera transform, a texture that failed to load, or a shader.
+**Any rendering change ships unguarded by the suite**, and the harness in
+`tools/harness/` is the only thing that looks at a frame. Verify a rendering
+change there or it is not verified.
+
+This is true on `main` today. It is not a finding about any particular engine
+version and it does not get fixed by upgrading one.
+
+### WebGL context loss is NOT the iPhone crash
+
+Seven hypotheses are now down, and this is one of them. **Stop re-opening it.**
+
+The latest crash report **from the device** carries `webglContextLost=false`,
+`contextLostEvents=0`, `contextRestoredEvents=0`, with `contextLossGuard`
+reading `attached` — so the instrument was armed and recorded nothing. That
+rules out the one branch of the decision table in
+`reports/2026-09-08-outside-the-guards.md` that would have made this the
+diagnosis, and it rules out "the guard was never attached" as the reason for
+the silence in the six reports before it.
+
+Separately, and reproducibly in this repository, Phaser 3.90 **survives** a real
+forced context loss: `GL=1 sh tools/harness/run.sh ctxsurvive` drives
+`WEBGL_lose_context` and the loop, the canvas, the renderer and the run all come
+back.
+
+Both halves matter. The first says it did not happen on the device. The second
+says the engine would have handled it if it had. Context restoration is
+therefore not a reason to change engines — Phaser 3 has had it since 3.85.0.
+
 ## Reports
 
 **Every report ends with a markdown file, always.** A finding that lives only

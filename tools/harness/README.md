@@ -71,6 +71,33 @@ screenshots are the evidence.
 | `worldmap` | the level-select road: how many screens long it is, that a drag actually moves it, that a short drag ending on a level does NOT start that level, and that a tap does |
 | `cakes` | what a level pays: the unearned recipe measured off the two TEXTURES rather than off a screenshot, the panel at 0, 1, 2 and 3, and the record coming back on a map node at a size the log reports in CSS pixels |
 | `difficulty` | the setting end to end: the chip on the level select, the panel it opens, choosing Try Hard, and then the HUD readout — including a mid-run change to the SAVE that must not reach a run already going |
+| `ctxsurvive` | drives a real `WEBGL_lose_context` and asks whether the game SURVIVES it — is the loop still stepping, is the canvas still drawing, is the renderer out of its lost state, is the run intact. Needs `GL=1`. Uses nothing version-specific, so it gives comparable answers on any engine |
+
+## Every GL=1 screenshot this harness takes is BLACK
+
+**Any picture from any earlier `GL=1` run is meaningless.** There is no
+`preserveDrawingBuffer` on the context, so by the time `canvas.toDataURL()`
+runs the buffer has already been presented and comes back blank. The saved PNG
+is solid black, and `toDataURL().length` is *stable* across the loss — it read
+the same 81702 bytes before a context loss, after it, and on two different
+renderers, which is exactly what a working probe would look like if you only
+read the number.
+
+The default runs pass `--disable-gpu` and fall back to Canvas2D, where
+`toDataURL` is fine. That is why this went unseen: it is only wrong on the runs
+that were added to answer questions about the drawing context itself.
+
+**The fix: go through `renderer.snapshot`**, which hooks the renderer's own
+post-render step and therefore reads the buffer before it is presented.
+
+**And disarm a pending snapshot on timeout.** A snapshot requested while the
+context is lost is never taken, so the request stays armed; when the context
+comes back it fires at the frame it was made and freezes the loop — which reads
+exactly like "the engine did not survive the loss". That false negative was
+produced on two different engines before it was understood to be the
+instrument.
+
+This is engine-agnostic and has nothing to do with which Phaser is vendored.
 
 ## Notes
 
