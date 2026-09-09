@@ -72,6 +72,11 @@ screenshots are the evidence.
 | `cakes` | what a level pays: the unearned recipe measured off the two TEXTURES rather than off a screenshot, the panel at 0, 1, 2 and 3, and the record coming back on a map node at a size the log reports in CSS pixels |
 | `difficulty` | the setting end to end: the chip on the level select, the panel it opens, choosing Try Hard, and then the HUD readout — including a mid-run change to the SAVE that must not reach a run already going |
 | `ctxsurvive` | drives a real `WEBGL_lose_context` and asks whether the game SURVIVES it — is the loop still stepping, is the canvas still drawing, is the renderer out of its lost state, is the run intact. Needs `GL=1`. Uses nothing version-specific, so it gives comparable answers on any engine |
+| `crashreport` | the global handler on both paths — a throw and a rejection — and every field the report is supposed to carry |
+| `loopthrow` | that a throw inside the game loop is named, stacked and rethrown, and that the wrapper is on `loop.callback` rather than on `game.step` (which is captured once and cannot be shadowed) |
+| `listenerguard` | that every `addEventListener` is wrapped, Phaser's own included, that removal still works through the wrapper, and that a throw names its target and type |
+| `scheduleguard` | that `setTimeout`, `setInterval` and `queueMicrotask` are wrapped, that rejections are labelled distinctly, and that a pending timer records the DOM event and the stack that armed it |
+| `webglwatch` | the context-loss instrument end to end, plus the per-category guard-count table. Needs `GL=1` for the real `loseContext` half |
 
 ## Every GL=1 screenshot this harness takes is BLACK
 
@@ -87,19 +92,30 @@ The default runs pass `--disable-gpu` and fall back to Canvas2D, where
 `toDataURL` is fine. That is why this went unseen: it is only wrong on the runs
 that were added to answer questions about the drawing context itself.
 
-**The fix — now implemented in `index.html`** — is to go through
-`renderer.snapshot`, which hooks the renderer's own post-render step and
-therefore reads the buffer before it is presented. Measured on the way in: the
-old path wrote a **61,259-byte PNG for both the title screen and the game
-screen, byte-identical**; `renderer.snapshot` writes 3.4 MB and 6.6 MB.
+**DONE as of `dc0cdb5`.** `shot()` now goes through `frame()`, which uses
+`renderer.snapshot` on a WebGL renderer — it hooks the renderer's own
+post-render step and therefore reads the buffer before it is presented — and
+falls straight through to `toDataURL` on Canvas2D, where the direct read is
+correct and free.
 
-**A pending snapshot is disarmed on a 2 s timeout**, falling back to
-`toDataURL` and letting the run continue. A snapshot requested while the
-context is lost is never taken, so the request would otherwise stay armed and
-hang the run on an `await` — or fire on restore at the frame it was made and
-freeze the loop, which reads exactly like "the engine did not survive the
-loss". That false negative was produced on two different engines before it was
-understood to be the instrument.
+Measured on `screens 140 844x390` under `GL=1`, one run each way:
+
+| | title screen | game screen |
+|---|---|---|
+| `toDataURL` (old) | 61,259 bytes | 61,259 bytes |
+| `renderer.snapshot` (now) | 3,384,528 bytes | 6,576,444 bytes |
+
+Byte-identical PNGs for two completely different screens is the signature of
+the fault: both were the same uniform black rectangle.
+
+**And a pending snapshot is disarmed on a 2s timeout.** A snapshot requested
+while the context is lost is never taken, so the request stays armed; when the
+context comes back it fires at the frame it was made and freezes the loop —
+which reads exactly like "the engine did not survive the loss". That false
+negative was produced on two different engines before it was understood to be
+the instrument. `webglwatch` now proves the timeout: it loses the context for
+real, calls `frame()`, and checks that it returns (2.1s, a PNG data URL) and
+leaves `renderer.snapshotState.callback` null.
 
 This is engine-agnostic and has nothing to do with which Phaser is vendored.
 The finding came off the Phaser 4 spike; the fix landed separately in
