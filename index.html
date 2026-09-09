@@ -16,6 +16,37 @@
     -->
     <meta name="theme-color" content="#10161d" />
     <!--
+      THE WEB APP MANIFEST, and the Apple tags that do the same job on iOS.
+
+      There was no manifest at all, which is why a home screen web app got no
+      display mode and no orientation preference and was free to rotate.
+
+      WHAT THE MANIFEST ACTUALLY BUYS ON iOS IS LESS THAN IT LOOKS. Safari has
+      read `display` since 16.4, so the standalone launch is covered by the
+      manifest on a current phone -- but iOS honours NO `orientation` member,
+      in a home screen app or a tab, and it has no Screen Orientation lock
+      either. So `"orientation": "landscape"` is correct, costs nothing, and is
+      obeyed by Android and by desktop PWAs while iOS ignores it. THE ROTATE
+      GATE IS STILL THE ONLY DEFENCE ON iOS. Do not remove it. See
+      reports/2026-09-09-manifest-and-cleanup.md.
+
+      The apple-* tags are here for iOS older than 16.4, where the manifest is
+      not read and these are the only way to get a standalone launch. They are
+      belt and braces with the manifest, not a substitute for it.
+
+      apple-touch-icon is NOT redundant with the manifest icons: iOS takes the
+      home screen icon from this link and ignores the manifest's `icons`.
+    -->
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Courjahan" />
+    <!-- black-translucent so the page paints under the status bar and the
+         safe-area insets the HUD already reads stay meaningful. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
+    <!--
       GitHub Pages will not let us set Cache-Control, so these are best effort:
       some browsers honour them for the document, many ignore them. The real
       mechanism is the version check at the bottom of this file.

@@ -64,6 +64,51 @@ jobs:
                exit 1 ;;
           esac
 
+      # THE MANIFEST HAS TO SURVIVE THE BUILD TOO, for the same reason and by
+      # the same method. It lives in `public/`, which Vite copies wholesale to
+      # the output root -- a mechanism that works right up until someone sets
+      # `publicDir: false` or moves the file, and then the home screen app
+      # quietly goes back to having no display mode and no icon, which looks
+      # like nothing at all until a phone rotates.
+      #
+      # `npm install` answers 403 in the agent environment, so this cannot be
+      # checked where the file is written. It is checked here, on the real
+      # output, by the machine that runs Vite.
+      - name: the web app manifest and its icons survive the build
+        run: |
+          fail=0
+          test -f dist/manifest.webmanifest \
+            || { echo "FAIL: dist/manifest.webmanifest was not emitted"; fail=1; }
+          if [ -f dist/manifest.webmanifest ]; then
+            node -e '
+              // Not require(): node resolves .webmanifest through no loader.
+              const m = JSON.parse(require("fs").readFileSync("dist/manifest.webmanifest", "utf8"));
+              const want = { display: "fullscreen", orientation: "landscape",
+                             background_color: "#10161d", theme_color: "#10161d" };
+              let bad = 0;
+              for (const [k, v] of Object.entries(want)) {
+                if (m[k] !== v) { console.log(`FAIL: manifest.${k} is ${m[k]}, expected ${v}`); bad = 1; }
+              }
+              if (!Array.isArray(m.icons) || m.icons.length === 0) {
+                console.log("FAIL: manifest lists no icons"); bad = 1;
+              }
+              if (bad) process.exit(1);
+              console.log(`OK: manifest emitted, display=${m.display} orientation=${m.orientation} icons=${m.icons.length}`);
+            ' || fail=1
+          fi
+          grep -q 'rel="manifest"' dist/index.html \
+            && echo "OK: dist/index.html links the manifest" \
+            || { echo "FAIL: the emitted index.html does not link the manifest"; fail=1; }
+          grep -q 'apple-touch-icon' dist/index.html \
+            && echo "OK: dist/index.html carries the apple-touch-icon link" \
+            || { echo "FAIL: no apple-touch-icon in the emitted index.html"; fail=1; }
+          for i in icon-192.png icon-512.png icon-maskable-512.png apple-touch-icon.png; do
+            test -s "dist/icons/$i" \
+              && echo "OK: dist/icons/$i ($(stat -c%s "dist/icons/$i") bytes)" \
+              || { echo "FAIL: dist/icons/$i missing or empty"; fail=1; }
+          done
+          exit $fail
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3
