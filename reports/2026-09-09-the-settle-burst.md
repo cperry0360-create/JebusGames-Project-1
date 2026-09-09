@@ -1,0 +1,289 @@
+# The settle burst: what the gate's streak counter is actually counting
+
+**The gate raised in 1.0 ms. Three rendered frames at 60fps would be 33.3 ms.**
+The finding is confirmed, measured rather than inferred, and the 21 ms
+raise-and-lower in the crash report is now ordinary rather than impossible.
+
+`settle()`'s three timers **are** wrapped, with an origin stack naming `settle`
+itself, and a throw in one is described in full rather than reaching a report as
+a bare `Script error.`
+
+The rotation scenario reproduces the **mechanism** and does not reproduce a
+crash. Hammering the burst cycle twelve times over throws nothing at all. And
+the reported state — landscape layout in a portrait window with the overlay
+hidden — turns out to need something the stale predicate alone does not supply.
+
+| commit | what | CI |
+|---|---|---|
+| `850fc24` | Trace which clock calls the orientation sync, and measure the burst | **green** — all five jobs success ([run 256](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34344578061)) |
+| `c5e185c` | Hammer the burst cycle and watch, and stop asserting a held gate is a lock | **run 257**, reported in the reply that carried this file |
+
+Both are code changes, so both deploy; the commit carrying this file is
+markdown only and should be skipped by the filter added in `326700c`.
+
+Nothing here is a fix. No hysteresis was added, nothing is swallowed, and no
+decision reads the new instrument. Item 4 of the brief, kept.
+
+---
+
+## 1. What the streak counter counts
+
+`ENTER_FRAMES` is 3 and its comment reasons in frames — *"three frames is under
+50ms at 60fps"*. The counter has never known what a frame is. It increments once
+per `sync()` **call**, and `sync()` runs from two clocks.
+
+Every call now carries a timestamp and the name of the clock that made it
+(`src/systems/OrientationTrace.ts`). `run.sh rotationburst` reads it back.
+
+### The measurement
+
+Three events dispatched in one tick, with the portrait predicate forced:
+
+```
++0.0ms resize:now            portrait=true streak=1 up=false 1400x628
++0.5ms orientationchange:now portrait=true streak=2 up=false 1400x628
++1.0ms visualViewport:now    portrait=true streak=3 up=true  RAISED 1400x628
+```
+
+**1.00 ms**, and repeated at 1.10 ms on a second run. Each event's `:now` leg
+runs synchronously inside the dispatch, so three calls land before the tick
+ends and the streak is satisfied by a guard documented as taking three frames.
+
+### The whole burst, from one rotation's worth of events
+
+Three events, 746 ms of observation:
+
+| | |
+|---|---|
+| `sync()` calls | **26** |
+| of which came from `settle`, not from a frame | **15** |
+| bursts of 2+ calls inside 8 ms | **5** |
+
+```
+burst of 3: resize:now, orientationchange:now, visualViewport:now   spanning 1.20ms
+burst of 3: resize:raf, orientationchange:raf, visualViewport:raf   spanning 0.30ms
+burst of 3: resize:60,  orientationchange:60,  visualViewport:60    spanning 8.40ms
+burst of 3: resize:180, orientationchange:180, visualViewport:180   spanning 11.40ms
+```
+
+Three calls spanning **0.30 ms**. At 60fps two frames cannot land inside 16.7 ms,
+so every one of those groups is the streak counting something that is not a
+frame. Fifteen of the twenty-six calls in a rotation are settle legs.
+
+**This is why `CrashContext` carries a raise and a lower 21 ms apart.** It is not
+a fast phone or a mis-stamped log; it is three settle legs and then a landscape
+reading, and the counter cannot tell that from four frames.
+
+`tests/orientationtrace.test.ts` pins this as a property of the counter rather
+than as a story about one run — including the case that makes it plain: three
+`sync` calls with **no time passing at all** raise the gate.
+
+## 2. `settle()`'s own timers are wrapped
+
+Asked because a guard that reports itself installed and catches nothing is worse
+than none — and answered by reading the guard's own record during a real resize
+rather than by reasoning about `window` versus `globalThis`.
+
+Immediately after a dispatched `resize`:
+
+```
+timersArmed: 4   timersPending: 3   pendingDuringAnEvent: 3
+timeout(60ms)  armed during "resize on window" from at settle (Orientation.js:291:20)
+timeout(180ms) armed during "resize on window" from at settle (Orientation.js:291:20)
+timeout(400ms) armed during "resize on window" from at settle (Orientation.js:291:20)
+```
+
+All three legs are there, all three are recorded as armed **during a DOM event**,
+and the origin stack names `settle` and the listener that called it. That is
+better than the question asked for: a throw in one of those callbacks would
+arrive naming not just the callback but the event that armed it.
+
+**And a throw is genuinely described.** Driven, not asserted — a real throw
+through `window.setTimeout(…, 60)`, the same path settle's legs use:
+
+```
+counts: {"a timeout callback (60ms)": 1}
+logged: caught in a timeout callback (60ms): TypeError: deliberate: a throw
+        from settle's own scheduling path
+```
+
+So if the crash is in a settle leg, the next report says so by name. It will not
+come back as `Script error.`
+
+## 3. What the predicate governs, and what it does not
+
+This is the part that changed the shape of the question.
+
+The obvious reading of the video — landscape layout, portrait window, overlay
+hidden — is "the predicate went stale and everything followed it". **Half of
+that is wrong.**
+
+Forcing the script's predicate to landscape inside a real 390x844 window:
+
+| | |
+|---|---|
+| `isPortrait()` | `false` — the forced value |
+| gate holding | `[]` — **it released every scene it was holding** |
+| canvas | `1170x2532` |
+| camera | `1170x2532`, zoom 3.517 — **still the shape of the real window** |
+
+**The gate follows the predicate. The layout does not.** `applyResolution`
+measures the parent element, so the canvas and the camera stay the shape of the
+window whatever the predicate says.
+
+So a stale predicate on its own produces a **running game in a portrait window** —
+not a landscape layout squeezed into one. **The sideways render in the video
+needs a stale CANVAS as well**, which is a different measurement in a different
+function, and that is where the next look should go.
+
+### Chromium cannot reproduce the reported state, and the reason is a finding
+
+`overlayVisible()` reads `getComputedStyle`, so the overlay is driven by the
+stylesheet's own `@media (orientation: portrait)` — evaluated by the engine, and
+unreachable from JavaScript. Overriding `window.matchMedia` moves the **script**
+and leaves the **stylesheet** where it was: in the run above, `isPortrait()` went
+`false` while `overlayVisible()` stayed `true`.
+
+On iOS both derive from one stale viewport and go wrong **together**, which is
+exactly why the crash report carries `portrait=false` *and* `rotateOverlay=hidden`.
+Here they cannot be desynchronised from userland at all.
+
+This is the cost of the earlier fix that pointed both at one predicate. It
+removed the disagreement that used to make this detectable — and it also removed
+the only way to model the failure outside iOS.
+
+## 4. The overlay and the gate are not the same question
+
+Measured directly, and it matters for reading any crash report:
+
+```
+portrait frame 1   overlay=VISIBLE  gateUp=false
+portrait frame 2   overlay=VISIBLE  gateUp=false
+portrait frame 3   overlay=VISIBLE  gateUp=true   raised
+landscape frame 1  overlay=hidden   gateUp=false  lowered
+```
+
+The overlay is pure CSS and has **no hysteresis**; the gate has three readings of
+it. For the first two portrait readings of every rotation the overlay is up and
+the game is still running behind it. `rotateOverlay` and the gate's own state are
+two different facts, and a report carrying one says nothing about the other.
+
+## 5. So what does the burst actually do? Nothing that throws
+
+The question is what throws, so the cycle was driven hard rather than reasoned
+about. Twelve alternating rotations back to back, no pause between them — each
+raising and lowering the gate, pausing and resuming every scene, pausing and
+resuming all audio, and resizing the canvas on each of the fifteen calls:
+
+| | |
+|---|---|
+| `sync()` calls | 120 |
+| raises / lowers | 2 / 2 |
+| new guard trips | **none** |
+| page errors | **none** |
+| scenes still held at the end | **none** |
+
+**Nothing threw.** That is a negative result and it is worth having: rapid
+raise/lower cycling is not the crash, at least not in Chromium. The burst
+explains the 21 ms raise-and-lower; it does not yet explain the failure.
+
+---
+
+## Verification
+
+Everything here is headless Chromium in this sandbox. **It cannot reach
+github.io — the egress proxy answers 403 by policy — and it is not an iPhone.
+No live or device verification is claimed.**
+
+- **Tests** — `node --test 'tests/*.test.ts'`: **1024 pass, 0 fail** (1018
+  before, plus six in `tests/orientationtrace.test.ts`).
+- **Typecheck** — `sh tools/tsdiff.sh 9fb87c1`: baseline **212** distinct errors,
+  working tree **212**, **zero introduced**. It caught one real error on the way
+  in: a `CrashContext` fallback typed against the wrong union.
+- **`rotationburst`** — clean at 1400x820 (exit 0). At 390x844 the scenario is
+  clean and the run exits 4, which is `BOOT FAILED`: portrait is gated, so the
+  game genuinely does not boot through splash to title there and every scene in
+  that run was forced by hand. That is the harness reporting honestly, not a
+  fault in the scenario.
+- **No regression in the gate's own scenarios** — `softlock` exits 0 with
+  `NO LOCK: the gate handed the run back`; `stuckguard` exits 0 with
+  `RECOVERED and REPORTED`.
+- **Reproduce:**
+  ```bash
+  sh tools/harness/build.sh
+  sh tools/harness/run.sh rotationburst 200 1400x820   # sections 1, 2, 5, 6
+  sh tools/harness/run.sh rotationburst 200 390x844    # section 3b
+  ```
+
+**What is real here and what is a model.** The events are real and `settle` is
+the shipping function, so the burst and the call counting are measured. Chromium
+cannot be made to rotate and does not go stale the way iOS does, so the stale
+reading is **modelled** by overriding the predicate. That models the reported
+state; it does not reproduce iOS.
+
+**Three of the scenario's own red results were the instrument, not the game**,
+and each is recorded in the source next to what it caught:
+
+1. Section 2 first forced the predicate across **one** event for 60 ms and
+   measured a 70.70 ms raise, which looked like the hysteresis working. Two of
+   that event's legs read portrait and the third came after the window closed,
+   so the raise came from ordinary frames and the burst was never tested.
+2. Section 6 expected two raises where a portrait window starts with the gate
+   already up and has one fewer to give.
+3. Section 6 called a held gate *"the soft lock"* at 390x844, where the window
+   really is portrait and holding is the gate working.
+
+One existing test also needed relaxing: `orientation.test.ts` matched
+`requestAnimationFrame(measure)` as source text and stopped matching when each
+leg was given a name, with every re-measure still in place.
+
+---
+
+## Where this leaves the repository
+
+**`main` is at `c5e185c`.**
+
+**What is now known, and did not need to be guessed:**
+
+1. **The streak counts calls, not frames.** A rotation's three events raise the
+   gate in about a millisecond. The 21 ms raise-and-lower is explained.
+2. **`settle`'s timers are wrapped**, and a throw in one arrives named, with the
+   event that armed it.
+3. **A stale predicate releases the gate but does not move the layout.**
+
+**The next measurement, and it is a different function:**
+
+4. **The sideways render needs a stale CANVAS, not just a stale predicate.**
+   `applyResolution` measures the parent element; the question is whether that
+   measurement can come back landscape-shaped while the window is portrait. That
+   is where the video's frame comes from, and nothing in this pass touched it.
+5. **The existing crash reports can be read for this today.** `CrashContext`
+   already carries `viewportCss` (`innerWidth x innerHeight`) *and* `portrait`
+   (the predicate) *and* `screenAngle`. A report with a portrait-shaped
+   `viewportCss` and `portrait=false` says the predicate was stale; one with a
+   landscape-shaped `viewportCss` says the whole DOM was. New reports also carry
+   `syncBurstsSeen`, `fastestRaiseMs` and a 24-line `syncTrace`, so the next one
+   names the clock that raised the gate.
+
+**Deliberately not done, per the brief:**
+
+6. **No hysteresis was added and nothing is swallowed.** The obvious repair —
+   count frames, or debounce the burst — is a behaviour change on a code path
+   whose failure is not yet understood, and it would destroy the evidence the
+   trace was added to collect. `ENTER_FRAMES`'s comment is now wrong in a
+   documented way, which is better than a counter that is quietly right.
+
+**Carried forward, still open:**
+
+7. **`realboot` exits 5 on success** — `drawn > 20` against a clean run's
+   `drew=20`. Pre-existing, unchanged, and still the scenario the harness README
+   tells you to run before a push. See
+   `reports/2026-09-09-manifest-and-cleanup.md`.
+8. **Five harness scenarios still assert nothing** — `muzzle`, `rockets`,
+   `retreat`, `regressions`, `meteor`. They fail loudly now instead of lying.
+9. **`claude/phaser-4-migration-spike-hage91` still has to be deleted from the
+   GitHub web UI.** Two sessions have had 403 from the CLI. Everything worth
+   keeping is already on `main`.
+10. **iOS honours no orientation lock**, in a home screen app, a tab or a
+    WKWebView, and Safari does not implement `screen.orientation.lock()`. The
+    gate cannot be retired and has to actually work.
