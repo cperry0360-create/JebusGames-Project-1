@@ -99,6 +99,24 @@ instrument.
 
 This is engine-agnostic and has nothing to do with which Phaser is vendored.
 
+### Two more things about GL=1, found while salvaging `ctxsurvive`
+
+- **The game does not finish booting under `GL=1`.** `realboot` reports
+  `splash -> title: false / THE GAME DID NOT BOOT` on SwiftShader, and every
+  `GL=1` scenario therefore forces its scenes by hand. Verified **pre-existing**
+  against a control worktree at `8385d8e`, which fails identically — it is not a
+  product regression and it is not what any given `GL=1` run is testing, but it
+  does mean a `GL=1` result proves nothing about boot. The same run under the
+  default Canvas2D passes with `Title=built Loadout=built Game=built Hud=built`.
+- **`ctxsurvive`'s loop-step check is one frame wide and can misfire.** It
+  samples the frame counter twice after the restore; two consecutive runs gave
+  `97 -> 97` (reported as *did NOT survive*) and `97 -> 98` (*SURVIVED*), with
+  the ink and renderer readings identical and healthy in both. Run it twice
+  before believing a red. The survival verdict itself is real — `contextLost`
+  goes false, ink returns to 96.4%, and the run is intact.
+- The `drawer` scenario throws under `GL=1` on Phaser 3 (`Cannot read properties
+  of undefined (reading 'x')`). Pre-existing and known.
+
 ## Notes
 
 - **`build()` presses and holds, and returns whether a tower actually
