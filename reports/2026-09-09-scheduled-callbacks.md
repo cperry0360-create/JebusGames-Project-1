@@ -9,11 +9,16 @@ lead that survived: **the last listener finished 1754 ms before the throw**.
 | commit | what | CI |
 |---|---|---|
 | [`dc0cdb5`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/dc0cdb5) | ScheduleGuard, timestamped listener breadcrumbs, `scheduleguard` scenario, `renderer.snapshot` in `shot()`, the dead-context snapshot proof in `webglwatch` | run 247 — **test, typecheck, deploy/build, deploy/deploy all green**, deployed |
-| *(this file)* | the report | — |
+| [`446ea24`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/446ea24) | this report, the `tools/harness/README.md` update, and the five diagnostic scenarios added to its scenario table | run 250 — **all four jobs green**, deployed |
 
-`main` was at `8385d8e` when this work started and had moved to `f925718` by the
-time it was pushed. `dc0cdb5` is a rebase of one commit onto it, no conflicts.
-Everything below was re-run after the rebase; `f925718` is a report file only.
+`main` was at `8385d8e` when this work started and had moved four times before
+this landed — another session was pushing report commits concurrently. `dc0cdb5`
+is a rebase onto `f925718`, no conflicts; `446ea24` is a rebase onto `7e1b9c0`
+with one conflict in `tools/harness/README.md`, where both sessions had written
+up the same GL=1 finding. Resolved by keeping the fuller text — the measured
+byte table and the `webglwatch` proof — since the two said the same thing.
+Everything in §8 was re-run **after** the first rebase; the commits rebased over
+were report files only, except that README section.
 
 ---
 
