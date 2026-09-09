@@ -330,12 +330,18 @@ Classified against real history rather than assumed:
 | `d70bc9f` | one report row | SKIP |
 | `446ea24` | a report and a harness README | SKIP |
 
-**And it still deploys on a real code change**: run 252 carried
-`.github/workflows/checks.yml` and `src/`, the `changes` job passed, and
-`deploy / build` and `deploy / deploy` both ran and succeeded. The Pages
-artifact went 32,189,159 → **32,474,773 bytes**, +285,614 for the four icons.
-The proof that it *skips* is the push carrying this file, which is markdown
-only.
+**Both directions confirmed on the real workflow, not reasoned about:**
+
+| run | head | what changed | `changes` | `test` / `typecheck` | `deploy` |
+|---|---|---|---|---|---|
+| [252](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34337954788) | `326700c` | workflow + `src/` | success | success | **ran, success** |
+| [253](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34339935193) | `c35bb99` | `tools/` + `tests/` | success | success | **ran, success** |
+| [254](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34340245313) | `5e17fe4` | this report, markdown only | success | success | **`skipped`** |
+
+Run 254 is the one that matters: the checks still ran and passed, and the
+`deploy` job's conclusion is `skipped` — so a docs commit is verified without
+republishing 32 MB of byte-identical game. The Pages artifact on run 252 went
+32,189,159 → **32,474,773 bytes**, +285,614 for the four icons.
 
 ## 5. The harness — all of (a), part of (b)
 
