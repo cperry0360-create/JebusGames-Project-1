@@ -3228,13 +3228,85 @@ async function run() {
     // AND THE BUDGET RUNS OUT ON ITS OWN. Wound forward rather than held for
     // ten seconds: what is under test is that the budget ends it, and a
     // ten-second wait would be testing `sleep`.
+    //
+    // `onBoard` WITH IT, and that is not incidental. The budget is only spent
+    // by a beam the player has actually aimed at the board -- a press still
+    // sitting on its own medallion draws and costs nothing -- so winding
+    // `left` down on an unaimed beam now measures nothing at all, and this
+    // step passed for the wrong reason before that was true.
     G5.cooldowns.reset(LASER)
     G5.castHeroSlot(LASER)
-    if (G5.held) G5.held.left = 0.05
+    if (G5.held) { G5.held.left = 0.05; G5.held.onBoard = true }
     await sleep(400)
     note('with the budget wound to 0.05s: held=' + !!G5.held
       + '  cooldown ready=' + G5.cooldowns.ready(LASER))
     if (G5.held) fail5('the beam outlived its own hold budget')
+
+    // --- 6b: A TAP ON THE MEDALLION SPENDS NOTHING -------------------------
+    //
+    // THE BUG. `endHeldAbility` starts the cooldown only when `fired` is true,
+    // and `fired` went true as soon as the beam existed -- which is from the
+    // instant of the press, because the beam is aimed along the hero's facing
+    // until a board aim arrives. So the facing beam, which was only ever meant
+    // to be feedback, was damaging, draining the budget and spending the
+    // cooldown. Tapping the medallion fired a burst at nothing and put a
+    // 20-second ability away; the only way to use it was to press and then
+    // drag off the button, which no player would guess.
+    //
+    // Held across FRAMES, not released in the same turn. The old cancel test
+    // above releases synchronously, so `updateHeldBeam` never ran once and it
+    // passed throughout the bug. Half a second of real frames is what tells
+    // the two apart.
+    {
+      // HE HAS TO BE UP. `updateHeldBeam` interrupts a beam the moment the
+      // hero goes down, and a null `held` here would read as "the tap spent
+      // the ability" -- a measurement of the wave, not of the gesture.
+      if (hero5.down) await until(() => !hero5.down, (hero5.def.reviveSeconds + 6) * 1000)
+      G5.cooldowns.reset(LASER)
+      hero5.powered = true
+      G5.castHeroSlot(LASER)
+      const budget0 = G5.held ? G5.held.left : -1
+      const HB = G5.held && G5.held.art
+      await sleep(500)
+      const drew = !!(HB && HB.visible && HB.anims && HB.anims.isPlaying)
+      note('held on the medallion for 0.5s: onBoard=' + (G5.held ? G5.held.onBoard : '-')
+        + '  budget ' + budget0.toFixed(2) + ' -> ' + (G5.held ? G5.held.left.toFixed(2) : '-')
+        + '  fired=' + (G5.held ? G5.held.fired : '-')
+        + '  beam still drawing=' + drew)
+      if (!G5.held) fail5('the beam stopped by itself while the finger was down')
+      if (G5.held && G5.held.left !== budget0) fail5('an unaimed beam drained its own budget')
+      if (G5.held && G5.held.fired) fail5('an unaimed beam counts as having fired')
+      // THE PICTURE IS STILL THERE. Suppressing it was the other option and it
+      // is worse: a held button that draws nothing reads as one that did not
+      // work, which is the fault this whole gesture already had.
+      if (!drew) fail5('the beam draws nothing while it waits for an aim')
+      G5.releaseHeldAbility()
+      note('   let go without ever leaving the button: cooldown ready='
+        + G5.cooldowns.ready(LASER))
+      if (!G5.cooldowns.ready(LASER)) fail5('a tap on the medallion spent the cooldown')
+    }
+
+    // --- 6c: AND A BEAM THAT REACHED THE BOARD SPENDS ONLY ITS BOARD TIME ---
+    {
+      if (hero5.down) await until(() => !hero5.down, (hero5.def.reviveSeconds + 6) * 1000)
+      G5.cooldowns.reset(LASER)
+      hero5.powered = true
+      G5.castHeroSlot(LASER)
+      await sleep(400)
+      const beforeAim = G5.held ? G5.held.left : -1
+      if (G5.held) {
+        G5.held.aimX = hero5.x; G5.held.aimY = hero5.y - 200; G5.held.onBoard = true
+      }
+      await sleep(500)
+      const afterAim = G5.held ? G5.held.left : -1
+      note('0.4s on the button then 0.5s on the board: budget ' + beforeAim.toFixed(2)
+        + ' -> ' + afterAim.toFixed(2) + ' (spent ' + (beforeAim - afterAim).toFixed(2)
+        + 's of game time for 0.5s real)')
+      if (beforeAim !== AB[2].holdSeconds) fail5('the pre-aim phase spent budget')
+      if (afterAim >= beforeAim) fail5('the beam spent nothing after it was aimed')
+      G5.releaseHeldAbility()
+      if (G5.cooldowns.ready(LASER)) fail5('a beam that fired did not go on cooldown')
+    }
 
     // --- 7: WHERE A HELD BEAM POINTS WHILE THE FINGER IS STILL ON THE BUTTON
     //
@@ -4448,6 +4520,7 @@ async function run() {
   if (scenario === 'meteor') {
     // The complaint: impacts land too far from where the player taps.
     const ABIL = (await import('./js/data/abilities.json', { with: { type: 'json' } })).default
+    const RULESJ = (await import('./js/data/rules.json', { with: { type: 'json' } })).default
     const def = ABIL.meteor
     note('meteor: ring radius=' + def.radius + ' impactSpread=' + def.impactSpread +
       ' impactRadius=' + def.impactRadius + ' telegraph=' + def.telegraphSeconds + 's' +
@@ -4469,7 +4542,14 @@ async function run() {
       e.setPosition(target.x, target.y)
       // Held still for the length of the barrage, so what is measured is where
       // the meteors land and not where the enemies walked to.
-      e.applyStun(60, 1)
+      //
+      // THE DIMINISH TABLE IS NOT OPTIONAL: `applyStun` reads
+      // `diminish.windowSeconds` unconditionally, so the two-argument call
+      // that used to be here threw on the first probe and this scenario died
+      // before a single meteor was fired. It reported that as a DIRECTOR ERROR
+      // rather than as success, so nothing was hidden -- but nothing was
+      // measured either.
+      e.applyStun(60, 1, RULESJ.combat.stunDiminish)
     }
     await sleep(200)
     note('probes parked on the tap: ' + g.enemies.length + ' at ' +
@@ -4500,6 +4580,218 @@ async function run() {
       ' meteors (' + g.enemies.length + ' targets stacked there)')
     note('first impact landed ' + (hits.length ? 'on the tap' : 'NOWHERE NEAR IT'))
     await shot('meteor-03-after')
+    return
+  }
+
+  if (scenario === 'glacier') {
+    // THE ABILITY THAT READ AS DOING NOTHING.
+    //
+    // Two separate faults, both measured here. It had NO effect art -- what it
+    // drew was one translucent blue circle from `add.graphics()`, tweened out
+    // over 260ms of a multi-second field -- and its slow was being eaten by the
+    // diminishing returns in rules.json, because it re-applied a 0.6s slow
+    // every 250ms and each application inside the window lasts 0.7x the last.
+    const ABIL = (await import('./js/data/abilities.json', { with: { type: 'json' } })).default
+    const ARTJ = (await import('./js/data/art.json', { with: { type: 'json' } })).default
+    const RJ = (await import('./js/data/rules.json', { with: { type: 'json' } })).default
+    const PRES = (await import('./js/data/presentation.json', { with: { type: 'json' } })).default
+    let faults = 0
+    const fail = (m) => { faults++; note('   *** ' + m) }
+    const def = ABIL.glacier
+    const KEY = ARTJ.fx.glacier
+    const cfg = ARTJ.render[KEY]
+    note('glacier: radius=' + def.radius + ' damage=' + def.damage
+      + ' slowFactor=' + def.slowFactor + ' duration=' + def.duration + 'g'
+      + ' cooldown=' + def.cooldown + 'g   art=' + KEY + ' '
+      + cfg.sheet.frames + 'x' + cfg.sheet.frameWidth + 'px'
+      + '  ink ' + cfg.contentWidth + 'x' + cfg.contentHeight
+      + '  settled ' + cfg.restWidth + 'x' + cfg.restHeight
+      + '  anchor ' + cfg.anchorX + ',' + cfg.anchorY)
+
+    g.status.abilities = ['glacier']
+    g.cooldowns.register('glacier', def.cooldown)
+
+    const target = g.lane.pointAt(g.lane.totalLength * 0.45)
+    g.startWave()
+    await until(() => g.enemies.length > 2, 30000)
+    await sleep(400)
+
+    // THE CAMERA MOVES FIRST, AND THE PARKING HAPPENS AFTER IT.
+    //
+    // This is the harness bug that looked exactly like the product bug. Parked
+    // before the pan, the probes spent `lookAt`'s pan -- up to 1.8 real
+    // seconds -- walking 130 to 220px up the lane, so by the time the ability
+    // was cast the radius was empty. The run then reported "the eruption
+    // damaged nothing" and "the field stopped slowing", which are the two
+    // findings this scenario exists to make.
+    await lookAt(target.x, target.y)
+    // Unkillable, on the cast point, and STOPPED. A stun still ticks
+    // `slowRemaining` and `sinceSlow` down -- both happen before `tick`'s
+    // stunned early-return -- so what is measured is the field's slow and not
+    // where the probes wandered off to. Same trick as the meteor scenario.
+    for (const e of g.enemies) {
+      e.health = 999999
+      e.distance = g.lane.totalLength * 0.45
+      e.setPosition(target.x, target.y)
+      // THE DIMINISH TABLE IS NOT OPTIONAL. `applyStun` reads
+      // `diminish.windowSeconds` unconditionally, so the two-argument call
+      // that the meteor scenario uses throws on its first probe -- which is
+      // how that scenario has been dying before any of its assertions run.
+      e.applyStun(60, 1, RJ.combat.stunDiminish)
+    }
+    const probes = g.enemies.filter((e) => e.alive)
+    await sleep(200)
+    note('probes parked on the cast point: ' + probes.length + ' at '
+      + Math.round(target.x) + ',' + Math.round(target.y)
+      + '  (furthest from it: ' + Math.round(Math.max(0, ...probes.map(
+        (e) => Math.hypot(e.x - target.x, e.y - target.y)))) + 'px of ' + def.radius + ')')
+
+    const iceOf = () => g.children.list.find((o) => o.texture && o.texture.key === KEY)
+    const graphicsBefore = g.children.list.filter((o) => o.type === 'Graphics').length
+    const hp0 = probes.map((e) => e.health)
+    g.cooldowns.reset('glacier')
+    g.fireAbility('glacier', target.x, target.y)
+    await sleep(60)
+
+    // --- 1: THERE IS PAINTED ART ON THE BOARD ------------------------------
+    let ice = iceOf()
+    note('cast: sprite=' + (ice ? ice.texture.key : 'NONE')
+      + '  frame=' + (ice ? ice.frame.name : '-')
+      + '  clip=' + (ice && ice.anims && ice.anims.currentAnim ? ice.anims.currentAnim.key : 'none')
+      + '  playing=' + (ice && ice.anims ? ice.anims.isPlaying : '-')
+      + '  at ' + (ice ? Math.round(ice.x) + ',' + Math.round(ice.y) : '-')
+      + '  cast point ' + Math.round(target.x) + ',' + Math.round(target.y))
+    if (!ice) fail('the Glacier drew no sprite at all')
+    if (ice && (!ice.anims || !ice.anims.isPlaying)) fail('the eruption is not animating')
+    if (ice && (Math.round(ice.x) !== Math.round(target.x)
+      || Math.round(ice.y) !== Math.round(target.y))) {
+      fail('the sprite is not at the cast point')
+    }
+    // AND THE PROCEDURAL CIRCLE IS GONE. A Graphics appearing here would mean
+    // the old drawing survived beside the new art.
+    const graphicsNow = g.children.list.filter((o) => o.type === 'Graphics').length
+    note('Graphics objects added by the cast: ' + (graphicsNow - graphicsBefore))
+    if (graphicsNow > graphicsBefore) fail('the Glacier still draws a procedural circle')
+
+    // --- 2: SIZED TO THE FIELD, BY THE INK ---------------------------------
+    //
+    // The ice occupies about 262 of each 512px cell, so a sprite scaled by the
+    // CELL draws the eruption at roughly half the field it represents. What is
+    // checked is the on-screen size of the INK, which is what a player sees.
+    if (ice) {
+      const inkW = ice.displayWidth * (cfg.contentWidth / cfg.sheet.frameWidth)
+      const inkH = ice.displayHeight * (cfg.contentHeight / cfg.sheet.frameHeight)
+      note('eruption: display=' + Math.round(ice.displayWidth) + 'x' + Math.round(ice.displayHeight)
+        + '  ink on screen=' + Math.round(inkW) + 'x' + Math.round(inkH)
+        + '  field diameter=' + def.radius * 2
+        + '  depth=' + Math.round(ice.depth) + ' (cast y=' + Math.round(target.y) + ')')
+      if (Math.abs(inkW - def.radius * 2) > 6) {
+        fail('the eruption is ' + Math.round(inkW) + 'px across for a '
+          + def.radius * 2 + 'px field')
+      }
+      if (ice.depth < target.y) fail('the eruption is drawn under the lane it erupts from')
+    }
+
+    // THE ERUPTION IS OVER IN TWO THIRDS OF A SECOND, and `shot()` is not fast
+    // enough to photograph it: it sleeps 140ms of its own and then POSTs a
+    // 6.5MB data URL, which takes most of a second on its own. The first pair
+    // of pictures this scenario produced were therefore two photographs of the
+    // settled patch, one of them labelled "eruption". Captured inline instead,
+    // timed at the peak of the clip, with the frame number recorded beside it
+    // so the report can say which frame the picture actually shows.
+    await sleep(300)
+    const shotFrame = (() => { const i = iceOf(); return i ? i.frame.name : '-' })()
+    await post('/shot/glacier-01-eruption', game.canvas.toDataURL('image/png'))
+    note('eruption screenshot caught frame ' + shotFrame + ' of ' + cfg.sheet.frames
+      + ' (the clip is ' + PRES.effects.glacierMs + 'ms)')
+
+    // --- 3: THE FROST STAYS, AND IT LIES ON THE GROUND ---------------------
+    //
+    // GROUND_SQUASH is 0.62 in AbilityRunner: the map is painted in
+    // three-quarter view, so a ground marking is an ellipse. A circle floats.
+    await until(() => { const i = iceOf(); return i && (!i.anims || !i.anims.isPlaying) }, 4000)
+    ice = iceOf()
+    if (!ice) fail('the frost patch vanished when the eruption finished')
+    if (ice) {
+      const inkW = ice.displayWidth * (cfg.restWidth / cfg.sheet.frameWidth)
+      const inkH = ice.displayHeight * (cfg.restHeight / cfg.sheet.frameHeight)
+      note('settled: frame=' + ice.frame.name
+        + '  display=' + Math.round(ice.displayWidth) + 'x' + Math.round(ice.displayHeight)
+        + '  frost on screen=' + Math.round(inkW) + 'x' + Math.round(inkH)
+        + '  squash=' + (inkH / inkW).toFixed(3) + ' (ground markings are 0.62)'
+        + '  depth=' + Math.round(ice.depth) + ' (cast y=' + Math.round(target.y) + ')')
+      if (Math.abs(inkW - def.radius * 2) > 6) {
+        fail('the frost patch is ' + Math.round(inkW) + 'px across for a '
+          + def.radius * 2 + 'px field')
+      }
+      if (Math.abs(inkH / inkW - 0.62) > 0.03) {
+        fail('the frost patch is ' + (inkH / inkW).toFixed(3)
+          + ':1, which is not a ground ellipse')
+      }
+      if (ice.depth >= target.y) fail('the frost is drawn over the enemies standing in it')
+    }
+    await shot('glacier-02-frost-patch')
+
+    // --- 4: THE DAMAGE ------------------------------------------------------
+    const dealt = probes.map((e, i) => hp0[i] - e.health)
+    note('damage: ' + dealt.map(Math.round).join(',') + ' across ' + probes.length
+      + ' enemies (data says ' + def.damage + ' before armour)')
+    if (!dealt.every((d) => d > 0)) fail('the eruption damaged nothing under it')
+
+    // --- 5: THE SLOW, SAMPLED ACROSS THE WHOLE FIELD -----------------------
+    //
+    // THE BUG THIS IS FOR. The old field re-applied a 0.6s slow every 250ms,
+    // and `slowDiminish` shortens each application inside its window to 0.7x
+    // the last, dropping it entirely below `minSeconds`. So the ticks were
+    // 0.6s, 0.42s, then nothing: a five-second field slowed for two-thirds of
+    // a second, and every one of the twenty refused ticks still counted a
+    // stack -- so an enemy walked out of the field immune to every OTHER slow
+    // in the game for six seconds.
+    const p = probes[0]
+    note('slowDiminish: window=' + RJ.combat.slowDiminish.windowSeconds
+      + 's factor=' + RJ.combat.slowDiminish.factor
+      + ' minSeconds=' + RJ.combat.slowDiminish.minSeconds)
+    const samples = []
+    // Real seconds. The field's duration is in GAME seconds and the clock runs
+    // at `pacing.gameSpeed`, so sampling the raw number would stop early.
+    const lifeMs = (def.duration / RJ.pacing.gameSpeed) * 1000
+    for (let i = 0; i < 6; i++) {
+      samples.push({
+        at: ((i + 1) * lifeMs / 6 / 1000).toFixed(2),
+        slowed: p.slowed, factor: p.slowFactor,
+        left: p.slowRemaining, stacks: p.slowStacks,
+      })
+      await sleep(lifeMs / 6)
+    }
+    for (const sm of samples) {
+      note('   t+' + sm.at + 's real: slowed=' + sm.slowed
+        + ' factor=' + (sm.factor || 0).toFixed(2)
+        + ' remaining=' + (sm.left || 0).toFixed(2) + 'g'
+        + ' stacks=' + sm.stacks)
+    }
+    const slowedThroughout = samples.slice(0, 5).every((sm) => sm.slowed)
+    note('slowed for the whole field: ' + slowedThroughout
+      + '   stacks taken: ' + samples[samples.length - 1].stacks
+      + ' (one visit should be one stack)')
+    if (!slowedThroughout) fail('the field stopped slowing before it ended')
+    if (samples[samples.length - 1].stacks > 2) {
+      fail('one visit took ' + samples[samples.length - 1].stacks
+        + ' stacks; the field is inoculating what it freezes')
+    }
+    if (samples[0].factor && Math.abs(samples[0].factor - def.slowFactor) > 0.001) {
+      fail('the field slowed to ' + samples[0].factor + ' rather than ' + def.slowFactor)
+    }
+    await shot('glacier-03-late-field')
+
+    // --- 6: AND IT MELTS ---------------------------------------------------
+    await sleep(1600)
+    note('after the duration: sprite=' + (iceOf() ? 'STILL THERE' : 'gone')
+      + '  enemy still slowed=' + p.slowed)
+    if (iceOf()) fail('the frost patch outlived its own field')
+
+    note('RESULT ' + (faults === 0
+      ? 'the Glacier draws painted art, covers its own radius and slows for its whole duration'
+      : '*** ' + faults + ' fault(s) in the Glacier ***'))
     return
   }
 

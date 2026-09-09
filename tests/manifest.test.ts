@@ -467,6 +467,38 @@ test('the image size reader actually reads sizes, in both containers', () => {
   }
 })
 
+test('a declared sheet grid matches the strip it slices', () => {
+  /*
+   * A `sheet` block tells the loader to cut one file into equal cells, and
+   * NOTHING checks the arithmetic. Phaser does not complain: `load.spritesheet`
+   * with the wrong frame width slices the strip on the wrong boundaries and
+   * hands back frames that are two halves of two pictures, which animates,
+   * reports success, and is wrong in a way that only a rendered frame shows.
+   *
+   * The frames are laid out in a single row in every strip this game ships, so
+   * the arithmetic is: frameWidth x frames is the file's width, and frameHeight
+   * is its height. Both are checked, because the two failures look different --
+   * a wrong width shears every frame, a wrong height crops or pads them.
+   */
+  let checked = 0
+  for (const [key, cfg] of Object.entries(art.render) as [string, any][]) {
+    if (!cfg.sheet) continue
+    const path = art.files[key]
+    if (!path) continue
+    const file = url(`../public/${art.assetRoot}${path}`)
+    if (!existsSync(file)) continue
+    const [w, h] = imageSize(readFileSync(file), path)
+    const { frameWidth, frameHeight, frames } = cfg.sheet
+    checked++
+    assert.equal(frameWidth * frames, w,
+      `${key} declares ${frames} frames of ${frameWidth}px, which is ` +
+      `${frameWidth * frames}px, but ${path} is ${w}px wide`)
+    assert.equal(frameHeight, h,
+      `${key} declares ${frameHeight}px cells but ${path} is ${h}px tall`)
+  }
+  assert.ok(checked > 5, `only ${checked} sheets checked; the manifest has more`)
+})
+
 test('every recorded content box fits inside the file it describes', () => {
   // The test that would have caught a whole cast rendering at half size.
   //

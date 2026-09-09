@@ -474,6 +474,125 @@ test('six draftable actives plus the rare drop, each doing something distinct', 
   }
 })
 
+test('the Glacier is a painted eruption, sized by its ink and not by its cell', () => {
+  /*
+   * IT HAD NO EFFECT ART AT ALL. `ability_glacier.webp` is the draft icon;
+   * what the ability drew on the board was `scene.add.graphics()`, one
+   * translucent blue circle, tweened out over 260ms of a five-second field.
+   * That is the main reason it read as doing nothing: for four and a half of
+   * its five seconds there was nothing on screen at all.
+   */
+  const key = art.fx.glacier
+  assert.ok(key, 'art.json names no Glacier effect')
+  assert.ok(art.files[key], `${key} is not in the manifest`)
+  assert.ok(existsSync(url(`../public/assets/${art.files[key]}`)),
+    `${art.files[key]} is not on disk; the loader will request it and get a 404`)
+  const cfg = art.render[key]
+  assert.ok(cfg?.sheet, 'the Glacier is registered as a single picture, not a strip')
+  assert.equal(cfg.sheet.frames, 8, 'the strip is eight frames')
+
+  // SIZED BY THE INK. The ice occupies about 262 of each 512px cell, so
+  // scaling the CELL to the field's diameter would draw the eruption at half
+  // the size of the field it represents -- the same failure that flattened the
+  // Mind Laser into a smooth gradient. `contentWidth` is the union across the
+  // strip; `restWidth`/`restHeight` are the settled frame's own ink, which is
+  // what has to measure the radius once the eruption is over, because from
+  // then on that patch IS the field as far as the player can see.
+  for (const f of ['contentWidth', 'contentHeight', 'restWidth', 'restHeight']) {
+    assert.equal(typeof cfg[f], 'number', `the Glacier records no ${f}`)
+    assert.ok(cfg[f] < cfg.sheet.frameWidth,
+      `${f} is ${cfg[f]} of a ${cfg.sheet.frameWidth}px cell, which is the cell and not the ink`)
+  }
+  assert.ok(cfg.restWidth < cfg.contentWidth && cfg.restHeight < cfg.contentHeight,
+    'the settled frost is recorded as bigger than the whole strip it is one frame of')
+
+  // THE ANCHOR IS THE GROUND DISC, not the middle of the cell and not the
+  // bottom of the ink. The frames are bottom-aligned on a shared line at 0.86
+  // of the cell, but the painted ground ellipse -- the telegraph ring in frame
+  // 0 and the frost patch in frame 7 -- is centred at 0.68, measured as the
+  // widest opaque row of each. Anchoring on the ink's bottom edge would push
+  // the whole field a hundred pixels up the map; anchoring at 0.5 would float
+  // it above the cast point.
+  assert.ok(cfg.anchorY > 0.6 && cfg.anchorY < 0.75,
+    `the Glacier anchors at ${cfg.anchorY}, which is not the middle of its ground disc`)
+  assert.equal(cfg.anchorX, 0.5, 'the frames are centred horizontally')
+
+  const runner = readFileSync(url('../src/systems/AbilityRunner.ts'), 'utf8')
+  const g = runner.slice(runner.indexOf('function glacier('))
+  const body = g.slice(0, g.indexOf('\n}'))
+  assert.doesNotMatch(body, /add\.graphics\(\)/,
+    'the Glacier still draws a procedural circle')
+  const artFn = runner.slice(runner.indexOf('function frostArt('))
+  const artBody = artFn.slice(0, artFn.indexOf('\n}'))
+  assert.match(artBody, /cfg\.restWidth/, 'the settled frost is not sized by its own ink')
+  assert.match(artBody, /GROUND_SQUASH/,
+    'the lingering frost is a circle; ground markings on a 3/4 map are ellipses')
+})
+
+test('the Glacier is worth a twenty-second cooldown', () => {
+  const g = abilities.glacier
+  // Chain is the yardstick the brief names: 46 damage on an 18-second
+  // cooldown is what a draftable special is expected to be worth. The Glacier
+  // was 12 on a 20-second one -- less than a Bramble tower's third shot -- so
+  // the field had to carry the whole ability and the field was broken too.
+  assert.ok(g.damage >= abilities.chain.damage,
+    `the Glacier does ${g.damage} against Chain's ${abilities.chain.damage} on a shorter cooldown`)
+  // And it is still not the damage ability. Molotov is.
+  assert.ok(g.damage < abilities.molotov.damage,
+    'the Glacier out-damages the Molotov, which makes the Molotov pointless')
+  // A DEEPER SLOW THAN ANY TOWER. A field on a 20-second cooldown that slows
+  // no harder than a Bramble which fires forever is not worth a draft slot.
+  const brambles = Object.values(towers)
+    .filter((t: any) => t && typeof t === 'object' && t.slowFactor > 0)
+    .map((t: any) => t.slowFactor)
+  assert.ok(brambles.length > 0, 'no tower slows, so this compares nothing')
+  assert.ok(g.slowFactor < Math.min(...brambles),
+    `the Glacier slows to ${g.slowFactor} and a tower already slows to ${Math.min(...brambles)}`)
+  assert.ok(g.slowFactor > 0, 'a Glacier that does not slow is a small Molotov')
+})
+
+test('the Glacier slows each enemy once per visit, not every 250ms', () => {
+  /*
+   * THE DIMINISHING RETURNS WERE FIGHTING THE DESIGN.
+   *
+   * The field re-applied a 0.6s slow every 250ms through `slowDiminish`, whose
+   * rule is that each application inside the six-second window lasts 0.7x the
+   * one before and anything under `minSeconds` is not applied at all. So the
+   * field's own ticks were 0.6s, 0.42s, then nothing: an enemy standing in a
+   * five-second ice field was slowed for two-thirds of a second and walked the
+   * rest at full speed, and the longer it stayed the LESS slowed it was.
+   *
+   * This is the arithmetic, asserted against the live rules, so a change to
+   * either the tick rate or the diminish curve has to come back through here.
+   */
+  const d = rules.combat.slowDiminish
+  let total = 0
+  for (let stack = 0; ; stack++) {
+    const dealt = 0.6 * d.factor ** stack
+    if (dealt < d.minSeconds) break
+    total = Math.max(total, stack * 0.25 + dealt)
+  }
+  assert.ok(total < abilities.glacier.duration / 2,
+    `re-applying every 250ms would slow for ${total.toFixed(2)}s of a ` +
+    `${abilities.glacier.duration}s field, which is why it is not done that way`)
+
+  // The fix is not an exemption. A field is ONE slow, and the 250ms loop was
+  // never twenty applications -- so the sweep grants an enemy its slow when it
+  // ENTERS, for the rest of the field's life, and skips anyone already in it.
+  // Everything the diminishing returns exist to prevent still applies: a
+  // second Glacier inside the window is still shortened, and an enemy that
+  // leaves and returns takes another stack.
+  const runner = readFileSync(url('../src/systems/AbilityRunner.ts'), 'utf8')
+  const g = runner.slice(runner.indexOf('function glacier('))
+  const body = g.slice(0, g.indexOf('\n}'))
+  assert.match(body, /if \(inside\.includes\(e\)\) continue/,
+    'the field slows enemies it has already slowed')
+  assert.match(body, /applySlow\([^)]*ctx\.slowDiminish\)/,
+    'the field was exempted from the diminishing returns rather than fitted to them')
+  assert.doesNotMatch(body, /applySlow\([^,]+, 0\.6,/,
+    'the field still hands out a fixed 0.6s slow rather than the time it has left')
+})
+
 test('ability cooldowns are spread, so they are not interchangeable', () => {
   const cds = Object.values(abilities).filter((a: any) => a.draftable).map((a: any) => a.cooldown)
   assert.ok(Math.max(...cds) >= Math.min(...cds) * 2, 'every ability has roughly the same cooldown')

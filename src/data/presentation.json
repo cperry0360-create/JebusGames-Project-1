@@ -11,6 +11,9 @@
   },
   "effects": {
     "blastMs": 320,
+    "_glacier": "THE ERUPTION PLAYS ONCE AND THEN STOPS. `glacierMs` is the whole eight-frame eruption; after it the sprite holds its last frame -- the frost patch on the ground -- for the rest of the field's duration, and `glacierFadeMs` is how long that patch takes to melt out at the end. Slower than `blastMs` on purpose: an explosion is over before the eye finds it and the player only has to see that it happened, while the Glacier has to show WHERE, because that circle of ground is the ability.",
+    "glacierMs": 640,
+    "glacierFadeMs": 400,
     "splashMs": 280,
     "hitSparkMs": 200,
     "deathPuffMs": 300,

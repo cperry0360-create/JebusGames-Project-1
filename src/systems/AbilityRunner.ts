@@ -7,8 +7,9 @@ import type { DiminishDef } from './Combat.ts'
 import type { AbilityDef, ServerNukeDef } from '../types.ts'
 import { withinRadius } from './Targeting.ts'
 import { Enemy } from '../entities/Enemy.ts'
-import { ART } from './Art.ts'
+import { ART, renderFor } from './Art.ts'
 import { EFFECT_MS, playEffect, sizeForRadius } from './Effects.ts'
+import { GAME_SPEED } from './GameTime.ts'
 
 export interface AbilityContext {
   scene: Phaser.Scene
@@ -62,35 +63,179 @@ function molotov(def: AbilityDef, x: number, y: number, ctx: AbilityContext): vo
   for (const e of withinRadius(ctx.enemies(), x, y, def.radius)) ctx.damage(e, def.damage, def.ignoresArmor)
 }
 
-function glacier(def: AbilityDef, x: number, y: number, ctx: AbilityContext): void {
-  const ring = ctx.scene.add.graphics().setDepth(ctx.overlayDepth)
-  ring.fillStyle(0x8fd0ff, 0.18).fillCircle(x, y, def.radius)
-  ring.lineStyle(3, 0x8fd0ff, 0.8).strokeCircle(x, y, def.radius)
+/** Ground markings are ellipses, not circles: the map is painted in 3/4. */
+const GROUND_SQUASH = 0.62
 
-  // Field lingers: everything caught inside is slowed for the duration.
+/**
+ * The Glacier's picture: an eruption of ice at the cast point, which settles
+ * into a frost patch that stays for the field's whole life.
+ *
+ * WHAT THIS REPLACED: `scene.add.graphics()`, a translucent blue circle and a
+ * stroked ring, tweened out over 260ms. That is why the ability read as doing
+ * nothing at all -- there was nothing on screen for four and a half of its
+ * five seconds, so a field the player had paid a 20-second cooldown for was
+ * invisible for almost all of the time it was working.
+ *
+ * TWO PHASES, ONE SPRITE, AND THEY ARE SIZED DIFFERENTLY.
+ *
+ * The eruption throws shards well above the ground and is drawn at the size
+ * of the field, uniformly. The frost that is left is a GROUND MARKING and
+ * obeys the same rule the meteor telegraph does: an ellipse squashed by
+ * `GROUND_SQUASH`, because the map is painted in three-quarter view and a
+ * circle drawn on it floats.
+ *
+ * AND BOTH ARE SIZED BY THE MEASURED INK, NOT BY THE CELL. The ice occupies
+ * about 262 of each 512px cell, so scaling the cell to the field's diameter
+ * would draw the whole effect at half the size of the field it represents --
+ * the same failure that flattened the Mind Laser into a smooth gradient.
+ * `contentWidth` is the union across the strip; `restWidth`/`restHeight` are
+ * the settled frame's own ink, which is what has to measure the radius once
+ * the eruption is over, because from then on that patch IS the field as far
+ * as the player can see.
+ *
+ * Returns the handle the field's own clock uses to fade it, or null when the
+ * art did not load -- `add.sprite` on a key that is not in the texture manager
+ * hands back Phaser's green-and-black __MISSING chequerboard rather than
+ * nothing, and a chequerboard the size of the field is worse than the
+ * invisible ability this is fixing. The slow and the damage do not depend on
+ * it either way.
+ */
+function frostArt(
+  ctx: AbilityContext, x: number, y: number, radius: number,
+): { fade: () => void } | null {
+  const key = ART.fx.glacier
+  if (!ctx.scene.textures.exists(key)) return null
+  const cfg = renderFor(key)
+  const cellW = cfg.sheet?.frameWidth ?? 512
+  const cellH = cfg.sheet?.frameHeight ?? cellW
+  const span = radius * 2
+
+  const ice = ctx.scene.add.sprite(x, y, key)
+  // The anchor is the middle of the painted GROUND DISC, which is not the
+  // middle of the cell and not the bottom of the ink either -- see art.json.
+  ice.setOrigin(cfg.anchorX ?? 0.5, cfg.anchorY ?? 0.5)
+  const burst = span / (cfg.contentWidth ?? cellW)
+  ice.setDisplaySize(cellW * burst, cellH * burst)
+  // Over the lane while it erupts: the shards are above the ground and the
+  // whole point of the eruption is that the player watches it land.
+  ice.setDepth(y + 5)
+
+  const settle = (): void => {
+    ice.setDisplaySize(
+      cellW * (span / (cfg.restWidth ?? cfg.contentWidth ?? cellW)),
+      cellH * (span * GROUND_SQUASH / (cfg.restHeight ?? cfg.contentHeight ?? cellH)),
+    )
+    // And then it is part of the ground, so enemies walk OVER it. A frost
+    // patch drawn on top of the lads standing in it reads as a pane of glass.
+    ice.setDepth(y - 1)
+  }
+
+  // `registerEffectAnims` builds one clip per sheet in the manifest, keyed by
+  // the sprite key. If it is somehow absent the last frame is still the right
+  // picture -- a field with no eruption beats a field with nothing.
+  if (ctx.scene.anims.exists(key)) {
+    // FRAME RATE, NOT `duration`. The clip registered by `registerEffectAnims`
+    // carries a frame rate derived from `blastMs`, and a `duration` in the play
+    // config does not override it -- measured: the eruption ran its eight
+    // frames in about 330ms against the 640 it was asked for, which is
+    // `blastMs`'s 25fps and not the Glacier's own timing. `frameRate` does
+    // override it, and it is the same number said the other way round.
+    ice.play({ key, frameRate: (cfg.sheet?.frames ?? 8) * 1000 / EFFECT_MS.glacierMs })
+    ice.once(Phaser.Animations.Events.ANIMATION_COMPLETE, settle)
+  } else {
+    ice.setFrame((cfg.sheet?.frames ?? 1) - 1)
+    settle()
+  }
+
+  return {
+    fade: () => ctx.scene.tweens.add({
+      targets: ice, alpha: 0, duration: EFFECT_MS.glacierFadeMs,
+      onComplete: () => ice.destroy(),
+    }),
+  }
+}
+
+/**
+ * GLACIER. One hit on everything under the eruption, then a field that slows
+ * everything standing in it for as long as it lasts.
+ *
+ * THE SLOW IS APPLIED ONCE PER ENEMY PER VISIT, and that is the fix.
+ *
+ * It used to call `applySlow` on every enemy in the radius every 250ms with a
+ * 0.6s duration, which ran the field straight into the diminishing returns in
+ * rules.json: each application inside the six-second window lasts 0.7x the one
+ * before it, and anything under `minSeconds` (0.4) is not applied at all. So
+ * the field's own ticks were 0.6s, then 0.42s, then nothing -- an enemy
+ * standing in a five-second ice field was slowed for the first two-thirds of
+ * a second and walked the rest at full speed. The longer it stayed, the less
+ * slowed it was, which is backwards for a lingering field.
+ *
+ * Worse, `applySlow` counts a stack even when it refuses to apply anything, so
+ * a lad who crossed the field came out the other side with twenty stacks and
+ * six seconds of immunity to every OTHER slow in the game. The ability was
+ * inoculating what it was meant to freeze.
+ *
+ * The diminishing returns are not wrong and this does not exempt the field
+ * from them. They are a rule about REPEATED applications, and the 250ms loop
+ * was never twenty slows -- it was one slow, kept alive by a bookkeeping loop
+ * that the rule then read as twenty. So the field grants each enemy ONE slow
+ * when it enters, lasting the rest of the field's life, and takes its stack
+ * like anything else. A second Glacier on the same lad inside the window is
+ * still shortened; a slow tower firing into the field still stacks against it;
+ * and an enemy that walks out and back in takes another stack for the second
+ * visit. Nothing the diminishing returns exist to prevent is reintroduced.
+ * See reports/2026-09-07-mind-laser-and-glacier.md for the alternatives.
+ */
+function glacier(def: AbilityDef, x: number, y: number, ctx: AbilityContext): void {
+  const art = frostArt(ctx, x, y, def.radius)
+
+  // GAME SECONDS, like every other duration in the data. The old loop counted
+  // real seconds against a number the rest of the game reads as game seconds
+  // -- gnomes' `duration` is game seconds because a Fighter's life is spent in
+  // `dt`, which is scaled -- so the field outlived its own data by 40%. It
+  // matters more now than it did: the slow handed to `applySlow` is spent in
+  // that same scaled `dt`, so a field counting one unit and a slow counting
+  // the other would end at different moments.
   let elapsed = 0
+
+  // THE ERUPTION, at the moment of the cast: it damages whoever is standing
+  // under it and freezes them for the field's whole life.
+  //
+  // `inside` is who the field has already slowed. It is the previous sweep's
+  // result rather than a set the sweep maintains, so an enemy that walks out
+  // of the radius simply is not in the next one -- and walking back in is then
+  // a fresh visit, which takes a fresh stack, exactly like any other second
+  // application of a slow.
+  let inside = withinRadius(ctx.enemies(), x, y, def.radius)
+  for (const e of inside) {
+    ctx.damage(e, def.damage, def.ignoresArmor)
+    e.applySlow(def.slowFactor, def.duration, ctx.slowDiminish)
+  }
+
   const timer = ctx.scene.time.addEvent({
     delay: 250,
     loop: true,
     callback: () => {
-      elapsed += 0.25
-      for (const e of withinRadius(ctx.enemies(), x, y, def.radius)) {
-        e.applySlow(def.slowFactor, 0.6, ctx.slowDiminish)
-      }
+      elapsed += 0.25 * GAME_SPEED
       if (elapsed >= def.duration) {
         timer.remove()
-        ctx.scene.tweens.add({
-          targets: ring, alpha: 0, duration: 260, onComplete: () => ring.destroy(),
-        })
+        art?.fade()
+        return
       }
+      // Whoever has walked in since the last sweep, slowed for whatever is
+      // left of the field. Nobody already standing in it is touched again:
+      // that repetition is what the diminishing returns were reading as
+      // twenty separate slows.
+      const left = def.duration - elapsed
+      const here = withinRadius(ctx.enemies(), x, y, def.radius)
+      for (const e of here) {
+        if (inside.includes(e)) continue
+        e.applySlow(def.slowFactor, left, ctx.slowDiminish)
+      }
+      inside = here
     },
   })
-
-  for (const e of withinRadius(ctx.enemies(), x, y, def.radius)) ctx.damage(e, def.damage, def.ignoresArmor)
 }
-
-/** Ground markings are ellipses, not circles: the map is painted in 3/4. */
-const GROUND_SQUASH = 0.62
 
 /**
  * A shadow on the ground where a meteor is about to land.
