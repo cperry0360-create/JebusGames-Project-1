@@ -456,10 +456,17 @@ test('a poweredOnly ability is unusable in base form and enabled in powered form
   // reached only from a tap that resolved to `commit`, so every way of backing
   // out of the targeting is free.
   const armed = body(GAME, 'castHeroSlot(slot: string): void {')
-  const targeted = armed.slice(armed.indexOf("if (a.activation === 'targeted')"),
-    armed.indexOf("if (a.activation === 'held')"))
+  // ONE ARMING BRANCH FOR BOTH. A held ability arms exactly as a targeted one
+  // does -- see the Mind Laser tests in heropowers.test.ts -- so the slice this
+  // reads is the branch they share, and it runs to the instant case.
+  const targeted = armed.slice(
+    armed.indexOf("if (a.activation === 'targeted' || a.activation === 'held')"),
+    armed.indexOf('// INSTANT.'))
+  assert.ok(targeted.length > 0, 'the targeted and held abilities no longer share an arming branch')
   assert.doesNotMatch(targeted, /cooldowns\.start/,
     'pressing the button spends the cooldown before the ability has been placed')
+  assert.doesNotMatch(targeted, /beginHeldAbility/,
+    'pressing the medallion still fires the beam rather than arming it')
   const fire = GAME.slice(GAME.indexOf('private firePower('))
   assert.match(fire.slice(0, fire.indexOf('\n  }')), /this\.cooldowns\.start\(slot\)/,
     'nothing starts the cooldown when the ability actually lands')

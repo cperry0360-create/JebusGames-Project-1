@@ -545,6 +545,103 @@ test('every number a hero power uses is in heroes.json', () => {
   }
 })
 
+/* ------------------------------------------ the held beam, and how it is armed */
+
+test('the Mind Laser is armed by a tap and fired by the board, like everything else', () => {
+  /*
+   * THE INTERACTION THIS IS ABOUT. Mind Laser was the only control in the game
+   * that asked for a drag: press the medallion, keep the finger down, drag out
+   * over the board. Nothing taught it, and the hero's OTHER power is tap the
+   * medallion then tap the board -- which is what every ability in the game
+   * does. The tell was that it needed a line of text to explain the gesture.
+   *
+   * So it arms. The medallion tap spends nothing and starts no cooldown, the
+   * armed state is drawn exactly the way a targeted ability's is, and the
+   * PRESS on the board is what lights the beam. Everything after that press is
+   * unchanged: the beam follows the finger, and the release stops it.
+   */
+  const game = src('scenes/GameScene.ts')
+
+  // ONE BRANCH, SHARED. Both activations reach `targeting.arm` with the same
+  // request, so the medallion glow, the CANCEL button and the disc round the
+  // hero are one implementation rather than two that can drift.
+  const cast = game.slice(game.indexOf('castHeroSlot(slot: string): void {'))
+  const castBody = cast.slice(0, cast.indexOf('\n  /** Why the button did nothing'))
+  assert.match(castBody, /if \(a\.activation === 'targeted' \|\| a\.activation === 'held'\) \{/,
+    'a held ability does not arm the way a targeted one does')
+  const arming = castBody.slice(
+    castBody.indexOf("if (a.activation === 'targeted' || a.activation === 'held')"),
+    castBody.indexOf('// INSTANT.'))
+  assert.match(arming, /this\.targeting\.arm\(\{ kind: 'power', id: slot \}\)/,
+    'arming does not go through the targeting mode')
+  // NOTHING IS SPENT BY THE TAP: no cooldown, and no beam.
+  assert.doesNotMatch(arming, /cooldowns\.start/, 'the tap that arms spends the cooldown')
+  assert.doesNotMatch(arming, /beginHeldAbility/, 'the tap that arms fires the beam')
+  // THE SECOND TAP IS THE WAY OUT, and it is free.
+  assert.match(arming, /if \(armed === 'toggled'\) \{\s*\n\s*this\.clearSelection\('toggle'\)/,
+    'tapping the armed medallion again does not disarm')
+
+  // THE STRING THAT TAUGHT THE DRAG IS GONE, and no second one replaced it.
+  // The medallion's glow and the disc round the hero are the armed state; a
+  // line of text saying how to work the button is the signal the button is
+  // wrong, and the first replacement for it was still on the glass while the
+  // beam was firing.
+  assert.doesNotMatch(game, /drag to aim/, 'the drag instruction is still on the screen')
+  assert.doesNotMatch(game, /drag onto the board/, 'the drag instruction is still on the screen')
+  assert.doesNotMatch(game, /hold on the board/, 'a second gesture instruction took its place')
+  assert.match(arming, /if \(a\.activation === 'targeted'\) \{\s*\n\s*this\.status\.alert =/,
+    'the arming toast is no longer the targeted ability\'s alone')
+
+  // THE PRESS ON THE BOARD FIRES IT, and it is the press rather than the
+  // release because the beam is live between the two.
+  const press = game.slice(game.indexOf('private pressArmedHold('))
+  const pressBody = press.slice(0, press.indexOf('\n  /**'))
+  assert.match(pressBody, /this\.targeting\.resolveTap\(true\)/,
+    'the press does not resolve the armed request')
+  assert.match(pressBody, /this\.beginHeldAbility\(hold\.slot, hold\.def\)/,
+    'the press on the board does not light the beam')
+  assert.match(pressBody, /this\.aimHeldAbility\(p\)/,
+    'the beam is not aimed at the point that was pressed')
+  // AND IT CANNOT FIRE WITHOUT BEING ARMED.
+  assert.match(pressBody, /const hold = this\.armedHold\s*\n\s*if \(hold === null\) return/,
+    'the board press lights a beam with nothing armed')
+  // A PRESS OFF THE BOARD DISARMS, free, except on the row that does the
+  // arming -- HudScene has already handled that press by the time this runs.
+  assert.match(pressBody, /if \(!insideRect\(this\.layout\.abilities, ui\.x, ui\.y\)\) this\.clearSelection\('outside'\)/,
+    'a press that is not on the board does not disarm')
+  // THE REFUSALS ARE RE-ASKED. Arming takes no time off the clock, so the
+  // gate that passed at the medallion can have closed before the press.
+  assert.match(pressBody, /powerRefusal\(\s*\n?\s*hold\.def, this\.hero\.powered, this\.hero\.down, this\.cooldowns\.ready\(hold\.slot\)\)/,
+    'the press does not re-check whether the ability may still be used')
+
+  // The press is wired into the scene's own pointerdown, and its release is
+  // not also read as a tap on the board.
+  const setup = game.slice(game.indexOf('private setupInput(): void {'))
+  const setupBody = setup.slice(0, setup.indexOf("this.input.keyboard?.on('keydown-ESC'"))
+  assert.match(setupBody, /this\.pressFiredBeam = false\s*\n\s*this\.pressArmedHold\(p, ui\)/,
+    'the press handler is not wired to pointerdown')
+  assert.match(setupBody, /if \(this\.pressFiredBeam\) return/,
+    'the release that stops the beam also lands on the board as a tap')
+
+  // AND THE MAP HOLDS STILL while the beam is aimed. The rig is asked once per
+  // pointer at the press, so a claimed finger can never pan or pinch.
+  assert.match(game, /claims: \(p, over\) => this\.armedHold !== null \|\| this\.chromeUnderPointer\(p, over\)/,
+    'the drag that aims the beam also pans the map')
+
+  // THE ARMED STATE IS DRAWN THE WAY MIND CONTROL'S IS: the same medallion
+  // glow off `pendingAbility`, and the same disc round the hero -- with the
+  // reach coming from whichever field the ability keeps it in.
+  const area = game.slice(game.indexOf('private drawTargetArea(): void {'))
+  const areaBody = area.slice(0, area.indexOf('\n  /** The road, painted'))
+  assert.match(areaBody, /const reach = skillReach\(p\)/,
+    'the held ability gets a disc of radius zero, so nothing shows it is armed')
+  assert.match(areaBody, /g\.fillCircle\(this\.hero\.x, this\.hero\.y, reach\)/)
+  assert.match(areaBody, /g\.strokeCircle\(this\.hero\.x, this\.hero\.y, reach\)/)
+  const targeting = src('systems/TargetingMode.ts')
+  assert.match(targeting, /get pendingAbility\(\): string \| null \{\s*\n\s*return this\.req !== null && this\.req\.kind !== 'rally'/,
+    'an armed hero power no longer lights its medallion')
+})
+
 /* ------------------------------------------ the held beam, and where it points */
 
 test('the held beam is never aimed at the HUD that started it', () => {

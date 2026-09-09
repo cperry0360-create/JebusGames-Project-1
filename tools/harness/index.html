@@ -193,6 +193,19 @@ async function click(x, y, btn = 0) {
   mouse('mousedown', x, y, btn); await sleep(90)
   mouse('mouseup', x, y, btn); await sleep(160)
 }
+// THE FIRST HALF OF A PRESS-AND-HOLD, and it MOVES FIRST.
+//
+// A bare synthetic `mousedown` at a point the pointer has never been at is not
+// dispatched to the scene at all -- the press was queued and the world never
+// heard it, and a scenario built on one measures nothing. `click` above has
+// always moved first, which is why every other scenario is unaffected and why
+// this cost a round to find: the "product bug" it looked like was the harness.
+// A real pointer, mouse or finger, always arrives with a position.
+async function press(x, y, btn = 0) {
+  await move(x, y)
+  mouse('mousedown', x, y, btn)
+  await sleep(140)
+}
 const KEYS = {
   Space: { key: ' ', code: 'Space', keyCode: 32 }, KeyR: { key: 'r', code: 'KeyR', keyCode: 82 },
   KeyE: { key: 'e', code: 'KeyE', keyCode: 69 }, KeyQ: { key: 'q', code: 'KeyQ', keyCode: 81 },
@@ -3656,160 +3669,44 @@ async function run() {
       note('*** no live enemy to flag unblockable'); faults5++
     }
 
-    // --- 5 and 6: the Mind Laser -------------------------------------------
-    G5.cooldowns.reset(LASER)
-    await until(() => G5.enemies.some((e) => e.alive), 60000)
-    const victim = G5.enemies.find((e) => e.alive)
-    G5.castHeroSlot(LASER)
-    note('held: ' + !!G5.held + '  budget=' + (G5.held ? G5.held.left.toFixed(2) : '-')
-      + 's (data says ' + AB[2].holdSeconds + ')')
-    if (!G5.held) fail5('the laser did not light in powered form')
-    // AIMED BY DRAGGING, which is what the HUD forwards. Pointed straight at
-    // something so the corridor has a target in it.
-    if (G5.held && victim) {
-      // `onBoard` TOO, and that is not a detail. The aim point is only ever
-      // written from a pointer sample the BOARD owns -- a sample on the HUD is
-      // refused outright -- so a beam that has not been dragged off its own
-      // medallion yet re-derives the hero's facing every frame and ignores
-      // whatever is in `aimX`. Setting the coordinates without the flag pokes
-      // a field the scene is deliberately not reading. Section 7 below drives
-      // the same thing through real mouse events; this one is aiming at a
-      // named victim so the damage can be measured.
-      G5.held.aimX = victim.x; G5.held.aimY = victim.y; G5.held.onBoard = true
-      const hp0 = victim.health
-      await sleep(700)
-      note('   after 0.7s of beam the target went ' + Math.round(hp0) + ' -> '
-        + Math.round(victim.health) + ' (alive=' + victim.alive + ')')
-      if (victim.alive && victim.health >= hp0) fail5('the beam damaged nothing under it')
-      // WHAT IS ACTUALLY ON THE GLASS. A screenshot of a heavily squashed
-      // beam cannot tell a real strip from a stand-in, and "the art is not
-      // wired" was diagnosed off one. So the sprite is asked directly: which
-      // texture, which frame, which clip, and at what scale.
-      const HA = G5.held && G5.held.art
-      note('   beam sprite: texture=' + (HA ? HA.texture.key : '-')
-        + '  frame=' + (HA ? HA.frame.name : '-')
-        + '  clip=' + (HA && HA.anims && HA.anims.currentAnim ? HA.anims.currentAnim.key : 'none')
-        + '  playing=' + (HA && HA.anims ? HA.anims.isPlaying : '-'))
-      if (HA) {
-        note('   beam draw: scale=' + HA.scaleX.toFixed(3) + ',' + HA.scaleY.toFixed(3)
-          + '  display=' + Math.round(HA.displayWidth) + 'x' + Math.round(HA.displayHeight)
-          + '  anisotropy=' + (HA.scaleX / HA.scaleY).toFixed(2) + 'x'
-          + '  origin=' + HA.originX + ',' + HA.originY)
-        if (HA.texture.key !== AB[2].fx) fail5('the beam is drawing ' + HA.texture.key
-          + ' rather than ' + AB[2].fx)
-        if (!HA.anims || !HA.anims.isPlaying) fail5('the beam sprite is not animating')
+    // How far off, in radians, the beam's aim is from the direction the hero
+    // would have to look to see a given world point. The aim point is a
+    // DIRECTION and `range` is the reach, so an angle is the only comparison
+    // that means anything: the two points are never the same distance out.
+    const angleOff = (h, wx, wy, ax, ay) => {
+      const want = Math.atan2(wy - h.y, wx - h.x)
+      const got = Math.atan2(ay - h.y, ax - h.x)
+      return Math.abs(((want - got + Math.PI * 3) % (Math.PI * 2)) - Math.PI)
+    }
+
+    // A screen point on the board at a fraction along the lane, clear of every
+    // piece of chrome -- so a press there is a press the BOARD hears. Returns
+    // null rather than a point under the HUD, because a scenario that presses
+    // chrome and calls it the board proves nothing.
+    const boardPoint = (t) => {
+      for (const f of [t, t + 0.12, t - 0.12, t + 0.24, t - 0.24]) {
+        if (f < 0 || f > 1) continue
+        const w = G5.lane.pointAt(G5.lane.totalLength * f)
+        const sp = RESM7.worldToScreen(G5, w.x, w.y, G5.cameras.main)
+        if (HL7.hudBlocksGesture(G5.layout, sp.x, sp.y)) continue
+        if (G5.drawer && G5.drawer.owns(sp.x, sp.y)) continue
+        return { x: sp.x, y: sp.y, wx: w.x, wy: w.y }
       }
-      await shot('courtland-3-laser-sustain')
-      const spent = AB[2].holdSeconds - G5.held.left
-      note('   budget spent after 0.7s of holding: ' + spent.toFixed(2) + 's')
-    }
-    // RELEASE STOPS IT.
-    G5.releaseHeldAbility()
-    note('after release: held=' + !!G5.held
-      + '  cooldown ready=' + G5.cooldowns.ready(LASER))
-    if (G5.held) fail5('releasing did not stop the beam')
-    if (G5.cooldowns.ready(LASER)) fail5('a beam that fired did not go on cooldown')
-    await sleep(500)
-    await shot('courtland-4-laser-released')
-
-    // A PRESS TAKEN BACK COSTS NOTHING. Released inside the charge-up, before
-    // a single damage tick, so nothing was spent and nothing is owed.
-    G5.cooldowns.reset(LASER)
-    G5.castHeroSlot(LASER)
-    G5.releaseHeldAbility()
-    note('pressed and let go instantly: cooldown ready=' + G5.cooldowns.ready(LASER))
-    if (!G5.cooldowns.ready(LASER)) fail5('a cancelled press spent the whole cooldown')
-
-    // AND THE BUDGET RUNS OUT ON ITS OWN. Wound forward rather than held for
-    // ten seconds: what is under test is that the budget ends it, and a
-    // ten-second wait would be testing `sleep`.
-    //
-    // `onBoard` WITH IT, and that is not incidental. The budget is only spent
-    // by a beam the player has actually aimed at the board -- a press still
-    // sitting on its own medallion draws and costs nothing -- so winding
-    // `left` down on an unaimed beam now measures nothing at all, and this
-    // step passed for the wrong reason before that was true.
-    G5.cooldowns.reset(LASER)
-    G5.castHeroSlot(LASER)
-    if (G5.held) { G5.held.left = 0.05; G5.held.onBoard = true }
-    await sleep(400)
-    note('with the budget wound to 0.05s: held=' + !!G5.held
-      + '  cooldown ready=' + G5.cooldowns.ready(LASER))
-    if (G5.held) fail5('the beam outlived its own hold budget')
-
-    // --- 6b: A TAP ON THE MEDALLION SPENDS NOTHING -------------------------
-    //
-    // THE BUG. `endHeldAbility` starts the cooldown only when `fired` is true,
-    // and `fired` went true as soon as the beam existed -- which is from the
-    // instant of the press, because the beam is aimed along the hero's facing
-    // until a board aim arrives. So the facing beam, which was only ever meant
-    // to be feedback, was damaging, draining the budget and spending the
-    // cooldown. Tapping the medallion fired a burst at nothing and put a
-    // 20-second ability away; the only way to use it was to press and then
-    // drag off the button, which no player would guess.
-    //
-    // Held across FRAMES, not released in the same turn. The old cancel test
-    // above releases synchronously, so `updateHeldBeam` never ran once and it
-    // passed throughout the bug. Half a second of real frames is what tells
-    // the two apart.
-    {
-      // HE HAS TO BE UP. `updateHeldBeam` interrupts a beam the moment the
-      // hero goes down, and a null `held` here would read as "the tap spent
-      // the ability" -- a measurement of the wave, not of the gesture.
-      if (hero5.down) await until(() => !hero5.down, (hero5.def.reviveSeconds + 6) * 1000)
-      G5.cooldowns.reset(LASER)
-      hero5.powered = true
-      G5.castHeroSlot(LASER)
-      const budget0 = G5.held ? G5.held.left : -1
-      const HB = G5.held && G5.held.art
-      await sleep(500)
-      const drew = !!(HB && HB.visible && HB.anims && HB.anims.isPlaying)
-      note('held on the medallion for 0.5s: onBoard=' + (G5.held ? G5.held.onBoard : '-')
-        + '  budget ' + budget0.toFixed(2) + ' -> ' + (G5.held ? G5.held.left.toFixed(2) : '-')
-        + '  fired=' + (G5.held ? G5.held.fired : '-')
-        + '  beam still drawing=' + drew)
-      if (!G5.held) fail5('the beam stopped by itself while the finger was down')
-      if (G5.held && G5.held.left !== budget0) fail5('an unaimed beam drained its own budget')
-      if (G5.held && G5.held.fired) fail5('an unaimed beam counts as having fired')
-      // THE PICTURE IS STILL THERE. Suppressing it was the other option and it
-      // is worse: a held button that draws nothing reads as one that did not
-      // work, which is the fault this whole gesture already had.
-      if (!drew) fail5('the beam draws nothing while it waits for an aim')
-      G5.releaseHeldAbility()
-      note('   let go without ever leaving the button: cooldown ready='
-        + G5.cooldowns.ready(LASER))
-      if (!G5.cooldowns.ready(LASER)) fail5('a tap on the medallion spent the cooldown')
+      return null
     }
 
-    // --- 6c: AND A BEAM THAT REACHED THE BOARD SPENDS ONLY ITS BOARD TIME ---
-    {
-      if (hero5.down) await until(() => !hero5.down, (hero5.def.reviveSeconds + 6) * 1000)
-      G5.cooldowns.reset(LASER)
-      hero5.powered = true
-      G5.castHeroSlot(LASER)
-      await sleep(400)
-      const beforeAim = G5.held ? G5.held.left : -1
-      if (G5.held) {
-        G5.held.aimX = hero5.x; G5.held.aimY = hero5.y - 200; G5.held.onBoard = true
-      }
-      await sleep(500)
-      const afterAim = G5.held ? G5.held.left : -1
-      note('0.4s on the button then 0.5s on the board: budget ' + beforeAim.toFixed(2)
-        + ' -> ' + afterAim.toFixed(2) + ' (spent ' + (beforeAim - afterAim).toFixed(2)
-        + 's of game time for 0.5s real)')
-      if (beforeAim !== AB[2].holdSeconds) fail5('the pre-aim phase spent budget')
-      if (afterAim >= beforeAim) fail5('the beam spent nothing after it was aimed')
-      G5.releaseHeldAbility()
-      if (G5.cooldowns.ready(LASER)) fail5('a beam that fired did not go on cooldown')
-    }
-
-    // --- 7: WHERE A HELD BEAM POINTS WHILE THE FINGER IS STILL ON THE BUTTON
+    // --- 5, 6 and 7: the Mind Laser ----------------------------------------
     //
-    // Driven through the real HUD with real mouse events, because the whole
-    // bug lives in the gap between the two: the medallion is on the UI camera
-    // and the board it aims at is on the world camera, and every pointer
-    // sample during the hold was converted straight to the world. The beam
-    // fired into the third HUD button for its full duration.
+    // DRIVEN THROUGH REAL POINTER EVENTS FROM HERE DOWN, because the whole of
+    // this section is about which half of a gesture does what. Nothing below
+    // calls `castHeroSlot` directly except where it is checking a refusal:
+    // the medallion is pressed, the board is pressed, and the finger comes up
+    // where a finger would come up.
+    //
+    // THE INTERACTION. It used to be press-the-medallion-and-drag, the only
+    // control in the game that asked for a drag and one nothing taught. It is
+    // two steps now, the same two every other ability uses: TAP the medallion
+    // to arm, then PRESS AND HOLD the board to fire.
     {
       const hud7 = scene('Hud')
       const slots7 = (hud7 && hud7.slots) || []
@@ -3817,66 +3714,251 @@ async function run() {
       const btn = heroSlots[heroSlots.length - 1]
       if (!btn) fail5('no hero medallion to press')
       else {
-        G5.cooldowns.reset(LASER)
-        hero5.powered = true
         const bx = btn.hit.x, by = btn.hit.y
-        const facing0 = hero5.facingLeft
-        mouse('mousedown', bx, by)
-        await sleep(120)
-        note('   pressed the medallion at ' + Math.round(bx) + ',' + Math.round(by)
-          + ': held=' + !!G5.held)
-        if (!G5.held) fail5('pressing the medallion did not light the beam')
-        // A DRAG THAT HAS NOT LEFT THE BUTTON YET. Two samples on the button
-        // itself and one on the counters, all of which are chrome.
-        await move(bx, by)
-        await move(bx + 4, by - 2)
+        hero5.powered = true
+        G5.cooldowns.reset(LASER)
+        note('medallion at ' + Math.round(bx) + ',' + Math.round(by)
+          + '  inside the ability row=' + HL7.insideRect(G5.layout.abilities, bx, by))
+
+        // --- 5a: THE TAP ARMS, AND SPENDS NOTHING --------------------------
+        await click(bx, by)
+        const armed = G5.targeting.active
+        const pending = G5.status.pendingAbility
+        note('tapped the medallion: armed=' + armed + '  pendingAbility=' + pending
+          + '  mode=' + G5.status.mode + '  beam lit=' + !!G5.held
+          + '  cooldown ready=' + G5.cooldowns.ready(LASER))
+        if (!armed) fail5('tapping the medallion did not arm the Mind Laser')
+        if (pending !== LASER) fail5('the armed medallion is not the one that was tapped')
+        if (G5.held) fail5('tapping the medallion fired the beam')
+        if (!G5.cooldowns.ready(LASER)) fail5('tapping the medallion spent the cooldown')
+
+        // ARMED IS DRAWN, and drawn the way Mind Control draws it: a disc
+        // round the hero at the ability's own reach. Measured off the
+        // Graphics object rather than off a screenshot, because a wash at 18%
+        // alpha over a painted map is not something a pixel can settle.
+        const areaCmds = G5.targetArea && G5.targetArea.commandBuffer
+          ? G5.targetArea.commandBuffer.length : 0
+        note('   the armed board: targetArea draw commands=' + areaCmds
+          + '  (Mind Control paints the same disc; reach here is '
+          + AB[2].range + ')')
+        if (areaCmds === 0) fail5('nothing on the board says the ability is armed')
+        // THE PICTURE OF THE ARMED STATE. The numbers above say a disc was
+        // painted; only the frame says it reads as one.
+        await lookAt(hero5.x, hero5.y)
+        await shot('courtland-2-laser-armed')
+
+        // --- 5b: A SECOND TAP DISARMS, AND STILL SPENDS NOTHING ------------
+        await click(bx, by)
+        note('tapped it again: armed=' + G5.targeting.active
+          + '  beam lit=' + !!G5.held
+          + '  cooldown ready=' + G5.cooldowns.ready(LASER))
+        if (G5.targeting.active) fail5('tapping the armed medallion again did not disarm it')
+        if (G5.held) fail5('the second tap fired the beam')
+        if (!G5.cooldowns.ready(LASER)) fail5('backing out of the arm spent the cooldown')
+
+        // --- 5c: IT CANNOT FIRE WITHOUT BEING ARMED ------------------------
+        //
+        // The board press is the trigger, so the board press with nothing
+        // armed has to be inert. A press in the middle of the lane, which is
+        // where a player would press.
+        const idle = boardPoint(0.5)
+        if (!idle) fail5('no point on the board clear of the HUD to press')
+        else {
+          await press(idle.x, idle.y)
+          await sleep(120)
+          note('pressed the board with nothing armed: beam lit=' + !!G5.held)
+          if (G5.held) fail5('the beam fired without being armed first')
+          mouse('mouseup', idle.x, idle.y)
+          await sleep(120)
+          // That release WAS an ordinary tap on the board, so whatever it
+          // selected is put back before the next step reads the mode.
+          G5.clearSelection('button')
+        }
+
+        // --- 5d: ARM, THEN TAP OFF THE BOARD -> DISARMED, NOTHING SPENT ----
+        //
+        // The counters plate: chrome, and NOT the ability row, which is the
+        // one piece of chrome that must not disarm (HudScene has already
+        // re-armed or toggled by the time the world hears the press).
+        G5.cooldowns.reset(LASER)
+        await click(bx, by)
         const cn = G5.layout.counters
-        await move(cn.x + cn.width / 2, cn.y + cn.height / 2)
-        if (G5.held) {
-          // The beam's real far end, off the scene's own arithmetic: the aim
-          // point is a DIRECTION and `range` is the reach, so what has to be
-          // clear of the HUD is where the line actually stops.
-          const endA = G5.heldEnd(G5.held)
-          const uiA = RESM7.worldToScreen(G5, endA.x, endA.y, G5.cameras.main)
-          const onHud = HL7.hudBlocksGesture(G5.layout, uiA.x, uiA.y)
-          // ALONG THE FACING: same y as the hero, and on the side he is on.
-          const dx = G5.held.aimX - hero5.x
-          const alongFacing = Math.abs(G5.held.aimY - hero5.y) < 1
-            && (facing0 ? dx < 0 : dx > 0)
-          note('   with the finger still on chrome: aim=' + Math.round(G5.held.aimX)
-            + ',' + Math.round(G5.held.aimY) + '  hero=' + Math.round(hero5.x)
-            + ',' + Math.round(hero5.y) + '  facingLeft=' + facing0
-            + '  along facing=' + alongFacing
-            + '  beam end lands on HUD=' + onHud + '  onBoard=' + G5.held.onBoard)
-          if (!alongFacing) fail5('a beam held on the button is not aimed along the hero\'s facing')
-          if (onHud) fail5('the beam terminates inside a HUD region')
-          if (G5.held.onBoard) fail5('chrome under the finger counted as a board point')
-        }
-        // ONTO THE BOARD, and it retargets.
-        const board = RESM7.worldToScreen(G5, hero5.x, hero5.y - 240, G5.cameras.main)
-        await move(board.x, board.y)
-        if (G5.held) {
-          note('   after moving onto the board: aim=' + Math.round(G5.held.aimX)
-            + ',' + Math.round(G5.held.aimY) + '  onBoard=' + G5.held.onBoard)
-          if (!G5.held.onBoard) fail5('a point on the board did not retarget the beam')
-          if (Math.abs(G5.held.aimY - hero5.y) < 1) {
-            fail5('the beam is still on the facing after the finger reached the board')
+        await click(cn.x + cn.width / 2, cn.y + cn.height / 2)
+        note('armed, then tapped the counters: armed=' + G5.targeting.active
+          + '  beam lit=' + !!G5.held
+          + '  cooldown ready=' + G5.cooldowns.ready(LASER))
+        if (G5.targeting.active) fail5('a tap off the board left the ability armed')
+        if (G5.held) fail5('a tap off the board fired the beam')
+        if (!G5.cooldowns.ready(LASER)) fail5('a tap off the board spent the cooldown')
+
+        // --- 6: ARM, THEN PRESS AND HOLD THE BOARD -------------------------
+        //
+        // THE AIM IS CHECKED AGAINST A STATIONARY POINT ON THE LANE, not
+        // against an enemy. `press` moves the pointer and waits a beat before
+        // the button goes down, and a walking enemy covers ten degrees of arc
+        // in that time -- so aiming at one and then asserting the beam points
+        // at where it NOW is measures the wave's speed, not the aim. It read
+        // as a ten-degree aiming error on three viewports out of four, which
+        // is exactly what a real aiming bug would have looked like.
+        const spot = boardPoint(0.3)
+        if (!spot) fail5('no point on the board clear of the HUD to aim at')
+        else {
+          G5.cooldowns.reset(LASER)
+          await click(bx, by)
+          await press(spot.x, spot.y)
+          note('armed, then pressed the board: beam lit=' + !!G5.held
+            + '  onBoard=' + (G5.held ? G5.held.onBoard : '-')
+            + '  armed still=' + G5.targeting.active
+            + '  mode=' + G5.status.mode)
+          if (!G5.held) fail5('pressing the board with the ability armed did not fire it')
+          if (G5.held && !G5.held.onBoard) fail5('the press was not read as a board aim')
+          if (G5.targeting.active) fail5('firing the beam left the ability armed')
+          // THE ARMED PHASE COSTS NO BUDGET, which is the surviving half of
+          // the old step 6c ("a beam that reached the board spends ONLY its
+          // board time"). Under the old press-and-drag gesture the beam
+          // existed while it waited for an aim, so 6c had to prove that the
+          // waiting did not drain it. Arming does not light a beam at all
+          // now, so the equivalent claim is that the beam is born with its
+          // budget whole: anything less means time was charged for the arm.
+          if (G5.held && G5.held.left !== AB[2].holdSeconds) {
+            fail5('the beam started with ' + G5.held.left + 's of '
+              + AB[2].holdSeconds + 's -- the armed phase spent budget')
           }
+          if (G5.held) {
+            // The aim point names a DIRECTION -- the beam is `range` long
+            // whichever way it points -- so what is compared is the angle from
+            // the hero, not the distance.
+            const off = angleOff(hero5, spot.wx, spot.wy, G5.held.aimX, G5.held.aimY)
+            note('   pressed ' + Math.round(spot.wx) + ',' + Math.round(spot.wy)
+              + ' on the board: aim=' + Math.round(G5.held.aimX) + ','
+              + Math.round(G5.held.aimY) + '  angle off by '
+              + (off * 180 / Math.PI).toFixed(2) + ' deg')
+            if (off > 0.02) fail5('the beam is not aimed at the point that was pressed')
+            const HA = G5.held.art
+            note('   beam sprite: texture=' + HA.texture.key
+              + '  clip=' + (HA.anims && HA.anims.currentAnim ? HA.anims.currentAnim.key : 'none')
+              + '  playing=' + (HA.anims ? HA.anims.isPlaying : '-')
+              + '  display=' + Math.round(HA.displayWidth) + 'x' + Math.round(HA.displayHeight)
+              + '  anisotropy=' + (HA.scaleX / HA.scaleY).toFixed(2) + 'x')
+            if (HA.texture.key !== AB[2].fx) {
+              fail5('the beam is drawing ' + HA.texture.key + ' rather than ' + AB[2].fx)
+            }
+            if (!HA.anims || !HA.anims.isPlaying) fail5('the beam sprite is not animating')
+          }
+
+          // IT FOLLOWS THE FINGER, and the map holds still while it does.
+          const cam0 = { x: G5.cameras.main.scrollX, y: G5.cameras.main.scrollY }
+          const away = boardPoint(0.6)
+          if (away && G5.held) {
+            await move(away.x, away.y)
+            const off2 = angleOff(hero5, away.wx, away.wy, G5.held.aimX, G5.held.aimY)
+            note('   dragged to ' + Math.round(away.wx) + ',' + Math.round(away.wy)
+              + ': aim=' + Math.round(G5.held.aimX) + ',' + Math.round(G5.held.aimY)
+              + '  angle off by ' + (off2 * 180 / Math.PI).toFixed(2) + ' deg')
+            if (off2 > 0.02) fail5('the beam did not follow the finger')
+          }
+          const cam1 = { x: G5.cameras.main.scrollX, y: G5.cameras.main.scrollY }
+          const panned = Math.hypot(cam1.x - cam0.x, cam1.y - cam0.y)
+          note('   the map moved ' + panned.toFixed(1) + 'px under the aiming drag')
+          if (panned > 4) fail5('aiming the beam panned the map')
+
+          // AND IT DAMAGES WHAT IT IS HELD ON. The finger follows the enemy,
+          // which is what a player does with a beam and what makes the moving
+          // target above a non-problem: the aim is re-sent every sample.
+          const victim = G5.enemies.find((e) => e.alive && !e.controlled
+            && Math.hypot(e.x - hero5.x, e.y - hero5.y) < AB[2].range * 0.7)
+          if (!victim) fail5('no enemy inside the beam\'s reach to hold it on')
+          else {
+            const hp0 = victim.health
+            let tracked = 0
+            for (let i = 0; i < 8 && G5.held; i++) {
+              const sp = RESM7.worldToScreen(G5, victim.x, victim.y, G5.cameras.main)
+              if (HL7.hudBlocksGesture(G5.layout, sp.x, sp.y)) break
+              await move(sp.x, sp.y)
+              tracked++
+              if (!victim.alive) break
+            }
+            note('   held on a walking enemy for ' + tracked + ' samples: '
+              + Math.round(hp0) + ' -> ' + Math.round(victim.health)
+              + ' (alive=' + victim.alive + ')')
+            if (tracked === 0) fail5('the enemy never had a screen point clear of the HUD')
+            else if (victim.alive && victim.health >= hp0) {
+              fail5('the beam damaged nothing under it')
+            }
+          }
+          const spent = G5.held ? AB[2].holdSeconds - G5.held.left : null
+          note('   budget spent while held: ' + (spent === null ? '-' : spent.toFixed(2)) + 's'
+            + ' of ' + AB[2].holdSeconds + 's')
+          if (spent === null) fail5('the beam did not survive the hold')
+          // AND THE BOARD TIME IS ACTUALLY CHARGED -- the other half of 6c.
+          // A beam that damages but never spends its budget would hold for
+          // ever, and `spent` was reported here without ever being asserted.
+          else if (spent <= 0) fail5('the beam spent nothing while held on the board')
+          await shot('courtland-3-laser-sustain')
+
+          // A SAMPLE ON CHROME IS STILL REFUSED, not clamped: the last board
+          // aim is kept. This is the half of the old drag that survives, and
+          // it survives because the finger still passes over the HUD.
+          const kept = G5.held ? { x: G5.held.aimX, y: G5.held.aimY } : null
+          await move(cn.x + cn.width / 2, cn.y + cn.height / 2)
+          if (G5.held && kept) {
+            const same = Math.abs(G5.held.aimX - kept.x) < 0.5
+              && Math.abs(G5.held.aimY - kept.y) < 0.5
+            note('   dragged over the counters: aim held at '
+              + Math.round(G5.held.aimX) + ',' + Math.round(G5.held.aimY) + ' = ' + same)
+            if (!same) fail5('a finger crossing the HUD moved the aim')
+          }
+
+          // --- RELEASE STOPS IT, AND THE COOLDOWN STARTS HERE --------------
+          mouse('mouseup', cn.x + cn.width / 2, cn.y + cn.height / 2)
+          await sleep(140)
+          note('after mouseup: beam lit=' + !!G5.held
+            + '  cooldown ready=' + G5.cooldowns.ready(LASER))
+          if (G5.held) fail5('releasing did not stop the beam')
+          if (G5.cooldowns.ready(LASER)) fail5('a beam that fired did not go on cooldown')
+          // AND THE RELEASE IS NOT ALSO A TAP ON THE BOARD.
+          if (G5.status.mode !== 'normal') {
+            fail5('the release that stopped the beam left the board in ' + G5.status.mode)
+          }
+          await sleep(400)
+          await shot('courtland-4-laser-released')
         }
-        // AND BACK ONTO THE BUTTON: the last board aim is KEPT, not replaced
-        // and not clamped.
-        const kept = G5.held ? { x: G5.held.aimX, y: G5.held.aimY } : null
-        await move(bx, by)
-        if (G5.held && kept) {
-          const same = Math.abs(G5.held.aimX - kept.x) < 0.5 && Math.abs(G5.held.aimY - kept.y) < 0.5
-          note('   dragged back over the button: aim held at '
-            + Math.round(G5.held.aimX) + ',' + Math.round(G5.held.aimY) + ' = ' + same)
-          if (!same) fail5('coming back over the HUD moved the aim')
+
+        // --- A PRESS THAT FIRED NOTHING STILL COSTS NOTHING ----------------
+        //
+        // POKED, AND SAID SO. `fired` is set by the first damage tick, and a
+        // real mousedown/mouseup pair cannot be guaranteed to fall inside one
+        // frame, so this drives the branch rather than the gesture. What it
+        // asserts is the rule the whole ability rests on: the cooldown starts
+        // in `endHeldAbility` and only when the beam actually fired.
+        G5.cooldowns.reset(LASER)
+        const again = boardPoint(0.5)
+        if (again) {
+          await click(bx, by)
+          await press(again.x, again.y)
+          if (G5.held) G5.held.fired = false
+          mouse('mouseup', again.x, again.y)
+          await sleep(120)
+          note('a press with fired=false: cooldown ready=' + G5.cooldowns.ready(LASER))
+          if (!G5.cooldowns.ready(LASER)) fail5('a beam that fired nothing spent the cooldown')
         }
-        mouse('mouseup', bx, by)
-        await sleep(120)
-        note('   after mouseup: held=' + !!G5.held)
-        if (G5.held) fail5('releasing over the button did not stop the beam')
+
+        // --- THE BUDGET RUNS OUT ON ITS OWN --------------------------------
+        //
+        // Wound forward rather than held for ten seconds: what is under test
+        // is that the budget ends it, and a ten-second wait tests `sleep`.
+        G5.cooldowns.reset(LASER)
+        if (again) {
+          await click(bx, by)
+          await press(again.x, again.y)
+          if (G5.held) G5.held.left = 0.05
+          await sleep(400)
+          note('with the budget wound to 0.05s: beam lit=' + !!G5.held
+            + '  cooldown ready=' + G5.cooldowns.ready(LASER))
+          if (G5.held) fail5('the beam outlived its own hold budget')
+          mouse('mouseup', again.x, again.y)
+          await sleep(120)
+        }
       }
     }
 
@@ -5985,6 +6067,8 @@ async function run() {
     // the mode has its own scenario, and what is under test here is what gets
     // DRAWN once a point has been chosen.
     const RS = await import('./js/systems/RunState.js')
+    const RESPA = await import('./js/systems/Resolution.js')
+    const HLPA = await import('./js/systems/HudLayout.js')
     const HEROES = (await import('./js/data/heroes.json', { with: { type: 'json' } })).default
     const ids = Object.keys(HEROES).filter((k) => !k.startsWith('_'))
     const missing = []
@@ -6039,6 +6123,9 @@ async function run() {
       for (let i = 0; i < h.abilities.length; i++) {
         const a = h.abilities[i]
         const slot = 'heroSlot' + (i + 1)
+        // The screen point the held beam was fired from, so its release can
+        // land where its press did.
+        let held = null
         if (a.poweredOnly) G.hero.powered = true
         G.cooldowns.reset(slot)
 
@@ -6064,12 +6151,25 @@ async function run() {
           G.castHeroSlot(slot)
           G.firePower(slot, to.x, to.y)
         } else {
-          // HELD: pressed, aimed down the lane, and released. The beam is live
-          // between two input events, so both of them are driven here.
+          // HELD: ARMED on the medallion, then FIRED by a press on the board,
+          // which is the two-step every ability in the game uses. The press
+          // is a real one because it is the only thing that lights the beam
+          // now -- `castHeroSlot` alone arms and draws nothing.
           const to = G.lane.pointAt(Math.min(G.lane.totalLength * 0.45 + a.range * 0.8,
             G.lane.totalLength - 10))
+          held = null
+          for (let f = 0.45; f <= 0.95; f += 0.1) {
+            const w = G.lane.pointAt(G.lane.totalLength * f)
+            const sp = RESPA.worldToScreen(G, w.x, w.y, G.cameras.main)
+            if (HLPA.hudBlocksGesture(G.layout, sp.x, sp.y)) continue
+            if (G.drawer && G.drawer.owns(sp.x, sp.y)) continue
+            held = sp
+            break
+          }
           G.castHeroSlot(slot)
-          if (G.held) { G.held.aimX = to.x; G.held.aimY = to.y }
+          if (!held) note('   *** no board point clear of the HUD to fire the beam from')
+          else await press(held.x, held.y)
+          void to
         }
         await sleep(140)
         let n = drawn(a.fx)
@@ -6078,6 +6178,7 @@ async function run() {
         if (n === 0) missing.push(id + ' ability ' + (i + 1) + ' (' + a.fx + ')')
         await shot('power-' + id + '-' + (i + 1) + '-' + a.effect)
         if (a.activation === 'held') {
+          if (held) mouse('mouseup', held.x, held.y)
           G.releaseHeldAbility()
           await sleep(200)
         }

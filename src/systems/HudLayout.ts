@@ -370,6 +370,12 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
   }
 }
 
+/** Whether a screen point falls inside a rectangle. Written once because three
+ *  callers had the same four comparisons inline and a fourth was about to. */
+export function insideRect(r: Rect, x: number, y: number): boolean {
+  return x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height
+}
+
 /** Whether two rectangles share any area. */
 export function overlaps(a: Rect, b: Rect): boolean {
   return a.x < b.x + b.width && b.x < a.x + a.width
@@ -407,8 +413,7 @@ export function collisions(layout: HudLayout): string[] {
  * the world.
  */
 export function hudTakesPress(layout: HudLayout, x: number, y: number): boolean {
-  const inside = (r: Rect): boolean =>
-    x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height
+  const inside = (r: Rect): boolean => insideRect(r, x, y)
   return inside(layout.abilities) || inside(layout.startButton)
     || inside(layout.settings) || inside(layout.cancel) || inside(layout.heroChip)
 }
@@ -432,7 +437,5 @@ export function hudTakesPress(layout: HudLayout, x: number, y: number): boolean 
  * element.
  */
 export function hudBlocksGesture(layout: HudLayout, x: number, y: number): boolean {
-  const inside = (r: Rect): boolean =>
-    x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height
-  return hudTakesPress(layout, x, y) || inside(layout.counters)
+  return hudTakesPress(layout, x, y) || insideRect(layout.counters, x, y)
 }
