@@ -130,6 +130,8 @@ guardAudioPromises()
 // guard only present on main.ts's boot path is one no scenario could check.
 const LG = await import('./js/systems/ListenerGuard.js')
 LG.installListenerGuard()
+const SG = await import('./js/systems/ScheduleGuard.js')
+SG.installScheduleGuard()
 const game = new Phaser.Game(gameConfig)
 window.game = game
 // The scale mode is NONE, so nothing sizes the canvas by itself. main.ts does
@@ -204,9 +206,54 @@ async function key(name) {
   window.dispatchEvent(new KeyboardEvent('keyup', { ...k, bubbles: true, cancelable: true }))
   await sleep(80)
 }
+// EVERY GL=1 SCREENSHOT THIS HARNESS TOOK WAS BLACK, and nobody noticed for
+// seven passes. `canvas.toDataURL` reads the drawing buffer, and WebGL clears
+// that buffer at the end of every frame unless the context was created with
+// `preserveDrawingBuffer`. Phaser does not set it and neither does this page,
+// so under GL=1 the read lands after the clear and returns a black rectangle
+// that looks exactly like a scene that failed to draw. The Phaser 4 spike
+// found this; it is propagated here so no picture from a GL=1 run in the crash
+// investigation is trusted again.
+//
+// `renderer.snapshot` is the correct read: it defers to the END of the next
+// render pass, before the clear, so it sees real pixels.
+//
+// AND IT IS DISARMED ON TIMEOUT. A snapshot is a request queued on the
+// renderer, honoured only when a frame actually completes. Ask for one while
+// the context is lost -- which is the exact situation half these scenarios are
+// built to create -- and no frame ever completes, the callback never fires, and
+// the harness hangs forever on an `await` instead of reporting a fault. So the
+// pending request is cleared off the renderer and the black-but-honest
+// `toDataURL` is used instead, with the run continuing.
+function frame() {
+  const r = game.renderer
+  // Canvas2D keeps its backing store between frames, so the direct read is
+  // correct there and costs nothing. This is the default (`--disable-gpu`).
+  if (!r || r.type === 1 || typeof r.snapshot !== 'function') {
+    return Promise.resolve(game.canvas.toDataURL('image/png'))
+  }
+  return new Promise((resolve) => {
+    let done = false
+    const finish = (data) => { if (!done) { done = true; resolve(data) } }
+    const timer = setTimeout(() => {
+      try { if (r.snapshotState) r.snapshotState.callback = null } catch (e) { /* gone */ }
+      console.log('  SNAPSHOT TIMED OUT, disarmed; falling back to toDataURL')
+      finish(game.canvas.toDataURL('image/png'))
+    }, 2000)
+    try {
+      r.snapshot((img) => {
+        clearTimeout(timer)
+        finish(img && img.src ? img.src : game.canvas.toDataURL('image/png'))
+      })
+    } catch (e) {
+      clearTimeout(timer)
+      finish(game.canvas.toDataURL('image/png'))
+    }
+  })
+}
 async function shot(name) {
   await sleep(140)
-  await post('/shot/' + name, game.canvas.toDataURL('image/png'))
+  await post('/shot/' + name, await frame())
 }
 
 // Everything visible, recursively, so a screenshot is never the only evidence.
@@ -853,6 +900,130 @@ async function run() {
     window.__screensDump = { texmem: TEXDUMP }
     return
   }
+  if (scenario === 'scheduleguard') {
+    /*
+     * THE SCHEDULED-CALLBACK GUARD, PROVEN BY THROWING THROUGH EACH PATH.
+     *
+     * The rule that has already caught me once in this investigation: a guard
+     * that reports itself installed and catches nothing is worse than none. So
+     * every path below is a real throw driven through a real scheduler, and the
+     * pending-timer record is read back rather than assumed.
+     */
+    const DG = await import('./js/systems/Diagnostics.js')
+    const GD = await import('./js/systems/Guard.js')
+    const SGm = await import('./js/systems/ScheduleGuard.js')
+    const LGm = await import('./js/systems/ListenerGuard.js')
+
+    let faults = 0
+    const bad = (m) => { faults++; note('*** ' + m) }
+    note('schedule stats at start: ' + JSON.stringify(SGm.scheduleStats()))
+    if (!SGm.scheduleStats().installed) bad('the schedule guard is not installed')
+
+    // ---- 1. setTimeout ----
+    GD.resetGuards()
+    setTimeout(() => { throw new TypeError('deliberate: from a setTimeout') }, 20)
+    await sleep(300)
+    let c = GD.guardCounts()
+    note('after a throwing setTimeout: ' + JSON.stringify(c))
+    if (!Object.keys(c).some((k) => /timeout callback/.test(k))) {
+      bad('a setTimeout callback was NOT wrapped')
+    }
+    const logged1 = DG.recentEvents().filter((e) => e.kind === 'guard'
+      && /deliberate: from a setTimeout/.test(e.detail))
+    note('  logged: ' + (logged1[0] ? logged1[0].detail : 'NOTHING'))
+    if (!logged1.length) bad('the setTimeout wrapper did not record the real message')
+
+    // ---- 2. setInterval ----
+    GD.resetGuards()
+    let ticks = 0
+    const iv = setInterval(() => {
+      ticks++
+      if (ticks === 1) throw new RangeError('deliberate: from a setInterval')
+    }, 30)
+    await sleep(300)
+    clearInterval(iv)
+    c = GD.guardCounts()
+    note('after a throwing setInterval: ' + JSON.stringify(c) + '  ticks=' + ticks)
+    if (!Object.keys(c).some((k) => /interval callback/.test(k))) {
+      bad('a setInterval callback was NOT wrapped')
+    }
+
+    // ---- 3. queueMicrotask, which is how a promise chain resumes ----
+    GD.resetGuards()
+    queueMicrotask(() => { throw new EvalError('deliberate: from a microtask') })
+    await sleep(200)
+    c = GD.guardCounts()
+    note('after a throwing microtask: ' + JSON.stringify(c))
+    // Case-insensitive: the label is "a queueMicrotask callback", and the first
+    // version of this check missed a wrapper that had in fact fired.
+    if (!Object.keys(c).some((k) => /microtask/i.test(k))) {
+      bad('a queueMicrotask callback was NOT wrapped')
+    }
+
+    // ---- 4. AN UNHANDLED REJECTION, distinctly labelled, actually firing ----
+    DG.setLastReport(null)
+    Promise.reject(new DOMException('deliberate: a rejected promise', 'AbortError'))
+    await sleep(400)
+    const rej = DG.lastReport()
+    note('rejection report: ' + (rej ? rej.cause + ' | ' + rej.message : 'NONE'))
+    if (!rej) bad('window.onunhandledrejection did not fire at all')
+    else {
+      if (rej.cause !== 'unhandled rejection') {
+        bad('a rejection was not labelled apart from a throw: ' + rej.cause)
+      }
+      if (!/AbortError/.test(rej.message)) {
+        bad('the DOMException did not describe itself: ' + rej.message)
+      }
+    }
+
+    // ---- 5. TIMERS STILL PENDING, WITH WHERE THEY WERE ARMED FROM ----
+    //
+    // The lead exactly: a callback armed by a viewport event and running later.
+    // Armed from inside a real dispatched event so `during` is populated, and
+    // long enough that it is still pending when the state is read.
+    SGm.resetScheduleGuard()
+    const armer = () => { setTimeout(() => { /* never mind */ }, 5000) }
+    window.addEventListener('harness-arm', armer)
+    window.dispatchEvent(new Event('harness-arm'))
+    window.removeEventListener('harness-arm', armer)
+    await sleep(150)
+    const st = SGm.scheduleStats()
+    note('pending after arming inside an event:')
+    note('  ' + JSON.stringify(st))
+    if (Number(st.pendingDuringAnEvent) < 1) {
+      bad('a timer armed inside a DOM event was not recorded as such')
+    }
+    if (!/during "harness-arm on window"/.test(String(st.pendingDetail))) {
+      bad('the pending record does not name the event that armed it')
+    }
+    if (!/from /.test(String(st.pendingDetail))) {
+      bad('the pending record does not say where it was armed from')
+    }
+
+    // And it reaches the crash report, which is the whole point.
+    const probe = DG.buildReport('harness probe', 'not a real fault')
+    note('crash report would say:')
+    for (const k of ['timersArmed', 'timersFired', 'timersPending',
+      'pendingDuringAnEvent', 'pendingDetail']) {
+      note('  ' + k + ' = ' + String(probe.state[k]).slice(0, 200))
+    }
+    if (!('pendingDetail' in probe.state)) bad('the crash report does not carry the pending timers')
+
+    // ---- 6. THE TIMESTAMPED TIMELINE ----
+    window.dispatchEvent(new Event('resize'))
+    await sleep(200)
+    const ls = LGm.listenerStats()
+    note('recentEvents: ' + String(ls.recentEvents).slice(0, 220))
+    if (!/@\d+ms/.test(String(ls.recentEvents))) {
+      bad('the event timeline carries no timestamps')
+    }
+
+    note('RESULT ' + (faults === 0
+      ? 'every scheduled path is wrapped, rejections are labelled, and pending timers name what armed them'
+      : '*** ' + faults + ' fault(s) ***'))
+    return
+  }
+
   if (scenario === 'webglwatch') {
     /*
      * THE CONTEXT-LOSS CANDIDATE, DRIVEN FOR REAL.
@@ -927,6 +1098,25 @@ async function run() {
       if (String(probe.state.webglContextLost) !== 'true') {
         bad('the crash report does NOT carry the context loss')
       }
+      // ---- 2b. A SNAPSHOT ASKED FOR ON A DEAD CONTEXT ----
+      //
+      // PROVEN HERE RATHER THAN ASSERTED. `renderer.snapshot` is honoured at
+      // the end of the next render pass, and a lost context never completes
+      // one, so the callback never fires. Before the timeout existed this
+      // `await` would have hung the whole run -- silently, and in exactly the
+      // scenarios written to create a dead context. The check is that it
+      // returns, that it says it timed out, and that it leaves no request
+      // sitting on the renderer to fire later against a restored context.
+      const t0 = Date.now()
+      const data = await frame()
+      const took = Date.now() - t0
+      const stillArmed = !!(game.renderer.snapshotState && game.renderer.snapshotState.callback)
+      note('frame() on a dead context returned after ' + took + 'ms, '
+        + data.length + ' chars, snapshot still armed: ' + stillArmed)
+      if (took > 4000) bad('frame() did not time out on a dead context: ' + took + 'ms')
+      if (stillArmed) bad('a snapshot request was left armed on the renderer after the timeout')
+      if (!/^data:image\/png/.test(data)) bad('frame() did not return a PNG data URL')
+
       // Give it back, so the rest of the run is not on a dead context.
       ext.restoreContext()
       await sleep(900)

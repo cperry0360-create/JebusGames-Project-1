@@ -53,6 +53,8 @@ interface InFlight {
 }
 
 let current: InFlight | null = null
+/** Module load, so every breadcrumb is stamped on one clock. */
+const loadedAt = Date.now()
 /** A short tail of recent event types, so the report shows the sequence rather
  *  than only the last one. Deliberately tiny: this is a breadcrumb, not a log,
  *  and the real event log is next to it in the same report. */
@@ -104,7 +106,10 @@ function makeWrapper(
     const before = current
     current = { type, target: describeTarget(this), at: Date.now(), running: true }
     if (recent.length >= RECENT_MAX) recent.shift()
-    recent.push(`${type}@${current.target}`)
+    // WITH A TIMESTAMP. The Share sequence is seven events and then 1.7
+    // seconds of quiet before the throw; without times on each one that gap
+    // has to be inferred from a single `lastEvent` figure rather than read.
+    recent.push(`${type}@${current.target}@${Date.now() - loadedAt}ms`)
     try {
       callListener(listener, this, ev)
     } catch (err) {
@@ -239,6 +244,17 @@ function eventContext(): Record<string, unknown> {
       : 'none dispatched yet',
     recentEvents: recent.join(' ') || 'none',
   }
+}
+
+/**
+ * The DOM event currently being dispatched, or '' when none is.
+ *
+ * `ScheduleGuard` asks this when a timer is armed: a callback armed while a
+ * viewport event is in flight and running a second later is the exact shape of
+ * the outstanding lead, and it is worth paying for a stack for those alone.
+ */
+export function eventInFlight(): string {
+  return current?.running ? `${current.type} on ${current.target}` : ''
 }
 
 /** For the harness: the same facts, without going through a crash report. */

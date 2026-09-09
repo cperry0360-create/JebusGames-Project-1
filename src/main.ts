@@ -14,6 +14,7 @@ import { VERSION_LABEL } from './systems/Build.ts'
 import { installCrashContext, installGameContext } from './systems/CrashContext.ts'
 import { guardGameLoop, resetGuards } from './systems/Guard.ts'
 import { installListenerGuard } from './systems/ListenerGuard.ts'
+import { installScheduleGuard } from './systems/ScheduleGuard.ts'
 
 // First, before anything can throw. A game that dies on the way up has to say
 // so; the alternative is the black screen this replaces.
@@ -30,6 +31,11 @@ installCrashContext()
 // and those are the ones the last report ruled everything else out in favour
 // of. See ListenerGuard.ts.
 installListenerGuard()
+// AND WHAT THE PAGE SCHEDULES, not only what it handles. The latest report has
+// the last listener finishing 1754ms before the throw, so the throw is on a
+// callback path `addEventListener` cannot reach. Same ordering rule: only
+// callbacks armed after this are wrapped. See ScheduleGuard.ts.
+installScheduleGuard()
 // Before the game exists, so the engine's own audio calls are already covered
 // by the time it makes any. Sound must never be able to take the game down.
 guardAudioPromises()
