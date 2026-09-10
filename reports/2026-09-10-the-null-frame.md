@@ -16,7 +16,7 @@ could ever have outlived its texture.
 |---|---|---|
 | [`0c7aa7f`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/0c7aa7f) | first attempt at the same fix | run 265 — **typecheck FAILED**, `TS2445: Property 'anims' is protected`. Superseded, see §5 |
 | [`9e389b8`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/9e389b8) | the fix, the `nullframe` scenario, the regression tests | run 266 — **changes, test, typecheck, deploy/build, deploy/deploy all green**, deployed |
-| *(this file)* | the report | see the row filled in at the bottom of this table after CI |
+| [`bb49e15`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/bb49e15) | this report, and the `tsdiff` limitation written into `CLAUDE.md` | run 267 — **changes, test, typecheck green**; deploy correctly **skipped** by the new markdown paths filter |
 
 `main` moved 19 commits under this work — including the Mind Laser activation
 rework — between the first push attempt and the rebase. Everything in §7 was
