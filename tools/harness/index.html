@@ -67,7 +67,8 @@ const SCENARIO_NAMES = [
   'lettering', 'levelart', 'levels', 'listenerguard', 'loadout', 'locked',
   'loopthrow', 'looptrack', 'lost', 'mapedge', 'maproute', 'markers',
   'meteor', 'mix', 'modal', 'moes', 'music', 'muzzle', 'nightfall',
-  'nodefirst', 'noderings', 'notch', 'nuke', 'nukeseq', 'opening', 'padart',
+  'nodefirst', 'noderings', 'notch', 'nuke', 'nukeseq', 'nullframe',
+  'opening', 'padart',
   'pausedismiss', 'pauseresume', 'phone', 'pixels', 'plate', 'playrun',
   'politician', 'powerart', 'proximity', 'realboot', 'regressions',
   'results', 'retreat', 'rotationburst', 'revive', 'ring', 'rockets', 'rollspeed',
@@ -3631,6 +3632,244 @@ async function run() {
     return
   }
 
+  if (scenario === 'nullframe') {
+    /*
+     * THE NULL FRAME, AND THE LEVEL CHANGE THAT CAUSES IT.
+     *
+     * From the device, build ec91739, standalone, in-game on level 3:
+     *
+     *   TypeError: null is not an object (evaluating 'this.data.sourceSize')
+     *     get (Frame.data.sourceSize) <- setSizeToFrame <- setCurrentFrame
+     *     <- handleStart <- startAnimation <- endHeldAbility
+     *     <- releaseHeldAbility <- onGameOut <- onTouchMove
+     *
+     * `Frame.realWidth` is `this.data.sourceSize.w`, and `Frame.destroy()` sets
+     * `data` to null. So the animation was holding frames belonging to a
+     * texture that had already been destroyed -- which is what `freeLevelArt`
+     * does to `fx-mind-laser` at the end of every level.
+     *
+     * THIS SCENARIO MUST FAIL BEFORE THE FIX. Establishing that is the whole
+     * point: a scenario written after a fix, that passes, proves only that it
+     * was written after the fix.
+     */
+    const RSn = await import('./js/systems/RunState.js')
+    const LAn = await import('./js/systems/LevelArt.js')
+    const GDn = await import('./js/systems/Guard.js')
+    const RESn = await import('./js/systems/Resolution.js')
+    const HLn = await import('./js/systems/HudLayout.js')
+    let faults = 0
+    const bad = (m) => { faults++; note('*** ' + m) }
+    const FX = 'fx-mind-laser'
+    const CLIPS = [FX + '-charge', FX + '-sustain', FX + '-fade']
+
+    const playLevel = async (levelId) => {
+      for (const k of ['Title', 'Splash', 'Credits', 'Boot', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+      RSn.setRunState({
+        heroId: 'courtland', abilities: ['glacier', 'meteor'],
+        openingTowers: ['withholding', 'writeoff'], reserveTowers: [], levelId,
+      })
+      game.scene.start('Game')
+      if (!(await until(() => running('Game') && scene('Game').status.heroName !== '', 25000))) {
+        bad(levelId + ': the level did not build'); return null
+      }
+      await until(() => running('Hud'), 12000)
+      await sleep(900)
+      return scene('Game')
+    }
+
+    // Whether every frame of every laser clip still belongs to a live texture.
+    const clipHealth = () => CLIPS.map((k) => {
+      const a = game.anims.get(k)
+      if (!a) return k + '=absent'
+      const live = game.textures.exists(FX) ? game.textures.get(FX) : null
+      const n = a.frames.length
+      const dead = a.frames.filter((f) => !f.frame || f.frame.data === null).length
+      const foreign = a.frames.filter((f) => f.frame && f.frame.texture !== live).length
+      return k + '=' + n + 'f' + (dead ? ' DEAD:' + dead : '') + (foreign ? ' FOREIGN:' + foreign : '')
+    }).join('  ')
+
+    // Lights the beam THE WAY A PLAYER DOES: tap the medallion to arm, then
+    // press and hold the board to fire. Two steps since the activation rework
+    // -- `castHeroSlot` only arms now, and a scenario that called it and then
+    // read `g.held` would report "the laser did not light" on a perfectly
+    // healthy build.
+    //
+    // Reports whether the PRESS threw, which is the half that matters: the
+    // charge clip is played from `beginHeldAbility`, so on a stale animation
+    // the crash arrives before anybody lets go.
+    const fire = async (g) => {
+      g.hero.powered = true
+      g.cooldowns.reset('heroSlot3')
+      const hud = scene('Hud')
+      const slots = (hud && hud.slots) || []
+      const heroSlots = slots.filter((s2) => s2.region && s2.region.kind === 'heroSlot')
+      const btn = heroSlots[heroSlots.length - 1]
+      if (!btn) return { threw: null, lit: false, why: 'no hero medallion to press' }
+      try {
+        await click(btn.hit.x, btn.hit.y)
+      } catch (err) {
+        return { threw: String(err && err.message ? err.message : err), lit: !!g.held,
+          why: 'the medallion tap threw' }
+      }
+      if (!g.targeting.active) {
+        return { threw: null, lit: !!g.held, why: 'the medallion tap did not arm the ability' }
+      }
+      const spot = boardSpot(g)
+      if (!spot) return { threw: null, lit: false, why: 'no board point clear of the HUD' }
+      try {
+        await press(spot.x, spot.y)
+        return { threw: null, lit: !!g.held, why: '' }
+      } catch (err) {
+        return { threw: String(err && err.message ? err.message : err), lit: !!g.held,
+          why: 'the board press threw' }
+      }
+    }
+
+    // A screen point on the lane that no chrome covers, so a press there is a
+    // press the BOARD hears.
+    const boardSpot = (g) => {
+      for (const f of [0.3, 0.42, 0.18, 0.54, 0.66]) {
+        const w = g.lane.pointAt(g.lane.totalLength * f)
+        const sp = RESn.worldToScreen(g, w.x, w.y, g.cameras.main)
+        if (HLn.hudBlocksGesture(g.layout, sp.x, sp.y)) continue
+        if (g.drawer && g.drawer.owns(sp.x, sp.y)) continue
+        return { x: sp.x, y: sp.y }
+      }
+      return null
+    }
+
+    // ---- LEVEL 1: the path that has always worked ------------------------
+    const g1 = await playLevel('level1')
+    if (!g1) { note('RESULT *** could not build level 1'); return }
+    note('level 1 art: ' + FX + ' resident=' + game.textures.exists(FX))
+    const a1 = await fire(g1)
+    note('level 1 press: lit=' + a1.lit + '  threw=' + (a1.threw || 'no')
+      + (a1.why ? '  (' + a1.why + ')' : ''))
+    if (a1.threw) bad('the FIRST level already throws on the press: ' + a1.threw)
+    if (!a1.lit) bad('the laser did not light on level 1: ' + (a1.why || 'no reason given'))
+    note('level 1 clips: ' + clipHealth())
+    const heldArt1 = g1.held && g1.held.art
+    if (heldArt1) {
+      note('  beam frame=' + heldArt1.frame.name
+        + '  clip=' + (heldArt1.anims.currentAnim ? heldArt1.anims.currentAnim.key : 'none'))
+    }
+    try { g1.releaseHeldAbility() } catch (err) { bad('level 1 release threw: ' + err) }
+    await sleep(300)
+
+    // ---- THE LEVEL CHANGE ------------------------------------------------
+    // Level 3, because that is where the report came from, and because it is a
+    // different plate and a different enemy roster -- so the shutdown really
+    // does free and the load really does refetch.
+    const g3 = await playLevel('level3')
+    if (!g3) { note('RESULT *** could not build level 3'); return }
+    note('level 3 art: ' + FX + ' resident=' + game.textures.exists(FX))
+    if (!game.textures.exists(FX)) bad('the laser art did not come back with level 3')
+
+    // THE MEASUREMENT THE WHOLE FILE EXISTS FOR, taken BEFORE anything is
+    // played: are the global clips still cut from the texture that is loaded
+    // now, or from the one the previous level gave back?
+    note('level 3 clips BEFORE any press: ' + clipHealth())
+    const stale = CLIPS.filter((k) => {
+      const a = game.anims.get(k)
+      return a && a.frames.some((f) => !f.frame || f.frame.data === null)
+    })
+    if (stale.length) {
+      bad('after a level change these clips hold destroyed frames: ' + stale.join(', ')
+        + ' -- this is the crash')
+    }
+
+    // ---- THE PRESS ------------------------------------------------------
+    GDn.resetGuards()
+    const a3 = await fire(g3)
+    note('level 3 press: lit=' + a3.lit + '  threw=' + (a3.threw || 'no')
+      + (a3.why ? '  (' + a3.why + ')' : ''))
+    if (a3.threw) bad('the press threw after a level change: ' + a3.threw)
+    if (!a3.lit) bad('the laser did not light on level 3: ' + (a3.why || 'no reason given'))
+    const heldArt3 = g3.held && g3.held.art
+    if (heldArt3) {
+      // DEFENSIVELY, because reading the sprite is itself one of the things
+      // that throws here: `displayWidth` goes through `Frame.realWidth`, which
+      // is the exact getter in the crash. A diagnostic that dies on the fault
+      // it is measuring reports nothing at all -- which is what this did on
+      // its first run.
+      const clip = heldArt3.anims.currentAnim ? heldArt3.anims.currentAnim.key : 'none'
+      let size = 'unreadable'
+      try {
+        size = Math.round(heldArt3.displayWidth) + 'x' + Math.round(heldArt3.displayHeight)
+      } catch (err) {
+        bad('reading the beam sprite throws: ' + (err && err.message ? err.message : err))
+      }
+      let frameName = 'unreadable'
+      try { frameName = String(heldArt3.frame.name) } catch (err) { /* named above */ }
+      note('  beam frame=' + frameName + '  clip=' + clip
+        + '  playing=' + heldArt3.anims.isPlaying + '  display=' + size)
+      if (clip === 'none') bad('the beam is not playing any clip on level 3')
+      if (size !== 'unreadable' && !(heldArt3.displayWidth > 1)) {
+        bad('the beam has no size on level 3')
+      }
+    }
+
+    // ---- THE RELEASE, THROUGH THE PATH THE REPORT NAMES -------------------
+    //
+    // `onGameOut` is the pointer LEAVING the canvas, not a normal release, and
+    // the brief is specific that this is the path that ran. Driven through a
+    // real `mouseout` on the canvas first, because a scenario that reaches the
+    // handler by calling it directly proves nothing about whether the handler
+    // is reachable. Falls back only if the real event does not arrive, and
+    // says so rather than pretending.
+    let route = 'mouseout on the canvas'
+    let threwOnRelease = null
+    const hud = scene('Hud')
+    try {
+      game.canvas.dispatchEvent(new MouseEvent('mouseout', {
+        view: window, bubbles: true, cancelable: true,
+      }))
+      await sleep(200)
+    } catch (err) {
+      threwOnRelease = String(err && err.message ? err.message : err)
+    }
+    if (g3.held && threwOnRelease === null) {
+      route = 'hud.input.emit("gameout") -- the real mouseout did NOT reach it'
+      try {
+        hud.input.emit('gameout')
+        await sleep(200)
+      } catch (err) {
+        threwOnRelease = String(err && err.message ? err.message : err)
+      }
+    }
+    note('release route: ' + route)
+    note('after release: held=' + !!g3.held + '  threw=' + (threwOnRelease || 'no'))
+    note('guard counts across the press and release: ' + JSON.stringify(GDn.guardCounts()))
+    if (threwOnRelease) bad('the release threw: ' + threwOnRelease)
+    if (g3.held) bad('the release did not stop the beam')
+    const caught = Object.keys(GDn.guardCounts())
+    if (caught.length) bad('a guard caught something during the sequence: ' + caught.join(', '))
+
+    // ---- AND EVERY OTHER CLIP CUT FROM LEVEL ART -------------------------
+    //
+    // The sibling audit, asked as a question of the animation manager rather
+    // than of a list somebody has to keep up to date: after a level change, is
+    // ANY registered animation holding a destroyed frame?
+    const freed = new Set(LAn.LEVEL_ART_KEYS)
+    const rotten = []
+    for (const key of game.anims.anims.keys()) {
+      const a = game.anims.get(key)
+      if (!a) continue
+      const deadF = a.frames.filter((f) => !f.frame || f.frame.data === null).length
+      if (deadF) rotten.push(key + '(' + deadF + '/' + a.frames.length + ')')
+    }
+    note('animations registered: ' + game.anims.anims.keys().length
+      + '  holding destroyed frames: ' + (rotten.length ? rotten.join(', ') : 'none'))
+    if (rotten.length) bad('these animations hold destroyed frames after a level change: '
+      + rotten.join(', '))
+    note('  (level-art keys that can be freed: ' + freed.size + ')')
+
+    try { await shot('nullframe-level3-beam') } catch (err) { note('  (no screenshot: ' + err + ')') }
+    note('RESULT ' + (faults === 0
+      ? 'the held beam survives a level change: clips are re-cut, the press lights it, and gameout stops it'
+      : '*** ' + faults + ' fault(s) ***'))
+    return
+  }
   if (scenario === 'courtland') {
     // COURTLAND'S THREE, driven the way a player drives them, and measured on
     // the claims the brief makes rather than on whether a sprite appeared.

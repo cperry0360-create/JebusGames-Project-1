@@ -1158,12 +1158,16 @@ export class GameScene extends Phaser.Scene {
     // Asked for by id rather than read off the loaded level for the same
     // reason — `levelArtKeys` falls back to the default level, and freeing the
     // wrong level's art is a smaller fault than freeing none of it.
-    const keys = levelArtKeys(this.level?.id ?? runState().levelId)
+    // THE ARCH CROP IS ONE OF THE TEXTURES THIS FREES, so it goes into the
+    // same list rather than being removed on a line of its own afterwards.
+    // `forgetEffectAnims` now drops every animation cut from anything in this
+    // list, and an animation cut from a texture that is freed outside the list
+    // is exactly the dangling frame this whole function exists to prevent.
+    const keys = [...levelArtKeys(this.level?.id ?? runState().levelId), ARCH_NEAR_KEY]
     forgetEffectAnims(this, keys)
     for (const key of keys) {
       if (this.textures.exists(key)) this.textures.remove(key)
     }
-    if (this.textures.exists(ARCH_NEAR_KEY)) this.textures.remove(ARCH_NEAR_KEY)
   }
 
   // ---------------------------------------------------------------- setup

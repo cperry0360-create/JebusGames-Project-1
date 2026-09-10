@@ -74,7 +74,7 @@ export function registerEffectAnims(scene: Phaser.Scene): void {
 }
 
 /**
- * Drops the animations cut from textures that are about to be freed.
+ * Drops every animation cut from a texture that is about to be freed.
  *
  * AN ANIMATION OUTLIVES ITS TEXTURE, and that is the trap in freeing effect
  * art. `anims.create` stores frame objects belonging to the texture they were
@@ -84,10 +84,40 @@ export function registerEffectAnims(scene: Phaser.Scene): void {
  * from the texture it just loaded. The effect plays, and plays nothing.
  *
  * Called from the same shutdown that frees the textures, with the same keys.
+ *
+ * IT ASKS THE TEXTURE, NOT THE NAME, and that is the whole of the change. This
+ * used to remove the animation whose KEY equalled the texture key, which is
+ * true of every clip `registerEffectAnims` builds and of nothing else. The
+ * Mind Laser's strip is cut into three clips named `<key>-charge`,
+ * `<key>-sustain` and `<key>-fade` by `GameScene.ensureLaserAnims`, none of
+ * which matched — so all three survived every shutdown holding frames from a
+ * destroyed texture, and the next level's first press went through
+ * `Frame.realWidth`, which is `this.data.sourceSize.w`, on a frame whose
+ * `data` `Frame.destroy()` had set to null:
+ *
+ *     TypeError: null is not an object (evaluating 'this.data.sourceSize')
+ *
+ * A texture's frames are the one thing that cannot be wrong about which
+ * animations belong to it. Naming conventions can be, and this one was: a list
+ * of suffixes maintained by hand is correct exactly until somebody adds a
+ * fourth clip, and the failure is a crash two levels into a session on a
+ * phone. See reports/2026-09-10-the-null-frame.md.
+ *
+ * `getAnimsFromTexture` IS PHASER'S OWN ANSWER to that question — it walks
+ * every registered animation and matches `frame.textureKey` — so this asks the
+ * engine rather than keeping a second copy of the rule that could drift from
+ * what the frames actually say.
  */
 export function forgetEffectAnims(scene: Phaser.Scene, keys: readonly string[]): void {
   for (const key of keys) {
-    if (renderFor(key).sheet && scene.anims.exists(key)) scene.anims.remove(key)
+    // ONLY FOR A TEXTURE THAT IS ACTUALLY LOADED. `getAnimsFromTexture` looks
+    // the key up through the texture manager, and that hands back the
+    // `__MISSING` placeholder for a key it does not hold — so asking about a
+    // key this level never loaded would return the animations belonging to
+    // the placeholder and remove those instead. `freeLevelArt` is given a
+    // whole level's manifest and guards its own removal the same way.
+    if (!scene.textures.exists(key)) continue
+    for (const anim of scene.anims.getAnimsFromTexture(key)) scene.anims.remove(anim)
   }
 }
 
