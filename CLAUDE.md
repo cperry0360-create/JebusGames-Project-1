@@ -121,6 +121,16 @@ Use `sh tools/tsdiff.sh <known-green-commit>` instead. It typechecks the
 working tree and a commit CI already accepted, and reports only the
 difference. Two real errors reached CI before this existed.
 
+**And it is blind to anything that is not an error locally.** It compares error
+COUNTS, and without `node_modules` every Phaser type is `any` — so an access
+rule on one cannot fire here at all. `scene.anims.anims.values()` ran correctly
+in the harness and reported zero introduced errors, and CI answered
+`TS2445: Property 'anims' is protected`. There is no way to check that from the
+sandbox: the registry answers 403 to `npm install` and the egress proxy answers
+403 to fetching `phaser.d.ts` from a CDN. When a change touches a Phaser member
+`tsdiff` cannot see, prefer a documented public API and expect CI to be the
+first thing that can tell you. See `reports/2026-09-10-the-null-frame.md`.
+
 ## Standing facts
 
 Things established at cost that are not discoverable from the code, and that a
