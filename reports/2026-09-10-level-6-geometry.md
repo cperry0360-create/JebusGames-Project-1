@@ -27,7 +27,8 @@ The paint disagrees. Details in §3.
 | Commit | What | CI |
 |---|---|---|
 | `12491fe` | Derive level 6's map geometry off the painted plate | **green** — `test`, `typecheck` and `changes` all success; `deploy` skipped, as it is on every branch that is not `main` ([run 34475601026](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34475601026)) |
-| this report | markdown only; its row is filled by the commit after it | |
+| `3c48151` | Write up the level 6 geometry pass | **green** — `test`, `typecheck`, `changes` all success; `deploy` skipped ([run 34475895174](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34475895174)) |
+| this fill-in | markdown only; its row is filled by the commit after it, if there is one |  |
 
 Branch: `claude/level-6-map-geometry-zw4qb1`. Nothing here is on `main`.
 
