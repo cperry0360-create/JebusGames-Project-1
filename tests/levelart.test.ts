@@ -194,15 +194,21 @@ test('the only level art no level loads is level 6\'s', () => {
   // it is either art for a level that has not shipped or a key moved off boot
   // by mistake. Both are worth knowing; only one is a bug.
   //
-  // These four are the first kind. `waves.level6.json` and `level6.json` are
+  // These five are the first kind. `waves.level6.json` and `level6.json` are
   // in the repository and level 6 is NOT on levels.json's list, so its roster
   // — Scrapper, Sprinter, the level-6 Bruiser and the Rooster boss — has no
   // level to arrive with. That is 15.1 MB that used to sit on the title screen
   // for a level nobody can reach.
   //
+  // `map-level6` JOINED THEM WITH THE MAP PASS. The plate is traced, encoded
+  // and registered in art.json — tools/level6_geometry.json and
+  // tools/check_level6.py are derived from it — and level 6 still has no row
+  // in levels.json, so the plate is loaded by nothing for the same reason the
+  // roster is. It is one entry, not a fifth failure mode.
+  //
   // WHEN LEVEL 6 SHIPS THIS TEST FAILS, which is the intent: add level 6 to
   // levels.json and the list here empties on its own.
   assert.deepEqual(orphanedLevelArt(LEVELS.map((l) => l.id)).sort(), [
-    'enemy-bruiser', 'enemy-rooster', 'enemy-scrapper', 'enemy-sprinter',
+    'enemy-bruiser', 'enemy-rooster', 'enemy-scrapper', 'enemy-sprinter', 'map-level6',
   ], 'level art that no shipped level loads')
 })
