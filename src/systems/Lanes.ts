@@ -34,7 +34,13 @@ import { Path } from './Path.ts'
 export const MAIN_LANE = 'main'
 
 /** As much of a map as the lane network reads. */
-export type LaneSource = Pick<MapDef, 'waypoints' | 'lanes' | 'mainMerge'>
+export type LaneSource = Pick<MapDef, 'waypoints' | 'lanes' | 'mainMerge' | 'mainId'>
+
+/** What the map's own `waypoints` lane is called. `main` unless the map says
+ *  otherwise; see the note on `MapDef.mainId`. */
+export function mainIdOf(map: LaneSource): string {
+  return map.mainId ?? MAIN_LANE
+}
 
 /**
  * The map's lanes as one list, main first.
@@ -45,7 +51,7 @@ export type LaneSource = Pick<MapDef, 'waypoints' | 'lanes' | 'mainMerge'>
  */
 export function laneDefs(map: LaneSource): LaneDef[] {
   return [
-    { id: MAIN_LANE, waypoints: map.waypoints, merge: map.mainMerge },
+    { id: mainIdOf(map), waypoints: map.waypoints, merge: map.mainMerge, entrance: true },
     ...(map.lanes ?? []),
   ]
 }
@@ -317,15 +323,23 @@ export function validateLanes(map: LaneSource): string[] {
   // a continuation is fine (it is a gate); a lane nothing continues into that
   // ALSO reaches an exit on its own is a route with no way onto it, which is
   // the forgotten-merge typo wearing a different hat, and it is reported.
+  //
+  // A LANE MAY ALSO BE JOINED UP BY BEING AN ENTRANCE. Level 6 is two
+  // independent lanes -- each has its own opening on the west edge and its own
+  // exit on the east, and neither merges -- so its south lane is a terminal
+  // nothing feeds and is still perfectly reachable, because walkers spawn on
+  // it. `entrance` is the map saying so; see the note on LaneDef. Without it
+  // this rule rejected level 6 outright, which is how it was found.
   const terminals = defs.filter((d) => contsOf(d).length === 0)
   if (terminals.length === 0) problems.push('every lane merges; none reaches the exit')
   const fedInto = new Set<string>()
   for (const d of defs) for (const m of contsOf(d)) fedInto.add(m.into)
   if (defs.length > 1) {
     for (const d of terminals) {
-      if (!fedInto.has(d.id) && d.id !== MAIN_LANE) {
+      if (!fedInto.has(d.id) && !d.entrance) {
         problems.push(
-          `lane "${d.id}" reaches an exit but nothing merges into it; it is a route with no gate`)
+          `lane "${d.id}" reaches an exit but nothing merges into it and it is not an entrance; ` +
+          'it is a route with no gate')
       }
     }
   }

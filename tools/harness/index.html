@@ -64,7 +64,7 @@ const SCENARIO_NAMES = [
   'enemyfacing', 'everyloadout', 'facing', 'fps', 'full', 'full13', 'fx',
   'game', 'gateway', 'gestures', 'glacier', 'gnomes', 'goblin', 'heroanim',
   'heroblock', 'herochip', 'herofx', 'herohp', 'lane', 'leak', 'ledger',
-  'lettering', 'levelart', 'levels', 'listenerguard', 'loadout', 'locked',
+  'lettering', 'level6', 'levelart', 'levels', 'listenerguard', 'loadout', 'locked',
   'loopthrow', 'looptrack', 'lost', 'mapedge', 'maproute', 'markers',
   'meteor', 'mix', 'modal', 'moes', 'music', 'muzzle', 'nightfall',
   'nodefirst', 'noderings', 'notch', 'nuke', 'nukeseq', 'nullframe',
@@ -14414,6 +14414,290 @@ async function run() {
 
   // Does a boss that walks off the end cost lives, and does the wave still
   // count as cleared? Driven directly rather than by playing thirteen waves.
+  /*
+   * LEVEL 6, THE TWO-LANE LEVEL, AND THE ROOSTER'S BREATH.
+   *
+   * Everything here is read off a running scene rather than off the data:
+   * whether both lanes actually carry enemies, whether BOTH exits take lives,
+   * and whether the flame telegraphs before it burns, scorches a tower, and
+   * stays out of the other lane. The last one is the interesting one -- the
+   * plate MERGES the two lanes and the map joins the south one to an
+   * unreachable band to pull them apart, so "the corridor cannot reach the
+   * other road" is a claim about geometry this pass authored and not about
+   * geometry somebody painted.
+   */
+  if (scenario === 'level6') {
+    let faults = 0
+    const bad = (m) => { faults++; note('*** ' + m) }
+    const RS6 = await import('./js/systems/RunState.js')
+
+    /* ---- the node on the world map, locked then open ---- */
+    const SAVE6 = await import('./js/systems/Save.js')
+    const WR6 = await import('./js/systems/WorldRoad.js')
+    for (const cleared of [['level1', 'level2', 'level3', 'level4'],
+                           ['level1', 'level2', 'level3', 'level4', 'level5']]) {
+      SAVE6.writeSave({ ...SAVE6.DEFAULT_SAVE, clearedLevels: cleared })
+      for (const k of ['Title', 'WorldMap', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+      game.scene.start('WorldMap')
+      if (!(await until(() => running('WorldMap'), 12000))) { bad('the world map did not open'); break }
+      await sleep(600)
+      const node = WR6.roadNodes().find((n) => n.level && n.level.id === 'level6')
+      if (!node) { bad('level 6 has no node on the road'); break }
+      const state = WR6.nodeState(node, cleared)
+      const want = cleared.includes('level5') ? 'open' : 'locked'
+      note('world map with ' + cleared.length + ' cleared: level 6 is slot '
+        + (node.index + 1) + ' at ' + Math.round(node.x) + ',' + Math.round(node.y)
+        + ' and reads ' + state)
+      if (state !== want) bad('level 6 reads ' + state + ' with ' + cleared.length + ' cleared, wanted ' + want)
+      await shot('level6-0-map-' + want)
+    }
+
+    for (const k of ['Title', 'WorldMap', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+    RS6.setRunState({
+      heroId: 'cory', levelId: 'level6', seed: 7, abilities: ['molotov', 'glacier'],
+      openingTowers: ['withholding', 'writeoff'], reserveTowers: [], resumeFrom: null,
+    })
+    game.scene.start('Game')
+    if (!(await until(() => running('Game') && scene('Game').hero, 20000))) {
+      bad('level 6 did not start'); note('RESULT ' + faults + ' fault(s)'); return
+    }
+    const G = scene('Game')
+    await sleep(700)
+    note('level 6 built: lanes=' + JSON.stringify(G.lanes.lanes.map((l) => l.id))
+      + ' pads=' + G.build.spots.length + ' lives=' + G.status.lives)
+    if (G.lanes.lanes.length !== 2) bad('expected two lanes, got ' + G.lanes.lanes.length)
+    await shot('level6-1-board')
+
+    /* ---- both lanes actually carry enemies ---- */
+    const seen = new Set()
+    G.status.wave = 0
+    for (let w = 0; w < 6 && seen.size < 2; w++) {
+      G.startWave()
+      const t0 = Date.now()
+      while (Date.now() - t0 < 9000 && seen.size < 2) {
+        for (const e of G.enemies) if (e.alive) seen.add(e.laneId)
+        await sleep(100)
+      }
+    }
+    note('lanes that carried an enemy: ' + JSON.stringify([...seen]))
+    if (seen.size < 2) bad('only ' + seen.size + ' lane(s) ever carried an enemy')
+    await shot('level6-2-bothlanes')
+
+    /* ---- both exits take lives ---- */
+    for (const id of ['upper', 'lower']) {
+      for (const e of G.enemies) e.die()
+      G.spawner.groups = []
+      await sleep(300)
+      const before = G.status.lives
+      const lane = G.lanes.lane(id)
+      const spawned = G.spawnEnemyForHarness
+        ? G.spawnEnemyForHarness('scrapper', id)
+        : null
+      // No harness hook: walk a live one over instead. Start a wave, grab the
+      // first enemy on this lane and push it to its own lane's end.
+      if (!spawned) {
+        // WAVE 2, NOT WAVE 1. waves.level6.json's first wave is `up:scrapperx4`
+        // and nothing else, so restarting at wave 0 can only ever produce an
+        // upper-lane enemy -- which this scenario reported as "no enemy ever
+        // walked the lower lane" and was a bug in the check, not the game.
+        G.status.wave = 1
+        G.startWave()
+        if (!(await until(() => G.enemies.some((e) => e.alive && e.laneId === id), 12000))) {
+          bad('no enemy ever walked the ' + id + ' lane'); continue
+        }
+        for (const e of G.enemies) if (e.laneId !== id) e.die()
+        G.spawner.groups = []
+      }
+      const e = G.enemies.find((x) => x.alive && x.laneId === id)
+      if (!e) { bad('nothing alive on ' + id); continue }
+      e.laneDistance = lane.path.totalLength - 6
+      e.distance = lane.path.totalLength - 6
+      await until(() => G.status.lives < before || !e.alive, 12000)
+      await sleep(500)
+      const lost = before - G.status.lives
+      note(id + ' exit: lives ' + before + ' -> ' + G.status.lives + '  (lost ' + lost + ')')
+      if (lost <= 0) bad('the ' + id + ' exit cost no lives')
+    }
+    await shot('level6-3-exits')
+
+    /* ---- the Rooster: telegraph, burn, scorch, and stay in its lane ---- */
+    // A TOWER ON THE BOSS'S OWN LANE FIRST. With none on the board the scorch
+    // check can only ever report false, which is a scenario that cannot fail
+    // rather than a level that passes. Pad 0 sits 80.8 px off the upper lane.
+    for (const e of G.enemies) e.die()
+    G.spawner.groups = []
+    G.status.peanuts = 9999
+    await sleep(300)
+    // Through the scene's own `place`, not the ring: the ring needs the build
+    // phase and a camera looking at the pad, and this check is about the
+    // SCORCH, not about the build UI (which `phone` and `buildall` cover).
+    // Pad 0 is (669, 52), 80.8 px off the upper lane the Rooster walks.
+    let built = false
+    for (const spot of G.build.spots) {
+      if (Math.hypot(spot.x - 669, spot.y - 52) > 4) continue
+      G.place('withholding', spot)
+      built = G.towers.length > 0
+    }
+    note('tower for the scorch check: built=' + built + ' towers=' + G.towers.length
+      + (G.towers[0] ? ' at ' + Math.round(G.towers[0].x) + ',' + Math.round(G.towers[0].y) : ''))
+    G.spawner.groups = []
+    G.status.lives = 20
+    await sleep(300)
+    G.status.wave = G.status.waveCount - 1
+    G.startWave()
+    if (!(await until(() => G.enemies.some((e) => e.alive && e.def.flame), 30000))) {
+      bad('the Rooster never spawned'); note('RESULT ' + faults + ' fault(s)'); return
+    }
+    for (const e of G.enemies) if (!e.def.flame) e.die()
+    G.spawner.groups = []
+    const boss = G.enemies.find((e) => e.alive && e.def.flame)
+    note('boss: ' + boss.def.name + ' hp=' + boss.health + ' lane=' + boss.laneId)
+
+    // Put a tower where the fire will be: just ahead of him on his own lane.
+    const FL = G.flameRules
+    if (!FL) bad('level 6 has no flame rules on the scene')
+    const ahead = G.lanes.lane(boss.laneId).path
+    let scorchSeen = false, telegraphSeen = false, burnSeen = false, heldSeen = false
+    let closestToOther = Infinity
+    const other = G.lanes.lanes.find((l) => l.id !== boss.laneId)
+    // A tower cannot be built mid-wave on demand here, so the scorch is
+    // checked against the towers the run already has, plus the hero, who can
+    // be walked into the corridor.
+    // PARK HIM WHERE THE FIRE WILL REACH THE TOWER. The corridor is 64 px wide
+    // and every pad on this board sits 70-103 px off its lane, so whether a
+    // breath scorches anything depends entirely on WHERE along the lane it is
+    // taken -- 21.4% of the upper lane can reach a pad and the rest cannot.
+    // Waiting for it to happen by luck is a check that reports "no scorch" for
+    // a mechanic that works.
+    const FE0 = await import('./js/systems/Flame.js')
+    let parkAt = null
+    const tw = G.towers[0]
+    if (tw && FL) {
+      const path = ahead
+      let bestD = null, bestGap = Infinity
+      for (let d = 0; d < path.totalLength; d += 4) {
+        const pt = path.pointAt(d)
+        const h = path.headingNear(pt.x, pt.y)
+        const end = FE0.flameEnd(pt.x, pt.y, h, FL)
+        // distance from the tower to the corridor's centre segment
+        const dx = end.x - pt.x, dy = end.y - pt.y, L2 = dx * dx + dy * dy
+        const t = L2 ? Math.max(0, Math.min(1, ((tw.x - pt.x) * dx + (tw.y - pt.y) * dy) / L2)) : 0
+        const gap = Math.hypot(tw.x - (pt.x + t * dx), tw.y - (pt.y + t * dy))
+        if (gap < bestGap) { bestGap = gap; bestD = d }
+      }
+      note('best breathing spot for the tower at ' + Math.round(tw.x) + ',' + Math.round(tw.y)
+        + ': lane distance ' + bestD + ', corridor passes ' + bestGap.toFixed(1)
+        + ' px from it (half-width ' + FL.width / 2 + ')')
+      if (bestD !== null && bestGap <= FL.width / 2) {
+        parkAt = bestD
+        boss.laneDistance = bestD
+        boss.distance = bestD
+      }
+    }
+    const t0 = Date.now()
+    let shotTelegraph = false, shotBurn = false
+    while (Date.now() - t0 < 26000 && !(scorchSeen && burnSeen && telegraphSeen)) {
+      const st = G.flameStates.get(boss)
+      if (st) {
+        if (st.telegraphLeft > 0) {
+          telegraphSeen = true
+          if (!shotTelegraph) { shotTelegraph = true; await shot('level6-4-telegraph') }
+          if (st.flameLeft > 0) bad('the fire is live during the telegraph')
+        }
+        if (st.flameLeft > 0) {
+          burnSeen = true
+          if (!shotBurn) { shotBurn = true; await shot('level6-5-flame') }
+          // WHERE THE CORRIDOR REACHES, measured against the other lane.
+          const FE = await import('./js/systems/Flame.js')
+          const h = ahead.headingNear(boss.x, boss.y)
+          const end = FE.flameEnd(boss.x, boss.y, h, FL)
+          for (let i = 0; i <= 60; i++) {
+            const px = boss.x + (end.x - boss.x) * i / 60
+            const py = boss.y + (end.y - boss.y) * i / 60
+            let best = Infinity
+            const w = other.path.points
+            for (let k = 0; k < w.length - 1; k++) {
+              const ax = w[k].x, ay = w[k].y, bx = w[k + 1].x, by = w[k + 1].y
+              const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy
+              const tt = L2 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / L2)) : 0
+              best = Math.min(best, Math.hypot(px - (ax + tt * dx), py - (ay + tt * dy)))
+            }
+            closestToOther = Math.min(closestToOther, best)
+          }
+        }
+      }
+      if (boss.selfHeld) heldSeen = true
+      if (G.scorchLeft && G.scorchLeft.size > 0) scorchSeen = true
+      // HOLD HIM ON THE SPOT BETWEEN BREATHS. He walks at 30 px/s and the
+      // cadence is six seconds, so left alone he is 180 px past the place the
+      // corridor covered the tower by the time he next breathes -- which reads
+      // as "the scorch does not work" and is really "he moved".
+      if (parkAt !== null && !(st && (st.flameLeft > 0 || st.telegraphLeft > 0))) {
+        boss.laneDistance = parkAt
+        boss.distance = parkAt
+      }
+      await sleep(60)
+    }
+    note('telegraph seen=' + telegraphSeen + '  fire seen=' + burnSeen
+      + '  boss held=' + heldSeen + '  a tower scorched=' + scorchSeen
+      + '  towers on board=' + G.towers.length)
+    note('closest the corridor came to the OTHER lane: ' + closestToOther.toFixed(1)
+      + ' px  (fire half-width ' + (FL ? FL.width / 2 : '?') + ')')
+    if (!telegraphSeen) bad('the Rooster never telegraphed')
+    if (!burnSeen) bad('the Rooster never breathed')
+    if (!heldSeen) bad('the Rooster never stopped to breathe')
+    if (!scorchSeen) bad('the fire never scorched the tower standing in it')
+    // THE CORRIDOR DOES REACH THE OTHER LANE, and it is NOT scored as a fault
+    // because it is not a regression -- it is what this board is. level6.json
+    // used to claim the flame "cannot leave its own lane ... a property of the
+    // map"; it is not true and its note now says so. The corridor is a STRAIGHT
+    // 300 px capsule and both roads serpentine, so breathing from 26.0% of the
+    // upper lane and 7.5% of the lower puts the other road inside it. Measured
+    // exactly, off the shipped map, in reports/2026-09-11-level-6.md. Shorten
+    // `reach` or narrow `width` in level6.json to change it; both are data.
+    // AND THE SAME QUESTION ASKED OF THE WHOLE LANE, not of wherever the boss
+    // happened to be standing. The check above only sees the positions this run
+    // drove him to; this walks both roads and asks, at every 4 px, whether a
+    // breath taken there would reach the other one. Deterministic, so it is the
+    // number that goes in the report.
+    if (FL) {
+      const segTo = (px, py, w) => {
+        let best = Infinity
+        for (let k = 0; k < w.length - 1; k++) {
+          const ax = w[k].x, ay = w[k].y, bx = w[k + 1].x, by = w[k + 1].y
+          const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy
+          const tt = L2 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / L2)) : 0
+          best = Math.min(best, Math.hypot(px - (ax + tt * dx), py - (ay + tt * dy)))
+        }
+        return best
+      }
+      for (const lane of G.lanes.lanes) {
+        const foe = G.lanes.lanes.find((l) => l.id !== lane.id)
+        let n = 0, crossed = 0
+        for (let d = 0; d < lane.path.totalLength; d += 4) {
+          const pt = lane.path.pointAt(d)
+          if (pt.x < 0 || pt.x > 1280 || pt.y < 0 || pt.y > 720) continue
+          n++
+          const h = lane.path.headingNear(pt.x, pt.y)
+          const end = FE0.flameEnd(pt.x, pt.y, h, FL)
+          for (let i = 0; i <= 60; i++) {
+            if (segTo(pt.x + (end.x - pt.x) * i / 60,
+                      pt.y + (end.y - pt.y) * i / 60, foe.path.points) <= FL.width / 2) {
+              crossed++; break
+            }
+          }
+        }
+        note('KNOWN breathing from the ' + lane.id + ' lane reaches the ' + foe.id
+          + ' lane at ' + (crossed * 100 / Math.max(n, 1)).toFixed(1) + '% of its length'
+          + ' -- level6.json used to claim this was impossible; its `_flame` note now says'
+          + ' otherwise. `reach` and `width` are data.')
+      }
+    }
+    await shot('level6-6-after')
+    note('RESULT ' + (faults ? '*** ' + faults + ' fault(s) ***' : 'no faults'))
+    return
+  }
+
   if (scenario === 'bossleak') {
     g.status.wave = g.status.waveCount - 1
     g.startWave()

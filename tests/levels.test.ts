@@ -495,7 +495,7 @@ test('each level\'s laneLengthPx is what its own map actually walks', () => {
   // which is why levels 1 and 2 read the same as they always did.
   const maps: Record<string, string> = {
     level1: 'map', level2: 'map_level2', level3: 'map_level3', level4: 'map_level4',
-    level5: 'map_level5',
+    level5: 'map_level5', level6: 'map_level6',
   }
   const walk = (w: [number, number][]): number => {
     let d = 0
@@ -508,10 +508,19 @@ test('each level\'s laneLengthPx is what its own map actually walks', () => {
     assert.ok(file, `${l.id} has no map file in this test's table; add it`)
     const map = read(file)
     const trunk = walk(map.waypoints as [number, number][])
-    const branches = (map.lanes ?? []) as Array<{ id: string; waypoints: [number, number][] }>
-    const routes = branches.length === 0
-      ? [trunk]
-      : branches.map((b) => walk(b.waypoints) + trunk)
+    const branches = (map.lanes ?? []) as Array<
+      { id: string; waypoints: [number, number][]; merge?: unknown }>
+    // A BRANCH THAT MERGES walks itself and then the trunk. A lane that does
+    // NOT merge is a route on its own and the trunk is a second route beside
+    // it, which is level 6: two independent lanes, neither feeding the other,
+    // so adding the trunk to one of them would invent 1711 px nothing walks.
+    // This is `LaneNetwork.routeLengths` said in the test's own terms.
+    const merges = branches.filter((b) => b.merge !== undefined)
+    const independent = branches.filter((b) => b.merge === undefined)
+    const routes = merges.length === 0
+      ? [trunk, ...independent.map((b) => walk(b.waypoints))]
+      : [...merges.map((b) => walk(b.waypoints) + trunk),
+         ...independent.map((b) => walk(b.waypoints))]
     // `laneLengthPx` IS THE LONGEST ROUTE, and level 5 is the first level where
     // that is a distinction worth making. Levels 1 to 4 have one route or
     // several arranged to be equal, so every route was the recorded number and

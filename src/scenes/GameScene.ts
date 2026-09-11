@@ -25,6 +25,10 @@ import { LaneNetwork } from '../systems/Lanes.ts'
 import { NightRules } from '../systems/NightRules.ts'
 import { convertedHealth } from '../systems/Vampirism.ts'
 import { puddleAlpha } from '../systems/AcidPuddle.ts'
+import {
+  flameEnd, inFlame, newFlameState, scorchIntervalMultiplier, tickFlame,
+  type FlameRules, type FlameState,
+} from '../systems/Flame.ts'
 import { Path } from '../systems/Path.ts'
 import { BuildSystem } from '../systems/BuildSystem.ts'
 import type { BuildSpot } from '../systems/BuildSystem.ts'
@@ -318,6 +322,27 @@ export class GameScene extends Phaser.Scene {
   private skyTint: Phaser.GameObjects.Rectangle | null = null
   /** One sprite per live puddle, in the same order as `night.puddles`. */
   private puddleArt: Phaser.GameObjects.Image[] = []
+  /**
+   * THE ROOSTER'S BREATH, and null on every level that is not level 6.
+   *
+   * `systems/Flame.ts` owns the cadence and the corridor -- it is Phaser-free
+   * and the soak runs the SAME module, which is the point: the win rate the
+   * soak reports and the fight the player has are the same arithmetic. What is
+   * here is the scene half only: holding the boss still, drawing the warning
+   * and the fire, and handing the damage to the things standing in it.
+   */
+  private flameRules: FlameRules | null = null
+  /** One cycle per breathing enemy. Keyed by the enemy so a boss that dies
+   *  mid-telegraph takes its half-finished breath with it. */
+  private flameStates = new Map<Enemy, FlameState>()
+  /** Seconds of scorch left on a tower. A scorched tower takes NO damage and
+   *  keeps firing; what it loses is rate. */
+  private scorchLeft = new Map<Tower, number>()
+  /** The corridor, drawn. One image reused rather than created per breath, so
+   *  nothing accumulates across a fight. */
+  private flameArt: Phaser.GameObjects.Image | null = null
+  /** The scorch marker over each burning tower, by tower. */
+  private scorchArt = new Map<Tower, Phaser.GameObjects.Image>()
   private build!: BuildSystem
   /** Public so the probe can drive the bribe through the real swap. Undefined
    *  on a level whose map declares no signs — see `buildSign`. */
@@ -737,6 +762,12 @@ export class GameScene extends Phaser.Scene {
     this.build = new BuildSystem(this.level.map.buildSpots, this.level.map.spotRadius)
     this.spawner = new WaveSpawner()
     this.night = NightRules.from(levelRules(this.level.id))
+    // LEVEL 6'S ROOSTER, and null on every other level -- `levelRules` returns
+    // null for a level that names no rules file, so this whole mechanic is one
+    // `if` away from not existing anywhere else.
+    this.flameRules = (levelRules(this.level.id)?.flame as FlameRules | undefined) ?? null
+    this.flameStates = new Map()
+    this.scorchLeft = new Map()
 
     this.drawPlate()
     this.buildSign()
@@ -2455,6 +2486,10 @@ export class GameScene extends Phaser.Scene {
     this.ghost = undefined
   }
 
+  /** Buy and raise one tower on one pad. Private, and the level-6 harness
+   *  scenario reaches it anyway: driving the ring needs the build phase and a
+   *  camera on the pad, and what that scenario is checking is the Rooster's
+   *  scorch rather than the build UI. */
   private place(id: string, spot: BuildSpot): void {
     const def = TOWERS[id]
     if (!this.build.isFree(spot.index)) return
@@ -4190,6 +4225,16 @@ export class GameScene extends Phaser.Scene {
     this.hazards.length = 0
     for (const a of this.puddleArt) a.destroy()
     this.puddleArt.length = 0
+    // THE ROOSTER'S LEAVINGS. The scorch outlives the boss by four seconds by
+    // design, so it can still be on the board when a run ends -- and a marker
+    // left parented to a destroyed tower is the shape of bug this scene has
+    // been bitten by before.
+    for (const a of this.scorchArt.values()) a.destroy()
+    this.scorchArt.clear()
+    this.scorchLeft.clear()
+    this.flameStates.clear()
+    this.flameArt?.destroy()
+    this.flameArt = null
     this.night?.clear()
   }
 
@@ -4311,6 +4356,126 @@ export class GameScene extends Phaser.Scene {
     this.puddleArt.push(art)
     play(this, n.humiliationRules?.sound ?? 'hit-a', 0.8)
     this.shoutHaHa()
+  }
+
+  /**
+   * The Rooster's breath, one frame at a time.
+   *
+   * WHY THE BOSS STOPPING MATTERS MORE THAN THE DAMAGE. The flame's own damage
+   * only touches the player's SIDE -- the hero, the summoned fighters and the
+   * Ima Dummy's lads -- and none of them is what kills a run. What decides the
+   * fight is `held`: the Rooster stands still for a second of every six, and a
+   * second of a boss not walking is a second of every gun on the board still
+   * having it in range. Level 6 soaks at 42% with this running and 30% with it
+   * removed, which is the wrong way round from what "he breathes fire on you"
+   * sounds like, and it is why this is wired to the same module the soak uses
+   * rather than re-implemented here. See reports/2026-09-11-level-6.md.
+   *
+   * NO ANIMATION IS REGISTERED. The corridor and the scorch marker are static
+   * images, deliberately: `Effects.ts` has to forget an animation when the
+   * texture it was cut from is freed, and the cheapest way to be certain this
+   * cannot re-open that bug is to cut no animation at all. If the flame ever
+   * gets frames, it goes through `registerEffectAnims`/`forgetEffectAnims`
+   * with the rest -- see the note on `freeLevelArt`.
+   */
+  private tickRooster(dt: number): void {
+    const rules = this.flameRules
+    if (!rules) return
+
+    // The scorch runs on every level-6 tower whether or not a boss is alive:
+    // four seconds of it outlast the breath, and outlast the Rooster dying.
+    for (const [t, left] of this.scorchLeft) {
+      const next = left - dt
+      if (next > 0) { this.scorchLeft.set(t, next); continue }
+      this.scorchLeft.delete(t)
+      this.scorchArt.get(t)?.destroy()
+      this.scorchArt.delete(t)
+    }
+
+    const boss = this.enemies.find((e) => e.alive && e.def.flame)
+    if (!boss) { this.hideFlame(); return }
+
+    let state = this.flameStates.get(boss)
+    if (!state) { state = newFlameState(rules); this.flameStates.set(boss, state) }
+    const r = tickFlame(state, dt, boss.alive, rules)
+    this.flameStates.set(boss, r.state)
+    // `selfHeld` is the same field Batula's hunch uses, and Enemy.update reads
+    // it as "do not advance this frame".
+    boss.selfHeld = r.held
+
+    // THE BOSS'S OWN LANE, not `this.lane`. `this.lane` is main's path, which
+    // on level 6 is the UPPER lane -- so a Rooster walking the lower one would
+    // have breathed along the other road's heading. The four other sites that
+    // still use `this.lane` as a stand-in for "the road" are listed in
+    // reports/2026-09-10-level-6-geometry.md and are not fixed here.
+    const heading = this.lanes.lane(boss.laneId).path.headingNear(boss.x, boss.y)
+    if (r.event?.kind === 'telegraph') {
+      this.showFlame(boss, heading, rules, true)
+      logEvent('flame-windup', `${boss.def.name} winds up for ${rules.telegraphSeconds}s`)
+    } else if (r.event?.kind === 'breathe') {
+      this.showFlame(boss, heading, rules, false)
+      play(this, 'hit-a', 0.7)
+    } else if (r.event?.kind === 'out') {
+      this.hideFlame()
+    }
+
+    if (!r.burning) return
+    // The corridor moves with the boss, so it is recomputed rather than frozen
+    // at the moment it lit: he is held, but a held enemy can still be shoved.
+    this.showFlame(boss, heading, rules, false)
+    const from = { x: boss.x, y: boss.y }
+    const to = flameEnd(boss.x, boss.y, heading, rules)
+
+    // TOWERS ARE SCORCHED FOR AS LONG AS THE FIRE TOUCHES THEM, refreshed
+    // every tick rather than set once, so walking the fire across a row does
+    // not give the first tower four seconds and the last one none.
+    for (const t of this.towers) {
+      if (!inFlame({ x: t.x, y: t.y }, from, to, rules)) continue
+      this.scorchLeft.set(t, rules.scorchSeconds)
+      if (!this.scorchArt.has(t)) {
+        const mark = this.add.image(t.x, t.y - 12, rules.scorchFx)
+          .setDepth(GROUND_DEPTH + 8)
+        fitInRect(mark, rules.scorchFx, 34, 34)
+        this.scorchArt.set(t, mark)
+      }
+    }
+
+    const per = rules.damagePerSecond * rules.tickSeconds
+    for (let i = 0; i < r.ticks; i++) {
+      if (!this.hero.down && inFlame({ x: this.hero.x, y: this.hero.y }, from, to, rules)) {
+        this.damageHero(per)
+      }
+      for (const f of this.fighters) {
+        if (inFlame({ x: f.x, y: f.y }, from, to, rules)) f.hurt(per)
+      }
+      for (const g of this.garrisons) {
+        for (const sol of g.soldiers) {
+          if (sol.alive && inFlame({ x: sol.x, y: sol.y }, from, to, rules)) sol.hurt(per)
+        }
+      }
+    }
+  }
+
+  /** The corridor as one stretched image, dim while it is only a warning. */
+  private showFlame(boss: Enemy, heading: number, rules: FlameRules, warning: boolean): void {
+    if (!this.flameArt) {
+      this.flameArt = this.add.image(0, 0, rules.fx).setOrigin(0, 0.5)
+      this.flameArt.setDepth(GROUND_DEPTH + 7)
+    }
+    const art = this.flameArt
+    art.setTexture(rules.fx)
+    art.setPosition(boss.x, boss.y)
+    art.setRotation(heading)
+    art.setDisplaySize(rules.reach, rules.width)
+    // The WARNING is the same strip at a third of the alpha. A separate
+    // telegraph texture would be a second art dependency for a level whose
+    // whole joke is that nothing in it got finished.
+    art.setAlpha(warning ? 0.35 : 1)
+    art.setVisible(true)
+  }
+
+  private hideFlame(): void {
+    this.flameArt?.setVisible(false)
   }
 
   /** The crowd on the walls. Floating text, because the walls are painted. */
@@ -5129,6 +5294,12 @@ export class GameScene extends Phaser.Scene {
     // Level 5's own rules, and a no-op returning on the first line everywhere
     // else. Before `tickEnemies` because it decides how fast they walk.
     this.tickNight(dt)
+    // NOT INSIDE `tickNight`, which is where this first went and where it did
+    // nothing at all: that method returns on the first line when the level has
+    // no `phases` block, and level 6 has none -- it is level FIVE that owns the
+    // day/night rules. The harness caught it (`run.sh level6`): the Rooster
+    // spawned, walked, and never once stopped or breathed.
+    this.tickRooster(dt)
     this.tickEnemies(dt)
     // WHAT THE PLAYER'S SIDE MAY SHOOT, which is not every enemy on the board.
     // A mind-controlled enemy is fighting for the player, and a tower or a
@@ -5143,7 +5314,13 @@ export class GameScene extends Phaser.Scene {
       // twice the interval, and getting that the wrong way round would make a
       // puddle a buff. 1 everywhere there is no puddle, so this multiplies
       // into every tower on every level and finds nothing.
-      t.fireIntervalScale = this.night?.towerSlowAt(t.x, t.y) ?? 1
+      // A SCORCHED TOWER MULTIPLIES ON TOP OF AN ACID ONE rather than
+      // replacing it. They are different levels today, so the product is
+      // always one of them times 1 -- but the wrong shape here is the kind
+      // that only shows up on the level that first has both.
+      t.fireIntervalScale = (this.night?.towerSlowAt(t.x, t.y) ?? 1)
+        * ((this.scorchLeft.get(t) ?? 0) > 0 && this.flameRules
+          ? scorchIntervalMultiplier(this.flameRules) : 1)
       t.tick(dt, hostiles, (tower, target) => this.fire(tower, target))
     }
     // A Beacon that has just come back relights everything it covers, and a

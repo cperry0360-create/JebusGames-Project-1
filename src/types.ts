@@ -68,6 +68,21 @@ export interface LaneDef {
    * matters: a lane nothing leads to and that leads nowhere is unreachable.
    */
   merge?: MergeContinuation | MergeContinuation[]
+  /**
+   * True where this lane is a place enemies ARRIVE, not somewhere they are
+   * handed on to. `main` is one by definition and never declares it.
+   *
+   * WHAT IT IS FOR. `validateLanes` reports a lane that nothing merges into
+   * and that itself merges nowhere, because on every map up to level 5 that
+   * shape was a forgotten `merge` -- a stretch of road with no way onto it.
+   * Level 6 is two INDEPENDENT lanes, each with its own entrance and its own
+   * exit, so its south lane is exactly that shape and is exactly correct. The
+   * flag is the difference between the two, stated by the map rather than
+   * guessed: a lane that says it is an entrance is reachable because walkers
+   * spawn on it, and one that does not say so and has nothing feeding it is
+   * still the typo the rule was written to catch.
+   */
+  entrance?: boolean
 }
 
 export interface MapDef {
@@ -96,6 +111,23 @@ export interface MapDef {
    * copies of it to drift. See systems/Lanes.ts.
    */
   lanes?: LaneDef[]
+  /**
+   * What the lane built from `waypoints` is CALLED. Defaults to "main".
+   *
+   * WHY A MAP WOULD RENAME IT. Up to level 5 the `waypoints` lane was always
+   * the trunk every enemy finished on, so "main" described it and the wave
+   * tables never had to name it -- branches were named and the trunk was where
+   * they ended up. Level 6 is two independent lanes called `upper` and `lower`,
+   * neither of which is a trunk, and its wave table spawns on both by name. One
+   * of them still has to be the map's own `waypoints`, because LaneNetwork is
+   * built as [waypoints, ...lanes] and GameScene measures the board bounds
+   * against the first. Renaming it is how that lane can be `upper` to the waves
+   * AND the map's own waypoints to the engine, instead of a silent fallback:
+   * `LaneNetwork.lane()` resolves an unknown id to main, so a wave spawning on
+   * "upper" against a lane called "main" would have walked the right road for
+   * the wrong reason and the wrong road the day a third lane arrived.
+   */
+  mainId?: string
   /**
    * Where the lane `waypoints` describes CONTINUES, if it is not itself an
    * exit. Absent on every map before level 5, and the shape of the field is

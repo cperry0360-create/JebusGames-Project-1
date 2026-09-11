@@ -17,19 +17,18 @@ const FLAME = (level6 as any).flame as FlameRules
 /* ------------------------------------------------ the gate the brief asked for */
 
 test('a level cannot ship with a boss whose health is unset', () => {
-  // THE POINT OF THIS TEST IS THAT THE ROOSTER'S HEALTH IS NULL ON PURPOSE.
+  // THE ROOSTER'S HEALTH WAS NULL ON PURPOSE UNTIL LEVEL 6 SHIPPED.
   //
   // A boss's health only means anything against the DPS the board it walks
-  // past can hold, and level 6's board does not exist -- its plate is a
-  // 2970x316 proof at contact-sheet resolution that has to be re-rendered
-  // before a single pad can be placed. So the number is deliberately absent,
-  // and what has to be impossible is SHIPPING it absent: a level whose wave
-  // table spawns an enemy with no health would divide by nothing on the first
-  // frame.
+  // past can hold, so the number stayed absent until there was a board to
+  // measure it on. It is 7500 now, soaked at 480 seeds against level 6's own
+  // two-lane map for 42%: see reports/2026-09-11-level-6.md. What this test
+  // guards has not changed -- a level whose wave table spawns an enemy with no
+  // health would divide by nothing on the first frame.
   //
-  // The rule is therefore about REGISTERED levels rather than about the file.
-  // Authoring a roster ahead of a map is fine; wiring it into levels.json is
-  // what promises it is playable.
+  // The rule is about REGISTERED levels rather than about the file. Authoring
+  // a roster ahead of a map is still fine; wiring it into levels.json is what
+  // promises it is playable, and level 6 now makes that promise.
   const registered = new Set((levels as any).levels.map((l: any) => l.id))
   for (const l of (levels as any).levels) {
     const table = JSON.parse(readFileSync(url(`../src/data/${l.waves}`), 'utf8'))
@@ -44,13 +43,13 @@ test('a level cannot ship with a boss whose health is unset', () => {
       }
     }
   }
-  // And the other half: the Rooster IS unset right now, so this test is
-  // testing something. If somebody fills it in, this line is the reminder to
-  // delete the exemption below with it.
-  assert.equal(E.rooster.maxHealth, null,
-    'the Rooster has a health value now; register level 6 in levels.json and drop the exemption below')
-  assert.ok(!registered.has('level6'),
-    'level 6 is registered but its boss has no health')
+  // And the other half, the way round it now runs: level 6 IS registered, so
+  // the loop above is actually checking its roster rather than skipping it.
+  // Without this line the test would still pass on a levels.json that had
+  // quietly dropped level 6, and would be testing nothing about the Rooster.
+  assert.ok(registered.has('level6'), 'level 6 is no longer registered in levels.json')
+  assert.equal(E.rooster.maxHealth, 7500,
+    'the Rooster\'s health moved; it is a soaked number, so re-soak level 6 and update the report')
 })
 
 test('an unregistered wave table belongs to a level that is genuinely unfinished', () => {
@@ -60,13 +59,19 @@ test('an unregistered wave table belongs to a level that is genuinely unfinished
   // one whose level cannot yet BE named -- and "cannot yet" means its boss has
   // no health. A level stops qualifying the moment somebody tunes it, which is
   // the moment it should be registered.
+  //
+  // THE LIST IS EMPTY NOW. `waves.level6.json` was the only entry and level 6
+  // is registered, so every wave table on disk belongs to a level. The test
+  // stays because the loophole has not gone anywhere: the next roster authored
+  // ahead of its map lands here, and this is what stops it hiding a dead enemy
+  // from rules.test.ts indefinitely.
   const named = new Set((levels as any).levels.map((l: any) => l.waves))
   const unregistered: string[] = []
   for (const f of readdirSync(url('../src/data/'))) {
     if (/^waves.*\.json$/.test(f) && !named.has(f)) unregistered.push(f)
   }
-  assert.deepEqual(unregistered, ['waves.level6.json'],
-    'a wave table exists that no level names and that this test does not know about')
+  assert.deepEqual(unregistered, [],
+    'a wave table exists that no level names; either register its level or say why here')
   for (const f of unregistered) {
     const table = JSON.parse(readFileSync(url(`../src/data/${f}`), 'utf8'))
     const boss = table.waves.map((w: any) => w.boss).filter(Boolean).pop()
@@ -293,14 +298,12 @@ test('nothing on the board is taller than the shortest building', () => {
 
 test('level 6 adds nothing to any other level', () => {
   // The same property level 5 has to hold, checked the same way: the flame
-  // reaches exactly one level because exactly one level names level6.json, and
-  // right now no level does -- so it currently reaches none, which is the
-  // correct answer for a level with no map.
+  // reaches exactly ONE level because exactly one level names level6.json.
+  // That count was zero until level 6 shipped and is one now; what must never
+  // happen is two, which is how a level-scoped rule becomes a global one.
   const named = (levels as any).levels.filter((l: any) => l.rules === 'level6.json')
-  assert.deepEqual(named, [], 'level 6 is wired into levels.json before it has a map')
-  for (const l of (levels as any).levels) {
-    assert.notEqual(l.rules, 'level6.json')
-  }
+  assert.deepEqual(named.map((l: any) => l.id), ['level6'],
+    'level6.json reaches a level that is not level 6')
   // And the file itself declares no global anything.
   const raw = readFileSync(url('../src/data/level6.json'), 'utf8')
   for (const k of ['startingLives', 'startingPeanuts', 'peanutsPerWaveCleared']) {

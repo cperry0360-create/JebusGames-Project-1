@@ -189,26 +189,22 @@ test('every level asks for its own plate and the shared in-play art', () => {
   }
 })
 
-test('the only level art no level loads is level 6\'s', () => {
+test('every piece of level art belongs to a level that loads it', () => {
   // Level art that no shipped level asks for is never loaded by anything, and
   // it is either art for a level that has not shipped or a key moved off boot
   // by mistake. Both are worth knowing; only one is a bug.
   //
-  // These five are the first kind. `waves.level6.json` and `level6.json` are
-  // in the repository and level 6 is NOT on levels.json's list, so its roster
-  // — Scrapper, Sprinter, the level-6 Bruiser and the Rooster boss — has no
-  // level to arrive with. That is 15.1 MB that used to sit on the title screen
-  // for a level nobody can reach.
+  // THIS LIST WAS FIVE ENTRIES LONG UNTIL LEVEL 6 SHIPPED. `waves.level6.json`
+  // and `level6.json` sat in the repository with no row in levels.json, so the
+  // Scrapper, the Sprinter, the level-6 Bruiser, the Rooster and — once the
+  // map pass traced it — the `map-level6` plate had no level to arrive with:
+  // 15.1 MB loaded by nothing. Adding the row emptied the list on its own,
+  // which is what the note here used to predict.
   //
-  // `map-level6` JOINED THEM WITH THE MAP PASS. The plate is traced, encoded
-  // and registered in art.json — tools/level6_geometry.json and
-  // tools/check_level6.py are derived from it — and level 6 still has no row
-  // in levels.json, so the plate is loaded by nothing for the same reason the
-  // roster is. It is one entry, not a fifth failure mode.
-  //
-  // WHEN LEVEL 6 SHIPS THIS TEST FAILS, which is the intent: add level 6 to
-  // levels.json and the list here empties on its own.
-  assert.deepEqual(orphanedLevelArt(LEVELS.map((l) => l.id)).sort(), [
-    'enemy-bruiser', 'enemy-rooster', 'enemy-scrapper', 'enemy-sprinter', 'map-level6',
-  ], 'level art that no shipped level loads')
+  // It stays as an EMPTY assertion rather than being deleted, because the
+  // failure it catches has not gone anywhere: the next unshipped level's art
+  // lands here the moment somebody converts it, and so does a key knocked off
+  // boot by mistake.
+  assert.deepEqual(orphanedLevelArt(LEVELS.map((l) => l.id)).sort(), [],
+    'level art that no shipped level loads')
 })

@@ -23,12 +23,15 @@ import mapLevel2 from '../data/map_level2.json' with { type: 'json' }
 import mapLevel3 from '../data/map_level3.json' with { type: 'json' }
 import mapLevel4 from '../data/map_level4.json' with { type: 'json' }
 import mapLevel5 from '../data/map_level5.json' with { type: 'json' }
+import mapLevel6 from '../data/map_level6.json' with { type: 'json' }
 import wavesLevel1 from '../data/waves.json' with { type: 'json' }
 import wavesLevel2 from '../data/waves.level2.json' with { type: 'json' }
 import wavesLevel3 from '../data/waves.level3.json' with { type: 'json' }
 import wavesLevel4 from '../data/waves.level4.json' with { type: 'json' }
 import wavesLevel5 from '../data/waves.level5.json' with { type: 'json' }
+import wavesLevel6 from '../data/waves.level6.json' with { type: 'json' }
 import rulesLevel5 from '../data/level5.json' with { type: 'json' }
+import rulesLevel6 from '../data/level6.json' with { type: 'json' }
 
 /** A row of levels.json: what the registry records about a level. */
 export interface LevelDef {
@@ -88,6 +91,10 @@ export interface LevelRules {
   gliding?: unknown
   acid?: unknown
   humiliation?: unknown
+  /** Level 6's Rooster breath. `GameScene.tickRooster` runs it through
+   *  systems/Flame.ts; every other level returns null from `levelRules` and
+   *  the whole mechanic is a no-op there. */
+  flame?: unknown
   roster?: Record<string, string>
 }
 
@@ -112,6 +119,7 @@ const MAPS: Record<string, MapDef> = {
   level3: mapLevel3 as unknown as MapDef,
   level4: mapLevel4 as unknown as MapDef,
   level5: mapLevel5 as unknown as MapDef,
+  level6: mapLevel6 as unknown as MapDef,
 }
 
 /** Wave tables by the filename levels.json names them with. */
@@ -121,11 +129,13 @@ const WAVE_TABLES: Record<string, WavesDef> = {
   'waves.level3.json': wavesLevel3 as unknown as WavesDef,
   'waves.level4.json': wavesLevel4 as unknown as WavesDef,
   'waves.level5.json': wavesLevel5 as unknown as WavesDef,
+  'waves.level6.json': wavesLevel6 as unknown as WavesDef,
 }
 
 /** Rules blocks by the filename levels.json names them with. */
 const LEVEL_RULES: Record<string, LevelRules> = {
   'level5.json': rulesLevel5 as unknown as LevelRules,
+  'level6.json': rulesLevel6 as unknown as LevelRules,
 }
 
 export const LEVELS: LevelDef[] = (levelsData as unknown as { levels: LevelDef[] }).levels

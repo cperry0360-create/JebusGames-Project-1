@@ -4,6 +4,133 @@ Newest first.
 
 ---
 
+## 2026-09-11 — level 6 tuned, and levels 1-5 held
+
+### The headline
+
+**The Rooster is 7,500 health, and level 6 soaks at 203/480 (42%) on normal.**
+Inside the 35-45% band, and 222 of its 277 losses (80%) happen on the boss wave
+— the highest share in the game; level 5's is 65%.
+
+    node --experimental-strip-types tools/soak/level.ts 480 level6 normal
+
+    level6 [normal]: 203/480 wins  (42%)
+    lost after wave: w4x1 w5x16 w6x27 w7x6 w8x3 w9x2 w12x222
+    average lives left on a win: 17.6
+
+**The hero is Cory and only Cory.** `tools/soak/level.ts` calls
+`simulate(seed, 'normal', LEVEL, undefined, DIFFICULTY)` — the fourth argument
+is the hero and it passes `undefined`, so `Sim.ts` resolves `DEFAULT_HERO_ID`
+for all 480 seeds. The by-seed rotation is `run.ts`'s, the whole-game soak, and
+none of these numbers used it. No hero's values were touched.
+
+### HP alone could not reach the band, and the table is how that was found
+
+The first sweep, against the wave table and roster as authored:
+
+| rooster.maxHealth | wins/120 | lost after wave |
+|---|---|---|
+| 1,200 | 17 (14%) | w4x24 w5x36 w6x26 w7x13 w8x3 w9x1 |
+| 2,600 | 16 (13%) | w4x24 w5x36 w6x26 w7x13 w8x3 w9x1 w12x1 |
+| 4,500 | 8 (7%) | w4x24 w5x36 w6x26 w7x13 w8x3 w9x1 w12x9 |
+| 7,000 | 0 (0%) | w4x24 w5x36 w6x26 w7x13 w8x3 w9x1 w12x17 |
+| 10,000 | 0 (0%) | w4x24 w5x36 w6x26 w7x13 w8x3 w9x1 w12x17 |
+
+The pre-boss buckets are **identical in every row** — 103 of 120 runs died
+before wave 13 whatever the boss cost — so the ceiling was 14% at a boss worth
+nothing. That is the flat table the brief says to look for, and what controlled
+the fight was the board, not the boss.
+
+**The cause: the wave table was sized for a lane that no longer exists.** Its
+`_curve` note reasons about "roughly 50 seconds of walk … against 15 to 25 on
+every level before it", which was true of the abandoned 2970x316 stitched
+plate. The shipped plate walks 1711 px — 18.6 s at scrapper speed, squarely in
+the family (levels 1-5 walk 15.6-21.5 s). The counts were built for a board
+1.7x longer.
+
+### What moved, and what did not
+
+The authored wave table was **not** touched: same thirteen waves, same counts,
+same upper/lower asymmetry, `git diff` on `waves.level6.json` is empty. What
+moved is the level-6 roster, which is exclusive to level 6 — `scrapper`,
+`sprinter`, `bruiser6` and `rooster` appear in no other wave table, so this
+cannot reach another level by construction.
+
+| | health | was | peanutReward | was |
+|---|---|---|---|---|
+| scrapper | 80 | 110 | 26 | 11 |
+| sprinter | 50 | 70 | 22 | 9 |
+| bruiser6 | 300 | 420 | 82 | 34 |
+| rooster | **7,500** | null | 1,600 | 1,600 |
+
+The purse is the bigger half of that change and it is the finding underneath
+it: level 6 asks the player to cover **two roads**, and it was paying 0.155
+peanuts per point of enemy health against level 5's 0.202.
+
+### Sensitivity, one variable at a time, reverting between rows
+
+All at 120 seeds with everything else at the shipped values.
+
+| variable | value | wins/120 | |
+|---|---|---|---|
+| rooster.maxHealth | 4,000 | 101 (84%) | |
+| | 6,000 | 81 (68%) | |
+| | 7,000 | 58 (48%) | |
+| | **7,500** | **47 (39%)** | shipped |
+| | 8,000 | 37 (31%) | |
+| | 9,000 | 21 (18%) | |
+| | 12,000 | 0 (0%) | |
+| scrapper.peanutReward | 14 | 23 (19%) | |
+| | 20 | 33 (28%) | |
+| | **26** | **47 (39%)** | shipped |
+| | 32 | 63 (53%) | |
+| bruiser6.armor | 6 / 9 / **12** / 15 | 46 / 49 / **47** / 47 | flat |
+| bruiser6.maxHealth | 220 / 260 / **300** / 360 | 47 / 51 / **47** / 47 | flat |
+
+**Two live levers and two dead ones.** Boss health and the purse move the win
+rate monotonically across their whole range; the Bruiser's armour and health do
+not move it at all. That follows from the board: 13 usable pads covering two
+roads means the run is decided by how fast towers go up, not by how tough any
+one rank-and-file enemy is.
+
+### The flame is worth 12 points, in the direction nobody expects
+
+Level 6 at 480 seeds with `level6.json`'s `flame` block removed, which is what
+the scene actually ran until this pass wired it up:
+
+    level6 [normal]: 142/480 wins  (30%)
+    lost after wave: w4x1 w5x16 w6x27 w7x6 w8x3 w9x2 w12x283
+
+**30% without it, 42% with it.** The flame is a net *help* to the player,
+because `tickFlame` holds the boss still for a second of every six and a second
+of a boss not walking is a second of every gun still having it in range. Its
+damage only ever touches the player's own side and none of that decides a run.
+
+Wiring it into `GameScene` is therefore not decoration: without it the level
+plays at 30% and is out of band on the hard side.
+
+### Levels 1-5, same seeds, before and after
+
+Run against a clean `git worktree` at `149403c` and against this tree, 480
+seeds each, normal:
+
+| level | before | after | |
+|---|---|---|---|
+| level1 | 428/480 (89%) | 428/480 (89%) | identical |
+| level2 | 255/480 (53%) | 255/480 (53%) | identical |
+| level3 | 422/480 (88%) | 422/480 (88%) | identical |
+| level4 | 299/480 (62%) | 299/480 (62%) | identical |
+| level5 | 218/480 (45%) | 218/480 (45%) | identical |
+
+Not one outcome differs. Expected — the roster is level-6-exclusive — but
+measured rather than argued, because "it should not reach them" and "it did
+not" are different claims.
+
+Levels 1 and 3 sit well outside the 35-45% band at 89% and 88%. That is
+pre-existing and untouched here.
+
+---
+
 ## 2026-09-07 — the three difficulty modes, sanity-checked
 
 ### What changed
