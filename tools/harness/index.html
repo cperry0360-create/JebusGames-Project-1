@@ -14429,6 +14429,17 @@ async function run() {
   if (scenario === 'level6') {
     let faults = 0
     const bad = (m) => { faults++; note('*** ' + m) }
+    // `GameScene.startWave` returns on its FIRST LINE unless the phase is
+    // 'ready'. Calling it from a scenario that has just driven a wave is a
+    // silent no-op -- which is how this reported "nothing ever spawned on the
+    // flank" for a wave that had never started. Always through here.
+    const runWave = (n) => {
+      const G2 = scene('Game')
+      if (n !== undefined) G2.status.wave = n
+      G2.status.phase = 'ready'
+      G2.startWave()
+      return G2.status.phase === 'wave'
+    }
     const RS6 = await import('./js/systems/RunState.js')
 
     /* ---- the node on the world map, locked then open ---- */
@@ -14465,22 +14476,70 @@ async function run() {
     await sleep(700)
     note('level 6 built: lanes=' + JSON.stringify(G.lanes.lanes.map((l) => l.id))
       + ' pads=' + G.build.spots.length + ' lives=' + G.status.lives)
-    if (G.lanes.lanes.length !== 2) bad('expected two lanes, got ' + G.lanes.lanes.length)
+    // THREE LANES NOW: two fronts and a flank that merges into `lower`.
+    const fronts = G.lanes.lanes.filter((l) => l.merge === null).map((l) => l.id)
+    const flanks = G.lanes.lanes.filter((l) => l.merge !== null).map((l) => l.id)
+    note('fronts (run to an exit): ' + JSON.stringify(fronts)
+      + '   flanks (merge in): ' + JSON.stringify(flanks))
+    if (fronts.length !== 2) bad('expected two front lanes, got ' + fronts.length)
+    if (flanks.length !== 1) bad('expected one flank, got ' + flanks.length)
     await shot('level6-1-board')
 
     /* ---- both lanes actually carry enemies ---- */
     const seen = new Set()
-    G.status.wave = 0
     for (let w = 0; w < 6 && seen.size < 2; w++) {
-      G.startWave()
+      if (!runWave(w)) { bad('wave ' + (w + 1) + ' would not start'); break }
       const t0 = Date.now()
       while (Date.now() - t0 < 9000 && seen.size < 2) {
         for (const e of G.enemies) if (e.alive) seen.add(e.laneId)
         await sleep(100)
       }
     }
-    note('lanes that carried an enemy: ' + JSON.stringify([...seen]))
+    note('lanes that carried an enemy: ' + JSON.stringify([...seen].sort()))
     if (seen.size < 2) bad('only ' + seen.size + ' lane(s) ever carried an enemy')
+
+    /* ---- and the FLANK spawns, out of the bottom mouth ---- */
+    // Waves 8, 10 and 12 carry it, so wave 1-6 above can never show it. Driven
+    // straight to wave 8 rather than waited for.
+    for (const e of G.enemies) e.die()
+    G.spawner.groups = []
+    if (!runWave(7)) bad('wave 8 would not start')
+    let flankSeen = null
+    const tf = Date.now()
+    while (Date.now() - tf < 25000 && !flankSeen) {
+      const f = G.enemies.find((e) => e.alive && e.laneId === 'flank')
+      if (f) flankSeen = { x: f.x, y: f.y, enemy: f.def.name }
+      await sleep(80)
+    }
+    if (!flankSeen) {
+      bad('nothing ever spawned on the flank across wave 8')
+    } else {
+      note('the flank spawned ' + flankSeen.enemy + ' at '
+        + Math.round(flankSeen.x) + ',' + Math.round(flankSeen.y)
+        + '  (the bottom mouth is at 849,719)')
+      // It has to come out of the BOTTOM, not the side.
+      if (flankSeen.y < 600) {
+        bad('the flank spawned at y=' + Math.round(flankSeen.y) + ', not near the bottom edge')
+      }
+    }
+    // And it has to end up on `lower` rather than leaking where it merges.
+    const fl = G.enemies.find((e) => e.alive && e.laneId === 'flank')
+    if (fl) {
+      const beforeLives = G.status.lives
+      fl.laneDistance = G.lanes.lane('flank').path.totalLength - 4
+      fl.distance = fl.laneDistance
+      await until(() => fl.laneId !== 'flank' || !fl.alive, 9000)
+      await sleep(300)
+      note('a flank walker at the end of its lane is now on: ' + fl.laneId
+        + '  alive=' + fl.alive + '  lives ' + beforeLives + ' -> ' + G.status.lives)
+      if (fl.alive && fl.laneId !== 'lower') {
+        bad('the flank walker did not transfer onto lower; it is ' + fl.laneId)
+      }
+      if (G.status.lives < beforeLives) {
+        bad('reaching the end of the flank cost a life; it merges, it is not an exit')
+      }
+    }
+    await shot('level6-2b-flank')
     await shot('level6-2-bothlanes')
 
     /* ---- both exits take lives ---- */
@@ -14500,8 +14559,7 @@ async function run() {
         // and nothing else, so restarting at wave 0 can only ever produce an
         // upper-lane enemy -- which this scenario reported as "no enemy ever
         // walked the lower lane" and was a bug in the check, not the game.
-        G.status.wave = 1
-        G.startWave()
+        runWave(1)
         if (!(await until(() => G.enemies.some((e) => e.alive && e.laneId === id), 12000))) {
           bad('no enemy ever walked the ' + id + ' lane'); continue
         }
@@ -14543,8 +14601,7 @@ async function run() {
     G.spawner.groups = []
     G.status.lives = 20
     await sleep(300)
-    G.status.wave = G.status.waveCount - 1
-    G.startWave()
+    runWave(G.status.waveCount - 1)
     if (!(await until(() => G.enemies.some((e) => e.alive && e.def.flame), 30000))) {
       bad('the Rooster never spawned'); note('RESULT ' + faults + ' fault(s)'); return
     }
@@ -14570,7 +14627,9 @@ async function run() {
     // Waiting for it to happen by luck is a check that reports "no scorch" for
     // a mechanic that works.
     const FE0 = await import('./js/systems/Flame.js')
+    const ART6 = await import('./js/systems/Art.js')
     let parkAt = null
+    let beakSample = null
     const tw = G.towers[0]
     if (tw && FL) {
       const path = ahead
@@ -14601,12 +14660,37 @@ async function run() {
       if (st) {
         if (st.telegraphLeft > 0) {
           telegraphSeen = true
-          if (!shotTelegraph) { shotTelegraph = true; await shot('level6-4-telegraph') }
+          if (!shotTelegraph) {
+            shotTelegraph = true
+            await lookAt(boss.x, boss.y)
+            await shot('level6-4-telegraph')
+          }
           if (st.flameLeft > 0) bad('the fire is live during the telegraph')
         }
         if (st.flameLeft > 0) {
           burnSeen = true
-          if (!shotBurn) { shotBurn = true; await shot('level6-5-flame') }
+          // SAME INSTANT, no await in between.
+          if (!beakSample && G.flameArt) {
+            const rr = ART6.renderFor(boss.def.sprite)
+            const hh = G.lanes.lane(boss.laneId).path.headingNear(boss.x, boss.y)
+            const wx = boss.x + Math.cos(hh) * rr.beakForward
+            const wy = boss.y + rr.beakRise
+            beakSample = {
+              at: G.flameArt.x.toFixed(1) + ',' + G.flameArt.y.toFixed(1),
+              want: wx.toFixed(1) + ',' + wy.toFixed(1),
+              mid: boss.x.toFixed(1) + ',' + boss.y.toFixed(1),
+              off: Math.hypot(G.flameArt.x - wx, G.flameArt.y - wy),
+            }
+          }
+          if (!shotBurn) {
+            shotBurn = true
+            // LOOK AT HIM FIRST. The default camera band on a 390-tall viewport
+            // puts a boss at y=113 off the top of the screen, so the first
+            // version of this shot caught 20 px of flame at the frame edge and
+            // could not be read at all.
+            await lookAt(boss.x, boss.y)
+            await shot('level6-5-flame')
+          }
           // WHERE THE CORRIDOR REACHES, measured against the other lane.
           const FE = await import('./js/systems/Flame.js')
           const h = ahead.headingNear(boss.x, boss.y)
@@ -14638,6 +14722,93 @@ async function run() {
       }
       await sleep(60)
     }
+    // THE RENDERING, off the live object rather than off the source. This is
+    // what fix 2 was about: it was an Image with setDisplaySize(300, 64) on a
+    // 181x181 cell, so it smeared 4.69:1 and sat on frame 0 of a 12-frame sheet.
+    const fa = G.flameArt
+    if (!fa) {
+      bad('there is no flame object at all')
+    } else {
+      const aspect = fa.scaleX === 0 ? 0 : fa.scaleY / fa.scaleX
+      note('flame object: ' + fa.type
+        + '  scaleX=' + fa.scaleX.toFixed(4) + ' scaleY=' + fa.scaleY.toFixed(4)
+        + '  scaleY/scaleX=' + aspect.toFixed(6)
+        + '  display=' + fa.displayWidth.toFixed(1) + 'x' + fa.displayHeight.toFixed(1)
+        + '  frame=' + fa.frame.name + ' of ' + fa.texture.frameTotal
+        + '  origin=' + fa.originX + ',' + fa.originY
+        + '  depth=' + fa.depth)
+      if (fa.type !== 'Sprite') bad('the flame is a ' + fa.type + ', which cannot play an animation')
+      if (Math.abs(aspect - 1) > 1e-6) {
+        bad('the flame is scaled ' + aspect.toFixed(4) + ':1, not uniformly; that is the smear')
+      }
+      // ABOVE THE BOARD. Towers and enemies y-sort from 0 to 720, so anything
+      // meant to draw over them has to be out of that band entirely.
+      const boardMax = Math.max(0, ...G.towers.map((t) => t.depth),
+                                ...G.enemies.map((e) => e.depth))
+      note('highest board depth: ' + boardMax + '   flame depth: ' + fa.depth)
+      if (fa.depth <= boardMax) {
+        bad('the flame draws at ' + fa.depth + ', at or below the board top of ' + boardMax
+          + '; it will pass behind a tower')
+      }
+      // THE ORIGIN IS THE BEAK, and `beakSample` below is where that is
+      // actually measured -- captured on a BURNING frame, with no await between
+      // reading the flame and reading the boss. Measuring it here instead was
+      // wrong: `lookAt` eases the camera over several frames, the breath ends
+      // during it, and the boss walks on -- so the expectation moved out from
+      // under a flame that had been placed correctly.
+      if (!beakSample) {
+        bad('never caught the flame and the boss in the same frame')
+      } else {
+        note('flame origin at ' + beakSample.at
+          + '  beak expected ' + beakSample.want
+          + '  boss midpoint would be ' + beakSample.mid
+          + '  -> off by ' + beakSample.off.toFixed(2) + ' px')
+        if (beakSample.off > 1) bad('the flame is not at the beak')
+      }
+    }
+    // ANIMATION: watch the frame index move across a breath. "It plays" is not
+    // something a single sample can say -- an Image on frame 0 looks identical.
+    const frames = new Set()
+    const t1 = Date.now()
+    while (Date.now() - t1 < 9000) {
+      const st2 = G.flameStates.get(boss)
+      if (st2 && st2.flameLeft > 0 && G.flameArt) frames.add(G.flameArt.frame.name)
+      if (parkAt !== null && !(st2 && (st2.flameLeft > 0 || st2.telegraphLeft > 0))) {
+        boss.laneDistance = parkAt; boss.distance = parkAt
+      }
+      await sleep(40)
+    }
+    note('frames the fire actually drew: ' + JSON.stringify([...frames].sort()))
+    if (frames.size < 2) {
+      bad('the fire drew ' + frames.size + ' distinct frame(s); it is a still, not an animation')
+    }
+
+    /* ---- a portrait of the fire, mid-board, for a person to look at ---- */
+    // The scorch check parks him at lane distance 544, which is (481,113) --
+    // near the top of the world, where the camera cannot centre above him and
+    // the flame lands half off the frame. 1371 puts him at (1050,420).
+    parkAt = 1371
+    boss.laneDistance = parkAt
+    boss.distance = parkAt
+    await lookAt(1050, 420)
+    const tp = Date.now()
+    let shotPortrait = false
+    while (Date.now() - tp < 14000 && !shotPortrait) {
+      const st3 = G.flameStates.get(boss)
+      if (st3 && st3.flameLeft > 0) {
+        shotPortrait = true
+        note('portrait: boss at ' + boss.x.toFixed(0) + ',' + boss.y.toFixed(0)
+          + '  flame at ' + G.flameArt.x.toFixed(0) + ',' + G.flameArt.y.toFixed(0)
+          + '  display ' + G.flameArt.displayWidth.toFixed(0) + 'x'
+          + G.flameArt.displayHeight.toFixed(0) + '  frame ' + G.flameArt.frame.name)
+        await shot('level6-7-flame-portrait')
+      } else if (st3 && st3.telegraphLeft <= 0) {
+        boss.laneDistance = parkAt; boss.distance = parkAt
+      }
+      await sleep(40)
+    }
+    if (!shotPortrait) bad('never caught a breath for the portrait')
+
     note('telegraph seen=' + telegraphSeen + '  fire seen=' + burnSeen
       + '  boss held=' + heldSeen + '  a tower scorched=' + scorchSeen
       + '  towers on board=' + G.towers.length)
@@ -14671,8 +14842,11 @@ async function run() {
         }
         return best
       }
-      for (const lane of G.lanes.lanes) {
-        const foe = G.lanes.lanes.find((l) => l.id !== lane.id)
+      // Only the lanes a boss can walk. The flank MERGES into `lower` and no
+      // wave spawns a boss on it, so asking what its corridor would reach is a
+      // number about a situation that cannot arise.
+      for (const lane of G.lanes.lanes.filter((l) => l.merge === null)) {
+        const foe = G.lanes.lanes.find((l) => l.id !== lane.id && l.merge === null)
         let n = 0, crossed = 0
         for (let d = 0; d < lane.path.totalLength; d += 4) {
           const pt = lane.path.pointAt(d)

@@ -46,7 +46,7 @@ test('level 6 is two independent lanes, and the engine accepts that shape', () =
   assert.deepEqual(validateLanes(M as never), [],
     'the map does not validate; see LaneDef.entrance')
   const net = new LaneNetwork(M as never)
-  assert.deepEqual(net.lanes.map((l) => l.id), ['upper', 'lower'])
+  assert.deepEqual(net.lanes.map((l) => l.id), ['upper', 'lower', 'flank'])
   for (const id of ['upper', 'lower']) {
     // Independent means: nothing continues from it, and it is its own terminal.
     assert.equal(net.transferFrom(id), null, `${id} hands its walkers on to something`)
@@ -61,7 +61,17 @@ test('level 6 is two independent lanes, and the engine accepts that shape', () =
   for (const w of (waves as never as { waves: { spawns: { lane?: string }[] }[] }).waves) {
     for (const s of w.spawns) if (s.lane) spawnLanes.add(s.lane)
   }
-  assert.deepEqual([...spawnLanes].sort(), ['lower', 'upper'])
+  assert.deepEqual([...spawnLanes].sort(), ['flank', 'lower', 'upper'])
+
+  // AND THE FLANK IS NOT INDEPENDENT: it merges into `lower` and therefore
+  // terminates there. A flank that reached an exit of its own would be a third
+  // lane, which is the thing the design says it must not become.
+  assert.ok(net.transferFrom('flank'), 'the flank does not hand its walkers on')
+  assert.deepEqual(net.terminals('flank').map((t) => t.id), ['lower'])
+  const join = net.transferFrom('flank')!
+  assert.equal(join.lane.id, 'lower')
+  assert.ok(Math.abs(join.distance - 830.9) < 0.5,
+    `the flank joins lower at ${join.distance.toFixed(1)} px, not the 830.9 the map records`)
 })
 
 test('the two lanes enter on the west edge, leave on the east, and never touch', () => {
@@ -156,6 +166,41 @@ test('level 6 carries all eighteen painted pads, untouched', () => {
   }
   assert.deepEqual(dead, [2, 9, 12, 16, 18],
     'the set of pads that reach no road changed; re-read the report before moving the join')
+})
+
+test('the Rooster breathes from its beak, uniformly scaled, above the board', () => {
+  // FIX 2, pinned. The flame used to be an Image with `setDisplaySize(300, 64)`
+  // on a 181 x 181 cell: an aspect of 4.69:1, which smears painted art into a
+  // gradient, stuck on frame 0 of a twelve-frame sheet, at a depth below every
+  // tower on the board. What the numbers here guard is the SHAPE of the fix;
+  // that it reads as fire is a picture, and the picture is in the report.
+  const art = JSON.parse(readFileSync(new URL('../src/data/art.json', import.meta.url), 'utf8'))
+  const bird = art.render['enemy-rooster']
+  // The beak, as measured off the painted jet's narrowest column. It goes stale
+  // on a re-export exactly the way contentWidth does, so it is pinned.
+  assert.ok(Math.abs(bird.beakForward - 27.8) < 0.1, `beakForward is ${bird.beakForward}`)
+  assert.ok(Math.abs(bird.beakRise - -108.5) < 0.1, `beakRise is ${bird.beakRise}`)
+  // It is above the origin (the feet) and forward of it, which is the only
+  // arrangement that can be a beak on a bird standing on the ground.
+  assert.ok(bird.beakRise < 0 && Math.abs(bird.beakRise) < bird.displayHeight,
+    'the beak is not between the feet and the top of the sprite')
+  assert.ok(bird.beakForward > 0, 'the beak is not forward of the origin')
+
+  // UNIFORM SCALE. The scene computes `reach / contentWidth` and applies it to
+  // both axes, so the only thing that can reintroduce the smear is the source
+  // calling setDisplaySize again.
+  const src = readFileSync(new URL('../src/scenes/GameScene.ts', import.meta.url), 'utf8')
+  const showFlame = src.slice(src.indexOf('private showFlame'), src.indexOf('private hideFlame'))
+  assert.match(showFlame, /art\.setScale\(k\)/, 'the flame is not uniformly scaled')
+  assert.doesNotMatch(showFlame, /setDisplaySize/,
+    'the flame sets a display size again; that is the 4.69:1 smear coming back')
+  assert.match(showFlame, /this\.add\.sprite/, 'the flame is not a Sprite and cannot animate')
+  assert.match(showFlame, /LAYER\.worldOverlay/,
+    'the flame is not in the band whose definition is "above every entity"')
+  // And the scale is the ability's reach over the art's own ink width.
+  const flame = art.render['fx-rooster-flame']
+  const k = 240 / flame.contentWidth
+  assert.ok(k > 0, 'the flame art has no contentWidth to scale by')
 })
 
 test('level 6 is reachable from the world map, behind level 5', () => {

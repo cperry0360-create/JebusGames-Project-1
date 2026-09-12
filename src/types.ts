@@ -1071,6 +1071,21 @@ export interface SpriteRender {
   displayHeight?: number
   /** Width of the ground shadow under this sprite. */
   shadowWidth?: number
+  /**
+   * WHERE THE BEAK IS, on a boss that breathes, as a WORLD offset from the
+   * sprite's own origin. Two numbers because they behave differently:
+   * `beakForward` is along the way the thing is FACING, so a mirrored sprite
+   * needs no special case, and `beakRise` is straight up the screen.
+   *
+   * MEASURED, and it goes stale on a re-export exactly the way `contentWidth`
+   * does. The Rooster's art carries a painted jet and the jet's narrowest
+   * column is the beak: on its 1254 x 1224 frame that is (863, 308.5), the
+   * origin is (0.5008 x 1254, 1.0 x 1224), and one source pixel is
+   * displayHeight / frameHeight = 145 / 1224 world px. Which gives +27.8
+   * forward and 108.5 up. tests/level6map.test.ts pins the pair.
+   */
+  beakForward?: number
+  beakRise?: number
   /** Ground plates only: where the middle of the painted GROUND sits inside
    *  the canvas, as a fraction of its height. A build pad is not a thing
    *  standing on the ground, it is a patch of ground, so what has to land on

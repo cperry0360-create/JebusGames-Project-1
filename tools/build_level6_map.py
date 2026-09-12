@@ -16,6 +16,11 @@ OUT = os.path.join(ROOT, 'src', 'data', 'map_level6.json')
 
 # The off-plate gateway x's, matching level 4's -60 / 1340.
 ENTRY_X, EXIT_X = -60.0, 1340.0
+# And the flank's, matching level 5's south gate at y=779. It enters through the
+# BOTTOM edge, so its gateway is below the plate rather than left of it -- and
+# the band's own first traced point is already on the bottom row, so one point
+# is prepended where the west lanes get a computed extension.
+FLANK_ENTRY_Y = 779.0
 
 # THE ONE AUTHORED JOIN. The painted south lane runs into the north lane; the
 # painted band that reaches the east 82.8% exit is not connected to anything.
@@ -81,6 +86,19 @@ def main():
     b_core = south[:SOUTH_CUT_INDEX + 1] + upper[ORPHAN_JOIN_INDEX:]
     lane_b = [extend(b_core, ENTRY_X)] + b_core + [extend(b_core[::-1], EXIT_X)]
 
+    # THE FLANK. The mouth on the bottom edge feeds the band that reaches east83,
+    # and the band runs from there round the U-turn and back east until it meets
+    # the lower lane at exactly the point the connector joins it. So the flank is
+    # band[0..join] and it is ALL PAINTED -- it adds no fabricated road at all,
+    # and it puts four pads that reached nothing back in range.
+    flank_core = ob[:ORPHAN_JOIN_INDEX + turn + 1]
+    assert flank_core[-1] == join, (flank_core[-1], join)
+    lane_f = [[flank_core[0][0], FLANK_ENTRY_Y]] + flank_core
+    # It has to END at the join, which is what the lane engine expects of a
+    # branch, and its last traced point IS that point to 0.00 px -- the same
+    # coordinate the lower lane carries -- so nothing was snapped.
+    merge_at = next(i for i, p in enumerate(lane_b) if p == join)
+
     pads = [list(p) for p in g['pads']]
 
     out = {
@@ -144,7 +162,11 @@ def main():
             f'to x={ENTRY_X} and x={EXIT_X}, so enemies walk in and out along the road they are '
             'already on rather than appearing at the plate edge. That is levels 2, 3 and 4\'s method.'
         ),
-        'lanes': [{'id': 'lower', 'waypoints': lane_b, 'entrance': True}],
+        'lanes': [
+            {'id': 'lower', 'waypoints': lane_b, 'entrance': True},
+            {'id': 'flank', 'waypoints': lane_f,
+             'merge': {'into': 'lower', 'atIndex': merge_at}},
+        ],
         '_lanes': (
             'THE SOUTH LANE, `lower`, west 20.8% to east 82.8%. It declares NO `merge` -- it runs to its own '
             'exit and nothing continues from it -- and it declares `entrance: true`, which is new. '
@@ -159,6 +181,28 @@ def main():
             'starting lane.'
         ),
         'buildSpots': pads,
+        '_flank': (
+            'THE THIRD SPAWN, out of the bottom edge at 59-74% across, and it is ALL PAINTED '
+            'ROAD -- it adds not one fabricated pixel. The band that reaches the east 82.8% '
+            'exit has a mouth on the bottom edge; tools/level6_geometry.json used to call that '
+            'an excluded touch ("a band running off the frame at a shallow angle") and now '
+            'calls it the `flank` entrance. This lane walks it from the mouth, round the '
+            'U-turn at (92,469), and back east to (592,475) -- which is exactly the point the '
+            'lower lane\'s connector joins the band, so it merges into `lower` there rather '
+            'than running a route of its own. It ENDS at the join to 0.00 px, so nothing was '
+            'snapped.\n\n'
+            'IT IS A FLANK BY DIRECTION, NOT BY SPEED, and that is worth knowing before '
+            'anybody calls it a shortcut: 1425.7 px to the join against the lower lane\'s '
+            '830.9, so a Sprinter arrives there 4.0s LATER than one that came in the front. '
+            'What it buys is the approach -- it comes up through the bottom-left, which is the '
+            'quarter of the board nothing walked before, and it puts pads 9, 12, 16 and 18 '
+            'back in range of a road. Those four reached nothing at all until this lane '
+            'existed; only pad 2 still does. Shortening it means fabricating a cut straight up '
+            'from the mouth to the lower lane, about 175 px of unpainted ground, and that was '
+            'not done.\n\n'
+            'IT IS DELIBERATELY SMALL. Sprinters only, three of the thirteen waves, in the '
+            'back half. See waves.level6.json `_flank`.'
+        ),
         '_buildSpots': (
             'EIGHTEEN PAINTED PADS, copied from the geometry file untouched. They are found by colour '
             'on the plate rather than placed, so two things that are gates on levels 3 and 4 are only '
@@ -178,6 +222,8 @@ def main():
     print(f'  north (main): {len(lane_a)} pts, traced length {polyline_length(north):.1f}')
     print(f'  south       : {len(lane_b)} pts, traced+authored length {polyline_length(b_core):.1f}')
     print(f'  connector   : {cut} -> {join}, {fabricated:.1f} px')
+    print(f'  flank       : {len(lane_f)} pts, ALL PAINTED, {polyline_length(flank_core):.1f} px, '
+          f'merging into lower at index {merge_at} {join}')
     print(f'  pads        : {len(pads)}')
 
 

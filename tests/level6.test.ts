@@ -50,6 +50,10 @@ test('a level cannot ship with a boss whose health is unset', () => {
   assert.ok(registered.has('level6'), 'level 6 is no longer registered in levels.json')
   assert.equal(E.rooster.maxHealth, 7500,
     'the Rooster\'s health moved; it is a soaked number, so re-soak level 6 and update the report')
+  // RE-DERIVED AFTER THE FLANK LANDED, and it came back to the same number.
+  // 7000 soaks at 50% and 8000 at 28%, so 7500's 38% is the middle of the band
+  // and not a figure that happened to survive. See
+  // reports/2026-09-12-level-6-fixes.md.
 })
 
 test('an unregistered wave table belongs to a level that is genuinely unfinished', () => {
@@ -136,13 +140,43 @@ test('thirteen waves, both lanes live, and the heavier side alternates', () => {
   }
   const lanes = new Set<string>()
   for (const w of W) for (const s of w.spawns) lanes.add(s.lane)
-  assert.deepEqual([...lanes].sort(), ['lower', 'upper'], 'the level has exactly two lanes')
+  assert.deepEqual([...lanes].sort(), ['flank', 'lower', 'upper'],
+    'the level has two front lanes and one flank')
+
+  // THE FLANK IS DELIBERATELY SMALL, and this is where that stays true.
+  //
+  // It spawns out of the bottom mouth and merges into `lower`, and the whole
+  // design intent is a surprise rather than a third front: a few fast bodies,
+  // a few waves, in the back half. The easiest way for a later pass to ruin
+  // level 6 is to make it a lane -- so the numbers are gated rather than
+  // described. See waves.level6.json's `_flank`.
+  const flankWaves = W.map((w: any, i: number) =>
+    w.spawns.some((s: any) => s.lane === 'flank') ? i + 1 : 0).filter(Boolean)
+  assert.ok(flankWaves.length >= 2 && flankWaves.length <= 3,
+    `the flank is on ${flankWaves.length} waves; the brief asks for two or three`)
+  assert.ok(flankWaves.every((n: number) => n >= 7),
+    `the flank appears on wave ${flankWaves.find((n: number) => n < 7)}; it belongs in the back `
+    + 'half, after the player has been taught the two front lanes')
+  const flankBodies = W.flatMap((w: any) => w.spawns)
+    .filter((s: any) => s.lane === 'flank')
+  assert.ok(flankBodies.every((s: any) => s.enemy === 'sprinter'),
+    'the flank carries something other than a Sprinter; it is meant to be the cheapest and '
+    + 'fastest thing on the board, not a second Bruiser column')
+  const flankTotal = flankBodies.reduce((n: number, s: any) => n + s.count, 0)
+  const allTotal = W.flatMap((w: any) => w.spawns).reduce((n: number, s: any) => n + s.count, 0)
+  assert.ok(flankTotal / allTotal < 0.1,
+    `the flank is ${(flankTotal / allTotal * 100).toFixed(1)}% of the level's bodies; over 10% and `
+    + 'it is a third lane rather than a surprise')
 
   // NOT MIRRORED. The heavier side has to change, or a board built
   // symmetrically is right on every wave and the second lane is decoration.
   const heavier = W.map((w: any) => {
     const per: Record<string, number> = { upper: 0, lower: 0 }
     for (const s of w.spawns) {
+      // The FLANK is not a side. It merges into `lower` rather than running its
+      // own route, so counting its health as lower's would call a wave
+      // lower-heavy on the strength of three Sprinters arriving late.
+      if (s.lane !== 'upper' && s.lane !== 'lower') continue
       if (E[s.enemy].maxHealth) per[s.lane] += s.count * E[s.enemy].maxHealth
     }
     return per.upper === per.lower ? 'even' : per.upper > per.lower ? 'upper' : 'lower'

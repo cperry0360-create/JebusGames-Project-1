@@ -4434,7 +4434,8 @@ export class GameScene extends Phaser.Scene {
       this.scorchLeft.set(t, rules.scorchSeconds)
       if (!this.scorchArt.has(t)) {
         const mark = this.add.image(t.x, t.y - 12, rules.scorchFx)
-          .setDepth(GROUND_DEPTH + 8)
+          // ON the tower, not under the plate. This was GROUND_DEPTH + 8.
+          .setDepth(t.y + 6)
         fitInRect(mark, rules.scorchFx, 34, 34)
         this.scorchArt.set(t, mark)
       }
@@ -4456,25 +4457,74 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** The corridor as one stretched image, dim while it is only a warning. */
+  /**
+   * The corridor, drawn as a UNIFORMLY SCALED SPRITE from the boss's beak.
+   *
+   * THIS WAS `setDisplaySize(reach, width)` AND THAT IS WHY IT LOOKED WRONG.
+   * The art's cell is square -- 181 x 181 -- and 300 x 64 squashes it to an
+   * aspect of 4.69:1, so every painted detail in it smears along one axis into
+   * a gradient. It is the Mind Laser's failure again: extreme anisotropy
+   * flattens painted art into something that reads as procedural. The anchor
+   * was never the problem.
+   *
+   * So: ONE scale factor on both axes, chosen so the art's own content length
+   * covers the ability's `reach`. `contentWidth` is the INK extent from
+   * tools/measure_art.py, which is what has to reach, not the frame.
+   *
+   * IT IS A SPRITE AND IT PLAYS. It was an Image, so it sat on frame 0 of a
+   * twelve-frame sheet for the whole breath -- a still of a fire. The animation
+   * is the one `registerEffectAnims` already builds for every sheet in the
+   * manifest, keyed by the texture, which is exactly the key `forgetEffectAnims`
+   * drops when level art is freed. Nothing new is registered here, so the
+   * null-frame trap from `9e389b8` cannot re-open through this path.
+   *
+   * AND IT DRAWS ABOVE THE BOARD. It was at `GROUND_DEPTH + 7`, which is below
+   * every tower and enemy on the map -- they y-sort from 0 to 720 -- so the
+   * fire passed behind a tower it was supposed to be burning. `worldOverlay` is
+   * the band whose whole definition is "above every entity".
+   */
   private showFlame(boss: Enemy, heading: number, rules: FlameRules, warning: boolean): void {
+    const cfg = renderFor(rules.fx)
+    // THE BEAK IS THE BOSS'S FACT, NOT THE FIRE'S. This read `cfg` -- the
+    // flame's own render entry -- which has no `beakForward`, so the offset
+    // came out 0 and the corridor started at the Rooster's midpoint. The
+    // harness caught it: "flame origin at 482.4,113.0, beak expected 511.0,4.5".
+    const bird = renderFor(boss.def.sprite)
     if (!this.flameArt) {
-      this.flameArt = this.add.image(0, 0, rules.fx).setOrigin(0, 0.5)
-      this.flameArt.setDepth(GROUND_DEPTH + 7)
+      this.flameArt = this.add.sprite(0, 0, rules.fx)
+      // No camera registration: world space is the default in this scene and
+      // only screen-space objects are registered, via `asScreenSpace`.
+      this.flameArt.setDepth(LAYER.worldOverlay + 10)
     }
     const art = this.flameArt
-    art.setTexture(rules.fx)
-    art.setPosition(boss.x, boss.y)
+    // The origin is the art's own anchor, not a hardcoded pair: the cone art
+    // puts its narrow end flush against the left edge at anchorX 0, and the
+    // strip it replaces sits at 0.5138 because its ink is not centred.
+    art.setOrigin(cfg.anchorX ?? 0, cfg.anchorY ?? 0.5)
+    // THE BEAK, not the boss's middle. `beakForward` is along the way it is
+    // facing and `beakRise` is straight up the screen, so a left-facing boss
+    // needs no special case -- cos(heading) does it.
+    art.setPosition(boss.x + Math.cos(heading) * (bird.beakForward ?? 0),
+                    boss.y + (bird.beakRise ?? 0))
     art.setRotation(heading)
-    art.setDisplaySize(rules.reach, rules.width)
-    // The WARNING is the same strip at a third of the alpha. A separate
-    // telegraph texture would be a second art dependency for a level whose
-    // whole joke is that nothing in it got finished.
+    const k = rules.reach / (cfg.contentWidth ?? art.width)
+    art.setScale(k)
+    // The WARNING is the same art at a third of the alpha and held on its first
+    // frame; the breath is the clip running. A separate telegraph texture would
+    // be a second art dependency for a level whose whole joke is that nothing
+    // in it got finished.
     art.setAlpha(warning ? 0.35 : 1)
+    if (warning) {
+      art.anims.stop()
+      art.setFrame(0)
+    } else if (!art.anims.isPlaying && this.anims.exists(rules.fx)) {
+      art.play({ key: rules.fx, duration: rules.flameSeconds * 1000, repeat: -1 })
+    }
     art.setVisible(true)
   }
 
   private hideFlame(): void {
+    this.flameArt?.anims.stop()
     this.flameArt?.setVisible(false)
   }
 

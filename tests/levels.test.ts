@@ -11,6 +11,7 @@ import {
   nextLevelId, resolveLevelId, unlockedLevels,
 } from '../src/systems/Levels.ts'
 import { roadNodes } from '../src/systems/WorldRoad.ts'
+import { LaneNetwork } from '../src/systems/Lanes.ts'
 
 const levels = read('levels'), enemies = read('enemies')
 const l1 = read('waves'), l2 = read('waves.level2')
@@ -307,6 +308,21 @@ test('every level has a slot on the road and a card to draw there', () => {
     assert.ok(key, `art.json's worldMap.cards has no card for ${l.id}`)
     assert.ok(art.files[key],
       `${l.id}'s card is "${key}", which is not a file in the manifest`)
+    // AND IT HAS TO BE A CARD, not the level's plate standing in for one.
+    //
+    // Level 6 shipped pointing at `map-level6` because no card_level6.webp
+    // existed, and that reads as a placeholder on the world map: a 1672x941
+    // 16:9 plate squashed into a 3:2 node box by `setDisplaySize`. It passed
+    // both checks above, because a plate IS a file in the manifest. So the
+    // shape of the key is checked too -- every level's card is `card-<id>` and
+    // ships as `ui/card_<id>.webp`, which is what tools/mapcards/run.sh emits.
+    assert.equal(key, `card-${l.id}`,
+      `${l.id}'s world-map card is "${key}", not its own card; a plate or another `
+      + "level's card standing in for one reads as a placeholder on the map")
+    assert.match(art.files[key] as string, /^ui\/card_level\d+\.webp$/,
+      `${l.id}'s card is ${art.files[key]}, which is not a ui/card_*.webp`)
+    assert.ok(existsSync(url(`../public/assets/${art.files[key]}`)),
+      `${l.id}'s card is registered as ${art.files[key]} and that file is not on disk`)
   }
 
   // And no card for a level that does not exist, which would be a file
@@ -497,39 +513,29 @@ test('each level\'s laneLengthPx is what its own map actually walks', () => {
     level1: 'map', level2: 'map_level2', level3: 'map_level3', level4: 'map_level4',
     level5: 'map_level5', level6: 'map_level6',
   }
-  const walk = (w: [number, number][]): number => {
-    let d = 0
-    for (let i = 0; i < w.length - 1; i++)
-      d += Math.hypot(w[i + 1][0] - w[i][0], w[i + 1][1] - w[i][1])
-    return d
-  }
+  // THE ROUTE MATHS IS THE ENGINE'S, and it did not used to be. This test
+  // re-derived it -- "the branch, plus the whole trunk" -- which was right for
+  // levels 3, 4 and 5, where every branch merges into `main` at waypoint 0 so
+  // the whole trunk really is what is left. Level 6's flank merges into
+  // `lower` at index 23, so the hand-rolled version added a lane the walker
+  // never touches and a stretch it had already passed, and reported a route of
+  // 3196.8 for one that walks 2260.4.
+  //
+  // `LaneNetwork.routeLengths` is the thing the enemies, the gateway and the
+  // soak all use. Using it here removes a second opinion rather than adding
+  // one -- the check that matters is still the CONSTANT against the geometry,
+  // which is what caught level 2's 38.6 px.
   for (const l of levels.levels) {
     const file = maps[l.id]
     assert.ok(file, `${l.id} has no map file in this test's table; add it`)
     const map = read(file)
-    const trunk = walk(map.waypoints as [number, number][])
-    const branches = (map.lanes ?? []) as Array<
-      { id: string; waypoints: [number, number][]; merge?: unknown }>
-    // A BRANCH THAT MERGES walks itself and then the trunk. A lane that does
-    // NOT merge is a route on its own and the trunk is a second route beside
-    // it, which is level 6: two independent lanes, neither feeding the other,
-    // so adding the trunk to one of them would invent 1711 px nothing walks.
-    // This is `LaneNetwork.routeLengths` said in the test's own terms.
-    const merges = branches.filter((b) => b.merge !== undefined)
-    const independent = branches.filter((b) => b.merge === undefined)
-    const routes = merges.length === 0
-      ? [trunk, ...independent.map((b) => walk(b.waypoints))]
-      : [...merges.map((b) => walk(b.waypoints) + trunk),
-         ...independent.map((b) => walk(b.waypoints))]
-    // `laneLengthPx` IS THE LONGEST ROUTE, and level 5 is the first level where
-    // that is a distinction worth making. Levels 1 to 4 have one route or
-    // several arranged to be equal, so every route was the recorded number and
-    // an exact match on all of them was the right check. Level 5's three gates
-    // walk 1436.4, 1217.3 and 1170.1 -- a spread that comes out of the
-    // painting and cannot be arranged away (see map_level5.json's `_lanes`).
-    // So: nothing walks further than the recorded figure, and something walks
-    // exactly it. A level whose routes ARE equal still has to match on all of
-    // them, because the longest is then also the shortest.
+    const net = new LaneNetwork(map as never)
+    // EVERY lane's route, the trunk's own included. On levels 3, 4 and 5 that
+    // adds the trunk alone -- 672.3, 605.0, 728.6 -- which nothing spawns on
+    // and nothing walks in full, and including it is harmless: the assertions
+    // are "nothing walks further than the recorded figure" and "something
+    // walks exactly it", and a short extra route can only satisfy the first.
+    const routes = net.lanes.flatMap((lane) => net.routeLengths(lane.id))
     const longest = Math.max(...routes.map((r) => Math.round(r * 10) / 10))
     for (const r of routes) {
       assert.ok(Math.round(r * 10) / 10 <= l.laneLengthPx,

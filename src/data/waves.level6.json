@@ -1,6 +1,7 @@
 {
   "_note": "LEVEL 6, THE UNFINISHED LEVEL. Thirteen waves across TWO PARALLEL LANES that never touch, never merge and never cross -- each runs from its own spawn on the left edge to its own exit on the right, and both exits cost lives. That topology is new: level 5's crossroads merges three gates into one exit, and levels 3 and 4 fork into one. Two independent routes is the shape `LaneDef.merge` became a list to allow, and it needs one more change before it validates -- see `_lanes` below.\nHAND-AUTHORED, like levels 4 and 5. THE BOSS'S HEALTH IS NOT IN enemies.json YET and this table is therefore NOT TUNED: it is a shape with the brief's starting stats poured into it, waiting for a board to be measured against. See reports/2026-09-07-level-6-roster-and-plate-spec.md.",
   "_lanes": "TWO LANES, TWO GATES, TWO EXITS, AND THEY NEVER MEET. Every group names `upper` or `lower` and nothing merges.\nTHIS DOES NOT VALIDATE YET, and the map pass has to fix it rather than discover it. `Lanes.validateLanes` reports `a lane that reaches an exit and that nothing merges into is a route with no gate` -- a rule written for level 5 to catch a FORGOTTEN merge, which is exactly what a second independent route looks like from the outside. `main` is exempt, so one of level 6's lanes is fine and the other is not. The fix is one more property, not a relaxation: a lane with no continuation is legal if it has a SPAWN GROUP naming it, which the wave table can answer and the lane list cannot. It is left undone here because a validator change with no map to validate is a change nothing can be run against.\nTHE LANES ARE NOT MIRRORED. The heavier side alternates -- upper, lower, upper, lower, upper, lower, upper, lower, upper, lower, upper, lower, upper -- and the two lanes carry different KINDS of pressure on the same wave rather than the same group twice, so a board built symmetrically is wrong on one side of every wave.",
+  "_flank": "THE FLANK, AND IT IS DELIBERATELY SMALL. Three waves of the thirteen -- 8, 10 and 12 -- carry a Sprinter group on the `flank` lane and the other ten carry none. Eleven bodies across the whole level, 4.7% of everything that spawns, against 223 down the two front lanes. It is a surprise from a direction nothing else uses, not a third front, and the moment it becomes one the level stops being two lanes and a joke and becomes a chore. tests/level6.test.ts gates the count, the waves and the share.\n\nSPRINTERS ONLY, for two reasons. They are the cheapest thing on the board to kill, so a player who has covered the bottom-left at all is not punished for the surprise; and they are the fastest, so the group arrives as a burst rather than a trickle the towers pick off one at a time.\n\nIT ARRIVES LATE, NOT EARLY. The flank walks 1425.7 px to the point it joins `lower` against that lane's own 830.9, so a Sprinter out of the bottom mouth reaches the junction 4.0s AFTER one that came in the front door -- and the delays here (6s, 9s, 12s) are on top of that. It is a flank by DIRECTION. Anyone who wants it to be a flank by SPEED has to fabricate a cut straight up from the mouth, about 175 px of unpainted ground, and re-soak. See map_level6.json's `_flank`.\n\nWHAT IT IS WORTH, MEASURED: 38% with no flank at all, 39% with these eleven bodies, 42% with twenty-two. It makes the level very slightly EASIER, because a Sprinter is 50 health that pays 22 peanuts and it walks 1425 px of road past four pads that covered nothing before. Nobody should read the flank as the level's difficulty; the Rooster is.\n\nBACK HALF ONLY. Waves 1-7 teach the two lanes; a third spawn before the player has covered either is not a surprise, it is a tutorial that lies.",
   "_curve": "Rank and file health: 440, 540, 700, 1010, 1190, 1740, 2100, 2700, 3540, 4320, 5300, 6360, then wave 13's 1880 of escort under the Rooster. Every step is upward and inside the 55% cap.\nTHE SPAWN COUNTS ARE THE NUMBER TO WATCH ON THIS LEVEL, not the health. The route is roughly 50 seconds of walk at these speeds -- against 15 to 25 on every level before it -- so far more is alive at once than any board has had to hold: 34 bodies on wave 12 against level 5's 30 at its heaviest, on a lane three times as long. If the soak reports the level stuck rather than lost, this is the first place to look.",
   "_economy": "The run pays 0.147 peanuts per point of rank-and-file health, which is ABOVE the 0.13 floor and will not stay there: the Rooster's health is unset, and every point of it that lands goes into the denominator. At 6,000 it falls to 0.124 and content.test.ts's floor fails. So the map pass has to re-check this the moment the boss HP is picked, and the answer will be either fewer boss hit points or a larger purse. It is written down here rather than discovered there.",
   "_boss": "THE ROOSTER IS WAVE 13 AND THERE IS NO MID-LEVEL APPEARANCE, which is the brief's shape and level 4's read the other way round. His escort is a trickle from the OTHER lane to his own -- he walks the upper rail, and the scrappers and sprinters come up the lower one -- so the player cannot park the whole board in front of him.\nWHAT HE DOES IS THE FLAME, not a swing: `damage: 0`, `blockable: false`, and level6.json's `flame` block. He stops every six seconds, telegraphs for 0.8, and breathes a 300 px corridor down his own lane.",
@@ -168,6 +169,13 @@
           "interval": 0.55,
           "delay": 5,
           "lane": "upper"
+        },
+        {
+          "enemy": "sprinter",
+          "count": 3,
+          "interval": 1.1,
+          "delay": 6.0,
+          "lane": "flank"
         }
       ]
     },
@@ -234,6 +242,13 @@
           "interval": 0.5,
           "delay": 6,
           "lane": "lower"
+        },
+        {
+          "enemy": "sprinter",
+          "count": 4,
+          "interval": 1.0,
+          "delay": 9.0,
+          "lane": "flank"
         }
       ]
     },
@@ -300,6 +315,13 @@
           "interval": 0.5,
           "delay": 6,
           "lane": "lower"
+        },
+        {
+          "enemy": "sprinter",
+          "count": 4,
+          "interval": 1.0,
+          "delay": 12.0,
+          "lane": "flank"
         }
       ]
     },

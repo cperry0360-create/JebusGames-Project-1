@@ -4,6 +4,110 @@ Newest first.
 
 ---
 
+## 2026-09-12 — level 6 re-soaked against a third spawn, and a harness bug worth more than the change
+
+### The headline
+
+**The Rooster stays at 7,500.** Re-derived from scratch after level 6 grew a
+third spawn: **181/480 (38%)** on normal, inside the band, 80% of losses on the
+boss wave. `src/data/enemies.json` is byte-identical to `dbaf734`.
+
+    level6 [normal]: 181/480 wins  (38%)
+    lost after wave: w4x1 w5x18 w6x28 w7x10 w8x1 w9x1 w12x240
+    average lives left on a win: 18.4
+
+Hero was **Cory only** — `tools/soak/level.ts` passes `undefined` for the hero,
+so `Sim.ts` resolves `DEFAULT_HERO_ID` for all 480 seeds. `run.ts`'s by-seed
+rotation was not used and no hero's values were touched.
+
+### THE SCRIPTED PLAYER DID NOT KNOW WHICH ROADS MATTER
+
+Adding the flank lane to `map_level6.json` moved the measured win rate from
+**38% to 13%** at a fixed 7,500 — **with the flank's spawn groups removed
+entirely.** Nothing walked the new lane and the level got three times harder.
+
+`Sim.ts` filled pads "nearest the road first", where the road is the nearest
+point on ANY lane. Four of level 6's pads are closer to the flank than to
+either front lane:
+
+| pad | build-queue position, 2 lanes | 3 lanes |
+|---|---|---|
+| **12** | 16th of 18 | **1st** |
+| 9 | 14th | 9th |
+| 18 | 15th | 11th |
+| 16 | 18th | 12th |
+
+So the scripted player spent its opening purse covering a lane carrying 4.7% of
+the level. A person would not. **The soak was describing a player, not a board.**
+
+### The fix, and the one that was thrown away
+
+Lane traffic is now computed from the wave table — what spawns on a lane plus
+everything that merges into it, so a trunk carries the whole level:
+
+| level | shares |
+|---|---|
+| 1, 2 | main 100% |
+| 3 | main 100%, upper 54.7%, lower 45.3% |
+| 4 | main 100%, upper 52.7%, lower 47.3% |
+| 5 | main 100%, west 34.0%, north 33.5%, south 32.5% |
+| **6** | upper 49.6%, lower 50.4%, **flank 4.7%** |
+
+**Weighting distance by share was tried and is wrong.** `distance / share`
+re-ranks levels 3, 4 and 5 too — their branches carry 32-55% against a trunk's
+100% — and moved all three: **level 3 88% → 96%, level 4 62% → 72%, level 5
+45% → 64%.** The regression run caught it; the comment claiming shares are all
+1 on a trunk map was false.
+
+**What shipped is an exclusion**: a lane under `MINOR_LANE_SHARE = 0.2` is left
+out of the ranking. Every pad stays in the queue, it just stops jumping it for a
+trickle. There is a factor of seven of clear air between 4.7% and 32.5%, so it
+changes level 6 and nothing else.
+
+### The Rooster, re-derived at 480 seeds after the fix
+
+| rooster.maxHealth | wins/480 |
+|---|---|
+| 7,000 | 240 (50%) |
+| **7,500** | **181 (38%)** |
+| 8,000 | 132 (28%) |
+
+The 120-seed sweep run BEFORE the fix is kept as a specimen: 4,500 → 72%,
+5,500 → 55%, 6,300 → 36%, 7,000 → 26%, 7,500 → 15%, 9,000 → 3%. Perfectly
+monotonic, and every number wrong, because the board it measured was one nobody
+would build.
+
+### What the third spawn is actually worth
+
+| flank | 480 seeds |
+|---|---|
+| removed entirely | 182/480 (38%) |
+| **as shipped, 11 bodies (4.7%)** | **181/480 (38%)** |
+| doubled, 22 bodies | 202/480 (42%) |
+
+**It makes the level very slightly easier.** A Sprinter is 50 health that pays
+22 peanuts and walks 1425 px past four pads that covered nothing before. The
+flank is not this level's difficulty; the Rooster is.
+
+### Levels 1-5, same seeds, before and after
+
+Against a clean `git worktree` at `dbaf734`:
+
+| level | before | after | |
+|---|---|---|---|
+| level1 | 428/480 (89%) | 428/480 (89%) | identical |
+| level2 | 255/480 (53%) | 255/480 (53%) | identical |
+| level3 | 422/480 (88%) | 422/480 (88%) | identical |
+| level4 | 299/480 (62%) | 299/480 (62%) | identical |
+| level5 | 218/480 (45%) | 218/480 (45%) | identical |
+
+Not one outcome differs. This is the run that rejected the weighted fix, so it
+earned its keep twice.
+
+Full write-up: `reports/2026-09-12-level-6-fixes.md`.
+
+---
+
 ## 2026-09-11 — level 6 tuned, and levels 1-5 held
 
 ### The headline

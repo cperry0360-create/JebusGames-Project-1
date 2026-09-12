@@ -1,6 +1,7 @@
 {
  "_note": "DERIVED by tools/trace_level6.py from art-source/map_level6.png. Checked independently by tools/check_level6.py. This file replaces the one written for the abandoned stitched two-lane plate, which described different art and was wrong in every number.",
- "_conflict": "THE PLATE MERGES THE TWO LANES. west12 and west21 join at the junction below and share the last stretch to east73; east83 is fed only by a band entering at the bottom frame edge and is reachable from no entrance. The brief for this level says the lanes are independent and that each exit has its own entrance. They are not, and it does not. Nothing here was adjusted to fit the brief. See reports/2026-09-10-level-6-geometry.md.",
+ "_conflict": "THE PLATE MERGES THE TWO LANES. west12 and west21 join at the junction below and share the last stretch to east73. The brief for this level says the lanes are independent and that each exit has its own entrance. They are not. Nothing here was adjusted to fit the brief; src/data/map_level6.json authors ONE 82 px segment to pull them apart and says so in its `_fabricated` note. See reports/2026-09-10-level-6-geometry.md.",
+ "_thirdEntrance": "THE BAND THAT REACHES east83 HAS A MOUTH, and this file used to call it an excluded touch -- \"a band running off the frame at a shallow angle, not a terminal\". It is 182 canvas px of road on the BOTTOM edge, 59-74% across, and it is the only thing feeding east83. It is `south59` in `openings` and `flank` in `entrances` now, and level 6 spawns a small Sprinter flank out of it. What is still excluded is the TOP touch, which is the scaffold's planking and is connected to no road at all -- the blob test above proves that rather than assuming it. See reports/2026-09-12-level-6-fixes.md.",
  "world": [
   1280,
   720
@@ -17,6 +18,10 @@
   "south": [
    0,
    150
+  ],
+  "flank": [
+   849,
+   719
   ]
  },
  "exits": {
@@ -73,6 +78,17 @@
     596
    ],
    "fraction": 0.8285
+  },
+  "south59": {
+   "span": [
+    758,
+    940
+   ],
+   "at": [
+    849,
+    719
+   ],
+   "fraction": 0.6633
   }
  },
  "excludedTouches": {
@@ -83,14 +99,6 @@
    ],
    "fraction": 0.6309,
    "why": "the scaffold planking, road-coloured and connected to no road"
-  },
-  "south": {
-   "span": [
-    758,
-    940
-   ],
-   "fraction": 0.6633,
-   "why": "a band running off the frame at a shallow angle, not a terminal"
   }
  },
  "lanes": {

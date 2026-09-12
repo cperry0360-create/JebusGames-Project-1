@@ -129,11 +129,18 @@ PAD_CENTRE_TOLERANCE = 2.0
 # The openings the brief states, as a fraction of the frame, and how far a
 # measured centre may sit from one. 2% of 720 is 14 px, well inside one road
 # width and well outside measurement noise.
+# FIVE OPENINGS: three entrances and two exits. `south59` on the bottom edge was
+# an EXCLUDED touch until level 6 grew its flank -- the geometry file's
+# `_thirdEntrance` note says what changed and why. It is measured along the
+# WIDTH; the other four are along the height.
 OPENINGS = {'west12': ('west', 'y', 0.12), 'west21': ('west', 'y', 0.20),
-            'east73': ('east', 'y', 0.73), 'east83': ('east', 'y', 0.83)}
+            'east73': ('east', 'y', 0.73), 'east83': ('east', 'y', 0.83),
+            'south59': ('south', 'x', 0.66)}
 OPENING_TOLERANCE = 0.02
-# The two touches that are NOT openings, and where the brief says they are.
-EXCLUDED = {'north': ('x', 0.63), 'south': ('x', 0.66)}
+# The ONE touch that is still not an opening. The top edge is the scaffold's
+# planking: road-coloured, and connected to no road at all, which the blob test
+# in main() proves rather than assumes.
+EXCLUDED = {'north': ('x', 0.63)}
 # The bottom mouth, in road widths. The brief calls it 241 px on the source
 # plate, which is 184 canvas px; the paint's edge moves a few pixels either
 # way, so the gate is a band.
@@ -464,19 +471,30 @@ def main():
     found = [(e, r) for e, rr in runs.items() for r in rr]
     print(f'  {len(found)} frame touch(es): ' + ', '.join(
         f'{e} {r[0]}-{r[1]}' for e, r in sorted(found)))
-    terminals = len(runs['west']) + len(runs['east'])
-    print(f'  terminals on the vertical edges: {terminals}   '
-          f'excluded touches on the horizontal edges: {len(runs["north"]) + len(runs["south"])}')
-    if terminals != 4:
-        problems.append(f'{terminals} road openings on the west and east edges, not 4')
+    # THREE ENTRANCES AND TWO EXITS. Two west openings and one bottom one are
+    # where enemies arrive; the two east openings are where they leave. This
+    # used to count the vertical edges only and demand four, which is the count
+    # from before the flank -- the bottom mouth was excluded then.
+    terminals = len(runs['west']) + len(runs['east']) + len(runs['south'])
+    print(f'  openings on the band: {terminals}  '
+          f'= {len(runs["west"])} west + {len(runs["east"])} east + {len(runs["south"])} south'
+          f'   excluded touches: {len(runs["north"])}')
+    if terminals != 5:
+        problems.append(f'{terminals} road openings on the band, not 5 '
+                        f'(2 west entrances, 2 east exits, 1 bottom entrance)')
+    if len(runs['south']) != 1:
+        problems.append(f'{len(runs["south"])} openings on the bottom edge, not 1; the flank '
+                        f'spawns out of exactly one')
     if runs['north']:
         problems.append('the top edge has a road opening on the band the entrances reach; the '
                         'brief says the top touch is art running off the frame')
     for key, (edge, axis, want) in OPENINGS.items():
         rr = sorted(runs[edge])
-        idx = 0 if key in ('west12', 'east73') else 1
-        if len(rr) != 2:
-            problems.append(f'the {edge} edge has {len(rr)} openings, not 2')
+        # The bottom edge carries ONE opening, the two vertical edges two each.
+        want_n = 1 if edge == 'south' else 2
+        idx = 0 if key in ('west12', 'east73', 'south59') else 1
+        if len(rr) != want_n:
+            problems.append(f'the {edge} edge has {len(rr)} openings, not {want_n}')
             continue
         lo, hi = rr[idx]
         mid = (lo + hi) / 2
@@ -490,6 +508,13 @@ def main():
         if [lo, hi] != declared and abs(mid - sum(declared) / 2) > 3:
             problems.append(f'the {key} opening spans {lo}-{hi} here and {declared} in the '
                             f'geometry file')
+        # THE BOTTOM MOUTH HAS TO BE WIDE ENOUGH TO BE A ROAD. It moved here from
+        # the excluded-touch loop when it became an opening; left there it was a
+        # gate on a dict that no longer has a 'south' key, which is a check that
+        # cannot fail.
+        if key == 'south59' and not (SOUTH_MOUTH_PX[0] <= hi - lo + 1 <= SOUTH_MOUTH_PX[1]):
+            problems.append(f'the bottom mouth is {hi - lo + 1} canvas px, outside '
+                            f'{SOUTH_MOUTH_PX[0]}-{SOUTH_MOUTH_PX[1]}')
     # THE TWO EXCLUDED TOUCHES ARE MEASURED ON THE RAW ROAD MASK, not on the
     # band, and that is the whole point of them. The top one is not on the band
     # at all -- it is the scaffold's planking, which is why it is not an
@@ -518,9 +543,6 @@ def main():
                             'fifth opening')
         if abs(frac - want) > OPENING_TOLERANCE * 2:
             problems.append(f'the {edge} touch sits at {frac:.1%}, not the briefed {want:.0%}')
-        if edge == 'south' and not (SOUTH_MOUTH_PX[0] <= hi - lo + 1 <= SOUTH_MOUTH_PX[1]):
-            problems.append(f'the bottom mouth is {hi - lo + 1} canvas px, outside '
-                            f'{SOUTH_MOUTH_PX[0]}-{SOUTH_MOUTH_PX[1]}')
 
     deep = depth(w, h, band)
     maxdeep = max(d for d in deep if d < 10 ** 9)
@@ -540,9 +562,15 @@ def main():
     print('\n--- which entrance reaches which exit ---')
     exits = {'east73': (w - 1, int(round(sum(g['openings']['east73']['span']) / 2))),
              'east83': (w - 1, int(round(sum(g['openings']['east83']['span']) / 2)))}
+    flank_in = tuple(g['entrances']['flank'])
     reach = {}
-    for a, at in (('north', north_in), ('south', south_in)):
-        seed, _ = component(w, h, band, snap((at[0] + 6, at[1])))
+    # The flank is seeded ABOVE its mouth rather than 6 px to the right of it:
+    # it enters on the bottom edge, so "just inside the frame" is upwards here
+    # and sideways for the other two.
+    for a, at in (('north', (north_in[0] + 6, north_in[1])),
+                  ('south', (south_in[0] + 6, south_in[1])),
+                  ('flank', (flank_in[0], flank_in[1] - 6))):
+        seed, _ = component(w, h, band, snap(at))
         for b, bt in exits.items():
             X, Y = snap(bt)
             reach[(a, b)] = bool(seed[Y * w + X])
@@ -553,6 +581,12 @@ def main():
         if not reach[(a, want)]:
             problems.append(f'the geometry file sends the {a} lane to {want} and the paint has '
                             f'no path there')
+    # AND THE FLANK REACHES east83, which is the whole reason that band exists.
+    # This is the assertion the old `_conflict` was about, read the other way
+    # round: no WEST entrance reaches east83, and the bottom one does.
+    if not reach[('flank', 'east83')]:
+        problems.append('the flank entrance has no painted path to east83; the band it spawns '
+                        'into is not the band that reaches that exit')
 
     print('\n--- the lanes, re-traced off the plate ---')
     lanes = {}

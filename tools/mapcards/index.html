@@ -21,6 +21,7 @@ const PLATES = {
   level3: 'public/assets/maps/map_level3.webp',
   level4: 'public/assets/maps/map_level4.webp',
   level5: 'public/assets/maps/map_level5.webp',
+  level6: 'public/assets/maps/map_level6.webp',
 }
 
 async function load(path) {
@@ -65,6 +66,16 @@ const CROPS = {
   // which is the half of this level anybody would recognise. 1.50:1, so
   // essentially nothing is centre-cropped away by the cover fit below.
   level5: [0.14, 0.05, 0.60, 0.71],
+  // LEVEL 6: THE WIREFRAME UNICORN, and the two roads that sweep past it. The
+  // level's joke is that nothing in it got finished, and the unicorn is the one
+  // object that says so at 300x200 -- a blue wireframe horse on a plinth is
+  // unmistakable where a white cube and a traffic cone are just shapes. The
+  // scaffolding in the bottom-left would also have worked and is a worse card:
+  // it sits in the corner with one road, so half the crop is empty floor.
+  // Chosen off preview_level6.png. 0.32 x 1672 = 535.0 wide and 0.379 x 941 =
+  // 356.6 tall, which is 1.5002 -- the card's own 3:2, so the cover fit below
+  // throws essentially nothing away.
+  level6: [0.66, 0.20, 0.32, 0.379],
 }
 
 const CARD_W = 300, CARD_H = 200

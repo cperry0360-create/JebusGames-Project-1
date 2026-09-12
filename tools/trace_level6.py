@@ -607,22 +607,36 @@ def main():
             mid = (lo + hi) / 2
             print(f'  {edge:6s} {lo:4d}-{hi:4d}  centre {mid:6.1f} = {mid / n:5.1%} of the frame,'
                   f' {hi - lo + 1:3d} px')
-    terminals = {'west': runs['west'], 'east': runs['east']}
-    excluded = {'north': runs['north'], 'south': runs['south']}
+    # THE BOTTOM TOUCH IS AN ENTRANCE NOW, and it used to be excluded here as
+    # "the art running off the frame". It is the mouth of the band that reaches
+    # east83, it is 182 canvas px of road, and level 6 spawns a flank out of it.
+    # The TOP touch stays excluded and is a different thing entirely: the
+    # scaffold's planking, road-coloured and connected to no road at all, which
+    # the blob test below proves rather than assumes.
+    terminals = {'west': runs['west'], 'east': runs['east'], 'south': runs['south']}
+    excluded = {'north': runs['north']}
     n_terminals = sum(len(v) for v in terminals.values())
-    print(f'  TERMINALS (vertical edges only): {n_terminals}.  '
+    print(f'  TERMINALS (two vertical edges and the bottom): {n_terminals}.  '
           f'excluded touches: {sum(len(v) for v in excluded.values())}')
-    if n_terminals != 4:
-        print('  the brief says four; this plate does not agree, and nothing below is safe')
+    if n_terminals != 5:
+        print('  five expected -- two west, two east, one south; this plate does not agree,'
+              ' and nothing below is safe')
 
     (w1, w2), (e1, e2) = sorted(runs['west']), sorted(runs['east'])
+    (s1,) = sorted(runs['south'])
     gates = {
         'west12': (0, (w1[0] + w1[1]) // 2),
         'west21': (0, (w2[0] + w2[1]) // 2),
         'east73': (CANVAS_W - 1, (e1[0] + e1[1]) // 2),
         'east83': (CANVAS_W - 1, (e2[0] + e2[1]) // 2),
+        # The bottom mouth. Its span runs along the WIDTH, so the gate's x is
+        # the midpoint and its y is the bottom row -- the other four are the
+        # other way round and reading this one the same way would put the
+        # flank's spawn off the left of the board.
+        'south59': ((s1[0] + s1[1]) // 2, CANVAS_H - 1),
     }
-    spans = {'west12': list(w1), 'west21': list(w2), 'east73': list(e1), 'east83': list(e2)}
+    spans = {'west12': list(w1), 'west21': list(w2), 'east73': list(e1), 'east83': list(e2),
+             'south59': list(s1)}
 
     print('\n--- which entrance reaches which exit ---')
     deep = depth(band)
@@ -736,26 +750,40 @@ def main():
                  'one written for the abandoned stitched two-lane plate, which described '
                  'different art and was wrong in every number.',
         '_conflict': 'THE PLATE MERGES THE TWO LANES. west12 and west21 join at the '
-                     f'junction below and share the last stretch to {north_exit}; '
-                     f'{orphan_exit} is fed only by a band entering at the bottom frame '
-                     'edge and is reachable from no entrance. The brief for this level '
-                     'says the lanes are independent and that each exit has its own '
-                     'entrance. They are not, and it does not. Nothing here was adjusted '
-                     'to fit the brief. See reports/2026-09-10-level-6-geometry.md.',
+                     f'junction below and share the last stretch to {north_exit}. The '
+                     'brief for this level says the lanes are independent and that each '
+                     'exit has its own entrance. They are not. Nothing here was adjusted '
+                     'to fit the brief; src/data/map_level6.json authors ONE 82 px '
+                     'segment to pull them apart and says so in its `_fabricated` note. '
+                     'See reports/2026-09-10-level-6-geometry.md.',
+        '_thirdEntrance': 'THE BAND THAT REACHES '
+                          f'{orphan_exit} HAS A MOUTH, and this file used to call it an '
+                          'excluded touch -- "a band running off the frame at a shallow '
+                          'angle, not a terminal". It is 182 canvas px of road on the '
+                          'BOTTOM edge, 59-74% across, and it is the only thing feeding '
+                          f'{orphan_exit}. It is `south59` in `openings` and `flank` in '
+                          '`entrances` now, and level 6 spawns a small Sprinter flank out '
+                          'of it. What is still excluded is the TOP touch, which is the '
+                          "scaffold's planking and is connected to no road at all -- the "
+                          'blob test above proves that rather than assuming it. See '
+                          'reports/2026-09-12-level-6-fixes.md.',
         'world': [CANVAS_W, CANVAS_H],
         'plate': [w, h],
-        'entrances': {'north': list(gates['west12']), 'south': list(gates['west21'])},
+        'entrances': {'north': list(gates['west12']), 'south': list(gates['west21']),
+                      'flank': list(gates['south59'])},
         'exits': {'north': list(gates[north_exit]), 'south': list(gates[south_exit])},
+        # `fraction` is the opening's position along the edge it sits on, so the
+        # four on the vertical edges divide by the HEIGHT and the bottom one by
+        # the WIDTH. Dividing them all by the height put south59 at 130% of a
+        # frame it is not on.
         'openings': {k: {'span': spans[k], 'at': list(gates[k]),
-                         'fraction': round(sum(spans[k]) / 2 / CANVAS_H, 4)}
-                     for k in ('west12', 'west21', 'east73', 'east83')},
+                         'fraction': round(sum(spans[k]) / 2
+                                           / (CANVAS_W if k == 'south59' else CANVAS_H), 4)}
+                     for k in ('west12', 'west21', 'east73', 'east83', 'south59')},
         'excludedTouches': {
             'north': {'span': list(runs['north'][0]),
                       'fraction': round(sum(runs['north'][0]) / 2 / CANVAS_W, 4),
                       'why': 'the scaffold planking, road-coloured and connected to no road'},
-            'south': {'span': list(runs['south'][0]),
-                      'fraction': round(sum(runs['south'][0]) / 2 / CANVAS_W, 4),
-                      'why': 'a band running off the frame at a shallow angle, not a terminal'},
         },
         'lanes': {n: [[round(x, 2), round(y, 2)] for x, y in l] for n, l in lanes.items()},
         'lengths': {n: round(v, 2) for n, v in lengths.items()},

@@ -797,8 +797,77 @@ export function simulate(
   // own note calls meaningless. That is the harness ranking maps by their
   // array order. A player looks at the board and covers the road first, so
   // the sim does too, and the number now describes the level.
+  // HOW MUCH TRAFFIC EACH LANE ACTUALLY CARRIES, as a share of the level's
+  // bodies. A lane's traffic is what SPAWNS on it plus everything that merges
+  // into it, so a trunk carries the whole level and a flank carries a trickle.
+  const laneTraffic = ((): Record<string, number> => {
+    const out: Record<string, number> = {}
+    for (const l of net.lanes) out[l.id] = 0
+    let total = 0
+    for (const wv of WAVES) {
+      for (const sp of wv.spawns) {
+        const startId = net.lane(sp.lane ?? MAIN_LANE).id
+        total += sp.count
+        // Every lane on this group's route, the ones it merges into included.
+        let at = startId
+        for (let hop = 0; hop <= net.lanes.length; hop++) {
+          out[at] = (out[at] ?? 0) + sp.count
+          const next = net.transferFrom(at)
+          if (!next) break
+          at = next.lane.id
+        }
+      }
+    }
+    for (const k of Object.keys(out)) out[k] = total ? out[k]! / total : 0
+    return out
+  })()
+
+  /**
+   * THE ORDER THE SCRIPTED PLAYER FILLS PADS, and a lane nothing walks is not
+   * part of "the road".
+   *
+   * It was `padToLane` ascending -- nearest the road first -- which is right
+   * while every lane carries comparable traffic. Measured, that is true of
+   * every level up to 5: the thinnest lane in the game is level 5's south gate
+   * at 32.5% of the run's bodies, and a trunk carries 100%. Level 6's FLANK
+   * carries 4.7%, and four pads sit nearer to it than to either front lane --
+   * so adding it to the map moved pad 12 from 16th in this queue to FIRST and
+   * the level's measured win rate from 38% to 13%, with the flank's spawns
+   * removed entirely. The board had not changed; the scripted player had just
+   * been made to spend its opening purse covering a lane nothing walked.
+   *
+   * SO A LANE IS EXCLUDED, NOT DISCOUNTED. Weighting the distance by the share
+   * was tried first and is wrong: on levels 3, 4 and 5 the branches carry
+   * 32-55% against the trunk's 100%, so dividing by the share re-ranked their
+   * pads too and moved all three levels -- level 5 from 45% to 64%. A
+   * threshold changes level 6 and nothing else, because there is a factor of
+   * seven of clear air between 4.7% and 32.5%.
+   *
+   * `MINOR_LANE_SHARE` is that threshold. A pad still gets built eventually --
+   * the queue holds every pad -- it just stops jumping the queue for a
+   * trickle, which is what a player looking at the board would also not do.
+   */
+  const MINOR_LANE_SHARE = 0.2
+  const ranked = net.lanes.filter((l) => (laneTraffic[l.id] ?? 0) >= MINOR_LANE_SHARE)
+  const rankAgainst = ranked.length > 0 ? ranked : net.lanes
+  const padRank: number[] = build.spots.map((spot) => {
+    let best = Infinity
+    for (const l of rankAgainst) {
+      const w = l.path.points
+      for (let i = 0; i < w.length - 1; i++) {
+        const ax = w[i]!.x, ay = w[i]!.y
+        const bx = w[i + 1]!.x, by = w[i + 1]!.y
+        const dx = bx - ax, dy = by - ay
+        const len2 = dx * dx + dy * dy
+        const t = len2 ? Math.max(0, Math.min(1, ((spot.x - ax) * dx + (spot.y - ay) * dy) / len2)) : 0
+        best = Math.min(best, Math.hypot(spot.x - (ax + t * dx), spot.y - (ay + t * dy)))
+      }
+    }
+    return best
+  })
+
   const byReach = [...build.spots].sort(
-    (a, b) => (padToLane[a.index] ?? 0) - (padToLane[b.index] ?? 0))
+    (a, b) => (padRank[a.index] ?? 0) - (padRank[b.index] ?? 0))
 
   const spend = (): void => {
     if (mode === 'nobuild') return
