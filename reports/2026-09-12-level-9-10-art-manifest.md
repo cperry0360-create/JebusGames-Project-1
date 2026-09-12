@@ -11,11 +11,37 @@ have no roster and this report does not guess one.
 | commit | what | CI |
 |---|---|---|
 | `a614f58` | Sort the level 9 and 10 art into `art-source/level9` and `level10` | [run 288](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34724533814) green |
-| *this commit* | This report | filled in by the commit below |
+| `4a7e788` | This report | [run 291](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34724664359) green |
+| `2aaf8d5` | Merge `main`'s root-PNG move, keeping the per-level directories | [run 293](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34724797893) green |
+| *this commit* | Fill in this report's own CI rows | it only edits this table and the section below |
+
+Runs 289 and 290 are the concurrent session's, not this work — see **A
+collision on `main`** below. The table stops recording runs here: recording one
+takes another commit, and the three above cover every commit that touches a file
+the checks read.
 
 Branch `claude/level-9-10-art-audit-izulqc`. The session could not push to
 `main`; the merge command is at the bottom of this file and was the first line
 of the session's reply.
+
+## A collision on `main`
+
+**While this audit was running, another session moved the same files.** Branch
+`claude/move-art-files-root-j6jn11`, commit `dedb6f6`, landed on `main` and moved
+the 36 root PNGs into a **flat** `art-source/`. This branch was moving them into
+`art-source/level9/` and `art-source/level10/` at the same time.
+
+Git saw 36 rename/rename conflicts: same file, same bytes, two destinations.
+Resolved in `2aaf8d5` to the **per-level directories** — that is what the brief
+asked for, and it is a superset of what `main` did. `main` got the files out of
+the repository root; this gets them out of the root *and* sorted.
+
+Every one of the 36 was compared byte for byte against its counterpart before
+the flat copy was dropped. **All 36 identical**, so preferring one side loses
+nothing.
+
+`main` is now an ancestor of this branch, so the merge at the bottom is still a
+fast-forward.
 
 ---
 
@@ -502,15 +528,25 @@ plate as the thing that is *too small* for a 1280-world-px surface. Levels 9 and
 
 ## Verification
 
+Run before the merge with `main`, and again on the merged tree:
+
 | check | result |
 |---|---|
-| `node --test 'tests/*.test.ts'` | **1035 pass, 0 fail** |
+| `node --test 'tests/*.test.ts'` | **1035 pass, 0 fail** — both times |
 | `sh tools/tsdiff.sh 2cc0129` | baseline 212 errors, working tree 212, **0 introduced** |
 | `sh tools/tsdiff.sh c277c3a` | 212 / 212, **0 introduced** |
+| `sh tools/tsdiff.sh dedb6f6` (after the merge) | 212 / 212, **0 introduced** |
 | stray PNGs at repository root | **none** |
-| `git status` after the move | 52 renames, nothing else |
+| `art-source/level9/` and `level10/` | 22 and 30 files, none of the 52 left flat |
+| levels 5-8 in `art-source/` | untouched |
 
-`2cc0129` was CI run 287, green, and is the tree this branch started from.
+`2cc0129` was CI run 287 green and is the tree this branch started from;
+`dedb6f6` is `main` after the concurrent session's move.
+
+There is no TypeScript, JSON or `public/` change on this branch at all, so
+`tsdiff` reporting zero is the expected result rather than an informative one.
+It is recorded because CLAUDE.md asks for it, not because it proves anything
+here.
 
 ### What was NOT checked
 
