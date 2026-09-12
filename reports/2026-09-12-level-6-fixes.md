@@ -10,7 +10,44 @@ which roads matter.
 
 | commit | what | CI |
 |---|---|---|
-| *(filled in below)* | | |
+| `566deea` | the third spawn, the flame, the card, the soak heuristic | run 273 — **typecheck FAILED**, tests green, deploy skipped |
+| `924c8db` | declare `flameArt` as the Sprite it holds, and a local guard | run 274 — **all five green**, deployed |
+| `<this report>` | this file and its `SOAK-REPORT.md` section | markdown only; the deploy's paths filter skips it |
+
+**`566deea` turned `main` red and this is the account of it**, because the
+failure is the one CLAUDE.md warns about and it cost a cycle anyway.
+
+`flameArt` stayed declared `Phaser.GameObjects.Image | null` while `showFlame`
+was rewritten to assign `this.add.sprite(...)`. `tsc` in CI rejected four
+lines — `.anims` and `.play` do not exist on an `Image`, twice each — and
+`tools/tsdiff.sh` reported **212 against 212, nothing introduced**, because it
+compares error COUNTS and with no `node_modules` every Phaser type is `any`.
+`npm install` was tried again here and still answers **403** on
+`@types/node`, so there is no way to run the real check from the sandbox.
+
+A Sprite in an Image field is the nastiest shape of this bug: `Sprite extends
+Image`, so the assignment itself is legal and only the first call that needs
+the Sprite half fails.
+
+Two things came out of it:
+
+1. Every member the flame uses was then checked against `Sprite` one at a time
+   — `setOrigin`, `setPosition`, `setRotation`, `setScale`, `setAlpha`,
+   `setFrame`, `setVisible`, `width`, `anims.stop`, `anims.isPlaying`,
+   `play({key, duration, repeat})`. The last three already appear in this same
+   file at lines 3819, 3849 and 4055 and pass CI today.
+2. **A local guard**, in `tests/level6map.test.ts`: it reads GameScene as text
+   and pairs every `this.X = this.add.sprite(...)` with X's declaration. It was
+   established to FAIL before it was trusted — reverting the declaration makes
+   it report the whole four-line error in one line, locally, in half a second.
+   That is not a replacement for `tsc`; it is the cheapest thing that catches
+   this particular class where `tsdiff` cannot.
+
+Run 274's Pages artifact is **32,942,907 bytes**, against 32,917,045 at
+`dbaf734`: **+25,862 bytes**, which is the card (21,956) and the code.
+
+**The served page is Cory's to confirm.** This sandbox cannot reach github.io —
+the egress proxy answers 403 by policy — and no live check was made.
 
 ## The headline
 
@@ -492,10 +529,12 @@ the same one. WorldMap draws 61 objects, 0 faults, now with a real card.
 
 ### Tests and typecheck
 
-- **1,034 tests, 0 failures** (was 1,033).
-- `sh tools/tsdiff.sh dbaf734`: **212 against 212 -- nothing introduced.** It is
-  blind to Phaser access rules, as CLAUDE.md says; it did catch `boss.lane`
-  being private last session, because `Enemy` is ours.
+- **1,035 tests, 0 failures** (was 1,033; the flame pin and the sprite-field
+  guard are the two new ones).
+- `sh tools/tsdiff.sh dbaf734`: **212 against 212 -- nothing introduced**, and
+  **that reading was wrong**: see the commit table. It compares error counts and
+  cannot see a real Phaser type error. `npm install` still answers 403, so
+  there is no real typecheck available here at all.
 - `python3 tools/build_level6_map.py` twice in a row leaves the same md5, so the
   generator reproduces the shipped map exactly.
 
@@ -514,6 +553,15 @@ timeout is still unwritten. Neither was in scope here and neither was started.
 
 - The third spawn, the flame's rendering, the card, the soak heuristic, and a
   re-derived Rooster at the same 7,500.
+
+**One thing this pass added to the toolbox**
+
+- `tests/level6map.test.ts` now guards the sprite-field/factory mismatch
+  locally. It is narrow on purpose -- it knows about `add.sprite`, `add.image`,
+  `add.text`, `add.graphics`, `add.container` and `add.rectangle` -- and it
+  fails loudly if its regex stops matching, so it cannot rot into a test that
+  checks nothing. Worth widening the moment another class of Phaser error gets
+  through `tsdiff`.
 
 **Waiting on Cory**
 
