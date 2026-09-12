@@ -17,7 +17,8 @@ against that, not against a pad count.
 | `ed1f8fb` | the two CI cells above, and the push verification in the closing section | run 279 — **green** |
 | `<this line>` | this row | markdown only, and no run is recorded for it: recording one takes another commit, and the three runs above already cover every commit that touched a file the checks read |
 | `8134c25` | `main` merged into the branch, so it can fast-forward again — see **The merge that did not happen** below | run 292 — **`test`, `typecheck` and `changes` all green**; `deploy` skipped |
-| `<this line>` | the row above, and the rewritten closing section | markdown only |
+| `d671dfa` | **The merge that did not happen**, the rewritten closing section, and the same note in the level 8 report | run 294 — **`test`, `typecheck` and `changes` all green**; `deploy` skipped |
+| `<this line>` | closes the cell above | markdown only, and the table stops here: recording a run for it would take another commit, and every commit that touched a file the checks read is already listed |
 
 Reproduce the whole thing:
 
