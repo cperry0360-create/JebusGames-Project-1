@@ -203,6 +203,50 @@ test('the Rooster breathes from its beak, uniformly scaled, above the board', ()
   assert.ok(k > 0, 'the flame art has no contentWidth to scale by')
 })
 
+test('a field holding a Phaser sprite is DECLARED as a sprite', () => {
+  // THIS IS A LOCAL STAND-IN FOR A TYPECHECK THAT CANNOT RUN HERE, and it
+  // exists because the flame fix shipped broken.
+  //
+  // `flameArt` was declared `Phaser.GameObjects.Image | null` while `showFlame`
+  // assigned `this.add.sprite(...)` to it. `tsc` in CI rejected four lines --
+  // `.anims` and `.play` do not exist on an Image -- and `tools/tsdiff.sh` was
+  // blind to every one of them: with no `node_modules` every Phaser type is
+  // `any`, so the local error COUNT did not move. That is the exact blind spot
+  // CLAUDE.md documents, and the cost was a red `main`.
+  //
+  // So: read the source as text and pair every `this.X = this.add.sprite(...)`
+  // with X's declaration. It catches nothing tsc would not, and it catches it
+  // HERE, which is the whole point.
+  const src = readFileSync(new URL('../src/scenes/GameScene.ts', import.meta.url), 'utf8')
+  const decl = new Map<string, string>()
+  for (const m of src.matchAll(
+    /^\s*(?:private |readonly |public )*(\w+)(?:!)?:\s*Phaser\.GameObjects\.(\w+)/gm)) {
+    decl.set(m[1]!, m[2]!)
+  }
+  const factoryType: Record<string, string> = {
+    sprite: 'Sprite', image: 'Image', text: 'Text', graphics: 'Graphics',
+    container: 'Container', rectangle: 'Rectangle',
+  }
+  let checked = 0
+  for (const m of src.matchAll(/this\.(\w+)\s*=\s*this\.add\.(\w+)\(/g)) {
+    const field = m[1]!, factory = m[2]!
+    const want = factoryType[factory]
+    const have = decl.get(field)
+    if (!want || !have) continue
+    checked++
+    // An Image assigned to a Sprite field is fine in neither direction here:
+    // Sprite extends Image, so a Sprite in an Image field compiles until
+    // somebody calls `.anims` on it, which is exactly what happened.
+    assert.equal(have, want,
+      `GameScene.${field} is declared Phaser.GameObjects.${have} but is assigned `
+      + `this.add.${factory}(). A Sprite in an Image field compiles until something `
+      + 'calls .anims or .play on it, and tsdiff cannot see that.')
+  }
+  assert.ok(checked >= 3,
+    `only ${checked} field assignments were checked; the regex has stopped matching `
+    + 'and this test is no longer looking at anything')
+})
+
 test('level 6 is reachable from the world map, behind level 5', () => {
   const row = (levels as never as { levels: { id: string; unlockedBy: string | null }[] })
     .levels.find((l) => l.id === 'level6')

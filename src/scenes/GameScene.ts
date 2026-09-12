@@ -340,7 +340,13 @@ export class GameScene extends Phaser.Scene {
   private scorchLeft = new Map<Tower, number>()
   /** The corridor, drawn. One image reused rather than created per breath, so
    *  nothing accumulates across a fight. */
-  private flameArt: Phaser.GameObjects.Image | null = null
+  // A SPRITE, NOT AN IMAGE, and the type is the point. This was declared as an
+  // `Image` while `showFlame` assigned `add.sprite` to it, and `tsc` in CI
+  // rejected four lines -- `.anims` and `.play` do not exist on an Image.
+  // `tools/tsdiff.sh` could not see it: without `node_modules` every Phaser
+  // type is `any`, so the local error count did not move. CLAUDE.md says CI is
+  // the first thing that can tell you, and it was.
+  private flameArt: Phaser.GameObjects.Sprite | null = null
   /** The scorch marker over each burning tower, by tower. */
   private scorchArt = new Map<Tower, Phaser.GameObjects.Image>()
   private build!: BuildSystem
