@@ -13,7 +13,8 @@ against that, not against a pad count.
 | commit | what | CI |
 |---|---|---|
 | `fabc308` | the WebP plate, `art.json`, the tracer, the checker, `level7_geometry.json`, the overlay, one test expectation | run 277 — **`test`, `typecheck` and `changes` all green**; `deploy` skipped, because this is a branch and not `main` |
-| `<this report>` | this file | markdown only; the deploy's paths filter skips it |
+| `69c3f79` | this report | run 278 — **`test`, `typecheck` and `changes` all green**; `deploy` skipped |
+| `<this line>` | the two CI cells above, filled in once the runs finished | markdown only |
 
 Reproduce the whole thing:
 
@@ -476,7 +477,12 @@ nothing loads it.
 
 **On the branch `claude/level-7-geometry-wsbyqq`, green, fast-forwardable onto
 `main`.** The session could not push to `main`; the merge command is the first
-line of the closing message.
+line of the closing message. Verified after the push rather than assumed —
+`git fetch origin` then `git ls-tree -r origin/claude/level-7-geometry-wsbyqq`
+lists all six new files, `git merge-base --is-ancestor origin/main
+origin/claude/level-7-geometry-wsbyqq` returns true, and the branch is two
+commits ahead of `origin/main` at `ac3c059`. **The branch and `main` are NOT
+the same commit.**
 
 **Landed in this pass**
 
