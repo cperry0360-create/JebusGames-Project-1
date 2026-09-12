@@ -1,0 +1,810 @@
+{
+ "_note": "DERIVED by tools/trace_level7.py from art-source/map_level7.png. Checked independently by tools/check_level7.py. Geometry only: the roster, the waves and the boss mechanics are a separate pass.",
+ "_lanes": "THREE INDEPENDENT PARALLEL HIGHWAYS. Each has its own west entrance and its own east exit, they never touch, and all three cost lives when leaked. The nearest approach between any two painted bands is recorded in `gaps` and re-measured by the checker.",
+ "_paint": "THE WHITE EDGE LINES AND THE YELLOW CENTRE DASHES ARE ROAD, and each highway is therefore ONE lane. The mask is a morphological reconstruction -- grey asphalt grown into the paint it touches -- then closed, to bridge the outline either side of a dash. MEASURED, both ways: a grey-asphalt-only mask of this plate comes apart into NINE full-width bands rather than three, because every white edge line runs the whole width and cuts its highway into kerb, carriageway and kerb; and those carriageways measure 55, 63 and 60 px against the 67, 75 and 71 here, so a grey-only trace would have every road on the level 15-18% narrow. The dash outlines do not sever a band -- the gaps between dashes reconnect it -- and they still moved two of the three lanes off the road's centre before the closing was added. See tools/check_level7.py, which re-tests both.",
+ "_standoff": "THE HOUSE STANDOFF, NOT A RELAXED ONE. The medians are about 110 px tall, so a pad in one stands about 55 px off the asphalt -- half what levels 2 to 4 hold. Measured the way those levels measure it, centre to lane CENTRELINE rather than to the kerb, 55 px of scrub plus a 35 px half-width is 90 px, which is the band's own near edge. Nothing was relaxed and nothing was forced.",
+ "world": [
+  1280,
+  720
+ ],
+ "plate": [
+  1672,
+  941
+ ],
+ "lanesAre": [
+  "north",
+  "middle",
+  "south"
+ ],
+ "entrances": {
+  "north": [
+   0,
+   151
+  ],
+  "middle": [
+   0,
+   335
+  ],
+  "south": [
+   0,
+   518
+  ]
+ },
+ "exits": {
+  "north": [
+   1279,
+   151
+  ],
+  "middle": [
+   1279,
+   335
+  ],
+  "south": [
+   1279,
+   518
+  ]
+ },
+ "openings": {
+  "north": {
+   "west": [
+    118,
+    185
+   ],
+   "east": [
+    118,
+    184
+   ],
+   "westFraction": 0.2104,
+   "eastFraction": 0.2097
+  },
+  "middle": {
+   "west": [
+    298,
+    372
+   ],
+   "east": [
+    298,
+    372
+   ],
+   "westFraction": 0.4653,
+   "eastFraction": 0.4653
+  },
+  "south": {
+   "west": [
+    483,
+    553
+   ],
+   "east": [
+    483,
+    553
+   ],
+   "westFraction": 0.7194,
+   "eastFraction": 0.7194
+  }
+ },
+ "lanes": {
+  "north": [
+   [
+    0,
+    151
+   ],
+   [
+    1279,
+    151
+   ]
+  ],
+  "middle": [
+   [
+    0,
+    335
+   ],
+   [
+    1279,
+    335
+   ]
+  ],
+  "south": [
+   [
+    0,
+    518
+   ],
+   [
+    1279,
+    518
+   ]
+  ]
+ },
+ "lengths": {
+  "north": 1279.0,
+  "middle": 1279.0,
+  "south": 1279.0
+ },
+ "roadLength": 3837.0,
+ "roadWidth": 71,
+ "roadWidthPerLane": {
+  "north": 67,
+  "middle": 75,
+  "south": 71
+ },
+ "bandExtent": {
+  "north": [
+   118,
+   184
+  ],
+  "middle": [
+   298,
+   372
+  ],
+  "south": [
+   483,
+   553
+  ]
+ },
+ "bandHeight": {
+  "north": 67,
+  "middle": 75,
+  "south": 71
+ },
+ "groundStrips": [
+  {
+   "where": "above the north highway",
+   "rows": [
+    0,
+    117
+   ],
+   "height": 118
+  },
+  {
+   "where": "between north and middle",
+   "rows": [
+    185,
+    297
+   ],
+   "height": 113
+  },
+  {
+   "where": "between middle and south",
+   "rows": [
+    373,
+    482
+   ],
+   "height": 110
+  },
+  {
+   "where": "below the south highway",
+   "rows": [
+    554,
+    719
+   ],
+   "height": 166
+  }
+ ],
+ "gaps": {
+  "north-middle": {
+   "paintToPaint": 112.0,
+   "centrelineToCentreline": 184.0
+  },
+  "north-south": {
+   "paintToPaint": 298.0,
+   "centrelineToCentreline": 367.0
+  },
+  "middle-south": {
+   "paintToPaint": 111.0,
+   "centrelineToCentreline": 183.0
+  }
+ },
+ "towerRange": 112,
+ "padCoreRadius": 24,
+ "padFootprintRadius": 34,
+ "padStandoffBand": [
+  90,
+  114
+ ],
+ "padSpacing": 74,
+ "padsCoveringTwoLanes": 20,
+ "candidatePositions": 1207,
+ "candidatePositionsCoveringTwoLanes": 399,
+ "candidatePositionsPerStrip": {
+  "above the north highway": 122,
+  "between north and middle": 186,
+  "between middle and south": 213,
+  "below the south highway": 686
+ },
+ "padsPerStrip": {
+  "between north and middle": 10,
+  "between middle and south": 10,
+  "above the north highway": 1,
+  "below the south highway": 1
+ },
+ "uncoveredLaneSpans": {
+  "north": [
+   [
+    0,
+    72.0
+   ],
+   [
+    1228.0,
+    1279.0
+   ]
+  ],
+  "middle": [
+   [
+    0,
+    20.0
+   ],
+   [
+    1225.0,
+    1279.0
+   ]
+  ],
+  "south": [
+   [
+    0,
+    22.0
+   ],
+   [
+    1090.0,
+    1279.0
+   ]
+  ]
+ },
+ "pads": [
+  [
+   1162,
+   242
+  ],
+  [
+   990,
+   242
+  ],
+  [
+   862,
+   242
+  ],
+  [
+   706,
+   242
+  ],
+  [
+   578,
+   242
+  ],
+  [
+   450,
+   242
+  ],
+  [
+   322,
+   242
+  ],
+  [
+   138,
+   242
+  ],
+  [
+   266,
+   426
+  ],
+  [
+   86,
+   426
+  ],
+  [
+   834,
+   426
+  ],
+  [
+   1014,
+   426
+  ],
+  [
+   706,
+   426
+  ],
+  [
+   578,
+   426
+  ],
+  [
+   450,
+   426
+  ],
+  [
+   1086,
+   242
+  ],
+  [
+   246,
+   242
+  ],
+  [
+   374,
+   426
+  ],
+  [
+   938,
+   426
+  ],
+  [
+   190,
+   426
+  ],
+  [
+   758,
+   46
+  ],
+  [
+   1026,
+   610
+  ]
+ ],
+ "padDetail": [
+  {
+   "centre": [
+    1162,
+    242
+   ],
+   "toLane": {
+    "north": 91.0,
+    "middle": 93.0,
+    "south": 276.0
+   },
+   "standoff": 91.0,
+   "covers": [
+    "middle",
+    "north"
+   ],
+   "strip": "between north and middle"
+  },
+  {
+   "centre": [
+    990,
+    242
+   ],
+   "toLane": {
+    "north": 91.0,
+    "middle": 93.0,
+    "south": 276.0
+   },
+   "standoff": 91.0,
+   "covers": [
+    "middle",
+    "north"
+   ],
+   "strip": "between north and middle"
+  },
+  {
+   "centre": [
+    862,
+    242
+   ],
+   "toLane": {
+    "north": 91.0,
+    "middle": 93.0,
+    "south": 276.0
+   },
+   "standoff": 91.0,
+   "covers": [
+    "middle",
+    "north"
+   ],
+   "strip": "between north and middle"
+  },
+  {
+   "centre": [
+    706,
+    242
+   ],
+   "toLane": {
+    "north": 91.0,
+    "middle": 93.0,
+    "south": 276.0
+   },
+   "standoff": 91.0,
+   "covers": [
+    "middle",
+    "north"
+   ],
+   "strip": "between north and middle"
+  },
+  {
+   "centre": [
+    578,
+    242
+   ],
+   "toLane": {
+    "north": 91.0,
+    "middle": 93.0,
+    "south": 276.0
+   },
+   "standoff": 91.0,
+   "covers": [
+    "middle",
+    "north"
+   ],
+   "strip": "between north and middle"
+  },
+  {
+   "centre": [
+    450,
+    242
+   ],
+   "toLane": {
+    "north": 91.0,
+    "middle": 93.0,
+    "south": 276.0
+   },
+   "standoff": 91.0,
+   "covers": [
+    "middle",
+    "north"
+   ],
+   "strip": "between north and middle"
+  },
+  {
+   "centre": [
+    322,
+    242
+   ],
+   "toLane": {
+    "north": 91.0,
+    "middle": 93.0,
+    "south": 276.0
+   },
+   "standoff": 91.0,
+   "covers": [
+    "middle",
+    "north"
+   ],
+   "strip": "between north and middle"
+  },
+  {
+   "centre": [
+    138,
+    242
+   ],
+   "toLane": {
+    "north": 91.0,
+    "middle": 93.0,
+    "south": 276.0
+   },
+   "standoff": 91.0,
+   "covers": [
+    "middle",
+    "north"
+   ],
+   "strip": "between north and middle"
+  },
+  {
+   "centre": [
+    266,
+    426
+   ],
+   "toLane": {
+    "north": 275.0,
+    "middle": 91.0,
+    "south": 92.0
+   },
+   "standoff": 91.0,
+   "covers": [
+    "middle",
+    "south"
+   ],
+   "strip": "between middle and south"
+  },
+  {
+   "centre": [
+    86,
+    426
+   ],
+   "toLane": {
+    "north": 275.0,
+    "middle": 91.0,
+    "south": 92.0
+   },
+   "standoff": 91.0,
+   "covers": [
+    "middle",
+    "south"
+   ],
+   "strip": "between middle and south"
+  },
+  {
+   "centre": [
+    834,
+    426
+   ],
+   "toLane": {
+    "north": 275.0,
+    "middle": 91.0,
+    "south": 92.0
+   },
+   "standoff": 91.0,
+   "covers": [
+    "middle",
+    "south"
+   ],
+   "strip": "between middle and south"
+  },
+  {
+   "centre": [
+    1014,
+    426
+   ],
+   "toLane": {
+    "north": 275.0,
+    "middle": 91.0,
+    "south": 92.0
+   },
+   "standoff": 91.0,
+   "covers": [
+    "middle",
+    "south"
+   ],
+   "strip": "between middle and south"
+  },
+  {
+   "centre": [
+    706,
+    426
+   ],
+   "toLane": {
+    "north": 275.0,
+    "middle": 91.0,
+    "south": 92.0
+   },
+   "standoff": 91.0,
+   "covers": [
+    "middle",
+    "south"
+   ],
+   "strip": "between middle and south"
+  },
+  {
+   "centre": [
+    578,
+    426
+   ],
+   "toLane": {
+    "north": 275.0,
+    "middle": 91.0,
+    "south": 92.0
+   },
+   "standoff": 91.0,
+   "covers": [
+    "middle",
+    "south"
+   ],
+   "strip": "between middle and south"
+  },
+  {
+   "centre": [
+    450,
+    426
+   ],
+   "toLane": {
+    "north": 275.0,
+    "middle": 91.0,
+    "south": 92.0
+   },
+   "standoff": 91.0,
+   "covers": [
+    "middle",
+    "south"
+   ],
+   "strip": "between middle and south"
+  },
+  {
+   "centre": [
+    1086,
+    242
+   ],
+   "toLane": {
+    "north": 91.0,
+    "middle": 93.0,
+    "south": 276.0
+   },
+   "standoff": 91.0,
+   "covers": [
+    "middle",
+    "north"
+   ],
+   "strip": "between north and middle"
+  },
+  {
+   "centre": [
+    246,
+    242
+   ],
+   "toLane": {
+    "north": 91.0,
+    "middle": 93.0,
+    "south": 276.0
+   },
+   "standoff": 91.0,
+   "covers": [
+    "middle",
+    "north"
+   ],
+   "strip": "between north and middle"
+  },
+  {
+   "centre": [
+    374,
+    426
+   ],
+   "toLane": {
+    "north": 275.0,
+    "middle": 91.0,
+    "south": 92.0
+   },
+   "standoff": 91.0,
+   "covers": [
+    "middle",
+    "south"
+   ],
+   "strip": "between middle and south"
+  },
+  {
+   "centre": [
+    938,
+    426
+   ],
+   "toLane": {
+    "north": 275.0,
+    "middle": 91.0,
+    "south": 92.0
+   },
+   "standoff": 91.0,
+   "covers": [
+    "middle",
+    "south"
+   ],
+   "strip": "between middle and south"
+  },
+  {
+   "centre": [
+    190,
+    426
+   ],
+   "toLane": {
+    "north": 275.0,
+    "middle": 91.0,
+    "south": 92.0
+   },
+   "standoff": 91.0,
+   "covers": [
+    "middle",
+    "south"
+   ],
+   "strip": "between middle and south"
+  },
+  {
+   "centre": [
+    758,
+    46
+   ],
+   "toLane": {
+    "north": 105.0,
+    "middle": 289.0,
+    "south": 472.0
+   },
+   "standoff": 105.0,
+   "covers": [
+    "north"
+   ],
+   "strip": "above the north highway"
+  },
+  {
+   "centre": [
+    1026,
+    610
+   ],
+   "toLane": {
+    "north": 459.0,
+    "middle": 275.0,
+    "south": 92.0
+   },
+   "standoff": 92.0,
+   "covers": [
+    "south"
+   ],
+   "strip": "below the south highway"
+  }
+ ],
+ "buildSpots": [
+  [
+   1162,
+   242
+  ],
+  [
+   990,
+   242
+  ],
+  [
+   862,
+   242
+  ],
+  [
+   706,
+   242
+  ],
+  [
+   578,
+   242
+  ],
+  [
+   450,
+   242
+  ],
+  [
+   322,
+   242
+  ],
+  [
+   138,
+   242
+  ],
+  [
+   266,
+   426
+  ],
+  [
+   86,
+   426
+  ],
+  [
+   834,
+   426
+  ],
+  [
+   1014,
+   426
+  ],
+  [
+   706,
+   426
+  ],
+  [
+   578,
+   426
+  ],
+  [
+   450,
+   426
+  ],
+  [
+   1086,
+   242
+  ],
+  [
+   246,
+   242
+  ],
+  [
+   374,
+   426
+  ],
+  [
+   938,
+   426
+  ],
+  [
+   190,
+   426
+  ],
+  [
+   758,
+   46
+  ],
+  [
+   1026,
+   610
+  ]
+ ],
+ "coverage": {
+  "north": 0.902,
+  "middle": 0.941,
+  "south": 0.831
+ }
+}

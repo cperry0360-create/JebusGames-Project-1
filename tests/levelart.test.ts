@@ -201,10 +201,13 @@ test('every piece of level art belongs to a level that loads it', () => {
   // 15.1 MB loaded by nothing. Adding the row emptied the list on its own,
   // which is what the note here used to predict.
   //
-  // It stays as an EMPTY assertion rather than being deleted, because the
-  // failure it catches has not gone anywhere: the next unshipped level's art
-  // lands here the moment somebody converts it, and so does a key knocked off
-  // boot by mistake.
-  assert.deepEqual(orphanedLevelArt(LEVELS.map((l) => l.id)).sort(), [],
+  // AND THE NEXT UNSHIPPED LEVEL'S ART DID LAND HERE, which is what the note
+  // above predicted. `map-level7` is the level 7 plate: traced by the geometry
+  // pass, registered in art.json, and pointed at by no row in levels.json yet,
+  // so nothing loads it. It is 0.43 MB that arrives with no level. The entry
+  // comes out on its own when level 7 gets its row, the same way level 6's
+  // five entries did — so this is a list of what is WAITING, not a list of
+  // exceptions, and anything else appearing in it is the bug this test is for.
+  assert.deepEqual(orphanedLevelArt(LEVELS.map((l) => l.id)).sort(), ['map-level7'],
     'level art that no shipped level loads')
 })
