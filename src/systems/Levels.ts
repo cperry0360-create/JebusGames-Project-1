@@ -24,14 +24,17 @@ import mapLevel3 from '../data/map_level3.json' with { type: 'json' }
 import mapLevel4 from '../data/map_level4.json' with { type: 'json' }
 import mapLevel5 from '../data/map_level5.json' with { type: 'json' }
 import mapLevel6 from '../data/map_level6.json' with { type: 'json' }
+import mapLevel8 from '../data/map_level8.json' with { type: 'json' }
 import wavesLevel1 from '../data/waves.json' with { type: 'json' }
 import wavesLevel2 from '../data/waves.level2.json' with { type: 'json' }
 import wavesLevel3 from '../data/waves.level3.json' with { type: 'json' }
 import wavesLevel4 from '../data/waves.level4.json' with { type: 'json' }
 import wavesLevel5 from '../data/waves.level5.json' with { type: 'json' }
 import wavesLevel6 from '../data/waves.level6.json' with { type: 'json' }
+import wavesLevel8 from '../data/waves.level8.json' with { type: 'json' }
 import rulesLevel5 from '../data/level5.json' with { type: 'json' }
 import rulesLevel6 from '../data/level6.json' with { type: 'json' }
+import rulesLevel8 from '../data/level8.json' with { type: 'json' }
 
 /** A row of levels.json: what the registry records about a level. */
 export interface LevelDef {
@@ -95,6 +98,15 @@ export interface LevelRules {
    *  systems/Flame.ts; every other level returns null from `levelRules` and
    *  the whole mechanic is a no-op there. */
   flame?: unknown
+  /** Level 8's Performance Review: where the painted scan line crosses the
+   *  road, and what going through it does. systems/PerformanceGate.ts asserts
+   *  the shape and returns null for a level without one. */
+  performanceReview?: unknown
+  /** Level 8's Human Resources aura. systems/EnemyAura.ts, same null rule. */
+  armorAura?: unknown
+  /** Level 8's Consultant explosion: radius, damage, and whether it hurts the
+   *  player's units as well. Both sides, on purpose. */
+  deathBlast?: unknown
   roster?: Record<string, string>
 }
 
@@ -120,6 +132,13 @@ const MAPS: Record<string, MapDef> = {
   level4: mapLevel4 as unknown as MapDef,
   level5: mapLevel5 as unknown as MapDef,
   level6: mapLevel6 as unknown as MapDef,
+  // LEVEL 8'S DATA IS REGISTERED AND LEVEL 8 HAS NO ROW IN levels.json, which
+  // is the same state level 6's wave table and rules block sat in for a week.
+  // `loadLevel` reads this table by the id on a ROW, so nothing can reach these
+  // three until that row exists -- see the `_theRowIsNotThereYet` note in
+  // src/data/level8.json, and tests/level8.test.ts, which fails if the level is
+  // ever shipped without a prerequisite that resolves.
+  level8: mapLevel8 as unknown as MapDef,
 }
 
 /** Wave tables by the filename levels.json names them with. */
@@ -130,12 +149,14 @@ const WAVE_TABLES: Record<string, WavesDef> = {
   'waves.level4.json': wavesLevel4 as unknown as WavesDef,
   'waves.level5.json': wavesLevel5 as unknown as WavesDef,
   'waves.level6.json': wavesLevel6 as unknown as WavesDef,
+  'waves.level8.json': wavesLevel8 as unknown as WavesDef,
 }
 
 /** Rules blocks by the filename levels.json names them with. */
 const LEVEL_RULES: Record<string, LevelRules> = {
   'level5.json': rulesLevel5 as unknown as LevelRules,
   'level6.json': rulesLevel6 as unknown as LevelRules,
+  'level8.json': rulesLevel8 as unknown as LevelRules,
 }
 
 export const LEVELS: LevelDef[] = (levelsData as unknown as { levels: LevelDef[] }).levels

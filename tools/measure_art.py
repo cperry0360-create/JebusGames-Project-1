@@ -232,6 +232,55 @@ ENEMY_KEY = {
     'enemy_sprinter.webp':        ('enemy-sprinter',       0.92,  64.0),
     'enemy_bruiser.webp':         ('enemy-bruiser',        0.94,  85.0),
     'boss_rooster.webp':          ('enemy-rooster',        0.90, 145.0),
+    # THE LEVEL 8 CAST. Office robots, and the sizes are the brief's with ONE
+    # change and one correction, both stated rather than quietly made:
+    #
+    # MIDDLE MANAGEMENT IS 85 AND NOT THE 92 THE BRIEF ASKED FOR. This is the
+    # third time a brief has asked for 92 and the answer has not changed: every
+    # tower in the game is 87.1 px tall, content.test.ts holds the rank and file
+    # under the shortest of them, and a 92 px enemy would be the only ordinary
+    # unit on the board taller than every building on it. 85 is what level 3's,
+    # 5's and 6's heaviest elites already are.
+    #
+    # THE INTERN'S BOX IS WIDER THAN HE IS TALL -- 854x567, because loose paper
+    # flies out behind him -- and the brief warns that sizing him from the box
+    # scales him to nothing. It does not bite HERE: `displayHeight` is driven by
+    # the canvas HEIGHT, and measured on this file the robot's own ink runs rows
+    # 0-566, the full height, with the paper adding only width (it occupies rows
+    # 140-490 out at x 0-300). So 58 is 58 of robot. What the wide box does
+    # affect is anything that fits him into a BOX by `contentWidth` --
+    # `fitInBox` divides by both extents -- and that is what the aspect recorded
+    # below is for.
+    # 0.88 AND IT IS THE SHALLOWEST CUT RATHER THAN THE DEEPEST, which is the
+    # opposite of every note above and is the same lesson. The Intern is running
+    # with ONE foot down -- so there is no "both feet" to find -- and what the
+    # cut has to exclude is the paper. At 0.86 a sheet at x129-174 joins the
+    # group and the footprint runs x129-724, which is a 61 px shadow spanning
+    # the litter; at 0.88 only his foot is left, x520-717. The paper floats
+    # about 70 source px clear of his ground line, which is what makes this
+    # work at all.
+    'enemy_intern.webp':          ('enemy-intern',         0.88,  58.0),
+    # HR 0.97 AND THE CONSULTANT 0.96, which are the deepest bands in the file,
+    # and they are deep for a reason worth writing down: both are drawn mid-
+    # stride with a very long gait, and their two contact patches genuinely
+    # span nearly the whole canvas -- HR's trailing foot is at x17 of 628 and
+    # her leading one reaches the right edge. A shallower band measures a
+    # footprint 92% of her width, which manifest.test.ts rejects at 85% with
+    # "it has swallowed something the art is holding". Nothing was swallowed;
+    # the stance really is that wide. The deeper cut takes the contact patches
+    # rather than the ankles, which is what a shadow under a walking figure
+    # actually is, and both feet survive it -- at 0.98 they still do, so this
+    # is not the edge of the measurement either.
+    'enemy_hr.webp':              ('enemy-hr',             0.97,  72.0),
+    'enemy_consultant.webp':      ('enemy-consultant',     0.96,  78.0),
+    'enemy_manager.webp':         ('enemy-manager',        0.94,  85.0),
+    # A DRONE HAS NO FEET, exactly like the Glider: it hovers, so its ground
+    # silhouette finds the lowest thing dangling off it -- a landing skid, a tie
+    # and a sheet of paper -- rather than a stance. Both its shadow and its x
+    # anchor come off the ink, which is the rule the Zamboni, the Glitch Bug,
+    # the Glider and the Rooster already get.
+    'enemy_office_drone.webp':    ('enemy-office-drone',   0.90,  55.0),
+    'boss_ceo.webp':              ('enemy-ceo',            0.90, 150.0),
 }
 # Enemies whose shadow is cast by the whole body, not by the feet.
 # A GLIDER HAS NO FEET ON THE GROUND. It hovers, so its foot band catches the
@@ -243,8 +292,11 @@ ENEMY_KEY = {
 # the left and one foot raised. The ground silhouette therefore finds TAIL, not
 # feet -- at its 0.90 band the deepest run is x5-710 of a 1254 px canvas, which
 # is a plume -- so both its shadow and its x anchor come off the ink instead.
-ENEMY_BODY_SHADOW = {'enemy-zamboni', 'enemy-glitch-bug', 'enemy-glider', 'enemy-rooster'}
-ENEMY_BODY_ANCHOR = {'enemy-glider', 'enemy-rooster'}
+# THE OFFICE DRONE IS THE FIFTH AND SIXTH: a quadcopter hanging in the air
+# over a landscape canvas, with nothing on the ground at all.
+ENEMY_BODY_SHADOW = {'enemy-zamboni', 'enemy-glitch-bug', 'enemy-glider', 'enemy-rooster',
+                     'enemy-office-drone'}
+ENEMY_BODY_ANCHOR = {'enemy-glider', 'enemy-rooster', 'enemy-office-drone'}
 # Where to LOOK for feet, as fractions of the source width, for art whose
 # ground silhouette catches something that is not one.
 #

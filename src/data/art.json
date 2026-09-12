@@ -150,9 +150,18 @@
     "enemy-bruiser": "enemies/enemy_bruiser.webp",
     "enemy-rooster": "enemies/boss_rooster.webp",
     "fx-rooster-flame": "effects/fx_rooster_flame.webp",
+    "enemy-intern": "enemies/enemy_intern.webp",
+    "enemy-hr": "enemies/enemy_hr.webp",
+    "enemy-consultant": "enemies/enemy_consultant.webp",
+    "enemy-manager": "enemies/enemy_manager.webp",
+    "enemy-office-drone": "enemies/enemy_office_drone.webp",
+    "enemy-ceo": "enemies/boss_ceo.webp",
+    "fx-performance-scan": "effects/fx_performance_scan.webp",
+    "fx-performance-buff": "effects/fx_performance_buff.webp",
     "fx-glacier": "effects/fx_glacier.webp",
     "map-level6": "maps/map_level6.webp",
-    "map-level7": "maps/map_level7.webp"
+    "map-level7": "maps/map_level7.webp",
+    "map-level8": "maps/map_level8.webp"
   },
   "render": {
     "turret-escalation": {
@@ -1043,6 +1052,73 @@
       "beakForward": 27.8,
       "beakRise": -108.5
     },
+    "enemy-intern": {
+      "_note": "MEASURED BY tools/measure_art.py, like the whole level 8 cast, and none of it typed by hand. `contentWidth`/`contentHeight` are SOURCE extents and `fitInBox` divides by them, so they go stale silently on a re-export -- re-run the script and copy them back; `displayHeight` is in world pixels and survives a re-export untouched. THE INTERN'S BOX IS WIDER THAN HE IS TALL, 854x567, because loose paper flies out behind him. His 58 is 58 of ROBOT: the robot's own ink fills the canvas height and only the paper adds width. His anchorX of 0.7242 is his ONE PLANTED FOOT rather than the middle of the picture -- he is running -- and his foot band is 0.88, the shallowest cut that finds the foot and not the litter, which is the opposite of every other band in the file and is explained there.",
+      "anchorX": 0.7242,
+      "anchorY": 1.0,
+      "displayHeight": 58.0,
+      "shadowWidth": 20.3,
+      "contentWidth": 854,
+      "contentHeight": 567
+    },
+    "enemy-hr": {
+      "_note": "HER FOOT BAND IS 0.97, the deepest in tools/measure_art.py, and the Consultant's is 0.96. Both are drawn mid-stride with a very long gait and their two contact patches span nearly the whole canvas -- her trailing foot is at x17 of 628 and her leading one reaches the right edge -- so a shallower band measures a footprint 92% of her width and manifest.test.ts rejects that at 85%. Nothing was swallowed; the stance is that wide. The deeper cut measures the contact patches rather than the ankles.",
+      "anchorX": 0.4873,
+      "anchorY": 1.0,
+      "displayHeight": 72.0,
+      "shadowWidth": 44.5,
+      "contentWidth": 628,
+      "contentHeight": 821
+    },
+    "enemy-consultant": {
+      "anchorX": 0.4802,
+      "anchorY": 1.0,
+      "displayHeight": 78.0,
+      "shadowWidth": 57.7,
+      "contentWidth": 884,
+      "contentHeight": 973
+    },
+    "enemy-manager": {
+      "anchorX": 0.5216,
+      "anchorY": 1.0,
+      "displayHeight": 85.0,
+      "shadowWidth": 72.6,
+      "contentWidth": 1272,
+      "contentHeight": 995
+    },
+    "enemy-office-drone": {
+      "_note": "LANDSCAPE, 4084x2888, and it HOVERS -- so its shadow and its x anchor both come off the ink rather than off a stance, which is the rule the Zamboni, the Glitch Bug, the Glider and the Rooster already get. It is a GROUND unit for every other purpose: every tower can shoot it. See the `_layer` note on its enemies.json row.",
+      "anchorX": 0.5011,
+      "anchorY": 0.9931,
+      "displayHeight": 55.0,
+      "shadowWidth": 77.8,
+      "contentWidth": 4084,
+      "contentHeight": 2888
+    },
+    "enemy-ceo": {
+      "_note": "RENDERED FLUSH TO HIS CANVAS: the source outline is shaved by 40 to 76 px on each side and the file has been PADDED 80 px all round to give the sprite room. The shaved pixels are gone from the art and are not recoverable, so anchorY is 0.9812 rather than 1.0 -- the padding is transparent and the anchor has to sit on the ink.",
+      "anchorX": 0.5854,
+      "anchorY": 0.9812,
+      "displayHeight": 150.0,
+      "shadowWidth": 96.6,
+      "contentWidth": 3945,
+      "contentHeight": 4256
+    },
+    "fx-performance-scan": {
+      "_note": "AN 8-FRAME HORIZONTAL SHEET ON A UNIFORM GRID, 272x610 per cell, with clean alpha -- it arrived cut and is not re-sliced here. `registerEffectAnims` builds one animation per manifest entry carrying a `sheet`, so declaring the grid is the whole of wiring it up, and `forgetEffectAnims` drops that animation when the texture is freed by asking the TEXTURE which animations were cut from it. See reports/2026-09-10-the-null-frame.md for what happens to an effect animation that outlives its texture.",
+      "sheet": {
+        "frameWidth": 272,
+        "frameHeight": 610,
+        "frames": 8
+      }
+    },
+    "fx-performance-buff": {
+      "_note": "ONE FRAME, NOT A SHEET, and that is deliberate rather than an omission: the buff marker hangs over a reviewed enemy for the rest of its life, and a marker that animates forever is one more thing drawing every frame on a phone. Carrying no `sheet` means `registerEffectAnims` never builds an animation for it, so there is none to outlive the texture. It is still level art and is still freed with the level. Anchored at its BASE, like `fx-mind-control`, because `GameScene.syncStatusMarkers` sits a marker just clear of the top of the sprite it belongs to.",
+      "anchorX": 0.5,
+      "anchorY": 1.0,
+      "contentWidth": 680,
+      "contentHeight": 1148
+    },
     "fx-rooster-flame": {
       "anchorX": 0.0,
       "anchorY": 0.5138,
@@ -1077,7 +1153,8 @@
     "level4": "map-level4",
     "level5": "map-level5",
     "level6": "map-level6",
-    "level7": "map-level7"
+    "level7": "map-level7",
+    "level8": "map-level8"
   },
   "levelArt": {
     "_note": "ART THAT ONLY EXISTS INSIDE A LEVEL, and so is not loaded at boot. The plates went first (see `map` above and reports/2026-09-07-the-crash.md); this is the rest of the same argument. Every key here is fetched when a level starts and given back when it ends, exactly as a plate is, which took 90.8 MB of enemies, effects, signs, soldiers and in-play buttons off the title screen. THE ENEMIES ARE NOT LISTED HERE and that is deliberate: enemies.json already says which sprite each enemy wears and the wave tables already say which enemies a level fields, so the set is COMPUTED per level rather than written down twice -- systems/LevelArt.ts. A level loads its own enemies and nobody else's. What is left in `shared` is art any level might need: the effects, the props, the soldiers, the projectiles and the two in-play panels. THE DEFAULT IS BOOT. A new key that nobody adds here stays in the boot manifest, which costs memory and cannot break a screen; a menu key listed here by mistake would be a missing texture on a menu, which can. tests/levelart.test.ts checks the direction that matters -- that every enemy sprite and every ability effect is level art, and that nothing a menu draws is.",
@@ -1096,6 +1173,8 @@
       "fx-mind-control",
       "fx-mind-laser",
       "fx-muzzle",
+      "fx-performance-buff",
+      "fx-performance-scan",
       "fx-rooster-flame",
       "fx-seismic",
       "fx-spike-strip",
@@ -1184,7 +1263,9 @@
     "stunned": "fx-stunned",
     "burn": "fx-burn",
     "mindControl": "fx-mind-control",
-    "glacier": "fx-glacier"
+    "glacier": "fx-glacier",
+    "performanceScan": "fx-performance-scan",
+    "performanceBuff": "fx-performance-buff"
   },
   "decor": [
     "decor-bush",

@@ -64,22 +64,41 @@ test('an unregistered wave table belongs to a level that is genuinely unfinished
   // no health. A level stops qualifying the moment somebody tunes it, which is
   // the moment it should be registered.
   //
-  // THE LIST IS EMPTY NOW. `waves.level6.json` was the only entry and level 6
-  // is registered, so every wave table on disk belongs to a level. The test
-  // stays because the loophole has not gone anywhere: the next roster authored
-  // ahead of its map lands here, and this is what stops it hiding a dead enemy
-  // from rules.test.ts indefinitely.
+  // THE LIST EMPTIED WHEN LEVEL 6 SHIPPED AND HAS ONE ENTRY AGAIN, for a
+  // reason the original rule did not have a shape for: `waves.level8.json`
+  // belongs to a level that is FINISHED -- built, checked, soaked, boss tuned
+  // -- and that still cannot be registered, because level 8 is unlocked by
+  // level 7 and level 7 has no row. `isLevelUnlocked` refuses an unknown
+  // prerequisite and tests/levels.test.ts walks every chain back to level 1,
+  // so a row for level 8 today would be a permanently locked node AND a red
+  // build.
+  //
+  // It is not the loophole this test was written about. rules.test.ts reads
+  // every wave table ON DISK, so level 8's six enemies are still held to the
+  // no-dead-weight rule whether or not a level names their table. What is
+  // required of a PARKED table instead is that it is parked for a reason the
+  // data agrees with: the level it belongs to is genuinely not in levels.json.
+  // The entry comes out the day level 7 gets its row, and tests/level8.test.ts
+  // is what fails if somebody ships level 8 unreachable instead.
+  const PARKED: Record<string, string> = {
+    'waves.level8.json': 'level8',
+  }
   const named = new Set((levels as any).levels.map((l: any) => l.waves))
   const unregistered: string[] = []
   for (const f of readdirSync(url('../src/data/'))) {
     if (/^waves.*\.json$/.test(f) && !named.has(f)) unregistered.push(f)
   }
-  assert.deepEqual(unregistered, [],
+  assert.deepEqual(unregistered.filter((f) => !(f in PARKED)), [],
     'a wave table exists that no level names; either register its level or say why here')
   for (const f of unregistered) {
     const table = JSON.parse(readFileSync(url(`../src/data/${f}`), 'utf8'))
     const boss = table.waves.map((w: any) => w.boss).filter(Boolean).pop()
     assert.ok(boss, `${f} is not registered and has no boss; it is simply orphaned`)
+    if (f in PARKED) {
+      const registered = (levels as any).levels.some((l: any) => l.id === PARKED[f])
+      assert.equal(registered, false, `${f}'s level IS registered; take it out of PARKED`)
+      continue
+    }
     assert.equal(E[boss].maxHealth, null,
       `${f} is not registered but its boss ${boss} is tuned; register the level`)
   }
@@ -125,7 +144,16 @@ test('the Sprinter is fast, and the collision with Baby Frank is recorded', () =
   assert.equal(speeds[1]![0], 'sprinter', 'the Sprinter is no longer second fastest')
   assert.equal((speeds[0]![1] as any).speed, 172)
   assert.equal((speeds[1]![1] as any).speed, 150)
-  assert.equal((speeds[2]![1] as any).speed, 140, 'the third fastest moved')
+  // THIRD PLACE CHANGED HANDS WHEN LEVEL 8 LANDED, and this records it rather
+  // than being relaxed: it was level 3's Tiny Glitch at 140 and it is level
+  // 8's Intern at 145. The two facts this test exists for are untouched --
+  // Baby Frank is still the fastest thing in the game and the Sprinter is
+  // still second -- and a reviewed Intern is a different question again: the
+  // Performance Review multiplies its 145 to 174, which is faster than
+  // anything else on any board, and is a thing done TO it rather than a
+  // number on its row.
+  assert.equal(speeds[2]![0], 'intern', 'the third fastest moved')
+  assert.equal((speeds[2]![1] as any).speed, 145, 'the third fastest moved')
 })
 
 /* ------------------------------------------------------------------- the waves */

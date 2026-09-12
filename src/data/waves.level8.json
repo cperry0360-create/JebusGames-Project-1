@@ -1,0 +1,132 @@
+{
+  "_note": "LEVEL 8, THE OPTIMIZATION: fourteen waves over one entrance and two exits. Every group names both the lane it walks in from (`shared`, the trunk, which is the only spawn on this map) and the EXIT it is aimed at, so the arm a group takes is a design decision rather than a coin flip. See `_exits` below.",
+  "_exits": "THE TWO ARMS ARE NOT EQUIVALENT AND THAT IS THE LEVEL.\n\nEAST is 437 px of road past the fork and only 36% of it is inside a tower's reach -- measured, in tools/level8_geometry.json's `coverage`. It is the CHEAP EXIT: a group routed east walks 1,779 px in total and past far fewer guns than one routed south.\n\nSOUTH is 2,304 px past the fork, 77% covered, and it is the arm the Performance Review is painted across -- the scan line crosses it 142.68 px after the junction, so everything routed south that is not a boss arrives 20% faster and 10% bigger. A group routed south walks 3,646 px in total.\n\nSo the two arms trade length and cover against speed, and the table alternates which one carries the weight rather than treating them as the same road twice. Early waves lean east, which is where a player who has not looked at the map will be short of guns; the middle alternates; the late waves push hard down both at once, which is what 19 pads are for.",
+  "_gate": "WHAT THE SCAN LINE DOES TO THIS TABLE. An Intern routed south is a 174 px/s enemy on a well-covered arm; an Intern routed east is a 145 px/s enemy on an arm with almost no cover. Both are dangerous and they are dangerous in different ways, which is the point of routing them separately. NOTHING IS BUFFED TWICE -- the buff is once per enemy, ever -- and nothing routed east is buffed at all, because the line is not on that arm.",
+  "_economy": "THE ECONOMY IS rules.json'S, UNCHANGED: 100 starting peanuts on normal, 35 a wave cleared, and each enemy's own reward. Nothing here sets a purse. The rewards are the roster's -- Intern 8, HR 20, Consultant 26, Middle Management 38 -- and the Office Drone pays NOTHING, which is what stops the boss fight being a farm.",
+  "_boss": "THE CEO ARRIVES AT WAVE 14 AND NOWHERE ELSE. No mid-level appearance: the brief asks for one boss fight and this level's difficulty is the 3,646 px route, the two exits and the gate rather than a boss with a gimmick. He is routed SOUTH, down the long covered arm, because a boss the board cannot reach is a timer rather than a fight -- and he is immune to the review on the way. His Office Drones inherit his own route pick, so they follow him down the same arm; they spawn at his position, which by 70% health is past the scan line, so they are not reviewed either.",
+  "waves": [
+    {
+      "name": "Onboarding",
+      "spawns": [
+        { "enemy": "intern", "count": 5, "interval": 1.2, "delay": 0, "lane": "shared", "exit": "east" }
+      ]
+    },
+    {
+      "name": "Unpaid Overtime",
+      "spawns": [
+        { "enemy": "intern", "count": 6, "interval": 0.9, "delay": 0, "lane": "shared", "exit": "east" },
+        { "enemy": "intern", "count": 4, "interval": 0.9, "delay": 6, "lane": "shared", "exit": "south" }
+      ]
+    },
+    {
+      "name": "The Other Door",
+      "_name": "The wave that teaches the fork: the bigger half goes south through the scanner and comes out faster, and the smaller half goes east where the guns are not.",
+      "spawns": [
+        { "enemy": "intern", "count": 8, "interval": 0.8, "delay": 0, "lane": "shared", "exit": "south" },
+        { "enemy": "intern", "count": 4, "interval": 1.0, "delay": 4, "lane": "shared", "exit": "east" }
+      ]
+    },
+    {
+      "name": "Employee Relations",
+      "_name": "Human Resources arrives, one of her, with a pack to protect. Killing her first is the whole lesson and this is the wave to learn it on.",
+      "spawns": [
+        { "enemy": "hr", "count": 1, "interval": 2.0, "delay": 0, "lane": "shared", "exit": "east" },
+        { "enemy": "intern", "count": 6, "interval": 0.9, "delay": 2, "lane": "shared", "exit": "east" },
+        { "enemy": "intern", "count": 5, "interval": 0.9, "delay": 8, "lane": "shared", "exit": "south" }
+      ]
+    },
+    {
+      "name": "Deliverables",
+      "_name": "The Consultant, first appearance, on the covered arm -- so the first explosion happens where the player is watching.",
+      "spawns": [
+        { "enemy": "consultant", "count": 2, "interval": 3.0, "delay": 0, "lane": "shared", "exit": "south" },
+        { "enemy": "intern", "count": 8, "interval": 0.8, "delay": 3, "lane": "shared", "exit": "south" },
+        { "enemy": "intern", "count": 5, "interval": 1.0, "delay": 10, "lane": "shared", "exit": "east" }
+      ]
+    },
+    {
+      "name": "Performance Improvement Plan",
+      "_name": "Middle Management, first appearance, routed EAST: 480 health and 14 armour down the arm with a third of the cover. If the player has not built for the east exit yet, this is the wave that says so.",
+      "spawns": [
+        { "enemy": "manager", "count": 2, "interval": 4.0, "delay": 0, "lane": "shared", "exit": "east" },
+        { "enemy": "intern", "count": 8, "interval": 0.8, "delay": 4, "lane": "shared", "exit": "south" },
+        { "enemy": "hr", "count": 1, "interval": 2.0, "delay": 2, "lane": "shared", "exit": "east" }
+      ]
+    },
+    {
+      "name": "Synergy",
+      "spawns": [
+        { "enemy": "hr", "count": 2, "interval": 5.0, "delay": 0, "lane": "shared", "exit": "south" },
+        { "enemy": "consultant", "count": 3, "interval": 2.6, "delay": 3, "lane": "shared", "exit": "south" },
+        { "enemy": "intern", "count": 10, "interval": 0.7, "delay": 8, "lane": "shared", "exit": "east" }
+      ]
+    },
+    {
+      "name": "Restructuring",
+      "spawns": [
+        { "enemy": "manager", "count": 3, "interval": 3.6, "delay": 0, "lane": "shared", "exit": "south" },
+        { "enemy": "consultant", "count": 3, "interval": 2.4, "delay": 6, "lane": "shared", "exit": "east" },
+        { "enemy": "intern", "count": 10, "interval": 0.7, "delay": 10, "lane": "shared", "exit": "east" }
+      ]
+    },
+    {
+      "name": "The Reorg",
+      "_name": "Both arms carry a heavy group at once for the first time. Nineteen pads is a lot of board and this is the wave that asks whether the player used it or stacked everything on the trunk.",
+      "spawns": [
+        { "enemy": "manager", "count": 3, "interval": 3.4, "delay": 0, "lane": "shared", "exit": "east" },
+        { "enemy": "manager", "count": 2, "interval": 3.4, "delay": 4, "lane": "shared", "exit": "south" },
+        { "enemy": "hr", "count": 2, "interval": 4.0, "delay": 2, "lane": "shared", "exit": "east" },
+        { "enemy": "intern", "count": 12, "interval": 0.6, "delay": 12, "lane": "shared", "exit": "south" }
+      ]
+    },
+    {
+      "name": "Cost Centre",
+      "spawns": [
+        { "enemy": "consultant", "count": 5, "interval": 2.2, "delay": 0, "lane": "shared", "exit": "south" },
+        { "enemy": "hr", "count": 2, "interval": 4.0, "delay": 4, "lane": "shared", "exit": "south" },
+        { "enemy": "intern", "count": 14, "interval": 0.6, "delay": 8, "lane": "shared", "exit": "east" },
+        { "enemy": "manager", "count": 2, "interval": 3.4, "delay": 14, "lane": "shared", "exit": "east" }
+      ]
+    },
+    {
+      "name": "Quarterly Review",
+      "spawns": [
+        { "enemy": "manager", "count": 4, "interval": 3.2, "delay": 0, "lane": "shared", "exit": "south" },
+        { "enemy": "consultant", "count": 4, "interval": 2.2, "delay": 5, "lane": "shared", "exit": "east" },
+        { "enemy": "hr", "count": 3, "interval": 3.6, "delay": 3, "lane": "shared", "exit": "south" },
+        { "enemy": "intern", "count": 14, "interval": 0.55, "delay": 12, "lane": "shared", "exit": "south" }
+      ]
+    },
+    {
+      "name": "Headcount",
+      "spawns": [
+        { "enemy": "intern", "count": 20, "interval": 0.45, "delay": 0, "lane": "shared", "exit": "east" },
+        { "enemy": "intern", "count": 16, "interval": 0.5, "delay": 6, "lane": "shared", "exit": "south" },
+        { "enemy": "hr", "count": 3, "interval": 3.4, "delay": 10, "lane": "shared", "exit": "east" },
+        { "enemy": "consultant", "count": 4, "interval": 2.2, "delay": 14, "lane": "shared", "exit": "south" }
+      ]
+    },
+    {
+      "name": "Final Alignment",
+      "_name": "The last wave before the boss, and the heaviest thing on the board that is not him: five walls down the long arm, four down the short one, with the whole intern roster behind them.",
+      "spawns": [
+        { "enemy": "manager", "count": 5, "interval": 3.0, "delay": 0, "lane": "shared", "exit": "south" },
+        { "enemy": "manager", "count": 4, "interval": 3.0, "delay": 6, "lane": "shared", "exit": "east" },
+        { "enemy": "consultant", "count": 5, "interval": 2.0, "delay": 10, "lane": "shared", "exit": "east" },
+        { "enemy": "hr", "count": 4, "interval": 3.2, "delay": 4, "lane": "shared", "exit": "south" },
+        { "enemy": "intern", "count": 18, "interval": 0.5, "delay": 16, "lane": "shared", "exit": "south" }
+      ]
+    },
+    {
+      "name": "The CEO",
+      "boss": "ceo",
+      "spawns": [
+        { "enemy": "ceo", "count": 1, "interval": 2.0, "delay": 0, "lane": "shared", "exit": "south" },
+        { "enemy": "manager", "count": 3, "interval": 3.4, "delay": 10, "lane": "shared", "exit": "east" },
+        { "enemy": "consultant", "count": 4, "interval": 2.4, "delay": 18, "lane": "shared", "exit": "south" },
+        { "enemy": "intern", "count": 14, "interval": 0.6, "delay": 26, "lane": "shared", "exit": "east" },
+        { "enemy": "hr", "count": 3, "interval": 3.4, "delay": 34, "lane": "shared", "exit": "south" }
+      ]
+    }
+  ]
+}

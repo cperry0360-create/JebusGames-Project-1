@@ -98,12 +98,48 @@ export class Enemy extends Phaser.GameObjects.Container {
   /** Counts down to the next burst. Only a summoner uses it. */
   private summonTimer = 0
   /**
-   * True once `onHealthThreshold` has fired. ONCE PER ENEMY, not once per
-   * crossing: on level 5 a boss heals for everything it bites, so its health
-   * crosses 50% in both directions and a roar without a latch would summon
-   * without limit.
+   * Which of this one's `onHealthThreshold` entries have already fired, by
+   * index. ONCE PER ENEMY PER THRESHOLD, not once per crossing: on level 5 a
+   * boss heals for everything it bites, so its health crosses 50% in both
+   * directions and a roar without a latch would summon without limit.
+   *
+   * A SET RATHER THAN A BOOLEAN, and that is level 8's one change to the
+   * mechanic. The CEO summons at 70% AND at 40%, so a single latch would
+   * spend the whole thing on the first crossing and the second phase would
+   * never arrive. Every enemy that carries one threshold behaves exactly as
+   * it did -- the set holds at most {0} for them.
    */
-  thresholdFired = false
+  readonly firedThresholds = new Set<number>()
+  /**
+   * True once the Performance Review has buffed this one. ONCE, EVER.
+   *
+   * THE LATCH IS HERE RATHER THAN ON THE GATE, and that is what makes the
+   * rule hold in every case at once: the road can cross the scan line twice,
+   * a summoned child can spawn past it, and a boss is immune. All three ask
+   * the same question of the same flag. Level 8's `performanceReview` block
+   * says what a review does; nothing else in the game sets this.
+   */
+  reviewed = false
+  /**
+   * What the Performance Review is doing to this one's legs: 1.2 once it has
+   * been through the scanner and 1 for everything that has not.
+   *
+   * A SECOND MULTIPLIER RATHER THAN A WRITE TO `speedScale`, which the level's
+   * own day/night rules own. Nothing uses both today -- level 8 has no sky --
+   * and a mechanic that silently overwrites another level's field is the shape
+   * of bug that only shows up on the level that has both.
+   */
+  reviewSpeed = 1
+  /**
+   * Armour granted by something on the enemy's OWN side standing nearby:
+   * level 8's Human Resources, and nothing else so far.
+   *
+   * Recomputed by the scene every frame from whatever is alive, rather than
+   * applied and unwound, so it ends the instant the source dies and there is
+   * nothing to leak. `syncStatusMarkers` asks its question the same way and
+   * for the same reason.
+   */
+  auraArmor = 0
   /**
    * The tower-disable clock, or null for the great majority of enemies that do
    * not have one.
@@ -140,7 +176,10 @@ export class Enemy extends Phaser.GameObjects.Container {
   private bobPhase = Math.random() * Math.PI * 2
   /** Distance from the feet to the art's frame centre, negated on a flip. */
   private readonly artOffset: number
-  private readonly baseScaleX: number
+  /** The scale the art was built at. NOT readonly: the Performance Review
+   *  multiplies both axes into it, because it is what the emergence and the
+   *  attack tween scale FROM and a live-scale write would be undone by either. */
+  private baseScaleX: number
   private facingLeft = false
   /**
    * Milliseconds since this enemy reached the arch mouth; negative until it
@@ -192,8 +231,8 @@ export class Enemy extends Phaser.GameObjects.Container {
    */
   private readonly laneOffset: number
   /** The scale the art was built at, so the emergence scale-up multiplies it
-   *  rather than replacing it. */
-  private readonly baseScaleY: number
+   *  rather than replacing it. Not readonly: see `baseScaleX`. */
+  private baseScaleY: number
 
   constructor(
     scene: Phaser.Scene,
@@ -515,9 +554,42 @@ export class Enemy extends Phaser.GameObjects.Container {
     return Math.min(currentPeanuts, Math.max(this.def.tax!.minimumTake, take))
   }
 
-  /** Armour after Cory's passive has been chewing on it. */
+  /**
+   * Armour after Cory's passive has been chewing on it, and after whatever is
+   * standing next to it is adding.
+   *
+   * ONE PLACE, which is why the aura goes through here: this getter is what
+   * `damageAfterArmor` is handed on every hit from every source -- towers,
+   * soldiers, abilities, the hero -- so an aura added here is an aura that
+   * cannot be forgotten by one damage path. The shred is subtracted last, so
+   * Cory's passive still eats into a buffed target rather than being cancelled
+   * by it.
+   */
   get effectiveArmor(): number {
-    return Math.max(0, this.def.armor - this.armorShred)
+    return Math.max(0, this.def.armor + this.auraArmor - this.armorShred)
+  }
+
+  /**
+   * The Performance Review, applied: 10% bigger and 20% faster, once ever.
+   *
+   * Returns false when there was nothing to do, so the caller can tell a real
+   * review from a second crossing and only play the scan effect for the first.
+   *
+   * THE SCALE IS MULTIPLIED INTO `baseScaleX/Y`, not set on the sprite. Those
+   * two are what `applyEmergence` and the attack tween both scale FROM, so a
+   * sprite told to be 10% bigger by writing its live scale would snap back the
+   * next time either of them ran. The live scale is updated as well because
+   * `applyEmergence` stops writing once the enemy is fully out, which by the
+   * scanner it always is.
+   */
+  review(sizeMultiplier: number, speedMultiplier: number): boolean {
+    if (this.reviewed) return false
+    this.reviewed = true
+    this.reviewSpeed = speedMultiplier
+    this.baseScaleX *= sizeMultiplier
+    this.baseScaleY *= sizeMultiplier
+    this.art.setScale(this.art.scaleX * sizeMultiplier, this.art.scaleY * sizeMultiplier)
+    return true
   }
 
   applySlow(factor: number, seconds: number, diminish: DiminishDef): void {
@@ -742,9 +814,14 @@ export class Enemy extends Phaser.GameObjects.Container {
       // so a Bramble's 45% is 45% of whatever the sky has left. `selfHeld` is
       // the boss stopping himself to be sick on the road, and it is a full
       // stop rather than a very large slow.
+      // `reviewSpeed` sits beside `speedScale` rather than inside it: the sky
+      // owns one and the scanner owns the other, and both multiply the DEF's
+      // speed before `slowedSpeed` takes its cut -- so a slow still bites a
+      // reviewed enemy for the same fraction it bites anything else.
       const step = this.selfHeld
         ? 0
-        : slowedSpeed(this.def.speed * this.speedScale, this.slowFactor, this.slowed) * dt
+        : slowedSpeed(this.def.speed * this.speedScale * this.reviewSpeed,
+                      this.slowFactor, this.slowed) * dt
       if (this.controlled) {
         // BACK DOWN THE LANE IT CAME UP, on its own lane and no other.
         // Progress runs backwards with it, so nothing that sorts by "closest
