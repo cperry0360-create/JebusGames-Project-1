@@ -14,7 +14,8 @@ against that, not against a pad count.
 |---|---|---|
 | `fabc308` | the WebP plate, `art.json`, the tracer, the checker, `level7_geometry.json`, the overlay, one test expectation | run 277 — **`test`, `typecheck` and `changes` all green**; `deploy` skipped, because this is a branch and not `main` |
 | `69c3f79` | this report | run 278 — **`test`, `typecheck` and `changes` all green**; `deploy` skipped |
-| `<this line>` | the two CI cells above, filled in once the runs finished | markdown only |
+| `ed1f8fb` | the two CI cells above, and the push verification in the closing section | run 279 — **green** |
+| `<this line>` | this row | markdown only, and no run is recorded for it: recording one takes another commit, and the three runs above already cover every commit that touched a file the checks read |
 
 Reproduce the whole thing:
 
