@@ -64,7 +64,7 @@ const SCENARIO_NAMES = [
   'enemyfacing', 'everyloadout', 'facing', 'fps', 'full', 'full13', 'fx',
   'game', 'gateway', 'gestures', 'glacier', 'gnomes', 'goblin', 'heroanim',
   'heroblock', 'herochip', 'herofx', 'herohp', 'lane', 'leak', 'ledger',
-  'lettering', 'level6', 'levelart', 'levels', 'listenerguard', 'loadout', 'locked',
+  'lettering', 'level6', 'level8', 'levelart', 'levels', 'listenerguard', 'loadout', 'locked',
   'loopthrow', 'looptrack', 'lost', 'mapedge', 'maproute', 'markers',
   'meteor', 'mix', 'modal', 'moes', 'music', 'muzzle', 'nightfall',
   'nodefirst', 'noderings', 'notch', 'nuke', 'nukeseq', 'nullframe',
@@ -110,7 +110,7 @@ const ASSERTS_NOTHING = new Set([
  * scenario joins this list when its checks go through `expect`.
  */
 const USES_EXPECT = new Set([
-  'typegame', 'rotationburst',
+  'typegame', 'rotationburst', 'level8',
 ])
 
 /** How many checks this run actually EVALUATED, pass or fail. */
@@ -14426,6 +14426,265 @@ async function run() {
    * other road" is a claim about geometry this pass authored and not about
    * geometry somebody painted.
    */
+  if (scenario === 'level8') {
+    /*
+     * LEVEL 8, IN A RENDERED FRAME. Everything below is checked against the
+     * real scene: the two exits, the gate, the explosion, the boss's two
+     * phases and the cakes.
+     *
+     * THE ROW IS PUSHED IN HERE AND NOWHERE ELSE. Level 8 has no row in
+     * levels.json -- it is unlocked by level 7 and level 7 has no row either,
+     * so a shipped row would be a permanently locked node and a red build (see
+     * src/data/level8.json). `loadLevel` reads the registry by the id on a
+     * ROW, so without one this scenario would silently run LEVEL 1 and report
+     * level 8's name over level 1's numbers. `LEVELS` is a plain exported
+     * array, so the harness registers the row it WILL have, in the harness
+     * only, and says so in its own output. tools/soak/level.ts does the same
+     * for the same reason and with the same row.
+     */
+    const L8 = await import('./js/systems/Levels.js')
+    if (!L8.LEVELS.some((l) => l.id === 'level8')) {
+      L8.LEVELS.push({
+        id: 'level8', name: 'The Optimization', unlockedBy: 'level7',
+        waves: 'waves.level8.json', laneLengthPx: 3646.5, rules: 'level8.json',
+      })
+    }
+    note('HARNESS-ONLY: level 8 has no row in levels.json (it is unlocked by level 7, '
+      + 'which does not exist yet); this scenario registers the row it will have so the '
+      + 'level can be looked at. The product does NOT have it.')
+    expect(!L8.LEVELS.some((l) => l.id === 'level7'),
+      'level 7 exists now, so level 8 should have a real row rather than this one')
+
+    const RS8 = await import('./js/systems/RunState.js')
+    const runWave = (n) => {
+      const G2 = scene('Game')
+      if (n !== undefined) G2.status.wave = n
+      G2.status.phase = 'ready'
+      G2.startWave()
+      return G2.status.phase === 'wave'
+    }
+
+    for (const k of ['Title', 'WorldMap', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+    RS8.setRunState({
+      heroId: 'cory', levelId: 'level8', seed: 11, abilities: ['molotov', 'glacier'],
+      openingTowers: ['withholding', 'writeoff'], reserveTowers: [], resumeFrom: null,
+    })
+    game.scene.start('Game')
+    if (!(await until(() => running('Game') && scene('Game').hero, 20000))) {
+      expect(false, 'level 8 did not start')
+      note('RESULT level 8 did not build'); return
+    }
+    const G = scene('Game')
+    await sleep(700)
+    const laneIds = G.lanes.lanes.map((l) => l.id)
+    note('level 8 built: lanes=' + JSON.stringify(laneIds) + ' pads=' + G.build.spots.length
+      + ' lives=' + G.status.lives + ' plate=' + G.level.map.plate)
+    expect(G.level.id === 'level8', 'the scene is running ' + G.level.id + ', not level8')
+    expect(G.build.spots.length === 19, '19 pads expected, got ' + G.build.spots.length)
+    expect(JSON.stringify(laneIds) === JSON.stringify(['shared', 'east', 'south']),
+      'lanes are ' + JSON.stringify(laneIds))
+    const exits = G.lanes.lanes.filter((l) => l.merge === null).map((l) => l.id)
+    expect(exits.length === 2, 'expected two exits, got ' + JSON.stringify(exits))
+    await shot('level8-1-board')
+
+    /* ---- the spawn, and both exits, in the frame ---- */
+    // WHERE THE THREE TERMINALS ARE, drawn as the scene has them rather than
+    // read off the map file: the point a lane's path ends at IS where an enemy
+    // leaks.
+    for (const id of laneIds) {
+      const p = G.lanes.lane(id).path
+      note('  lane ' + id + ': ' + Math.round(p.totalLength) + ' px, '
+        + JSON.stringify([Math.round(p.pointAt(0).x), Math.round(p.pointAt(0).y)]) + ' -> '
+        + JSON.stringify([Math.round(p.pointAt(p.totalLength).x),
+          Math.round(p.pointAt(p.totalLength).y)]))
+    }
+    if (!runWave(0)) expect(false, 'wave 1 would not start')
+    const t0 = Date.now()
+    while (Date.now() - t0 < 6000 && G.enemies.length === 0) await sleep(100)
+    expect(G.enemies.length > 0, 'nothing spawned on wave 1')
+    await shot('level8-2-wave1')
+
+    /* ---- LEAKS AT EITHER EXIT COST LIVES ---- */
+    // Driven rather than waited for: an enemy is put a few pixels short of a
+    // terminal and stepped over it, which is the same code path a leak takes
+    // after a 3,646 px walk and takes two seconds instead of two minutes.
+    // The enemy table is the JSON itself -- GameScene imports it directly and
+    // there is no module wrapping it, which is how three other scenarios here
+    // already reach it.
+    const ENEMIES8 = (await import('./js/data/enemies.json', { with: { type: 'json' } })).default
+    const leakAt = async (laneId) => {
+      const before = G.status.lives
+      const lane = G.lanes.lane(laneId)
+      const e = new (await import('./js/entities/Enemy.js')).Enemy(
+        G, ENEMIES8.intern, lane.path, G.gateway,
+        { lanes: G.lanes, laneId, startAt: { laneDistance: lane.path.totalLength - 6, distance: 0 } })
+      G.enemies.push(e)
+      await sleep(600)
+      const lost = before - G.status.lives
+      note('  leak at the ' + laneId + ' exit: lives ' + before + ' -> ' + G.status.lives)
+      expect(lost >= 1, 'a leak at the ' + laneId + ' exit cost ' + lost + ' lives')
+    }
+    await leakAt('east')
+    await leakAt('south')
+    await shot('level8-3-leaked')
+
+    /* ---- THE PERFORMANCE REVIEW ---- */
+    // An enemy is placed just short of the painted scan line and stepped over
+    // it. The gate is a DISTANCE test, so this is exactly what a walking enemy
+    // does; nothing about the crossing is faked.
+    const GATE8 = (await import('./js/systems/PerformanceGate.js'))
+    const rules8 = (await import('./js/systems/Levels.js')).levelRules('level8')
+    const gate8 = GATE8.gateRules(rules8)
+    expect(!!gate8, 'level 8 has no Performance Review in the scene')
+    const cross = gate8.crossings[0]
+    const south = G.lanes.lane(cross.lane)
+    const Enemy8 = (await import('./js/entities/Enemy.js')).Enemy
+    // FAR ENOUGH BACK THAT THE `BEFORE` READ IS HONEST. Twelve pixels was not:
+    // an Intern covers that in 80 ms and the harness runs at DPR 3, so the
+    // first read already said `reviewed=true` and the size comparison was
+    // measuring the buffed sprite against itself. 240 px is 1.7 seconds of
+    // walking.
+    const subject = new Enemy8(G, ENEMIES8.intern, south.path, G.gateway, {
+      lanes: G.lanes, laneId: cross.lane,
+      startAt: { laneDistance: cross.distance - 240, distance: 0 },
+    })
+    G.enemies.push(subject)
+    const sizeBefore = subject.art.scaleY
+    note('  the subject starts ' + Math.round(cross.distance - subject.laneDistance)
+      + ' px short of the line at ' + JSON.stringify(cross.at)
+      + ', reviewed=' + subject.reviewed)
+    expect(subject.reviewed === false, 'the subject was reviewed before reaching the line')
+    await shot('level8-4-before-review')
+    const tCross = Date.now()
+    while (Date.now() - tCross < 4000 && !subject.reviewed) await sleep(50)
+    note('  after crossing: reviewed=' + subject.reviewed
+      + ' reviewSpeed=' + subject.reviewSpeed
+      + ' scaleY ' + sizeBefore.toFixed(4) + ' -> ' + subject.art.scaleY.toFixed(4)
+      + ' (x' + (subject.art.scaleY / sizeBefore).toFixed(3) + ')')
+    expect(subject.reviewed === true, 'the enemy crossed the line and was not reviewed')
+    expect(Math.abs(subject.reviewSpeed - gate8.speedMultiplier) < 1e-6,
+      'reviewSpeed is ' + subject.reviewSpeed + ', wanted ' + gate8.speedMultiplier)
+    expect(Math.abs(subject.art.scaleY / sizeBefore - gate8.sizeMultiplier) < 0.01,
+      'the sprite grew by x' + (subject.art.scaleY / sizeBefore).toFixed(3)
+      + ', wanted x' + gate8.sizeMultiplier)
+    // AND THE MARKER IS ON IT. `syncStatusMarkers` runs every frame and asks
+    // the enemy what is true of it, so one frame is enough.
+    await sleep(200)
+    const marker = G.statusMarkers.get(subject)
+    note('  marker: ' + (marker ? marker.kind : 'none'))
+    expect(!!marker && marker.kind === 'review',
+      'a reviewed enemy carries no marker; a thing that speeds up with nothing on it reads as a bug')
+    await shot('level8-5-reviewed')
+
+    /* ---- AND NEVER TWICE ---- */
+    const sizeAfterFirst = subject.art.scaleY
+    subject.laneDistance = cross.distance - 12
+    subject.distance = 0
+    await sleep(700)
+    note('  second crossing: reviewed=' + subject.reviewed
+      + ' reviewSpeed=' + subject.reviewSpeed
+      + ' scaleY ' + sizeAfterFirst.toFixed(4) + ' -> ' + subject.art.scaleY.toFixed(4))
+    expect(Math.abs(subject.art.scaleY - sizeAfterFirst) < 1e-6,
+      'the second crossing grew the sprite again; the buff stacked')
+    expect(Math.abs(subject.reviewSpeed - gate8.speedMultiplier) < 1e-6,
+      'the second crossing changed the speed again; the buff stacked')
+    await shot('level8-6-crossed-twice')
+
+    /* ---- THE BOSS IS IMMUNE ---- */
+    // HE WALKS AT 28 px/s, which is a fifth of an Intern, so he needs a budget
+    // rather than a fixed sleep: 60 px at 28 px/s is 2.1 seconds and the first
+    // version of this gave him 0.9.
+    const bossSubject = new Enemy8(G, ENEMIES8.ceo, south.path, G.gateway, {
+      lanes: G.lanes, laneId: cross.lane,
+      startAt: { laneDistance: cross.distance - 40, distance: 0 },
+    })
+    G.enemies.push(bossSubject)
+    const tBoss = Date.now()
+    while (Date.now() - tBoss < 8000 && bossSubject.laneDistance <= cross.distance + 5) {
+      await sleep(100)
+    }
+    note('  the CEO over the line: reviewed=' + bossSubject.reviewed
+      + ' at ' + Math.round(bossSubject.laneDistance) + ' px, the line is at '
+      + Math.round(cross.distance))
+    expect(bossSubject.laneDistance > cross.distance, 'the CEO never reached the line')
+    expect(bossSubject.reviewed === false, 'the CEO was buffed by the gate')
+
+    /* ---- THE CEO SUMMONS AT 70% AND AT 40% ---- */
+    const drones = () => G.enemies.filter((e) => e.alive && e.summonedBy === bossSubject).length
+    expect(drones() === 0, 'the CEO arrived with drones already out')
+    bossSubject.health = bossSubject.maxHealth * 0.69
+    G.damageEnemy(bossSubject, 1, true, 0, false)
+    await sleep(300)
+    const after70 = drones()
+    note('  at 69% health: ' + after70 + ' drones')
+    expect(after70 === 4, 'the 70% phase summoned ' + after70 + ' drones, wanted 4')
+    bossSubject.health = bossSubject.maxHealth * 0.39
+    G.damageEnemy(bossSubject, 1, true, 0, false)
+    await sleep(300)
+    const after40 = drones()
+    note('  at 39% health: ' + after40 + ' drones (cap 6)')
+    expect(after40 > after70, 'the 40% phase summoned nothing')
+    expect(after40 <= 6, after40 + ' drones are alive at once; the cap is 6')
+    // AND NOT A THIRD TIME. The latch is per threshold, so more damage at the
+    // same health must not re-summon.
+    G.damageEnemy(bossSubject, 1, true, 0, false)
+    await sleep(200)
+    expect(drones() === after40, 'the CEO summoned again below 40%; the latch is not per phase')
+    await shot('level8-7-ceo-summons')
+
+    /* ---- THE CONSULTANT EXPLODES ON BOTH SIDES ---- */
+    // Placed on the road beside the hero, with a neighbour to catch the blast,
+    // so both halves of "both sides" are measured in one death.
+    for (const e of [...G.enemies]) { if (e !== bossSubject) e.destroy() }
+    G.enemies = G.enemies.filter((e) => e === bossSubject)
+    const at = G.lanes.lane('shared').path
+    const spot = at.pointAt(at.totalLength * 0.5)
+    G.hero.setPosition(spot.x + 20, spot.y)
+    const victim = new Enemy8(G, ENEMIES8.intern, at, G.gateway, {
+      lanes: G.lanes, laneId: 'shared',
+      startAt: { laneDistance: at.totalLength * 0.5 + 10, distance: 0 },
+    })
+    const bomb = new Enemy8(G, ENEMIES8.consultant, at, G.gateway, {
+      lanes: G.lanes, laneId: 'shared',
+      startAt: { laneDistance: at.totalLength * 0.5, distance: 0 },
+    })
+    G.enemies.push(victim, bomb)
+    await sleep(150)
+    const heroBefore = G.hero.health
+    const victimBefore = victim.health
+    const dist = Math.round(Math.hypot(victim.x - bomb.x, victim.y - bomb.y))
+    note('  the Consultant, ' + dist + ' px from an Intern and '
+      + Math.round(Math.hypot(G.hero.x - bomb.x, G.hero.y - bomb.y)) + ' px from the hero; '
+      + 'hero ' + heroBefore + ' hp, intern ' + victimBefore + ' hp')
+    G.damageEnemy(bomb, 99999, true, 0, false)
+    await sleep(250)
+    note('  after the blast: hero ' + heroBefore + ' -> ' + G.hero.health
+      + ', intern ' + victimBefore + ' -> ' + (victim.alive ? victim.health : 'dead'))
+    expect(G.hero.health < heroBefore, 'the explosion did not damage the hero')
+    expect(!victim.alive || victim.health < victimBefore,
+      'the explosion did not damage the enemy standing next to it')
+    await shot('level8-8-blast')
+
+    /* ---- CAKES ---- */
+    const CAKES8 = await import('./js/systems/Cakes.js')
+    // `cakesFor(won, livesRemaining, startingLives)` -- three arguments, not a
+    // status object. The thresholds are FRACTIONS of the run's own starting
+    // lives (difficulty scales them), which is why the middle row is half.
+    const start8 = G.status.startingLives
+    const rows = [[start8, 3], [Math.ceil(start8 / 2), 2], [1, 1]]
+    for (const [lives, want] of rows) {
+      const got = CAKES8.cakesFor(true, lives, start8)
+      note('  cleared with ' + lives + '/' + start8 + ' lives: ' + got + ' cakes')
+      expect(got === want, 'cleared with ' + lives + ' lives paid ' + got + ' cakes, wanted ' + want)
+    }
+    expect(CAKES8.cakesFor(false, 0, start8) === 0, 'a lost run paid cakes')
+
+    note('RESULT ' + (ASSERT_FAILS === 0
+      ? ASSERTIONS + ' checks, all passed'
+      : '*** ' + ASSERT_FAILS + ' of ' + ASSERTIONS + ' checks failed ***'))
+    return
+  }
+
   if (scenario === 'level6') {
     let faults = 0
     const bad = (m) => { faults++; note('*** ' + m) }

@@ -144,6 +144,7 @@
     "map-level5": "maps/map_level5.webp",
     "card-level5": "ui/card_level5.webp",
     "card-level6": "ui/card_level6.webp",
+    "card-level8": "ui/card_level8.webp",
     "fx-acid-puddle": "effects/fx_acid_puddle.webp",
     "enemy-scrapper": "enemies/enemy_scrapper.webp",
     "enemy-sprinter": "enemies/enemy_sprinter.webp",
@@ -1387,7 +1388,8 @@
       "level3": "card-level3",
       "level4": "card-level4",
       "level5": "card-level5",
-      "level6": "card-level6"
+      "level6": "card-level6",
+      "level8": "card-level8"
     }
   },
   "soldierTiers": {

@@ -76,7 +76,14 @@ import {
   TRANSFORM_INVULNERABLE_SECONDS, applyHit, attackInterval, damageToHero, outgoingDamage,
 } from '../../src/systems/Transform.ts'
 import { Path } from '../../src/systems/Path.ts'
-import { LaneNetwork, MAIN_LANE, advance, type Walker } from '../../src/systems/Lanes.ts'
+import {
+  LaneNetwork, MAIN_LANE, advance, chooseContinuation, pickAt, pickForTerminal,
+  type Walker,
+} from '../../src/systems/Lanes.ts'
+import {
+  crossedGate, gateRules, reviewable, type GateRules,
+} from '../../src/systems/PerformanceGate.ts'
+import { armorAuraRules, auraArmorAt, type ArmorAuraRules } from '../../src/systems/EnemyAura.ts'
 import { defaultRally, soldierStations } from '../../src/systems/Rally.ts'
 import { Disabler } from '../../src/systems/TowerDisable.ts'
 import { BuildSystem } from '../../src/systems/BuildSystem.ts'
@@ -139,6 +146,27 @@ export interface SoakResult {
   /** Every tower and ability that fired at least once. */
   firedTowers: Set<string>
   firedAbilities: Set<string>
+  /**
+   * WHERE THE LIVES WENT, by the exit the enemy got out of.
+   *
+   * Only a branching map has more than one key, and only level 8 has two that
+   * both cost lives. The east arm is 36% covered against the south's 77%, so
+   * "how many of the losses came out of the cheap exit" is the question the
+   * wave table was built to answer and could not be asked before this existed.
+   */
+  leaksByExit: Record<string, number>
+  /** WHICH ENEMY GOT OUT, counted. A leak rate is a number; what is leaking is
+   *  a diagnosis, and the two are not the same question -- level 8 killed 273
+   *  of ~257 scripted enemies on its first soak and still bled 18 lives, and
+   *  nothing in the output said which of the six it was. */
+  leaksByEnemy: Record<string, number>
+  /** How many enemies the Performance Review buffed over the run, and how much
+   *  friendly damage the Consultants' explosions did. Both 0 everywhere but
+   *  level 8, which is the scoping made visible in the output. */
+  reviewed: number
+  /** And how many ever stood inside an HR's armour aura. See `everBuffed`. */
+  auraBuffed: number
+  blastOnFriendlies: number
 }
 
 interface SimEnemy {
@@ -156,7 +184,24 @@ interface SimEnemy {
   speedScale: number
   selfHeld: boolean
   bleed: BleedState
-  thresholdFired: boolean
+  /** Which `onHealthThreshold` entries have fired, by index. A SET rather than
+   *  a boolean since level 8's CEO has two phases -- the scene's own latch
+   *  changed the same way and for the same reason. */
+  firedThresholds: Set<number>
+  /** True once level 8's Performance Review has buffed it. Once, ever. */
+  reviewed: boolean
+  /** 1.2 once reviewed, 1 otherwise. Beside `speedScale` rather than inside
+   *  it, exactly as on the shipped Enemy. */
+  reviewSpeed: number
+  /** Armour lent by a living HR standing nearby. Recomputed every frame. */
+  auraArmor: number
+  /** True once this one has stood inside an HR's aura at all.
+   *
+   *  MEASURED BECAUSE THE SENSITIVITY TABLE CAME BACK FLAT. Sweeping the
+   *  bonus 0, 2, 4, 8 moved the win rate 40, 40, 39, 40 -- and "worth
+   *  nothing" and "never fired" produce the same flat table. This is what
+   *  tells the two apart. */
+  everBuffed: boolean
   /** The Rooster's breath clock, or null for everything that does not breathe.
    *  Held on the enemy so a boss killed mid-telegraph takes its half-finished
    *  cast with it, exactly as the Disabler is. */
@@ -298,6 +343,23 @@ export function simulate(
     if (findings.length < 40) findings.push({ kind, detail, wave: waveIndex + 1, atSeconds: +now.toFixed(1) })
   }
 
+  // ASKED FOR A LEVEL AND GIVEN ANOTHER ONE.
+  //
+  // `loadLevel` resolves an unknown id to the DEFAULT level rather than
+  // throwing, which is right for a saved run naming a level that was renamed
+  // and is a trap here: a soak pointed at a level with no row in levels.json
+  // silently reports LEVEL 1's win rate under the other level's name. That is
+  // the exact shape of "a confident wrong number" -- and level 8 is a level
+  // with no row, so this is not hypothetical.
+  //
+  // Reported rather than thrown, because a caller that knows it is soaking a
+  // parked level (tools/soak/level.ts registers one) should still be able to,
+  // and a caller that made a typo needs to see it in the output.
+  if (level.id !== levelId) {
+    note('wrong-level', `asked for "${levelId}", which has no row in levels.json; `
+      + `simulating "${level.id}" instead -- every number below is that level's`)
+  }
+
   // --- the draft ---------------------------------------------------------
   // THE HERO IS NO LONGER DRAWN. It used to be picked at random, which was
   // indistinguishable from a constant while there was one of them; there are
@@ -360,6 +422,17 @@ export function simulate(
   // nothing below fires.
   const FLAME: FlameRules | null =
     ((levelRules(levelId) as any)?.flame as FlameRules | undefined) ?? null
+  // LEVEL 8'S THREE, through the same resolver for the same reason. All three
+  // are null on every other level, which is the property re-soaking levels 1
+  // to 7 on the same seeds proves rather than claims.
+  const GATE: GateRules | null = gateRules(levelRules(levelId))
+  const AURA: ArmorAuraRules | null = armorAuraRules(levelRules(levelId))
+  const BLAST: { radius: number; damage: number; hitsPlayerUnits: boolean } | null = (() => {
+    const b = (levelRules(levelId) as any)?.deathBlast
+    return b && b.radius && b.damage
+      ? { radius: b.radius, damage: b.damage, hitsPlayerUnits: b.hitsPlayerUnits === true }
+      : null
+  })()
   const net = new LaneNetwork(MAP)
   const lane = net.main
   const build = new BuildSystem(MAP.buildSpots, MAP.spotRadius)
@@ -386,6 +459,12 @@ export function simulate(
   /** 1-based wave on which the first life was lost, or -1 if none ever was. */
   let firstLifeLostWave = -1
   let kills = 0
+  // Level 8's three measurements. Zero everywhere else, by construction.
+  const leaksByExit: Record<string, number> = {}
+  const leaksByEnemy: Record<string, number> = {}
+  let reviewedCount = 0
+  let blastOnFriendlies = 0
+  let auraBuffedCount = 0
   let unlocked = opening.slice()
   const enemies: SimEnemy[] = []
   const towers: SimTower[] = []
@@ -474,7 +553,9 @@ export function simulate(
       // mulberry32 seeded off the same seed keeps the crossroads reproducible
       // and levels 1 to 4 bit-identical.
       routePick,
-      speedScale: 1, selfHeld: false, bleed: NO_BLEED, thresholdFired: false,
+      speedScale: 1, selfHeld: false, bleed: NO_BLEED,
+      firedThresholds: new Set<number>(), reviewed: false, reviewSpeed: 1, auraArmor: 0,
+      everBuffed: false,
       flame: def.flame && FLAME ? newFlameState(FLAME) : null,
       // Enemies walk left to right on every map in the game, so facing east is
       // the right answer before anything has moved.
@@ -655,6 +736,30 @@ export function simulate(
    * summoner's own distance, capped by how many of ITS children are still
    * alive, and not counted toward the wave being over.
    */
+  /**
+   * Human Resources: bonus armour for everything standing near a living one.
+   *
+   * ASKED EVERY FRAME rather than applied and unwound, which is what the scene
+   * does and for the scene's reason -- an aura applied on spawn and removed on
+   * death leaks the moment something dies in a way the remover did not expect.
+   * The source is not its own beneficiary, and two of them do not stack; both
+   * of those live in `auraArmorAt` and are the same code the game runs.
+   */
+  const tickArmorAura = (): void => {
+    if (!AURA) return
+    const sources = enemies
+      .filter((e) => e.alive && e.def.armorAura === true)
+      .map((e) => ({ x: e.x, y: e.y, alive: true }))
+    if (sources.length === 0) {
+      for (const e of enemies) e.auraArmor = 0
+      return
+    }
+    for (const e of enemies) {
+      e.auraArmor = e.def.armorAura === true ? 0 : auraArmorAt({ x: e.x, y: e.y }, sources, AURA)
+      if (e.auraArmor > 0) e.everBuffed = true
+    }
+  }
+
   const tickSummons = (dt: number): void => {
     for (const parent of [...enemies]) {
       const spec = parent.def.summons
@@ -695,7 +800,10 @@ export function simulate(
 
   const hurtEnemy = (e: SimEnemy, damage: number, ignoresArmor: boolean, pierce = 0): void => {
     if (!e.alive) return
-    const armor = Math.max(0, e.def.armor - e.armorShred)
+    // THE AURA IS IN THE ARMOUR, which is where the shipped `effectiveArmor`
+    // puts it: one place, so every damage path in this file respects it
+    // without any of them knowing it exists.
+    const armor = Math.max(0, e.def.armor + e.auraArmor - e.armorShred)
     const dealt = ignoresArmor ? damage : damageAfterArmor(damage, armor, pierce)
     if (!Number.isFinite(dealt)) { note('nan', `damage to ${e.id} is ${dealt}`); return }
     if (dealt < 0) note('negative', `damage to ${e.id} is ${dealt}`)
@@ -715,18 +823,82 @@ export function simulate(
           spawn(sp.enemy, e.distance, e, e.laneId, e.laneDistance, e.routePick)
         }
       }
-    } else if (night && e.def.onHealthThreshold && !e.thresholdFired) {
-      // Batula's roar at half health. ONCE, latched: he heals for everything
-      // he bites, so his health crosses 50% in both directions.
-      const t = e.def.onHealthThreshold
-      if (e.health / e.def.maxHealth <= t.belowHealth) {
-        e.thresholdFired = true
-        if (t.humiliation) night.addHumiliation(t.humiliation)
-        if (t.summon) {
-          for (let i = 0; i < t.summon.count; i++) {
-            spawn(t.summon.enemy, e.distance, e, e.laneId, e.laneDistance, e.routePick)
-          }
-        }
+      deathBlast(e)
+    } else {
+      checkThresholds(e)
+    }
+  }
+
+  /**
+   * The Consultant's parting recommendation: a blast at its corpse that
+   * damages BOTH SIDES.
+   *
+   * WHAT IS MODELLED: the enemies caught, through `hurtEnemy` -- so a blast
+   * that kills another Consultant sets off its blast, which is the mechanic
+   * rather than a loop -- and the hero and the lads, through the same
+   * subtraction their own fights use.
+   *
+   * WHAT IS NOT: the gnomes, because this file does not put summoned fighters
+   * on the board at all (see the note on `tickBoss`). So the friendly half of
+   * the explosion is modelled slightly LIGHT here: a player whose gnomes are
+   * standing in the blast loses units the simulation does not.
+   */
+  function deathBlast(dead: SimEnemy): void {
+    if (!BLAST || dead.def.deathBlast !== true) return
+    const r = BLAST.radius
+    for (const other of [...enemies]) {
+      if (other === dead || !other.alive) continue
+      if (Math.hypot(other.x - dead.x, other.y - dead.y) > r) continue
+      hurtEnemy(other, BLAST.damage, false)
+    }
+    if (!BLAST.hitsPlayerUnits) return
+    if (!heroState.down && Math.hypot(heroState.x - dead.x, heroState.y - dead.y) <= r) {
+      heroState.health -= BLAST.damage
+      blastOnFriendlies += BLAST.damage
+    }
+    for (const t of towers) {
+      for (const sd of t.soldiers) {
+        if (sd.respawnIn > 0 || Math.hypot(sd.x - dead.x, sd.y - dead.y) > r) continue
+        sd.health -= BLAST.damage
+        blastOnFriendlies += BLAST.damage
+      }
+    }
+  }
+
+  /**
+   * Every health phase this enemy has crossed and not yet spent.
+   *
+   * A LIST AND NOT ONE OBJECT, since level 8's CEO summons at 70% and again at
+   * 40%; Batula's single-object row reads exactly as it did.
+   *
+   * AND IT IS NO LONGER GATED ON `night`. It was -- the whole block sat behind
+   * `night &&`, because the only threshold in the game was Batula's and his
+   * grants a Humiliation stack, which is a level 5 concept. The CEO's phases
+   * would have fired NOWHERE in this file, and his fight would have been
+   * soaked against a boss that never summons. Only the humiliation needs the
+   * night now.
+   */
+  function checkThresholds(e: SimEnemy): void {
+    const decl = e.def.onHealthThreshold
+    if (!decl) return
+    const list = Array.isArray(decl) ? decl : [decl]
+    for (let i = 0; i < list.length; i++) {
+      if (e.firedThresholds.has(i)) continue
+      const t = list[i]!
+      if (e.health / (e.def.maxHealth ?? 1) > t.belowHealth) continue
+      e.firedThresholds.add(i)
+      if (t.humiliation && night) night.addHumiliation(t.humiliation)
+      const sp = t.summon
+      if (!sp) continue
+      // The cap counts this summoner's own living children, so the second
+      // phase tops the board up rather than adding four unconditionally.
+      let want = sp.count
+      if (sp.cap !== undefined) {
+        const alive = enemies.filter((x) => x.alive && x.summonedBy === e).length
+        want = Math.min(want, Math.max(0, sp.cap - alive))
+      }
+      for (let k = 0; k < want; k++) {
+        spawn(sp.enemy, e.distance, e, e.laneId, e.laneDistance, e.routePick)
       }
     }
   }
@@ -1203,8 +1375,25 @@ export function simulate(
 
       // A group walks in from the gate its wave named. Absent means the trunk,
       // which is what every wave written before branching existed means.
-      for (const sp of spawner.update(DT)) spawn(sp.enemy, 0, null, sp.lane ?? MAIN_LANE, 0)
+      for (const sp of spawner.update(DT)) {
+        // THE EXIT THE GROUP NAMED, turned into the one number a walker
+        // carries by the same `pickForTerminal` the scene uses -- so the arm an
+        // enemy takes is the same arm in both, and a soak of level 8 is a soak
+        // of the routing the wave table actually asks for. Without this every
+        // group would split by the map's weights and the whole design of the
+        // level (heavy down the cheap exit, then the covered one) would be
+        // invisible to this file. Undefined leaves the pick to the run's own
+        // route stream, which is every wave table before level 8.
+        const pick = sp.exit !== undefined
+          ? pickForTerminal(net, sp.lane ?? MAIN_LANE, sp.exit) ?? routeRng()
+          : routeRng()
+        spawn(sp.enemy, 0, null, sp.lane ?? MAIN_LANE, 0, pick)
+      }
       tickNight(DT)
+      // LEVEL 8'S HR AURA, and a no-op returning on the first line everywhere
+      // else. Before anything shoots, like the scene's, because it decides how
+      // much damage the hits landed this frame take off.
+      tickArmorAura()
       tickBoss(DT)
       tickSummons(DT)
       tickTowerDisable(DT)
@@ -1390,11 +1579,36 @@ export function simulate(
         // same three lines the scene's walk branch runs, in the same order.
         const step = e.selfHeld
           ? 0
-          : slowedSpeed(e.def.speed * e.speedScale, e.slowFactor, e.slowRemaining > 0) * DT
+          : slowedSpeed(e.def.speed * e.speedScale * e.reviewSpeed,
+                        e.slowFactor, e.slowRemaining > 0) * DT
+        // WHERE IT WAS BEFORE THE STEP, for the Performance Review, read only
+        // on a level that has one. The gate is a distance test rather than a
+        // proximity test for the same reason it is in the scene: at 174 px/s a
+        // reviewed Intern crosses a 25 px circle in 144 ms, and this file steps
+        // at DT.
+        const gateFromLane = GATE ? e.laneId : ''
+        const gateFromAt = GATE ? e.laneDistance : 0
         const moved = advance(net, e as Walker, step)
         e.laneId = moved.laneId
         e.laneDistance = moved.laneDistance
         e.distance = moved.distance
+        if (GATE && !e.reviewed && reviewable(e.def)) {
+          // The merge case is asked rather than assumed, exactly as the scene
+          // asks it: if the step crossed the junction, where it JOINED the new
+          // lane is what the crossing is measured from, and both come from the
+          // same pure functions that moved it.
+          let from = gateFromAt
+          if (e.laneId !== gateFromLane) {
+            const took = chooseContinuation(net.continuations(gateFromLane),
+                                            pickAt(e.routePick, gateFromLane))
+            from = took?.distance ?? 0
+          }
+          if (crossedGate(GATE, e.laneId, from, e.laneDistance)) {
+            e.reviewed = true
+            e.reviewSpeed = GATE.speedMultiplier
+            reviewedCount++
+          }
+        }
         const on = net.lane(e.laneId)
         const p = on.path.pointAt(e.laneDistance)
         // The step it just took, before the position is overwritten. Held to a
@@ -1412,6 +1626,9 @@ export function simulate(
           e.alive = false
           escaped++
           lives -= e.def.livesCost
+          // WHICH EXIT IT GOT OUT OF. One key on every map before level 8.
+          leaksByExit[on.id] = (leaksByExit[on.id] ?? 0) + e.def.livesCost
+          leaksByEnemy[e.id] = (leaksByEnemy[e.id] ?? 0) + 1
           // Measurement only: where the difficulty first bites. A run that
           // ends 20/20 and a run that ends 20/20 having nearly lost one on
           // wave 11 are the same number and very different games.
@@ -1419,8 +1636,13 @@ export function simulate(
         }
       }
 
-      // Clear the dead.
-      for (let i = enemies.length - 1; i >= 0; i--) if (!enemies[i]!.alive) enemies.splice(i, 1)
+      // Clear the dead, counting what the aura had touched on the way out --
+      // the array is the only record and it is about to lose them.
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        if (enemies[i]!.alive) continue
+        if (enemies[i]!.everBuffed) auraBuffedCount++
+        enemies.splice(i, 1)
+      }
 
       if (lives <= 0) { outcome = 'lost'; break runLoop }
       // Scripted spawns only, as in the scene: a summoner that kept bursting
@@ -1471,6 +1693,8 @@ export function simulate(
     seed, hero: heroId, abilities: draftedAbilities, towers: opening,
     outcome, waves: wavesReached, lives, firstLifeLostWave, peanutsEarned, kills,
     seconds: +now.toFixed(1), bannerPoints, findings, firedTowers, firedAbilities,
+    leaksByExit, leaksByEnemy, reviewed: reviewedCount, blastOnFriendlies,
+    auraBuffed: auraBuffedCount,
   }
 }
 
