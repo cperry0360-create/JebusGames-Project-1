@@ -13,12 +13,17 @@ interface Group {
    *  Carried rather than resolved here: the spawner does not know what lanes a
    *  map has, and should not. */
   lane: string | undefined
+  /** The exit this group is aimed at on a splitting map, or undefined to let
+   *  the map's own split weights decide. Carried, not resolved, for the same
+   *  reason `lane` is: which exits exist is the network's business. */
+  exit: string | undefined
 }
 
-/** One enemy to put on the board, and where it comes in. */
+/** One enemy to put on the board, where it comes in, and where it is headed. */
 export interface Spawn {
   enemy: string
   lane: string | undefined
+  exit: string | undefined
 }
 
 export class WaveSpawner {
@@ -31,6 +36,7 @@ export class WaveSpawner {
       interval: s.interval,
       timer: s.delay,
       lane: s.lane,
+      exit: s.exit,
     }))
   }
 
@@ -51,7 +57,7 @@ export class WaveSpawner {
       g.timer -= dt
       // A long frame can owe more than one unit; pay them all out.
       while (g.timer <= 0 && g.remaining > 0) {
-        spawned.push({ enemy: g.enemy, lane: g.lane })
+        spawned.push({ enemy: g.enemy, lane: g.lane, exit: g.exit })
         g.remaining--
         g.timer += g.interval
       }

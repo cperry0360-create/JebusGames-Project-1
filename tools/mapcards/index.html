@@ -22,6 +22,7 @@ const PLATES = {
   level4: 'public/assets/maps/map_level4.webp',
   level5: 'public/assets/maps/map_level5.webp',
   level6: 'public/assets/maps/map_level6.webp',
+  level8: 'public/assets/maps/map_level8.webp',
 }
 
 async function load(path) {
@@ -76,6 +77,23 @@ const CROPS = {
   // 356.6 tall, which is 1.5002 -- the card's own 3:2, so the cover fit below
   // throws essentially nothing away.
   level6: [0.66, 0.20, 0.32, 0.379],
+  // LEVEL 8: THE FORK AND THE PERFORMANCE REVIEW, which are the two things
+  // this level has that no other level does -- a road that splits to two exits
+  // and a machine that buffs whatever walks through it. Both are in the
+  // right-centre of the plate: the junction is at canvas (1072,356) of
+  // 1280x720, which is 0.838, 0.494 of the plate, and the sign, the camera and
+  // the red scan line sit just up and left of it. A crop of the big U-bend on
+  // the left would be a road on carpet, which is the card level 1 nearly got.
+  // 0.4388 x 3840 = 1685 wide and 0.52 x 2160 = 1123 tall, which is 1.5005 --
+  // the card's own 3:2, so the cover fit below throws essentially nothing away.
+  //
+  // CHOSEN OFF preview_level8.png, and widened once: the first frame was
+  // [0.55, 0.24, 0.4388, 0.52], which held the machine and the junction and
+  // cut the OPTIMIZED ROUTE sign off the top. That sign is the level's title
+  // written into its own art, so the frame moved up and out to keep it.
+  // 0.489 x 3840 = 1878 wide and 0.58 x 2160 = 1253 tall, which is 1.4991 --
+  // the card's own 3:2.
+  level8: [0.50, 0.10, 0.489, 0.58],
 }
 
 const CARD_W = 300, CARD_H = 200

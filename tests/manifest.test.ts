@@ -292,9 +292,17 @@ test('a ground shadow covers the footprint and not the whole sprite', () => {
     // drawn mid-leap with its tail plumes sweeping to the ground and one foot
     // raised, so the deepest thing in its silhouette is a feather rather than
     // a stance. Body shadow, and body anchor with it.
+    //
+    // The Office Drone is the sixth, and it is the Glider's and the Glitch
+    // Bug's reason for the third time: it is a quadcopter hanging in the air
+    // over a landscape canvas, and the only things its silhouette puts near
+    // the ground are a landing skid, a tie and a sheet of paper. A shadow that
+    // width under a 4084 px wingspan is the mismeasurement this test exists to
+    // catch, arrived at from the other side. Body shadow, and body anchor with
+    // it -- see ENEMY_BODY_SHADOW in tools/measure_art.py.
     const BODY_SHADOWED = new Set([
       'enemy-zamboni', 'enemy-glitch-bug', 'enemy-glider', 'enemy-rooster',
-      'hero-cory-power'])
+      'enemy-office-drone', 'hero-cory-power'])
     // `heroes/` as well as `enemies/`. It used to name one file --
     // `hero/hero_cory.webp` -- because Cory was the only hero whose art this
     // script had measured; the other four lived in `heroes/` and were checked

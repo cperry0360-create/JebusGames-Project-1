@@ -85,6 +85,28 @@ export interface LaneDef {
   entrance?: boolean
 }
 
+/**
+ * One health phase: what an enemy does the first time it drops below a share
+ * of its health.
+ *
+ * Its own interface now that `onHealthThreshold` takes a list of them, so the
+ * shape is named in one place rather than repeated inside a union.
+ */
+export interface ThresholdDef {
+  belowHealth: number
+  /**
+   * What it calls in, and the most of them it may have ALIVE at once.
+   *
+   * `cap` counts this summoner's own living children, exactly as
+   * `SummonsDef.cap` does, and is what stops two phases of four becoming
+   * eight on the board while a player is already losing. Absent means no
+   * cap, which is what Batula's roar has always meant.
+   */
+  summon?: { enemy: string; count: number; cap?: number }
+  /** Humiliation stacks granted outright. See level5.json. */
+  humiliation?: number
+}
+
 export interface MapDef {
   /** Key into art.json's map section. */
   plate: string
@@ -580,16 +602,17 @@ export interface EnemyDef {
    * The one-off that fires the first time this one drops below a share of its
    * health. Batula's roar at 50%: six Baby Franks and a free Humiliation.
    *
-   * ONCE PER ENEMY, not once per crossing. Health can cross a threshold twice
-   * — lifesteal is on this level and it heals — and a boss that re-roared
-   * every time a bleed lapsed would summon without limit.
+   * ONCE PER ENEMY PER ENTRY, not once per crossing. Health can cross a
+   * threshold twice — lifesteal is on level 5 and it heals — and a boss that
+   * re-roared every time a bleed lapsed would summon without limit.
+   *
+   * ONE OBJECT IS ONE PHASE and is what Batula declares; A LIST IS SEVERAL,
+   * which level 8's CEO needs — he summons at 70% and again at 40%. The
+   * single-object form is read exactly as it always was, so Batula's row and
+   * every test over it are untouched, and this is the same "one or a list"
+   * shape `LaneDef.merge` uses for the same reason.
    */
-  onHealthThreshold?: {
-    belowHealth: number
-    summon?: { enemy: string; count: number }
-    /** Humiliation stacks granted outright. See level5.json. */
-    humiliation?: number
-  }
+  onHealthThreshold?: ThresholdDef | ThresholdDef[]
 
   /**
    * True for an enemy the sun bothers and the night helps: the day slow, the
@@ -614,6 +637,27 @@ export interface EnemyDef {
    * about what may TOUCH it.
    */
   glides?: boolean
+
+  /**
+   * True for an enemy that gives the enemies around it armour while it lives:
+   * level 8's Human Resources, and nothing else.
+   *
+   * A FLAG HERE AND THE NUMBERS IN THE LEVEL'S RULES, which is the Rooster's
+   * `flame: true` pattern and is what scopes the mechanic: `levelRules`
+   * returns null everywhere else and `systems/EnemyAura.ts` has nothing to
+   * project. PROPOSED RATHER THAN SETTLED — see the note on the row.
+   */
+  armorAura?: boolean
+
+  /**
+   * True for an enemy that explodes where it died, damaging BOTH SIDES: level
+   * 8's Consultant, and nothing else.
+   *
+   * Radius and damage are the level's, for the same scoping reason as
+   * `armorAura`. Damaging the enemy's own side as well as the player's is
+   * deliberate and is the joke; see level8.json's `deathBlast` block.
+   */
+  deathBlast?: boolean
 
   /**
    * The share of the damage it deals to a PLAYER unit that it heals for.
@@ -1043,6 +1087,25 @@ export interface WaveSpawnDef {
    *  which is what every wave written before branching existed means — so no
    *  wave table needed editing. */
   lane?: string
+  /**
+   * Which EXIT this group is aimed at, on a map whose lane splits.
+   *
+   * WHAT IT IS FOR. Level 8 is one entrance and two exits, and the two are not
+   * equivalent: the east arm is 437 px long with a third of it inside a
+   * tower's reach, the south arm is 2,304 px with three quarters covered and
+   * the Performance Review painted across it. "Send the heavy group down the
+   * cheap exit" is a wave-design decision, and without this the arm is a coin
+   * flip per enemy — `routePick` is random at spawn and the map's weights are
+   * the same for every wave.
+   *
+   * It names a TERMINAL LANE, and `Lanes.pickForTerminal` turns that into the
+   * one number a walker carries: the pick is still chosen once, at spawn, and
+   * the arm is still decided by the same pure function the soak uses, so
+   * nothing about the junction becomes per-frame. An unroutable name falls
+   * back to a random pick rather than throwing, the way `LaneNetwork.lane`
+   * resolves an unknown lane id, and a test catches the typo.
+   */
+  exit?: string
 }
 
 export interface WaveDef {
@@ -1258,6 +1321,13 @@ export interface ArtDef {
     /** The Glacier's eruption, and the frost it leaves. Eight frames, played
      *  once, then held on the last one for the field's duration. */
     glacier: string
+    /** Level 8's Performance Review, played at the painted scan line when an
+     *  enemy goes through it. Eight frames of 272x610, once. */
+    performanceScan: string
+    /** And the marker it leaves: drawn over a reviewed enemy for the rest of
+     *  its life, because an enemy that suddenly speeds up with nothing on it
+     *  reads as a bug. ONE FRAME, deliberately — see art.json. */
+    performanceBuff: string
   }
   decor: string[]
   /** Keys that get a greyscale copy built at boot, for unavailable states. */

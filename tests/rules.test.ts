@@ -411,8 +411,33 @@ test('every wave references a real enemy and introduces types gradually', () => 
     const table = read(f.replace(/\.json$/, ''))
     for (const w of table.waves) for (const sp of w.spawns) seen.add(sp.enemy)
   }
+  // AND OVER WHAT THOSE SPAWNS BRING WITH THEM. An enemy can reach the board
+  // without ever appearing in a wave table: level 8's Office Drone is summoned
+  // by the CEO at 70% and 40% health and is spawned by nothing, which is
+  // deliberate -- it pays no peanuts, so a wave of them would be free money
+  // and the boss fight would be a farm. Counted as unspawned it reads as dead
+  // weight in the deploy, which is the opposite of true.
+  //
+  // The closure is `summons`, `splitsOnDeath` and `onHealthThreshold.summon`,
+  // walked transitively, which is the same question systems/LevelArt.ts asks
+  // to decide which sprites a level loads -- so an enemy that is reachable
+  // here is exactly an enemy whose art ships.
+  const named = (value: unknown, out: Set<string>): void => {
+    if (typeof value === 'string') { if (value in enemies) out.add(value); return }
+    if (Array.isArray(value)) { for (const v of value) named(v, out); return }
+    if (value !== null && typeof value === 'object') {
+      for (const [k, v] of Object.entries(value)) { if (!k.startsWith('_')) named(v, out) }
+    }
+  }
+  const frontier = [...seen]
+  while (frontier.length > 0) {
+    const id = frontier.pop()!
+    const next = new Set<string>()
+    named((enemies as any)[id], next)
+    for (const n of next) if (!seen.has(n)) { seen.add(n); frontier.push(n) }
+  }
   assert.equal(seen.size, Object.keys(enemies).length,
-    `enemies never spawned by any wave table: ${Object.keys(enemies).filter((id) => !seen.has(id)).join(', ')}`)
+    `enemies no wave table spawns and nothing on the board summons: ${Object.keys(enemies).filter((id) => !seen.has(id)).join(', ')}`)
 })
 
 test('the run ends on a boss, escorted but not buried', () => {
@@ -507,12 +532,13 @@ test('every boss pays a lump sum, and the rule is checked on every boss', () => 
    * only ever looking at the one boss it happened to be true of.
    */
   const bosses = Object.entries(enemies).filter(([, e]: [string, any]) => e.tier === 'boss')
-  // SEVEN ROWS, SIX BOSSES. Level 4's Glitch Lich King is two rows -- the
+  // EIGHT ROWS, SEVEN BOSSES. Level 4's Glitch Lich King is two rows -- the
   // wave 7 form that retreats and the wave 13 form that does not -- and both
   // are held to every rule below, which is the point of the count being here
   // at all: it is a tripwire against a boss being added and never examined.
-  // Batula is the sixth row and the Rooster the seventh.
-  assert.equal(bosses.length, 7, 'the roster gained or lost a boss')
+  // Batula is the sixth row, the Rooster the seventh, and level 8's CEO the
+  // eighth.
+  assert.equal(bosses.length, 8, 'the roster gained or lost a boss')
   const dearest = Math.max(...Object.values(towers).map((t: any) => t.cost))
   // THE BEST ORDINARY PAYOUT, and `ordinary` is role as well as tier -- level
   // 5's Vampire Lord is a mini-boss carrying `tier: elite` (see enemies.json's

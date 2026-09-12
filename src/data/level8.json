@@ -1,0 +1,53 @@
+{
+  "_note": "EVERYTHING LEVEL 8 ADDS TO THE RULES, in one file, scoped exactly the way level5.json and level6.json are: `levels.json` names it on level 8's row and on no other, `Levels.levelRules` returns null for every level that names nothing, and all three mechanics below are no-ops on null. Seven levels of tuned numbers cannot be moved by anything in here, and the soak proves it rather than claiming it -- levels 1 to 7 were re-soaked at 480 seeds with the same seeds after this landed and none of them moved.",
+  "_theRowIsNotThereYet": "AND THAT IS THE STATE OF THE LEVEL RATHER THAN AN OVERSIGHT. Level 8 is unlocked by level 7, level 7 has no row in levels.json, and `isLevelUnlocked` refuses an unknown prerequisite rather than treating it as satisfied -- so a row here naming `level7` would be a permanently locked node on the world map AND would fail tests/levels.test.ts, which walks every prerequisite chain back to level 1. The level is built, checked, soaked and parked: map, roster, waves, rules, art and simulator are all here and all tested. Adding the row is one line, the day level 7 gets its own. See tests/level8.test.ts, which fails if it is ever shipped unreachable.",
+  "_names": "WHERE THE DISPLAY NAMES ARE: on the six enemies.json rows this file's `roster` points at, and nowhere else. Every name the HUD, the boss bar, the wave card and the log print comes from `name` on those rows -- renaming them for the kids is six edits in one file, starting at the row that carries the `_level8` note. Nothing in src/ spells an enemy's name.",
+  "roster": {
+    "fast": "intern",
+    "support": "hr",
+    "blast": "consultant",
+    "wall": "manager",
+    "drone": "officeDrone",
+    "boss": "ceo"
+  },
+  "_roster": "READ BY systems/LevelArt.ts as well as by a person: `enemyIdsForLevel` walks this block and the wave table for enemy ids and loads exactly those sprites with the level. An enemy named here but not in the waves still gets its art loaded, which is what makes the Office Drone work -- nothing spawns one from a wave, the CEO summons them.",
+
+  "_performanceReview": "THE GATE, AND IT IS MEASURED OFF THE PLATE RATHER THAN PLACED BY EYE. The roadside machine, the sign and the red scan line are painted into the map art; `tools/find_level8_gate.py` finds the line (the only saturated red blob on the plate, 506 px, 63.1 px long at 69.9 degrees) and intersects it with the SHIPPED lane polylines in map_level8.json. `crossings` is its output, copied verbatim.\n\nIT IS ON THE SOUTH BRANCH, NOT THE TRUNK, and that is a fact about the painting that the brief could not have known: the line is drawn 142.68 px past the fork, on the arm that runs down to the bottom exit. So an enemy routed EAST is never reviewed and is never buffed, and an enemy routed SOUTH is buffed 6% of the way down a 2304 px arm. That is the single most important thing about this level's routing and waves.level8.json is built around it -- east is the short, under-defended arm, south is the long, well-covered arm whose traffic arrives 20% faster.\n\nONE CROSSING, NOT TWO. The brief warns that the road doubles back and an enemy can cross the line twice; on this plate it does not -- the tool reports every crossing it finds and finds one. The non-stacking latch is still implemented and still tested, because it is the buff's own rule rather than a property of this geometry: a re-trace or a re-paint could add a second crossing without anybody noticing.",
+  "performanceReview": {
+    "line": [[943.41, 391.85], [965.09, 451.06]],
+    "crossings": [
+      { "lane": "south", "distance": 142.68, "at": [954.74, 422.78] }
+    ],
+    "sizeMultiplier": 1.1,
+    "speedMultiplier": 1.2,
+    "scanMs": 420,
+    "markerHeight": 24,
+    "_sizeMultiplier": "1.10, RENDERED SIZE ONLY. It scales the sprite and nothing else -- not the health bar's width, not the shadow, not the hit radius, not the block range. A 10% bigger picture is the signal; a 10% bigger hitbox would be a second, invisible mechanic.",
+    "_speedMultiplier": "1.20, applied as a multiplier on the walk speed the enemy already has, so it composes with a slow rather than replacing it. An Intern reviewed at 145 walks at 174, which is faster than anything else in the game except level 5's Baby Frank.",
+    "_once": "BUFFED ONCE, EVER, PER ENEMY. The latch is on the enemy (`Enemy.reviewed`), not on the gate, and it is checked before the buff is applied rather than after -- so a second crossing, a summoned child spawning past the line, and a boss that is immune all take the same path. tests/level8.test.ts drives an enemy across twice and asserts the second crossing changes nothing.",
+    "_bossesImmune": "THE CEO IS NOT BUFFED, and neither is any other boss: `role: boss` or `tier: boss` is the test, which is the same pair `armor.test.ts` and content.test.ts use for the rank and file. A 20% faster boss on a 3,646 px arm is a different fight, and it is not this one.",
+    "_scanMs": "420, the whole 8-frame scan animation, matching `heroFx.sweepMs`. The sheet is 8 cells of 272x610 and `registerEffectAnims` cuts it from the manifest's `sheet` block; `forgetEffectAnims` drops the animation when the texture is freed, which is the path reports/2026-09-10-the-null-frame.md exists about.",
+    "_markerHeight": "24, `heroFx.markerHeight`, which is what the burn and mind-control markers already draw at. The marker hangs over a reviewed enemy FOR THE REST OF ITS LIFE rather than for a duration -- an enemy that has suddenly sped up with nothing on it reads as a bug, which is the lesson fx_mind_control taught -- so there is no duration to configure. `GameScene.syncStatusMarkers` asks every enemy what is true of it each frame and cannot leak one."
+  },
+
+  "_armorAura": "HUMAN RESOURCES, AND IT IS PROPOSED RATHER THAN SETTLED. The brief asks for it to be built and flagged as open, and this is the flag: HR projects an aura that gives every enemy near it bonus armour while it lives, so killing HR first makes everything around it easier. It is the Beacon tower's mechanism read the other way round -- a support unit buffing its own side inside a radius -- and it goes through `Enemy.effectiveArmor`, which is the one place armour is turned into damage taken, so nothing about the damage path is duplicated.\n\nWHAT IS OPEN: whether +4 armour is the right number and whether 110 px is the right radius. 110 is just inside the shortest tower range in the game (112), which is the property that makes it legible -- a tower that can reach HR can reach most of what HR is protecting -- and +4 on top of an Intern's 0 armour is a 4-damage cut on every hit, which is 44% of a Withholding Tower's shot and nothing at all to a Rounding Error's splash. The soak's sensitivity table treats it as a variable; see reports/2026-09-12-level-8.md.",
+  "armorAura": {
+    "radius": 110,
+    "armorBonus": 4,
+    "_radius": "110 px, centre to centre, measured against the ENEMY's position not its art. The shortest tower range in the pool is 112.",
+    "_stacking": "TWO HR UNITS DO NOT STACK. The bonus is the largest one in range rather than the sum, for the reason slows do not stack either: a pack with four HR in it would otherwise be immune to the whole board, and `Beacon` already answers the same question the same way.",
+    "_whileItLives": "The aura is recomputed every frame from the living HR on the board, so it ends the instant HR dies with nothing to unwind. The same reason `syncStatusMarkers` asks rather than remembers."
+  },
+
+  "_deathBlast": "THE CONSULTANT EXPLODES ON DEATH, and it damages BOTH SIDES. That is deliberate and it is the joke: a consultant's parting recommendation hurts the client and the staff equally. It reuses the existing splash path -- `GameScene.damageEnemy` for the enemies caught, the same soldier and gnome damage entry points a fight already uses for the player's units, and `ART.fx.blast` for the picture -- so there is no second implementation of area damage on the board.",
+  "deathBlast": {
+    "radius": 70,
+    "damage": 30,
+    "hitsPlayerUnits": true,
+    "_radius": "70 px, which is 1.4 road widths: wide enough to catch the pack walking behind it and too narrow to reach a tower standing at the 90 px standoff every pad on this map is placed at. A blast that could hit the buildings would be a different mechanic.",
+    "_damage": "30, flat, ignoring armour on neither side. It is half an Intern (65), a third of an Ima Dummy soldier (90), and 11% of another Consultant -- so a line of Interns behind a dying Consultant is a real loss for the wave and a pack of Consultants is not a chain reaction.",
+    "_hitsPlayerUnits": "TRUE IS THE WHOLE POINT. With this false the explosion is a small gift to the player; with it true, holding the line in front of a Consultant with two soldiers costs 60 health of soldier every time one dies. The hero takes it too."
+  },
+
+  "_summons": "THE CEO'S TWO PHASES ARE NOT HERE. They are `onHealthThreshold` on his own enemies.json row, because `what it does at 70% health` is a fact about him rather than about the level, and the field already existed for Batula's roar -- level 8 only widened it from one threshold to a list. The cap is on the same row."
+}

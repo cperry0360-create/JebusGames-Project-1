@@ -2,8 +2,8 @@ import Phaser from 'phaser'
 import type { ScratchOutcome } from '../systems/Scratch.ts'
 import { NukeEarnedOverlay, NukeLaunchOverlay } from '../ui/NukeOverlays.ts'
 import type {
-  AbilityDef, DraftDef, EnemyDef, HeroAbilityDef, HeroDef, RulesDef, TowerDef,
-  TowerSpec, WavesDef,
+  AbilityDef, DraftDef, EnemyDef, HeroAbilityDef, HeroDef, RulesDef, ThresholdDef,
+  TowerDef, TowerSpec, WavesDef,
 } from '../types.ts'
 import displayData from '../data/display.json'
 import rulesData from '../data/rules.json'
@@ -21,7 +21,13 @@ import {
   DEFAULT_DIFFICULTY_ID, difficultyName, resolveDifficultyId,
   startingLives, startingPeanuts,
 } from '../systems/Difficulty.ts'
-import { LaneNetwork } from '../systems/Lanes.ts'
+import { LaneNetwork, chooseContinuation, pickAt, pickForTerminal } from '../systems/Lanes.ts'
+import {
+  armorAuraRules, auraArmorAt, type ArmorAuraRules,
+} from '../systems/EnemyAura.ts'
+import {
+  crossedGate, gateRules, reviewable, type GateRules,
+} from '../systems/PerformanceGate.ts'
 import { NightRules } from '../systems/NightRules.ts'
 import { convertedHealth } from '../systems/Vampirism.ts'
 import { puddleAlpha } from '../systems/AcidPuddle.ts'
@@ -307,6 +313,20 @@ export class GameScene extends Phaser.Scene {
   /** Every lane this map has, and how they join. One lane on a single-lane
    *  map, which is every level that exists today. */
   private lanes!: LaneNetwork
+  /**
+   * LEVEL 8'S THREE, and null on every other level -- `levelRules` returns
+   * null for a level that names no rules file, so each of these is one `if`
+   * away from not existing anywhere else. The same scoping level 5's night and
+   * level 6's flame use, and the reason re-soaking levels 1 to 7 after this
+   * landed showed nothing moved.
+   */
+  private gate: GateRules | null = null
+  private aura: ArmorAuraRules | null = null
+  // NOT `blast`: the scene already has a `blast(x, y, r)` METHOD -- the shared
+  // explosion every ability plays -- and a field of that name shadows it. The
+  // local typecheck caught it as "Duplicate identifier" and CI would have
+  // caught it as a call on a null object.
+  private deathBlast: { radius: number; damage: number; hitsPlayerUnits: boolean } | null = null
   /**
    * Level 5's five extra systems, or null on every other level.
    *
@@ -772,6 +792,18 @@ export class GameScene extends Phaser.Scene {
     // null for a level that names no rules file, so this whole mechanic is one
     // `if` away from not existing anywhere else.
     this.flameRules = (levelRules(this.level.id)?.flame as FlameRules | undefined) ?? null
+    // LEVEL 8'S THREE, read through the same `levelRules` gate and asserted by
+    // their own modules rather than trusted: a gate with no crossings, or an
+    // aura with no radius, is a mechanic that silently never fires, and that is
+    // worse than one that is absent.
+    const r8 = levelRules(this.level.id)
+    this.gate = gateRules(r8)
+    this.aura = armorAuraRules(r8)
+    const db = (r8 as { deathBlast?: { radius?: number; damage?: number;
+      hitsPlayerUnits?: boolean } } | null)?.deathBlast
+    this.deathBlast = db && db.radius && db.damage
+      ? { radius: db.radius, damage: db.damage, hitsPlayerUnits: db.hitsPlayerUnits === true }
+      : null
     this.flameStates = new Map()
     this.scorchLeft = new Map()
 
@@ -4610,7 +4642,12 @@ export class GameScene extends Phaser.Scene {
   private syncStatusMarkers(): void {
     const g = PRESENTATION.heroFx
     for (const e of this.enemies) {
-      const kind = !e.alive ? '' : e.burning ? 'burn' : e.controlled ? 'control' : ''
+      // Ordered, and the review comes LAST on purpose: a burning enemy that
+      // has also been reviewed shows the fire, because the fire is the one
+      // that is killing it. The review is permanent and can wait.
+      const kind = !e.alive
+        ? ''
+        : e.burning ? 'burn' : e.controlled ? 'control' : e.reviewed ? 'review' : ''
       const held = this.statusMarkers.get(e)
       if (kind === '') {
         if (held) { held.art.destroy(); this.statusMarkers.delete(e) }
@@ -4622,7 +4659,9 @@ export class GameScene extends Phaser.Scene {
       }
       let entry = this.statusMarkers.get(e)
       if (!entry) {
-        const key = kind === 'burn' ? ART.fx.burn : ART.fx.mindControl
+        const key = kind === 'burn' ? ART.fx.burn
+          : kind === 'review' ? ART.fx.performanceBuff
+            : ART.fx.mindControl
         entry = { kind, art: statusMarker(this, key, g.markerHeight, OVERLAY_DEPTH) }
         this.statusMarkers.set(e, entry)
       }
@@ -5290,8 +5329,20 @@ export class GameScene extends Phaser.Scene {
         // The lane the group named, or the main one. An unknown name resolves
         // to main rather than throwing — see LaneNetwork.lane.
         const lane = this.lanes.lane(spawn.lane)
+        // AND THE EXIT IT IS AIMED AT, on a map whose lane splits. `exit` names
+        // a terminal lane and `pickForTerminal` finds the one number a walker
+        // carries that reaches it, by walking the same pure `followMerges` the
+        // scene and the soak move everything with. Undefined -- every wave
+        // table written before level 8 -- leaves the pick random, which is the
+        // map's own split weights doing the deciding exactly as before. An
+        // unroutable name falls back to random rather than throwing, the way
+        // `lane()` resolves an unknown lane; tests/level8.test.ts catches the
+        // typo instead.
+        const routePick = spawn.exit !== undefined
+          ? pickForTerminal(this.lanes, lane.id, spawn.exit) ?? undefined
+          : undefined
         const enemy = new Enemy(this, def, lane.path, this.gateway,
-          { lanes: this.lanes, laneId: lane.id })
+          { lanes: this.lanes, laneId: lane.id, routePick })
         // The goblin's line, once per run, on the FIRST enemy to actually come
         // out of the arch. Hung off the emergence rather than the spawn so it
         // lands with the fade-in — spawning happens off the plate, behind the
@@ -5356,6 +5407,10 @@ export class GameScene extends Phaser.Scene {
     // day/night rules. The harness caught it (`run.sh level6`): the Rooster
     // spawned, walked, and never once stopped or breathed.
     this.tickRooster(dt)
+    // LEVEL 8'S HR AURA, and a no-op returning on the first line everywhere
+    // else. BEFORE `tickEnemies`, like `tickNight`, because it decides how
+    // much damage the hits landed this frame take off.
+    this.tickArmorAura()
     this.tickEnemies(dt)
     // WHAT THE PLAYER'S SIDE MAY SHOOT, which is not every enemy on the board.
     // A mind-controlled enemy is fighting for the player, and a tower or a
@@ -5985,13 +6040,142 @@ export class GameScene extends Phaser.Scene {
       // `alive` now means "not dead AND still on the board", so the extra
       // `active` check this line used to carry is folded into it.
       if (!e.alive) continue
+      // WHERE IT WAS BEFORE THE STEP, for the Performance Review. A gate is a
+      // line on the road and "did it cross" is a question about a step rather
+      // than about a position -- see systems/PerformanceGate.ts on why this is
+      // not a proximity test. Two numbers, read only when the level has a gate.
+      const wasLane = this.gate ? e.laneId : ''
+      const wasAt = this.gate ? e.laneDistance : 0
       if (e.tick(dt, (dmg) => this.damageBlocker(e, dmg))) {
         this.leak(e)
         continue
       }
+      if (this.gate) this.reviewCrossing(e, wasLane, wasAt)
       survivors.push(e)
     }
     this.enemies = survivors
+  }
+
+  /**
+   * The Performance Review: the gate the level paints across its own road.
+   *
+   * An enemy that crossed the line this step is 10% bigger and 20% faster for
+   * the rest of its life, once, ever. `Enemy.review` is the latch and returns
+   * false for anything already reviewed, so a second crossing plays no effect
+   * and changes no number -- which matters because a road may cross the same
+   * painted line twice, and because a summoned child can be born past it.
+   *
+   * THE MERGE CASE IS ASKED RATHER THAN ASSUMED. If the step took the enemy
+   * across the junction its lane changed underneath it, and the distance it
+   * had walked down the OLD lane cannot be compared with the new one's. Where
+   * it joined is not guessed at: `continuations` and `pickAt` are the same two
+   * pure functions the walker itself moved with, so this gets the arm it
+   * actually took and the distance it actually joined at. Assuming 0 would be
+   * right for level 8 -- both its arms join at waypoint 0 -- and wrong for the
+   * first map that merges into the middle of a lane.
+   */
+  private reviewCrossing(e: Enemy, wasLane: string, wasAt: number): void {
+    const g = this.gate
+    if (!g || e.reviewed || !reviewable(e.def)) return
+    let from = wasAt
+    if (e.laneId !== wasLane) {
+      const took = chooseContinuation(this.lanes.continuations(wasLane), pickAt(e.routePick, wasLane))
+      from = took?.distance ?? 0
+    }
+    const hit = crossedGate(g, e.laneId, from, e.laneDistance)
+    if (!hit || !e.review(g.sizeMultiplier, g.speedMultiplier)) return
+    playEffect(this, ART.fx.performanceScan, hit.at[0], hit.at[1], {
+      size: g.markerHeight * 3, height: g.markerHeight * 6,
+      depth: OVERLAY_DEPTH, durationMs: g.scanMs,
+    })
+    play(this, 'hit-b', 0.5)
+    logEvent('gate', `${e.def.name} reviewed: x${g.speedMultiplier} speed`)
+  }
+
+  /**
+   * Human Resources: bonus armour for everything standing near a living one.
+   *
+   * ASKED EVERY FRAME RATHER THAN APPLIED AND UNWOUND, which is the rule
+   * `syncStatusMarkers` already follows: an aura applied on spawn and removed
+   * on death leaks the moment something dies in a way the remover did not
+   * expect. Nothing has to notice HR dying; the bonus is simply not there on
+   * the next frame.
+   *
+   * THE SOURCE IS NOT ITS OWN BENEFICIARY. HR's own armour is on its row, and
+   * an HR standing next to another HR gets nothing from it -- see
+   * `auraArmorAt` on why the bonus is the largest in range rather than a sum.
+   */
+  private tickArmorAura(): void {
+    const a = this.aura
+    if (!a) return
+    // PLAIN POSITIONS, not the enemies themselves. systems/EnemyAura.ts is
+    // Phaser-free and takes coordinates; handing it an Enemy would tie a pure
+    // module to a Container and would be the one place a test could not drive
+    // it without a scene.
+    const sources = this.enemies
+      .filter((e) => e.alive && e.def.armorAura === true)
+      .map((e) => ({ x: e.x, y: e.y, alive: true }))
+    if (sources.length === 0) {
+      for (const e of this.enemies) e.auraArmor = 0
+      return
+    }
+    for (const e of this.enemies) {
+      e.auraArmor = e.def.armorAura === true
+        ? 0
+        : auraArmorAt({ x: e.x, y: e.y }, sources, a)
+    }
+  }
+
+  /**
+   * The Consultant's parting recommendation: a blast at its corpse that
+   * damages BOTH SIDES.
+   *
+   * That is the joke and it is deliberate -- see level8.json's `deathBlast`.
+   * It reuses what is already there: `damageEnemy` for the enemies caught, the
+   * hero's and the units' own `hurt` for the player's side, and the same
+   * `ART.fx.blast` every other explosion in the game plays.
+   *
+   * THE CORPSE IS EXCLUDED, which is not only tidiness: a blast that could
+   * damage the enemy that fired it would recurse through `damageEnemy` on the
+   * frame it died. The chain that CAN happen -- a blast killing another
+   * Consultant, which blasts -- is bounded by health and is the mechanic
+   * working, not a loop.
+   */
+  private deathBlastAt(enemy: Enemy): void {
+    const b = this.deathBlast
+    if (!b || enemy.def.deathBlast !== true) return
+    const r = b.radius
+    playEffect(this, ART.fx.blast, enemy.x, enemy.centreY, {
+      size: sizeForRadius(r), depth: enemy.y + 6, durationMs: EFFECT_MS.blastMs,
+    })
+    this.cameras.main.shake(160, 0.003)
+    let caught = 0
+    for (const other of [...this.enemies]) {
+      if (other === enemy || !other.alive) continue
+      if (Math.hypot(other.x - enemy.x, other.y - enemy.y) > r) continue
+      caught++
+      this.damageEnemy(other, b.damage, false)
+    }
+    let friendly = 0
+    if (b.hitsPlayerUnits) {
+      if (this.hero.alive && Math.hypot(this.hero.x - enemy.x, this.hero.y - enemy.y) <= r) {
+        friendly++
+        this.damageHero(b.damage)
+      }
+      for (const f of this.fighters) {
+        if (!f.alive || Math.hypot(f.x - enemy.x, f.y - enemy.y) > r) continue
+        friendly++
+        f.hurt(b.damage)
+      }
+      for (const g of this.garrisons) {
+        for (const sol of g.soldiers) {
+          if (!sol.alive || Math.hypot(sol.x - enemy.x, sol.y - enemy.y) > r) continue
+          friendly++
+          sol.hurt(b.damage)
+        }
+      }
+    }
+    logEvent('blast', `${enemy.def.name} detonates: ${caught} enemy, ${friendly} friendly`)
   }
 
   // ---------------------------------------------------------------- combat
@@ -6130,6 +6314,10 @@ export class GameScene extends Phaser.Scene {
       this.earn(enemy.def.peanutReward)
       this.rollRareDrop(enemy)
       this.splitOnDeath(enemy)
+      // AFTER the split, so a thing that breaks apart AND explodes puts its
+      // children on the board before the blast looks for something to catch.
+      // Nothing does both today; the order is the one a reader would expect.
+      this.deathBlastAt(enemy)
     } else {
       this.checkHealthThreshold(enemy)
       // Rotated, because a wave lands far more hits than one sample can carry
@@ -6180,10 +6368,30 @@ export class GameScene extends Phaser.Scene {
    * without limit. `thresholdFired` is the latch.
    */
   private checkHealthThreshold(enemy: Enemy): void {
-    const t = enemy.def.onHealthThreshold
-    if (!t || enemy.thresholdFired) return
-    if (enemy.healthFraction > t.belowHealth) return
-    enemy.thresholdFired = true
+    // ONE OBJECT OR A LIST. Batula declares one phase and level 8's CEO
+    // declares two -- 70% and 40% -- and the field takes either shape, the way
+    // `LaneDef.merge` does. Normalised here so the loop below is the only
+    // code that has to know.
+    const decl = enemy.def.onHealthThreshold
+    if (!decl) return
+    const list = Array.isArray(decl) ? decl : [decl]
+    for (let i = 0; i < list.length; i++) {
+      // LATCHED PER ENTRY, by index. One shared latch would spend the CEO's
+      // whole mechanic on his first crossing and the 40% phase would never
+      // arrive; a latch per crossing would let a boss that heals summon
+      // without limit, which is the thing the latch was added for.
+      if (enemy.firedThresholds.has(i)) continue
+      const t = list[i]!
+      if (enemy.healthFraction > t.belowHealth) continue
+      enemy.firedThresholds.add(i)
+      this.fireHealthThreshold(enemy, t)
+    }
+  }
+
+  /** One phase, fired. Split out of `checkHealthThreshold` when the field grew
+   *  from one threshold to a list, so the latching and the effect are not the
+   *  same function. */
+  private fireHealthThreshold(enemy: Enemy, t: ThresholdDef): void {
     if (t.humiliation) this.night?.addHumiliation(t.humiliation)
     logEvent('boss', `${enemy.def.name} roars`)
     this.status.alert = `${enemy.def.name} is not enjoying this.`
@@ -6193,7 +6401,17 @@ export class GameScene extends Phaser.Scene {
     const def = ENEMIES[spec.enemy]
     if (!def) return
     const at = enemy.summonPoint
-    for (let i = 0; i < spec.count; i++) {
+    // THE CAP COUNTS WHAT IS ALIVE, not what has been summoned, which is the
+    // same rule `tickSummons` applies to a summoner's own burst: the CEO's
+    // second phase tops the board up to six rather than adding four
+    // unconditionally, so a player who cleared the first four gets the full
+    // wave and a player who is drowning does not get eight.
+    let want = spec.count
+    if (spec.cap !== undefined) {
+      const alive = this.enemies.filter((e) => e.alive && e.summonedBy === enemy).length
+      want = Math.min(want, Math.max(0, spec.cap - alive))
+    }
+    for (let i = 0; i < want; i++) {
       const child = new Enemy(this, def, this.lanes.lane(at.laneId).path, this.gateway, {
         lanes: this.lanes,
         laneId: at.laneId,

@@ -131,6 +131,53 @@ export function pickAt(routePick: number, laneId: string): number {
   return v - Math.floor(v)
 }
 
+/**
+ * A `routePick` that sends a walker to a named terminal, or null if none does.
+ *
+ * WHAT THIS IS FOR. Level 8 is one entrance and two exits and the two are not
+ * equivalent -- a short under-defended arm and a long well-covered one with the
+ * Performance Review across it -- so a wave table wants to say "this group goes
+ * east". A walker's arm comes from its own `routePick`, which is random at spawn,
+ * and the map's split weights are the same for every wave; this is how a named
+ * exit becomes that one number.
+ *
+ * FOUND BY WALKING THE REAL FUNCTION, not by inverting the hash. `pickAt` mixes
+ * the junction's lane id into the pick to decorrelate two splits on one route,
+ * so solving for a pick algebraically would mean a second copy of that mixing
+ * that could drift from it. This tries candidate picks through `followMerges`
+ * itself -- the same code the scene and the soak move walkers with -- and
+ * returns the MIDDLE of the first run of candidates that land on the wanted
+ * terminal, so the answer is not sitting on a boundary where a rounding
+ * difference would flip the arm.
+ *
+ * Pure and deterministic: same network, same name, same number, every time.
+ */
+export function pickForTerminal(
+  net: LaneNetwork,
+  from: string,
+  terminal: string,
+  samples = 256,
+): number | null {
+  if (!net.has(terminal)) return null
+  const lane = net.lane(from)
+  const end = lane.path.totalLength
+  const lands = (pick: number): boolean =>
+    followMerges(net, { laneId: lane.id, laneDistance: end, routePick: pick }).laneId === terminal
+  // The first run of consecutive candidates that work, and its middle.
+  let start = -1
+  for (let i = 0; i < samples; i++) {
+    const pick = (i + 0.5) / samples
+    if (lands(pick)) {
+      if (start < 0) start = i
+      const next = i + 1 < samples && lands((i + 1.5) / samples)
+      if (!next) return (start + i + 1) / 2 / samples
+    } else if (start >= 0) {
+      return (start + i) / 2 / samples
+    }
+  }
+  return null
+}
+
 export class LaneNetwork {
   /** Main first, then the declared branches in the order the map lists them. */
   readonly lanes: Lane[]
