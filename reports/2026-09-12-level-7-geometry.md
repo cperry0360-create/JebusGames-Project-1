@@ -16,6 +16,8 @@ against that, not against a pad count.
 | `69c3f79` | this report | run 278 — **`test`, `typecheck` and `changes` all green**; `deploy` skipped |
 | `ed1f8fb` | the two CI cells above, and the push verification in the closing section | run 279 — **green** |
 | `<this line>` | this row | markdown only, and no run is recorded for it: recording one takes another commit, and the three runs above already cover every commit that touched a file the checks read |
+| `8134c25` | `main` merged into the branch, so it can fast-forward again — see **The merge that did not happen** below | run 292 — **`test`, `typecheck` and `changes` all green**; `deploy` skipped |
+| `<this line>` | the row above, and the rewritten closing section | markdown only |
 
 Reproduce the whole thing:
 
@@ -474,16 +476,67 @@ nothing loads it.
 
 ---
 
+## The merge that did not happen
+
+The brief for this pass was re-issued a second time with a note saying the
+branch had been **merged into `main` and had added nothing at all** — no
+geometry file, no checker, no converted plate, no report — and that the work was
+therefore starting from nothing.
+
+**It was not merged, and nothing is lost.** Checked against the objects rather
+than against anyone's recollection, including mine:
+
+```
+$ git merge-base --is-ancestor origin/claude/level-7-geometry-wsbyqq origin/main
+NO                      # no commit of this branch is in main's history
+$ git ls-tree -r --name-only origin/main | grep -i level7
+art-source/map_level7.png     # the source plate Cory uploaded, and nothing else
+```
+
+`main` had moved, which is what made it look merged: it went `ac3c059` →
+`dedb6f6`, six commits. Every one of them is Cory's own upload — five "Add files
+via upload" commits carrying the level 9 and 10 art, and one that moved 36 of
+those PNGs out of the repository root into `art-source/`. **None of them came
+from a session and none of them touched a level 7 file.** A `main` that has
+moved forward but does not contain your work is indistinguishable, from the
+outside, from a merge that dropped it.
+
+So the failure is the one CLAUDE.md's **Merging** section already names — work
+sitting green on a branch nobody merged — and this is the third consecutive
+occurrence, not a new one. The cost this time was nearly a full re-derivation of
+a trace that was already correct.
+
+What changed in response: `main` was merged **into** the branch (`8134c25`, run
+292 green) so that a fast-forward is still available after the divergence. The
+merge is content-free — 52 files, all of them art-source PNGs arriving from
+`main`, zero conflicts, zero lines of this branch's work touched.
+
+The checker was then re-run against the merged tree to prove the geometry still
+holds rather than assuming a clean merge implies it:
+
+```
+$ python3 tools/check_level7.py
+  PADS THAT REACH TWO HIGHWAYS AT ONCE: 20 of 22  (geometry file says 20)
+  the plate and tools/level7_geometry.json agree.
+$ node --test --experimental-strip-types 'tests/*.test.ts'   # 1055 pass, 0 fail
+$ sh tools/tsdiff.sh 924c8db                                 # 212 / 212, none introduced
+```
+
+---
+
 ## Where this leaves the repository
 
-**On the branch `claude/level-7-geometry-wsbyqq`, green, fast-forwardable onto
-`main`.** The session could not push to `main`; the merge command is the first
-line of the closing message. Verified after the push rather than assumed —
-`git fetch origin` then `git ls-tree -r origin/claude/level-7-geometry-wsbyqq`
-lists all six new files, `git merge-base --is-ancestor origin/main
-origin/claude/level-7-geometry-wsbyqq` returns true, and the branch is two
-commits ahead of `origin/main` at `ac3c059`. **The branch and `main` are NOT
-the same commit.**
+**On the branch `claude/level-7-geometry-wsbyqq` at `8134c25`, green, and
+fast-forwardable onto `main` at `dedb6f6`.** The session could not push to
+`main`; the merge command is the first line of the closing message. Verified
+after the push by reading the objects, not by trusting an exit code:
+`git ls-tree -r origin/claude/level-7-geometry-wsbyqq` lists all six new files,
+and `git merge-base --is-ancestor origin/main
+origin/claude/level-7-geometry-wsbyqq` returns true. **The branch and `main` are
+NOT the same commit, and `main` does not contain any of this work.**
+
+The branch carries the level 8 build as well — `reports/2026-09-12-level-8.md`
+is the report for that half, and it is unmerged for the same reason.
 
 **Landed in this pass**
 
