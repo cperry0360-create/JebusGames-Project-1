@@ -4,6 +4,140 @@ Newest first.
 
 ---
 
+## 2026-09-12 — level 8 soaked, and a level that gets HARDER when you take enemies out of it
+
+### The headline
+
+**The CEO is 9,000 health, and level 8 soaks at 47/120 (39%) on normal and
+207/480 (43%).** Both inside the 35-45% band.
+
+```bash
+node --experimental-strip-types tools/soak/level.ts 120 level8
+node --experimental-strip-types tools/soak/level.ts 480 level8
+```
+
+Level 8 has no row in `levels.json` — it is unlocked by level 7 and level 7 has
+no row either — so `tools/soak/level.ts` registers the row it will have, in a
+`PARKED` table, and `Sim.ts` now reports a `wrong-level` finding if a soak is
+ever pointed at an id that resolves to something else. Without that pair, a
+soak of level 8 silently printed LEVEL 1's win rate under level 8's name.
+
+**Hero rotation: none.** `level.ts` passes no hero, so every one of these runs
+is CORY. `run.ts` is the driver that rotates heroes by seed; nothing below does.
+
+### THE LEVEL IS PURSE-BOUND, AND THAT INVERTS THE OBVIOUS LEVER
+
+One variable at a time, 120 seeds, reverting between rows
+(`tools/soak/tune8.ts`, which takes the file as well as the path because two of
+level 8's three mechanics live in its rules block rather than on an enemy row):
+
+    every wave count, scaled      win rate
+      x0.5                            2%
+      x0.75                          15%
+      x1.0  (as authored)            39%
+      x1.3                           66%
+
+**Taking enemies out makes this level harder, monotonically.** 19 pads is the
+largest board in the game — levels 2 to 6 carry 15, 15, 14, 14 and 18 — and the
+brief's provisional rewards were at the house median of about 0.12 peanuts per
+point of enemy health, which funds about ten towers over thirteen waves and
+leaves half the board empty. Enemies are net INCOME on this board, so the wave
+table is the purse.
+
+    the four rank-and-file rewards, as a multiple of the brief's
+      x1.0   (8 / 20 / 26 / 38)        3%
+      x1.3   (10 / 26 / 34 / 49)      14%
+      x1.6   (13 / 32 / 42 / 60)      32%
+      x1.63  (13 / 33 / 44 / 62)      39%   <- shipped
+      x1.75  (14 / 35 / 46 / 66)      47%
+      x1.9   (15 / 38 / 49 / 72)      60%
+
+The shipped rewards are 0.125 to 0.2 peanuts per point of health, which sits
+between levels 1-4 (0.08-0.13) and level 6 (0.27-0.44) rather than outside the
+game.
+
+### The CEO, derived
+
+    ceo.maxHealth        win rate    losses in the boss wave
+      5000                  84%         1 of 19
+      7000                  73%        14 of 32
+      9000                  39%        55 of 73   <- shipped
+     11000                  13%        86 of 104
+     13000                   1%       101 of 119
+
+Not flat, and steep in the middle: 2,000 health is 26 points of win rate. The
+number is measured on level 8's own board and means nothing against another
+level's boss — 19 pads hold more DPS than 14.
+
+### The three new mechanics are flavour, and that is measured rather than assumed
+
+    level8.json armorAura.armorBonus      0 -> 40%   2 -> 40%   4 -> 39%   8 -> 40%
+    level8.json performanceReview
+                .speedMultiplier        1.0 -> 41% 1.2 -> 39% 1.5 -> 41%
+    level8.json deathBlast.damage         0 -> 38%  30 -> 39%  80 -> 43%
+
+**The HR aura fires and is worth nothing.** "Worth nothing" and "never ran"
+produce the same flat table, so the simulator was instrumented to tell them
+apart: **96.6 enemies a run stand inside an HR's aura**, counted, out of about
+267 spawned. Four points of flat armour against a tower pool whose shots are 27
+and 44 is a rounding error at the level of whole runs. If HR is meant to matter
+it needs to do something armour cannot — see the open question in
+reports/2026-09-12-level-8.md.
+
+**The gate is worth nothing measurable either**, at 6.4 enemies buffed a run.
+It only crosses the SOUTH arm, which is the 77%-covered one, so 20% more speed
+over well-defended road changes little.
+
+**The Consultant's explosion makes the level EASIER as it gets stronger**, which
+is the joke working: at 80 damage it is worth +5 points of win rate, because it
+kills its own side faster than it hurts the player's units. It does hurt them —
+156 damage a run lands on the hero and the lads, counted.
+
+### What the simulator learned, and one bug it was hiding
+
+Taught: the two exits and which one each leak came out of, the one-time gate
+buff with its non-stacking rule and its merge case, HR's aura, the Consultant's
+blast on both sides, and the CEO's two summon phases with their cap.
+
+**`onHealthThreshold` was gated on `night`.** The whole block sat behind
+`night &&` because the only threshold in the game was Batula's, whose grant is
+a Humiliation stack. The CEO's phases would have fired NOWHERE in this file and
+his health would have been tuned against a boss that never summons — which is
+level 4's Beacon all over again. Only the humiliation needs the night now.
+
+Approximated, and stated: the gnomes are not modelled at all in this file, so
+the FRIENDLY half of the Consultant's blast is measured light; the size half of
+the gate's buff is not modelled, because nothing here draws anything.
+
+### Levels 1 to 6, same seeds, before and after
+
+Baseline is `dad36d2` in a worktree, which is this branch immediately before the
+level 8 build. 480 seeds each, all-Cory, normal:
+
+    level        before        after
+    level1      428/480       428/480   (89%)
+    level2      255/480       255/480   (53%)
+    level3      422/480       422/480   (88%)
+    level4      299/480       299/480   (62%)
+    level5      218/480       218/480   (45%)
+    level6      210/480       210/480   (44%)
+
+**Bit-identical.** All three new mechanics resolve through `levelRules`, which
+returns null for every level that names no rules file. Level 7 has no row, so
+there was nothing to re-soak there.
+
+### A published number that does not reproduce
+
+The 2026-09-12 entry below this one publishes `level6 [normal]: 181/480 wins
+(38%)` from `tools/soak/level.ts 480 level6`. Run at `924c8db`, the commit that
+entry covers, in a clean worktree, that command prints **210/480 (44%)**. The
+same 44% comes out of this branch before and after the level 8 work, so nothing
+here moved it and nothing here explains it. Recorded rather than fixed: the
+number in that entry should not be trusted as the level 6 baseline until
+somebody works out how it was produced.
+
+---
+
 ## 2026-09-12 — level 6 re-soaked against a third spawn, and a harness bug worth more than the change
 
 ### The headline

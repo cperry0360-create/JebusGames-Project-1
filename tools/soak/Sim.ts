@@ -166,6 +166,24 @@ export interface SoakResult {
   reviewed: number
   /** And how many ever stood inside an HR's armour aura. See `everBuffed`. */
   auraBuffed: number
+  /**
+   * The exit the LAST leak of a losing run came out of, or null for a run that
+   * did not lose.
+   *
+   * NOT THE SAME QUESTION AS `leaksByExit`, which is where the lives went over
+   * the whole run. "Which exit ended it" is the one a wave table is judged on:
+   * level 8's east arm is 36% covered against the south's 77%, and a table
+   * routing the heavy groups down the cheap one shows up here and not in the
+   * totals.
+   *
+   * THE LAST LEAK RATHER THAN THE ZERO-CROSSING, and that is not a
+   * simplification. A run can be LOST WITH LIVES IN HAND: `waveOutcome` ends
+   * the run when anything escapes on the FINAL wave, whatever the counter
+   * says, so 30 of level 8's first 73 measured losses had lives left and no
+   * crossing into zero to point at -- the CEO simply walked out. The last leak
+   * is the one that ended it under either rule.
+   */
+  lostToExit: string | null
   blastOnFriendlies: number
 }
 
@@ -465,6 +483,7 @@ export function simulate(
   let reviewedCount = 0
   let blastOnFriendlies = 0
   let auraBuffedCount = 0
+  let lostToExit: string | null = null
   let unlocked = opening.slice()
   const enemies: SimEnemy[] = []
   const towers: SimTower[] = []
@@ -1629,6 +1648,10 @@ export function simulate(
           // WHICH EXIT IT GOT OUT OF. One key on every map before level 8.
           leaksByExit[on.id] = (leaksByExit[on.id] ?? 0) + e.def.livesCost
           leaksByEnemy[e.id] = (leaksByEnemy[e.id] ?? 0) + 1
+          // THE LAST LEAK WINS, overwritten every time. A run ends either by
+          // running out of lives or by letting anything out on the final wave,
+          // and the most recent escape is the one that did it under both.
+          lostToExit = on.id
           // Measurement only: where the difficulty first bites. A run that
           // ends 20/20 and a run that ends 20/20 having nearly lost one on
           // wave 11 are the same number and very different games.
@@ -1695,6 +1718,7 @@ export function simulate(
     seconds: +now.toFixed(1), bannerPoints, findings, firedTowers, firedAbilities,
     leaksByExit, leaksByEnemy, reviewed: reviewedCount, blastOnFriendlies,
     auraBuffed: auraBuffedCount,
+    lostToExit: outcome === 'lost' ? lostToExit : null,
   }
 }
 

@@ -64,6 +64,8 @@ let livesLeft = 0
 // out of is the question its wave table was built to answer.
 const leaks: Record<string, number> = {}
 const leakers: Record<string, number> = {}
+// WHICH EXIT ENDED THE RUN, over the losses. See `lostToExit` in Sim.ts.
+const killedBy: Record<string, number> = {}
 let reviewed = 0
 let auraBuffed = 0
 let blastOnFriendlies = 0
@@ -75,6 +77,7 @@ for (let seed = 1; seed <= RUNS; seed++) {
   else lostOn.push(r.waves)
   for (const [k, v] of Object.entries(r.leaksByExit)) leaks[k] = (leaks[k] ?? 0) + v
   for (const [k, v] of Object.entries(r.leaksByEnemy)) leakers[k] = (leakers[k] ?? 0) + v
+  if (r.lostToExit) killedBy[r.lostToExit] = (killedBy[r.lostToExit] ?? 0) + 1
   reviewed += r.reviewed
   auraBuffed += r.auraBuffed
   blastOnFriendlies += r.blastOnFriendlies
@@ -106,6 +109,12 @@ if (leaked.length) {
   const total = leaked.reduce((a, [, v]) => a + v, 0)
   console.log('  lives lost by exit: ' + leaked
     .map(([k, v]) => `${k} ${v} (${((v / total) * 100).toFixed(0)}%)`).join('  '))
+}
+const ended = Object.entries(killedBy).sort((a, b) => b[1] - a[1])
+if (ended.length) {
+  const total = ended.reduce((a, [, v]) => a + v, 0)
+  console.log('  the exit that ended the run: ' + ended
+    .map(([k, v]) => `${k} ${v} (${((v / total) * 100).toFixed(0)}% of losses)`).join('  '))
 }
 const got = Object.entries(leakers).sort((a, b) => b[1] - a[1])
 if (got.length) {
