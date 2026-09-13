@@ -17,9 +17,9 @@ before content is built on top.
 | --- | --- | --- |
 | `c17e2f3` | `claude/chapter-2-design.md`, `claude/chapter-2-art-rules.md` (hand upload) | run 335: **green** (`npm test` pass, `npx tsc --noEmit` pass, deploy skipped: docs only) |
 | `5084b89` | `claude/context.md`, `claude/level-art-segment-rules.md` (hand upload) | run 336: **green** (`npm test` pass, `npx tsc --noEmit` pass, deploy skipped: docs only) |
-| `PENDING` | This report | PENDING |
+| `7ebd04b` | This report | run 340: **green** (`npm test` pass, `npx tsc --noEmit` pass, deploy skipped: docs only) |
 
-Branch: none. All three commits are on `main`. `5084b89` is `origin/main` at the
+Branch: none. All commits are on `main`. `5084b89` is `origin/main` at the
 time of verification.
 
 Both uploads are the repository owner's, made through the GitHub web UI. This
