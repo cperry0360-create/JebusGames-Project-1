@@ -89,8 +89,16 @@ export class HudScene extends Phaser.Scene {
   private chipBar!: Phaser.GameObjects.Graphics
   private chipLabel!: Phaser.GameObjects.Text
   private chipHit!: Phaser.GameObjects.Rectangle
-  /** The texture the portrait is currently wearing, so it is swapped on a
-   *  transformation rather than re-fitted every frame. */
+  /**
+   * The texture the portrait is currently wearing, so it is swapped on a
+   * transformation rather than re-fitted every frame.
+   *
+   * IT IS ABOUT THE SPRITE, SO IT IS CLEARED WHEN THE SPRITE IS. A Phaser
+   * scene instance is constructed once and `create()` runs again on every
+   * restart, so a field initialised here survives a level change while the
+   * object it describes does not — which is the whole of the stray
+   * exclamation mark on the ability bar. See `buildHeroChip`.
+   */
   private chipKey = ''
   /** Every element's rectangle. Disjoint by construction, checked by a test. */
   /**
@@ -1036,6 +1044,22 @@ export class HudScene extends Phaser.Scene {
     // `drawHeroChip`, which is also what swaps it when the hero transforms.
     this.chipPortrait = this.add.image(box.x + box.width / 2, box.y + box.height / 2,
       ART.generated.iconMissing)
+    // A NEW SPRITE HAS NO HISTORY, AND THE CACHE HAS TO BE TOLD.
+    //
+    // `chipKey` is what stops `drawHeroChip` re-fitting the portrait every
+    // frame, and it is a plain field on a scene instance Phaser constructs
+    // ONCE and re-`create()`s on every restart. So on the second level of a
+    // session it still held the portrait key of the first — and since a player
+    // takes the same hero from one level to the next, the very next
+    // `drawHeroChip` found `key === chipKey`, skipped the branch, and left
+    // this brand-new image wearing the 256px missing-icon stand-in it was
+    // constructed with, unfitted, lying across the ability bar.
+    //
+    // That is the same shape as the bug in `drawSlots` and it is the same
+    // rule that closes it: fit whatever was actually set. Clearing the cache
+    // alongside the sprite is how that rule reaches a cached comparison —
+    // `''` is not a texture key, so the first draw always sets and fits.
+    this.chipKey = ''
     this.chipBar = this.add.graphics()
     this.chipLabel = this.add.text(box.x + box.width / 2, box.y + box.height / 2, '', {
       fontFamily: FONT_UI, fontSize: '19px', color: COLOR.ink, fontStyle: 'bold',

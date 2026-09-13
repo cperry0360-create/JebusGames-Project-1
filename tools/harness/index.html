@@ -61,7 +61,7 @@ const SCENARIO_NAMES = [
   'cakes', 'cakestate', 'chromepan', 'combat', 'contain', 'courtland',
   'crashreport', 'crashw5', 'credits', 'creditsroll', 'ctxsurvive',
   'dadsync', 'diag', 'difficulty', 'draft', 'drawer', 'edges',
-  'enemyfacing', 'everyloadout', 'facing', 'fps', 'full', 'full13', 'fx',
+  'elibar', 'enemyfacing', 'everyloadout', 'facing', 'fps', 'full', 'full13', 'fx',
   'game', 'gateway', 'gestures', 'glacier', 'gnomes', 'goblin', 'heroanim',
   'heroblock', 'herochip', 'herofx', 'herohp', 'lane', 'leak', 'ledger',
   'labelprobe', 'lettering', 'level6', 'level7', 'level8', 'levelart', 'levels',
@@ -4173,6 +4173,131 @@ async function run() {
     note('RESULT ' + (faults === 0
       ? 'the held beam survives a level change: clips are re-cut, the press lights it, and gameout stops it'
       : '*** ' + faults + ' fault(s) ***'))
+    return
+  }
+  if (scenario === 'elibar') {
+    // THE ABILITY BAR, SWEPT: EVERY HERO, EVERY LEVEL, THE WHOLE DRAFTABLE HAND.
+    //
+    // The report is "a stray ! renders on top of the Scratch Ticket card, on
+    // an iPad, at level 6". A screenshot says THAT something is there; it
+    // cannot say WHICH object it is, and one viewport of one hand on one level
+    // cannot say whether it is there at all. So this walks the bar in every
+    // combination the game can deal and prints, per slot, the texture the
+    // sprite is actually wearing and the size it is actually drawn at --
+    // `generated-icon-missing` IS the exclamation mark (see
+    // Presentation.ensureIconFallbackTexture: a stem and a dot, drawn rather
+    // than typed), so a slot wearing it names the asset that did not arrive.
+    //
+    // It also intersects every other visible HUD leaf with each slot's own
+    // rectangle, because "drawn on top of the card" is a claim about a foreign
+    // object and the slot's own five are the only ones that belong there.
+    const RSE = await import('./js/systems/RunState.js')
+    const AJ = (await import('./js/data/abilities.json', { with: { type: 'json' } })).default
+    const HJE = (await import('./js/data/heroes.json', { with: { type: 'json' } })).default
+    const AJ2 = (await import('./js/data/art.json', { with: { type: 'json' } })).default
+    let faultsE = 0
+    const failE = (m) => { faultsE++; note('   *** ' + m) }
+    // THE WHOLE DRAFTABLE HAND, so every drafted path is on the bar at once
+    // rather than the two the harness usually pins. The Scratch Ticket is one
+    // of them and it is what the report is about.
+    const HAND = Object.keys(AJ).filter((k) => AJ[k].draftable)
+    const HEROES = ['cory', 'courtland', 'han', 'eli', 'bailey']
+    const LEVELS = ['level1', 'level2', 'level3', 'level4',
+      'level5', 'level6', 'level7', 'level8']
+    // Every ability icon the manifest declares, so a key that failed to load
+    // is named even when no slot happens to be wearing it.
+    const ICON_KEYS = Object.keys(AJ2.files).filter((k) => k.startsWith('ability-'))
+
+    const leavesE = (root, out = []) => {
+      for (const o of (root.list || [])) {
+        if (o.visible === false) continue
+        if (o.list && o.list.length) leavesE(o, out)
+        else if (o.getBounds) out.push(o)
+      }
+      return out
+    }
+    const nameE = (o) => o.type + (o.text !== undefined && o.text !== ''
+      ? ' "' + String(o.text).slice(0, 20) + '"'
+      : (o.texture && o.texture.key ? ' ' + o.texture.key : ''))
+    const fmtE = (b) => Math.round(b.x) + ',' + Math.round(b.y) + ' '
+      + Math.round(b.width) + 'x' + Math.round(b.height)
+
+    const sweep = async (heroId, levelId, shoot) => {
+      RSE.setRunState({
+        heroId, abilities: HAND,
+        openingTowers: ['withholding', 'writeoff'], reserveTowers: [],
+        levelId,
+      })
+      for (const k of ['Title', 'Draft', 'Splash', 'Credits', 'Boot', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+      game.scene.start('Game')
+      if (!(await until(() => running('Game') && scene('Game').status.heroName !== '', 25000))) {
+        failE(heroId + ' on ' + levelId + ': the level did not build')
+        return
+      }
+      await until(() => running('Hud'), 12000)
+      await sleep(700)
+      const GE = scene('Game')
+      const hudE = scene('Hud')
+      const slotsE = hudE.slots || []
+      const label = (heroId + '/' + levelId).padEnd(20)
+
+      // 1. EVERY ABILITY ICON THE MANIFEST DECLARES, resident or not.
+      const gone = ICON_KEYS.filter((k) => !game.textures.exists(k))
+      if (gone.length) failE(label + 'ability art not loaded: ' + gone.join(', '))
+
+      // 2. EVERY SLOT: what it is wearing and how big it is drawn.
+      const standIns = []
+      const oversize = []
+      for (const s of slotsE) {
+        const r = s.region
+        const key = s.icon.texture.key
+        if (key === AJ2.generated.iconMissing) standIns.push(r.id + '(' + r.icon + ')')
+        if (s.icon.visible && (s.icon.displayHeight > r.boxH + 1
+          || s.icon.displayWidth > r.pitch + 1)) {
+          oversize.push(r.id + ' ' + Math.round(s.icon.displayWidth) + 'x'
+            + Math.round(s.icon.displayHeight) + ' in ' + Math.round(r.pitch)
+            + 'x' + Math.round(r.boxH))
+        }
+      }
+      // 3. ANYTHING FOREIGN ON A SLOT.
+      const own = new Set()
+      for (const s of slotsE) for (const o of [s.icon, s.frame, s.sweep, s.timer, s.hit]) own.add(o)
+      const all = leavesE(hudE.children)
+      const foreign = []
+      for (const s of slotsE) {
+        const r = s.region
+        for (const o of all) {
+          if (own.has(o)) continue
+          const b = o.getBounds()
+          if (b.width <= 0 || b.height <= 0) continue
+          if (b.right < r.x || b.x > r.x + r.pitch) continue
+          if (b.bottom < r.y || b.y > r.y + r.boxH) continue
+          foreign.push(nameE(o) + ' @' + fmtE(b) + ' over ' + r.id + '(' + r.icon + ')')
+        }
+      }
+      note(label + slotsE.length + ' slots  stand-ins=' + (standIns.length || 'none')
+        + '  oversize=' + (oversize.length || 'none')
+        + '  foreign=' + (foreign.length || 'none'))
+      for (const m of standIns) failE(label + 'slot ' + m + ' is wearing the missing-icon stand-in')
+      for (const m of oversize) failE(label + 'slot ' + m)
+      for (const m of foreign) failE(label + m)
+      if (shoot) {
+        note('  bar: ' + slotsE.map((s) => s.region.id + '=' + s.icon.texture.key
+          + '@' + Math.round(s.icon.displayWidth) + 'x' + Math.round(s.icon.displayHeight)).join('  '))
+        note('  abilities row ' + fmtE(GE.layout.abilities)
+          + '  scale ' + GE.layout.abilityScale.toFixed(3))
+        await shot('elibar-' + heroId + '-' + levelId + '-' + VP.w + 'x' + VP.h)
+      }
+    }
+
+    note('hand: ' + HAND.join(', ') + '   viewport ' + VP.w + 'x' + VP.h)
+    for (const lv of LEVELS) await sweep('eli', lv, lv === 'level6')
+    for (const h of HEROES) if (h !== 'eli') await sweep(h, 'level6', h === 'cory')
+
+    note('RESULT ' + (faultsE === 0
+      ? 'no stand-in, no oversized icon and nothing foreign on the ability bar, '
+        + 'across ' + (LEVELS.length + HEROES.length - 1) + ' boards'
+      : '*** ' + faultsE + ' fault(s) on the ability bar ***'))
     return
   }
   if (scenario === 'courtland') {
