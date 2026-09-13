@@ -64,7 +64,8 @@ const SCENARIO_NAMES = [
   'enemyfacing', 'everyloadout', 'facing', 'fps', 'full', 'full13', 'fx',
   'game', 'gateway', 'gestures', 'glacier', 'gnomes', 'goblin', 'heroanim',
   'heroblock', 'herochip', 'herofx', 'herohp', 'lane', 'leak', 'ledger',
-  'lettering', 'level6', 'level8', 'levelart', 'levels', 'listenerguard', 'loadout', 'locked',
+  'lettering', 'level6', 'level7', 'level8', 'levelart', 'levels', 'listenerguard',
+  'loadout', 'locked',
   'loopthrow', 'looptrack', 'lost', 'mapedge', 'maproute', 'markers',
   'meteor', 'mix', 'modal', 'moes', 'music', 'muzzle', 'nightfall',
   'nodefirst', 'noderings', 'notch', 'nuke', 'nukeseq', 'nullframe',
@@ -110,7 +111,7 @@ const ASSERTS_NOTHING = new Set([
  * scenario joins this list when its checks go through `expect`.
  */
 const USES_EXPECT = new Set([
-  'typegame', 'rotationburst', 'level8',
+  'typegame', 'rotationburst', 'level7', 'level8',
 ])
 
 /** How many checks this run actually EVALUATED, pass or fail. */
@@ -14426,6 +14427,276 @@ async function run() {
    * other road" is a claim about geometry this pass authored and not about
    * geometry somebody painted.
    */
+  if (scenario === 'level7') {
+    /*
+     * LEVEL 7, IN A RENDERED FRAME. Everything below is checked against the
+     * real scene: three lanes that all spawn and all cost lives, a mini boss
+     * that cannot be held, slowed or stunned and that cuts the player's own
+     * units, a boss that unloads four named cars where it fell, the world-map
+     * node, LEVEL 8 REACHABLE BEHIND IT, and the cakes.
+     *
+     * NO HARNESS-ONLY ROW. Level 7 is registered, which is the point of the
+     * pass this scenario belongs to, and the first thing it checks is that the
+     * registry really has it -- see the level8 scenario above for the row this
+     * one replaced.
+     */
+    const L7 = await import('./js/systems/Levels.js')
+    const RS7 = await import('./js/systems/RunState.js')
+    const SAVE7 = await import('./js/systems/Save.js')
+    const WR7 = await import('./js/systems/WorldRoad.js')
+    const Enemy7 = (await import('./js/entities/Enemy.js')).Enemy
+    const ENEMIES7 = (await import('./js/data/enemies.json', { with: { type: 'json' } })).default
+    const runWave = (n) => {
+      const G2 = scene('Game')
+      if (n !== undefined) G2.status.wave = n
+      G2.status.phase = 'ready'
+      G2.startWave()
+      return G2.status.phase === 'wave'
+    }
+
+    expect(L7.LEVELS.some((l) => l.id === 'level7'), 'level 7 has no row in levels.json')
+    const row7 = L7.LEVELS.find((l) => l.id === 'level7')
+    expect(row7 && row7.unlockedBy === 'level6',
+      'level 7 is unlocked by ' + (row7 && row7.unlockedBy) + ', not level 6')
+
+    /* ---- THE NODE ON THE WORLD MAP, LOCKED THEN OPEN ---- */
+    // And level 8's node in the same pass, because "level 8 is reachable" is
+    // the thing this whole level was blocking and a claim about a screen is
+    // only worth what a rendered frame of it says.
+    for (const cleared of [['level1', 'level2', 'level3', 'level4', 'level5'],
+                           ['level1', 'level2', 'level3', 'level4', 'level5', 'level6'],
+                           ['level1', 'level2', 'level3', 'level4', 'level5', 'level6', 'level7']]) {
+      SAVE7.writeSave({ ...SAVE7.DEFAULT_SAVE, clearedLevels: cleared })
+      for (const k of ['Title', 'WorldMap', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+      game.scene.start('WorldMap')
+      if (!(await until(() => running('WorldMap'), 12000))) {
+        expect(false, 'the world map did not open'); break
+      }
+      await sleep(600)
+      for (const id of ['level7', 'level8']) {
+        const node = WR7.roadNodes().find((n) => n.level && n.level.id === id)
+        expect(!!node, id + ' has no node on the road')
+        if (!node) continue
+        const state = WR7.nodeState(node, cleared)
+        const prereq = id === 'level7' ? 'level6' : 'level7'
+        // THREE STATES, NOT TWO. `nodeState` says `cleared` for a level in the
+        // list, `open` for one whose prerequisite is, and `locked` otherwise --
+        // so the third pass here, which has level 7 cleared, must want
+        // `cleared` on its node and `open` on level 8's.
+        const want = cleared.includes(id) ? 'cleared'
+          : (cleared.includes(prereq) ? 'open' : 'locked')
+        note('world map with ' + cleared.length + ' cleared: ' + id + ' is slot '
+          + (node.index + 1) + ' at ' + Math.round(node.x) + ',' + Math.round(node.y)
+          + ' and reads ' + state)
+        expect(state === want,
+          id + ' reads ' + state + ' with ' + cleared.length + ' cleared, wanted ' + want)
+      }
+      await shot('level7-0-map-' + cleared.length)
+    }
+
+    /* ---- THE BOARD ---- */
+    for (const k of ['Title', 'WorldMap', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+    RS7.setRunState({
+      heroId: 'cory', levelId: 'level7', seed: 5, abilities: ['molotov', 'glacier'],
+      openingTowers: ['withholding', 'writeoff'], reserveTowers: [], resumeFrom: null,
+    })
+    game.scene.start('Game')
+    if (!(await until(() => running('Game') && scene('Game').hero, 20000))) {
+      expect(false, 'level 7 did not start')
+      note('RESULT level 7 did not build'); return
+    }
+    const G = scene('Game')
+    await sleep(700)
+    const laneIds = G.lanes.lanes.map((l) => l.id)
+    note('level 7 built: lanes=' + JSON.stringify(laneIds) + ' pads=' + G.build.spots.length
+      + ' lives=' + G.status.lives + ' plate=' + G.level.map.plate)
+    expect(G.level.id === 'level7', 'the scene is running ' + G.level.id + ', not level7')
+    expect(G.build.spots.length === 22, '22 pads expected, got ' + G.build.spots.length)
+    expect(JSON.stringify(laneIds) === JSON.stringify(['north', 'middle', 'south']),
+      'lanes are ' + JSON.stringify(laneIds))
+    // ALL THREE RUN TO THEIR OWN EXIT. Nothing merges anywhere on this map.
+    const exits = G.lanes.lanes.filter((l) => l.merge === null).map((l) => l.id)
+    expect(exits.length === 3, 'expected three exits, got ' + JSON.stringify(exits))
+    for (const id of laneIds) {
+      const p = G.lanes.lane(id).path
+      note('  lane ' + id + ': ' + Math.round(p.totalLength) + ' px, '
+        + JSON.stringify([Math.round(p.pointAt(0).x), Math.round(p.pointAt(0).y)]) + ' -> '
+        + JSON.stringify([Math.round(p.pointAt(p.totalLength).x),
+          Math.round(p.pointAt(p.totalLength).y)]))
+    }
+    await shot('level7-1-board')
+
+    /* ---- TWENTY OF THE TWENTY-TWO PADS REACH TWO HIGHWAYS ---- */
+    // The number both boss healths were soaked against, re-derived from the
+    // scene's own lane paths rather than from the geometry file.
+    const RANGE7 = 112
+    const covers = G.build.spots.map((s) =>
+      laneIds.filter((id) => G.lanes.lane(id).path.distanceTo(s.x, s.y) <= RANGE7).length)
+    const doubles = covers.filter((n) => n >= 2).length
+    note('  pads reaching two highways at tower range ' + RANGE7 + ': ' + doubles + ' of '
+      + covers.length + '; reaching none: ' + covers.filter((n) => n === 0).length)
+    expect(doubles === 20, doubles + ' pads reach two highways, wanted 20')
+
+    /* ---- ALL THREE LANES SPAWN ---- */
+    if (!runWave(9)) expect(false, 'wave 10 would not start')
+    const seen = new Set()
+    const tSpawn = Date.now()
+    while (Date.now() - tSpawn < 12000 && seen.size < 3) {
+      for (const e of G.enemies) seen.add(e.laneId)
+      await sleep(100)
+    }
+    note('  wave 10 spawned on: ' + JSON.stringify([...seen]))
+    expect(seen.size === 3, 'only ' + [...seen].join(',') + ' ever spawned')
+    await shot('level7-2-three-lanes')
+
+    /* ---- AND ALL THREE EXITS COST LIVES ---- */
+    // Driven rather than waited for: an enemy is put a few pixels short of a
+    // terminal and stepped over it, which is the same code path a leak takes
+    // after a 1,400 px walk.
+    for (const e of [...G.enemies]) e.destroy()
+    G.enemies = []
+    const leakAt = async (laneId) => {
+      const before = G.status.lives
+      const lane = G.lanes.lane(laneId)
+      const e = new Enemy7(G, ENEMIES7.hatchback, lane.path, G.gateway,
+        { lanes: G.lanes, laneId, startAt: { laneDistance: lane.path.totalLength - 6, distance: 0 } })
+      G.enemies.push(e)
+      await sleep(600)
+      const lost = before - G.status.lives
+      note('  leak at the ' + laneId + ' exit: lives ' + before + ' -> ' + G.status.lives)
+      expect(lost >= 1, 'a leak at the ' + laneId + ' exit cost ' + lost + ' lives')
+    }
+    for (const id of laneIds) await leakAt(id)
+    await shot('level7-3-leaked')
+
+    /* ---- THE BLADE RIG CANNOT BE HELD, SLOWED OR STUNNED ---- */
+    for (const e of [...G.enemies]) e.destroy()
+    G.enemies = []
+    const mid = G.lanes.lane('middle').path
+    const rig = new Enemy7(G, ENEMIES7.bladeRig, mid, G.gateway, {
+      lanes: G.lanes, laneId: 'middle',
+      startAt: { laneDistance: mid.totalLength * 0.45, distance: 0 },
+    })
+    G.enemies.push(rig)
+    await sleep(200)
+    const RULES7 = (await import('./js/data/rules.json', { with: { type: 'json' } })).default
+    rig.applySlow(0.45, 4, RULES7.combat.slowDiminish)
+    rig.applyStun(2, RULES7.combat.stunLockoutMultiple, RULES7.combat.stunDiminish)
+    note('  the Rig after a slow and a stun: slowRemaining=' + rig.slowRemaining
+      + ' stunRemaining=' + rig.stunRemaining + ' blockable=' + rig.blockable)
+    expect(rig.slowRemaining <= 0, 'the Blade Rig was slowed')
+    expect(rig.stunRemaining <= 0, 'the Blade Rig was stunned')
+    expect(rig.blockable === false, 'the Blade Rig can be held')
+    // AND IT KEEPS WALKING, which is the thing the three flags are for.
+    const wasAt = rig.laneDistance
+    await sleep(900)
+    note('  and it walked ' + Math.round(rig.laneDistance - wasAt) + ' px anyway')
+    expect(rig.laneDistance > wasAt + 10, 'the Blade Rig stopped')
+
+    /* ---- AND IT CUTS WHAT STANDS IN THE ROAD ---- */
+    // The hero is put ON the Rig and the frame is allowed to run. Towers are
+    // deliberately out of scope, so only the hero and the lads can be cut.
+    const BLADES7 = await import('./js/systems/Blades.js')
+    const blades = BLADES7.bladesFrom(L7.levelRules('level7'))
+    expect(!!blades, 'level 7 has no blades in the scene')
+    G.hero.setPosition(rig.x, rig.y)
+    const hpBefore = G.hero.health
+    await sleep(900)
+    const cut = hpBefore - G.hero.health
+    note('  the hero standing on the Rig for ~0.9s: ' + hpBefore + ' -> ' + G.hero.health
+      + ' (' + cut.toFixed(1) + ' damage, rate ' + blades.damagePerSecond + '/s)')
+    expect(cut > 0, 'the blades did nothing to a hero standing in the road')
+    // ...and a hero standing clear of the road is safe, which is what makes
+    // "get out of the way" an answer rather than a hope.
+    G.hero.setPosition(rig.x, rig.y - blades.radius - 40)
+    const clearBefore = G.hero.health
+    await sleep(700)
+    note('  and standing ' + (blades.radius + 40) + ' px clear: ' + clearBefore
+      + ' -> ' + G.hero.health)
+    expect(G.hero.health >= clearBefore - 0.001, 'the blades reached a hero off the road')
+    await shot('level7-4-blade-rig')
+
+    /* ---- THE TRANSPORTER UNLOADS FOUR NAMED CARS WHERE IT DIED ---- */
+    for (const e of [...G.enemies]) e.destroy()
+    G.enemies = []
+    G.hero.setPosition(40, 40)
+    const boss = new Enemy7(G, ENEMIES7.transporter, mid, G.gateway, {
+      lanes: G.lanes, laneId: 'middle',
+      startAt: { laneDistance: mid.totalLength * 0.5, distance: 0 },
+    })
+    G.enemies.push(boss)
+    await sleep(200)
+    const diedAt = { x: boss.x, y: boss.y, d: boss.laneDistance }
+    note('  the Transporter dies at ' + Math.round(diedAt.d) + ' px of ' + Math.round(mid.totalLength)
+      + ', at ' + Math.round(diedAt.x) + ',' + Math.round(diedAt.y))
+    G.damageEnemy(boss, 999999, true, 0, false)
+    // The cars come off over a short beat, so this waits for the last one
+    // rather than reading the frame the first appeared on.
+    // WHERE EACH CAR APPEARED, recorded the first frame it is seen rather than
+    // read at the end. They come off over a short beat and start walking the
+    // moment they are on the road, so a distance read after the last one has
+    // arrived is the first one's position a second later -- which is how this
+    // check first reported two cars "ahead of where the boss died".
+    const tCars = Date.now()
+    const cars = () => G.enemies.filter((e) => e.alive && e.summonedBy === boss)
+    const appearedAt = new Map()
+    while (Date.now() - tCars < 4000 && appearedAt.size < 4) {
+      for (const c of cars()) if (!appearedAt.has(c)) appearedAt.set(c, c.laneDistance)
+      await sleep(40)
+    }
+    const out = [...appearedAt.keys()]
+    const colours = out.map((e) => e.def.sprite).sort()
+    note('  ' + out.length + ' cars off the trailer: ' + JSON.stringify(colours))
+    expect(out.length === 4, out.length + ' cars came off the trailer, wanted 4')
+    expect(JSON.stringify(colours) === JSON.stringify(['enemy-cargo-blue', 'enemy-cargo-green',
+      'enemy-cargo-red', 'enemy-cargo-yellow']), 'the four cars are not one of each colour')
+    for (const c of out) {
+      expect(c.laneId === 'middle', 'a car came off onto the ' + c.laneId + ' lane')
+      expect(appearedAt.get(c) <= diedAt.d + 0.001,
+        'a car appeared AHEAD of where the boss died, which is a clamp by another name')
+      expect(diedAt.d - appearedAt.get(c) <= 3 * 44 + 0.001,
+        'a car appeared further back than the declared spacing')
+    }
+    // THE FIRST ONE IS EXACTLY WHERE IT FELL. That is the risk Cory kept, and
+    // this is the assertion that stops a later pass softening it.
+    note('  they appeared at ' + JSON.stringify([...appearedAt.values()]
+      .map((d) => Math.round(diedAt.d - d))) + ' px behind the death point')
+    expect(Math.min(...[...appearedAt.values()].map((d) => diedAt.d - d)) < 0.001,
+      'no car is at the death point; a minimum spawn distance has been added')
+    await shot('level7-5-unloaded')
+    // AND THEY WALK FORWARD.
+    const before = out.map((c) => c.laneDistance)
+    await sleep(700)
+    const moved = out.filter((c, i) => c.laneDistance > before[i] + 5).length
+    note('  after 0.7s, ' + moved + ' of ' + out.length + ' cars have moved forward')
+    expect(moved === out.length, 'a car off the trailer is standing still')
+    // AND THE WAVE WAITS FOR THEM. `holdsWave` is what the scene's wave-over
+    // check reads, and everything else summoned in this game answers false.
+    for (const c of out) expect(c.holdsWave === true, 'a car does not hold the wave open')
+    const glider = new Enemy7(G, ENEMIES7.glider, mid, G.gateway, {
+      lanes: G.lanes, laneId: 'middle', summonedBy: boss,
+      startAt: { laneDistance: mid.totalLength * 0.5, distance: 0 },
+    })
+    expect(glider.holdsWave === false,
+      'an ordinary summoned child holds the wave open; killing a boss would stall every level')
+    glider.destroy()
+
+    /* ---- CAKES ---- */
+    const CAKES7 = await import('./js/systems/Cakes.js')
+    const start7 = G.status.startingLives
+    for (const [lives, want] of [[start7, 3], [Math.ceil(start7 / 2), 2], [1, 1]]) {
+      const got = CAKES7.cakesFor(true, lives, start7)
+      note('  cleared with ' + lives + '/' + start7 + ' lives: ' + got + ' cakes')
+      expect(got === want, 'cleared with ' + lives + ' lives paid ' + got + ' cakes, wanted ' + want)
+    }
+    expect(CAKES7.cakesFor(false, 0, start7) === 0, 'a lost run paid cakes')
+
+    note('RESULT ' + (ASSERT_FAILS === 0
+      ? ASSERTIONS + ' checks, all passed'
+      : '*** ' + ASSERT_FAILS + ' of ' + ASSERTIONS + ' checks failed ***'))
+    return
+  }
+
   if (scenario === 'level8') {
     /*
      * LEVEL 8, IN A RENDERED FRAME. Everything below is checked against the
@@ -14442,18 +14713,23 @@ async function run() {
      * only, and says so in its own output. tools/soak/level.ts does the same
      * for the same reason and with the same row.
      */
+    /*
+     * THE HARNESS-ONLY ROW IS GONE. This scenario used to push level 8's row
+     * into `LEVELS` itself, because the level was built and parked: it is
+     * unlocked by level 7, level 7 had no row, and a shipped row would have
+     * been a permanently locked node. Registering level 7 gave level 8 the
+     * prerequisite it was waiting for and both rows landed together, so the
+     * scenario now runs the real registry -- and asserts that it does, which is
+     * the same tripwire pointed the other way.
+     */
     const L8 = await import('./js/systems/Levels.js')
-    if (!L8.LEVELS.some((l) => l.id === 'level8')) {
-      L8.LEVELS.push({
-        id: 'level8', name: 'The Optimization', unlockedBy: 'level7',
-        waves: 'waves.level8.json', laneLengthPx: 3646.5, rules: 'level8.json',
-      })
-    }
-    note('HARNESS-ONLY: level 8 has no row in levels.json (it is unlocked by level 7, '
-      + 'which does not exist yet); this scenario registers the row it will have so the '
-      + 'level can be looked at. The product does NOT have it.')
-    expect(!L8.LEVELS.some((l) => l.id === 'level7'),
-      'level 7 exists now, so level 8 should have a real row rather than this one')
+    expect(L8.LEVELS.some((l) => l.id === 'level8'),
+      'level 8 has no row in levels.json; it is parked again')
+    expect(L8.LEVELS.some((l) => l.id === 'level7'),
+      'level 7 has no row, so level 8 is unreachable behind a prerequisite that does not exist')
+    const row8 = L8.LEVELS.find((l) => l.id === 'level8')
+    expect(row8 && row8.unlockedBy === 'level7',
+      'level 8 is unlocked by ' + (row8 && row8.unlockedBy) + ', not level 7')
 
     const RS8 = await import('./js/systems/RunState.js')
     const runWave = (n) => {

@@ -709,7 +709,7 @@
     "role": "boss",
     "tier": "boss",
     "sprite": "enemy-ceo",
-    "maxHealth": 9000,
+    "maxHealth": 8500,
     "armor": 8,
     "speed": 28,
     "peanutReward": 1800,
@@ -738,7 +738,7 @@
       }
     ],
     "_onHealthThreshold": "A LIST, WHICH IS NEW: the field held one object for Batula's roar at 50% and level 8 needed two phases, so it now takes either shape -- one object unwrapped, several as a list, exactly the way `LaneDef.merge` reads. Batula's row is untouched. Each threshold fires ONCE PER ENEMY and they are latched independently, so a boss healed back above 70% does not summon again.\nTHE CAP IS 6, NOT 8. It counts the drones of THIS boss that are still alive, so the second phase tops the board up to six rather than adding four unconditionally: a player who cleared the first four gets the full second wave, and a player who is drowning in them does not get eight. Four plus four with no cap is a board state nobody chose.",
-    "_maxHealth": "DERIVED FROM THE SOAK, NOT BRIEFED, and it must never be compared to another level's boss. 19 pads is more board than any other level in the game -- levels 2 to 6 carry 15, 15, 14, 14 and 18 -- and a boss's health only means anything against the DPS the board it walks past can hold. See the sensitivity table in reports/2026-09-12-level-8.md for how this number was chosen and what moves it.",
+    "_maxHealth": "8,500, RE-DERIVED AFTER LEVEL 8'S WAVE CURVE WAS FIXED. It was 9,000, soaked to 207/480 (43%) against a wave table whose curve had never been measured -- level 8 had no row in levels.json, so tests/content.test.ts's no-cliff rule never ran over it. Registering level 7 gave level 8 a row and the rule found five faults; flattening them took six counts out of the table, and a level that is purse-bound reads a body count as a difficulty number. At 9,000 the level then soaked 153/480 (32%), below the band. The table at 120 seeds: 6,500 -> 74%, 7,500 -> 57%, 8,500 -> 40%, 9,000 -> 32%. See reports/2026-09-13-level-7.md.",
     "_damage": "0 AND `blockable: false`, like every other standing boss: he walks through the line rather than being held by it, so there is nothing for him to hit. The fight is the health and the two summon phases, which is what the brief asks for -- the difficulty of this level is the 3,646 px route and the gate, not a boss with a gimmick."
   },
   "hatchback": {

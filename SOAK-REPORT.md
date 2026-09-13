@@ -4,12 +4,227 @@ Newest first.
 
 ---
 
+## 2026-09-13 — level 7 soaked, and a board the scripted player could not see
+
+### The headline
+
+**The Transporter is 3,000 health, the Blade Rig is 600, and level 7 soaks at
+51/120 (43%) on normal and 198/480 (41%).** Inside the 35-45% band.
+
+**Level 8 moved and had to be re-derived: the CEO is 8,500, not 9,000.**
+Registering level 7 gave level 8 a row, the row put its wave table under
+`tests/content.test.ts`'s no-cliff rule for the first time, the rule found five
+faults, and flattening them took six counts out of a level that is purse-bound.
+
+```bash
+node --experimental-strip-types tools/soak/level.ts 120 level7
+node --experimental-strip-types tools/soak/level.ts 480 level7
+node --experimental-strip-types tools/soak/level.ts 480 level8
+```
+
+**Hero rotation: none.** `level.ts` passes no hero, so every one of these runs
+is CORY. `run.ts` is the driver that rotates heroes by seed; nothing below does.
+No hero's values were touched.
+
+**Nothing is parked any more.** `PARKED` in `tools/soak/level.ts` is empty:
+level 8 was its one entry and both rows landed together.
+
+### THE SCRIPTED PLAYER COULD NOT SEE THIS BOARD
+
+Level 7 opened at **0/30 and would not move**. Not at 40% of the brief's
+rank-and-file health, not at 240 peanuts a kill, not with the boss healths at
+400 and 600. A level that does not respond to its own levers is not badly tuned,
+it is broken somewhere else, and here is where.
+
+The board is two medians of ten pads, every one placed at exactly the house
+standoff, so **twenty pads rank 91.0 px from the road**. `byReach` sorted by that
+distance and fell back to the order the array happens to list them in — which is
+the tracer's, north median first. So the sim bought eight towers in a row 276 px
+from the south highway and never touched it:
+
+    rank-and-file health   wins/40   lives lost by exit
+    34 (40%)                0        south 71%  middle 25%  north 4%
+    51 (60%)                0        south 65%  middle 27%  north 9%
+    68 (80%)                0        south 55%  middle 40%  north 5%
+    85 (the brief's)        0        south 55%  middle 42%  north 3%
+
+**It is the level 6 flank failure in the other disguise.** There the ranking was
+meaningful and the traffic was not; here the traffic is fine and the ranking has
+no information in it. Both report a board nobody would play that way as
+impossible. Ties are now dealt round-robin over the lane each pad is nearest to.
+A tie group of one is every group on levels 1 to 6, so those are bit-identical —
+see the table at the bottom.
+
+### THE OPENING WAS TWICE THE WORST IN THE GAME
+
+Wave 1 demand, measured as health per second of lane crossing times bodies:
+
+    level 1   1.94 hp/s x 4   =  7.8
+    level 2   1.96 hp/s x 5   =  9.8
+    level 5   2.24 hp/s x 4   =  9.0
+    level 3   6.10 hp/s x 2   = 12.2
+    level 6   3.26 hp/s x 4   = 13.0
+    level 8   2.58 hp/s x 7   = 18.1
+    level 4   8.22 hp/s x 3   = 24.7   <- the previous worst
+    level 7   7.59 hp/s x 6   = 45.5   <- the brief's
+
+And a tower at this board's standoff covers about **238 px** of the lane beside
+it, which is **1.9 seconds** of a 125 px/s Rust Bucket against level 1's 4.1 and
+level 6's 2.9. At 85 health the FIRST tower a player builds cannot kill
+anything at all. The opening is three cars on one road at 60 health now, on a
+curve of 240 growing 36% a wave.
+
+### AND THE BOARD NEVER CAME UP
+
+Towers standing at the end of each wave, seed 1:
+
+    wave       1   2   3   4   5   6   7   8   9  10  11  12  13
+    level 6    1   3   5   7  11  15  18  18  18  18  18  18  18
+    level 7    1   2   2   2   3   3   —   —   —   —   —   —   —   (lost at wave 6)
+
+Three independent lanes need roughly three times the guns of one road and need
+them early. The rank and file pays 26/55/90 now, against the brief's 10/18/32.
+**90 is a ceiling rather than a choice:** `tests/rules.test.ts` asks every boss
+to pay at least ten times the best ordinary kill and the smallest boss purse in
+the game is the Politician's 900, so no rank-and-file enemy anywhere may pay
+more than 90 without retuning level 1.
+
+### THE FINALE WAS NOT ROUTED WHERE IT LOOKED BEST
+
+One variable at a time, 40 seeds, reverting between rows.
+
+**The Transporter down the SOUTH highway** — 11 of 22 pads bear on it and its
+last 189 px are nobody's:
+
+    transporter.maxHealth    600 -> 45%   1100 -> 23%   1600 -> 15%   2100 -> 5%
+
+**The same boss down the MIDDLE** — 94.1% covered, both medians bearing:
+
+    transporter.maxHealth    650 -> 68%   1500 -> 68%   2500 -> 57%   3500 -> 38%
+
+Routed south the level lands in band at **650 health — less than the wave 8
+mini boss's**, and the fight is a deadline against a stretch of road rather than
+a contest with the board. It is routed down the middle at **3,000**.
+
+**Its armour was swept too, and the table came back flat:**
+
+    transporter.armor          0 -> 43%      6 -> 45%     12 -> 43%     18 -> 43%
+
+So health is what controls this fight and armour is flavour. That is the
+complement of level 8's HR aura rather than a repeat of it: there the flat table
+meant the mechanic did nothing, here it means the other variable does everything.
+
+**The Blade Rig**, at 40 seeds with the Transporter at 800:
+
+    bladeRig.maxHealth       400 -> 40%    800 -> 35%   1200 -> 35%   1600 -> 28%
+
+**600 as shipped.** Both numbers are small and both are about THIS board: at
+45 px/s the Rig is inside one tower's reach for 5.3 seconds, and on its second
+appearance it walks the south highway. **Do not compare either to another
+level's boss.**
+
+### THE LATE-KILL RISK, MEASURED RATHER THAN CLAMPED
+
+The Transporter does not die, it unloads: four cars come off the trailer **at
+the place it fell**. Eli raised that a kill next to the exit puts four cars next
+to the exit — up to eight lives with no chance to respond — and Cory kept the
+risk. There is no clamp, no minimum spawn distance and no grace period. Over
+480 seeds:
+
+| | |
+|---|---|
+| runs in which it was killed at all | 307 of 480 |
+| mean road left at the kill | **473 px** of 1,400 |
+| median | 464 px |
+| best | 912 px |
+| **worst** | **106 px** |
+| killed inside the last 300 px | **31 of 307 (10%)** |
+| losing runs ended by a car off the trailer | **109 of 282 (39%)** |
+
+**The catastrophe Eli described is real but rare; the ordinary version of it is
+the level's single biggest cause of loss.** One run in ten kills the boss inside
+the last 300 px, and the worst case measured left 106 px — under a second for a
+140 px/s car. But four cars at two lives each, arriving half a lane out against
+a player who is already low, ended 39% of every losing run. **That is not a bug
+and it is not the disaster that was feared; it is the finale doing exactly what
+it was designed to do, and it is worth Cory knowing the size of it.**
+
+### WHERE THE LIVES WENT, 480 seeds
+
+    level 7  lost after wave: w4x6 w5x70 w6x62 w8x7 w9x13 w10x2 w11x7 w12x115
+             lives lost by exit: south 4693 (69%)  middle 1933 (29%)  north 134 (2%)
+             the exit that ended the run: south 49%  middle 44%  north 7%
+
+Two clusters. **132 of the 282 losses are waves 5 and 6**, which is the board
+still coming up; **115 are wave 12 and the finale**. The south highway takes 69%
+of every life lost on 24% of the traffic, which is the map: 11 pads bear on it
+against the middle's 20, and its last 189 px cannot be covered at all.
+
+### LEVEL 8 HAD TO BE RE-DERIVED, AND REGISTERING LEVEL 7 IS WHY
+
+`tests/content.test.ts`'s no-cliff rule runs over every table in `levels.json`.
+Level 8 had no row, so **its curve had never once been measured**. Five of its
+thirteen steps were faults — wave 2 was 100% heavier than wave 1, wave 8 was
+56.8%, wave 13 was 90.7%, and waves 10 and 12 were *lighter* than the waves
+before them. Six counts moved: wave 1 gained two Interns, waves 8 and 9 lost one
+and two, wave 11 lost a Middle Management and an HR, and wave 13 lost three
+Middle Managements off a 2,400-point spike.
+
+Level 8 is purse-bound — fewer enemies is less income is harder, monotonically,
+which is that level's own published finding — so taking seven bodies out of it
+moved the number: **153/480 (32%)** at the CEO's 9,000, below the band. Swept at
+120 seeds:
+
+    ceo.maxHealth           6500 -> 74%   7500 -> 57%   8500 -> 40%   9000 -> 32%
+
+**8,500 as shipped, confirmed at 480 seeds: 195/480 (41%)**, back inside the
+band and four points off where it was before its curve was fixed.
+
+    level8 [normal]: 195/480 wins  (41%)
+      lost after wave: w4x5 w5x9 w6x9 w7x12 w8x6 w9x4 w10x8 w11x1 w12x2 w13x229
+      lives lost by exit: south 4395 (68%)  east 2096 (32%)
+      the exit that ended the run: south 84% of losses, east 16%
+
+**HR's armour aura is still open and still does nothing.** 85 enemies a run
+stand in one and the win rate does not notice — that finding is unchanged by
+this pass and is carried forward.
+
+### LEVELS 1 TO 6 DID NOT MOVE
+
+480 seeds, the same seeds, all-Cory, normal. The left column is what
+`SOAK-REPORT.md` published on 2026-09-12.
+
+| level | published | this pass | |
+|---|---|---|---|
+| level1 | 428/480 (89%) | 428/480 (89%) | identical |
+| level2 | 255/480 (53%) | 255/480 (53%) | identical |
+| level3 | 422/480 (88%) | 422/480 (88%) | identical |
+| level4 | 299/480 (62%) | 299/480 (62%) | identical |
+| level5 | 218/480 (45%) | 218/480 (45%) | identical |
+| level6 | 210/480 (44%) | 210/480 (44%) | identical |
+
+The pad tie-break, the two new mechanics and the release queue are all
+scoped: a tie group of more than one pad exists only on level 7, `bladesFrom`
+returns null everywhere else, and `splitsOnDeath.holdsWave` and
+`emergeSeconds` are absent from every other row in `enemies.json`.
+
+**Levels 1 and 3 are still outside the band at 89% and 88%.** Pre-existing,
+carried forward again, and not touched by this pass.
+
+---
+
 ## 2026-09-12 — level 8 soaked, and a level that gets HARDER when you take enemies out of it
 
 ### The headline
 
 **The CEO is 9,000 health, and level 8 soaks at 47/120 (39%) on normal and
 207/480 (43%).** Both inside the 35-45% band.
+
+> **SUPERSEDED 2026-09-13.** The CEO is **8,500** and the level soaks at
+> **195/480 (41%)**. Registering level 7 put this wave table under the no-cliff
+> rule for the first time, the rule found five faults in it, and flattening them
+> moved a purse-bound level. The numbers below are the state before that; see
+> the 2026-09-13 entry above.
 
 ```bash
 node --experimental-strip-types tools/soak/level.ts 120 level8
