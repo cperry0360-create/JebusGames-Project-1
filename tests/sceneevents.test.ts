@@ -337,19 +337,26 @@ test('the HUD draws no counter whose art the manifest cannot resolve', () => {
   // The other half of "missing icons": a counter plate is drawn straight from
   // ART.ui.counters, so a name that resolves to nothing draws nothing at all
   // and the counter is simply absent — which is what a HUD missing its lives
-  // and wave pills looks like. The three names HudScene asks for are hardcoded
-  // in buildCounters, so they are hardcoded here too, on purpose.
+  // pill looks like.
+  //
+  // TWO NAMES NOW, NOT THREE. The top-left group is peanuts and lives stacked;
+  // the wave number is read off the control in the opposite corner, which had
+  // to name the wave it was about to start anyway. `wave` is still a key in
+  // art.json and is deliberately NOT checked here: nothing draws it, and a
+  // check that guards an unread name is a check that will one day fail for a
+  // reason nobody can act on.
   const art = JSON.parse(src('data/art.json'))
   const counters = art.ui.counters as Record<string, string>
-  for (const name of ['peanuts', 'lives', 'wave']) {
+  const hud = code('scenes/HudScene.ts')
+  const list = /const READOUTS = \[([^\]]*)\]/.exec(hud)
+  assert.ok(list, 'HudScene no longer declares which readouts it builds')
+  const names = [...list[1]!.matchAll(/'([a-z]+)'/g)].map((m) => m[1]!)
+  assert.deepEqual(names, ['peanuts', 'lives'],
+    'HudScene builds a different set of readouts than this check guards')
+  for (const name of names) {
     const key = counters[name]
     assert.ok(key, `art.json names no counter plate for "${name}"; HudScene would draw nothing`)
     assert.ok(art.files[key],
       `the ${name} counter points at "${key}", which is not a file in the manifest`)
   }
-  // HudScene must keep asking for exactly these three, or the check above is
-  // guarding names nothing reads.
-  const hud = code('scenes/HudScene.ts')
-  assert.match(hud, /\['peanuts', 'lives', 'wave'\]/,
-    'HudScene no longer builds its counters from those three names')
 })

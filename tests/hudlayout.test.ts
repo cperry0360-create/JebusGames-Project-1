@@ -24,7 +24,12 @@ const NOTCH: Insets = { top: 0, right: 44, bottom: 21, left: 44 }
 
 /** Three counter plates and a full hand of abilities — the widest the HUD
  *  ever gets. */
-const WIDEST = { countersWidth: 350, abilitiesWidth: 370 }
+// `countersWidth` IS ONE READOUT'S WIDTH NOW, NOT THREE PLATES IN A ROW.
+// The top-left group is peanuts and lives STACKED, so what the layout needs
+// is the wider of the pair -- 48 CSS px at the shipped `readoutHeight` of 20
+// -- where it used to be the sum of three 44px-tall plates and their gaps.
+// Leaving 333 here would be measuring a HUD the game does not draw.
+const WIDEST = { countersWidth: 48, abilitiesWidth: 370 }
 
 test('no two HUD elements overlap, at any viewport, notch or not', () => {
   for (const [name, width, height] of VIEWPORTS) {

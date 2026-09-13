@@ -121,7 +121,25 @@ export function centerRange(
   marginPx = 0,
 ): { min: number; max: number } {
   const half = viewSize / (2 * Math.max(zoom, 0.0001))
-  if (half * 2 >= worldSize) return { min: worldSize / 2, max: worldSize / 2 }
+  // THE VIEW COVERS THE WHOLE WORLD ON THIS AXIS, and this branch used to pin
+  // the centre to the world's middle outright -- a zero-width range, no slack,
+  // the camera immovable.
+  //
+  // THAT PIN IS WHAT MADE A BUILD PAD UNREACHABLE. The map is full-bleed and
+  // the run opens at cover zoom, so on a 16:9 plate in a 16:9 window the view
+  // covers the world on BOTH axes and the camera cannot move at all. A pad
+  // painted near the top or bottom edge of the plate therefore renders under
+  // the HUD band and there is no camera position that takes it out -- not a
+  // hard pad to tap, an impossible one. `tools/harness/run.sh padhud` counted
+  // twelve such pads on level 6 alone at 667x375.
+  //
+  // The margin now applies here too, so "the whole world fits" still allows
+  // the player to nudge it by exactly the margin. The margin is passed as the
+  // HUD's band height on the vertical axis and stays 0 on the horizontal,
+  // where nothing is docked.
+  if (half * 2 >= worldSize) {
+    return { min: worldSize / 2 - marginPx, max: worldSize / 2 + marginPx }
+  }
   return { min: half - marginPx, max: worldSize - half + marginPx }
 }
 

@@ -87,6 +87,25 @@ export interface CameraLimits {
   minZoom?: number
   /** How far past the map edge the view may reach before panning stops. */
   boundsMarginPx?: number
+  /**
+   * The taller HUD band, in PHYSICAL screen pixels.
+   *
+   * The vertical allowance, and it is separate from `boundsMarginPx` because
+   * the two axes are not symmetric: the HUD is docked to the TOP and BOTTOM of
+   * a full-bleed map and nothing is docked to the sides. The camera needs
+   * enough vertical slack to take a build pad out from under a band, and none
+   * horizontally.
+   *
+   * PHYSICAL PIXELS, NOT WORLD UNITS, and not CSS pixels either. `centerRange`
+   * wants world units, and how many world units a band covers depends on the
+   * zoom -- so the conversion is `band / zoom` and it happens per frame in
+   * `update`, where the zoom for that frame is known. Handing it a world value
+   * would be right at exactly one zoom.
+   *
+   * Set by `setHudBand` from the live layout rather than authored: the band's
+   * height depends on the viewport and on the safe-area insets.
+   */
+  hudBandPx?: number
   /** Movement in screen pixels that turns a tap into a pan. */
   tapSlopPx: number
   /** Map travel per unit of finger travel. Below 1 so a drag is not twitchy. */
@@ -198,6 +217,7 @@ export class CameraRig {
   constructor(scene: Phaser.Scene, limits: CameraLimits) {
     this.scene = scene
     this.limits = limits
+    this.hudBand = limits.hudBandPx ?? 0
 
     const cam = scene.cameras.main
     // Deliberately no `setBounds`. Phaser's bounds clamp runs in `preRender`
@@ -347,6 +367,24 @@ export class CameraRig {
    * Clamped by `update`'s own limits, so a point outside the world is pinned
    * to the nearest legal view rather than showing the void beside it.
    */
+  /**
+   * How much vertical slack the HUD needs, in physical screen pixels.
+   *
+   * Called whenever the layout is recomputed -- a resize, a rotation, a
+   * safe-area change -- because the band is a function of the viewport. It is
+   * a live value rather than a constructor argument for that reason: the rig
+   * outlives every one of those events.
+   */
+  setHudBand(px: number): void {
+    this.hudBand = Number.isFinite(px) && px > 0 ? px : 0
+  }
+
+  /** Seeded from `limits.hudBandPx` in the constructor and moved by
+   *  `setHudBand` thereafter. It was added as a field and read every frame
+   *  while nothing ever wrote it from the limits, which reads in a diff as
+   *  wired and measures as a no-op. */
+  private hudBand = 0
+
   lookAt(x: number, y: number): void {
     this.targetCenterX = x
     this.targetCenterY = y
@@ -421,8 +459,10 @@ export class CameraRig {
     // Clamped every frame, target and actual alike, so the edge is never
     // crossed in the first place and there is nothing to correct.
     const m = this.limits.boundsMarginPx ?? 0
+    // The band in WORLD units at this frame's zoom. See `hudBandPx`.
+    const my = Math.max(m, this.hudBand / Math.max(z, 0.0001))
     const rx = centerRange(cam.width, this.limits.worldWidth, z, m)
-    const ry = centerRange(cam.height, this.limits.worldHeight, z, m)
+    const ry = centerRange(cam.height, this.limits.worldHeight, z, my)
     const cx = Math.min(Math.max(this.targetCenterX, rx.min), rx.max)
     const cy = Math.min(Math.max(this.targetCenterY, ry.min), ry.max)
     // Momentum must not keep pushing into a wall it cannot pass.

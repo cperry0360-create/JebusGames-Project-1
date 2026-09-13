@@ -151,9 +151,20 @@ test('the run captures its difficulty once and never asks again', () => {
   assert.match(game, /startingPeanuts\(RULES\.startingPeanuts, this\.status\.difficultyId\)/,
     'starting peanuts are not scaled by the run\'s difficulty')
 
-  // The HUD and the end screens read the RUN, never the save.
+  // THE GAME SCREEN DOES NOT SHOW IT AT ALL ANY MORE, and that is the point of
+  // this pair rather than a gap in it. It printed the mode name in dim text at
+  // the left end of the second row, over the map, for the whole run -- the
+  // same class of thing as the hero's name and the DAD MODE badge, both taken
+  // off this screen earlier for the same reason: a fact chosen BEFORE the
+  // level and unable to change during it does not need a permanent readout on
+  // the board. It is on the level select screen, where it is chosen, and on
+  // the results dialog, where the run is being scored.
+  //
+  // The save rule still holds and is the half that would be a bug: whatever
+  // does show it must read the RUN.
   const hud = code('scenes/HudScene.ts')
-  assert.match(hud, /difficultyName\(s\.difficultyId\)/, 'the HUD does not show the difficulty')
+  assert.ok(!/difficultyName/.test(hud),
+    'the difficulty label is back on the game screen')
   assert.ok(!/savedDifficulty|loadSave/.test(hud),
     'the HUD reads the save, so it would show a setting the run is not being played on')
   assert.match(game, /label: 'Difficulty', value: difficultyName\(this\.status\.difficultyId\)/,

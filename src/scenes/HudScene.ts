@@ -19,7 +19,6 @@ import {
   type BarMetrics, type SlotDef, type SlotRegion,
 } from '../systems/AbilityBar.ts'
 import { abilityInSlot, abilityUsable, heroSlotDefs, isHeroSlot } from '../systems/HeroSkills.ts'
-import { difficultyName } from '../systems/Difficulty.ts'
 import { onSceneResize, sceneIsLive } from '../systems/SceneEvents.ts'
 import { fitUiCamera, viewH, viewW } from '../systems/Resolution.ts'
 import { enterGate, leaveGate, noteInputAccepted } from '../systems/InputGates.ts'
@@ -70,11 +69,21 @@ const SOCKET = presentationData.abilityBar.emptySocket as {
 
 /** UI lives in its own scene so the world can Y-sort freely without the HUD
  *  ever landing in the middle of the sort order. */
+/**
+ * The two stacked readouts in the top-left corner, in drawing order.
+ *
+ * `art.json`'s `ui.counters` still carries a third plate, `wave`, and it is
+ * deliberately not in this list: the wave number is read off the control in
+ * the opposite corner, which had to name the wave it was about to start
+ * anyway. The plate stays in the manifest because nothing else is using that
+ * art and deleting it is a separate decision from not drawing it.
+ */
+const READOUTS = ['peanuts', 'lives'] as const
+
 export class HudScene extends Phaser.Scene {
   private world!: GameScene
   private peanutsText!: Phaser.GameObjects.Text
   private livesText!: Phaser.GameObjects.Text
-  private waveText!: Phaser.GameObjects.Text
   /**
    * The hero's portrait chip: the picture, the health over it, the frame
    * round it and the rectangle that takes the tap.
@@ -119,12 +128,10 @@ export class HudScene extends Phaser.Scene {
    *  it shrinks instead of running off the plate. */
   private peanutsField = 999
   private livesField = 999
-  private waveField = 999
   private bossBar!: Phaser.GameObjects.Graphics
   private bossLabel!: Phaser.GameObjects.Text
   /** The run's difficulty, read off the run rather than off the save — see
    *  `GameStatus.difficultyId`. */
-  private difficultyLabel!: Phaser.GameObjects.Text
   private startBtn!: PlateButton
   /** Public for the harness, which has to be able to put the HUD back into a
    *  known state between checks -- a modal reports the whole screen as chrome,
@@ -223,21 +230,15 @@ export class HudScene extends Phaser.Scene {
       fontStyle: 'bold', stroke: '#0d1016', strokeThickness: 4, letterSpacing: 1,
     }).setOrigin(0.5, 0.5)
 
-    // WHICH DIFFICULTY THIS RUN IS ON, at the left end of the second row.
+    // THE DIFFICULTY LABEL IS GONE FROM THE GAME SCREEN.
     //
-    // Small and dim on purpose: it is a fact about the run that never changes
-    // while the run is on, so it is there to be checked rather than watched.
-    // The boss bar shares this row and is CENTRED in it at a fixed 300px, so
-    // the two cannot meet on any viewport the game supports — the row is the
-    // full width less the margins, and the narrowest is 568.
-    // 15px, WHICH IS THE FLOOR AND NOT A PREFERENCE. It was set at 13 to read
-    // as quiet chrome; `typography.test.ts` refused it, and it is right to --
-    // a readout small enough to be ignored is a readout that cannot be read at
-    // arm's length on a phone. It is made quiet with COLOUR instead.
-    this.difficultyLabel = this.add.text(0, 0, '', {
-      fontFamily: FONT_UI, fontSize: '15px', color: COLOR.dim,
-      stroke: '#0d1016', strokeThickness: 3, letterSpacing: 1,
-    }).setOrigin(0, 0.5)
+    // It printed the mode name -- `YEAH, I GAME` -- in dim text at the left
+    // end of the second row, over the map, for the whole run. It is the same
+    // class of thing as the hero's name and the DAD MODE badge, both of which
+    // were taken off this screen in earlier passes and for the same reason: a
+    // fact that is chosen BEFORE the level and cannot change during it does
+    // not need a permanent readout on the board. It is on the level select
+    // screen, in `presentation.difficultyChip`, which is where it is chosen.
 
     // Bottom-left of the ability row: the hero's portrait, with his health on
     // it. See `buildHeroChip`.
@@ -289,31 +290,41 @@ export class HudScene extends Phaser.Scene {
    *  before anything is drawn, and the drawing needs the same answer. */
   private counterWidths(): number[] {
     const keys = ART.ui.counters
-    return ['peanuts', 'lives', 'wave'].map((name) => {
+    return READOUTS.map((name) => {
       const cfg = renderFor(keys[name])
-      return (cfg.contentWidth ?? 232) * (LAYOUT.plateHeight / (cfg.contentHeight ?? 96))
+      return (cfg.contentWidth ?? 232) * (LAYOUT.readoutHeight / (cfg.contentHeight ?? 96))
     })
   }
 
-  /** Unscaled: the layout decides how much of this the row actually gets. */
+  /**
+   * Unscaled: the layout decides how much of this the corner actually gets.
+   *
+   * THE WIDEST, NOT THE SUM. The three plates used to be laid side by side and
+   * this returned their total, which is what made the top row span the screen.
+   * Two of them are stacked now, so the width the corner needs is the wider of
+   * the pair -- and the wave counter is not in this group at all; it is read
+   * off the control in the opposite corner, which had to say which wave it was
+   * starting anyway.
+   */
   private measureCounters(): number {
-    const w = this.counterWidths()
-    return w.reduce((a, b) => a + b, 0) + HUD.plateGap * (w.length - 1)
+    return Math.max(...this.counterWidths())
   }
 
   private buildCounters(box: Rect): void {
     const keys = ART.ui.counters
+    // TWO, NOT THREE. The wave counter is not a readout in this corner any
+    // more: the control in the opposite corner already had to name the wave it
+    // was about to start, so a second copy of the number was chrome.
     const order: Array<[string, () => Phaser.GameObjects.Text, string]> = [
       ['peanuts', () => this.peanutsText, COLOR.amber],
       ['lives', () => this.livesText, COLOR.danger],
-      ['wave', () => this.waveText, COLOR.ink],
     ]
-    let x = box.x
-    const top = box.y
+    const x = box.x
+    let top = box.y
     for (const [name, , colour] of order) {
       const key = keys[name]
       const cfg = renderFor(key)
-      const scale = (LAYOUT.plateHeight / (cfg.contentHeight ?? 96)) * this.layout.counterScale
+      const scale = (LAYOUT.readoutHeight / (cfg.contentHeight ?? 96)) * this.layout.counterScale
       const plateW = (cfg.contentWidth ?? 232) * scale
 
       const plate = this.add.image(x, top, key).setOrigin(0, 0)
@@ -348,13 +359,16 @@ export class HudScene extends Phaser.Scene {
 
       // Defaults only matter for a plate whose field was never measured; the
       // three real ones all carry theirs.
+      // Centred in THIS PLATE rather than in the group's box: the box holds two
+      // stacked plates now, so `box.height` is both of them and half of it is
+      // the seam between them.
       const text = this.add.text(
-        x + (cfg.fieldLeft ?? 0.3) * plateW + HUD.numberMargin,
-        top + (cfg.fieldCentreY ?? 0.5) * box.height,
+        x + (cfg.fieldLeft ?? 0.3) * plateW + HUD.numberMargin * this.layout.counterScale,
+        top + (cfg.fieldCentreY ?? 0.5) * plate.displayHeight,
         '',
         {
           fontFamily: FONT_UI,
-          fontSize: `${Math.round(HUD.numberSize * this.layout.counterScale)}px`,
+          fontSize: `${Math.round(LAYOUT.readoutNumberSize * this.layout.counterScale)}px`,
           fontStyle: 'bold', color: colour,
         },
       ).setOrigin(0, 0.5)
@@ -363,10 +377,10 @@ export class HudScene extends Phaser.Scene {
       // cannot run off the end of its own plate.
       const field = plateW * (1 - (cfg.fieldLeft ?? 0.3)) - HUD.numberMargin * 2
       if (name === 'peanuts') { this.peanutsText = text; this.peanutsField = field }
-      else if (name === 'lives') { this.livesText = text; this.livesField = field }
-      else { this.waveText = text; this.waveField = field }
+      else { this.livesText = text; this.livesField = field }
 
-      x += plateW + HUD.plateGap * this.layout.counterScale
+      // DOWN, not across. This one line is the shape change.
+      top += plate.displayHeight + LAYOUT.readoutGap * this.layout.counterScale
     }
   }
 
@@ -400,7 +414,12 @@ export class HudScene extends Phaser.Scene {
     }
     g.fillCircle(x, y, r)
     g.fillStyle(0x1b222c, 1).fillCircle(x, y, r * 0.42)
-    const hit = this.add.rectangle(x, y, box.width + 4, box.height + 4, 0xffffff, 0.001)
+    // PADDED TO THE TAP FLOOR. The disc is drawn at `cornerButton` because a
+    // 44px one fills the 44px row corner to corner and reads as a slab; the
+    // rectangle a thumb actually lands on is the floor. See
+    // `layout._cornerButtonTapPad`.
+    const pad = LAYOUT.cornerButtonTapPad
+    const hit = this.add.rectangle(x, y, box.width + pad, box.height + pad, 0xffffff, 0.001)
       .setInteractive({ useHandCursor: true })
     hit.name = 'hud:settings'
     hit.on('pointerover', () => plate.setActive(true))
@@ -593,7 +612,7 @@ export class HudScene extends Phaser.Scene {
     const w = box.width
     const h = box.height
     this.startBtn = plateButton(this, x + w / 2, y + h / 2, w, h, '',
-      () => this.world.startWave(), 16)
+      () => this.world.startWave(), LAYOUT.startLabelSize)
   }
 
   /**
@@ -745,9 +764,7 @@ export class HudScene extends Phaser.Scene {
     }
     this.lastPeanuts = s.peanuts
     this.lastLives = s.lives
-    this.setCounter(this.waveText, `${Math.min(s.wave + 1, s.waveCount)}/${s.waveCount}`, this.waveField)
     this.drawBossBar(s)
-    this.drawDifficulty(s)
     this.drawStartButton(s)
     this.drawSlots(s)
     this.drawHeroChip(s)
@@ -801,20 +818,6 @@ export class HudScene extends Phaser.Scene {
     this.bossLabel.setPosition(x + w / 2, y + h / 2)
   }
 
-  /**
-   * The run's difficulty, at the left end of the second row.
-   *
-   * READ OFF THE RUN, NOT OFF THE SAVE. `status.difficultyId` is captured on
-   * the frame the level is created and never re-read, so this shows what the
-   * run is actually being played on — where asking the save would show
-   * whatever the setting is now, which is a different thing the moment
-   * somebody changes it on the level select screen mid-run.
-   */
-  private drawDifficulty(s: GameScene['status']): void {
-    const region = this.layout.messageRow
-    this.difficultyLabel.setText(difficultyName(s.difficultyId).toUpperCase())
-    this.difficultyLabel.setPosition(region.x, region.y + region.height / 2)
-  }
 
   /**
    * A refusal, shown above the ability bar where the tap happened.
@@ -875,19 +878,26 @@ export class HudScene extends Phaser.Scene {
 
     if (s.phase === 'ready') {
       const n = Math.min(s.wave + 1, s.waveCount)
-      // TWO THINGS, NOT THREE. It read `WAVE 2 · 3s · +4`, and the seconds were
-      // the least useful of the three: a countdown the player cannot change,
-      // next to the number that says what changing it is worth. The bonus is
-      // the whole argument for pressing now rather than waiting, so the bonus
-      // is what stays.
+      // TWO THINGS, NOT THREE, AND THE WORD `START` IS NOT ONE OF THEM.
+      //
+      // It read `WAVE 2 · 3s · +4` and then `START WAVE 2`, and the plate had to
+      // be 168px wide to hold the longest of those. What the word START was
+      // doing is already done twice over -- by the plate's own enabled state,
+      // which greys out the moment the wave is running, and by the play glyph.
+      // Dropping it is what let the control come down to 132 without the
+      // number or the bonus getting any smaller.
       const bonus = Math.floor(s.readyCountdown) * RULES.pacing.earlyStartPeanutsPerSecond
-      this.startBtn.setLabel(bonus > 0 ? `WAVE ${n} · +${bonus}` : `START WAVE ${n}`)
+      this.startBtn.setLabel(bonus > 0 ? `▶ ${n}/${s.waveCount} +${bonus}` : `▶ WAVE ${n}`)
     }
     // NO WAVE NAME. It read `The Gathering · 6 left`, and the name was a
     // flavour string in waves.json that told the player nothing they could act
     // on while it took the width that the count needed.
+    // MID-WAVE IT IS THE WAVE COUNTER. The stacked readouts in the other corner
+    // carried `n/total` until this pass; the control had to name the wave
+    // anyway, so the second copy went and this one gained the total.
     else if (s.phase === 'wave') {
-      this.startBtn.setLabel(`WAVE ${Math.min(s.wave + 1, s.waveCount)} · ${s.enemiesLeft} left`)
+      this.startBtn.setLabel(
+        `${Math.min(s.wave + 1, s.waveCount)}/${s.waveCount} · ${s.enemiesLeft}`)
     }
     else this.startBtn.setLabel(s.phase === 'won' ? 'CLEARED' : 'OVERRUN')
   }

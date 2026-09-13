@@ -19,7 +19,12 @@ const P = read('presentation')
 const CFG = P.drawer as DrawerConfig
 const LAYOUT = P.hud.layout
 const TOWERS = Object.keys(read('towers'))
-const WIDEST = { countersWidth: 333, abilitiesWidth: 322 }
+// `countersWidth` IS ONE READOUT'S WIDTH NOW, NOT THREE PLATES IN A ROW.
+// The top-left group is peanuts and lives STACKED, so what the layout needs
+// is the wider of the pair -- 48 CSS px at the shipped `readoutHeight` of 20
+// -- where it used to be the sum of three 44px-tall plates and their gaps.
+// Leaving 333 here would be measuring a HUD the game does not draw.
+const WIDEST = { countersWidth: 48, abilitiesWidth: 322 }
 const VIEWPORTS: Array<[string, number, number]> = [
   ['844x390', 844, 390],
   ['568x320', 568, 320],
@@ -308,6 +313,14 @@ test('how far each viewport has to scroll, measured', () => {
    *
    *   844x390   inner 202 -> grid 118  content 198   maxScroll 80
    *   568x320   inner 133 -> grid 73   content 198   maxScroll 125
+   *
+   * Fifth, and it moved NOTHING, which is the point of recording it. The HUD's
+   * top-left group became two stacked readouts instead of three pills in a
+   * row. The stack is sized so it is exactly as tall as the row it replaced --
+   * 20 + 4 + 20 = 44, which is `plateHeight` -- so the second row starts where
+   * it always did and the panel keeps every pixel it had. The first attempt
+   * used 26px plates, came out at 56, and cost this grid twelve pixels on
+   * every screen; these two recorded numbers are what caught it.
    *
    * THE NARROW CASE IS THE ONE TO LOOK AT, and it has finally crossed the
    * line that mattered. A 62px tile now FITS in the 73px grid, so 568x320

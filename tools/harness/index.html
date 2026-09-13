@@ -69,7 +69,7 @@ const SCENARIO_NAMES = [
   'loopthrow', 'looptrack', 'lost', 'mapedge', 'maproute', 'markers',
   'meteor', 'mix', 'modal', 'moes', 'music', 'muzzle', 'nightfall',
   'nodefirst', 'noderings', 'notch', 'nuke', 'nukeseq', 'nullframe',
-  'opening', 'padart',
+  'opening', 'padart', 'padhud',
   'pausedismiss', 'pauseresume', 'phone', 'pixels', 'plate', 'playrun',
   'politician', 'powerart', 'proximity', 'realboot', 'regressions',
   'results', 'retreat', 'roadfit', 'rotationburst', 'revive', 'ring', 'rockets',
@@ -15577,6 +15577,100 @@ async function run() {
     note('RESULT ' + (ASSERT_FAILS === 0
       ? ASSERTIONS + ' checks, all passed'
       : '*** ' + ASSERT_FAILS + ' of ' + ASSERTIONS + ' checks failed ***'))
+    return
+  }
+
+  if (scenario === 'padhud') {
+    /*
+     * WHERE THE HUD SITS ON THE BOARD, per level, in one table.
+     *
+     * The HUD is SCREEN space and the pads are WORLD space, and until this
+     * scenario existed nothing in the repository compared the two. The HUD's
+     * own test proves its rectangles are disjoint FROM EACH OTHER; the map is
+     * full-bleed by design, so "disjoint from each other" says nothing at all
+     * about whether a pad is underneath one of them.
+     *
+     * Reported rather than asserted here: this is the measurement that decides
+     * what the fix has to be.
+     */
+    const RS = await import('./js/systems/RunState.js')
+    const LV = await import('./js/systems/Levels.js')
+    const RES = await import('./js/systems/Resolution.js')
+    const SA = await import('./js/systems/SafeArea.js')
+    const HL = await import('./js/systems/HudLayout.js')
+
+    const startLevel = async (levelId) => {
+      for (const k of ['Title', 'WorldMap', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+      RS.setRunState({
+        heroId: 'cory', levelId, seed: 5, abilities: ['molotov', 'glacier'],
+        openingTowers: ['withholding', 'writeoff'], reserveTowers: [], resumeFrom: null,
+      })
+      game.scene.start('Game')
+      if (!(await until(() => running('Game') && scene('Game').hero, 25000))) return null
+      await until(() => running('Hud'), 12000)
+      await sleep(700)
+      return scene('Game')
+    }
+
+    const iou = (a, b) => !(a.x + a.width <= b.x || b.x + b.width <= a.x
+      || a.y + a.height <= b.y || b.y + b.height <= a.y)
+
+    note('viewport ' + VP.w + 'x' + VP.h + '  dpr=' + RES.deviceScale()
+      + '  insets ' + JSON.stringify(SA.safeAreaInsets()))
+    let worst = 0
+    for (const lv of LV.LEVELS) {
+      const G = await startLevel(lv.id)
+      if (!G) { note(lv.id + ': did not build'); continue }
+      const hud = scene('Hud')
+      const L = hud.layout || G.layout
+      // The HUD rectangles the player can actually press or read.
+      const named = ['counters', 'startButton', 'messageRow', 'heroChip',
+        'abilities', 'settings', 'cancel']
+      const rects = named.filter((k) => L[k]).map((k) => ({ id: k, r: L[k] }))
+      // Every pad's TAP rect in CSS pixels, at the camera the run opens on.
+      const cam = G.cameras.main
+      const pads = G.build.spots.map((s) => {
+        const c = RES.worldToScreen(G, s.x, s.y, cam)
+        const rad = G.level.map.spotRadius * cam.zoom / RES.deviceScale()
+        // At least 44 CSS px square, which is what a thumb needs and what the
+        // pad's own hit area is widened to.
+        const half = Math.max(22, rad)
+        return { i: s.index, r: { x: c.x - half, y: c.y - half, width: half * 2, height: half * 2 } }
+      })
+      const hits = []
+      for (const h of rects) for (const p of pads) if (iou(h.r, p.r)) hits.push(h.id + '/pad' + p.i)
+      const onScreen = pads.filter((p) => p.r.x + p.r.width > 0 && p.r.x < VP.w
+        && p.r.y + p.r.height > 0 && p.r.y < VP.h).length
+      // AND CAN EACH ONE BE BROUGHT OUT FROM UNDER THE HUD? The at-rest count
+      // above is the symptom; this is the thing that decides whether a pad is
+      // merely awkward or actually unbuildable. Driven through the rig, so it
+      // is the camera the player has rather than arithmetic about it.
+      const stuck = []
+      for (const p of pads) {
+        const spot = G.build.spots.find((sp) => sp.index === p.i)
+        let free = false
+        for (const aim of [[spot.x, spot.y], [spot.x, spot.y - 200], [spot.x, spot.y + 200],
+          [spot.x, 0], [spot.x, G.level.map.height ?? 720]]) {
+          if (G.rig) { G.rig.lookAt(aim[0], aim[1]) } else break
+          await sleep(220)
+          const c = RES.worldToScreen(G, spot.x, spot.y, G.cameras.main)
+          const rad = G.level.map.spotRadius * G.cameras.main.zoom / RES.deviceScale()
+          const half = Math.max(22, rad)
+          const r = { x: c.x - half, y: c.y - half, width: half * 2, height: half * 2 }
+          const offScreen = r.x < 0 || r.y < 0 || r.x + r.width > VP.w || r.y + r.height > VP.h
+          if (!offScreen && !rects.some((h) => iou(h.r, r))) { free = true; break }
+        }
+        if (!free) stuck.push(p.i)
+      }
+      if (G.rig) G.rig.lookAt((G.level.map.width ?? 1280) / 2, (G.level.map.height ?? 720) / 2)
+      note(lv.id.padEnd(8) + ' zoom ' + cam.zoom.toFixed(3)
+        + '  pads ' + pads.length + ' (' + onScreen + ' on screen)'
+        + '  at rest ' + hits.length
+        + '  UNREACHABLE ' + stuck.length + (stuck.length ? ': ' + stuck.join(',') : ''))
+      worst = Math.max(worst, stuck.length)
+      if (hits.length) await shot('padhud-' + lv.id + '-' + VP.w + 'x' + VP.h)
+    }
+    note('RESULT worst level has ' + worst + ' pad(s) that cannot be freed from the HUD at ' + VP.w + 'x' + VP.h)
     return
   }
 

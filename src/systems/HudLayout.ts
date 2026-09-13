@@ -95,7 +95,15 @@ export interface LayoutInput {
   width: number
   height: number
   insets: Insets
-  /** Measured from the art, not guessed: the three counter plates side by side. */
+  /**
+   * Measured from the art, not guessed: the WIDEST of the two stacked
+   * readouts.
+   *
+   * It used to be the three counter plates laid side by side, which is what
+   * made the top row span the screen. The wave counter moved into the control
+   * in the other corner and the remaining two are stacked, so the number the
+   * layout needs is a width, not a sum.
+   */
   countersWidth: number
   /** Measured from the run's hand: the ability icons and the gap between the
    *  drafted group and the hero's own. */
@@ -130,6 +138,24 @@ export interface LayoutConfig {
    *  the insets leave less. */
   startWidth: number
   startMinWidth: number
+  /**
+   * The second row's width: what the boss bar needs, and nothing more.
+   *
+   * The row used to take the full width less the margins and hold two things,
+   * a wave message and the boss bar. The message is gone and the difficulty
+   * label that replaced it at the left end is gone too, so the row has ONE
+   * occupant for one wave in thirteen -- and a full-width empty rectangle
+   * reserved across the top of a full-bleed map is exactly the shape that put
+   * the HUD on a build pad. `padhud` named `messageRow` in more collisions
+   * than any other element on every viewport measured.
+   */
+  messageWidth: number
+  /** One stacked readout's height in the top-left corner. A READOUT, not a
+   *  control: nothing taps it, so its only floor is legibility and it is much
+   *  shorter than the 44px plate it was cut from. */
+  readoutHeight: number
+  /** Between the two stacked readouts. */
+  readoutGap: number
 }
 
 export interface HudLayout {
@@ -222,6 +248,38 @@ export interface HudLayout {
   panelArea: Rect
 }
 
+/**
+ * The taller of the two HUD bands, in CSS pixels.
+ *
+ * WHAT IT IS FOR: the camera. The map is full-bleed and the HUD draws over it,
+ * so a build pad painted near the top or bottom edge of a plate renders under
+ * a band. Before this existed the camera was PINNED -- at cover zoom the view
+ * covers the world on both axes, `centerRange` returned a zero-width range,
+ * and `boundsMarginPx` was 0 -- so such a pad could not be moved out from
+ * under the HUD by any camera position available to the player. Not awkward:
+ * impossible. `tools/harness/run.sh padhud` counted twelve of them on level 6
+ * at 667x375.
+ *
+ * The rig takes this as its vertical bounds margin, so the board can always be
+ * nudged far enough to clear whichever band is in the way. THE TALLER OF THE
+ * TWO rather than each separately, because the margin is symmetric and a pad
+ * may be at either edge.
+ *
+ * Measured off the rectangles rather than summed from the config: the bands
+ * are where the elements actually ended up, and on a narrow screen the
+ * ability row shrinks while CANCEL does not.
+ */
+export function hudBandHeight(l: HudLayout, viewHeight: number): number {
+  const topEdge = Math.max(
+    l.counters.y + l.counters.height,
+    l.startButton.y + l.startButton.height,
+    l.settings.y + l.settings.height,
+    l.messageRow.y + l.messageRow.height,
+  )
+  const bottomEdge = Math.min(l.abilities.y, l.cancel.y, l.heroChip.y)
+  return Math.max(0, topEdge, viewHeight - bottomEdge)
+}
+
 export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
   const { width: W, height: H, insets } = input
   const left = insets.left + cfg.marginX
@@ -241,15 +299,26 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
   }
   const topRight = settings.x - cfg.marginX
 
-  // The counters give way first, because a slightly smaller pill is still
-  // readable and an overlapping one is not.
+  // THE READOUTS, STACKED IN THE CORNER. Two of them -- peanuts and lives --
+  // one above the other, each `readoutHeight` tall.
+  //
+  // They were three 44px plates in a row spanning most of the width, and the
+  // row is what sat on the build pads: `padhud` measured the counters or the
+  // row under them over a pad on eight of the nine levels at 844x390. Stacking
+  // two short plates in the corner is a quarter of the footprint, and it costs
+  // nothing legible, because NOTHING TAPS THEM -- the 44px floor is a rule
+  // about fingers and these are read, not pressed.
+  //
+  // They still give way before the control does, for the old reason: a
+  // slightly narrower plate is still readable and an overlapping one is not.
   const topRoom = topRight - left - cfg.startMinWidth - cfg.marginX
   const countersW = Math.min(input.countersWidth, Math.max(0, topRoom))
   const counterScale = input.countersWidth > 0 ? countersW / input.countersWidth : 1
+  const countersH = cfg.readoutHeight * 2 + cfg.readoutGap
   const counters: Rect = {
     x: left, y: top,
     width: countersW,
-    height: cfg.plateHeight * counterScale,
+    height: countersH * counterScale,
   }
 
   // The start button then takes what is left, down to its own floor: at 240px
@@ -274,10 +343,16 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
   // buttons. So the row is one occupant again and takes its width back rather
   // than reserving a hole for something that is not there — which is the same
   // thing that happened when CANCEL left it.
+  // The second row clears whichever corner group is taller. The readouts are
+  // now the taller of the two on a screen with room, which is why this is a
+  // `max` and not simply the plate height.
   const rowY = top + Math.max(counters.height, startButton.height) + cfg.rowGap
-  const rowW = right - left
+  // CENTRED, AND ONLY AS WIDE AS ITS ONE OCCUPANT. Clamped to the space
+  // between the margins so a narrow phone shrinks the bar rather than pushing
+  // it under a corner group.
+  const rowW = Math.min(cfg.messageWidth, right - left)
   const messageRow: Rect = {
-    x: left, y: rowY, width: rowW, height: cfg.rowHeight,
+    x: (left + right) / 2 - rowW / 2, y: rowY, width: rowW, height: cfg.rowHeight,
   }
 
   // CANCEL, flush to the display's right edge and sitting on the same baseline
