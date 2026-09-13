@@ -10,13 +10,14 @@
 //     not in level order — level 4 sat at the far left because the cards were
 //     too big to stack and there was nowhere else it would fit — so the long
 //     run across the screen appeared to skip a level;
-//   - there was no room for a fifth level, never mind twenty;
+//   - there was no room for a fifth level, never mind ten;
 //   - and nothing said which level a card was.
 //
-// It is a road of identical numbered nodes now, laid out along one curve by
-// LEVEL ORDER, carrying every planned level whether it is built or not. The
-// geometry lives in systems/WorldRoad.ts so the tests measure what the scene
-// draws rather than a second copy of it.
+// It is a road of identical numbered nodes now, laid out by LEVEL ORDER and
+// carrying every planned level whether it is built or not: five across, then
+// a turn, then five back the other way. The geometry lives in
+// systems/WorldRoad.ts so the tests measure what the scene draws rather than a
+// second copy of it.
 //
 // COMPOSED, NOT PAINTED, which has not changed. Adding a level touches no art:
 //   background  one tiling texture, reused at every size
@@ -25,15 +26,20 @@
 //   road        drawn here from the node positions, so moving a level in
 //               levels.json moves the road with it
 //
-// THE ROAD IS WIDER THAN THE SCREEN, and it scrolls sideways — the axis it
-// runs on. THE CAMERA DOES NOT MOVE: it is the fixed design-box fit every menu
-// uses, and the road is a container inside it whose x is dragged. Gestures on
-// a camera belong to CameraRig, which lives on GameScene alone.
+// THE ROAD USED TO BE WIDER THAN THE SCREEN and is not any more. The campaign
+// is ten levels, folded into two rows of five, and five across at a pitch of
+// 240 is exactly the 1280 of the design box — so every level is on the glass
+// at once and the scrollbar is gone. The scrolling machinery below is kept
+// rather than deleted: `maxScroll` is zero, `drawBar` returns on its first
+// line, and the drag is a no-op, which is the same code path a road that did
+// not fit would take. THE CAMERA DOES NOT MOVE either way: it is the fixed
+// design-box fit every menu uses, and the road is a container inside it whose
+// x is set. Gestures on a camera belong to CameraRig, on GameScene alone.
 
 import Phaser from 'phaser'
 import { LEVELS, furthestUnlocked, isLevelUnlocked, levelDef } from '../systems/Levels.ts'
 import {
-  ROAD, maxScroll, nodeState, roadNodes, roadWidth, scrollToNode,
+  ROAD, maxScroll, nodeState, roadNodes, roadPath, roadWidth, scrollToNode,
   type NodeState, type RoadNode,
 } from '../systems/WorldRoad.ts'
 import { cakesEarned, loadSave, setDifficulty } from '../systems/Save.ts'
@@ -88,12 +94,13 @@ const BG_ORIGIN_Y = WORLD_H / 2 - (WORLD_H * 3) / 2
 
 export class WorldMapScene extends Phaser.Scene {
   /**
-   * Everything that scrolls. The camera never moves; this does.
+   * Everything the road is made of. The camera never moves; this is what would.
    *
-   * Public for the harness, which has to be able to tell content that is
-   * off screen because it is scrolled away from content that is off screen
-   * because the layout put it there. Without that it reports fifteen OFF
-   * faults for a road doing exactly what a road is for.
+   * Public for the harness, which has to be able to tell content that is off
+   * screen because it is scrolled away from content that is off screen because
+   * the layout put it there. Without that it reported fifteen OFF faults for a
+   * road doing exactly what a road is for. At ten levels nothing scrolls, and
+   * the harness asks `scrolls()` rather than assuming either way.
    */
   road!: Phaser.GameObjects.Container
   /** The scrollbar, drawn only when the road is longer than the screen. */
@@ -160,7 +167,7 @@ export class WorldMapScene extends Phaser.Scene {
     this.drawBackground()
 
     this.road = this.add.container(0, 0).setDepth(0)
-    this.drawRoad(nodes)
+    this.drawRoad()
     for (const node of nodes) this.drawNode(node, cleared)
 
     this.bar = this.add.graphics().setDepth(5)
@@ -217,6 +224,20 @@ export class WorldMapScene extends Phaser.Scene {
    * Public for the harness, which reports how many screens long the road is
    * and cannot work that out from the camera alone once the notch is in play.
    */
+  /**
+   * Whether the road has anywhere to scroll to.
+   *
+   * Public for the harness, and the reason it is public matters. The `screens`
+   * audit is told to ignore everything inside `road`, because content running
+   * off the edge of the screen is what scrolling IS and reporting it would be
+   * reporting the feature. At ten levels in two rows nothing scrolls — so that
+   * exemption would hide every node on the screen from the one audit that
+   * looks at all of them. The audit asks this instead of assuming.
+   */
+  scrolls(): boolean {
+    return maxScroll(this.scrollWindow().width) > 0
+  }
+
   scrollWindow(): { left: number; width: number } {
     const cam = this.cameras.main
     const dpr = deviceScale()
@@ -320,8 +341,12 @@ export class WorldMapScene extends Phaser.Scene {
    * passes behind a place reads as one road; a road that stops at each place
    * reads as links.
    */
-  private drawRoad(nodes: RoadNode[]): void {
-    const points = nodes.map((n) => new Phaser.Math.Vector2(n.x, n.y))
+  private drawRoad(): void {
+    // THE POLYLINE COMES FROM WorldRoad, not from the node centres. It is the
+    // node centres plus the bowed turn where one row hands over to the next —
+    // and the turn is geometry, so it lives with the rest of the geometry
+    // rather than being invented here where no test can see it.
+    const points = roadPath().map((p) => new Phaser.Math.Vector2(p.x, p.y))
     if (points.length < 2) return
     const g = this.add.graphics().setDepth(-50)
     const P = ROAD.path
@@ -465,9 +490,12 @@ export class WorldMapScene extends Phaser.Scene {
     plate.fillRoundedRect(node.x - w / 2, y - h / 2, w, h, P.radius)
     this.road.add(plate)
 
-    // 44 design units. Three of them plus their gaps come to 148 of the
-    // picture's 160, which is as large as the row goes without hanging off the
-    // level it belongs to.
+    // 59 design units, which is 32 CSS pixels on a phone in landscape at
+    // 844x390 — the unit the brief was written in and the unit a design-unit
+    // figure hides. Three of them plus their gaps come to 198, which is WIDER
+    // than the picture's 160: the card cannot be widened at five across, so
+    // the row is allowed off the edges of it into the road, the same way the
+    // name under it already is. See `_nodeSize` in presentation.json.
     for (const img of cakeRow(this, node.x, y, { earned, size: CAKES.nodeSize })) {
       this.road.add(img.setDepth(3))
     }
@@ -547,15 +575,19 @@ export class WorldMapScene extends Phaser.Scene {
   /** The line under a node: the level's name, or that there is no level yet. */
   private drawLabel(node: RoadNode, text: string, colour: string): Phaser.GameObjects.Text {
     const N = ROAD.node
-    // WRAPPED TO THE NODE. "SPORTS COMPLEX AT DUSK" sets far wider than a node
-    // is, and unwrapped it would lie across its neighbours.
+    // WRAPPED TO `label.wrap`, WHICH IS WIDER THAN THE NODE. Unwrapped,
+    // "SPORTS COMPLEX AT DUSK" would lie across its neighbours; wrapped to the
+    // node's own 160 it sets three lines, and three lines twice over is more
+    // band than two rows have. The pitch is 240, so 220 keeps 20 units between
+    // one name's box and the next and gets that name down to two lines. See
+    // `_label` in presentation.json for the measurement.
     const t = this.add.text(
       node.x, node.y + (N.height + N.framePad) / 2 + ROAD.label.gap,
       text,
       {
         fontFamily: FONT_UI, fontSize: `${ROAD.label.size}px`, fontStyle: 'bold',
         color: colour, stroke: '#0d1016', strokeThickness: 4,
-        wordWrap: { width: N.width }, align: 'center',
+        wordWrap: { width: ROAD.label.wrap }, align: 'center',
       },
     ).setOrigin(0.5, 0).setDepth(2)
     this.road.add(t)
@@ -674,7 +706,11 @@ export class WorldMapScene extends Phaser.Scene {
 
   /** The title, the resume offer and the way back. */
   private drawChrome(): void {
-    this.add.text(WORLD_W / 2, 54, 'CHOOSE YOUR BATTLE', {
+    // 44, NOT 54. The band below it is 522 units and two rows of nodes and
+    // names want 506 of them, so the ten units this gives back are most of the
+    // road's wave. The heading's ink ends at 72 from here; `worldMap.band.top`
+    // is 86, which is where the open node's pulse ring stops.
+    this.add.text(WORLD_W / 2, 44, 'CHOOSE YOUR BATTLE', {
       fontFamily: FONT_DISPLAY, fontSize: '46px', color: COLOR.ink,
       stroke: '#0d1016', strokeThickness: 8,
     }).setOrigin(0.5).setDepth(10)

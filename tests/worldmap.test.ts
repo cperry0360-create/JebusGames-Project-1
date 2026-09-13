@@ -3,8 +3,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { LEVELS, ROAD_SLOTS } from '../src/systems/Levels.ts'
 import {
-  ROAD, bandCentre, maxScroll, nodeBlock, nodeCentre, nodeState, roadNodes, roadWidth,
-  scrollToNode,
+  ROAD, blockHeight, maxScroll, nodeBlock, nodeCentre, nodeRect, nodeState, perRow,
+  placeOf, roadHeight, roadNodes, roadPath, roadWidth, rowCount, rowPitch, scrollToNode,
 } from '../src/systems/WorldRoad.ts'
 
 const url = (p: string) => new URL(p, import.meta.url)
@@ -24,7 +24,13 @@ const display = JSON.parse(readFileSync(url('../src/data/display.json'), 'utf8')
 test('the road is one run of identical nodes in level order', () => {
   const nodes = roadNodes()
   assert.equal(nodes.length, ROAD_SLOTS)
-  assert.ok(ROAD_SLOTS >= 20, 'the planned campaign is no longer on the map')
+  // TEN, AND THE SCOPE IS TEN. It was twenty, which is why this screen was a
+  // 4310-unit road of padlocks behind a scrollbar; ten of those slots were for
+  // levels nobody had designed. A road with fewer slots than levels is the
+  // other failure and Levels.ts makes it impossible, so this is the one worth
+  // stating.
+  assert.equal(ROAD_SLOTS, 10, 'the planned campaign is no longer ten levels')
+  assert.ok(ROAD_SLOTS >= LEVELS.length, 'a built level has no slot to be drawn in')
 
   // IDENTICAL. Every node is the same box; the only thing that changes is what
   // is drawn inside it. This is the whole of fix (a), and it holds for the
@@ -36,11 +42,24 @@ test('the road is one run of identical nodes in level order', () => {
       ROAD.node.height + ROAD.node.framePad + ROAD.label.gap + ROAD.label.reserve)
   }
 
-  // In order, left to right, evenly spaced. A path drawn through these in
-  // order cannot double back, which is what the old positions did.
+  // EVENLY SPACED ALONG ITS ROW, and every second row runs the other way. The
+  // road is folded into two rows now, so "left to right for twenty" is no
+  // longer the shape -- but "one pitch along from the last, in the direction
+  // this row runs" still is, and it is what stops a node landing anywhere its
+  // level order did not put it.
   for (let i = 1; i < nodes.length; i++) {
-    assert.equal(nodes[i]!.x - nodes[i - 1]!.x, ROAD.pitch,
+    if (placeOf(i).row !== placeOf(i - 1).row) continue
+    const dir = placeOf(i).row % 2 === 0 ? 1 : -1
+    assert.equal((nodes[i]!.x - nodes[i - 1]!.x) * dir, ROAD.pitch,
       `slot ${nodes[i]!.number} is not one pitch along from the last`)
+  }
+  // And each row starts under the end of the one before it, so the eye never
+  // crosses the whole screen to find the next level.
+  for (let r = 1; r < rowCount(); r++) {
+    const last = nodes[r * perRow() - 1]!, first = nodes[r * perRow()]!
+    assert.equal(first.x, last.x,
+      `row ${r + 1} starts at ${first.x}, not under the end of row ${r} at ${last.x}`)
+    assert.ok(first.y > last.y, `row ${r + 1} does not sit below row ${r}`)
   }
   // And numbered from one, which is the other half of "read as progression".
   assert.deepEqual(nodes.map((n) => n.number), nodes.map((_, i) => i + 1))
@@ -82,41 +101,143 @@ test('the three states are the three the player can be in, and no fourth', () =>
   }
 })
 
-test('the road stays inside the band it is given, at its deepest and its highest', () => {
-  // The band is what is left between the title and the scrollbar. A node whose
-  // name lands under the bar is the fault this measures: it happened at a
-  // reserve of 118, where SPORTS COMPLEX AT DUSK's three lines plus its unlock
-  // line pushed the last row over the track.
+/*
+ * THE TWO CHECKS THIS SCREEN KEEPS NEEDING.
+ *
+ * The last two world map briefs both shipped overlapping cards, and both times
+ * the test that should have caught it had re-derived the scene's layout from
+ * constants copied out of it: one copy drifted and the check went on passing
+ * against a screen that no longer existed. These two ask WorldRoad for the
+ * rectangles the scene draws, so there is nothing to drift.
+ *
+ * Proved to catch a real failure rather than assumed to: setting
+ * `worldMap.rows.gap` to -140 in presentation.json puts row two's frames
+ * through row one's captions and fails the first; setting `band.bottom` back
+ * to 596, or `label.reserve` up to 160, pushes the deepest block out of the
+ * band and fails the second. Both were run red before this was written; see
+ * reports/2026-09-13-level-select-redesign.md.
+ */
+
+test('no two framed nodes overlap', () => {
+  // THE FRAME, not the picture: the painted border is the edge a neighbour has
+  // to clear, and it is 8 units larger than the art on every side.
+  const nodes = roadNodes()
+  const hit = (a: ReturnType<typeof nodeRect>, b: ReturnType<typeof nodeRect>): boolean =>
+    a.x < b.x + b.width && b.x < a.x + a.width
+    && a.y < b.y + b.height && b.y < a.y + a.height
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      assert.ok(!hit(nodeRect(nodes[i]!), nodeRect(nodes[j]!)),
+        `slots ${i + 1} and ${j + 1} overlap`)
+    }
+  }
+  // AND THE NAMES DO NOT EITHER, which is the collision that actually shipped:
+  // never two cards, always one card's caption lying across the next. A
+  // label block is the frame plus the room reserved under it.
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      assert.ok(!hit(nodeBlock(nodes[i]!), nodeBlock(nodes[j]!)),
+        `slots ${i + 1} and ${j + 1} have label blocks that overlap`)
+    }
+  }
+})
+
+test('no label block leaves the band', () => {
+  // A short reserve does not clip the text -- it pushes the deepest node down
+  // until its last line lands in the chrome, which is what a first pass at a
+  // reserve of 118 did when this was one row.
   for (const n of roadNodes()) {
     const b = nodeBlock(n)
-    assert.ok(b.y >= ROAD.band.top, `slot ${n.number} rides over the title`)
-    assert.ok(b.y + b.height <= ROAD.band.bottom, `slot ${n.number}'s name reaches the scrollbar`)
+    assert.ok(b.y >= ROAD.band.top,
+      `slot ${n.number} rides over the top of the band by ${Math.round(ROAD.band.top - b.y)}`)
+    assert.ok(b.y + b.height <= ROAD.band.bottom,
+      `slot ${n.number}'s name reaches ${Math.round(b.y + b.height)},`
+      + ` past the band at ${ROAD.band.bottom}`)
   }
+  // The whole road, counted once rather than node by node: two rows, their
+  // names and the full swing of the wave against the room there is.
+  assert.ok(roadHeight() <= ROAD.band.bottom - ROAD.band.top,
+    `the road wants ${Math.round(roadHeight())} units and the band has `
+    + `${ROAD.band.bottom - ROAD.band.top}`)
+})
+
+test('the road stays inside the band it is given, at its deepest and its highest', () => {
   // And the band is used rather than hugged: the old screen put everything in
-  // the top half. The deepest and highest nodes are within a node's height of
-  // the band's own edges.
-  const ys = roadNodes().map((n) => n.y)
-  const top = Math.min(...ys) - (ROAD.node.height + ROAD.node.framePad) / 2
-  const bottom = Math.max(...ys) + nodeBlock(roadNodes()[0]!).height
-    - (ROAD.node.height + ROAD.node.framePad) / 2
-  assert.ok(top - ROAD.band.top < ROAD.node.height,
-    `the road leaves ${Math.round(top - ROAD.band.top)} units empty at the top of the band`)
-  assert.ok(ROAD.band.bottom - bottom < ROAD.node.height,
-    `the road leaves ${Math.round(ROAD.band.bottom - bottom)} units empty at the bottom of the band`)
-  // The scrollbar sits below everything the road draws and above the buttons.
-  assert.ok(ROAD.scrollbar.y - ROAD.scrollbar.height / 2 >= ROAD.band.bottom,
-    'the scrollbar is inside the band the nodes use')
+  // the top half. Two rows fill it to within a couple of units now, which is
+  // the same claim with no room left to be wrong about.
+  const slack = (ROAD.band.bottom - ROAD.band.top) - roadHeight()
+  assert.ok(slack >= 0, `the road is ${Math.round(-slack)} units too tall for its band`)
+  assert.ok(slack < ROAD.node.height,
+    `the road leaves ${Math.round(slack)} units of the band empty`)
+  // ONE ROW'S NAMES CLEAR THE NEXT ROW'S FRAMES BY `rows.gap`, AT EVERY
+  // COLUMN. That is a property of phasing the wave off the screen slot rather
+  // than off the level number, and it is the thing that would quietly stop
+  // being true if someone phased it off the index again.
+  assert.equal(rowPitch() - blockHeight(), ROAD.rows.gap)
+  // BY SCREEN SLOT, not by level order: the snake mirrors every second row, so
+  // the node under slot 4 of row one is slot 4 of row two and NOT the node
+  // four places later in the level order.
+  const bySlot = new Map<string, number>()
+  for (const n of roadNodes()) bySlot.set(`${placeOf(n.index).row}:${placeOf(n.index).slot}`, n.y)
+  for (let r = 1; r < rowCount(); r++) {
+    for (let slot = 0; slot < perRow(); slot++) {
+      const above = bySlot.get(`${r - 1}:${slot}`), below = bySlot.get(`${r}:${slot}`)
+      if (above === undefined || below === undefined) continue
+      assert.equal(Math.round(below - above), rowPitch(),
+        `slot ${slot} is not one row pitch apart between rows ${r} and ${r + 1}`)
+    }
+  }
+  // The scrollbar is BELOW nothing now -- at two rows its strip is part of the
+  // band. It is never drawn (see the scrollbar test), and that is what makes
+  // the overlap harmless; stating it here so the trade is not rediscovered as
+  // a bug.
+  assert.ok(maxScroll(display.width) === 0,
+    'the road scrolls again, and the scrollbar at y '
+    + `${ROAD.scrollbar.y} would draw over the second row's names`)
 })
 
 test('the wave never leaves two neighbours at the same height', () => {
-  // A road that goes flat for a stretch reads as a list. The step is chosen so
-  // the pattern does not repeat over the whole planned campaign.
+  // A road that goes flat for a stretch reads as a list.
   const ys = roadNodes().map((n) => n.y)
   for (let i = 1; i < ys.length; i++) {
     assert.notEqual(ys[i], ys[i - 1], `slots ${i} and ${i + 1} are level with each other`)
   }
-  assert.ok(Math.abs(bandCentre() - (ROAD.band.top + ROAD.band.bottom) / 2) > 1,
-    'the wave is centred on the band rather than on the block, which drops the last name out of it')
+  // THE ROAD IS CENTRED ON ITS BLOCK, not on the band. A node's name hangs
+  // below it, so centring the nodes themselves leaves air at the top and drops
+  // the deepest caption out of the bottom -- which is the shape the screen had
+  // before any of this.
+  const blocks = roadNodes().map(nodeBlock)
+  const top = Math.min(...blocks.map((b) => b.y))
+  const bottom = Math.max(...blocks.map((b) => b.y + b.height))
+  assert.ok(Math.abs((top - ROAD.band.top) - (ROAD.band.bottom - bottom)) <= 1,
+    `the road leaves ${Math.round(top - ROAD.band.top)} units above it and `
+    + `${Math.round(ROAD.band.bottom - bottom)} below`)
+})
+
+test('the turn between rows bows clear of the last name on the row', () => {
+  /*
+   * The two nodes either side of a turn share a screen slot, so the painted
+   * road between them would be a plumb line -- straight down through the
+   * middle of the caption under the node it is leaving. A rendered frame at a
+   * bow of 46 shows the road drawn through its own label.
+   *
+   * The path is geometry and lives in WorldRoad, so this can measure it.
+   */
+  const path = roadPath()
+  const nodes = roadNodes()
+  assert.ok(path.length > nodes.length, 'the road is drawn straight through every turn')
+  for (let r = 1; r < rowCount(); r++) {
+    const leaving = nodes[r * perRow() - 1]!
+    const out = Math.max(...path.map((p) => Math.abs(p.x - leaving.x)))
+    assert.ok(out > ROAD.label.wrap / 2,
+      `the turn bows ${Math.round(out)} units, inside a caption ${ROAD.label.wrap} wide`)
+  }
+  // And not so far that it leaves the design box it is centred in.
+  const right = Math.max(...path.map((p) => p.x))
+  const left = Math.min(...path.map((p) => p.x))
+  assert.ok(left >= 0 && right <= display.width,
+    `the road runs from ${Math.round(left)} to ${Math.round(right)} of a `
+    + `${display.width}-unit box`)
 })
 
 test('the scrollbar is horizontal, and absent when the road fits', () => {
@@ -137,21 +258,30 @@ test('the scrollbar is horizontal, and absent when the road fits', () => {
   assert.equal(maxScroll(roadWidth()), 0)
   assert.equal(maxScroll(roadWidth() + 500), 0)
   assert.equal(maxScroll(display.width), roadWidth() - display.width)
-  // At twenty levels it IS needed, which is what makes the styling worth
-  // having rather than a control nobody sees.
-  assert.ok(roadWidth() > display.width * 2,
-    'the road is under two screens long; check whether the bar is still needed')
+  // AT TEN LEVELS IN TWO ROWS IT IS NEVER NEEDED, and that is the point of the
+  // redesign rather than a side effect of it: five across at this pitch is
+  // exactly the design box, and a camera fitted to the box never sees less
+  // than the box, so `maxScroll` is zero on every viewport the game runs at.
+  assert.equal(roadWidth(), ROAD.margin * 2 + ROAD.node.width + (perRow() - 1) * ROAD.pitch)
+  assert.ok(roadWidth() <= display.width,
+    `the road is ${roadWidth()} units against a ${display.width} box, so the bar is back`)
+  assert.equal(maxScroll(display.width), 0)
 })
 
 test('the screen opens on the level the player is up to, clamped to the ends', () => {
   const visW = display.width
-  // Slot one is already at the left end, so there is nothing to scroll back.
-  assert.equal(scrollToNode(0, visW), 0)
-  // The last slot cannot scroll past the end of the road.
-  assert.equal(scrollToNode(ROAD_SLOTS - 1, visW), maxScroll(visW))
-  // A slot in the middle is centred.
-  const mid = Math.floor(ROAD_SLOTS / 2)
-  assert.equal(scrollToNode(mid, visW), nodeCentre(mid).x - visW / 2)
+  // EVERY SLOT OPENS AT ZERO, because the whole road is on screen and there is
+  // nowhere to scroll to. Kept rather than deleted: the arithmetic is what
+  // says the bar must not be drawn, and a planned count that outgrew two rows
+  // would need all of it back.
+  for (let i = 0; i < ROAD_SLOTS; i++) assert.equal(scrollToNode(i, visW), 0)
+  // And it still centres and clamps when there IS something to scroll, which
+  // is the only way to check the clamp on a road that fits.
+  const narrow = 400
+  assert.equal(scrollToNode(0, narrow), 0)
+  assert.equal(scrollToNode(perRow() - 1, narrow), maxScroll(narrow))
+  const mid = 2
+  assert.equal(scrollToNode(mid, narrow), nodeCentre(mid).x - narrow / 2)
 })
 
 /* ------------------------------------------ the difficulty chip, out of the road */
