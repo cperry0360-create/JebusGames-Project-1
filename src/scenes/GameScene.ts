@@ -720,6 +720,21 @@ export class GameScene extends Phaser.Scene {
     this.heroSelected = false
     this.ticket?.destroy()
     this.ticket = null
+    // AND EVERY OTHER MODAL REFERENCE, for the reason the ticket is here.
+    //
+    // `modalOpen` is an OR over four of these and this scene object is REUSED
+    // between runs, so one left `active` by a run that ended while it was up
+    // makes `chromeUnderPointer` answer yes to every press on the NEXT run's
+    // board: no tower, no special, no hero order, and nothing drawn to say
+    // why. That is the soft lock HudScene's `paused` caused for real; these
+    // are the same fault's other doors, closed before one of them is used.
+    //
+    // The objects themselves went with the scene run that drew them -- the
+    // display list is torn down on shutdown -- so what is dropped here is the
+    // reference, not the overlay.
+    this.dialog = undefined
+    this.nukeEarned = null
+    this.nukeLaunch = null
 
     const run = runState()
     const heroDef = heroDef_(run.heroId) ?? heroDef_(DEFAULT_HERO_ID)!
