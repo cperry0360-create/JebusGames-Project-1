@@ -2,8 +2,11 @@
 
 | commit | what | CI |
 |---|---|---|
-| `9332930` | The four assets, `markers.json`, `systems/Markers.ts`, the renderer, two test surfaces | *pending — see the table at the bottom* |
-| *this commit* | This report | it adds files and edits nothing the checks read |
+| `9332930` | The four assets, `markers.json`, `systems/Markers.ts`, the renderer, two test surfaces | [run 345](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34779617034) green |
+| `9994199` | This report | [run 345](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34779617034) green |
+| *this commit* | Closing this table on run 345 | it edits this table and nothing else |
+`e361efe`, `9332930` and `9994199` were pushed together, so only the head got a run of its own; run 345 checked the tree containing all three. Green on changes, typecheck and test; deploy is skipped on a branch.
+
 
 ---
 

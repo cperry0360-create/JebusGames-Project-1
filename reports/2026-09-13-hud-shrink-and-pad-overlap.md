@@ -2,8 +2,11 @@
 
 | commit | what | CI |
 |---|---|---|
-| `e361efe` | The shrink, the camera fix, the guard test, the difficulty label | *pending — see the table at the bottom* |
-| *this commit* | This report | it adds files and edits nothing the checks read |
+| `e361efe` | The shrink, the camera fix, the guard test, the difficulty label | [run 345](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34779617034) green |
+| `9994199` | This report | [run 345](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34779617034) green |
+| *this commit* | Closing this table on run 345 | it edits this table and nothing else |
+`e361efe`, `9332930` and `9994199` were pushed together, so only the head got a run of its own; run 345 checked the tree containing all three. Green on changes, typecheck and test; deploy is skipped on a branch.
+
 
 ---
 

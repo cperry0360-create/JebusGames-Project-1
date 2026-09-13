@@ -2,8 +2,11 @@
 
 | commit | what | CI |
 |---|---|---|
-| `e361efe` | PART A: both edges, the difficulty label, the guard test | *pending — see below* |
-| *this commit* | This report | it adds files and edits nothing the checks read |
+| `e361efe` | PART A: both edges, the difficulty label, the guard test | [run 345](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34779617034) green |
+| `9994199` | This report, and the level 8 measurement | [run 345](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34779617034) green |
+| *this commit* | Closing this table on run 345 | it edits this table and nothing else |
+`e361efe`, `9332930` and `9994199` were pushed together, so only the head got a run of its own; run 345 checked the tree containing all three. Green on changes, typecheck and test; deploy is skipped on a branch.
+
 
 **PART B STEP 1 is reported here and NO LEVEL 8 DATA HAS BEEN CHANGED**, which
 is what the brief asked for. STEPS 2, 3 and 4 are not done; the last section says
