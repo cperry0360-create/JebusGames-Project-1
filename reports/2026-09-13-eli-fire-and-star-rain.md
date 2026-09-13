@@ -5,11 +5,16 @@
 | `569ec71` | The hero chip stops carrying a texture key across a level change | **green** — [run 317](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34759967740) |
 | `75e5bbc` | Star Rain falls on the whole map, and Eli gets Russinga is Fire | **green** — run 317 |
 | `4511950` | Harness: an ability-bar sweep, Eli's three, and both held beams | **green** — run 317 |
-| `TBD` | This report | **TBD** |
+| `7924e0a` | This report and its SOAK-REPORT entry | **green** — [run 318](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34760292998) |
 
-Run 317 is one run over all three commits, pushed together: `test` **success**,
-`typecheck` **success**, `changes` **success**, `deploy` **skipped** (this is a
-branch, not `main`). Tests **1069 → 1072**.
+Run 317 is one run over the first three commits, pushed together: `test`
+**success**, `typecheck` **success**, `changes` **success**, `deploy`
+**skipped** (this is a branch, not `main`). Run 318 is the same four jobs on
+the report commit. Tests **1069 → 1072**.
+
+One commit is not in the table and cannot be: the one that fills the table in.
+It is the branch's last, it is markdown only, and its run is named at the end
+of this file.
 
 ---
 
