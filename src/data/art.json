@@ -1629,6 +1629,7 @@
     "_notAbilityIcons": "`ability-*` ARE NOT HERE. They are 256px icons on the loadout cards and in the HUD's ability rail, 0.25 MB each; the EFFECT each ability plays is what moved, and those are the `fx-*` above.",
     "byLevel": {
       "level9": [
+        "enemy-hat-gtt-b",
         "fx-wall-of-text",
         "fx-hat-regenerate",
         "fx-crab-claw-impact",
@@ -1643,7 +1644,7 @@
         "prop-vlaude-screen"
       ]
     },
-    "_byLevel": "ART ONE LEVEL DRAWS AND NO OTHER, keyed by level id. `shared` above is every level's bill; this is one level's. Level 9 brings seven effect sheets, four build-node variants and a screen -- 3.6 MB, more than any plate -- and none of it means anything on levels 1 to 8. A key here is level art (so boot never queues it) and is loaded by exactly the level named. The same shape `towerSkins` already uses, and the reason LevelArt.ts reads both."
+    "_byLevel": "ART ONE LEVEL DRAWS AND NO OTHER, keyed by level id. `shared` above is every level's bill; this is one level's. Level 9 brings seven effect sheets, four build-node variants and a screen -- 3.6 MB, more than any plate -- and none of it means anything on levels 1 to 8. A key here is level art (so boot never queues it) and is loaded by exactly the level named. The same shape `towerSkins` already uses, and the reason LevelArt.ts reads both.\nENEMY-HAT-GTT-B IS IN THIS LIST AND HAD TO BE PUT THERE BY HAND, which is the one gap in the derivation above. `ENEMY_SPRITE_KEYS` is derived from enemies.json's `sprite` field, and the hat's alternate tilt is named by `regen.altSprite` instead -- so it was classified as ordinary art, downloaded at BOOT by every player on every level, and freed by nothing. 0.19 MB on the loading bar for a picture only level 9 can show. Found by diffing the boot path against main rather than by any test: `levelart.test.ts` checks that nothing in a level's list is missing, not that nothing missing from a list should be in it. Any future field that names a second sprite for an enemy needs a row here too."
   },
   "ui": {
     "titleBackdrop": "ui-title-bg",
