@@ -1,0 +1,867 @@
+{
+ "_note": "Level 9, the circuit board. Derived by tools/trace_level9.py and checked independently by tools/check_level9.py. GEOMETRY ONLY -- no level is built from this yet.",
+ "world": [
+  1280,
+  720
+ ],
+ "plate": [
+  3840,
+  2160
+ ],
+ "entrances": {
+  "west": {
+   "terminal": [
+    0,
+    323
+   ],
+   "opening": [
+    291,
+    355
+   ],
+   "_note": "the one frame opening on the trace, 291-355 = 40.4%-49.3% of the height"
+  }
+ },
+ "_entrances": "ONE, not the two the brief states. There is cyan on the west edge in the briefed 81-84% band as well, and it is the cooling tower's leftmost vent slot clipped by the frame -- 165 px, two columns wide at plate resolution, connected to nothing.",
+ "exit": {
+  "terminal": [
+   1177,
+   329
+  ],
+  "opening": [
+   300,
+   359
+  ],
+  "_note": "AN INTERIOR EXIT: a door in the machine housing, not a frame edge. x=1177 is 92.0% of the width and the mouth spans y 300-359 = 41.7%-49.9% of the height."
+ },
+ "deadEnd": {
+  "terminal": [
+   910,
+   568
+  ],
+  "_note": "A FIFTH TERMINAL, interior, where the trace stops on open substrate. Nothing walks it as the board stands. If level 9 wants a second entrance this is the only place the paint offers one."
+ },
+ "nodes": {
+  "fork": [
+   96,
+   321
+  ],
+  "rejoin": [
+   409,
+   525
+  ],
+  "doorJunction": [
+   1103,
+   326
+  ]
+ },
+ "centreline": {
+  "stem": [
+   [
+    4.5,
+    323.0
+   ],
+   [
+    91.5,
+    322.7
+   ]
+  ],
+  "north": [
+   [
+    100.5,
+    321.0
+   ],
+   [
+    114.0,
+    315.9
+   ],
+   [
+    134.0,
+    301.5
+   ],
+   [
+    158.8,
+    277.0
+   ],
+   [
+    170.5,
+    261.0
+   ],
+   [
+    175.1,
+    248.0
+   ],
+   [
+    177.6,
+    232.0
+   ],
+   [
+    179.8,
+    164.0
+   ],
+   [
+    183.5,
+    148.0
+   ],
+   [
+    187.6,
+    140.0
+   ],
+   [
+    237.0,
+    89.7
+   ],
+   [
+    248.0,
+    81.9
+   ],
+   [
+    260.0,
+    77.5
+   ],
+   [
+    291.0,
+    74.0
+   ],
+   [
+    396.0,
+    74.0
+   ],
+   [
+    413.0,
+    76.2
+   ],
+   [
+    423.0,
+    80.2
+   ],
+   [
+    433.0,
+    87.5
+   ],
+   [
+    511.0,
+    165.0
+   ],
+   [
+    525.0,
+    175.7
+   ],
+   [
+    537.0,
+    179.5
+   ],
+   [
+    553.0,
+    181.5
+   ],
+   [
+    621.0,
+    183.0
+   ],
+   [
+    635.0,
+    185.9
+   ],
+   [
+    643.0,
+    189.8
+   ],
+   [
+    693.6,
+    239.0
+   ],
+   [
+    701.4,
+    250.0
+   ],
+   [
+    705.8,
+    261.0
+   ],
+   [
+    709.0,
+    283.0
+   ],
+   [
+    709.0,
+    347.0
+   ],
+   [
+    706.5,
+    365.0
+   ],
+   [
+    700.8,
+    377.0
+   ],
+   [
+    684.0,
+    393.4
+   ],
+   [
+    676.0,
+    397.2
+   ],
+   [
+    666.0,
+    399.1
+   ],
+   [
+    506.0,
+    400.0
+   ],
+   [
+    479.0,
+    401.9
+   ],
+   [
+    457.0,
+    407.7
+   ],
+   [
+    430.1,
+    430.0
+   ],
+   [
+    421.4,
+    440.0
+   ],
+   [
+    416.4,
+    449.0
+   ],
+   [
+    410.4,
+    476.0
+   ],
+   [
+    409.0,
+    520.5
+   ]
+  ],
+  "south": [
+   [
+    100.5,
+    325.5
+   ],
+   [
+    113.6,
+    339.0
+   ],
+   [
+    119.5,
+    349.0
+   ],
+   [
+    130.4,
+    401.0
+   ],
+   [
+    139.2,
+    422.0
+   ],
+   [
+    174.0,
+    459.0
+   ],
+   [
+    244.0,
+    527.2
+   ],
+   [
+    255.0,
+    531.7
+   ],
+   [
+    276.0,
+    534.0
+   ],
+   [
+    387.0,
+    534.0
+   ],
+   [
+    396.0,
+    532.9
+   ],
+   [
+    404.5,
+    529.3
+   ]
+  ],
+  "tail": [
+   [
+    413.5,
+    529.1
+   ],
+   [
+    450.0,
+    547.9
+   ],
+   [
+    467.0,
+    552.1
+   ],
+   [
+    572.0,
+    552.2
+   ],
+   [
+    584.0,
+    549.4
+   ],
+   [
+    593.0,
+    544.2
+   ],
+   [
+    647.0,
+    490.1
+   ],
+   [
+    658.0,
+    481.5
+   ],
+   [
+    667.0,
+    477.7
+   ],
+   [
+    691.0,
+    475.0
+   ],
+   [
+    832.0,
+    475.0
+   ],
+   [
+    848.0,
+    473.3
+   ],
+   [
+    858.0,
+    468.7
+   ],
+   [
+    897.8,
+    429.0
+   ],
+   [
+    905.2,
+    419.0
+   ],
+   [
+    909.1,
+    409.0
+   ],
+   [
+    913.0,
+    379.0
+   ],
+   [
+    913.0,
+    243.0
+   ],
+   [
+    914.5,
+    227.0
+   ],
+   [
+    916.9,
+    218.0
+   ],
+   [
+    922.5,
+    209.0
+   ],
+   [
+    934.0,
+    197.5
+   ],
+   [
+    944.0,
+    191.9
+   ],
+   [
+    975.0,
+    191.7
+   ],
+   [
+    983.0,
+    194.2
+   ],
+   [
+    991.0,
+    199.5
+   ],
+   [
+    1085.4,
+    296.0
+   ],
+   [
+    1099.9,
+    321.5
+   ]
+  ],
+  "door": [
+   [
+    1107.5,
+    328.4
+   ],
+   [
+    1172.5,
+    329.0
+   ]
+  ],
+  "spur": [
+   [
+    1103.0,
+    330.5
+   ],
+   [
+    1100.7,
+    472.0
+   ],
+   [
+    1096.3,
+    493.0
+   ],
+   [
+    1087.4,
+    508.0
+   ],
+   [
+    1044.0,
+    551.9
+   ],
+   [
+    1028.0,
+    562.8
+   ],
+   [
+    1002.0,
+    567.0
+   ],
+   [
+    914.5,
+    568.0
+   ]
+  ]
+ },
+ "lengths": {
+  "north": 1336.35,
+  "south": 417.68,
+  "stem": 87.01,
+  "tail": 1002.5,
+  "door": 65.03,
+  "spur": 375.83
+ },
+ "routes": {
+  "north": 2490.89,
+  "south": 1572.23
+ },
+ "traceLength": 3284.41,
+ "traceWidth": 47.5,
+ "towerRange": 132,
+ "_towerRange": "the shortest attacking range in src/data/towers.json. Levels 6 to 8 were measured at 112, which is no longer any tower's range; the coverage counts below are given at both.",
+ "legacyTowerRange": 112,
+ "padCoreRadius": 24,
+ "spotRadius": 34,
+ "pads": [
+  [
+   781.5,
+   106.0
+  ],
+  [
+   621.5,
+   108.0
+  ],
+  [
+   331.0,
+   170.0
+  ],
+  [
+   1098.5,
+   176.0
+  ],
+  [
+   805.0,
+   240.0
+  ],
+  [
+   460.0,
+   231.0
+  ],
+  [
+   344.5,
+   329.0
+  ],
+  [
+   1005.5,
+   354.0
+  ],
+  [
+   830.0,
+   358.0
+  ],
+  [
+   214.5,
+   365.5
+  ],
+  [
+   506.5,
+   469.5
+  ],
+  [
+   986.0,
+   483.0
+  ],
+  [
+   780.5,
+   579.0
+  ],
+  [
+   353.0,
+   607.5
+  ],
+  [
+   947.5,
+   641.5
+  ]
+ ],
+ "padChips": [
+  {
+   "box": [
+    710,
+    49,
+    853,
+    163
+   ],
+   "w": 144,
+   "h": 115,
+   "area": 15404,
+   "aspect": 1.252,
+   "suggestedNode": "node_chip_cabled",
+   "balancedNode": "node_chip_cabled"
+  },
+  {
+   "box": [
+    588,
+    75,
+    655,
+    141
+   ],
+   "w": 68,
+   "h": 67,
+   "area": 4274,
+   "aspect": 1.015,
+   "suggestedNode": "node_chip_fan",
+   "balancedNode": "node_chip_square"
+  },
+  {
+   "box": [
+    265,
+    120,
+    397,
+    220
+   ],
+   "w": 133,
+   "h": 101,
+   "area": 12992,
+   "aspect": 1.317,
+   "suggestedNode": "node_chip_cabled",
+   "balancedNode": "node_chip_cabled"
+  },
+  {
+   "box": [
+    1058,
+    139,
+    1139,
+    213
+   ],
+   "w": 82,
+   "h": 75,
+   "area": 5776,
+   "aspect": 1.093,
+   "suggestedNode": "node_chip_square",
+   "balancedNode": "node_chip_cabled"
+  },
+  {
+   "box": [
+    763,
+    200,
+    847,
+    280
+   ],
+   "w": 85,
+   "h": 81,
+   "area": 6534,
+   "aspect": 1.049,
+   "suggestedNode": "node_chip_fan",
+   "balancedNode": "node_chip_ram"
+  },
+  {
+   "box": [
+    429,
+    201,
+    491,
+    261
+   ],
+   "w": 63,
+   "h": 61,
+   "area": 3586,
+   "aspect": 1.033,
+   "suggestedNode": "node_chip_fan",
+   "balancedNode": "node_chip_ram"
+  },
+  {
+   "box": [
+    284,
+    273,
+    405,
+    385
+   ],
+   "w": 122,
+   "h": 113,
+   "area": 12751,
+   "aspect": 1.08,
+   "suggestedNode": "node_chip_square",
+   "balancedNode": "node_chip_ram"
+  },
+  {
+   "box": [
+    965,
+    310,
+    1046,
+    398
+   ],
+   "w": 82,
+   "h": 89,
+   "area": 6972,
+   "aspect": 0.921,
+   "suggestedNode": "node_chip_fan",
+   "balancedNode": "node_chip_fan"
+  },
+  {
+   "box": [
+    790,
+    320,
+    870,
+    396
+   ],
+   "w": 81,
+   "h": 77,
+   "area": 5846,
+   "aspect": 1.052,
+   "suggestedNode": "node_chip_fan",
+   "balancedNode": "node_chip_ram"
+  },
+  {
+   "box": [
+    179,
+    331,
+    250,
+    400
+   ],
+   "w": 72,
+   "h": 70,
+   "area": 4685,
+   "aspect": 1.029,
+   "suggestedNode": "node_chip_fan",
+   "balancedNode": "node_chip_square"
+  },
+  {
+   "box": [
+    472,
+    436,
+    541,
+    503
+   ],
+   "w": 70,
+   "h": 68,
+   "area": 4469,
+   "aspect": 1.029,
+   "suggestedNode": "node_chip_fan",
+   "balancedNode": "node_chip_square"
+  },
+  {
+   "box": [
+    951,
+    447,
+    1021,
+    519
+   ],
+   "w": 71,
+   "h": 73,
+   "area": 4901,
+   "aspect": 0.973,
+   "suggestedNode": "node_chip_fan",
+   "balancedNode": "node_chip_fan"
+  },
+  {
+   "box": [
+    706,
+    521,
+    855,
+    637
+   ],
+   "w": 150,
+   "h": 117,
+   "area": 16262,
+   "aspect": 1.282,
+   "suggestedNode": "node_chip_cabled",
+   "balancedNode": "node_chip_cabled"
+  },
+  {
+   "box": [
+    317,
+    572,
+    389,
+    643
+   ],
+   "w": 73,
+   "h": 72,
+   "area": 5022,
+   "aspect": 1.014,
+   "suggestedNode": "node_chip_fan",
+   "balancedNode": "node_chip_square"
+  },
+  {
+   "box": [
+    912,
+    606,
+    983,
+    677
+   ],
+   "w": 72,
+   "h": 72,
+   "area": 4896,
+   "aspect": 1.0,
+   "suggestedNode": "node_chip_fan",
+   "balancedNode": "node_chip_fan"
+  }
+ ],
+ "nodeArt": {
+  "node_chip_square": {
+   "file": [
+    932,
+    860
+   ],
+   "ink": [
+    912,
+    840
+   ],
+   "aspect": 1.086
+  },
+  "node_chip_ram": {
+   "file": [
+    998,
+    893
+   ],
+   "ink": [
+    978,
+    873
+   ],
+   "aspect": 1.12
+  },
+  "node_chip_fan": {
+   "file": [
+    1004,
+    979
+   ],
+   "ink": [
+    984,
+    959
+   ],
+   "aspect": 1.026
+  },
+  "node_chip_cabled": {
+   "file": [
+    1005,
+    746
+   ],
+   "ink": [
+    985,
+    726
+   ],
+   "aspect": 1.357
+  }
+ },
+ "suggestedNodeByAspect": {
+  "1": "node_chip_cabled",
+  "2": "node_chip_fan",
+  "3": "node_chip_cabled",
+  "4": "node_chip_square",
+  "5": "node_chip_fan",
+  "6": "node_chip_fan",
+  "7": "node_chip_square",
+  "8": "node_chip_fan",
+  "9": "node_chip_fan",
+  "10": "node_chip_fan",
+  "11": "node_chip_fan",
+  "12": "node_chip_fan",
+  "13": "node_chip_cabled",
+  "14": "node_chip_fan",
+  "15": "node_chip_fan"
+ },
+ "suggestedNodeBalanced": {
+  "3": "node_chip_cabled",
+  "13": "node_chip_cabled",
+  "1": "node_chip_cabled",
+  "4": "node_chip_cabled",
+  "7": "node_chip_ram",
+  "9": "node_chip_ram",
+  "5": "node_chip_ram",
+  "6": "node_chip_ram",
+  "10": "node_chip_square",
+  "11": "node_chip_square",
+  "2": "node_chip_square",
+  "14": "node_chip_square",
+  "15": "node_chip_fan",
+  "12": "node_chip_fan",
+  "8": "node_chip_fan"
+ },
+ "_nodeArt": "THE FOUR VARIANTS ARE NOT WIRED UP. Measured and matched to chips by aspect ratio only, as a starting point for the build session. They are about 300 world px at plate scale against chips averaging 81x75, so each one must be fitted to the chip it sits on rather than drawn at its own size.",
+ "padStandoff": [
+  155.9,
+  74.7,
+  96.0,
+  93.3,
+  101.2,
+  83.1,
+  132.1,
+  92.5,
+  83.0,
+  89.7,
+  69.4,
+  102.8,
+  104.0,
+  73.5,
+  194.3
+ ],
+ "padStandoffToSpur": [
+  392.1,
+  530.4,
+  706.3,
+  154.6,
+  311.4,
+  565.8,
+  618.1,
+  96.5,
+  226.4,
+  728.7,
+  419.7,
+  84.0,
+  134.5,
+  562.9,
+  74.5
+ ],
+ "padsUnreachable": [
+  1,
+  7,
+  15
+ ],
+ "padsCoveringTwoPasses": 3,
+ "padsCoveringTwoPassesAtLegacyRange": 2,
+ "closestPadPair": 120.6
+}

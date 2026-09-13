@@ -1649,7 +1649,33 @@ test('the deploy stays small enough to open on a phone', () => {
   // was. That is an art decision with a visible result, so it is written up in
   // reports/2026-09-13-restore-tower-assets.md and left for a human, not
   // taken silently by the session that needed the number to move.
+  //
+  // 43, RAISED FROM 41 ON 2026-09-13 BY THE LEVEL 9 GEOMETRY PASS, and the
+  // raise is named here rather than slipped in, because the note above says a
+  // budget with room for the next mistake is not a budget and this is the
+  // second raise in one day.
+  //
+  // What it is buying is `maps/map_level9.webp`: 1.36 MB, the 3840x2160 level
+  // 9 plate converted at q95 and registered in art.json, which is the step
+  // every plate from level 6 on has taken at its geometry pass and which
+  // reports/2026-09-13-level-9-geometry.md is the record of. Like the fourteen
+  // skins above it is LEVEL art -- `art.map` makes it a plate key, so boot
+  // never touches it -- and unlike them it is a download somebody will
+  // actually make, on the day level 9 gets a row in levels.json.
+  //
+  // 41.75 MB today, so 43 leaves 1.25 MB of headroom: the same tightness the
+  // cap has had at every setting.
+  //
+  // AND THE NEXT PLATE DOES NOT FIT. `map_level10.png` is the same 3840x2160
+  // and will land within a few hundred KB of this one, which would need a
+  // third raise inside a week. That is the point at which raising stops being
+  // the answer, and the answer the last two raises have both written down is
+  // still sitting there undone: re-encoding the fourteen machine tower skins
+  // at the quality their originals already ship at gives back about 2.4 MB --
+  // more than level 10's whole plate -- for no content change at all. See
+  // reports/2026-09-13-restore-tower-assets.md. A human should take that
+  // decision before level 10's plate arrives, not after.
   const total = files.reduce((a, f) => a + f.mb, 0)
-  assert.ok(total < 41,
+  assert.ok(total < 43,
     `assets total ${total.toFixed(1)}MB, which is a long wait on a phone`)
 })

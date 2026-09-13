@@ -231,7 +231,17 @@ test('every piece of level art belongs to a level that loads it', () => {
   // second clause is what this row is really asserting, and it is the reason
   // the 3.75 MB is allowed to sit in the deploy — see the deploy cap in
   // tests/content.test.ts and reports/2026-09-13-restore-tower-assets.md.
+  //
+  // AND `map-level9` IS THE FOURTH, which is the first thing on this list
+  // again: level 9's painted plate, converted and registered by the geometry
+  // pass in reports/2026-09-13-level-9-geometry.md exactly as level 7's was,
+  // with no row in levels.json to arrive with. It is level art rather than
+  // boot art the moment it has a row in `art.map`, which is why it is here and
+  // not costing every player a 1.36 MB download on the title screen. It leaves
+  // this list the day level 9 gets a row, the same way level 6's five and
+  // level 7's and 8's eight did.
   assert.deepEqual(orphanedLevelArt(LEVELS.map((l) => l.id)).sort(), [
+    'map-level9',
     'turret-dummy-machine', 'turret-dummy-t2-machine', 'turret-dummy-t3-machine',
     'turret-escalation-machine', 'turret-extension-machine',
     'turret-ledger-machine', 'turret-ledger-t2-machine', 'turret-ledger-t3-machine',
