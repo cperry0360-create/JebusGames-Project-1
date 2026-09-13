@@ -140,10 +140,25 @@ test('the Sprinter is fast, and the collision with Baby Frank is recorded', () =
   const speeds = Object.entries(E)
     .filter(([, e]: [string, any]) => typeof e.speed === 'number')
     .sort((a, b) => (b[1] as any).speed - (a[1] as any).speed)
-  assert.equal(speeds[0]![0], 'babyFrank', 'something has overtaken Baby Frank')
-  assert.equal(speeds[1]![0], 'sprinter', 'the Sprinter is no longer second fastest')
-  assert.equal((speeds[0]![1] as any).speed, 172)
-  assert.equal((speeds[1]![1] as any).speed, 150)
+  // THE ORDER CHANGED AGAIN WHEN LEVEL 7 LANDED, and this records it rather
+  // than being relaxed -- the same thing it already did when level 8's Intern
+  // took third place off level 3's Tiny Glitch. Level 7's Roadrager is a
+  // muscle car on a motorway at 190 px/s, which is the fastest thing in the
+  // game and ought to be: nothing else in this roster is a vehicle whose whole
+  // character is that it is going too fast. Baby Frank is now second and the
+  // Sprinter third.
+  //
+  // ITS SPEED IS NOT A FREE CHOICE EITHER. tests/rules.test.ts asks a level's
+  // `fast` role to be more than 1.5x its `basic`, and level 7's basic is the
+  // Rust Bucket at 125, so anything under 188 would have been a fast enemy
+  // that is not fast. See the `_speed` note on its enemies.json row for why
+  // the Rust Bucket was not slowed instead.
+  assert.equal(speeds[0]![0], 'musclecar', 'something has overtaken the Roadrager')
+  assert.equal(speeds[1]![0], 'babyFrank', 'Baby Frank is no longer second fastest')
+  assert.equal(speeds[2]![0], 'sprinter', 'the Sprinter is no longer third fastest')
+  assert.equal((speeds[0]![1] as any).speed, 190)
+  assert.equal((speeds[1]![1] as any).speed, 172)
+  assert.equal((speeds[2]![1] as any).speed, 150)
   // THIRD PLACE CHANGED HANDS WHEN LEVEL 8 LANDED, and this records it rather
   // than being relaxed: it was level 3's Tiny Glitch at 140 and it is level
   // 8's Intern at 145. The two facts this test exists for are untouched --
@@ -152,8 +167,8 @@ test('the Sprinter is fast, and the collision with Baby Frank is recorded', () =
   // Performance Review multiplies its 145 to 174, which is faster than
   // anything else on any board, and is a thing done TO it rather than a
   // number on its row.
-  assert.equal(speeds[2]![0], 'intern', 'the third fastest moved')
-  assert.equal((speeds[2]![1] as any).speed, 145, 'the third fastest moved')
+  assert.equal(speeds[3]![0], 'intern', 'the fourth fastest moved')
+  assert.equal((speeds[3]![1] as any).speed, 145, 'the fourth fastest moved')
 })
 
 /* ------------------------------------------------------------------- the waves */

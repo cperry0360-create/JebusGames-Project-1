@@ -8,125 +8,448 @@
     {
       "name": "Onboarding",
       "spawns": [
-        { "enemy": "intern", "count": 5, "interval": 1.2, "delay": 0, "lane": "shared", "exit": "east" }
+        {
+          "enemy": "intern",
+          "count": 7,
+          "interval": 1.2,
+          "delay": 0,
+          "lane": "shared",
+          "exit": "east"
+        }
       ]
     },
     {
       "name": "Unpaid Overtime",
       "spawns": [
-        { "enemy": "intern", "count": 6, "interval": 0.9, "delay": 0, "lane": "shared", "exit": "east" },
-        { "enemy": "intern", "count": 4, "interval": 0.9, "delay": 6, "lane": "shared", "exit": "south" }
+        {
+          "enemy": "intern",
+          "count": 6,
+          "interval": 0.9,
+          "delay": 0,
+          "lane": "shared",
+          "exit": "east"
+        },
+        {
+          "enemy": "intern",
+          "count": 4,
+          "interval": 0.9,
+          "delay": 6,
+          "lane": "shared",
+          "exit": "south"
+        }
       ]
     },
     {
       "name": "The Other Door",
       "_name": "The wave that teaches the fork: the bigger half goes south through the scanner and comes out faster, and the smaller half goes east where the guns are not.",
       "spawns": [
-        { "enemy": "intern", "count": 8, "interval": 0.8, "delay": 0, "lane": "shared", "exit": "south" },
-        { "enemy": "intern", "count": 4, "interval": 1.0, "delay": 4, "lane": "shared", "exit": "east" }
+        {
+          "enemy": "intern",
+          "count": 8,
+          "interval": 0.8,
+          "delay": 0,
+          "lane": "shared",
+          "exit": "south"
+        },
+        {
+          "enemy": "intern",
+          "count": 4,
+          "interval": 1.0,
+          "delay": 4,
+          "lane": "shared",
+          "exit": "east"
+        }
       ]
     },
     {
       "name": "Employee Relations",
       "_name": "Human Resources arrives, one of her, with a pack to protect. Killing her first is the whole lesson and this is the wave to learn it on.",
       "spawns": [
-        { "enemy": "hr", "count": 1, "interval": 2.0, "delay": 0, "lane": "shared", "exit": "east" },
-        { "enemy": "intern", "count": 6, "interval": 0.9, "delay": 2, "lane": "shared", "exit": "east" },
-        { "enemy": "intern", "count": 5, "interval": 0.9, "delay": 8, "lane": "shared", "exit": "south" }
+        {
+          "enemy": "hr",
+          "count": 1,
+          "interval": 2.0,
+          "delay": 0,
+          "lane": "shared",
+          "exit": "east"
+        },
+        {
+          "enemy": "intern",
+          "count": 6,
+          "interval": 0.9,
+          "delay": 2,
+          "lane": "shared",
+          "exit": "east"
+        },
+        {
+          "enemy": "intern",
+          "count": 5,
+          "interval": 0.9,
+          "delay": 8,
+          "lane": "shared",
+          "exit": "south"
+        }
       ]
     },
     {
       "name": "Deliverables",
       "_name": "The Consultant, first appearance, on the covered arm -- so the first explosion happens where the player is watching.",
       "spawns": [
-        { "enemy": "consultant", "count": 2, "interval": 3.0, "delay": 0, "lane": "shared", "exit": "south" },
-        { "enemy": "intern", "count": 8, "interval": 0.8, "delay": 3, "lane": "shared", "exit": "south" },
-        { "enemy": "intern", "count": 5, "interval": 1.0, "delay": 10, "lane": "shared", "exit": "east" }
+        {
+          "enemy": "consultant",
+          "count": 2,
+          "interval": 3.0,
+          "delay": 0,
+          "lane": "shared",
+          "exit": "south"
+        },
+        {
+          "enemy": "intern",
+          "count": 8,
+          "interval": 0.8,
+          "delay": 3,
+          "lane": "shared",
+          "exit": "south"
+        },
+        {
+          "enemy": "intern",
+          "count": 5,
+          "interval": 1.0,
+          "delay": 10,
+          "lane": "shared",
+          "exit": "east"
+        }
       ]
     },
     {
       "name": "Performance Improvement Plan",
       "_name": "Middle Management, first appearance, routed EAST: 480 health and 14 armour down the arm with a third of the cover. If the player has not built for the east exit yet, this is the wave that says so.",
       "spawns": [
-        { "enemy": "manager", "count": 2, "interval": 4.0, "delay": 0, "lane": "shared", "exit": "east" },
-        { "enemy": "intern", "count": 8, "interval": 0.8, "delay": 4, "lane": "shared", "exit": "south" },
-        { "enemy": "hr", "count": 1, "interval": 2.0, "delay": 2, "lane": "shared", "exit": "east" }
+        {
+          "enemy": "manager",
+          "count": 2,
+          "interval": 4.0,
+          "delay": 0,
+          "lane": "shared",
+          "exit": "east"
+        },
+        {
+          "enemy": "intern",
+          "count": 8,
+          "interval": 0.8,
+          "delay": 4,
+          "lane": "shared",
+          "exit": "south"
+        },
+        {
+          "enemy": "hr",
+          "count": 1,
+          "interval": 2.0,
+          "delay": 2,
+          "lane": "shared",
+          "exit": "east"
+        }
       ]
     },
     {
       "name": "Synergy",
       "spawns": [
-        { "enemy": "hr", "count": 2, "interval": 5.0, "delay": 0, "lane": "shared", "exit": "south" },
-        { "enemy": "consultant", "count": 3, "interval": 2.6, "delay": 3, "lane": "shared", "exit": "south" },
-        { "enemy": "intern", "count": 10, "interval": 0.7, "delay": 8, "lane": "shared", "exit": "east" }
+        {
+          "enemy": "hr",
+          "count": 2,
+          "interval": 5.0,
+          "delay": 0,
+          "lane": "shared",
+          "exit": "south"
+        },
+        {
+          "enemy": "consultant",
+          "count": 3,
+          "interval": 2.6,
+          "delay": 3,
+          "lane": "shared",
+          "exit": "south"
+        },
+        {
+          "enemy": "intern",
+          "count": 10,
+          "interval": 0.7,
+          "delay": 8,
+          "lane": "shared",
+          "exit": "east"
+        }
       ]
     },
     {
       "name": "Restructuring",
       "spawns": [
-        { "enemy": "manager", "count": 3, "interval": 3.6, "delay": 0, "lane": "shared", "exit": "south" },
-        { "enemy": "consultant", "count": 3, "interval": 2.4, "delay": 6, "lane": "shared", "exit": "east" },
-        { "enemy": "intern", "count": 10, "interval": 0.7, "delay": 10, "lane": "shared", "exit": "east" }
+        {
+          "enemy": "manager",
+          "count": 3,
+          "interval": 3.6,
+          "delay": 0,
+          "lane": "shared",
+          "exit": "south"
+        },
+        {
+          "enemy": "consultant",
+          "count": 3,
+          "interval": 2.4,
+          "delay": 6,
+          "lane": "shared",
+          "exit": "east"
+        },
+        {
+          "enemy": "intern",
+          "count": 9,
+          "interval": 0.7,
+          "delay": 10,
+          "lane": "shared",
+          "exit": "east"
+        }
       ]
     },
     {
       "name": "The Reorg",
       "_name": "Both arms carry a heavy group at once for the first time. Nineteen pads is a lot of board and this is the wave that asks whether the player used it or stacked everything on the trunk.",
       "spawns": [
-        { "enemy": "manager", "count": 3, "interval": 3.4, "delay": 0, "lane": "shared", "exit": "east" },
-        { "enemy": "manager", "count": 2, "interval": 3.4, "delay": 4, "lane": "shared", "exit": "south" },
-        { "enemy": "hr", "count": 2, "interval": 4.0, "delay": 2, "lane": "shared", "exit": "east" },
-        { "enemy": "intern", "count": 12, "interval": 0.6, "delay": 12, "lane": "shared", "exit": "south" }
+        {
+          "enemy": "manager",
+          "count": 3,
+          "interval": 3.4,
+          "delay": 0,
+          "lane": "shared",
+          "exit": "east"
+        },
+        {
+          "enemy": "manager",
+          "count": 2,
+          "interval": 3.4,
+          "delay": 4,
+          "lane": "shared",
+          "exit": "south"
+        },
+        {
+          "enemy": "hr",
+          "count": 2,
+          "interval": 4.0,
+          "delay": 2,
+          "lane": "shared",
+          "exit": "east"
+        },
+        {
+          "enemy": "intern",
+          "count": 10,
+          "interval": 0.6,
+          "delay": 12,
+          "lane": "shared",
+          "exit": "south"
+        }
       ]
     },
     {
       "name": "Cost Centre",
       "spawns": [
-        { "enemy": "consultant", "count": 5, "interval": 2.2, "delay": 0, "lane": "shared", "exit": "south" },
-        { "enemy": "hr", "count": 2, "interval": 4.0, "delay": 4, "lane": "shared", "exit": "south" },
-        { "enemy": "intern", "count": 14, "interval": 0.6, "delay": 8, "lane": "shared", "exit": "east" },
-        { "enemy": "manager", "count": 2, "interval": 3.4, "delay": 14, "lane": "shared", "exit": "east" }
+        {
+          "enemy": "consultant",
+          "count": 5,
+          "interval": 2.2,
+          "delay": 0,
+          "lane": "shared",
+          "exit": "south"
+        },
+        {
+          "enemy": "hr",
+          "count": 2,
+          "interval": 4.0,
+          "delay": 4,
+          "lane": "shared",
+          "exit": "south"
+        },
+        {
+          "enemy": "intern",
+          "count": 14,
+          "interval": 0.6,
+          "delay": 8,
+          "lane": "shared",
+          "exit": "east"
+        },
+        {
+          "enemy": "manager",
+          "count": 2,
+          "interval": 3.4,
+          "delay": 14,
+          "lane": "shared",
+          "exit": "east"
+        }
       ]
     },
     {
       "name": "Quarterly Review",
       "spawns": [
-        { "enemy": "manager", "count": 4, "interval": 3.2, "delay": 0, "lane": "shared", "exit": "south" },
-        { "enemy": "consultant", "count": 4, "interval": 2.2, "delay": 5, "lane": "shared", "exit": "east" },
-        { "enemy": "hr", "count": 3, "interval": 3.6, "delay": 3, "lane": "shared", "exit": "south" },
-        { "enemy": "intern", "count": 14, "interval": 0.55, "delay": 12, "lane": "shared", "exit": "south" }
+        {
+          "enemy": "manager",
+          "count": 3,
+          "interval": 3.2,
+          "delay": 0,
+          "lane": "shared",
+          "exit": "south"
+        },
+        {
+          "enemy": "consultant",
+          "count": 4,
+          "interval": 2.2,
+          "delay": 5,
+          "lane": "shared",
+          "exit": "east"
+        },
+        {
+          "enemy": "hr",
+          "count": 2,
+          "interval": 3.6,
+          "delay": 3,
+          "lane": "shared",
+          "exit": "south"
+        },
+        {
+          "enemy": "intern",
+          "count": 14,
+          "interval": 0.55,
+          "delay": 12,
+          "lane": "shared",
+          "exit": "south"
+        }
       ]
     },
     {
       "name": "Headcount",
       "spawns": [
-        { "enemy": "intern", "count": 20, "interval": 0.45, "delay": 0, "lane": "shared", "exit": "east" },
-        { "enemy": "intern", "count": 16, "interval": 0.5, "delay": 6, "lane": "shared", "exit": "south" },
-        { "enemy": "hr", "count": 3, "interval": 3.4, "delay": 10, "lane": "shared", "exit": "east" },
-        { "enemy": "consultant", "count": 4, "interval": 2.2, "delay": 14, "lane": "shared", "exit": "south" }
+        {
+          "enemy": "intern",
+          "count": 20,
+          "interval": 0.45,
+          "delay": 0,
+          "lane": "shared",
+          "exit": "east"
+        },
+        {
+          "enemy": "intern",
+          "count": 16,
+          "interval": 0.5,
+          "delay": 6,
+          "lane": "shared",
+          "exit": "south"
+        },
+        {
+          "enemy": "hr",
+          "count": 3,
+          "interval": 3.4,
+          "delay": 10,
+          "lane": "shared",
+          "exit": "east"
+        },
+        {
+          "enemy": "consultant",
+          "count": 4,
+          "interval": 2.2,
+          "delay": 14,
+          "lane": "shared",
+          "exit": "south"
+        }
       ]
     },
     {
       "name": "Final Alignment",
       "_name": "The last wave before the boss, and the heaviest thing on the board that is not him: five walls down the long arm, four down the short one, with the whole intern roster behind them.",
       "spawns": [
-        { "enemy": "manager", "count": 5, "interval": 3.0, "delay": 0, "lane": "shared", "exit": "south" },
-        { "enemy": "manager", "count": 4, "interval": 3.0, "delay": 6, "lane": "shared", "exit": "east" },
-        { "enemy": "consultant", "count": 5, "interval": 2.0, "delay": 10, "lane": "shared", "exit": "east" },
-        { "enemy": "hr", "count": 4, "interval": 3.2, "delay": 4, "lane": "shared", "exit": "south" },
-        { "enemy": "intern", "count": 18, "interval": 0.5, "delay": 16, "lane": "shared", "exit": "south" }
+        {
+          "enemy": "manager",
+          "count": 3,
+          "interval": 3.0,
+          "delay": 0,
+          "lane": "shared",
+          "exit": "south"
+        },
+        {
+          "enemy": "manager",
+          "count": 3,
+          "interval": 3.0,
+          "delay": 6,
+          "lane": "shared",
+          "exit": "east"
+        },
+        {
+          "enemy": "consultant",
+          "count": 5,
+          "interval": 2.0,
+          "delay": 10,
+          "lane": "shared",
+          "exit": "east"
+        },
+        {
+          "enemy": "hr",
+          "count": 4,
+          "interval": 3.2,
+          "delay": 4,
+          "lane": "shared",
+          "exit": "south"
+        },
+        {
+          "enemy": "intern",
+          "count": 18,
+          "interval": 0.5,
+          "delay": 16,
+          "lane": "shared",
+          "exit": "south"
+        }
       ]
     },
     {
       "name": "The CEO",
       "boss": "ceo",
       "spawns": [
-        { "enemy": "ceo", "count": 1, "interval": 2.0, "delay": 0, "lane": "shared", "exit": "south" },
-        { "enemy": "manager", "count": 3, "interval": 3.4, "delay": 10, "lane": "shared", "exit": "east" },
-        { "enemy": "consultant", "count": 4, "interval": 2.4, "delay": 18, "lane": "shared", "exit": "south" },
-        { "enemy": "intern", "count": 14, "interval": 0.6, "delay": 26, "lane": "shared", "exit": "east" },
-        { "enemy": "hr", "count": 3, "interval": 3.4, "delay": 34, "lane": "shared", "exit": "south" }
+        {
+          "enemy": "ceo",
+          "count": 1,
+          "interval": 2.0,
+          "delay": 0,
+          "lane": "shared",
+          "exit": "south"
+        },
+        {
+          "enemy": "manager",
+          "count": 3,
+          "interval": 3.4,
+          "delay": 10,
+          "lane": "shared",
+          "exit": "east"
+        },
+        {
+          "enemy": "consultant",
+          "count": 4,
+          "interval": 2.4,
+          "delay": 18,
+          "lane": "shared",
+          "exit": "south"
+        },
+        {
+          "enemy": "intern",
+          "count": 14,
+          "interval": 0.6,
+          "delay": 26,
+          "lane": "shared",
+          "exit": "east"
+        },
+        {
+          "enemy": "hr",
+          "count": 3,
+          "interval": 3.4,
+          "delay": 34,
+          "lane": "shared",
+          "exit": "south"
+        }
       ]
     }
-  ]
+  ],
+  "_curve": "THE CURVE WAS FIXED THE DAY THIS LEVEL GOT A ROW, and that is how it was found. tests/content.test.ts's `the wave curve has no cliff in it` runs over every table in levels.json, and level 8 had no row until level 7 landed -- so its curve had never once been measured. Five of its thirteen steps were faults: wave 2 was 100% heavier than wave 1, wave 8 was 56.8%, wave 13 was 90.7%, and waves 10 and 12 were LIGHTER than the waves before them. Six counts moved and nothing else: wave 1 gained two Interns, waves 8 and 9 lost one and two, wave 11 lost a Middle Management and an HR, and wave 13 lost three Middle Managements off a 2,400-point spike. The level was re-soaked afterwards -- see SOAK-REPORT.md and reports/2026-09-13-level-7.md -- because level 8 is purse-bound and a body count is a difficulty number on it."
 }

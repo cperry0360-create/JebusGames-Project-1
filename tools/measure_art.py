@@ -281,6 +281,41 @@ ENEMY_KEY = {
     # the Glider and the Rooster already get.
     'enemy_office_drone.webp':    ('enemy-office-drone',   0.90,  55.0),
     'boss_ceo.webp':              ('enemy-ceo',            0.90, 150.0),
+    # LEVEL 7 IS NINE VEHICLES AND EVERY ONE OF THEM IS LANDSCAPE, which is the
+    # opposite shape to everything above: the widest thing in the file before
+    # these was the Office Drone at 1.41:1 and the Blade Rig is 2.31:1. Two
+    # consequences, and both are why all nine are in ENEMY_BODY_SHADOW and
+    # ENEMY_BODY_ANCHOR below rather than measured off a stance.
+    #
+    # FIRST, A CAR'S SHADOW IS THE CAR. A foot band finds the tyre contact
+    # patches, which on a vehicle drawn side-on are two small runs at the far
+    # ends of the art -- so `hi - lo + 1` comes out at 90-97% of the canvas
+    # anyway, and manifest.test.ts rejects anything past 85% with "it has
+    # swallowed something the art is holding". Nothing is being swallowed: the
+    # thing really is that wide, and what lies under a car is its whole
+    # underside rather than four ellipses. Measuring the body says that
+    # directly instead of arriving at the same number by accident.
+    #
+    # SECOND, THE ANCHOR. A vehicle's x centre is its body's, not the midpoint
+    # between two tyres -- the Blade Rig's blades hang off its nose and the
+    # transporter's cab is at one end of a trailer, so a contact-patch anchor
+    # puts either of them visibly off its own lane centre.
+    #
+    # The band values below are still read and still printed; they decide
+    # nothing for these nine but the script has no shape that skips them.
+    'enemy_hatchback.webp':       ('enemy-hatchback',      0.90,  66.0),
+    'enemy_musclecar.webp':       ('enemy-musclecar',      0.90,  74.0),
+    # 86, not the brief's 88. tests/content.test.ts holds the rank and file under
+    # the SHORTEST TOWER, which is 87.1 world px, so an 88 px van is a lorry that
+    # dwarfs the buildings shooting at it. Two pixels, and the rule it was breaking
+    # is the one that keeps the board reading as a board.
+    'enemy_van.webp':             ('enemy-van',            0.90,  86.0),
+    'boss_bladerig.webp':         ('enemy-bladerig',       0.90, 130.0),
+    'boss_transporter.webp':      ('enemy-transporter',    0.90, 175.0),
+    'enemy_cargo_red.webp':       ('enemy-cargo-red',      0.90,  72.0),
+    'enemy_cargo_blue.webp':      ('enemy-cargo-blue',     0.90,  72.0),
+    'enemy_cargo_yellow.webp':    ('enemy-cargo-yellow',   0.90,  72.0),
+    'enemy_cargo_green.webp':     ('enemy-cargo-green',    0.90,  72.0),
 }
 # Enemies whose shadow is cast by the whole body, not by the feet.
 # A GLIDER HAS NO FEET ON THE GROUND. It hovers, so its foot band catches the
@@ -294,9 +329,15 @@ ENEMY_KEY = {
 # is a plume -- so both its shadow and its x anchor come off the ink instead.
 # THE OFFICE DRONE IS THE FIFTH AND SIXTH: a quadcopter hanging in the air
 # over a landscape canvas, with nothing on the ground at all.
+# THE NINE LEVEL 7 VEHICLES ARE THE SEVENTH THROUGH FIFTEENTH, for the reason
+# written against their rows above: what lies under a car is the car.
+LEVEL7_VEHICLES = {'enemy-hatchback', 'enemy-musclecar', 'enemy-van', 'enemy-bladerig',
+                'enemy-transporter', 'enemy-cargo-red', 'enemy-cargo-blue',
+                'enemy-cargo-yellow', 'enemy-cargo-green'}
 ENEMY_BODY_SHADOW = {'enemy-zamboni', 'enemy-glitch-bug', 'enemy-glider', 'enemy-rooster',
-                     'enemy-office-drone'}
-ENEMY_BODY_ANCHOR = {'enemy-glider', 'enemy-rooster', 'enemy-office-drone'}
+                     'enemy-office-drone'} | LEVEL7_VEHICLES
+ENEMY_BODY_ANCHOR = ({'enemy-glider', 'enemy-rooster', 'enemy-office-drone'}
+                     | LEVEL7_VEHICLES)
 # Where to LOOK for feet, as fractions of the source width, for art whose
 # ground silhouette catches something that is not one.
 #

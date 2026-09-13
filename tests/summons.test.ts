@@ -202,9 +202,18 @@ test('the scene and the sim summon by the same rule', () => {
   assert.match(game, /startAt: \{ laneDistance: at\.laneDistance, distance: at\.distance \}/,
     'the child does not start at its parent place')
   assert.match(game, /laneId: at\.laneId/, 'the child is not put on its parent lane')
-  // Wave completion ignores summons.
-  assert.match(game, /this\.enemies\.some\(\(e\) => !e\.summoned\)/,
+  // WAVE COMPLETION IGNORES SUMMONS, and it asks the ENEMY that rather than
+  // reading `summoned` itself. `Enemy.holdsWave` is `!summoned` for every
+  // enemy in the game except the four cars off level 7's Transporter, which
+  // carry `splitsOnDeath.holdsWave` and are the end of the level rather than
+  // an afterthought to a fight that is already over. A boss's brood still must
+  // not extend the wave that spawned it -- killing the Vampire Lord at wave 11
+  // must not leave the player waiting for four Gliders to walk off -- and that
+  // is the getter's default, checked below on the entity itself.
+  assert.match(game, /this\.enemies\.some\(\(e\) => e\.holdsWave\)/,
     'the wave-over check no longer ignores summons')
+  assert.match(src('entities/Enemy.ts'), /get holdsWave\(\): boolean \{\s*\n\s*return !this\.summoned \|\| this\.heldWave/,
+    'holdsWave no longer defaults to ignoring summons')
 
   const sim = readFileSync(new URL('../tools/soak/Sim.ts', import.meta.url), 'utf8')
   assert.match(sim, /e\.summonedBy === parent/, 'the sim does not cap per summoner')

@@ -334,7 +334,12 @@ test('every level has a slot on the road and a card to draw there', () => {
   // src/data/level8.json). Its card is 25 KB that the world map will draw the
   // day the row lands. What is required of the exception is that the level
   // genuinely EXISTS as data -- a card for a typo would still fail here.
-  const PARKED_CARDS: Record<string, string> = { level8: 'map_level8' }
+  // EMPTY NOW. Level 8 was the one entry, parked because it is unlocked by
+  // level 7 and level 7 had no row; both rows landed together, so there is
+  // nothing parked and the exception has nothing to except. It stays as the
+  // shape rather than being deleted, because the next built-but-unregistered
+  // level will need it again.
+  const PARKED_CARDS: Record<string, string> = {}
   for (const id of Object.keys(cards)) {
     if (LEVELS.some((l) => l.id === id)) continue
     const parked = PARKED_CARDS[id]
@@ -523,7 +528,8 @@ test('each level\'s laneLengthPx is what its own map actually walks', () => {
   // which is why levels 1 and 2 read the same as they always did.
   const maps: Record<string, string> = {
     level1: 'map', level2: 'map_level2', level3: 'map_level3', level4: 'map_level4',
-    level5: 'map_level5', level6: 'map_level6',
+    level5: 'map_level5', level6: 'map_level6', level7: 'map_level7',
+    level8: 'map_level8',
   }
   // THE ROUTE MATHS IS THE ENGINE'S, and it did not used to be. This test
   // re-derived it -- "the branch, plus the whole trunk" -- which was right for

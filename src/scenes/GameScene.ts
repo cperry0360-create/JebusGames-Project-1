@@ -21,7 +21,10 @@ import {
   DEFAULT_DIFFICULTY_ID, difficultyName, resolveDifficultyId,
   startingLives, startingPeanuts,
 } from '../systems/Difficulty.ts'
+import { bladeDamage, bladesFrom } from '../systems/Blades.ts'
+import type { BladesDef } from '../systems/Blades.ts'
 import { LaneNetwork, chooseContinuation, pickAt, pickForTerminal } from '../systems/Lanes.ts'
+import type { Lane } from '../systems/Lanes.ts'
 import {
   armorAuraRules, auraArmorAt, type ArmorAuraRules,
 } from '../systems/EnemyAura.ts'
@@ -327,6 +330,14 @@ export class GameScene extends Phaser.Scene {
   // local typecheck caught it as "Duplicate identifier" and CI would have
   // caught it as a call on a null object.
   private deathBlast: { radius: number; damage: number; hitsPlayerUnits: boolean } | null = null
+  /** LEVEL 7'S BLADES, null everywhere else. See systems/Blades.ts. */
+  private blades: BladesDef | null = null
+  /** The split children still waiting to come off a trailer, with the seconds
+   *  left before each appears. Empty on every frame of every other level. */
+  private pendingSplits: Array<{
+    def: EnemyDef; laneId: string; laneDistance: number; distance: number
+    parent: Enemy; routePick: number | undefined; holdsWave: boolean; delay: number
+  }> = []
   /**
    * Level 5's five extra systems, or null on every other level.
    *
@@ -804,6 +815,9 @@ export class GameScene extends Phaser.Scene {
     this.deathBlast = db && db.radius && db.damage
       ? { radius: db.radius, damage: db.damage, hitsPlayerUnits: db.hitsPlayerUnits === true }
       : null
+    // LEVEL 7'S BLADES, through the same gate and asserted the same way.
+    this.blades = bladesFrom(r8 as { blades?: unknown } | null)
+    this.pendingSplits = []
     this.flameStates = new Map()
     this.scorchLeft = new Map()
 
@@ -2659,10 +2673,18 @@ export class GameScene extends Phaser.Scene {
     const r = tower.range
     const step = 14
     this.laneWash.fillStyle(0xf6ecd9, 0.14)
-    for (let d = 0; d <= this.lane.totalLength; d += step) {
-      const pt = this.lane.pointAt(d)
-      if (Math.hypot(pt.x - tower.x, pt.y - tower.y) > r) continue
-      this.laneWash.fillCircle(pt.x, pt.y, 15)
+    // EVERY LANE, not `this.lane`. This used to walk main's path alone, which
+    // was invisible while main was the only road and merely incomplete on
+    // levels 3 to 6 -- and is a lie on level 7, where TWENTY of the 22 pads
+    // reach two highways at once and the wash would have shown one of them.
+    // A player reading the wash to decide where to build would have been told
+    // a median tower does half the work it does.
+    for (const lane of this.lanes.lanes) {
+      for (let d = 0; d <= lane.path.totalLength; d += step) {
+        const pt = lane.path.pointAt(d)
+        if (Math.hypot(pt.x - tower.x, pt.y - tower.y) > r) continue
+        this.laneWash.fillCircle(pt.x, pt.y, 15)
+      }
     }
   }
 
@@ -3269,10 +3291,17 @@ export class GameScene extends Phaser.Scene {
   private washLane(colour: number, keep: (p: { x: number; y: number }) => boolean): void {
     const T = PRESENTATION.targeting
     this.targetArea.fillStyle(colour, T.washAlpha)
-    for (let d = 0; d <= this.lane.totalLength; d += T.step) {
-      const pt = this.lane.pointAt(d)
-      if (!keep(pt)) continue
-      this.targetArea.fillCircle(pt.x, pt.y, T.laneRadius)
+    // EVERY LANE, for `drawCoveredLane`'s reason and with a sharper edge: this
+    // paints WHERE A PATH-ONLY ABILITY MAY BE CAST, and `validCastPoint` now
+    // answers that against the nearest lane. Painting main's road while the
+    // rule measured all three would have shown a legal cast as illegal on two
+    // thirds of level 7's board.
+    for (const lane of this.lanes.lanes) {
+      for (let d = 0; d <= lane.path.totalLength; d += T.step) {
+        const pt = lane.path.pointAt(d)
+        if (!keep(pt)) continue
+        this.targetArea.fillCircle(pt.x, pt.y, T.laneRadius)
+      }
     }
   }
 
@@ -3292,7 +3321,40 @@ export class GameScene extends Phaser.Scene {
   private validCastPoint(def: AbilityDef, x: number, y: number): boolean {
     const within = def.pathOnlyWithin
     if (within === undefined) return true
-    return this.lane.distanceTo(x, y) <= within
+    return this.distanceToNearestLane(x, y) <= within
+  }
+
+  /**
+   * How far a point is from the closest road on this map.
+   *
+   * "THE ROAD" IS NOT `this.lane`, and on a multi-lane map it never was.
+   * `this.lane` is main's path -- the north highway on level 7, the upper lane
+   * on level 6 -- so a summon dropped beside the middle or south highway was
+   * refused as off-road while standing on asphalt. Two thirds of level 7's
+   * board was unreachable to every path-only ability.
+   *
+   * Cheap enough to call per pointer move: three paths of two vertices each
+   * here, and `Path.distanceTo` is a loop over segments.
+   */
+  private distanceToNearestLane(x: number, y: number): number {
+    let best = Infinity
+    for (const lane of this.lanes.lanes) {
+      const d = lane.path.distanceTo(x, y)
+      if (d < best) best = d
+    }
+    return best
+  }
+
+  /** The lane whose painted road is closest to a point. What "turned to the
+   *  road" means for something laid down on a map with more than one. */
+  private nearestLane(x: number, y: number): Lane {
+    let best = this.lanes.main
+    let bestD = Infinity
+    for (const lane of this.lanes.lanes) {
+      const d = lane.path.distanceTo(x, y)
+      if (d < bestD) { bestD = d; best = lane }
+    }
+    return best
   }
 
   private fireAbility(id: string, x: number, y: number): void {
@@ -4212,8 +4274,12 @@ export class GameScene extends Phaser.Scene {
       state: makeHazard(p, x, y),
       // Under the entities, like the lane wash: it is painted on the road.
       // Turned to the road it is laid on. See Path.headingNear.
+      // THE NEAREST LANE'S heading, not main's. Harmless on level 7, where all
+      // three highways run at heading 0 and main's answer is every lane's --
+      // and wrong on level 6, where a Spike Strip laid on the lower road was
+      // turned to the upper one's bearing.
       art: groundStrip(this, p.fx, x, y, p.radius, GROUND_DEPTH + 3,
-        this.lane.headingNear(x, y)),
+        this.nearestLane(x, y).path.headingNear(x, y)),
     })
   }
 
@@ -5000,7 +5066,11 @@ export class GameScene extends Phaser.Scene {
     // boss called in is not the wave's to account for, and a summoner that
     // kept bursting until the last child died would hold the wave open for as
     // long as it could keep summoning.
-    if (!this.spawner.done || this.enemies.some((e) => !e.summoned)) return
+    // `holdsWave`, NOT `!summoned`. They are the same answer for every enemy in
+    // the game except the four cars off level 7's Transporter, which are
+    // summoned children that the wave -- and the level -- deliberately waits
+    // for. See `Enemy.holdsWave`.
+    if (!this.spawner.done || this.enemies.some((e) => e.holdsWave)) return
 
     const escaped = this.escapedThisWave
     const last = this.status.wave + 1 >= this.level.waveTable.waves.length
@@ -5411,6 +5481,14 @@ export class GameScene extends Phaser.Scene {
     // else. BEFORE `tickEnemies`, like `tickNight`, because it decides how
     // much damage the hits landed this frame take off.
     this.tickArmorAura()
+    // LEVEL 7'S BLADE RIG, and a no-op returning on the first line everywhere
+    // else. BEFORE `tickEnemies` for `tickNight`'s reason: a unit the blades
+    // killed this frame should not also get to swing.
+    this.tickBlades(dt)
+    // The cars still coming off the Transporter's trailer. Also before
+    // `tickEnemies`, so a car released this frame takes its first step this
+    // frame rather than standing still for one.
+    this.tickPendingSplits(dt)
     this.tickEnemies(dt)
     // WHAT THE PLAYER'S SIDE MAY SHOOT, which is not every enemy on the board.
     // A mind-controlled enemy is fighting for the player, and a tower or a
@@ -6341,22 +6419,116 @@ export class GameScene extends Phaser.Scene {
   private splitOnDeath(enemy: Enemy): void {
     const spec = enemy.def.splitsOnDeath
     if (!spec) return
-    const def = ENEMIES[spec.enemy]
-    if (!def) return
+    // ONE KIND OR SEVERAL. The Vampire Lord names `enemy` and gets four of the
+    // same Glider; the Transporter names `enemies` and gets one of each colour
+    // off its trailer, cycled to fill `count` so the two fields cannot
+    // disagree about how many children there are.
+    const ids = spec.enemies ?? (spec.enemy ? [spec.enemy] : [])
+    const defs = ids.map((id) => ENEMIES[id]).filter((d): d is EnemyDef => !!d)
+    if (defs.length === 0) return
     const at = enemy.summonPoint
+    const holdsWave = spec.holdsWave === true
+    const spacing = spec.spacingPx ?? 0
+    const stagger = spec.emergeSeconds ?? 0
     for (let i = 0; i < spec.count; i++) {
-      const child = new Enemy(this, def, this.lanes.lane(at.laneId).path, this.gateway, {
-        lanes: this.lanes,
-        laneId: at.laneId,
-        startAt: { laneDistance: at.laneDistance, distance: at.distance },
-        summonedBy: enemy,
-        routePick: enemy.routePick,
-      })
-      child.speedScale = this.night?.speedFor(def) ?? 1
-      this.enemies.push(child)
+      const def = defs[i % defs.length]!
+      // STRUNG BACK ALONG THE LANE, never forward, and never below zero.
+      // `i === 0` is exactly the death point, which is what keeps the late-kill
+      // case as bad as it is meant to be -- see enemies.json's `_finale`. The
+      // clamp at 0 is not a safety margin either: it is the start of the road,
+      // and a car cannot be placed behind the entrance.
+      const laneDistance = Math.max(0, at.laneDistance - spacing * i)
+      const distance = Math.max(0, at.distance - spacing * i)
+      const delay = stagger * i
+      if (delay > 0) {
+        this.pendingSplits.push({
+          def, laneId: at.laneId, laneDistance, distance,
+          parent: enemy, routePick: enemy.routePick, holdsWave, delay,
+        })
+        continue
+      }
+      this.releaseSplit(def, at.laneId, laneDistance, distance, enemy,
+        enemy.routePick, holdsWave)
     }
     deathPuff(this, enemy.x, enemy.centreY)
-    logEvent('split', `${enemy.def.name} -> ${spec.count} x ${def.name}`)
+    logEvent('split', `${enemy.def.name} -> ${spec.count} x `
+      + defs.map((d) => d.name).join(', '))
+  }
+
+  /** One child onto the board, at a place on a lane. The shared tail of an
+   *  instant split and a staggered one, so the two cannot drift. */
+  private releaseSplit(def: EnemyDef, laneId: string, laneDistance: number,
+    distance: number, parent: Enemy, routePick: number | undefined,
+    holdsWave: boolean): void {
+    const child = new Enemy(this, def, this.lanes.lane(laneId).path, this.gateway, {
+      lanes: this.lanes,
+      laneId,
+      startAt: { laneDistance, distance },
+      summonedBy: parent,
+      routePick,
+      holdsWave,
+    })
+    child.speedScale = this.night?.speedFor(def) ?? 1
+    this.enemies.push(child)
+  }
+
+  /**
+   * The cars still coming off a trailer, one frame on.
+   *
+   * A QUEUE RATHER THAN A TIMER PER CHILD, because a child that does not exist
+   * yet cannot hold its own clock. Empty on every frame of every level whose
+   * splits are instant, which is every level but 7.
+   *
+   * THE PARENT IS ALREADY DEAD by the time any of these fire, and that is
+   * fine: `summonedBy` is deliberately not cleared when a summoner dies -- see
+   * `Enemy.summonedBy` -- so the children stay its children and the wave-over
+   * count reads them through `holdsWave` rather than through a live parent.
+   */
+  private tickPendingSplits(dt: number): void {
+    if (this.pendingSplits.length === 0) return
+    const waiting: typeof this.pendingSplits = []
+    for (const p of this.pendingSplits) {
+      p.delay -= dt
+      if (p.delay > 0) { waiting.push(p); continue }
+      this.releaseSplit(p.def, p.laneId, p.laneDistance, p.distance, p.parent,
+        p.routePick, p.holdsWave)
+    }
+    this.pendingSplits = waiting
+  }
+
+  /**
+   * The Blade Rig's blades: everything of the player's standing where it is
+   * driving takes damage for as long as it stands there.
+   *
+   * TOWERS ARE NOT TOUCHED. A tower is a building on a pad beside the road and
+   * the blades cut what is in the road -- the hero, his fighters and the
+   * garrison lads on their rally spots. systems/Blades.ts has no field for
+   * towers, so this cannot be turned on by accident.
+   *
+   * It reuses the enumeration `deathBlastAt` already does for the player's
+   * side, which is the only other thing in the game that damages it.
+   */
+  private tickBlades(dt: number): void {
+    const b = this.blades
+    if (!b) return
+    const rigs = this.enemies
+      .filter((e) => e.alive && e.def.bladed === true && !e.controlled)
+      .map((e) => ({ x: e.x, y: e.y }))
+    if (rigs.length === 0) return
+    const heroCut = bladeDamage({ x: this.hero.x, y: this.hero.y }, rigs, b, dt)
+    if (heroCut > 0) this.damageHero(heroCut)
+    for (const f of this.fighters) {
+      if (!f.alive) continue
+      const cut = bladeDamage({ x: f.x, y: f.y }, rigs, b, dt)
+      if (cut > 0) f.hurt(cut)
+    }
+    for (const g of this.garrisons) {
+      for (const sol of g.soldiers) {
+        if (!sol.alive) continue
+        const cut = bladeDamage({ x: sol.x, y: sol.y }, rigs, b, dt)
+        if (cut > 0) sol.hurt(cut)
+      }
+    }
   }
 
   /**

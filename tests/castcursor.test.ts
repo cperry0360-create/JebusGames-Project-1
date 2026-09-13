@@ -62,8 +62,18 @@ test('the cursor keeps a constant size on the glass', () => {
 test('the placement rule itself is unchanged', () => {
   // The band was where the restriction was DRAWN, never where it was decided.
   assert.equal(A.gnomes.pathOnlyWithin, 56)
+  // IT MEASURES EVERY LANE NOW, and that is a fix rather than a change of
+  // rule. `this.lane` is MAIN's path -- the north highway on level 7, the
+  // upper lane on level 6 -- so a summon dropped on asphalt beside the middle
+  // or south highway was refused as off-road, and two thirds of level 7's
+  // board was unreachable to every path-only ability. The rule is still "56 px
+  // from the road"; what changed is which roads count as the road.
   assert.match(src('scenes/GameScene.ts'),
-    /private validCastPoint[\s\S]{0,220}?this\.lane\.distanceTo\(x, y\) <= within/)
+    /private validCastPoint[\s\S]{0,260}?this\.distanceToNearestLane\(x, y\) <= within/)
+  // And the thing that makes that answer honest: the nearest lane is the
+  // minimum over every lane on the map, not over main alone.
+  assert.match(src('scenes/GameScene.ts'),
+    /private distanceToNearestLane[\s\S]{0,400}?for \(const lane of this\.lanes\.lanes\)/)
 })
 
 test('CANCEL is in the HUD, and the layout reserves it', () => {

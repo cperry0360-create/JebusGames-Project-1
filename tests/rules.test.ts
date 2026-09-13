@@ -471,8 +471,14 @@ test('nothing but a boss walks through the line, and nothing but a boss taxes', 
   // one that is actually about bosses: they cannot be held, and they do not
   // attack. Taxing is a mechanic a boss MAY have and nothing else may.
   let taxing = 0
+  // A BOSS IS `role` OR `tier`, the reading tests/content.test.ts's size rule
+  // and tests/blocking.test.ts's line rule both use. Level 7's Blade Rig is
+  // `tier: elite` because a level may field exactly one `tier: boss` sprite
+  // and level 7's is the Transporter -- but it is a mini boss that cannot be
+  // held, which is its whole briefed identity, and judged on tier alone it is
+  // rank and file walking through the line.
   for (const [id, e] of Object.entries(enemies) as [string, any][]) {
-    if (e.tier === 'boss') {
+    if (e.tier === 'boss' || e.role === 'boss') {
       // A BOSS IS EITHER UNHOLDABLE AND HARMLESS OR HOLDABLE AND DANGEROUS,
       // and never the third thing.
       //
@@ -532,13 +538,16 @@ test('every boss pays a lump sum, and the rule is checked on every boss', () => 
    * only ever looking at the one boss it happened to be true of.
    */
   const bosses = Object.entries(enemies).filter(([, e]: [string, any]) => e.tier === 'boss')
+  // NINE ROWS, EIGHT BOSSES: level 7's Transporter is the ninth row. Level 7's
+  // Blade Rig is NOT here and should not be -- it is `tier: elite`, a mini
+  // boss fought twice, the Vampire Lord's shape exactly.
   // EIGHT ROWS, SEVEN BOSSES. Level 4's Glitch Lich King is two rows -- the
   // wave 7 form that retreats and the wave 13 form that does not -- and both
   // are held to every rule below, which is the point of the count being here
   // at all: it is a tripwire against a boss being added and never examined.
   // Batula is the sixth row, the Rooster the seventh, and level 8's CEO the
   // eighth.
-  assert.equal(bosses.length, 8, 'the roster gained or lost a boss')
+  assert.equal(bosses.length, 9, 'the roster gained or lost a boss')
   const dearest = Math.max(...Object.values(towers).map((t: any) => t.cost))
   // THE BEST ORDINARY PAYOUT, and `ordinary` is role as well as tier -- level
   // 5's Vampire Lord is a mini-boss carrying `tier: elite` (see enemies.json's
@@ -645,7 +654,20 @@ test('the board grows at a sane rate across the run', () => {
 test('leaking matters but one mistake is not fatal', () => {
   // Measured on the rank and file. A boss is meant to hurt badly when he gets
   // through, which is a different rule and checked below.
-  const worst = Math.max(...enemyList.filter(([, e]) => e.tier !== 'boss').map(([, e]) => e.livesCost))
+  // RANK AND FILE IS `role` AND `tier`, not `tier` alone, which is the reading
+  // tests/content.test.ts's size rule and tests/blocking.test.ts's line rule
+  // both already use. A mini boss leaking is not "one mistake"; it is the
+  // fight going wrong, and the rule this is -- twenty lives means five of the
+  // worst ordinary leaks -- is about the traffic.
+  //
+  // IT WAS ALREADY BENDING THE DATA BEFORE LEVEL 7. The Vampire Lord's row
+  // carries a `_livesCost` note saying he was capped at 4 BECAUSE OF THIS TEST
+  // and that 5 "would have quietly made the rule fail for every level in the
+  // game" -- a design number chosen by a test reading the wrong field. Level
+  // 7's Blade Rig costs 6, which is what a mini boss walking off a highway
+  // should cost, and that is the number that made the misreading matter.
+  const isBoss = (e: any): boolean => e.tier === 'boss' || e.role === 'boss'
+  const worst = Math.max(...enemyList.filter(([, e]) => !isBoss(e)).map(([, e]) => e.livesCost))
   assert.ok(rules.startingLives >= worst * 5, 'too few lives for the leak cost')
   assert.ok(rules.startingLives <= 40, 'so many lives that leaks stop mattering')
 })

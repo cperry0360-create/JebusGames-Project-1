@@ -22,6 +22,7 @@ const PLATES = {
   level4: 'public/assets/maps/map_level4.webp',
   level5: 'public/assets/maps/map_level5.webp',
   level6: 'public/assets/maps/map_level6.webp',
+  level7: 'public/assets/maps/map_level7.webp',
   level8: 'public/assets/maps/map_level8.webp',
 }
 
@@ -93,6 +94,25 @@ const CROPS = {
   // written into its own art, so the frame moved up and out to keep it.
   // 0.489 x 3840 = 1878 wide and 0.58 x 2160 = 1253 tall, which is 1.4991 --
   // the card's own 3:2.
+  // LEVEL 7: THE SIGN AND TWO OF THE THREE HIGHWAYS. The level's joke is
+  // written into its own art -- a green gantry sign reading GOOD THINGS AHEAD
+  // over an EXIT 65 marker, on a road whose other sign says NEXT EXIT:
+  // EVENTUALLY -- and level 8 already taught this crop the lesson: the sign IS
+  // the title, so the frame is built around it rather than cropped past it.
+  //
+  // ALL THREE HIGHWAYS WERE THE FIRST IDEA AND ARE A WORSE CARD. They span
+  // canvas y118 to y553, which needs 64% of the plate's height and therefore
+  // 96% of its width at 3:2 -- essentially the whole plate, shrunk to 300x200,
+  // where three 15px grey stripes on ochre read as a barcode rather than as a
+  // road. Two highways and a sign says "desert highway" at card size; three
+  // says nothing.
+  //
+  // Chosen off preview_level7.png. 0.48 x 1672 = 802.6 wide and 0.5686 x 941 =
+  // 535.1 tall, which is 1.4999 -- the card's own 3:2, so the cover fit below
+  // throws essentially nothing away. It holds the sign, the whole north
+  // highway, the whole middle highway, the scrub between them, and the rocks
+  // and cactus on the right-hand shoulder.
+  level7: [0.52, 0.00, 0.48, 0.5686],
   level8: [0.50, 0.10, 0.489, 0.58],
 }
 

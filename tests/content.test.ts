@@ -155,7 +155,14 @@ test('the three enemies are the painted art, standing on the ground', () => {
     assert.match(art.files[e.sprite], /^enemies\//, `${id} is not using the painted enemy art`)
     const cfg = art.render[e.sprite]
     assert.ok(cfg, `${id} has no render entry, so it would draw at its raw 512px size`)
-    assert.ok(cfg.anchorY >= 0.95,
+    // 0.94, DOWN FROM 0.95, and tests/manifest.test.ts carries the same floor
+    // and the full reasoning. Short version: every anchorY in the manifest is
+    // MEASURED off the ink by tools/measure_art.py, never authored, so a value
+    // under 1 means the canvas has transparent padding below the art and the
+    // anchor is compensating for it exactly as it should. The nine level 7
+    // vehicles were exported with a uniform 12 px margin; the Yellow Runaway's
+    // 12 px on a 216 px canvas is 0.9444, and 1.0 would float it.
+    assert.ok(cfg.anchorY >= 0.94,
       `${id} anchors at ${cfg.anchorY}; a 3/4 character has to stand on its feet`)
     assert.ok(cfg.displayHeight > 0 && cfg.shadowWidth > 0, `${id} is missing a measured size`)
   }

@@ -519,6 +519,24 @@ export interface EnemyDef {
    * rate is tuned around him as he is, and this brief was about level 3.
    */
   slowable: boolean
+  /**
+   * False for an enemy that ignores stuns, the same way `blockable: false`
+   * makes one ignore the line and `slowable: false` makes one ignore a slow.
+   *
+   * OPTIONAL, AND ABSENT MEANS TRUE, which is why no existing row needed
+   * editing and why levels 1 to 6 and 8 play identically: every enemy written
+   * before this field existed can be stunned, and still can.
+   *
+   * Level 7's Blade Rig is the first to carry it. All three flags are the same
+   * sentence said three times -- it cannot be held, slowed or stopped -- and
+   * the third one had no field because until now nothing needed it: the
+   * Politician and the Rainbow Reaper are unblockable and unslowable and are
+   * both perfectly stunnable, and a 0.6s Amendment on either of them is a
+   * reward for good play rather than a way to park a boss. The Blade Rig is
+   * different because its whole identity is that it does not stop -- a player
+   * who can stop it has turned the mini boss off.
+   */
+  stunnable?: boolean
   /** Present only on The Politician: he takes a share of the player's
    *  peanuts instead of attacking anything. */
   tax?: TaxDef
@@ -594,8 +612,51 @@ export interface EnemyDef {
    * to work out which the other is.
    */
   splitsOnDeath?: {
-    enemy: string
+    /** ONE KIND, repeated `count` times: the Vampire Lord's four Gliders. */
+    enemy?: string
+    /**
+     * SEVERAL KINDS, taken in order and cycled to fill `count`: level 7's
+     * Transporter, whose trailer is carrying one red car, one blue, one
+     * yellow and one green, and those four are what comes off it.
+     *
+     * A list rather than four `splitsOnDeath` blocks because it is ONE event.
+     * `enemy` is still read exactly as it always was, so the Lord's row and
+     * every test over it are untouched; a row carrying both is a typo and
+     * tests/level7.test.ts says so.
+     */
+    enemies?: string[]
     count: number
+    /**
+     * How far apart along the lane the children are placed, in world pixels,
+     * each one that much further BACK than the last. Absent means all of them
+     * exactly where the parent died, which is what the Lord's Gliders do.
+     *
+     * NOT A SAFETY MARGIN. The first child is at the death point regardless,
+     * so a Transporter killed on the exit line still puts a car on the exit
+     * line; the spacing is the trailer unloading, not a grace period. See
+     * level7.json's `_finale` and the late-kill measurement in the report.
+     */
+    spacingPx?: number
+    /**
+     * Seconds between one child appearing and the next. Absent or zero means
+     * they all arrive on the frame the parent died.
+     *
+     * Separate from `spacingPx` because they are different questions -- where
+     * they come out and when -- and a level should be able to answer either
+     * without the other.
+     */
+    emergeSeconds?: number
+    /**
+     * True where the children hold the wave open: the wave is not over until
+     * they are dead or have leaked.
+     *
+     * THE DEFAULT IS FALSE AND THAT IS THE VAMPIRE LORD'S ANSWER. A wave is
+     * over when its SCRIPTED spawns are gone, which is what keeps killing him
+     * from extending wave 11 by however long his remains take to walk off.
+     * Level 7's finale is the opposite by design: the cars off the trailer ARE
+     * the end of the level, so the wave -- and the run -- waits for them.
+     */
+    holdsWave?: boolean
   }
 
   /**
@@ -693,6 +754,25 @@ export interface EnemyDef {
    * here and no new code.
    */
   flame?: boolean
+
+  /**
+   * True for the one enemy that carries blades and cuts anything that touches
+   * it: level 7's Blade Rig, and nothing else.
+   *
+   * A FLAG RATHER THAN AN ID, like `acidTrail` and `flame` and for the same
+   * reason -- the scene and the simulator find "the enemy that does this" by
+   * asking rather than by knowing the Rig's name. What the blades DO -- the
+   * reach, the damage per second and whether towers are in scope -- is
+   * level7.json's `blades`, so a second vehicle with the same habit is one
+   * field here and no new code.
+   *
+   * IT IS NOT AN ATTACK. `damage` and `attackInterval` are what an enemy does
+   * to whatever is HOLDING it, through `damageBlocker`, and the Rig is
+   * `blockable: false` so nothing ever holds it. The blades are the other
+   * direction: a continuous cost for standing where it is walking, paid by
+   * player units that are in the way rather than by one that grabbed it.
+   */
+  bladed?: boolean
   peanutReward: number
   livesCost: number
   damage: number

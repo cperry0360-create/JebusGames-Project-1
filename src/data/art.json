@@ -144,6 +144,7 @@
     "map-level5": "maps/map_level5.webp",
     "card-level5": "ui/card_level5.webp",
     "card-level6": "ui/card_level6.webp",
+    "card-level7": "ui/card_level7.webp",
     "card-level8": "ui/card_level8.webp",
     "fx-acid-puddle": "effects/fx_acid_puddle.webp",
     "enemy-scrapper": "enemies/enemy_scrapper.webp",
@@ -162,7 +163,16 @@
     "fx-glacier": "effects/fx_glacier.webp",
     "map-level6": "maps/map_level6.webp",
     "map-level7": "maps/map_level7.webp",
-    "map-level8": "maps/map_level8.webp"
+    "map-level8": "maps/map_level8.webp",
+    "enemy-hatchback": "enemies/enemy_hatchback.webp",
+    "enemy-musclecar": "enemies/enemy_musclecar.webp",
+    "enemy-van": "enemies/enemy_van.webp",
+    "enemy-bladerig": "enemies/boss_bladerig.webp",
+    "enemy-transporter": "enemies/boss_transporter.webp",
+    "enemy-cargo-red": "enemies/enemy_cargo_red.webp",
+    "enemy-cargo-blue": "enemies/enemy_cargo_blue.webp",
+    "enemy-cargo-yellow": "enemies/enemy_cargo_yellow.webp",
+    "enemy-cargo-green": "enemies/enemy_cargo_green.webp"
   },
   "render": {
     "turret-escalation": {
@@ -1145,6 +1155,87 @@
         "frameHeight": 512,
         "frames": 8
       }
+    },
+    "enemy-hatchback": {
+      "_note": "LANDSCAPE, 692x389 (1.78:1). A car's shadow is the car, so shadowWidth is the whole body and anchorX is its ink centre -- see tools/measure_art.py. RULE 7: wants 469 px of source for a 66 px sprite and has 389 (0.83x). SHORT, and the shortfall is in the art rather than in the number: 66 world px is the smallest vehicle on the board and dropping it further would make a car narrower than the lane markings it drives over.",
+      "anchorX": 0.4993,
+      "anchorY": 0.9692,
+      "displayHeight": 66.0,
+      "shadowWidth": 117.4,
+      "contentWidth": 692,
+      "contentHeight": 389
+    },
+    "enemy-musclecar": {
+      "_note": "LANDSCAPE, 647x394 (1.64:1). RULE 7: wants 526 px and has 394 (0.75x). SHORT.",
+      "anchorX": 0.4992,
+      "anchorY": 0.9695,
+      "displayHeight": 74.0,
+      "shadowWidth": 121.5,
+      "contentWidth": 647,
+      "contentHeight": 394
+    },
+    "enemy-van": {
+      "_note": "LANDSCAPE, 837x641 (1.31:1). THE ONLY ONE OF THE NINE THAT MEETS RULE 7: wants 626 px of source for an 86 px sprite and has 641 (1.05x). displayHeight is 86 rather than the brief's 88 because the shortest tower is 87.1 world px and tests/content.test.ts holds the rank and file under it.",
+      "anchorX": 0.4994,
+      "anchorY": 0.9813,
+      "displayHeight": 86.0,
+      "shadowWidth": 112.3,
+      "contentWidth": 837,
+      "contentHeight": 641
+    },
+    "enemy-bladerig": {
+      "_note": "LANDSCAPE, 1147x497, and at 2.31:1 it is the widest thing in the manifest. At displayHeight 130 it draws 300 world px across -- wider than any tower's reach is deep, which is the mini boss reading as unstoppable before it does anything. RULE 7: wants 924 px of source and has 497 (0.54x). SHORT by nearly half.",
+      "anchorX": 0.4956,
+      "anchorY": 0.9759,
+      "displayHeight": 130.0,
+      "shadowWidth": 300.0,
+      "contentWidth": 1147,
+      "contentHeight": 497
+    },
+    "enemy-transporter": {
+      "_note": "LANDSCAPE, 1033x495 (2.09:1), and at displayHeight 175 it is the largest sprite in the game -- 365 world px across, 28.5% of the canvas. RULE 7: wants 1244 px of source and has 495 (0.40x), THE WORST RATIO IN THE FILE. A re-export at 1244 px tall is the only thing that fixes it; nothing in the manifest can. Its four cargo cars are painted on the trailer and are the four `enemy-cargo-*` sprites below, which is what makes the finale legible.",
+      "anchorX": 0.5044,
+      "anchorY": 0.9758,
+      "displayHeight": 175.0,
+      "shadowWidth": 365.2,
+      "contentWidth": 1033,
+      "contentHeight": 495
+    },
+    "enemy-cargo-red": {
+      "_note": "LANDSCAPE, 401x213 (1.88:1). One of the four cars on the transporter's trailer. RULE 7: wants 512 px and has 213 (0.42x). SHORT.",
+      "anchorX": 0.4988,
+      "anchorY": 0.9577,
+      "displayHeight": 72.0,
+      "shadowWidth": 135.5,
+      "contentWidth": 401,
+      "contentHeight": 213
+    },
+    "enemy-cargo-blue": {
+      "_note": "LANDSCAPE, 397x254 (1.56:1). RULE 7: wants 512 px and has 254 (0.50x). SHORT.",
+      "anchorX": 0.5139,
+      "anchorY": 0.9764,
+      "displayHeight": 72.0,
+      "shadowWidth": 112.5,
+      "contentWidth": 397,
+      "contentHeight": 254
+    },
+    "enemy-cargo-yellow": {
+      "_note": "LANDSCAPE, 360x216 (1.67:1). RULE 7: wants 512 px and has 216 (0.42x). SHORT.",
+      "anchorX": 0.5,
+      "anchorY": 0.9444,
+      "displayHeight": 72.0,
+      "shadowWidth": 120.0,
+      "contentWidth": 360,
+      "contentHeight": 216
+    },
+    "enemy-cargo-green": {
+      "_note": "LANDSCAPE, 384x253 (1.52:1). RULE 7: wants 512 px and has 253 (0.49x). SHORT.",
+      "anchorX": 0.5143,
+      "anchorY": 0.9644,
+      "displayHeight": 72.0,
+      "shadowWidth": 109.3,
+      "contentWidth": 384,
+      "contentHeight": 253
     }
   },
   "map": {
@@ -1389,6 +1480,7 @@
       "level4": "card-level4",
       "level5": "card-level5",
       "level6": "card-level6",
+      "level7": "card-level7",
       "level8": "card-level8"
     }
   },

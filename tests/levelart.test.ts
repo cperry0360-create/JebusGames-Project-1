@@ -201,21 +201,19 @@ test('every piece of level art belongs to a level that loads it', () => {
   // 15.1 MB loaded by nothing. Adding the row emptied the list on its own,
   // which is what the note here used to predict.
   //
-  // AND THE NEXT TWO UNSHIPPED LEVELS' ART DID LAND HERE, which is what the
-  // note above predicted. `map-level7` is the level 7 plate, traced by the
-  // geometry pass and pointed at by no row in levels.json. The other eight
-  // keys are level 8's whole cast and its plate: built, soaked and parked,
-  // because level 8 is unlocked by level 7 and level 7 has no row either —
-  // see src/data/level8.json's `_theRowIsNotThereYet`.
+  // AND IT IS EMPTY AGAIN, WHICH IS THE POINT OF KEEPING IT. It held eight
+  // keys the day before this: `map-level7`, traced by the geometry pass and
+  // pointed at by no row, and level 8's whole cast and plate — built, soaked
+  // and parked, because level 8 is unlocked by level 7 and level 7 had no row
+  // either. Registering level 7 gave level 8 the prerequisite it was waiting
+  // for, and BOTH ROWS LANDED IN THE SAME COMMIT, so all eight keys found
+  // their level at once. 5.0 MB that arrived with nothing now arrives with two
+  // levels.
   //
-  // 5.0 MB that arrives with no level, and it is 5.0 MB that costs nothing
-  // until a level asks for it: every key here is level art, so boot does not
-  // load any of it. The list empties itself two rows at a time, the same way
-  // level 6's five entries did — this is a list of what is WAITING, not a list
-  // of exceptions, and anything else appearing in it is the bug this test is
-  // for.
-  assert.deepEqual(orphanedLevelArt(LEVELS.map((l) => l.id)).sort(), [
-    'enemy-ceo', 'enemy-consultant', 'enemy-hr', 'enemy-intern', 'enemy-manager',
-    'enemy-office-drone', 'map-level7', 'map-level8',
-  ], 'level art that no shipped level loads')
+  // The list emptied itself, exactly as it did when level 6's five entries
+  // landed and exactly as the note here predicted both times. This is a list
+  // of what is WAITING, not a list of exceptions: anything appearing in it is
+  // either a level about to ship or the bug this test is for.
+  assert.deepEqual(orphanedLevelArt(LEVELS.map((l) => l.id)).sort(), [],
+    'level art that no shipped level loads')
 })

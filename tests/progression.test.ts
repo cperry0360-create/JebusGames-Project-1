@@ -78,8 +78,17 @@ test('the migration reproduces exactly the levels the old save had open', () => 
   // `unlockedBy: 'level5'`, so no old save can open it however many runs it had
   // cleared. Writing 5 here instead would assert the opposite and fail, which
   // is how this entry was arrived at rather than guessed.
+  // LEVELS 6, 7 AND 8 ARE ALL `Infinity`, AND THAT IS THE POINT OF THE TABLE.
+  // `MIGRATION_ORDER` in Save.ts is the literal ['level1'..'level4'] and is
+  // frozen on purpose -- a migration describes the past, so it does not grow
+  // when a level is added. A migrated save therefore never records level 5 as
+  // cleared; level 6 needs level 5, level 7 needs level 6 and level 8 needs
+  // level 7, so no old save can open any of the three however many runs it had
+  // cleared. Writing a number for any of them would assert the opposite and
+  // fail, which is how these entries are arrived at rather than guessed.
   const oldThresholds: Record<string, number> = {
-    level1: 0, level2: 1, level3: 2, level4: 3, level5: 4, level6: Infinity,
+    level1: 0, level2: 1, level3: 2, level4: 3, level5: 4,
+    level6: Infinity, level7: Infinity, level8: Infinity,
   }
   for (let n = 0; n <= 5; n++) {
     seed({ ...DEFAULT_SAVE, runsCleared: n, clearedLevels: undefined })

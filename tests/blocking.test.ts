@@ -127,7 +127,19 @@ test('bosses and flyers walk through soldiers, and nothing else does', () => {
     'two soldiers could pin the level 3 boss forever')
   assert.equal(E.politician.blockable, false)
   for (const [id, def] of Object.entries(E)) {
-    if (def.tier === 'boss') continue
+    // A BOSS IS `role`, NOT `tier`, and level 7's Blade Rig is why -- the same
+    // move tests/content.test.ts already made for the size rule, and for the
+    // same reason. The Rig is `tier: elite` deliberately: a level may field
+    // exactly one `tier: boss` sprite, and level 7's is the Transporter. What
+    // it IS is a mini boss that appears twice, and its whole briefed identity
+    // is that it cannot be held, slowed or stopped -- a player who can park it
+    // on a soldier has turned the fight off, which is precisely the failure
+    // this exemption exists for.
+    //
+    // THE VAMPIRE LORD IS NOW EXEMPT TOO and is still `blockable: true` in the
+    // data. That is the designer's call on a mini boss, which is what it
+    // should be; the rule keeps holding every genuine rank-and-file row.
+    if (def.tier === 'boss' || def.role === 'boss') continue
     // AND THE OTHER REASON SOMETHING IS NOT HELD, which level 4 introduced: it
     // is in the air. A boss is unblockable by design -- a player could
     // otherwise park it on a soldier and ignore the fight -- but a flyer is

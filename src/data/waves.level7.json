@@ -1,0 +1,468 @@
+{
+  "_note": "LEVEL 7, THE HIGHWAY: thirteen waves over THREE independent lanes. Every group names the lane it walks in from -- `north`, `middle` or `south` -- because on this map that is the only thing that decides which road an enemy takes. There is no fork and no `exit` field anywhere in this table: the three highways never touch, so where a group comes in is where it goes out.",
+  "_lanes": "THE THREE ARE NOT EQUIVALENT, AND THAT IS THE LEVEL.\n\nMIDDLE is the best-defended road on any board in the game: 94.1% of it is inside a tower's reach, because both medians touch it and twenty of the 22 pads stand in one of them.\n\nNORTH is 90.2% covered. Its only weakness is the first 72 px, where a pad cannot stand close enough to the frame to reach.\n\nSOUTH is 83.1%, AND ITS LAST 189 px ARE UNREACHABLE -- from x=1090 to the exit no pad can cover it, because the rusted pickup in the lower median classifies as road and no pad core fits beside it. Anything that survives to x=1090 in the south lane is out, whatever the player does. See map_level7.json's `_coverage`.\n\nSo the table leans on which lane carries the weight rather than treating them as one road three times. Early waves come down the north lane, where a player who has not looked at the board will be short of guns. The middle arrives once there is something worth putting in a median. The south is held back until the player has had a reason to look at the far end of it.",
+  "_allThree": "ALL THREE LANES AT ONCE IS AN EVENT, NOT THE NORM, which is why exactly three waves do it: 7, 10 and 12. Nine of the other ten run on two lanes and wave 1 runs on one. A table that filled all three every time would make the board's twenty double-covering pads compulsory rather than clever, and the whole design of this map is that a tower in a median is a choice that pays twice.",
+  "_pacing": "THE LANES ARE SHORT AND THE PACING IS BUILT FOR THAT, not for level 6's. Gateway to gateway is 1400 px on every lane, so a Rust Bucket at 125 px/s crosses in 11.2 s, a Roadrager at 150 in 9.3 s, a Delivery at 55 in 25.5 s, a Blade Rig at 45 in 31.1 s and the Transporter at 38 in 36.8 s. Anything past the guns reaches the exit almost immediately, so the intervals here are tight and the delays are short: a group that starts 14 s late on a level like this is a group that arrives after the wave is over.",
+  "_economy": "THE ECONOMY IS rules.json'S, UNCHANGED: 100 starting peanuts on normal, 35 a wave cleared, and each enemy's own reward. Nothing here sets a purse. The rewards are the roster's -- Rust Bucket 10, Roadrager 18, The Delivery 32 -- and the four cars off the Transporter's trailer pay NOTHING, which is what stops the finale being a payday at the moment there is nothing left to spend it on.",
+  "_bladeRig": "THE BLADE RIG APPEARS TWICE, AT WAVES 8 AND 11, ONE AT A TIME AND NEVER TOGETHER. It cannot be blocked, slowed or stunned and it cuts any player ground unit it drives through, so the answer to it is guns and getting out of the way rather than crowd control. Its first appearance is on the MIDDLE lane, the best-covered road on the board, because the lesson should be learnable; its second is on the SOUTH, where the last 189 px are nobody's, because by then the lesson has been learned.\n\nBoth waves carry `boss` so the Rig gets a name card and the bar across the top. It is `tier: elite` rather than `tier: boss` on its own row -- see enemies.json -- so this is a mini boss being announced, which is what it is.",
+  "_boss": "THE TRANSPORTER ARRIVES AT WAVE 13 AND NOWHERE ELSE, ROUTED SOUTH. That is the whole fight: 1,150 px of covered road between the gateway and x=1090 at 38 px/s is 30.3 seconds of exposure, and after that no tower on the board can touch it. A player whose guns cannot finish it inside that window does not get a second chance -- it walks out and takes 18 lives with it.\n\nAND WHEN IT DIES IT UNLOADS. Four cars come off the trailer at the place it died, one red, one blue, one yellow and one green, already rolling, and the wave does not end until all four are dead or out. Kill it early and they have most of a highway to cross. Kill it at x=1080 and four cars are 10 px from a stretch no gun reaches, and eight lives go with them. There is no clamp and no grace period; see enemies.json's `_finale`.",
+  "waves": [
+    {
+      "name": "Merging Traffic",
+      "_name": "One lane, one enemy, nothing else on the board. The wave that says a highway is a lane and a lane has an end.",
+      "spawns": [
+        {
+          "enemy": "hatchback",
+          "count": 6,
+          "interval": 1.4,
+          "delay": 0,
+          "lane": "north"
+        }
+      ]
+    },
+    {
+      "name": "Both Carriageways",
+      "_name": "A second road opens, and it is the far one. The player who built everything against the north lane finds out now rather than at wave 9.",
+      "spawns": [
+        {
+          "enemy": "hatchback",
+          "count": 5,
+          "interval": 1.2,
+          "delay": 0,
+          "lane": "north"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 3,
+          "interval": 1.2,
+          "delay": 3,
+          "lane": "south"
+        }
+      ]
+    },
+    {
+      "name": "Fast Lane",
+      "_name": "The Roadrager, first appearance, on the middle lane -- the best-covered road on the board, so the introduction to a 150 px/s enemy happens where the guns are.",
+      "spawns": [
+        {
+          "enemy": "hatchback",
+          "count": 6,
+          "interval": 1.0,
+          "delay": 0,
+          "lane": "middle"
+        },
+        {
+          "enemy": "musclecar",
+          "count": 1,
+          "interval": 2.0,
+          "delay": 4,
+          "lane": "middle"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 3,
+          "interval": 1.2,
+          "delay": 2,
+          "lane": "north"
+        }
+      ]
+    },
+    {
+      "name": "Rush Hour",
+      "spawns": [
+        {
+          "enemy": "hatchback",
+          "count": 7,
+          "interval": 0.9,
+          "delay": 0,
+          "lane": "south"
+        },
+        {
+          "enemy": "musclecar",
+          "count": 2,
+          "interval": 2.0,
+          "delay": 3,
+          "lane": "south"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 4,
+          "interval": 1.1,
+          "delay": 5,
+          "lane": "middle"
+        }
+      ]
+    },
+    {
+      "name": "Signed For",
+      "_name": "The Delivery, first appearance: 420 health, 12 armour and 55 px/s, which is a wall that takes 25 seconds to cross a lane the rest of the traffic clears in eleven. It comes down the middle, so the wall is fought where a median tower can reach it.",
+      "spawns": [
+        {
+          "enemy": "van",
+          "count": 1,
+          "interval": 3.0,
+          "delay": 0,
+          "lane": "middle"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 6,
+          "interval": 0.9,
+          "delay": 2,
+          "lane": "middle"
+        },
+        {
+          "enemy": "musclecar",
+          "count": 2,
+          "interval": 1.8,
+          "delay": 5,
+          "lane": "north"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 4,
+          "interval": 1.1,
+          "delay": 4,
+          "lane": "north"
+        }
+      ]
+    },
+    {
+      "name": "Hard Shoulder",
+      "spawns": [
+        {
+          "enemy": "hatchback",
+          "count": 8,
+          "interval": 0.8,
+          "delay": 0,
+          "lane": "north"
+        },
+        {
+          "enemy": "musclecar",
+          "count": 3,
+          "interval": 1.6,
+          "delay": 3,
+          "lane": "north"
+        },
+        {
+          "enemy": "van",
+          "count": 1,
+          "interval": 3.0,
+          "delay": 1,
+          "lane": "south"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 4,
+          "interval": 1.0,
+          "delay": 6,
+          "lane": "south"
+        }
+      ]
+    },
+    {
+      "name": "Three Abreast",
+      "_name": "THE FIRST EVENT WAVE. All three highways carrying at once, with the weight on the south -- which is the lane whose east end nobody can reach. Twenty-two pads is a lot of board and this is the wave that asks whether the player used the medians or stacked everything on one road.",
+      "spawns": [
+        {
+          "enemy": "van",
+          "count": 2,
+          "interval": 3.4,
+          "delay": 0,
+          "lane": "south"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 6,
+          "interval": 0.8,
+          "delay": 3,
+          "lane": "south"
+        },
+        {
+          "enemy": "musclecar",
+          "count": 2,
+          "interval": 1.6,
+          "delay": 2,
+          "lane": "middle"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 4,
+          "interval": 0.9,
+          "delay": 5,
+          "lane": "middle"
+        },
+        {
+          "enemy": "musclecar",
+          "count": 2,
+          "interval": 1.6,
+          "delay": 4,
+          "lane": "north"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 2,
+          "interval": 1.0,
+          "delay": 7,
+          "lane": "north"
+        }
+      ]
+    },
+    {
+      "name": "Roadworks",
+      "boss": "bladeRig",
+      "_name": "First of two, on the MIDDLE lane, alone. It cannot be held, slowed or stopped, and it cuts anything of the player's standing in the road it is driving down -- so the hero and the lads have to be somewhere else. Everything behind it is on the north lane, deliberately: a player dealing with the Rig should not also be losing the far road.",
+      "spawns": [
+        {
+          "enemy": "bladeRig",
+          "count": 1,
+          "interval": 2.0,
+          "delay": 0,
+          "lane": "middle"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 10,
+          "interval": 0.8,
+          "delay": 6,
+          "lane": "north"
+        },
+        {
+          "enemy": "musclecar",
+          "count": 3,
+          "interval": 1.6,
+          "delay": 10,
+          "lane": "north"
+        }
+      ]
+    },
+    {
+      "name": "Contraflow",
+      "spawns": [
+        {
+          "enemy": "van",
+          "count": 2,
+          "interval": 3.2,
+          "delay": 0,
+          "lane": "south"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 8,
+          "interval": 0.7,
+          "delay": 3,
+          "lane": "south"
+        },
+        {
+          "enemy": "musclecar",
+          "count": 5,
+          "interval": 1.4,
+          "delay": 2,
+          "lane": "middle"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 6,
+          "interval": 0.8,
+          "delay": 6,
+          "lane": "middle"
+        }
+      ]
+    },
+    {
+      "name": "Tailback",
+      "_name": "THE SECOND EVENT WAVE, and the heaviest three-lane wave before the boss. The weight is on the north this time rather than the south, which is the one thing wave 7 did not ask.",
+      "spawns": [
+        {
+          "enemy": "van",
+          "count": 2,
+          "interval": 3.0,
+          "delay": 0,
+          "lane": "north"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 8,
+          "interval": 0.7,
+          "delay": 2,
+          "lane": "north"
+        },
+        {
+          "enemy": "musclecar",
+          "count": 3,
+          "interval": 1.4,
+          "delay": 5,
+          "lane": "north"
+        },
+        {
+          "enemy": "van",
+          "count": 1,
+          "interval": 3.0,
+          "delay": 1,
+          "lane": "middle"
+        },
+        {
+          "enemy": "musclecar",
+          "count": 3,
+          "interval": 1.4,
+          "delay": 4,
+          "lane": "middle"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 6,
+          "interval": 0.8,
+          "delay": 3,
+          "lane": "south"
+        }
+      ]
+    },
+    {
+      "name": "Roadworks Resumed",
+      "boss": "bladeRig",
+      "_name": "Second of two, and it comes down the SOUTH lane, whose last 189 px no tower can reach. The first Rig was a lesson about standing in the road; this one is a lesson about where the road runs out.",
+      "spawns": [
+        {
+          "enemy": "bladeRig",
+          "count": 1,
+          "interval": 2.0,
+          "delay": 0,
+          "lane": "south"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 12,
+          "interval": 0.7,
+          "delay": 4,
+          "lane": "middle"
+        },
+        {
+          "enemy": "musclecar",
+          "count": 4,
+          "interval": 1.3,
+          "delay": 8,
+          "lane": "middle"
+        },
+        {
+          "enemy": "van",
+          "count": 1,
+          "interval": 3.0,
+          "delay": 2,
+          "lane": "middle"
+        }
+      ]
+    },
+    {
+      "name": "Gridlock",
+      "_name": "THE THIRD EVENT WAVE and the heaviest thing on this board that is not the boss: four Deliveries, seven Roadragers and eighteen Rust Buckets across all three highways at once.",
+      "spawns": [
+        {
+          "enemy": "van",
+          "count": 2,
+          "interval": 2.8,
+          "delay": 0,
+          "lane": "middle"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 7,
+          "interval": 0.65,
+          "delay": 3,
+          "lane": "middle"
+        },
+        {
+          "enemy": "musclecar",
+          "count": 3,
+          "interval": 1.3,
+          "delay": 6,
+          "lane": "middle"
+        },
+        {
+          "enemy": "van",
+          "count": 1,
+          "interval": 3.0,
+          "delay": 1,
+          "lane": "north"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 6,
+          "interval": 0.7,
+          "delay": 4,
+          "lane": "north"
+        },
+        {
+          "enemy": "musclecar",
+          "count": 2,
+          "interval": 1.4,
+          "delay": 2,
+          "lane": "north"
+        },
+        {
+          "enemy": "van",
+          "count": 1,
+          "interval": 3.0,
+          "delay": 2,
+          "lane": "south"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 5,
+          "interval": 0.7,
+          "delay": 5,
+          "lane": "south"
+        },
+        {
+          "enemy": "musclecar",
+          "count": 2,
+          "interval": 1.4,
+          "delay": 8,
+          "lane": "south"
+        }
+      ]
+    },
+    {
+      "name": "Last Load",
+      "boss": "transporter",
+      "_name": "Routed SOUTH, down the lane whose last 189 px nobody can reach. Thirty seconds of covered road at 38 px/s is the whole window. When it goes, four cars come off the trailer where it fell.",
+      "spawns": [
+        {
+          "enemy": "transporter",
+          "count": 1,
+          "interval": 2.0,
+          "delay": 0,
+          "lane": "south"
+        },
+        {
+          "enemy": "musclecar",
+          "count": 6,
+          "interval": 1.4,
+          "delay": 8,
+          "lane": "north"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 8,
+          "interval": 0.7,
+          "delay": 4,
+          "lane": "north"
+        },
+        {
+          "enemy": "van",
+          "count": 3,
+          "interval": 2.8,
+          "delay": 6,
+          "lane": "middle"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 6,
+          "interval": 0.7,
+          "delay": 12,
+          "lane": "middle"
+        }
+      ]
+    }
+  ],
+  "_names": "NO WAVE IS NAMED AFTER AN ENEMY, and that is deliberate rather than a shortage of jokes. Every display name a player reads comes from `name` on the enemies.json row -- the boss bar, the wave card, the log -- so a wave TITLE that spelled `The Blade Rig` out again would be a second copy of a name Cory is meant to be able to change with the kids in one edit. Waves 8, 11 and 13 are Roadworks, Roadworks Resumed and Last Load; what walks out of the gate announces itself. tests/level7.test.ts checks that no enemy name appears in this file outside a note."
+}

@@ -95,6 +95,8 @@ export class Enemy extends Phaser.GameObjects.Container {
    * a dead summoner's brood cannot be miscounted against a live one.
    */
   readonly summonedBy: Enemy | null
+  /** Set at construction from the split that made this one. See `holdsWave`. */
+  private heldWave = false
   /** Counts down to the next burst. Only a summoner uses it. */
   private summonTimer = 0
   /**
@@ -266,6 +268,9 @@ export class Enemy extends Phaser.GameObjects.Container {
       /** The split arm this one takes, for a child that should follow its
        *  parent rather than roll its own. */
       routePick?: number
+      /** True for a summoned child that HOLDS THE WAVE OPEN anyway. See
+       *  `holdsWave` below. */
+      holdsWave?: boolean
     },
   ) {
     super(scene, 0, 0)
@@ -274,6 +279,7 @@ export class Enemy extends Phaser.GameObjects.Container {
     this.lanes = network?.lanes ?? null
     this.laneId = network?.laneId ?? MAIN_LANE
     this.summonedBy = network?.summonedBy ?? null
+    this.heldWave = network?.holdsWave === true
     this.laneDistance = network?.startAt?.laneDistance ?? 0
     this.distance = network?.startAt?.distance ?? 0
     // A summoner's first burst waits a full interval, so a boss does not
@@ -622,6 +628,11 @@ export class Enemy extends Phaser.GameObjects.Container {
    */
   applyStun(seconds: number, lockoutMultiple: number, diminish: DiminishDef): void {
     if (seconds <= 0) return
+    // Crowd control the same way the line and the slow are: a flag on the
+    // enemy, not a rule about tiers. ABSENT MEANS TRUE, so every enemy written
+    // before the field existed is stunnable exactly as it was. See
+    // `EnemyDef.stunnable` -- level 7's Blade Rig is the only false.
+    if (this.def.stunnable === false) return
     if (!canStun(this.stunRemaining, this.stunLockout)) return
     // Each stop inside the window is shorter than the last. The lockout alone
     // only stopped a stun being refreshed while it ran; it did nothing to stop
@@ -686,6 +697,25 @@ export class Enemy extends Phaser.GameObjects.Container {
   /** True for anything that was called in rather than scripted by the wave. */
   get summoned(): boolean {
     return this.summonedBy !== null
+  }
+
+  /**
+   * True while this one keeps the wave from ending.
+   *
+   * A WAVE IS OVER WHEN ITS SCRIPTED SPAWNS ARE GONE, which is what this
+   * answers, and for every enemy in the game until level 7 it is exactly
+   * `!summoned`: a boss's brood must not extend the wave that spawned it, or
+   * killing the Vampire Lord at wave 11 would leave the player waiting for
+   * four Gliders to walk off before the shop opens.
+   *
+   * LEVEL 7'S FINALE IS THE ONE EXCEPTION AND IT IS THE POINT OF THE LEVEL.
+   * The four cars off the Transporter's trailer are not an afterthought to a
+   * fight that is over -- they ARE the end of the fight, and the wave, and the
+   * run. `splitsOnDeath.holdsWave` says so on the row that creates them, so
+   * this stays a property of the data rather than a special case about a name.
+   */
+  get holdsWave(): boolean {
+    return !this.summoned || this.heldWave
   }
 
   /**

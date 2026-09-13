@@ -186,7 +186,20 @@ test('a sprite anchored at its base is what makes it stand on the ground', () =>
     c.displayHeight !== undefined && c.displayHeight > 64 && !plates.has(k))
   assert.ok(tall.length > 0, 'no tall art is configured, so this proves nothing')
   for (const [key, cfg] of tall as [string, any][]) {
-    assert.ok(cfg.anchorY >= 0.95,
+    // 0.94, DOWN FROM 0.95, AND THE REASON IS THE OPPOSITE OF A FUDGE. This
+    // rule's own note says a canvas with transparent padding below the art
+    // NEEDS a smaller value or the art floats -- and 0.95 was simply the
+    // lowest any shipped sprite had needed. The Yellow Runaway needs 0.9444:
+    // its ink ends 12 px above a 216 px canvas, so 0.9444 is where its wheels
+    // are and 1.0 would float it by four world pixels. The nine level 7
+    // vehicles were exported with a uniform 12 px transparent margin, which is
+    // why this is the one that trips a threshold rather than a one-off.
+    //
+    // Every value here is MEASURED by tools/measure_art.py off the ink, never
+    // authored, so what this floor actually catches is a sprite whose canvas
+    // has grown a lot of dead space under it -- 6% is still far more than any
+    // art in this repository has by accident.
+    assert.ok(cfg.anchorY >= 0.94,
       `${key} is tall art but anchors at ${cfg.anchorY}; it will float or sink`)
   }
   // And the plates are held to the rule they DO have to obey: anchored on
@@ -300,9 +313,20 @@ test('a ground shadow covers the footprint and not the whole sprite', () => {
     // width under a 4084 px wingspan is the mismeasurement this test exists to
     // catch, arrived at from the other side. Body shadow, and body anchor with
     // it -- see ENEMY_BODY_SHADOW in tools/measure_art.py.
+    //
+    // THE NINE LEVEL 7 VEHICLES ARE THE SEVENTH THROUGH FIFTEENTH, and they are
+    // the Zamboni's reason and the Rivian's rather than the Glider's: they are
+    // vehicles, drawn side-on, and a shadow under a car is the car. A foot band
+    // finds the tyre contact patches -- two short runs at opposite ends of a
+    // landscape canvas -- so `hi - lo + 1` comes out at 90-97% of the width
+    // anyway and this rule would reject it as a swallowed prop. Nothing is
+    // swallowed; what lies under a car is its whole underside.
     const BODY_SHADOWED = new Set([
       'enemy-zamboni', 'enemy-glitch-bug', 'enemy-glider', 'enemy-rooster',
-      'enemy-office-drone', 'hero-cory-power'])
+      'enemy-office-drone', 'hero-cory-power',
+      'enemy-hatchback', 'enemy-musclecar', 'enemy-van', 'enemy-bladerig',
+      'enemy-transporter', 'enemy-cargo-red', 'enemy-cargo-blue',
+      'enemy-cargo-yellow', 'enemy-cargo-green'])
     // `heroes/` as well as `enemies/`. It used to name one file --
     // `hero/hero_cory.webp` -- because Cory was the only hero whose art this
     // script had measured; the other four lived in `heroes/` and were checked

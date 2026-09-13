@@ -24,6 +24,7 @@ import mapLevel3 from '../data/map_level3.json' with { type: 'json' }
 import mapLevel4 from '../data/map_level4.json' with { type: 'json' }
 import mapLevel5 from '../data/map_level5.json' with { type: 'json' }
 import mapLevel6 from '../data/map_level6.json' with { type: 'json' }
+import mapLevel7 from '../data/map_level7.json' with { type: 'json' }
 import mapLevel8 from '../data/map_level8.json' with { type: 'json' }
 import wavesLevel1 from '../data/waves.json' with { type: 'json' }
 import wavesLevel2 from '../data/waves.level2.json' with { type: 'json' }
@@ -31,9 +32,11 @@ import wavesLevel3 from '../data/waves.level3.json' with { type: 'json' }
 import wavesLevel4 from '../data/waves.level4.json' with { type: 'json' }
 import wavesLevel5 from '../data/waves.level5.json' with { type: 'json' }
 import wavesLevel6 from '../data/waves.level6.json' with { type: 'json' }
+import wavesLevel7 from '../data/waves.level7.json' with { type: 'json' }
 import wavesLevel8 from '../data/waves.level8.json' with { type: 'json' }
 import rulesLevel5 from '../data/level5.json' with { type: 'json' }
 import rulesLevel6 from '../data/level6.json' with { type: 'json' }
+import rulesLevel7 from '../data/level7.json' with { type: 'json' }
 import rulesLevel8 from '../data/level8.json' with { type: 'json' }
 
 /** A row of levels.json: what the registry records about a level. */
@@ -104,6 +107,10 @@ export interface LevelRules {
   performanceReview?: unknown
   /** Level 8's Human Resources aura. systems/EnemyAura.ts, same null rule. */
   armorAura?: unknown
+  /** Level 7's Blade Rig blades: the reach and the rate at which it cuts a
+   *  player ground unit standing in the road. systems/Blades.ts asserts the
+   *  shape and returns null for a level without them. */
+  blades?: unknown
   /** Level 8's Consultant explosion: radius, damage, and whether it hurts the
    *  player's units as well. Both sides, on purpose. */
   deathBlast?: unknown
@@ -132,12 +139,17 @@ const MAPS: Record<string, MapDef> = {
   level4: mapLevel4 as unknown as MapDef,
   level5: mapLevel5 as unknown as MapDef,
   level6: mapLevel6 as unknown as MapDef,
-  // LEVEL 8'S DATA IS REGISTERED AND LEVEL 8 HAS NO ROW IN levels.json, which
-  // is the same state level 6's wave table and rules block sat in for a week.
-  // `loadLevel` reads this table by the id on a ROW, so nothing can reach these
-  // three until that row exists -- see the `_theRowIsNotThereYet` note in
-  // src/data/level8.json, and tests/level8.test.ts, which fails if the level is
-  // ever shipped without a prerequisite that resolves.
+  // LEVEL 7 IS THE FIRST THREE-LANE MAP. Its cast is looser for level 3's
+  // reason and one of its own: a JSON import types `lanes[].id` as `string`
+  // rather than a lane id, and every one of its three lanes carries
+  // `entrance: true`.
+  level7: mapLevel7 as unknown as MapDef,
+  // LEVEL 8 NOW HAS A ROW, and level 7's arrival is what gave it one. It sat
+  // here registered and unreachable for exactly as long as level 7 had no row
+  // -- `loadLevel` reads this table by the id on a ROW, and `isLevelUnlocked`
+  // refuses a prerequisite that does not resolve -- which is the state the
+  // `_theRowIsNotThereYet` note in src/data/level8.json describes and
+  // tests/level8.test.ts held the repository to.
   level8: mapLevel8 as unknown as MapDef,
 }
 
@@ -149,6 +161,7 @@ const WAVE_TABLES: Record<string, WavesDef> = {
   'waves.level4.json': wavesLevel4 as unknown as WavesDef,
   'waves.level5.json': wavesLevel5 as unknown as WavesDef,
   'waves.level6.json': wavesLevel6 as unknown as WavesDef,
+  'waves.level7.json': wavesLevel7 as unknown as WavesDef,
   'waves.level8.json': wavesLevel8 as unknown as WavesDef,
 }
 
@@ -156,6 +169,7 @@ const WAVE_TABLES: Record<string, WavesDef> = {
 const LEVEL_RULES: Record<string, LevelRules> = {
   'level5.json': rulesLevel5 as unknown as LevelRules,
   'level6.json': rulesLevel6 as unknown as LevelRules,
+  'level7.json': rulesLevel7 as unknown as LevelRules,
   'level8.json': rulesLevel8 as unknown as LevelRules,
 }
 

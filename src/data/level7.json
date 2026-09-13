@@ -1,0 +1,26 @@
+{
+  "_note": "EVERYTHING LEVEL 7 ADDS TO THE RULES, in one file, scoped exactly the way level5.json, level6.json and level8.json are: `levels.json` names it on level 7's row and on no other, `Levels.levelRules` returns null for every level that names nothing, and the one system that reads this block is a no-op on null. So `levels 1 to 6 and 8 are unaffected` is a property of the data rather than a claim about where an `if` was written, and tests/level7.test.ts holds it.",
+  "_whatIsNotHere": "LEVEL 7 ADDS ONE RULE AND THAT IS ALL. There is no day/night, no lifesteal, no acid, no flame, no gate and no aura. The two things that make this level what it is -- the Blade Rig's immunities and the Transporter unloading four cars where it died -- are both facts about an ENEMY rather than about the level, so they live on enemies.json rows where the existing fields already are: `blockable`, `slowable`, `stunnable` and `glides` on the Rig, `splitsOnDeath` on the Transporter. Only the blades' numbers are the level's, for `flame`'s reason: the flag says which enemy does it and the block says what it does, so a second bladed vehicle is one field and no new code.",
+  "_names": "WHERE THE DISPLAY NAMES ARE: on the nine enemies.json rows this file's `roster` points at, and nowhere else. Every name the HUD, the boss bar, the wave card and the log print comes from `name` on those rows -- renaming the Blade Rig is one edit in one file, which is what Cory needs in order to rename them with the kids.",
+  "roster": {
+    "basic": "hatchback",
+    "fast": "musclecar",
+    "wall": "van",
+    "cargoRed": "cargoRed",
+    "cargoBlue": "cargoBlue",
+    "cargoYellow": "cargoYellow",
+    "cargoGreen": "cargoGreen",
+    "miniBoss": "bladeRig",
+    "boss": "transporter"
+  },
+  "_roster": "READ BY systems/LevelArt.ts as well as by a person: `enemyIdsForLevel` walks this block and the wave table for enemy ids and loads exactly those sprites with the level. The four cargo cars are named here as well as reached through the Transporter's `splitsOnDeath.enemies`, which is belt and braces on purpose -- the walk would find them either way, and a sprite that fails to load is a level that crashes on its last wave.",
+  "_blades": "THE BLADE RIG CUTS WHAT STANDS IN FRONT OF IT. Any player GROUND unit inside the radius takes damage for as long as it is there -- the hero, his fighters, and the lads a garrison tower rallies. TOWERS ARE NOT TOUCHED and there is no field to make them be: a tower is a building on a pad beside the road, and the blades cut what is in the road.\n\nTHERE WAS NO CONTACT-DAMAGE MECHANISM TO REUSE, which the brief asked to be told about. Everything in this game that hurts a player unit is either an attack from something HOLDING it -- `GameScene.damageBlocker`, driven by the enemy's own `damage` and `attackInterval` -- or a one-shot at a point, which is level 8's Consultant `deathBlast`. The Rig is neither: it is `blockable: false` so nothing ever holds it, and the blades are on continuously rather than at an instant. systems/Blades.ts is the smallest thing that works -- a radius, a rate, and a list of positions, applied per frame, Phaser-free so the soak imports the identical function instead of re-implementing it slightly wrong.",
+  "blades": {
+    "radius": 62,
+    "damagePerSecond": 55,
+    "_radius": "62 px, centre to centre, measured against the RIG's position rather than its art. Its sprite is 300 world px across and a radius that matched it would cut a hero standing two lanes away; 62 is a little under the 71 px road width, so the blades reach across the lane it is driving in and not out of it. A unit on the scrub beside the road is safe, which is what makes stepping back the answer.",
+    "_damagePerSecond": "55/s, which is heavy on purpose: the brief asks for heavy damage over time while in contact, and a hero who parks on this thing should be losing the argument within a few seconds rather than trading with it. It is a RATE, applied as rate x dt, so a unit that clips the edge of the sweep pays only for the frames it was there. Soaked: see reports/2026-09-13-level-7.md's sensitivity table.",
+    "_notAnAttack": "Deliberately not the Rig's `damage` and `attackInterval`. Those two fields are what an enemy does to whatever is holding it, and nothing ever holds this one -- its row carries 0 and 99 for the Rooster's and the CEO's reason."
+  },
+  "_finale": "THE TRANSPORTER'S FOUR CARS ARE NOT HERE EITHER, and for `_whatIsNotHere`'s reason: `what is left when it dies` is a fact about the Transporter, so the count, the spacing and the stagger are `splitsOnDeath` on its own enemies.json row, where `splitsOnDeath` already lived for the Vampire Lord. The only new thing that row needs is `holdsWave`, because on this level the children ARE the end of the wave rather than an afterthought to a fight that is already over."
+}
