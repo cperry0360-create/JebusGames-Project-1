@@ -1455,4 +1455,12 @@ export interface ArtDef {
   /** Which soldier art a deploying tower fields at each tier. Same shape and
    *  same clamp as `towerTiers`. */
   soldierTiers?: Record<string, string[]>
+  /**
+   * Whole-board reskins of the tower art, chosen by which level is running.
+   *
+   * `keys` remaps an ordinary manifest key to the skinned one; `levels` names
+   * the level ids that wear the skin, and is the only switch. See
+   * systems/TowerSkins.ts and art.json's `_towerSkins`.
+   */
+  towerSkins?: Record<string, { levels: string[]; keys: Record<string, string> }>
 }

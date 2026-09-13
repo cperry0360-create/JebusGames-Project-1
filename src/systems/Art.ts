@@ -15,6 +15,7 @@ import Phaser from 'phaser'
 import type { ArtDef, SpriteRender } from '../types.ts'
 import artData from '../data/art.json'
 import { isLevelArtKey } from './LevelArt.ts'
+import { activeSkinnedSprite } from './TowerSkins.ts'
 
 const art = artData as ArtDef
 
@@ -60,6 +61,15 @@ export const ART = {
    */
   towerTiers: art.towerTiers ?? {},
   soldierTiers: art.soldierTiers ?? {},
+  /**
+   * Whole-board reskins of the tower art, by skin name.
+   *
+   * Read through `TowerSkins.ts` rather than from here — this is the section
+   * re-export every other manifest section gets, and `manifest.test.ts` fails
+   * without it. The resolution rules (which level wears what, and what happens
+   * when the art is absent) are not a lookup and do not belong in a literal.
+   */
+  towerSkins: art.towerSkins ?? {},
 }
 
 /**
@@ -107,6 +117,17 @@ export const SPRITE_KEYS = Object.keys(art.files)
 export {
   ENEMY_SPRITE_KEYS, LEVEL_ART_KEYS, PLATE_KEYS, isLevelArtKey, isPlateKey,
 } from './LevelArt.ts'
+
+/**
+ * THE TOWER SKINS live in `systems/TowerSkins.ts`, and are re-exported here for
+ * the same two reasons `LevelArt.ts` is: callers keep one front door onto the
+ * manifest, and the module itself has to be free of Phaser so a test can
+ * execute it rather than read it as text.
+ */
+export {
+  activeSkinnedSprite, isSkinnedKey, setSkinLevel, SKIN_NAMES, SKINNABLE_KEYS,
+  SKINNED_KEYS, skinArtForLevel, skinDef, skinForLevel, skinnedKeyIn, skinnedSprite,
+} from './TowerSkins.ts'
 
 /**
  * Keys whose file may legitimately not be there.
@@ -257,6 +278,29 @@ export function icon(scene: Phaser.Scene, name: string): string {
 
 export function renderFor(key: string): SpriteRender {
   return { ...DEFAULT_RENDER, ...(art.render[key] ?? {}) }
+}
+
+/**
+ * The skin's texture for this key on the running board, or the original.
+ *
+ * `TowerSkins.activeSkinnedSprite` answers the manifest question — is there a
+ * skinned key, and does the manifest name a file for it. Only a scene can
+ * answer the one that actually protects the board: did that file LOAD. A skin
+ * key is level art, so it arrives with the level and is freed when the level
+ * ends, and a 404 or a race on the way in would otherwise put Phaser's magenta
+ * placeholder where a tower should be.
+ *
+ * That is a worse outcome than losing the reskin, so this falls back to the
+ * original key — which boot loaded and every menu is already drawing — and the
+ * board looks like an un-skinned board instead of a broken one. The fallback is
+ * here rather than at each call site because there are two call sites today and
+ * the third one added is the one that would forget: the same reasoning as
+ * `icon()` above, which exists because exactly that happened.
+ */
+export function skinnedTexture(scene: Phaser.Scene, key: string): string {
+  const skinned = activeSkinnedSprite(key)
+  if (skinned === key) return key
+  return scene.textures.exists(skinned) ? skinned : key
 }
 
 /**

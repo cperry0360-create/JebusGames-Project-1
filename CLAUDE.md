@@ -184,6 +184,44 @@ Both halves matter. The first says it did not happen on the device. The second
 says the engine would have handled it if it had. Context restoration is
 therefore not a reason to change engines — Phaser 3 has had it since 3.85.0.
 
+### An unreferenced-asset sweep is only safe once every branch that needs those assets has landed
+
+**Art can be committed before the code that uses it.** A sweep run in that
+window deletes work that is about to be needed, and it does so with every piece
+of evidence on its side: nothing on `main` references the files, so by the only
+test available they are dead weight.
+
+**Check open branches before deleting any asset for being unreferenced.**
+`git log --all -S'<filename>'` and a look at each branch's `art.json` is the
+whole check, and it takes a minute.
+
+This happened. `bda5eaf` added fourteen machine-world tower WebPs and
+`claude/machine-tower-skins-6looer` was cut from that commit to wire them up.
+Before that branch merged, `eda11dc` swept all fourteen into `art-source/` for
+being unreferenced — correctly, on main's evidence, and the branch's own code
+was the missing half of the picture.
+
+**And the merge would NOT have put them back.** This is the part worth
+remembering, because it is silent. The branch forked from the commit where the
+files were still under `public/`, and never touched those paths again; git sees
+one side that moved them and one side that did nothing, resolves in favour of
+the move, and reports no conflict. The merge lands the code and the manifest
+keys pointing at files that are not there.
+
+`tests/assets.test.ts` is the net and it holds — it names every missing key and
+fails. Do not rely on noticing.
+
+So, in order:
+
+1. Before a sweep, check every open branch's `art.json`, not just `main`'s.
+2. If a sweep already took the files, **restore them in their own commit BEFORE
+   merging the branch that needs them.** That puts both sides back in agreement
+   about where the files live and the merge stops eating them.
+3. Prefer moving to `art-source/` over deleting, which is what `eda11dc` did and
+   is why the recovery here was a `git mv` rather than an archaeology exercise.
+
+See `reports/2026-09-13-restore-tower-assets.md`.
+
 ## Reports
 
 **Every report ends with a markdown file, always.** A finding that lives only
