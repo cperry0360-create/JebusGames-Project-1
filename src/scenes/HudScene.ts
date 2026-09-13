@@ -158,6 +158,16 @@ export class HudScene extends Phaser.Scene {
     // is paused, so it is the better witness of the two: if even this stops
     // hearing taps, the whole UI has gone, not just the board.
     this.input.on('pointerdown', () => noteInputAccepted())
+    // THE EXIT THAT CANNOT BE FORGOTTEN. Every other way out of a run calls
+    // `releaseHudModals` for itself; this is what covers the ones nobody
+    // thought of, `relayout`'s own restart among them. See that method.
+    this.events.once('shutdown', () => this.releaseHudModals())
+    // And a new run of this scene owns no modal, whatever the last one left
+    // behind: the panel, the dialog and the objects behind both went with the
+    // scene run that drew them, so only the references are dropped here.
+    this.paused = false
+    this.settings = undefined
+    this.panel = undefined
     this.wireHeldAbility()
 
     // The HUD is laid out in CSS pixels — typography floors, plate sizes and
@@ -456,6 +466,43 @@ export class HudScene extends Phaser.Scene {
     })
   }
 
+  /**
+   * Lets go of a pause this scene is holding, whatever put it there.
+   *
+   * THE SOFT LOCK THIS FIXES. `paused` is a field on a scene Phaser REUSES:
+   * one instance is built at boot and `create()` runs again on every run.
+   * Nothing reset it, and the two ways out of the settings panel that are not
+   * CONTINUE -- RESTART and HOME -- both stopped this scene with it still set.
+   * The next run therefore started with `modalOpen` true, and `modalOpen` is
+   * what GameScene asks, through `hudModalOpen`, before acting on ANY press:
+   * `chromeUnderPointer` answered yes to every tap on the board, so no tower
+   * could be placed, no special could be cast and the hero could not be
+   * ordered -- while the waves, which start themselves on a countdown, went on
+   * spawning and the counters went on ticking. Nothing was drawn, because the
+   * panel had gone with the scene that drew it; there was no exception and
+   * nothing to dismiss.
+   *
+   * So the flag is dropped at every exit rather than at the one that happened
+   * to be tested, and `shutdown` is the exit that cannot be forgotten: a run
+   * of this scene may not end while it still claims a modal.
+   *
+   * THE WORLD IS HANDED BACK TOO. `openSettings` paused GameScene on this
+   * scene's behalf and only this scene will resume it, so a HUD that stops
+   * while holding the pause would leave a board frozen with no owner. Asked
+   * rather than assumed: resuming a scene that is not paused is not what this
+   * means, and after QUIT the world has already been stopped.
+   */
+  private releaseHudModals(): void {
+    this.settings?.close()
+    this.settings = undefined
+    this.panel?.close()
+    this.panel = undefined
+    if (!this.paused) return
+    this.paused = false
+    leaveGate('settings')
+    if (this.scene.isPaused('Game')) this.scene.resume('Game')
+  }
+
   private resumeGame(): void {
     this.paused = false
     leaveGate('settings')
@@ -481,6 +528,7 @@ export class HudScene extends Phaser.Scene {
    * describe, which makes that the one ordering that cannot race.
    */
   private restartRun(): void {
+    this.releaseHudModals()
     this.scene.resume('Game')
     this.scene.stop()
     this.scene.get('Game').scene.restart()
@@ -506,6 +554,7 @@ export class HudScene extends Phaser.Scene {
   }
 
   private quitToTitle(): void {
+    this.releaseHudModals()
     this.scene.resume('Game')
     this.scene.stop('Game')
     this.scene.start('Title')

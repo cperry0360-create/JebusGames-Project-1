@@ -57,7 +57,7 @@ const scenario = q.get('s') || 'game'
 
 const SCENARIO_NAMES = [
   'abilitybar', 'abilityicons', 'afford', 'arch', 'archplate', 'background',
-  'bars', 'beacon', 'boot', 'boss', 'bossability', 'bossleak', 'buildall',
+  'bars', 'beacon', 'boardinput', 'boot', 'boss', 'bossability', 'bossleak', 'buildall',
   'cakes', 'cakestate', 'chromepan', 'combat', 'contain', 'courtland',
   'crashreport', 'crashw5', 'credits', 'creditsroll', 'ctxsurvive',
   'dadsync', 'diag', 'difficulty', 'draft', 'drawer', 'edges',
@@ -112,7 +112,7 @@ const ASSERTS_NOTHING = new Set([
  * scenario joins this list when its checks go through `expect`.
  */
 const USES_EXPECT = new Set([
-  'typegame', 'rotationburst', 'level7', 'level8',
+  'typegame', 'rotationburst', 'level7', 'level8', 'boardinput',
 ])
 
 /** How many checks this run actually EVALUATED, pass or fail. */
@@ -15805,6 +15805,494 @@ async function run() {
       expect(got === want, 'cleared with ' + lives + ' lives paid ' + got + ' cakes, wanted ' + want)
     }
     expect(CAKES8.cakesFor(false, 0, start8) === 0, 'a lost run paid cakes')
+
+    note('RESULT ' + (ASSERT_FAILS === 0
+      ? ASSERTIONS + ' checks, all passed'
+      : '*** ' + ASSERT_FAILS + ' of ' + ASSERTIONS + ' checks failed ***'))
+    return
+  }
+
+  /*
+   * BOARD INPUT, FROM REAL POINTER EVENTS, ON EVERY REGISTERED LEVEL.
+   *
+   * WHY IT IS ONE SCENARIO AND NOT THREE. Placing a tower, casting a special
+   * and ordering the hero all resolve through GameScene's single `pointerup`
+   * handler, so a level that loses that handler loses all three at once --
+   * which is exactly how level 8's soft lock presented: waves spawning, the
+   * HUD ticking, and nothing on the board answering a finger. Checking the
+   * three together is what makes the difference between "the board is dead"
+   * and "one action is broken" legible from the report.
+   *
+   * EVERY LEVEL, NOT JUST THE ONE THAT BROKE. The fault was in shared code
+   * reached by one map's shape, and the only way that class of bug stops
+   * shipping is if every registered level has to answer a tap on its first
+   * pad before a change lands.
+   *
+   * ?arg=level8 runs one level, ?arg=level7,level8 runs a list, no arg runs
+   * every row in levels.json.
+   */
+  if (scenario === 'boardinput') {
+    const LVB = await import('./js/systems/Levels.js')
+    const RSB = await import('./js/systems/RunState.js')
+    const SAVEB = await import('./js/systems/Save.js')
+    const ABIL8 = (await import('./js/data/abilities.json', { with: { type: 'json' } })).default
+    const RESB = await import('./js/systems/Resolution.js')
+    const HLB = await import('./js/systems/HudLayout.js')
+    // Every level cleared, so nothing here is gated behind a prerequisite,
+    // and the drawer OFF, so the pad opens the build ring this drives.
+    SAVEB.writeSave({
+      ...SAVEB.DEFAULT_SAVE,
+      clearedLevels: LVB.LEVELS.map((l) => l.id),
+      controlDrawer: false,
+    })
+
+    /*
+     * A POINT THE HERO CAN BE ORDERED TO THAT NOTHING ELSE OWNS.
+     *
+     * `onClick` resolves most-specific-target-first, so a build pad standing
+     * where the order was aimed takes the tap and opens its ring instead --
+     * which reads in a report as "the hero cannot be moved" and is the harness
+     * aiming badly. Level 7 carries 22 pads and one of them is 80px off the
+     * hero's start, which is how this was found.
+     */
+    const bareGroundNear = (G) => {
+      const free = (x, y) => !G.build.spotAt(x, y)
+        && !G.towers.some((t) => t.hits(x, y))
+        && !G.hero.hits(x, y)
+      const view = G.cameras.main.worldView
+      for (let r = 70; r <= 220; r += 25) {
+        for (let a = 0; a < 16; a++) {
+          const x = G.hero.x + Math.cos(a * Math.PI / 8) * r
+          const y = G.hero.y + Math.sin(a * Math.PI / 8) * r
+          // Inside the view with a margin, so the tap lands on the canvas.
+          if (x < view.x + 40 || x > view.right - 40) continue
+          if (y < view.y + 40 || y > view.bottom - 40) continue
+          if (free(x, y)) return { x, y }
+        }
+      }
+      return { x: G.hero.x + 80, y: G.hero.y + 40 }
+    }
+
+    /*
+     * THE WAY A PLAYER ACTUALLY ARRIVES: the world map's own handover, the
+     * loadout's own draft, and BEGIN THE RUN pressed for real.
+     *
+     * Worth having beside the direct start because the two differ in what the
+     * run carries into `create()` -- the loadout DRAWS the opening towers and
+     * specials from the level's own weights, where a direct start hands over a
+     * fixed pair. A level that only breaks on the hand it is dealt would pass
+     * the cheap path forever.
+     *
+     * ?arg=real:level8 for one level down this path.
+     */
+    const enterTheLongWay = async (levelId) => {
+      for (const k of ['Title', 'Splash', 'WorldMap', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+      // What WorldMapScene.startLevel hands over: an empty hand, for the
+      // loadout to draw into.
+      RSB.setRunState({
+        heroId: 'cory', levelId, seed: 11,
+        openingTowers: [], abilities: [], reserveTowers: [], resumeFrom: null,
+      })
+      game.scene.start('Loadout')
+      if (!(await until(() => running('Loadout'), 12000))) return 'the loadout never opened'
+      await sleep(600)
+      const lo = scene('Loadout')
+      const all = []
+      const walkAll = (list) => { for (const o of list) { all.push(o); if (o.list) walkAll(o.list) } }
+      walkAll(lo.children.list)
+      const label = all.find((o) => o.type === 'Text' && /BEGIN/.test(String(o.text ?? '')))
+      if (!label) return 'the loadout has no BEGIN THE RUN button'
+      const b = label.getBounds()
+      const c = lo.cameras.main
+      const d = window.devicePixelRatio || 1
+      await click((c.x + (b.centerX - c.worldView.x) * c.zoom) / d,
+        (c.y + (b.centerY - c.worldView.y) * c.zoom) / d)
+      if (!(await until(() => running('Game'), 15000))) return 'BEGIN THE RUN started nothing'
+      note('   drew ' + JSON.stringify(RSB.runState().openingTowers)
+        + ' and ' + JSON.stringify(RSB.runState().abilities))
+      return null
+    }
+
+    const viaLoadout = /(^|:)real:/.test(arg || '')
+    const deep = /(^|:)deep:/.test(arg || '')
+    const afterPause = /(^|:)afterpause:/.test(arg || '')
+    const ids = arg
+      ? arg.replace(/^(real:|deep:|afterpause:)+/, '').split(',')
+      : LVB.LEVELS.map((l) => l.id)
+    note('levels under test: ' + JSON.stringify(ids)
+      + (viaLoadout ? '  (entered through the loadout)' : ''))
+    expect(ids.length > 0, 'levels.json registered no levels at all')
+
+    /**
+     * A RUN LEFT THROUGH THE PAUSE MENU, BEFORE THE ONE UNDER TEST.
+     *
+     * `?arg=afterpause:level8`. RESTART and HOME are the two ways out of the
+     * settings panel that are not CONTINUE, and both stop HudScene while it is
+     * still holding `paused`. Everything the world asks about chrome goes
+     * through `hudModalOpen`, so a flag left set there is a board that hears
+     * nothing on the NEXT run -- with the simulation, the auto-started waves
+     * and the counters all carrying on exactly as before.
+     *
+     * Driven from real taps on the gear and on the panel's own buttons, so
+     * what is exercised is the path a player takes.
+     */
+    const quitThroughTheMenu = async (how) => {
+      for (const k of ['Title', 'Splash', 'WorldMap', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+      RSB.setRunState({
+        heroId: 'cory', levelId: 'level1', seed: 2, abilities: ['molotov', 'glacier'],
+        openingTowers: ['withholding', 'writeoff'], reserveTowers: [], resumeFrom: null,
+      })
+      game.scene.start('Game')
+      if (!(await until(() => running('Game') && running('Hud') && scene('Game').hero, 20000))) {
+        return 'the warm-up run never started'
+      }
+      await sleep(700)
+      const H = scene('Hud')
+      const gear = H.layout.settings
+      await click(gear.x + gear.width / 2, gear.y + gear.height / 2)
+      await sleep(450)
+      if (!H.settings) return 'the gear did not open the settings panel'
+      note('   settings open: Hud.paused=' + H.paused + ' Game paused='
+        + !game.scene.isActive('Game'))
+      // The panel's own buttons carry names; see SettingsPanel.
+      const named = []
+      const walkN = (list) => { for (const o of list) { named.push(o); if (o.list) walkN(o.list) } }
+      walkN(H.children.list)
+      if (how === 'rotate') {
+        /*
+         * THE EXIT NOBODY PRESSES. `relayout` restarts this scene whenever the
+         * viewport changes -- a rotate, or iOS Safari's URL bar collapsing --
+         * and a settings panel open across one of those used to leave `paused`
+         * set with the panel destroyed. That is the worst version of the lock:
+         * `openSettings` guards on `this.paused && this.settings`, so the gear
+         * that is the only way back was dead as well as the board.
+         *
+         * Driven through the ScaleManager, which is where a real rotate
+         * arrives; there is no gesture for it to come from.
+         */
+        game.scale.resize(game.scale.width + 2, game.scale.height)
+        await sleep(900)
+        const HR = scene('Hud')
+        note('   left through a RESIZE while paused: Hud.paused=' + (HR && HR.paused)
+          + ' Game paused=' + game.scene.isPaused('Game'))
+        expect(HR && HR.paused === false,
+          'a viewport change while the settings panel was open left HudScene holding `paused`, '
+          + 'with the panel gone: the board AND the gear are both dead')
+        expect(!game.scene.isPaused('Game'),
+          'a viewport change while the settings panel was open left GameScene paused with '
+          + 'nothing owning the pause')
+        return null
+      }
+      const hit = named.find((o) => o.name === 'settings:' + how)
+      if (!hit) return 'the settings panel has no ' + how.toUpperCase() + ' button'
+      const b = hit.getBounds()
+      await click(b.centerX, b.centerY)
+      await sleep(500)
+      if (how === 'home') {
+        // HOME asks first. Its confirmation is a HUD dialog with QUIT on it.
+        const after = []
+        walkN2(scene('Hud').children.list, after)
+        const quit = after.find((o) => o.type === 'Text' && /^QUIT$/i.test(String(o.text ?? '')))
+        if (!quit) return 'the quit confirmation has no QUIT button'
+        const q = quit.getBounds()
+        await click(q.centerX, q.centerY)
+        await sleep(600)
+      }
+      await sleep(900)
+      const H2 = scene('Hud')
+      note('   left through ' + how.toUpperCase() + ': Hud.paused=' + (H2 && H2.paused)
+        + ' Game running=' + running('Game') + ' Game paused=' + game.scene.isPaused('Game')
+        + ' Title running=' + running('Title'))
+      // THE EXIT STILL HAS TO DO ITS JOB. A fix that dropped the flag by
+      // breaking the button it belongs to would pass every check below.
+      if (how === 'restart') {
+        expect(await until(() => running('Game') && !game.scene.isPaused('Game'), 15000),
+          'RESTART did not put a live run back on the screen')
+      }
+      if (how === 'continue') {
+        expect(running('Game') && !game.scene.isPaused('Game'),
+          'CONTINUE did not resume the run it paused')
+      }
+      if (how === 'home') {
+        expect(await until(() => running('Title'), 15000), 'HOME did not reach the title screen')
+      }
+      return null
+    }
+    const walkN2 = (list, out) => { for (const o of list) { out.push(o); if (o.list) walkN2(o.list, out) } }
+
+    if (afterPause) {
+      for (const how of ['continue', 'restart', 'rotate', 'home']) {
+        const why = await quitThroughTheMenu(how)
+        if (why) { expect(false, how + ': ' + why); continue }
+        expect(scene('Hud').paused === false,
+          'HudScene is still holding `paused` after leaving a run through '
+          + how.toUpperCase() + '; every later run\'s board is chrome to the world')
+      }
+    }
+
+    for (const levelId of ids) {
+      note('--------- ' + levelId + ' ---------')
+      if (viaLoadout) {
+        const why = await enterTheLongWay(levelId)
+        if (why) { expect(false, levelId + ': ' + why); continue }
+      } else {
+        for (const k of ['Title', 'WorldMap', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+        RSB.setRunState({
+          heroId: 'cory', levelId, seed: 3, abilities: ['molotov', 'glacier'],
+          openingTowers: ['withholding', 'writeoff'], reserveTowers: [], resumeFrom: null,
+        })
+        game.scene.start('Game')
+      }
+      if (!(await until(() => running('Game') && scene('Game').hero && scene('Game').build, 20000))) {
+        expect(false, levelId + ': the scene never came up')
+        continue
+      }
+      const G = scene('Game')
+      await sleep(800)
+      if (!expect(G.level.id === levelId,
+        'asked for ' + levelId + ' and the scene is running ' + G.level.id)) continue
+
+      // THE STATE THAT DECIDES WHETHER A TAP IS HEARD AT ALL, printed before
+      // anything is tapped. A modal left up, a HUD band over the board or a
+      // rig that swallowed the gesture each kill every check below, and each
+      // looks identical from the outcome alone.
+      note(levelId + ': pads=' + G.build.spots.length
+        + ' modal=' + G.modalOpen + ' hudModal=' + (scene('Hud') && scene('Hud').modalOpen)
+        + ' drawer=' + G.drawerOn() + ' phase=' + G.status.phase
+        + ' pressTakenByUi=' + G.pressTakenByUi)
+      expect(G.build.spots.length > 0, levelId + ': has no build pads at all')
+      expect(!G.modalOpen, levelId + ': a world modal is up before anything was tapped')
+
+      // The purse is not the thing under test.
+      G.setPeanuts(9999)
+      // Neither is the hand. The loadout draws whatever the level's weights
+      // give it, and an instant special or the scratch card would prove
+      // nothing about a tap on the BOARD, so slot 1 is a plainly targeted
+      // ability on every level here.
+      G.status.abilities = ['molotov', 'glacier']
+      for (const id of G.status.abilities) G.cooldowns.register(id, ABIL8[id].cooldown)
+
+      /*
+       * WHY A TAP WAS DROPPED, printed beside the outcome.
+       *
+       * "Nothing happened" is the same sentence for a press claimed by chrome,
+       * a release the camera rig counted as a pan, and a phase that refuses
+       * every tap. These are the three flags those cases set, read straight
+       * after the tap that failed.
+       */
+      const gates = () => 'takenByUi=' + G.pressTakenByUi
+        + ' firedBeam=' + G.pressFiredBeam
+        + ' consumedGesture=' + G.rig.consumedGesture
+        + ' modal=' + G.modalOpen + ' phase=' + G.status.phase
+
+      /*
+       * AND WHICH CLAIMANT IT WAS. `chromeUnderPointer` is an OR over seven
+       * things and `pressTakenByUi=true` says only that one of them answered;
+       * naming it is the difference between a diagnosis and a shrug.
+       */
+      const hud = () => scene('Hud')
+      const claimants = () => {
+        const p = G.input.activePointer
+        const ui = RESB.pointerToScreen(G, p, G.uiCam)
+        const HL = HLB.hudBlocksGesture(G.layout, ui.x, ui.y)
+        const hits = G.input.hitTestPointer(p)
+        const chrome = hits.filter((o) => G.screenSpace.includes(o))
+        return 'worldModal=' + G.modalOpen
+          + ' hudModal=' + (hud() ? hud().modalOpen : 'no hud')
+          + ' hudBand=' + HL
+          + ' drawer=' + (G.drawer ? G.drawer.ownsPress(ui.x, ui.y) : 'none')
+          + ' ring=' + (G.ring ? G.ring.active : 'none')
+          + ' ticket=' + (G.ticket ? G.ticket.active : 'none')
+          + ' dialog=' + (G.dialog ? G.dialog.active : 'none')
+          + ' nukeEarned=' + (G.nukeEarned ? G.nukeEarned.active : 'none')
+          + ' nukeLaunch=' + (G.nukeLaunch ? G.nukeLaunch.active : 'none')
+          + ' rare=' + G.status.rareAbility
+          + ' owns:nukeEarned=' + (G.nukeEarned ? G.nukeEarned.owns(hits) : '-')
+          + ' owns:nukeLaunch=' + (G.nukeLaunch ? G.nukeLaunch.owns(hits) : '-')
+          + ' owns:dialog=' + (G.dialog ? G.dialog.owns(hits) : '-')
+          + ' screenSpaceHits=' + JSON.stringify(chrome.map(
+            (o) => o.name || (o.texture && o.texture.key) || o.type))
+      }
+
+      /*
+       * A PAD THE HUD IS NOT SITTING ON, out of the candidates offered.
+       *
+       * A SECOND, SEPARATE FAULT, and it must not be reported as this one.
+       * `hudTakesPress` gives a press to the HUD wherever START WAVE, the
+       * gear, CANCEL, the chip or the ability row is drawn, and the world
+       * never sees it -- which is correct, and which makes a pad the camera
+       * cannot move out from under one of those untappable at that viewport.
+       * Level 6's pad at (1167, 53) is under START WAVE at 844x390 and at
+       * 667x375, and the camera is already hard against the top-right corner
+       * of the plate, so there is nowhere to pan it to.
+       *
+       * That is a board-layout fault, not a dead input path. It is NOTED with
+       * its numbers and the probe moves to the next candidate; the pad the
+       * brief actually asks about -- the FIRST one -- is offered alone, so a
+       * level whose pad 0 is unreachable still fails.
+       */
+      const reachablePad = async (candidates) => {
+        for (const i of candidates) {
+          const spot = G.build.spots[i]
+          if (!spot) continue
+          await lookAt(spot.x, spot.y)
+          const [sx, sy] = toScreen(spot.x, spot.y)
+          // THE SCENE'S OWN ANSWER, not a paraphrase of it. `chromeUnderPointer`
+          // is the seven-way OR the press actually goes through, and asking one
+          // of its seven -- `hudTakesPress` -- let level 6's pad under the
+          // COUNTERS plate through as reachable. The pointer is moved there
+          // first because that is what the answer is about.
+          await move(sx, sy)
+          if (!G.chromeUnderPointer(G.input.activePointer)) return { i, spot, sx, sy }
+          note('   pad ' + i + ' at world ' + Math.round(spot.x) + ',' + Math.round(spot.y)
+            + ' draws under chrome at screen ' + Math.round(sx) + ',' + Math.round(sy)
+            + ' with the camera as close as it goes; that press belongs to the HUD')
+        }
+        return null
+      }
+
+      /** The three board actions, from real pointer events. */
+      const probe = async (tag, candidates) => {
+        note('   -- ' + tag + ' --')
+
+        /* ---- 1. A TOWER ON A PAD ---- */
+        const pick = await reachablePad(candidates)
+        const padIndex = pick ? pick.i : candidates[0]
+        const spot = pick ? pick.spot : null
+        const before = G.towers.length
+        if (!pick) {
+          note('   *** no candidate pad of ' + JSON.stringify(candidates)
+            + ' is clear of the HUD at this viewport')
+        }
+        if (spot) {
+          const px = pick.sx, py = pick.sy
+          note('   pad ' + padIndex + ' world ' + Math.round(spot.x) + ',' + Math.round(spot.y)
+            + ' -> screen ' + Math.round(px) + ',' + Math.round(py))
+          await click(px, py)
+          await sleep(220)
+          if (!G.ring) {
+            note('   *** the build ring did not open on pad ' + padIndex + ': ' + gates())
+          } else {
+            const opts = G.ring.hitBoxes.filter((h) => !h.id.startsWith('ring:'))
+            if (!opts.length) note('   *** the ring opened with no options on it')
+            else {
+              const o = opts[0].rect
+              await click(o.x + o.width / 2, o.y + o.height / 2)
+              await sleep(220)
+              const cf = G.ring && G.ring.hitBoxes.find((h) => h.id === 'ring:confirm')
+              if (!cf) note('   *** the ring offered no confirm button')
+              else {
+                await click(cf.rect.x + cf.rect.width / 2, cf.rect.y + cf.rect.height / 2)
+                await sleep(320)
+              }
+            }
+          }
+        }
+        const placed = G.towers.length > before
+        if (!placed) note('   *** no tower placed: ' + gates())
+        expect(placed, levelId + ' (' + tag + '): no tower could be placed on pad '
+          + padIndex + ' from real taps')
+        if (G.ring) G.ring.close()
+        await sleep(120)
+
+        /* ---- 2. A SPECIAL ---- */
+        await key('Escape')
+        await sleep(140)
+        G.cooldowns.reset('molotov')
+        await key('KeyQ')
+        await sleep(180)
+        note('   molotov armed by the key: ' + !!G.targeting.request)
+        const view = G.cameras.main.worldView
+        const [cx, cy] = toScreen(view.centerX, view.centerY)
+        await click(cx, cy)
+        await sleep(320)
+        const cast = !G.cooldowns.ready('molotov')
+        if (!cast) note('   *** nothing cast: ' + gates())
+        expect(cast, levelId + ' (' + tag + '): no special could be cast from real taps')
+
+        /* ---- 3. THE HERO ---- */
+        await key('Escape')
+        await sleep(140)
+        await lookAt(G.hero.x, G.hero.y)
+        const [hx, hy] = toScreen(G.hero.x, G.hero.y)
+        await click(hx, hy)
+        await sleep(220)
+        const selected = G.heroSelected
+        note('   the hero answered his own tap: ' + selected)
+        // Bare ground, clear of every pad and tower on the board, so the order
+        // cannot lose its tap to a build node that happens to be standing
+        // where the hero was told to go.
+        const target = bareGroundNear(G)
+        const [mx, my] = toScreen(target.x, target.y)
+        await click(mx, my)
+        await sleep(260)
+        const rally = G.hero.rally
+        const ordered = Math.hypot(rally.x - target.x, rally.y - target.y) < 24
+        note('   rally now ' + Math.round(rally.x) + ',' + Math.round(rally.y)
+          + ' wanted ' + Math.round(target.x) + ',' + Math.round(target.y))
+        if (!(selected && ordered)) note('   *** the hero did not move: ' + gates())
+        expect(selected && ordered,
+          levelId + ' (' + tag + '): the hero could not be selected and ordered from real taps')
+      }
+
+      // PAD 0 ALONE, because that is the check the brief asks for: a level
+      // whose first pad cannot take a tower fails here rather than quietly
+      // moving on to its second.
+      await probe('before the first wave', [0])
+      await shot('boardinput-' + levelId + '-ready')
+
+      /*
+       * AND AGAIN WITH THE LEVEL RUNNING. The soft lock was reported on a
+       * board that was spawning and walking, so a check taken only on a still
+       * board is a check taken before the interesting moment.
+       */
+      G.status.phase = 'ready'
+      G.startWave()
+      await until(() => G.enemies.length > 0, 12000)
+      await sleep(1200)
+      note('   wave running: enemies=' + G.enemies.length + ' phase=' + G.status.phase)
+      G.setPeanuts(9999)
+      await probe('mid-wave', [1, 2, 3, 4, 5])
+      await shot('boardinput-' + levelId + '-wave')
+
+      /*
+       * AND AFTER THE LEVEL'S OWN MECHANICS HAVE FIRED.
+       *
+       * `?arg=deep:level8`. Every wave the table holds, driven in turn, with a
+       * hero order tapped between each one. A board that answers on wave 1 and
+       * stops answering on wave 9 is the same report as one that never
+       * answered, and only this pass can tell them apart -- level 8's gate,
+       * its death blast, its aura and its boss summons all first fire deep in
+       * the table.
+       */
+      if (deep) {
+        for (let w = 1; w < G.status.waveCount; w++) {
+          G.status.phase = 'ready'
+          G.status.wave = w
+          G.startWave()
+          await sleep(2500)
+          // Cleared rather than fought, so the pass walks the whole table in
+          // reasonable time and every wave's own spawns actually appear.
+          for (const e of [...G.enemies]) { if (e.alive) G.damageEnemy(e, 1e9, true, 0, false) }
+          await sleep(400)
+          await key('Escape')
+          const target = bareGroundNear(G)
+          await lookAt(G.hero.x, G.hero.y)
+          const [ax, ay] = toScreen(G.hero.x, G.hero.y)
+          await click(ax, ay)
+          await sleep(160)
+          const [bx, by] = toScreen(target.x, target.y)
+          await click(bx, by)
+          await sleep(200)
+          const ok = Math.hypot(G.hero.rally.x - target.x, G.hero.rally.y - target.y) < 24
+          note('   wave ' + (w + 1) + '/' + G.status.waveCount + ': board answers=' + ok
+            + '  ' + gates() + '  heroDown=' + G.hero.down)
+          if (!ok) note('      claimants: ' + claimants())
+          if (!expect(ok, levelId + ': the board stopped answering taps at wave ' + (w + 1))) break
+        }
+        await shot('boardinput-' + levelId + '-deep')
+      }
+    }
 
     note('RESULT ' + (ASSERT_FAILS === 0
       ? ASSERTIONS + ' checks, all passed'
