@@ -61,7 +61,7 @@ const SCENARIO_NAMES = [
   'cakes', 'cakestate', 'chromepan', 'combat', 'contain', 'courtland',
   'crashreport', 'crashw5', 'credits', 'creditsroll', 'ctxsurvive',
   'dadsync', 'diag', 'difficulty', 'draft', 'drawer', 'edges',
-  'elibar', 'enemyfacing', 'everyloadout', 'facing', 'fps', 'full', 'full13', 'fx',
+  'elibar', 'elifire', 'enemyfacing', 'everyloadout', 'facing', 'fps', 'full', 'full13', 'fx',
   'game', 'gateway', 'gestures', 'glacier', 'gnomes', 'goblin', 'heroanim',
   'heroblock', 'herochip', 'herofx', 'herohp', 'lane', 'leak', 'ledger',
   'labelprobe', 'lettering', 'level6', 'level7', 'level8', 'levelart', 'levels',
@@ -3964,13 +3964,23 @@ async function run() {
     const HLn = await import('./js/systems/HudLayout.js')
     let faults = 0
     const bad = (m) => { faults++; note('*** ' + m) }
-    const FX = 'fx-mind-laser'
+    // EITHER HELD BEAM, because there are two now and the trap is the shape
+    // rather than the picture: `forgetEffectAnims` asks the TEXTURE which
+    // animations belong to it, so a second strip cut into `<key>-charge`,
+    // `-sustain` and `-fade` is covered by construction -- and "by
+    // construction" is a claim, which is what this scenario exists to replace
+    // with a measurement.
+    //
+    //   sh tools/harness/run.sh nullframe 220 1024x768        Courtland
+    //   sh tools/harness/run.sh nullframe 220 1024x768 eli    Eli
+    const HERO = arg === 'eli' ? 'eli' : 'courtland'
+    const FX = HERO === 'eli' ? 'fx-eli-fire' : 'fx-mind-laser'
     const CLIPS = [FX + '-charge', FX + '-sustain', FX + '-fade']
 
     const playLevel = async (levelId) => {
       for (const k of ['Title', 'Splash', 'Credits', 'Boot', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
       RSn.setRunState({
-        heroId: 'courtland', abilities: ['glacier', 'meteor'],
+        heroId: HERO, abilities: ['glacier', 'meteor'],
         openingTowers: ['withholding', 'writeoff'], reserveTowers: [], levelId,
       })
       game.scene.start('Game')
@@ -4298,6 +4308,386 @@ async function run() {
       ? 'no stand-in, no oversized icon and nothing foreign on the ability bar, '
         + 'across ' + (LEVELS.length + HEROES.length - 1) + ' boards'
       : '*** ' + faultsE + ' fault(s) on the ability bar ***'))
+    return
+  }
+  if (scenario === 'elifire') {
+    // ELI'S THREE, ON THE BOARD. Three claims, none of which a screenshot can
+    // settle on its own:
+    //
+    //   1. He carries THREE medallions and nobody else's bar changed.
+    //   2. STAR RAIN falls across the whole playfield rather than round him.
+    //   3. RUSSINGA IS FIRE arms on a tap, spends nothing while the aim is off
+    //      the board, and draws painted fire rather than a smear.
+    const RSF = await import('./js/systems/RunState.js')
+    const RESF = await import('./js/systems/Resolution.js')
+    const HLF = await import('./js/systems/HudLayout.js')
+    const HJF = (await import('./js/data/heroes.json', { with: { type: 'json' } })).default
+    const AJF = (await import('./js/data/art.json', { with: { type: 'json' } })).default
+    const DJF = (await import('./js/data/display.json', { with: { type: 'json' } })).default
+    const PJF = (await import('./js/data/presentation.json', { with: { type: 'json' } })).default
+    let faultsF = 0
+    const failF = (m) => { faultsF++; note('   *** ' + m) }
+    const HAND = ['scratchTicket', 'glacier']
+
+    const startAs = async (heroId, levelId) => {
+      RSF.setRunState({
+        heroId, abilities: HAND,
+        openingTowers: ['withholding', 'writeoff'], reserveTowers: [], levelId,
+      })
+      for (const k of ['Title', 'Draft', 'Splash', 'Credits', 'Boot', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+      game.scene.start('Game')
+      await until(() => running('Game') && scene('Game').status.heroName !== '', 25000)
+      await until(() => running('Hud'), 12000)
+      await sleep(800)
+      return scene('Game')
+    }
+
+    // --- 1: THE ROSTER'S MEDALLION COUNTS, off the live bar ------------------
+    const WANT = { cory: 2, courtland: 3, han: 2, eli: 3, bailey: 2 }
+    for (const [heroId, want] of Object.entries(WANT)) {
+      await startAs(heroId, 'level1')
+      const hud = scene('Hud')
+      const meds = (hud.slots || []).filter((s) => s.region.kind === 'heroSlot')
+      const keys = meds.map((s) => s.icon.texture.key)
+      note(heroId.padEnd(10) + meds.length + ' medallion(s): ' + keys.join(' '))
+      if (meds.length !== want) failF(`${heroId} shows ${meds.length} medallions, not ${want}`)
+      const missing = keys.filter((k) => k === AJF.generated.iconMissing)
+      if (missing.length) failF(`${heroId} has ${missing.length} medallion(s) with no art`)
+      // Fitted, like every other slot -- a third medallion must not make the
+      // row overflow or the icons overlap.
+      for (const s of meds) {
+        if (s.icon.displayHeight > s.region.boxH + 1 || s.icon.displayWidth > s.region.pitch + 1) {
+          failF(`${heroId}'s ${s.region.id} is drawn past its own slot`)
+        }
+      }
+      if (heroId === 'eli') {
+        note('  eli names: ' + HJF.eli.abilities.map((a) => a.name).join(' | '))
+        await shot('elifire-1-bar-eli-' + VP.w + 'x' + VP.h)
+      }
+    }
+
+    // --- 2: STAR RAIN, ACROSS THE BOARD -------------------------------------
+    const GF = await startAs('eli', 'level1')
+    GF.status.peanuts = 999999
+    GF.status.lives = 9999
+    const heroF = GF.hero
+    const RAIN = HJF.eli.abilities[0]
+    const STRIKE = PJF.heroFx.strikeLength
+    note('')
+    note('STAR RAIN: coversMap=' + RAIN.coversMap + '  hits=' + RAIN.hits
+      + '  damage=' + RAIN.damage + '  jitter radius=' + RAIN.radius
+      + '  (a strike damages ' + STRIKE + 'px)')
+    GF.startWave()
+    // Enough of a wave on the board that they are strung out along the lane,
+    // which is the whole point: a disc round the hero could only ever reach
+    // the nearest of them.
+    await until(() => GF.enemies.filter((e) => e.alive).length >= 5, 90000)
+    await sleep(2500)
+    const before = GF.enemies.filter((e) => e.alive)
+      .map((e) => ({ e, hp: e.health, d: Math.hypot(e.x - heroF.x, e.y - heroF.y) }))
+    const spanBefore = Math.max(...before.map((b) => b.d))
+    note('  ' + before.length + ' enemies alive, the furthest ' + Math.round(spanBefore)
+      + 'px from Eli (the old volley reached 62px)')
+    GF.cooldowns.reset('heroSlot1')
+    GF.castHeroSlot('heroSlot1')
+    // WHERE THE STARS ACTUALLY FELL, sampled across the whole volley rather
+    // than once. They land `gapSeconds` apart and each sprite lives only as
+    // long as its clip, so a single read catches two of fourteen.
+    const stars = []
+    const seen = new Set()
+    for (let i = 0; i < 40; i++) {
+      for (const o of GF.children.list) {
+        if (o.texture && o.texture.key === RAIN.fx && !seen.has(o)) {
+          seen.add(o)
+          stars.push({ x: o.x, y: o.y })
+        }
+      }
+      await sleep(60)
+    }
+    await sleep(800)
+    const hurt = before.filter((b) => b.e.health < b.hp || !b.e.alive)
+    const dealt = before.reduce((n, b) => n + Math.max(0, b.hp - Math.max(0, b.e.health)), 0)
+    const furthest = hurt.length ? Math.max(...hurt.map((b) => b.d)) : 0
+    note('  struck ' + hurt.length + ' of ' + before.length + ' for ' + Math.round(dealt)
+      + ' health (the volley is worth ' + RAIN.hits * RAIN.damage + ')')
+    note('  the furthest enemy it reached was ' + Math.round(furthest) + 'px from Eli')
+    if (furthest <= 62) {
+      failF('nothing further than the old 62px disc was struck: the volley is still local')
+    }
+    if (hurt.length < 2) failF('a map-wide volley struck ' + hurt.length + ' enemies')
+    if (stars.length > 1) {
+      const bx = [Math.min(...stars.map((s) => s.x)), Math.max(...stars.map((s) => s.x))]
+      const by = [Math.min(...stars.map((s) => s.y)), Math.max(...stars.map((s) => s.y))]
+      note('  the first ' + stars.length + ' stars landed over '
+        + Math.round(bx[1] - bx[0]) + 'x' + Math.round(by[1] - by[0])
+        + ' of a ' + DJF.width + 'x' + DJF.height + ' board')
+    }
+    // A PICTURE OF IT, with the whole board in frame -- a volley spread over
+    // 1280x720 cannot be read at the run's own zoom.
+    // THE WHOLE BOARD IN FRAME. The camera works in CANVAS pixels, so the zoom
+    // that fits a 1280-wide world is the camera's own width over it -- not a
+    // number in CSS pixels, and not a guess: 0.1 put a 30,720px world view on
+    // the glass and photographed the letterbox.
+    if (GF.rig) {
+      GF.rig.targetZoom = Math.min(GF.cameras.main.width / DJF.width,
+        GF.cameras.main.height / DJF.height)
+      GF.rig.targetCenterX = DJF.width / 2
+      GF.rig.targetCenterY = DJF.height / 2
+      await sleep(1400)
+    }
+    GF.cooldowns.reset('heroSlot1')
+    GF.castHeroSlot('heroSlot1')
+    await sleep(RAIN.hits * RAIN.gapSeconds * 1000 * 0.6)
+    note('  camera zoom for the frame: ' + GF.cameras.main.zoom.toFixed(2)
+      + '  worldView ' + Math.round(GF.cameras.main.worldView.width) + 'x'
+      + Math.round(GF.cameras.main.worldView.height))
+    await shot('elifire-2-starrain-' + VP.w + 'x' + VP.h)
+
+    // AND THE EMPTY-BOARD VOLLEY, which is the only frame that can show the
+    // EXTENT rather than the reach: with enemies out there the stars land on
+    // THEM, so the picture is a picture of where the wave happened to be. With
+    // nothing out there they fall over the playfield, and that is the claim.
+    //
+    // THE BOARD IS EMPTIED FOR EXACTLY ONE TURN, not killed off. Killing the
+    // wave does not work -- the spawner puts another enemy on the lane before
+    // the cast lands, and fourteen stars then fall on that one enemy, which
+    // reads as a 37x41 volley and is a measurement of the harness rather than
+    // of the ability. `rainOver` chooses its points synchronously, so the list
+    // only has to be empty for the call itself.
+    // Anything already on the glass is excluded: a star left over from the
+    // volley above would be counted as one of these and would move the span.
+    const seenEmpty = new Set()
+    for (const o of GF.children.list) {
+      if (o.texture && o.texture.key === RAIN.fx) seenEmpty.add(o)
+    }
+    const stash = GF.enemies.splice(0, GF.enemies.length)
+    GF.cooldowns.reset('heroSlot1')
+    GF.castHeroSlot('heroSlot1')
+    GF.enemies.push(...stash)
+    const empty = []
+    for (let i = 0; i < 26; i++) {
+      for (const o of GF.children.list) {
+        if (o.texture && o.texture.key === RAIN.fx && !seenEmpty.has(o)) {
+          seenEmpty.add(o)
+          empty.push({ x: o.x, y: o.y })
+        }
+      }
+      // THE PICTURE IS TAKEN MID-VOLLEY, not after it. The stars land
+      // `gapSeconds` apart and each one is gone by the end of its clip, so a
+      // frame shot when the sampling loop finishes is a photograph of an empty
+      // board with a very convincing set of numbers beside it -- which is the
+      // first thing this produced. Three frames across the volley, and the one
+      // with the most stars on it is the one to read.
+      if (i === 3 || i === 8 || i === 13) {
+        const onGlass = GF.children.list.filter(
+          (o) => o.texture && o.texture.key === RAIN.fx && o.visible).length
+        note('    frame at sample ' + i + ': ' + onGlass + ' star(s) on the glass')
+        await shot('elifire-2b-starrain-empty-' + i + '-' + VP.w + 'x' + VP.h)
+      }
+      await sleep(55)
+    }
+    if (empty.length > 1) {
+      const ex = [Math.min(...empty.map((s) => s.x)), Math.max(...empty.map((s) => s.x))]
+      const ey = [Math.min(...empty.map((s) => s.y)), Math.max(...empty.map((s) => s.y))]
+      const covW = (ex[1] - ex[0]) / DJF.width, covH = (ey[1] - ey[0]) / DJF.height
+      note('  on an EMPTY board ' + empty.length + ' stars spanned '
+        + Math.round(ex[1] - ex[0]) + 'x' + Math.round(ey[1] - ey[0]) + ' of '
+        + DJF.width + 'x' + DJF.height + '  (' + Math.round(covW * 100) + '% x '
+        + Math.round(covH * 100) + '% of the playfield)')
+      if (empty.some((s) => s.x < 0 || s.x > DJF.width || s.y < 0 || s.y > DJF.height)) {
+        failF('a star fell off the board')
+      }
+      if (covW < 0.5 || covH < 0.5) {
+        failF('an empty-board volley covered only ' + Math.round(covW * 100) + 'x'
+          + Math.round(covH * 100) + '% of the playfield')
+      }
+    } else failF('an empty-board volley drew ' + empty.length + ' stars')
+
+    // --- 3: RUSSINGA IS FIRE ------------------------------------------------
+    const FIRE = HJF.eli.abilities[2]
+    const LASERDEF = HJF.courtland.abilities[2]
+    const CFG = AJF.render[FIRE.fx]
+    note('')
+    note('RUSSINGA IS FIRE: ' + FIRE.damage + ' every ' + FIRE.tickSeconds + 's for '
+      + FIRE.holdSeconds + 's held, ' + FIRE.range + 'px reach, ' + FIRE.beamWidth
+      + 'px corridor, ' + FIRE.cooldown + 's cooldown'
+      + '   [Mind Laser: ' + LASERDEF.damage + '/' + LASERDEF.tickSeconds + 's for '
+      + LASERDEF.holdSeconds + 's, ' + LASERDEF.range + 'px, ' + LASERDEF.beamWidth
+      + 'px, ' + LASERDEF.cooldown + 's]')
+    if (FIRE.name !== 'Russinga is Fire') failF('the ability is called "' + FIRE.name + '"')
+    if (FIRE.activation !== 'held') failF('it is not a held ability')
+    if (!FIRE.poweredOnly) failF('it is not powered-only')
+
+    const boardPoint = (t) => {
+      for (const f of [t, t + 0.12, t - 0.12, t + 0.24, t - 0.24]) {
+        if (f < 0 || f > 1) continue
+        const w = GF.lane.pointAt(GF.lane.totalLength * f)
+        const sp = RESF.worldToScreen(GF, w.x, w.y, GF.cameras.main)
+        if (HLF.hudBlocksGesture(GF.layout, sp.x, sp.y)) continue
+        if (GF.drawer && GF.drawer.owns(sp.x, sp.y)) continue
+        return { x: sp.x, y: sp.y, wx: w.x, wy: w.y }
+      }
+      return null
+    }
+
+    if (GF.rig) {
+      GF.rig.targetZoom = 1.2
+      GF.rig.targetCenterX = heroF.x
+      GF.rig.targetCenterY = heroF.y
+      await sleep(1200)
+    }
+    const hudF = scene('Hud')
+    const medF = (hudF.slots || []).filter((s) => s.region.kind === 'heroSlot')[2]
+    if (!medF) failF('Eli has no third medallion to press')
+    else {
+      const bx = medF.hit.x, by = medF.hit.y
+      // BASE FORM REFUSES IT, which is the powered-only gate.
+      heroF.powered = false
+      GF.cooldowns.reset('heroSlot3')
+      GF.castHeroSlot('heroSlot3')
+      note('base form: armed=' + GF.targeting.active + '  beam lit=' + !!GF.held)
+      if (GF.targeting.active || GF.held) failF('Russinga is Fire works in base form')
+      GF.clearSelection('button')
+
+      heroF.powered = true
+      GF.cooldowns.reset('heroSlot3')
+      // 3a: THE TAP ARMS AND SPENDS NOTHING.
+      await click(bx, by)
+      note('tapped the medallion: armed=' + GF.targeting.active
+        + '  pending=' + GF.status.pendingAbility + '  beam lit=' + !!GF.held
+        + '  cooldown ready=' + GF.cooldowns.ready('heroSlot3'))
+      if (!GF.targeting.active) failF('tapping the medallion did not arm it')
+      if (GF.status.pendingAbility !== 'heroSlot3') failF('the wrong slot armed')
+      if (GF.held) failF('tapping the medallion fired the beam')
+      if (!GF.cooldowns.ready('heroSlot3')) failF('the tap spent the cooldown')
+      await shot('elifire-3-armed-' + VP.w + 'x' + VP.h)
+
+      // 3b: PRESS AND HOLD THE BOARD.
+      const spot = boardPoint(0.35)
+      if (!spot) failF('no point on the board clear of the HUD to aim at')
+      else {
+        await press(spot.x, spot.y)
+        await sleep(150)
+        const h = GF.held
+        note('pressed the board: beam lit=' + !!h + '  onBoard=' + (h ? h.onBoard : '-')
+          + '  texture=' + (h ? h.art.texture.key : '-')
+          + '  clip=' + (h && h.art.anims && h.art.anims.currentAnim
+            ? h.art.anims.currentAnim.key : 'none')
+          + '  playing=' + (h && h.art.anims ? h.art.anims.isPlaying : '-'))
+        if (!h) failF('pressing the board did not light the fire')
+        else {
+          if (h.art.texture.key !== FIRE.fx) {
+            failF('the beam draws ' + h.art.texture.key + ' rather than ' + FIRE.fx)
+          }
+          if (!h.art.anims || !h.art.anims.isPlaying) failF('the fire is not animating')
+          // THE ANISOTROPY, off the live sprite rather than off the manifest.
+          const aniso = h.art.scaleX / h.art.scaleY
+          note('  drawn ' + Math.round(h.art.displayWidth) + 'x'
+            + Math.round(h.art.displayHeight) + '  scale '
+            + h.art.scaleX.toFixed(3) + ' x ' + h.art.scaleY.toFixed(3)
+            + '  ANISOTROPY ' + aniso.toFixed(2) + ':1'
+            + '  (contentWidth ' + CFG.contentWidth + ', beamCoreHeight '
+            + CFG.beamCoreHeight + ' of a ' + CFG.sheet.frameHeight + 'px cell)')
+          note('  the same sum against contentHeight would be '
+            + ((FIRE.range / CFG.contentWidth) / (FIRE.beamWidth / CFG.contentHeight)).toFixed(2)
+            + ':1, which is the mistake fx-mind-laser shipped')
+          if (aniso > 3) failF('the fire is squashed ' + aniso.toFixed(2) + ':1 and will smear')
+
+          // 3c: THE onBoard GATE. While the aim is not on the board the fire
+          // is a picture: no budget, no damage, no `fired`.
+          h.onBoard = false
+          const left0 = h.left, fired0 = h.fired
+          const hp0 = GF.enemies.filter((e) => e.alive)
+            .reduce((n, e) => n + e.health, 0)
+          await sleep(900)
+          const hOff = GF.held
+          note('  aim off the board for 900ms: budget ' + left0.toFixed(2) + ' -> '
+            + (hOff ? hOff.left.toFixed(2) : '-') + '  fired=' + (hOff ? hOff.fired : '-')
+            + '  beam still drawn=' + (!!hOff && hOff.art.visible))
+          if (!hOff) failF('the beam ended while its aim was off the board')
+          else {
+            if (hOff.left !== left0) failF('an off-board beam spent ' + (left0 - hOff.left) + 's')
+            if (hOff.fired !== fired0) failF('an off-board beam set `fired`')
+            if (!hOff.art.visible) failF('an off-board beam draws nothing, so the button reads dead')
+            const hp1 = GF.enemies.filter((e) => e.alive).reduce((n, e) => n + e.health, 0)
+            // Towers are firing too, so this only asks that the BEAM did not.
+            note('  board health over that window: ' + Math.round(hp0) + ' -> ' + Math.round(hp1))
+          }
+
+          // 3d: BACK ON THE BOARD, it spends and it damages.
+          const back = boardPoint(0.35)
+          if (back) await move(back.x, back.y)
+          await sleep(600)
+          const hOn = GF.held
+          note('  aim back on the board: onBoard=' + (hOn ? hOn.onBoard : '-')
+            + '  budget ' + (hOn ? hOn.left.toFixed(2) : '-') + ' of ' + FIRE.holdSeconds
+            + '  fired=' + (hOn ? hOn.fired : '-'))
+          if (hOn && hOn.left >= left0) failF('the beam spends nothing even on the board')
+          await shot('elifire-4-firing-' + VP.w + 'x' + VP.h)
+
+          // AND IT DAMAGES WHAT IT IS HELD ON.
+          const victim = GF.enemies.find((e) => e.alive
+            && Math.hypot(e.x - heroF.x, e.y - heroF.y) < FIRE.range * 0.7)
+          if (!victim) note('  (no enemy inside the corridor to hold it on)')
+          else {
+            const v0 = victim.health
+            for (let i = 0; i < 8 && GF.held; i++) {
+              const sp = RESF.worldToScreen(GF, victim.x, victim.y, GF.cameras.main)
+              if (HLF.hudBlocksGesture(GF.layout, sp.x, sp.y)) break
+              await move(sp.x, sp.y)
+              if (!victim.alive) break
+            }
+            note('  held on an enemy: ' + Math.round(v0) + ' -> '
+              + Math.round(victim.health) + ' (alive=' + victim.alive + ')')
+            if (victim.alive && victim.health >= v0) failF('the fire damaged nothing under it')
+          }
+        }
+        mouse('mouseup', spot.x, spot.y)
+        await sleep(200)
+        note('released: beam lit=' + !!GF.held
+          + '  cooldown ready=' + GF.cooldowns.ready('heroSlot3'))
+        if (GF.held) failF('releasing did not stop the fire')
+        if (GF.cooldowns.ready('heroSlot3')) failF('a beam that fired did not go on cooldown')
+
+        // 3e: A BEAM THAT NEVER REACHED THE BOARD COSTS NOTHING, which is the
+        // whole of the gate and the half 3c could not show -- by the time that
+        // step ran the beam had already fired on the board, so `fired` was
+        // true for an honest reason. This one is driven rather than gestured:
+        // a real mousedown/mouseup pair cannot be guaranteed to fall inside
+        // one frame, and what is under test is the branch, not the timing.
+        GF.cooldowns.reset('heroSlot3')
+        const again = boardPoint(0.5)
+        if (again) {
+          await click(bx, by)
+          await press(again.x, again.y)
+          const h2 = GF.held
+          if (!h2) failF('the second press did not light the fire')
+          else {
+            h2.fired = false
+            h2.onBoard = false
+            h2.left = FIRE.holdSeconds
+            await sleep(700)
+            const h3 = GF.held
+            note('  a beam whose aim never reached the board: budget '
+              + (h3 ? h3.left.toFixed(2) : '-') + ' of ' + FIRE.holdSeconds
+              + '  fired=' + (h3 ? h3.fired : '-'))
+            if (h3 && h3.left !== FIRE.holdSeconds) failF('it spent budget off the board')
+            if (h3 && h3.fired) failF('it set `fired` off the board')
+          }
+          mouse('mouseup', again.x, again.y)
+          await sleep(200)
+          note('  released it: cooldown ready=' + GF.cooldowns.ready('heroSlot3')
+            + '  (a beam that fired nothing is handed back ready)')
+          if (!GF.cooldowns.ready('heroSlot3')) {
+            failF('a beam that never reached the board spent the cooldown')
+          }
+        }
+      }
+    }
+
+    note('RESULT ' + (faultsF === 0
+      ? 'Eli carries three, Star Rain reaches the board and the fire reads as fire'
+      : '*** ' + faultsF + ' fault(s) in Eli\'s abilities ***'))
     return
   }
   if (scenario === 'courtland') {
