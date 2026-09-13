@@ -5,7 +5,9 @@
 | `49e3b7a` | The re-topology, the gate measurement, the re-soak, the harness scenario | [run 347](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34782565856) — **green** (`changes`, `typecheck`, `test`; `deploy` skipped on a branch) |
 | `9f7497f` | Closes the row above; merges main (two files under `claude/`, no conflicts) | [run 349](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34782741665) — **green** |
 | `c07d16a` | Open item 6: what merging this makes stale in `claude/context.md` | [run 351](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34782780336) — **green** |
-| *this commit* | Closes the two rows above | reports only; the run above already checked the tree |
+| `3402f49` | Closes the two rows above | reports only |
+| `b05564f` | Merges main a second time (the context.md reconciliation report) | [run 354](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34782849837) — **green** on the final head |
+| *this commit* | Fills in the row above | reports only |
 
 ---
 
