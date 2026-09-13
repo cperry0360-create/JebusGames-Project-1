@@ -214,8 +214,28 @@ test('every piece of level art belongs to a level that loads it', () => {
   // level 6's five entries did — this is a list of what is WAITING, not a list
   // of exceptions, and anything else appearing in it is the bug this test is
   // for.
+  //
+  // AND THE 14 MACHINE-WORLD TOWER SKINS ARE THE THIRD THING WAITING, for the
+  // same reason and one step further out. They are the levels 9 and 10 repaint
+  // of every tower and the Ima Dummy's lads, and those two levels have no row
+  // in levels.json — nor do 7 and 8 ahead of them. Unlike a plate or a cast,
+  // this art is not waiting on a row alone: art.json's `towerSkins.machine
+  // .levels` is the switch, and it is deliberately EMPTY rather than naming
+  // ids that no level defines, because `levelArtKeys` resolves an unknown id
+  // to the default level and the skin would be switched on for a board that
+  // never loaded it. So these stay here until level 9 gets a row AND that id
+  // is added to `levels` — see art.json's `_towerSkins` and
+  // reports/2026-09-13-machine-tower-skins.md.
+  //
+  // 2.6 MB, resident nowhere: not at boot, because every key here is level
+  // art, and not on levels 1 to 6, because no level wears the skin.
   assert.deepEqual(orphanedLevelArt(LEVELS.map((l) => l.id)).sort(), [
     'enemy-ceo', 'enemy-consultant', 'enemy-hr', 'enemy-intern', 'enemy-manager',
     'enemy-office-drone', 'map-level7', 'map-level8',
+    'turret-dummy-machine', 'turret-dummy-t2-machine', 'turret-dummy-t3-machine',
+    'turret-escalation-machine', 'turret-extension-machine',
+    'turret-ledger-machine', 'turret-ledger-t2-machine', 'turret-ledger-t3-machine',
+    'turret-rounding-machine', 'turret-shelter-machine', 'turret-writeoff-machine',
+    'unit-dummy-1-machine', 'unit-dummy-2-machine', 'unit-dummy-3-machine',
   ], 'level art that no shipped level loads')
 })

@@ -162,7 +162,21 @@
     "fx-glacier": "effects/fx_glacier.webp",
     "map-level6": "maps/map_level6.webp",
     "map-level7": "maps/map_level7.webp",
-    "map-level8": "maps/map_level8.webp"
+    "map-level8": "maps/map_level8.webp",
+    "turret-ledger-machine": "towers/tower_withholding_t1_machine.webp",
+    "turret-ledger-t2-machine": "towers/tower_withholding_t2_machine.webp",
+    "turret-ledger-t3-machine": "towers/tower_withholding_t3_machine.webp",
+    "turret-writeoff-machine": "towers/tower_writeoff_machine.webp",
+    "turret-rounding-machine": "towers/tower_rounding_machine.webp",
+    "turret-escalation-machine": "towers/tower_escalation_machine.webp",
+    "turret-extension-machine": "towers/tower_filing_machine.webp",
+    "turret-shelter-machine": "towers/tower_tax_machine.webp",
+    "turret-dummy-machine": "towers/tower_dummy_1_machine.webp",
+    "turret-dummy-t2-machine": "towers/tower_dummy_2_machine.webp",
+    "turret-dummy-t3-machine": "towers/tower_dummy_3_machine.webp",
+    "unit-dummy-1-machine": "towers/soldier_dummy_1_machine.webp",
+    "unit-dummy-2-machine": "towers/soldier_dummy_2_machine.webp",
+    "unit-dummy-3-machine": "towers/soldier_dummy_3_machine.webp"
   },
   "render": {
     "turret-escalation": {
@@ -1145,6 +1159,118 @@
         "frameHeight": 512,
         "frames": 8
       }
+    },
+    "turret-ledger-machine": {
+      "anchorX": 0.5,
+      "anchorY": 1.0,
+      "displayHeight": 87.1,
+      "shadowWidth": 56.6,
+      "contentWidth": 213,
+      "contentHeight": 300
+    },
+    "turret-ledger-t2-machine": {
+      "anchorX": 0.5,
+      "anchorY": 1.0,
+      "displayHeight": 107.7,
+      "shadowWidth": 61.0,
+      "contentWidth": 211,
+      "contentHeight": 304
+    },
+    "turret-ledger-t3-machine": {
+      "anchorX": 0.5,
+      "anchorY": 1.0,
+      "displayHeight": 137.0,
+      "shadowWidth": 69.1,
+      "contentWidth": 239,
+      "contentHeight": 465
+    },
+    "turret-writeoff-machine": {
+      "anchorX": 0.5008,
+      "anchorY": 0.9902,
+      "displayHeight": 87.1,
+      "shadowWidth": 79.0,
+      "contentWidth": 488,
+      "contentHeight": 512
+    },
+    "turret-rounding-machine": {
+      "anchorX": 0.4792,
+      "anchorY": 1.0,
+      "displayHeight": 87.1,
+      "shadowWidth": 34.2,
+      "contentWidth": 203,
+      "contentHeight": 511
+    },
+    "turret-escalation-machine": {
+      "anchorX": 0.5054,
+      "anchorY": 0.998,
+      "displayHeight": 87.1,
+      "shadowWidth": 77.3,
+      "contentWidth": 460,
+      "contentHeight": 512
+    },
+    "turret-extension-machine": {
+      "anchorX": 0.4987,
+      "anchorY": 1.0,
+      "displayHeight": 87.1,
+      "shadowWidth": 66.2,
+      "contentWidth": 389,
+      "contentHeight": 512
+    },
+    "turret-shelter-machine": {
+      "anchorX": 0.4988,
+      "anchorY": 1.0,
+      "displayHeight": 87.1,
+      "shadowWidth": 73.0,
+      "contentWidth": 429,
+      "contentHeight": 512
+    },
+    "turret-dummy-machine": {
+      "anchorX": 0.5015,
+      "anchorY": 1.0,
+      "displayHeight": 87.1,
+      "shadowWidth": 62.6,
+      "contentWidth": 643,
+      "contentHeight": 898
+    },
+    "turret-dummy-t2-machine": {
+      "anchorX": 0.5068,
+      "anchorY": 1.0,
+      "displayHeight": 101.0,
+      "shadowWidth": 66.2,
+      "contentWidth": 590,
+      "contentHeight": 896
+    },
+    "turret-dummy-t3-machine": {
+      "anchorX": 0.5095,
+      "anchorY": 1.0,
+      "displayHeight": 117.0,
+      "shadowWidth": 68.5,
+      "contentWidth": 527,
+      "contentHeight": 895
+    },
+    "unit-dummy-1-machine": {
+      "anchorX": 0.5344,
+      "anchorY": 1.0,
+      "displayHeight": 52.0,
+      "shadowWidth": 19.0,
+      "contentWidth": 522,
+      "contentHeight": 598
+    },
+    "unit-dummy-2-machine": {
+      "anchorX": 0.4731,
+      "anchorY": 1.0,
+      "displayHeight": 52.0,
+      "shadowWidth": 17.5,
+      "contentWidth": 483,
+      "contentHeight": 588
+    },
+    "unit-dummy-3-machine": {
+      "anchorX": 0.4611,
+      "anchorY": 1.0,
+      "displayHeight": 52.0,
+      "shadowWidth": 13.2,
+      "contentWidth": 398,
+      "contentHeight": 596
     }
   },
   "map": {
@@ -1399,6 +1525,29 @@
       "unit-dummy-3"
     ]
   },
+  "towerSkins": {
+    "machine": {
+      "levels": [],
+      "keys": {
+        "turret-ledger": "turret-ledger-machine",
+        "turret-ledger-t2": "turret-ledger-t2-machine",
+        "turret-ledger-t3": "turret-ledger-t3-machine",
+        "turret-writeoff": "turret-writeoff-machine",
+        "turret-rounding": "turret-rounding-machine",
+        "turret-escalation": "turret-escalation-machine",
+        "turret-extension": "turret-extension-machine",
+        "turret-shelter": "turret-shelter-machine",
+        "turret-dummy": "turret-dummy-machine",
+        "turret-dummy-t2": "turret-dummy-t2-machine",
+        "turret-dummy-t3": "turret-dummy-t3-machine",
+        "unit-dummy-1": "unit-dummy-1-machine",
+        "unit-dummy-2": "unit-dummy-2-machine",
+        "unit-dummy-3": "unit-dummy-3-machine"
+      }
+    }
+  },
+  "_towerSkins": "A WHOLE-BOARD RESKIN OF THE TOWERS, chosen by which level is running. `keys` maps the ordinary manifest key to the skinned one; `levels` is the list of level ids that wear the skin, and IT IS THE ONLY SWITCH. Everything else -- the loadout, the tower drawer, the world map, every menu -- asks for the ordinary key and is untouched by this, which is why the skin is resolved at the two places a tower's BODY art is chosen (entities/Tower.ts's wearTier and GameScene's soldier) and nowhere else.\nWHY `levels` IS EMPTY. The machine art is for levels 9 and 10, and neither exists: levels.json registers level1 through level6, and levels 7 and 8 are built but have no row either. An id here that no level defines would be a switch wired to nothing, and `levelArtKeys` resolves an unknown id to the DEFAULT level -- so naming `level9` here would not even load the art, it would just be a line that looks like it works. The mapping is what is worth landing ahead of the levels; turning it on is one id per level in this list, on the day that level gets its row.\nTHE KEYS DO NOT MATCH THE FILENAMES and two of them actively mislead: `turret-extension` is tower_filing and `turret-shelter` is tower_tax. Read the pairing off `files`, never off a filename.\nEVERY SKINNED KEY IS LEVEL ART, so boot loads none of it -- systems/LevelArt.ts adds a level's skin keys only when that level is in `levels`, and GameScene.freeLevelArt gives them back through the same path that forgets their animations. 14 more textures cost 0 MB at boot and 0 MB on any level not in this list.",
+  "_towerSkinsRender": "WHY EACH SKINNED KEY HAS ITS OWN `render` ENTRY, copied rather than shared. `applyRender` scales by `displayHeight / sprite.height` -- the CANVAS height -- and anchors on `anchorY`, so a key with no render entry falls back to {anchorX: 0.5, anchorY: 0.5} with no height at all: the tower would draw at its source size, centre-anchored, half-buried in its own pad. Every machine file has the same canvas as its original, so `anchorX`, `anchorY`, `displayHeight` and `shadowWidth` are COPIED from it and reproduce its placement and scale exactly. `contentWidth`/`contentHeight` are the machine file's OWN measured ink, because `fitInBox` divides by those (CLAUDE.md rule 7) and the ink is not the same.\nONE PAIR DISAGREES: tower_withholding_t2_machine's ink starts at y=67 in a 215x371 frame against the original's y=0, so 304 source px of ink against 371. Its base is still flush with the canvas bottom, so it sits on its pad correctly and needs no offset -- but the copied displayHeight of 107.7 puts 88.3 px of tower on screen where the original puts 107.7, which is 1.2 px taller than the tier-1 machine and reads as no growth at all on the upgrade. That is an art fix, not a metadata one: raising displayHeight to 131.4 would land the height and widen the base 20% past the pad. See reports/2026-09-13-machine-tower-skins.md.",
   "_optional": "Art that may legitimately be absent. A key here is skipped by the loader with a console warning rather than a missing-texture error, and every one belongs to a family with a named fallback -- tests/boot.test.ts enforces that. IT IS NOT A LICENCE TO SHIP WITHOUT THE FILE. `queueArt` requests every key in `files`, optional or not -- it cannot know which are absent without asking the server -- so a listed key whose file is missing is a 404 on every boot for every player, and three of them shipped that way. tests/assets.test.ts now fails on exactly that. The eight icons left here are the tower-panel glyphs, which have a generated stand-in.",
   "_greyable": "A greyscale copy is built for each of these at boot (BootScene, systems/Desaturate.ts) and the HUD swaps to it when the thing is unavailable. EVERY HERO ABILITY ICON IS HERE BECAUSE OF THE POWERED-FORM GATE. An ability with `poweredOnly` is greyed out until the hero transforms, and a tint cannot say that -- Phaser's tint multiplies, so a tinted icon reads as \"in shadow\" rather than as \"switched off\". It used to read as neither: the key was absent from this list, `greyKey` named a texture that had never been built, the swap was skipped and the button kept its full colour with only a dim tint on it. The word LOCKED being painted into the placeholder art was what made that survivable, and that word is gone with the placeholders.",
   "_fx": "EFFECTS THE GAME DRAWS FOR ITSELF, by role. `spark`, `blast`, `puff` and `muzzle` are combat feedback; `bossBolt` is one boss's projectile; `stunned`, `burn` and `mindControl` are STATUS MARKERS drawn over an enemy for as long as the status lasts, which is why they are here rather than in heroes.json beside the ability that applied them -- a burn is a fact about the enemy, and anything that can set something alight draws the same flame. `mindControl` is live now: Courtland's Mind Control sets `Enemy.controlled` and `enemyMarker` in GameScene draws this over every enemy it turns, which is what keeps two enemies fighting each other from reading as a bug.",

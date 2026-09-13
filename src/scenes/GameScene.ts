@@ -47,7 +47,8 @@ import { distanceAtX, laneGates, type EmergeConfig, type GateDistances } from '.
 import { makeRng } from '../systems/Draft.ts'
 import { dashArcs, HeroMarkers, type MarkersDef } from '../systems/HeroMarkers.ts'
 import {
-  ART, applyRender, fitContentHeight, fitContentWidth, fitInRect, renderFor, soldierSprite,
+  ART, applyRender, fitContentHeight, fitContentWidth, fitInRect, renderFor,
+  setSkinLevel, skinnedTexture, soldierSprite,
 } from '../systems/Art.ts'
 import { queueLevelArt } from '../systems/ArtLoader.ts'
 import { levelArtKeys } from '../systems/LevelArt.ts'
@@ -686,6 +687,12 @@ export class GameScene extends Phaser.Scene {
     // than throwing on the first frame — see Levels.resolveLevelId.
     this.level = loadLevel(runState().resumeFrom?.level ?? runState().levelId)
 
+    // WHICH TOWER SKIN THIS BOARD WEARS, set from the RESOLVED level and set
+    // here rather than anywhere later, because `restoreTowers` below builds a
+    // saved board's towers and each one picks its texture on the way up. Given
+    // back on shutdown, so a menu after a skinned run is not still wearing it.
+    setSkinLevel(this.level.id)
+
     // What plays here is data; see music.json. A scene not listed keeps
     // whatever is already playing, which is what carries the battle track
     // across Title -> Loadout without a restart.
@@ -1199,6 +1206,10 @@ export class GameScene extends Phaser.Scene {
     this.events.once('shutdown', () => {
       setRunActive(false)
       provideState(null)
+      // BEFORE freeLevelArt, which is about to remove this skin's textures.
+      // Anything drawing after this point is a menu, and a menu must be asking
+      // for the original key by then rather than one that is being freed.
+      setSkinLevel(null)
       this.freeLevelArt()
     })
   }
@@ -5854,7 +5865,9 @@ export class GameScene extends Phaser.Scene {
    */
   private manGarrison(g: { tower: Tower; rally: RallySpot | null; soldiers: Soldier[] }): void {
     const want = g.tower.soldierCount
-    const art = soldierSprite(g.tower.def.sprite, g.tower.tier)
+    // Skinned after the tier, the same way `Tower.wearTier` does it and for the
+    // same reason: the skin repaints the lad this tier already fields.
+    const art = skinnedTexture(this, soldierSprite(g.tower.def.sprite, g.tower.tier))
     const stations = g.rally
       ? soldierStations(this.lanes, g.rally, want)
       : Array.from({ length: want }, () => ({ x: g.tower.x, y: g.tower.y }))

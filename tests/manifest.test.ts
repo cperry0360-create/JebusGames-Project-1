@@ -435,6 +435,18 @@ test('every file in the manifest is bound to something that draws it', () => {
   for (const set of Object.values(art.soldierTiers ?? {})) {
     for (const k of set as string[]) claim(k)
   }
+  // A SKIN'S KEYS ARE NAMED ONLY HERE TOO, and they are the one group on this
+  // list that is not drawn by any ROLE: a skin repaints a key that some other
+  // section already claimed, so `turret-ledger-machine` is reached by
+  // Art.skinnedTexture on a board wearing the skin and by nothing else. Both
+  // halves of the pairing are claimed, because the `keys` table is the only
+  // place either side of it appears.
+  for (const skin of Object.values(art.towerSkins ?? {}) as Array<{ keys?: Record<string, string> }>) {
+    for (const [original, skinned] of Object.entries(skin.keys ?? {})) {
+      claim(original)
+      claim(skinned)
+    }
+  }
 
   // Anything the data files name: tower sprites and shots, enemies, ability
   // icons, hero art, the gnomes.
