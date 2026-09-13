@@ -13,7 +13,8 @@ statements were changed.
 | commit | what | CI |
 | --- | --- | --- |
 | `b23e311` | Reconcile context.md against main, and de-number the two citations of it | [run 348](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34782604672): **green at job level** — `changes` success, `test` success, `typecheck` success, `deploy` **skipped** (markdown-only push, which is the `changes` job working as designed) |
-| `<this report>` | This file | filled in below once run 349 reports |
+| `e43165b` | This file | [run 350](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34782770292): **green at job level** — `changes` success, `test` success, `typecheck` success, `deploy` skipped, same reason |
+| `<the commit adding this row>` | Fills in the row above | documentation only; touches no file the build reads, and its result is in the reply that carried this file |
 
 Both pushes are markdown only, so neither republishes Pages and neither should. The
 live site stays on `eb2bf4d`, the level 8 soft-lock merge.
