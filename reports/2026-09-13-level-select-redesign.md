@@ -13,7 +13,7 @@ correct answer for portrait rather than a skipped check.
 | commit | what | CI |
 | --- | --- | --- |
 | `171f02d` | Ten levels in two rows of five, and the level select fits on one screen | run 307: **green** (`npm test` pass, `npx tsc --noEmit` pass, deploy skipped: not `main`) |
-| `REPORT` | this report | run 308: filled in below |
+| `aa059d2` | Write up the level select redesign | run 308: **green** (`npm test` pass, `npx tsc --noEmit` pass, deploy skipped: not `main`) |
 
 Branch: `claude/level-select-redesign-3h5pkj`. Base: `bda5eaf`, which is
 `origin/main` at the time of writing.
@@ -450,8 +450,8 @@ scenario fail for a reason that was not the reason it named:
 ## Where this leaves the repository
 
 **In flight: nothing is merged.** `claude/level-select-redesign-3h5pkj` is two
-commits ahead of `origin/main` (`bda5eaf`) and fast-forwards cleanly. CI run
-307 is green on the code commit. This session cannot push to `main`, so the
+commits ahead of `origin/main` (`bda5eaf`) and fast-forwards cleanly. Both CI runs
+are green (307 on the code, 308 on this report). This session cannot push to `main`, so the
 branch is waiting on:
 
 ```
