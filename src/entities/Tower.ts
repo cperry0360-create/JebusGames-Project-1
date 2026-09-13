@@ -4,7 +4,7 @@ import { ySort } from '../systems/DepthSort.ts'
 import { GROUND_ONLY, pickFirst } from '../systems/Targeting.ts'
 import { boostedDamage } from '../systems/Combat.ts'
 import { deathPuff, makeShadow, muzzleFlash, PRESENTATION } from '../systems/Presentation.ts'
-import { applyRender, hasTierArt, tierSprite } from '../systems/Art.ts'
+import { applyRender, hasTierArt, skinnedTexture, tierSprite } from '../systems/Art.ts'
 import { atSpecChoice, BASE_TIER, investedIn, isMaxed, maxTier, nextStep, specById, statAt } from '../systems/Upgrades.ts'
 import rulesData from '../data/rules.json'
 import type { RulesDef } from '../types.ts'
@@ -63,12 +63,18 @@ export class Tower extends Phaser.GameObjects.Container {
     // Every tower's art carries its own base. The manifest used to point at a
     // Kenney placeholder tile to stand in for one; the painted towers made it
     // redundant and it is gone.
-    this.shadow = makeShadow(scene, def.sprite)
+    //
+    // SKINNED HERE AS WELL AS IN `wearTier`, which would swap to it a few lines
+    // below anyway. Building the sprite and its shadow from the unskinned key
+    // first and replacing both immediately works, but it destroys and rebuilds a
+    // shadow on every placement on a skinned board for no reason.
+    const opening = skinnedTexture(scene, def.sprite)
+    this.shadow = makeShadow(scene, opening)
     const parts: Phaser.GameObjects.GameObject[] = [this.shadow]
-    this.turret = scene.add.sprite(0, 0, def.sprite)
+    this.turret = scene.add.sprite(0, 0, opening)
     // Anchor and on-screen height come from the manifest, so a 512px tower and
     // a 64px turret both sit on the tile at the size the manifest asks for.
-    applyRender(this.turret, def.sprite)
+    applyRender(this.turret, opening)
     this.baseScale = this.turret.scaleX
     parts.push(this.turret)
     this.pips = scene.add.graphics()
@@ -118,7 +124,13 @@ export class Tower extends Phaser.GameObjects.Container {
    * was planted and the tower grows upward out of it.
    */
   private wearTier(animate: boolean): void {
-    const key = tierSprite(this.def.sprite, this.tier)
+    // THE SKIN IS RESOLVED AFTER THE TIER, not instead of it. A skin repaints a
+    // tower; it does not change how many silhouettes that tower has or which
+    // one this tier wears. So `tierSprite` picks the tier exactly as it always
+    // has and the skin swaps that key's picture, which is why a skinned board
+    // needs no `towerTiers` entry of its own and cannot disagree with an
+    // unskinned one about what tier 2 looks like.
+    const key = skinnedTexture(this.scene, tierSprite(this.def.sprite, this.tier))
     if (this.turret.texture.key === key) return
 
     this.turret.setTexture(key)

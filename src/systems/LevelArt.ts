@@ -37,6 +37,7 @@ import type { Level } from './Levels.ts'
 import artData from '../data/art.json' with { type: 'json' }
 import enemyData from '../data/enemies.json' with { type: 'json' }
 import { levelRules, loadLevel } from './Levels.ts'
+import { skinArtForLevel, SKINNED_KEYS } from './TowerSkins.ts'
 
 const art = artData as ArtDef
 const ENEMIES = enemyData as unknown as Record<string, EnemyDef>
@@ -80,6 +81,15 @@ export const LEVEL_ART_KEYS: string[] = [...new Set([
   ...PLATE_KEYS,
   ...ENEMY_SPRITE_KEYS,
   ...art.levelArt.shared,
+  // THE TOWER SKINS, and they are level art for a stricter reason than the
+  // rest of this list. A plate or an enemy is art some level definitely draws;
+  // a skin is art that only the levels in its own `levels` list draw, and it is
+  // a RESKIN of art boot already loads. If it were boot art it would be 14
+  // textures resident on the title screen for a look no board has asked for
+  // yet. Being level art, it is not loaded by boot and not loaded by a level
+  // outside the skin either — `levelArtKeys` below adds a skin's keys only to
+  // the levels wearing it.
+  ...SKINNED_KEYS,
 ])]
 
 /** Whether this key arrives with a level rather than at boot. */
@@ -164,6 +174,12 @@ export function levelArtKeys(levelId: string | null | undefined): string[] {
     ...(plate === undefined ? [] : [plate]),
     ...enemyArtForLevel(level),
     ...art.levelArt.shared,
+    // The skin, if this level wears one. Asked for with the RESOLVED id rather
+    // than the caller's, so the art a level loads is the art it draws: a board
+    // that fell back to the default level must not be handed the skin the
+    // unknown id would have claimed, or `freeLevelArt` would be asked to give
+    // back textures the loader never fetched.
+    ...skinArtForLevel(level.id),
   ])]
 }
 

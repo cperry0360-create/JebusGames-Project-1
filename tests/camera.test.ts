@@ -12,6 +12,7 @@ import {
   smoothing,
   worldAt,
 } from '../src/systems/CameraMath.ts'
+import { imageSize } from './imagesize.ts'
 
 const url = (p: string) => new URL(p, import.meta.url)
 const display = JSON.parse(readFileSync(url('../src/data/display.json'), 'utf8'))
@@ -336,16 +337,44 @@ const onScreen = (key: string, zoom: number): number =>
 
 const ART_JSON = JSON.parse(
   readFileSync(new URL('../src/data/art.json', import.meta.url), 'utf8'),
-) as { towerTiers?: Record<string, string[]> }
+) as {
+  towerTiers?: Record<string, string[]>
+  towerSkins?: Record<string, { keys?: Record<string, string> }>
+  render?: Record<string, { displayHeight?: number; contentHeight?: number }>
+  files?: Record<string, string>
+}
+
+/**
+ * A skin's tier sets, derived from the originals' rather than written again.
+ *
+ * A skin repaints a key; it does not decide how many tiers a tower has. So
+ * `towerTiers` stays the one statement of that and each skin's sets are that
+ * statement with every key run through the skin's `keys` map. Keys the skin
+ * does not remap stay themselves, which is what makes a partial skin fall back
+ * tier by tier instead of dropping out of these checks entirely.
+ */
+const SKINNED_TIER_SETS: Record<string, string[]> = Object.fromEntries(
+  Object.entries(ART_JSON.towerSkins ?? {}).flatMap(([skin, def]) =>
+    Object.entries(ART_JSON.towerTiers ?? {}).map(([base, set]) => [
+      `${base} (${skin})`, set.map((k) => def.keys?.[k] ?? k),
+    ])),
+)
 
 test('a tower fills the share of the screen the art was drawn for', () => {
   // Tier 1 only. A tower with tier art is deliberately taller as it upgrades —
   // that growth is the primary read on an upgrade — so holding every tier to
   // one height would forbid the thing the art exists to do. The tiers are
   // checked separately below.
-  const upperTiers = new Set(
-    Object.values(ART_JSON.towerTiers ?? {}).flatMap((set) => set.slice(1)),
-  )
+  //
+  // A SKIN'S UPPER TIERS ARE UPPER TIERS. `turret-ledger-t2-machine` is the
+  // tier-2 Withholding tower painted for the machine world, and it renders at
+  // 185px like the original t2 does — so without this it was held to the
+  // tier-1 band and failed. The skinned sets are derived above rather than
+  // listed, so a second skin needs nothing here.
+  const upperTiers = new Set([
+    ...Object.values(ART_JSON.towerTiers ?? {}).flatMap((set) => set.slice(1)),
+    ...Object.values(SKINNED_TIER_SETS).flatMap((set) => set.slice(1)),
+  ])
   const z = display.camera.defaultZoom
   for (const key of Object.keys(RENDER).filter((k) => k.startsWith('turret-'))) {
     if (upperTiers.has(key)) continue
@@ -357,7 +386,9 @@ test('a tower fills the share of the screen the art was drawn for', () => {
 
 test('an upgraded tower is visibly bigger, and not so big it leaves the board', () => {
   const z = display.camera.defaultZoom
-  for (const [base, set] of Object.entries(ART_JSON.towerTiers ?? {})) {
+  for (const [base, set] of Object.entries({
+    ...ART_JSON.towerTiers ?? {}, ...SKINNED_TIER_SETS,
+  })) {
     const heights = set.map((k) => onScreen(k, z))
     for (let i = 1; i < heights.length; i++) {
       const grew = heights[i]! / heights[i - 1]!
@@ -373,6 +404,54 @@ test('an upgraded tower is visibly bigger, and not so big it leaves the board', 
     assert.ok(tallest <= 260,
       `${base} at its top tier renders ${tallest.toFixed(0)}px tall; that is most of a phone`)
   }
+})
+
+/**
+ * THE SAME GROWTH, MEASURED ON THE INK — reported rather than asserted.
+ *
+ * The test above reads `displayHeight`, and `displayHeight` is a CANVAS figure:
+ * `applyRender` scales by `displayHeight / sprite.height`, the whole frame,
+ * padding included. So it measures how big the FRAME is drawn, and a tier whose
+ * frame grows 24% while the tower painted inside it does not grow at all passes
+ * it. That is not hypothetical — it is `turret-ledger-t2-machine`, whose ink
+ * starts 67px down a 371px frame the original fills to the top: 88px of tower on
+ * screen where the original puts 108, which is 1% taller than the machine tier 1
+ * rather than the 23% the original tier 2 manages.
+ *
+ * REPORTED AND NOT ASSERTED, deliberately, and the precedent is
+ * `assets.test.ts`'s per-directory weigh-in. A threshold here would fail the
+ * build on a fact about the ART, which no code change can fix and which is
+ * recorded as an open decision in reports/2026-09-13-machine-tower-skins.md —
+ * and the two ways to silence it are to edit the art or to accept a 20% wider
+ * base than the pad. Printing it puts the number in every CI log instead, so
+ * the day the art is re-exported the change is visible rather than assumed.
+ */
+test('tier growth is also measured on the ink, which displayHeight cannot see', () => {
+  const z = display.camera.defaultZoom
+  const canvasH = (key: string): number => {
+    const path = ART_JSON.files?.[key]
+    if (!path) return 0
+    return imageSize(readFileSync(url(`../public/assets/${path}`)), path)[1]
+  }
+  const lines: string[] = []
+  for (const [base, set] of Object.entries({
+    ...ART_JSON.towerTiers ?? {}, ...SKINNED_TIER_SETS,
+  })) {
+    const ink = set.map((k) => {
+      const r = ART_JSON.render?.[k]
+      const h = canvasH(k)
+      if (!r?.displayHeight || !r.contentHeight || !h) return 0
+      return (r.displayHeight * (r.contentHeight / h)) * z
+    })
+    const steps = ink.slice(1).map((v, i) => {
+      const grew = ink[i]! > 0 ? v / ink[i]! : 0
+      return `${((grew - 1) * 100).toFixed(0)}%`
+    })
+    lines.push(`${base}: ${ink.map((v) => v.toFixed(0) + 'px').join(' -> ')}`
+      + `  (growth ${steps.join(', ')})`)
+  }
+  console.log('  on-screen INK height per tier\n    ' + lines.join('\n    '))
+  assert.ok(lines.length > 0, 'no tier set was measured at all')
 })
 
 test('the hero is the size he was drawn to be', () => {
