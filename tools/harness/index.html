@@ -8060,9 +8060,19 @@ async function run() {
 
   if (scenario === 'towertiers') {
     // The Withholding Tower changing shape as it upgrades.
+    //
+    // PAD 2, NOT PAD 3. This scenario built on pad 3 and pad 3 is the one pad
+    // of the seven whose ring will not open -- `buildall` reports "6 of 7" and
+    // names it. So `build()` returned false, `g.towers[0]` was undefined, and
+    // the next line threw a TypeError before a single measurement was taken.
+    // It fails that way on a27d571 too, so it predates the skins merge and was
+    // not caught because the throw looks like a scenario crash rather than a
+    // product fault. Whatever is wrong with pad 3 is worth its own pass; this
+    // scenario is about tier art and any pad will do for that.
     g.status.peanuts = 99999
-    await build(3, 0)
+    if (!await build(2, 0)) { note('towertiers: could not build, nothing measured'); return }
     const t = g.towers[0]
+    if (!t) { note('towertiers: built but no tower, nothing measured'); return }
     await lookAt(t.x, t.y)
     const dump = (label) => {
       note(label + ': tier=' + t.tier + ' texture=' + t.turret.texture.key +
