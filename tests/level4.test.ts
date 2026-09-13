@@ -12,7 +12,7 @@ import towers from '../src/data/towers.json' with { type: 'json' }
 import draft from '../src/data/draft.json' with { type: 'json' }
 import levels from '../src/data/levels.json' with { type: 'json' }
 import art from '../src/data/art.json' with { type: 'json' }
-import { ROAD, nodeBlock, roadNodes } from '../src/systems/WorldRoad.ts'
+import { ROAD, nodeBlock, placeOf, roadNodes } from '../src/systems/WorldRoad.ts'
 
 const GEOMETRY = JSON.parse(
   readFileSync(new URL('../tools/level4_geometry.json', import.meta.url), 'utf8'))
@@ -400,21 +400,32 @@ test('no node\'s name lands on another node, anywhere on the road', () => {
   }
 
   // And the whole road stays inside the band it is allowed, top and bottom.
-  // The road runs off the sides on purpose -- it is three screens long and
-  // scrolls -- so only the vertical bound is a fault.
+  // It runs off neither side now -- the road is exactly the design box wide --
+  // but the vertical is where a name gets pushed into the chrome, so it is
+  // still the bound worth asserting node by node.
   for (const n of nodes) {
     const b = nodeBlock(n)
     assert.ok(b.y >= ROAD.band.top,
       `slot ${n.number} rides up over the title (${b.y} < ${ROAD.band.top})`)
     assert.ok(b.y + b.height <= ROAD.band.bottom,
-      `slot ${n.number}'s name runs into the scrollbar (${b.y + b.height} > ${ROAD.band.bottom})`)
+      `slot ${n.number}'s name runs into the chrome (${b.y + b.height} > ${ROAD.band.bottom})`)
   }
 
-  // Left to right, in level order, with no two at the same height: that is
-  // what makes the road readable as a progression rather than a scatter.
+  // IN LEVEL ORDER ALONG A SNAKE, with no two neighbours at the same height.
+  // This used to say "left to right" and meant it: the road was one row. It is
+  // two rows of five now and every second one runs the other way, so what
+  // makes it readable as a progression is that each step goes THE WAY ITS ROW
+  // GOES, and that a row change goes downwards rather than sideways.
   for (let i = 1; i < nodes.length; i++) {
-    assert.ok(nodes[i]!.x > nodes[i - 1]!.x,
-      `slot ${nodes[i]!.number} is not further along the road than slot ${nodes[i - 1]!.number}`)
+    const sameRow = placeOf(i).row === placeOf(i - 1).row
+    if (sameRow) {
+      const dir = placeOf(i).row % 2 === 0 ? 1 : -1
+      assert.ok((nodes[i]!.x - nodes[i - 1]!.x) * dir > 0,
+        `slot ${nodes[i]!.number} doubles back on slot ${nodes[i - 1]!.number}`)
+    } else {
+      assert.ok(nodes[i]!.y > nodes[i - 1]!.y,
+        `slot ${nodes[i]!.number} does not start below the end of the row before it`)
+    }
     assert.notEqual(nodes[i]!.y, nodes[i - 1]!.y,
       `slots ${nodes[i - 1]!.number} and ${nodes[i]!.number} sit at the same height; the road reads flat there`)
   }

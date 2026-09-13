@@ -64,15 +64,16 @@ const SCENARIO_NAMES = [
   'enemyfacing', 'everyloadout', 'facing', 'fps', 'full', 'full13', 'fx',
   'game', 'gateway', 'gestures', 'glacier', 'gnomes', 'goblin', 'heroanim',
   'heroblock', 'herochip', 'herofx', 'herohp', 'lane', 'leak', 'ledger',
-  'lettering', 'level6', 'level7', 'level8', 'levelart', 'levels', 'listenerguard',
-  'loadout', 'locked',
+  'labelprobe', 'lettering', 'level6', 'level7', 'level8', 'levelart', 'levels',
+  'listenerguard', 'loadout', 'locked',
   'loopthrow', 'looptrack', 'lost', 'mapedge', 'maproute', 'markers',
   'meteor', 'mix', 'modal', 'moes', 'music', 'muzzle', 'nightfall',
   'nodefirst', 'noderings', 'notch', 'nuke', 'nukeseq', 'nullframe',
   'opening', 'padart',
   'pausedismiss', 'pauseresume', 'phone', 'pixels', 'plate', 'playrun',
   'politician', 'powerart', 'proximity', 'realboot', 'regressions',
-  'results', 'retreat', 'rotationburst', 'revive', 'ring', 'rockets', 'rollspeed',
+  'results', 'retreat', 'roadfit', 'rotationburst', 'revive', 'ring', 'rockets',
+  'rollspeed',
   'scheduleguard', 'screens', 'scrim', 'settings', 'sharesheet',
   'shortviewport', 'signs', 'skilled', 'softlock', 'spec', 'spot5',
   'sprites', 'standalone', 'startrun', 'stuckcast', 'stuckguard', 'stun',
@@ -2097,17 +2098,20 @@ async function run() {
   //   NOTCH  a control sits inside a safe-area inset
   //   SMALL  a control is under 44x44, the minimum tap target
   //   OVER   two texts, or two controls, overlap each other
-  // THE LEVEL SELECT SCROLLS, and this is what establishes that it does.
+  // THE LEVEL SELECT NO LONGER SCROLLS, and this is what establishes that.
   //
-  // The road is three screens long. A screenshot of it cannot tell a map that
-  // scrolls from a map that is simply cropped, and the layout audit cannot
-  // either -- it is told to ignore anything inside the scrolling container,
-  // so if the container never moved the audit would go quiet and pass. So the
-  // first thing this does is prove a node MOVES when the map is dragged.
+  // It used to: the road was three screens long, and this scenario existed to
+  // prove a node MOVED when the map was dragged, because a screenshot cannot
+  // tell a map that scrolls from a map that is simply cropped. Ten levels in
+  // two rows of five are the whole design box wide, so `maxScroll` is zero, a
+  // drag moves nothing and there is no bar. UNMOVED is the right answer now
+  // and the log says so rather than flagging it.
   //
-  // The second thing is the fault that comes with dragging a screen whose
-  // content is also its buttons: a drag that happens to end on top of a level
-  // must not start that level.
+  // What it still checks is the fault that came with dragging a screen whose
+  // content is also its buttons, and which would come straight back if the
+  // planned count ever outgrew two rows: a drag that happens to end on top of
+  // a level must not start that level. That the drag no longer moves anything
+  // does not make the guard untested -- `dragged` still counts the travel.
   if (scenario === 'abilityicons') {
     // EVERY ABILITY ICON, ON EVERY HERO, AT ITS DRAWN SIZE.
     //
@@ -2612,6 +2616,293 @@ async function run() {
     return
   }
 
+  if (scenario === 'roadfit') {
+    /*
+     * EVERY LEVEL ON THE SCREEN AT ONCE, MEASURED OFF THE FRAME.
+     *
+     * The road used to be three screens long and this could not have been
+     * asked: half its nodes were legitimately off the viewport at any scroll,
+     * and the `screens` audit is told to ignore anything inside the scrolling
+     * container for exactly that reason. At ten levels in two rows of five the
+     * road FITS, so "is it all there, and does any of it collide" becomes a
+     * question with an answer -- and the one the `screens` audit still cannot
+     * give, because its scrolled-container exemption has not gone away.
+     *
+     * What this measures, and why each one has shipped broken at least once:
+     *   ON SCREEN  every node's frame inside the viewport, in CSS pixels
+     *   OVER       two framed nodes touching (the fault of the last two briefs)
+     *   BAND       a node's label block past the top or bottom of its band
+     *   BAR        a scrollbar drawn for an axis that no longer scrolls
+     *   ORDER      the serpentine actually walks 1..10 without doubling back
+     *
+     * It also prints the cake row's size in CSS PIXELS, which is the unit the
+     * 32px brief was written in and the unit a design-unit figure hides.
+     */
+    const RESM = await import('./js/systems/Resolution.js')
+    const WR = await import('./js/systems/WorldRoad.js')
+    const LV = await import('./js/systems/Levels.js')
+    const DES = (await import('./js/data/display.json', { with: { type: 'json' } })).default
+    scene('Title').scene.start('WorldMap')
+    if (!(await until(() => running('WorldMap'), 8000))) {
+      note('ROADFIT: *** the world map did not build ***')
+      expect(false, 'the world map did not build')
+      return
+    }
+    await sleep(600)
+    const wm = scene('WorldMap')
+    const cam = wm.cameras.main
+    const fit = Math.min(VP.w / DES.width, VP.h / DES.height)
+    const win = wm.scrollWindow()
+    note('viewport ' + VP.w + 'x' + VP.h + '  dpr=' + RESM.deviceScale()
+      + '  one design unit = ' + fit.toFixed(4) + ' CSS px')
+    note('road ' + Math.round(WR.roadWidth()) + ' design units across '
+      + Math.round(win.width) + ' visible  maxScroll ' + Math.round(WR.maxScroll(win.width)))
+    note('slots ' + WR.roadNodes().length + '  levels built ' + LV.LEVELS.length
+      + '  rows ' + (WR.ROAD.rows ? WR.ROAD.rows.perRow + ' per row' : 'one row'))
+
+    // THE SCROLLBAR MUST BE GONE. `maxScroll` is the arithmetic and the bar is
+    // the drawing; both are checked, because the screen this replaced drew a
+    // bar for an axis it did not scroll on.
+    expect(WR.maxScroll(win.width) === 0,
+      'the road is ' + Math.round(WR.roadWidth() - win.width) + ' units longer than the screen')
+
+    // WHAT THE BAND HAS TO CLEAR, in design units, off the frame rather than
+    // off the constants. The band is "under the title and above the chrome",
+    // and both of those are drawn by this scene at sizes nothing in
+    // presentation.json states -- a 46px display face with an 8px stroke is
+    // not 46 units tall, and guessing how much taller it is has put a node
+    // frame through a title before.
+    {
+      let titleBottom = 0, chromeTop = 1e9, chromeOf = ''
+      const visitC = (o) => {
+        if (o.visible === false || (o.alpha ?? 1) <= 0.02) return
+        if (o.getBounds && (o.text !== undefined || o.type === 'Rectangle' || o.type === 'Image')) {
+          const b = o.getBounds()
+          if (b.height > 0) {
+            if (b.centerY < WR.ROAD.band.top && b.bottom > titleBottom) titleBottom = b.bottom
+            if (b.centerY > WR.ROAD.band.bottom && b.top < chromeTop) {
+              chromeTop = b.top
+              chromeOf = o.text !== undefined ? String(o.text).slice(0, 20) : o.type
+            }
+          }
+        }
+        if (o.list) o.list.forEach(visitC)
+      }
+      for (const o of wm.children.list) if (o !== wm.road) visitC(o)
+      note('chrome: the title ends at ' + Math.round(titleBottom)
+        + ', the bottom bar starts at ' + Math.round(chromeTop) + ' (' + chromeOf + ')'
+        + '; the band is ' + WR.ROAD.band.top + '..' + WR.ROAD.band.bottom)
+      expect(titleBottom <= WR.ROAD.band.top, 'the title reaches into the band by '
+        + Math.round(titleBottom - WR.ROAD.band.top))
+      expect(chromeTop >= WR.ROAD.band.bottom, 'the bottom chrome reaches into the band by '
+        + Math.round(WR.ROAD.band.bottom - chromeTop))
+    }
+
+    // A rectangle in CSS pixels, through this scene's own fitted camera.
+    const rectOf = (o) => {
+      const b = o.getBounds()
+      const a = RESM.worldToScreen(wm, b.left, b.top, cam)
+      const z = RESM.worldToScreen(wm, b.right, b.bottom, cam)
+      return { l: a.x, t: a.y, r: z.x, b: z.y, w: z.x - a.x, h: z.y - a.y }
+    }
+    // Every Text inside the road container, so a label can be found by the
+    // node it sits under rather than by hunting the display list twice.
+    const texts = []
+    const visitT = (o) => {
+      if (o.visible === false || (o.alpha ?? 1) <= 0.02) return
+      if (o.text !== undefined && String(o.text).trim() !== '') {
+        texts.push({ s: String(o.text), b: o.getBounds() })
+      }
+      if (o.list) o.list.forEach(visitT)
+    }
+    wm.road.list.forEach(visitT)
+
+    const nodes = WR.roadNodes()
+    const blocks = nodes.map((n) => WR.nodeBlock(n))
+    const frames = nodes.map((n) => WR.nodeRect(n))
+
+    // 1. EVERY NODE ON SCREEN. In CSS pixels, against the viewport, because a
+    // node that is off the glass is off the glass whatever the design box says.
+    for (const n of nodes) {
+      const a = RESM.worldToScreen(wm, n.x - frames[0].width / 2, n.y - frames[0].height / 2, cam)
+      const z = RESM.worldToScreen(wm, n.x + frames[0].width / 2, n.y + frames[0].height / 2, cam)
+      const on = a.x >= -0.5 && a.y >= -0.5 && z.x <= VP.w + 0.5 && z.y <= VP.h + 0.5
+      if (!on) {
+        note('   slot ' + n.number + ' frame at ' + Math.round(a.x) + ',' + Math.round(a.y)
+          + ' to ' + Math.round(z.x) + ',' + Math.round(z.y) + ' of ' + VP.w + 'x' + VP.h)
+      }
+      expect(on, 'slot ' + n.number + ' is not wholly on screen')
+    }
+
+    // 2. NO TWO FRAMED NODES TOUCH. The frame is the painted border, which is
+    // the edge a neighbour has to clear -- not the picture inside it.
+    const hits = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width
+                        && a.y < b.y + b.height && b.y < a.y + a.height
+    let overlaps = 0
+    for (let i = 0; i < frames.length; i++) {
+      for (let j = i + 1; j < frames.length; j++) {
+        if (hits(frames[i], frames[j])) {
+          overlaps++
+          note('   slots ' + (i + 1) + ' and ' + (j + 1) + ' overlap')
+        }
+      }
+    }
+    expect(overlaps === 0, overlaps + ' pairs of framed nodes overlap')
+
+    // 3. NO LABEL BLOCK LEAVES THE BAND, and the block is what the scene
+    // reserves rather than what any one label happened to set to.
+    for (let i = 0; i < blocks.length; i++) {
+      const b = blocks[i]
+      expect(b.y >= WR.ROAD.band.top,
+        'slot ' + (i + 1) + ' rides over the top of the band by '
+        + Math.round(WR.ROAD.band.top - b.y))
+      expect(b.y + b.height <= WR.ROAD.band.bottom,
+        'slot ' + (i + 1) + "'s label block reaches "
+        + Math.round(b.y + b.height) + ', past the band at ' + WR.ROAD.band.bottom)
+    }
+
+    // 4. AND THE INK AGREES WITH THE RESERVE. The block above is arithmetic; a
+    // label that sets to more lines than the reserve was measured for runs out
+    // of the bottom of it and nothing in the arithmetic would notice.
+    let deepest = 0, deepestOf = ''
+    for (const t of texts) {
+      if (t.b.bottom > deepest) { deepest = t.b.bottom; deepestOf = t.s.replace(/\n/g, ' ') }
+    }
+    note('the deepest ink on the road is ' + Math.round(deepest)
+      + ' (' + JSON.stringify(deepestOf.slice(0, 40)) + '), band bottom ' + WR.ROAD.band.bottom)
+    expect(deepest <= WR.ROAD.band.bottom,
+      'a label sets past the bottom of the band by ' + Math.round(deepest - WR.ROAD.band.bottom))
+
+    // 5. THE ORDER IS FOLLOWABLE. A serpentine is only readable if each row
+    // runs one way and the next runs the other, so the eye is never asked to
+    // jump back across the screen mid-row.
+    const per = WR.ROAD.rows ? WR.ROAD.rows.perRow : nodes.length
+    for (let i = 1; i < nodes.length; i++) {
+      const sameRow = Math.floor(i / per) === Math.floor((i - 1) / per)
+      if (!sameRow) continue
+      const dir = Math.floor(i / per) % 2 === 0 ? 1 : -1
+      const step = (nodes[i].x - nodes[i - 1].x) * dir
+      expect(step > 0, 'slot ' + (i + 1) + ' doubles back on slot ' + i)
+    }
+    for (let r = 1; r * per < nodes.length; r++) {
+      expect(nodes[r * per].y > nodes[r * per - 1].y,
+        'row ' + (r + 1) + ' does not sit below row ' + r)
+    }
+
+    for (const n of nodes) {
+      note('  slot ' + n.number + '  centre ' + Math.round(n.x) + ',' + Math.round(n.y)
+        + '  block ' + Math.round(blocks[n.index].y) + '..'
+        + Math.round(blocks[n.index].y + blocks[n.index].height)
+        + (n.level ? '  ' + n.level.name : '  (unbuilt)'))
+    }
+
+    // THE CAKES, IN CSS PIXELS. 32 was asked for and 24-25 was drawn, and the
+    // gap between those two numbers is entirely the design-box fit: a figure
+    // in design units says nothing about what the eye gets on a phone.
+    {
+      let cake = null
+      const visitC = (o) => {
+        if (!cake && o.texture && /cake/.test(o.texture.key || '')) cake = o
+        if (o.list) o.list.forEach(visitC)
+      }
+      wm.road.list.forEach(visitC)
+      if (cake) {
+        const r = rectOf(cake)
+        note('a cake draws ' + r.w.toFixed(1) + 'x' + r.h.toFixed(1) + ' CSS px at '
+          + VP.w + 'x' + VP.h + ' (texture ' + cake.texture.key + ', '
+          + Math.round(cake.displayWidth) + ' design units)')
+      } else {
+        note('   *** no cake found on the road ***')
+      }
+      expect(!!cake, 'no cake is drawn on any node')
+    }
+
+    await shot('roadfit-' + VP.w + 'x' + VP.h)
+    note('RESULT ' + (ASSERT_FAILS === 0
+      ? 'all ' + nodes.length + ' nodes fit, none overlap, none leaves the band'
+      : '*** ' + ASSERT_FAILS + ' faults ***'))
+    return
+  }
+
+  if (scenario === 'labelprobe') {
+    /*
+     * HOW TALL THE NAME UNDER A NODE ACTUALLY SETS, at a range of wrap widths.
+     *
+     * `label.reserve` is the room kept under a node for its name and its
+     * unlock line, and presentation.json says in as many words that it is
+     * MEASURED off a rendered frame rather than counted in lines. This is the
+     * measurement. It builds the real strings in the real face at the real
+     * size, off to one side of a live scene, and reports what each wrap width
+     * costs -- so a reserve can be set from the worst case rather than from an
+     * estimate of how many lines a name "probably" wraps to.
+     */
+    const LV = await import('./js/systems/Levels.js')
+    const WR = await import('./js/systems/WorldRoad.js')
+    const TH = await import('./js/ui/Theme.js')
+    scene('Title').scene.start('WorldMap')
+    if (!(await until(() => running('WorldMap'), 8000))) { expect(false, 'no world map'); return }
+    await sleep(400)
+    const wm = scene('WorldMap')
+    const L = WR.ROAD.label
+    const names = LV.LEVELS.map((l) => l.name.toUpperCase())
+      .concat([WR.ROAD.plate.unbuiltLabel])
+    const unlocks = LV.LEVELS.filter((l) => l.unlockedBy)
+      .map((l) => 'Clear ' + LV.levelDef(l.unlockedBy).name.toUpperCase() + ' to unlock')
+    const measure = (s, wrap, bold) => {
+      const t = wm.add.text(-4000, -4000, s, {
+        fontFamily: TH.FONT_UI, fontSize: L.size + 'px',
+        fontStyle: bold ? 'bold' : '', stroke: '#0d1016', strokeThickness: bold ? 4 : 3,
+        wordWrap: { width: wrap }, align: 'center',
+      })
+      const h = t.height
+      const lines = t.getWrappedText().length
+      t.destroy()
+      return { h, lines }
+    }
+    // THE RESERVE HAS TO COVER THE WORST **NODE**, not the worst name added to
+    // the worst unlock line -- those belong to two different levels and no node
+    // ever sets both. Measuring them separately is how a reserve gets set 23
+    // units over what any node needs, or under it.
+    for (const wrap of [160, 180, 190, 200, 210, 220, 230]) {
+      let worstName = 0, worstNameS = '', worstU = 0, worstUS = ''
+      for (const n of names) {
+        const m = measure(n, wrap, true)
+        if (m.h > worstName) { worstName = m.h; worstNameS = n + ' (' + m.lines + ' lines)' }
+      }
+      for (const u of unlocks) {
+        const m = measure(u, wrap, false)
+        if (m.h > worstU) { worstU = m.h; worstUS = u + ' (' + m.lines + ' lines)' }
+      }
+      note('wrap ' + wrap + ': worst name ' + Math.round(worstName) + ' [' + worstNameS + ']'
+        + '  worst unlock ' + Math.round(worstU) + ' [' + worstUS + ']')
+    }
+    // PER NODE, at the wrap pair the scene would actually use. The unlock line
+    // is a sentence and wraps to the road's pitch; the name is a title and
+    // wraps to whatever `label.wrap` says.
+    for (const pair of [[160, 200], [200, 230], [210, 230], [220, 230], [220, 240], [230, 240]]) {
+      let worst = 0, worstS = ''
+      for (const l of LV.LEVELS) {
+        const n = measure(l.name.toUpperCase(), pair[0], true)
+        const u = l.unlockedBy
+          ? measure('Clear ' + LV.levelDef(l.unlockedBy).name.toUpperCase() + ' to unlock',
+              pair[1], false)
+          : { h: 0, lines: 0 }
+        const tot = n.h + (u.h ? 4 + u.h : 0)
+        if (tot > worst) {
+          worst = tot
+          worstS = l.name + ' (' + n.lines + ' + ' + u.lines + ' lines)'
+        }
+      }
+      const soon = measure(WR.ROAD.plate.unbuiltLabel, pair[0], true)
+      note('name wrap ' + pair[0] + ' / unlock wrap ' + pair[1]
+        + ': worst NODE needs ' + Math.round(worst) + ' [' + worstS + ']'
+        + '  (COMING SOON ' + Math.round(soon.h) + ')')
+    }
+    expect(true, 'the probe ran')
+    note('RESULT label heights measured at ' + VP.w + 'x' + VP.h)
+    return
+  }
+
   if (scenario === 'worldmap') {
     const RESM = await import('./js/systems/Resolution.js')
     const WR = await import('./js/systems/WorldRoad.js')
@@ -2656,8 +2947,14 @@ async function run() {
     await sleep(300)
     const after = cardAt('card-level1')
     const moved = start && after && Math.abs(after.x - start.x) > 20
+    const scrolls = WR.maxScroll(visW) > 0
     note('after a drag of ' + Math.round(VP.w * 0.6) + 'px, level 1 sits at ' + JSON.stringify(after)
-      + (moved ? '  *** MOVED ***' : '  UNMOVED -- the map does not scroll'))
+      + (moved === scrolls
+        ? (moved ? '  MOVED, as a road longer than the screen should'
+                 : '  UNMOVED, as a road that fits should')
+        : (moved ? '  *** it moved, and there is nothing to scroll ***'
+                 : '  *** UNMOVED -- the map has ' + Math.round(WR.maxScroll(visW))
+                   + ' units to scroll and does not ***')))
     note('scroll is now ' + Math.round(wm().scroll) + ' of ' + Math.round(WR.maxScroll(visW)))
     await shot('worldmap-2-scrolled-' + VP.w + 'x' + VP.h)
 
@@ -3014,13 +3311,20 @@ async function run() {
       // they are on screen or not, so only these get clipped to the band.
       //
       // `scrolled` marks the children of a container the scene PANS -- the
-      // world map's road, which is three screens long and is dragged sideways.
-      // Content running past the edge of the screen is what scrolling IS, so
-      // reporting it as cut off would be reporting the feature. Only what is
-      // wholly on screen is audited; see where these are dropped below.
+      // world map's road, which used to be three screens long and dragged
+      // sideways. Content running past the edge of the screen is what
+      // scrolling IS, so reporting it as cut off would be reporting the
+      // feature. Only what is wholly on screen is audited; see where these are
+      // dropped below.
+      //
+      // AND THE SCENE IS ASKED, NOT ASSUMED. At ten levels in two rows the
+      // road is exactly the design box wide and nothing scrolls -- at which
+      // point a blanket exemption would hide every node on the screen from the
+      // one audit that looks at all of them at once. `scrolls()` is false then
+      // and the road is audited like any other content.
       const visit = (o, masked = false, scrolled = false) => {
         if (sc.stack && o === sc.stack) masked = true
-        if (sc.road && o === sc.road) scrolled = true
+        if (sc.road && o === sc.road && (!sc.scrolls || sc.scrolls())) scrolled = true
         if (o.visible === false || (o.alpha ?? 1) <= 0.02) return
         // An empty Text still reports bounds and draws no ink. Measuring one
         // is measuring a placeholder -- the boss name's label sits at 0,0 with
@@ -14272,10 +14576,32 @@ async function run() {
     }
     if (onMap.length === 0) fail('the level select road shows no cakes at all')
     // The record that was just banked has to be back on the map.
+    //
+    // FOUND BY POSITION, NOT BY DRAW ORDER. This used to take the first three
+    // cakes in the sorted list and call them level 1's, and the list is sorted
+    // by y then x -- so it was really "whichever built node sits highest on the
+    // wave", which has not been level 1 since the road got a wave at all. It
+    // reported `level 1 banked 3; its node lights 0` against a save that was
+    // correct and a screen that was correct, on main, every run. A harness that
+    // fails for a reason that is not the reason it names is worse than one that
+    // does not check: it trains the next reader to ignore the check.
+    //
+    // WorldRoad knows where level 1's node is, so the cakes are the three
+    // nearest it.
+    const WRM = await import('./js/systems/WorldRoad.js')
+    const RESM2 = RESM
+    const wmScene = scene('WorldMap')
+    const n1 = WRM.roadNodes().find((n) => n.level && n.level.id === 'level1')
+    const anchor = RESM2.worldToScreen(wmScene, n1.x, n1.y, wmScene.cameras.main)
+    const near = [...onMap]
+      .sort((a, b) => Math.hypot(a.x - anchor.x, a.y - anchor.y)
+                    - Math.hypot(b.x - anchor.x, b.y - anchor.y))
+      .slice(0, CAKES.MAX_CAKES)
     const bankedTo = SAVE.cakesEarned('level1')
-    const first = onMap.slice(0, CAKES.MAX_CAKES)
-    note('  level 1 banked ' + bankedTo + '; its node lights ' + first.filter((c) => c.lit).length)
-    if (first.filter((c) => c.lit).length !== bankedTo) {
+    note('  level 1 banked ' + bankedTo + '; the three cakes nearest its node at '
+      + Math.round(anchor.x) + ',' + Math.round(anchor.y) + ' light '
+      + near.filter((c) => c.lit).length)
+    if (near.filter((c) => c.lit).length !== bankedTo) {
       fail('the map node disagrees with the save about level 1')
     }
     await shot('cakes-map-' + VP.w + 'x' + VP.h)
@@ -14291,9 +14617,9 @@ async function run() {
     // THE END-OF-LEVEL SCREENS, in every case that has different buttons on it.
     //
     // Three: a defeat, a win with a level after it, and a win with none. The
-    // last is the one worth photographing -- four levels are built and the road
-    // has twenty slots, so past level 4 NEXT LEVEL would point at a COMING SOON
-    // node, and it is REPLACED by LEVEL SELECT rather than disabled.
+    // last is the one worth photographing -- six levels are built and the road
+    // has ten slots, so past the last built one NEXT LEVEL would point at a
+    // COMING SOON node, and it is REPLACED by LEVEL SELECT rather than disabled.
     //
     // `arg` names the level, so the same scenario covers both win cases:
     //   run.sh results 200 "" level1   -> a win with level 2 after it

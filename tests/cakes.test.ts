@@ -250,15 +250,60 @@ test('the harness measures the unearned recipe off the texture, not off a pictur
 
 test('the cake sizes are tuned in JSON, and the map is not drawn at 24', () => {
   const P = read('presentation').cakes
-  assert.ok(P.nodeSize >= 32,
-    `a map node cake at ${P.nodeSize} design units is too small to count at a glance`)
+  const W = read('presentation').worldMap
+  /*
+   * 24 IS THE NUMBER IN THE TITLE AND IT IS IN CSS PIXELS.
+   *
+   * This used to hold the size to >= 32 DESIGN units, which is not the same
+   * claim and is not the one the finding made: the whole screen is fitted from
+   * the 1280x720 box down onto the viewport, so 44 design units is 46 CSS
+   * pixels on a desktop window and 24 on a phone in landscape at 844x390 --
+   * and 24 is where a rendered frame showed them unidentifiable. A design-unit
+   * floor cannot see that at all.
+   *
+   * So the floor is in the unit the finding used, at the viewport it was
+   * measured on. A cake is fitted into a box and comes out about 4% wider than
+   * the figure, which is why 57 makes 32 and 59 makes 33.
+   */
+  // A cake is fitted into a BOX by fitInBox, which scales the 1024-square
+  // canvas until the ink extents in art.json fit -- so the quad that actually
+  // draws is a few per cent larger than the figure. Derived here rather than
+  // assumed to be 1:1, because that difference is 57 against 59.
+  const ink = read('art').render['ui-cake']
+  const drawn = P.nodeSize * (1024 / Math.max(ink.contentWidth, ink.contentHeight))
+  const fit = 390 / 720   // the design box on an iPhone in landscape at 844x390
+  const css = drawn * fit
+  assert.ok(css >= 32,
+    `a map node cake is ${css.toFixed(1)} CSS px at 844x390, under the 32 the brief asked for`)
   assert.ok(P.panelSize > P.nodeSize, 'the victory panel does not show them larger than the map')
   assert.ok(P.gapFraction > 0 && P.gapFraction < 1)
-  // Three of them plus their gaps have to fit ACROSS THE NODE'S PICTURE, or
-  // the row hangs off both sides of the level it belongs to.
+  /*
+   * THE ROW IS WIDER THAN THE CARD, ON PURPOSE, and this is the half of the
+   * fix that is not a number.
+   *
+   * It used to have to fit across the node's 160-unit picture, and at that
+   * width three cakes cannot be 32 CSS pixels on a phone -- the arithmetic
+   * simply does not close. The card cannot be widened either: five across is
+   * what puts ten levels on one screen, and that pins it at 160. What changed
+   * is the presentation. The row is allowed off the edges of the card into the
+   * road, the same way the NAME under it already is at a wrap of 220, and what
+   * bounds it now is the pitch rather than the picture -- a row that reached
+   * the next node's row would be the real fault.
+   */
   const width = 3 * P.nodeSize + 2 * P.nodeSize * P.gapFraction
-  assert.ok(width <= read('presentation').worldMap.node.width,
-    `three cakes come to ${width.toFixed(0)} units across a ${read('presentation').worldMap.node.width}-unit node`)
+  const plate = width + P.nodePlate.pad * 2
+  assert.ok(plate <= W.pitch - 20,
+    `the cake plate is ${plate.toFixed(0)} units at a pitch of ${W.pitch}; it reaches its neighbour`)
+  assert.ok(width > W.node.width,
+    'three cakes fit inside the card again -- if they do, they are too small on a phone')
+  // AND IT STAYS ON THE CARD VERTICALLY. The row sits across the bottom of the
+  // picture; its plate may not hang below the painted frame into the gap the
+  // name starts in.
+  const plateBottom = P.nodeDrop + P.nodeSize / 2 + P.nodePlate.pad
+  assert.ok(plateBottom <= (W.node.height + W.node.framePad) / 2,
+    `the cake plate reaches ${plateBottom.toFixed(1)} below the node's centre, past its frame`)
+  assert.ok(P.nodeDrop + drawn / 2 <= (W.node.height + W.node.framePad) / 2,
+    'the cakes themselves hang below the painted frame')
   // NOTHING HARDCODES THEM, checked on the cake code alone rather than on
   // whole files — Dialog.ts's choice cards legitimately carry a 96, and a
   // sweep over the file would fail on it and teach the next reader to delete

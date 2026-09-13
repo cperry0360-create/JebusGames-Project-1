@@ -5176,8 +5176,8 @@ export class GameScene extends Phaser.Scene {
 
     // WHAT COMES NEXT, and whether it exists.
     //
-    // Four levels are built and the road has twenty slots, so past level 4
-    // there is no next level to offer. The button is not disabled in that
+    // Six levels are built and the road has ten slots, so past the last built
+    // one there is no next level to offer. The button is not disabled in that
     // case: a dead control that cannot say why is worse than no control, and
     // "why is NEXT LEVEL greyed out" is a question the screen should answer
     // rather than pose. It is REPLACED by LEVEL SELECT, and a line says the

@@ -312,9 +312,10 @@ export function isLevelCleared(id: string, cleared: readonly string[]): boolean 
  * is a real answer rather than a crash, and the map is the right screen for a
  * choice anyway.
  *
- * NULL IS THE CASE THAT MATTERS. Four levels exist and the road has twenty
- * slots, so after level 4 there is no next level -- and the victory screen has
- * to offer LEVEL SELECT instead of pointing NEXT LEVEL at a COMING SOON slot.
+ * NULL IS THE CASE THAT MATTERS. Six levels exist and the road has ten slots,
+ * so after the last built one there is no next level -- and the victory screen
+ * has to offer LEVEL SELECT instead of pointing NEXT LEVEL at a COMING SOON
+ * slot.
  */
 export function nextLevelId(id: string): string | null {
   return LEVELS.find((l) => l.unlockedBy === id)?.id ?? null
