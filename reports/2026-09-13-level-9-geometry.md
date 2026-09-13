@@ -11,7 +11,8 @@ on a board.
 | commit | what | CI |
 |---|---|---|
 | `e0fc55c` | The plate, the tracer, the checker, the geometry file, the overlay, the two test rows | [run 330](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34769363730) green |
-| *this commit* | This report | it edits one markdown file; the row below is filled in once its run lands |
+| `4818e52` | This report | [run 331](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34769540134) green |
+| *this commit* | Close this table on run 331 | it edits this table and nothing else |
 
 Branch `claude/level-9-geometry-uac8ax`. The session could not push to `main`;
 the merge command is at the bottom of this file and was the first line of the
