@@ -96,7 +96,12 @@ test('the checker fails an unknown level id rather than leaving it to runtime', 
     return problems
   }
   assert.deepEqual(check(CUTSCENES.levels), [], 'the shipped file does not pass its own rules')
-  assert.match(check({ level9: ['cutscenes/a.webp'] })[0]!, /unknown level "level9"/)
+  // `level99` RATHER THAN `level9`, and the rename is the point of writing it
+  // down: this line used level9 as its example of an id that is certainly not
+  // a level, and then level 9 shipped. Any id used as a negative control here
+  // is a bet that it never becomes real, so it is now two digits past the ten
+  // levels the roadmap plans for.
+  assert.match(check({ level99: ['cutscenes/a.webp'] })[0]!, /unknown level "level99"/)
   assert.match(check({ level1: [] })[0]!, /level1 empty/)
   assert.match(check({ level1: ['towers/tower_dummy_1.webp'] })[0]!, /level1 bad path/)
   assert.match(check({ level1: ['cutscenes/a.webp', 'cutscenes/a.webp'] })[0]!, /level1 duplicate/)

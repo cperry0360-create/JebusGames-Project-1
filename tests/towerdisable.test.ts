@@ -19,11 +19,28 @@ const tower = (over: Partial<DisableCandidate> & { name?: string } = {}) => ({
 
 /* --------------------------------------------------------------- the data */
 
-test('two enemies carry the ability, and they differ by one field', () => {
+test('four enemies carry the ability, and they differ by their numbers', () => {
   assert.deepEqual(DEF, { cooldown: 7, windup: 1, duration: 3.5, range: 260 })
   const casters = Object.entries(E).filter(([, v]) => v.towerDisable).map(([k]) => k)
-  assert.deepEqual(casters, ['unicornBoss', 'glitchBug'],
+  // TWO BECAME FOUR WHEN LEVEL 9 SHIPPED, and the two it added are the same
+  // cast with different numbers rather than a new mechanic: CANCER's claws
+  // close on the most expensive gun in 300 px and hold it off for six seconds
+  // every seven and a half, and PERPLEXED takes whatever is within 210 px for
+  // 1.8 seconds every 2.6. The first is a hole in the board and the second is
+  // a board that will not hold still. Neither destroys. The list is asserted
+  // by name for the reason it always was: levels 1 and 2 must not gain one.
+  assert.deepEqual(casters, ['unicornBoss', 'glitchBug', 'cancer', 'perplexed'],
     'the set of tower-attackers changed; levels 1 and 2 must not gain one')
+  // AND THE TWO INVARIANTS ARE ASKED OF ALL FOUR rather than of the Reaper
+  // alone, which is what they were worth all along: a windup that outlasts its
+  // cooldown overlaps casts, and a disable that outlasts it holds one tower
+  // down for the whole fight with nothing the player can do.
+  for (const [id, v] of Object.entries(E).filter(([, v]) => v.towerDisable)) {
+    const d = v.towerDisable as any
+    assert.ok(d.windup < d.cooldown, `${id} winds up for longer than its cooldown`)
+    assert.ok(d.duration < d.cooldown, `${id} can hold the board off permanently`)
+    assert.ok(d.range > 0, `${id} casts at nothing`)
+  }
   // The Reaper switches a tower off. The Glitch Bug takes it away. Everything
   // before the cast lands is the same rule and is not written twice.
   assert.ok(!DEF.destroys, 'the Reaper started destroying towers')

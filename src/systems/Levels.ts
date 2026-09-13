@@ -26,6 +26,7 @@ import mapLevel5 from '../data/map_level5.json' with { type: 'json' }
 import mapLevel6 from '../data/map_level6.json' with { type: 'json' }
 import mapLevel7 from '../data/map_level7.json' with { type: 'json' }
 import mapLevel8 from '../data/map_level8.json' with { type: 'json' }
+import mapLevel9 from '../data/map_level9.json' with { type: 'json' }
 import wavesLevel1 from '../data/waves.json' with { type: 'json' }
 import wavesLevel2 from '../data/waves.level2.json' with { type: 'json' }
 import wavesLevel3 from '../data/waves.level3.json' with { type: 'json' }
@@ -34,10 +35,12 @@ import wavesLevel5 from '../data/waves.level5.json' with { type: 'json' }
 import wavesLevel6 from '../data/waves.level6.json' with { type: 'json' }
 import wavesLevel7 from '../data/waves.level7.json' with { type: 'json' }
 import wavesLevel8 from '../data/waves.level8.json' with { type: 'json' }
+import wavesLevel9 from '../data/waves.level9.json' with { type: 'json' }
 import rulesLevel5 from '../data/level5.json' with { type: 'json' }
 import rulesLevel6 from '../data/level6.json' with { type: 'json' }
 import rulesLevel7 from '../data/level7.json' with { type: 'json' }
 import rulesLevel8 from '../data/level8.json' with { type: 'json' }
+import rulesLevel9 from '../data/level9.json' with { type: 'json' }
 
 /** A row of levels.json: what the registry records about a level. */
 export interface LevelDef {
@@ -151,6 +154,13 @@ const MAPS: Record<string, MapDef> = {
   // `_theRowIsNotThereYet` note in src/data/level8.json describes and
   // tests/level8.test.ts held the repository to.
   level8: mapLevel8 as unknown as MapDef,
+  // LEVEL 9, AND THE FIRST MAP IN THIS TABLE WHOSE EXIT IS NOT A FRAME EDGE.
+  // Its trace ends at a door in the machine housing at (1177, 329) and its
+  // lane's last waypoint IS that door rather than a point off the plate --
+  // see map_level9.json's `_exit`. Two spawn lanes out of one painted mouth,
+  // both `entrance: true` in effect (the main lane always is), merging into
+  // one tail.
+  level9: mapLevel9 as unknown as MapDef,
 }
 
 /** Wave tables by the filename levels.json names them with. */
@@ -163,6 +173,7 @@ const WAVE_TABLES: Record<string, WavesDef> = {
   'waves.level6.json': wavesLevel6 as unknown as WavesDef,
   'waves.level7.json': wavesLevel7 as unknown as WavesDef,
   'waves.level8.json': wavesLevel8 as unknown as WavesDef,
+  'waves.level9.json': wavesLevel9 as unknown as WavesDef,
 }
 
 /** Rules blocks by the filename levels.json names them with. */
@@ -171,6 +182,7 @@ const LEVEL_RULES: Record<string, LevelRules> = {
   'level6.json': rulesLevel6 as unknown as LevelRules,
   'level7.json': rulesLevel7 as unknown as LevelRules,
   'level8.json': rulesLevel8 as unknown as LevelRules,
+  'level9.json': rulesLevel9 as unknown as LevelRules,
 }
 
 export const LEVELS: LevelDef[] = (levelsData as unknown as { levels: LevelDef[] }).levels

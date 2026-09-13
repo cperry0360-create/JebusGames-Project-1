@@ -327,12 +327,32 @@ test('a ground shadow covers the footprint and not the whole sprite', () => {
     // landscape canvas -- so `hi - lo + 1` comes out at 90-97% of the width
     // anyway and this rule would reject it as a swallowed prop. Nothing is
     // swallowed; what lies under a car is its whole underside.
+    //
+    // LEVEL 9 ADDS FIVE, AND FOUR OF THEM ARE THE GLIDER'S REASON AGAIN. The
+    // Data Bug hovers on two cyan wings; the Hat and the Question Mark are
+    // objects floating over a circuit board with no underside at all; and the
+    // No-Pilot is a rainbow ribbon, which has the vehicles' relationship to
+    // the ground rather than a stance. All four put nothing but a tip near
+    // their ground line, so a footprint measured there would be the
+    // mismeasurement this test is for, reached from the other side. See
+    // LEVEL9_FOOTLESS in tools/measure_art.py.
     const BODY_SHADOWED = new Set([
       'enemy-zamboni', 'enemy-glitch-bug', 'enemy-glider', 'enemy-rooster',
       'enemy-office-drone', 'hero-cory-power',
       'enemy-hatchback', 'enemy-musclecar', 'enemy-van', 'enemy-bladerig',
       'enemy-transporter', 'enemy-cargo-red', 'enemy-cargo-blue',
-      'enemy-cargo-yellow', 'enemy-cargo-green'])
+      'enemy-cargo-yellow', 'enemy-cargo-green',
+      'enemy-data-bug', 'enemy-hat-gtt', 'enemy-hat-gtt-b', 'enemy-nopilot',
+      'enemy-perplexed',
+      // AND THE SERVER WALKER IS THE LEVEL 7 VEHICLES' CASE RATHER THAN THE
+      // GLIDER'S, arrived at from the opposite side of this test again. It is
+      // a quadruped: its rear foot is at x14 of a 943 px canvas and its front
+      // foot ends at x928, so the footprint tools/measure_art.py measures FROM
+      // ITS FEET comes out at 96% of the width on its own. Nothing is
+      // swallowed -- what lies under a four-legged walker carrying a server
+      // rack is the walker. Unlike the five above it is NOT in
+      // LEVEL9_FOOTLESS; its shadow really is its stance.
+      'enemy-server-walker'])
     // `heroes/` as well as `enemies/`. It used to name one file --
     // `hero/hero_cory.webp` -- because Cory was the only hero whose art this
     // script had measured; the other four lived in `heroes/` and were checked

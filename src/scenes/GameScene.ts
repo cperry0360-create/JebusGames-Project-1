@@ -44,7 +44,8 @@ import type { BuildSpot } from '../systems/BuildSystem.ts'
 import { WaveSpawner } from '../systems/WaveSpawner.ts'
 import { withinRadius, pickNearest } from '../systems/Targeting.ts'
 import { auraAt, darkCount, type AuraSource } from '../systems/Support.ts'
-import { GROUND_DEPTH } from '../systems/DepthSort.ts'
+import { GROUND_DEPTH, ySort } from '../systems/DepthSort.ts'
+import { newRegenState, tickRegen, type RegenState } from '../systems/Regen.ts'
 import { boardBounds, coverZoom, openingView } from '../systems/CameraMath.ts'
 import { distanceAtX, laneGates, type EmergeConfig, type GateDistances } from '../systems/Gateway.ts'
 import { makeRng } from '../systems/Draft.ts'
@@ -333,6 +334,8 @@ export class GameScene extends Phaser.Scene {
   private deathBlast: { radius: number; damage: number; hitsPlayerUnits: boolean } | null = null
   /** LEVEL 7'S BLADES, null everywhere else. See systems/Blades.ts. */
   private blades: BladesDef | null = null
+  /** Seconds until the blades may draw another impact. See `BladesDef.fxCooldown`. */
+  private bladeFxLeft = 0
   /** The split children still waiting to come off a trailer, with the seconds
    *  left before each appears. Empty on every frame of every other level. */
   private pendingSplits: Array<{
@@ -367,6 +370,14 @@ export class GameScene extends Phaser.Scene {
   /** One cycle per breathing enemy. Keyed by the enemy so a boss that dies
    *  mid-telegraph takes its half-finished breath with it. */
   private flameStates = new Map<Enemy, FlameState>()
+  /**
+   * HAT-GTT REPAIRING ITSELF, and empty on every level that is not level 9.
+   *
+   * Keyed by the enemy for the same reason `flameStates` is: a boss that dies
+   * mid-cycle takes its half-finished clock with it rather than leaving one
+   * behind for the next thing that happens to be at the same index.
+   */
+  private regenStates = new Map<Enemy, RegenState>()
   /** Seconds of scorch left on a tower. A scorched tower takes NO damage and
    *  keeps firing; what it loses is rate. */
   private scorchLeft = new Map<Tower, number>()
@@ -537,6 +548,14 @@ export class GameScene extends Phaser.Scene {
   /** Cropped out of the map plate at scene start; see createArchOccluders. */
   /** Public for the harness, which counts them and reads their depth. */
   archOccluders: Phaser.GameObjects.Image[] = []
+  /** The map's own decoration — see `buildScenery`.
+   *
+   *  NOT CALLED `scenery`, and the rename is a finding rather than taste: with
+   *  a field of that name on the scene, every `this.scene` in this file --
+   *  which without node_modules is already an unresolved Phaser member -- turns
+   *  from TS2339 into TS2551 "did you mean 'scenery'?", and `tools/tsdiff.sh`
+   *  reports the lot as newly introduced. Same errors, different code. */
+  sceneryArt: Array<Phaser.GameObjects.Image | Phaser.GameObjects.Sprite> = []
   /** Whether the goblin has already said his line this run. One per RUN, not
    *  per wave and not per enemy. */
   private greeted = false
@@ -841,10 +860,12 @@ export class GameScene extends Phaser.Scene {
     this.blades = bladesFrom(r8 as { blades?: unknown } | null)
     this.pendingSplits = []
     this.flameStates = new Map()
+    this.regenStates = new Map()
     this.scorchLeft = new Map()
 
     this.drawPlate()
     this.buildSign()
+    this.buildScenery()
 
     this.markerLayer = this.add.graphics().setDepth(GROUND_DEPTH + 6)
     // Above the pads and below everything that stands on them, so the mark
@@ -1362,6 +1383,57 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * The level's decoration: a picture at a position, and nothing else.
+   *
+   * THIS IS `buildSign` GENERALISED, and it is worth saying plainly because
+   * the level 9 and 10 art audit recorded that this game has NO PROP LAYER.
+   * It did have one — it was three lines inside `buildSign`, drawing level 1's
+   * tavern board from `map.signs.tavern` — and the only thing stopping it
+   * drawing anything else was that the field it read is called `signs` and
+   * holds two hard-coded roles. `map.scenery` is the same three lines with the
+   * picture named by the map, so a board that wants a screen bolted to it says
+   * so in its own JSON.
+   *
+   * WHAT IT DELIBERATELY IS NOT. Nothing built here has health, takes damage,
+   * blocks a shot, occupies a build spot or is targetable — it is added,
+   * y-sorted on its foot, and never looked at again. Level 9's Vlaude screen
+   * is scenery in exactly that sense: he watches, and he is not in the fight.
+   * The arcs are the same, and they are the one looping animation in the
+   * game: not an attack, not a hazard, not a projectile.
+   *
+   * Y-SORTED ON ITS FOOT like everything else on the board, so a unit walking
+   * in front of the screen draws over it and one behind it does not. That is
+   * CLAUDE.md rule 3 and the reason `anchorY` is 1.0 on all five keys.
+   */
+  private buildScenery(): void {
+    const items = this.level.map.scenery
+    if (!items) return
+    for (const item of items) {
+      if (!this.textures.exists(item.key)) continue
+      if (item.loop) {
+        // An animation, so it needs the clip `registerEffectAnims` cut from
+        // this texture — which is why `buildScenery` runs after the level's
+        // art has loaded and not in `preload`. `repeat: -1` is the only
+        // looping play in the game; every other effect is a one-shot that
+        // destroys itself on ANIMATION_COMPLETE.
+        const size = item.size ?? 64
+        const sprite = this.add.sprite(item.x, item.y, item.key)
+        sprite.setDisplaySize(size, size)
+        ySort(sprite)
+        if (this.anims.exists(item.key)) {
+          sprite.play({ key: item.key, repeat: -1 })
+        }
+        this.sceneryArt.push(sprite)
+      } else {
+        const img = this.add.image(item.x, item.y, item.key)
+        fitContentHeight(img, item.key, item.height ?? 64)
+        ySort(img)
+        this.sceneryArt.push(img)
+      }
+    }
+  }
+
+  /**
    * Paying the villager. He buys nothing — no stats, no tower, no advantage —
    * so the only thing that changes is the sign and the size of your wallet.
    */
@@ -1760,13 +1832,42 @@ export class GameScene extends Phaser.Scene {
     // last two art passes both had.
     const quietWorldWidth = cfg.quietScreenWidth / displayData.camera.defaultZoom
 
+    // LEVEL 9'S BOARD CARRIES ITS OWN PAD PICTURES, one per spot, and they are
+    // the first thing in the game to vary from spot to spot. Its pads are
+    // painted chips of four different shapes and it ships four node variants
+    // to match; `padArt[i].width` is the PAINTED CHIP'S width, which is what
+    // the node is drawn at. A node drawn at its own size would be 500 world px
+    // and cover six chips.
+    //
+    // The sign still goes on one spot -- the joke is the joke -- and it is the
+    // one spot that does not get a node. Everything else about a pad (the tap
+    // target, the pulse, the tint, the sell and build flow) is untouched:
+    // `padArt` decides what is drawn there and nothing else.
+    const padArt = this.level.map.padArt
     this.pads = this.build.spots.map((spot, i) => {
+      // THE FALLBACK RULE IS UNTOUCHED and is deliberately still one line: the
+      // sign is what a board falls back to when the quiet art is missing, and
+      // a level's own node art is an EXTRA on top of that rather than a third
+      // branch inside it. A node whose texture did not load falls back to the
+      // flagstone, and if the flagstone is missing too the board is already in
+      // its loud, wrong-looking, still-playable state.
       const isSign = i === signIndex || !hasQuiet
-      const key = isSign ? signKey : quietKey!
+      const node = isSign ? undefined : padArt?.[i]
+      const hasNode = node !== undefined && this.textures.exists(node.key)
+      const key = isSign ? signKey : (hasNode ? node!.key : quietKey!)
       const img = this.add.image(spot.x, spot.y, key).setDepth(GROUND_DEPTH + 5)
       applyRender(img, key)
       if (isSign) {
         fitContentHeight(img, key, cfg.signHeight)
+      } else if (hasNode) {
+        // Sized to the CHIP, in world pixels, because the chip is painted on
+        // the plate and the node has to sit on it rather than near it. No
+        // jitter and no rotation: a printed circuit board's chips are square
+        // to the board, and the scatter that stops seven identical slabs
+        // reading as one stamped object is doing nothing here -- there are
+        // four different pictures already.
+        fitContentWidth(img, key, node!.width)
+        img.setAlpha(cfg.quietAlpha)
       } else {
         // Sized by WIDTH, in screen pixels at the default zoom, because that
         // is the unit the size was specified in and the only one that means
@@ -4368,6 +4469,7 @@ export class GameScene extends Phaser.Scene {
     this.scorchArt.clear()
     this.scorchLeft.clear()
     this.flameStates.clear()
+    this.regenStates.clear()
     this.flameArt?.destroy()
     this.flameArt = null
     this.night?.clear()
@@ -4513,6 +4615,51 @@ export class GameScene extends Phaser.Scene {
    * gets frames, it goes through `registerEffectAnims`/`forgetEffectAnims`
    * with the rest -- see the note on `freeLevelArt`.
    */
+  /**
+   * HAT-GTT putting itself back together.
+   *
+   * THE ONE NEW RULE IN LEVEL 9'S FOUR FIGHTS, and it is four lines of scene
+   * on top of a Phaser-free module the soak runs too — see systems/Regen.ts
+   * for why `onHealthThreshold` could not do this and why the cadence is the
+   * Disabler's.
+   *
+   * PLAYED OVER THE HAT, NOT INSTEAD OF IT. The sheet is the fragments
+   * reversing inward into a repair ring, and it goes on at the enemy's own
+   * position at a depth above it, so what the player sees is a hat being
+   * repaired rather than a second hat made of effect frames. The alternate
+   * sprite is the hat's own -b, which is the same hat at a different tilt, and
+   * it is worn for the length of the repair and put back afterwards: that IS
+   * the transformation, and the joke is that you can barely tell.
+   */
+  private tickRegen(dt: number): void {
+    for (const e of this.enemies) {
+      const def = e.def.regen
+      if (!def) continue
+      let state = this.regenStates.get(e)
+      if (!state) { state = newRegenState(def); this.regenStates.set(e, state) }
+      const wasAlt = state.altLeft > 0
+      const r = tickRegen(state, dt, e.alive, e.health, e.maxHealth, def)
+      this.regenStates.set(e, r.state)
+      if (r.healed > 0) {
+        e.heal(r.healed)
+        if (this.textures.exists(def.fx)) {
+          playEffect(this, def.fx, e.x, e.centreY, {
+            size: def.fxSize, depth: e.y + 30, durationMs: EFFECT_MS.blastMs * 2,
+          })
+        }
+        play(this, 'hit-b', 0.6)
+        logEvent('regen', `${e.def.name} repairs ${Math.round(r.healed)}`)
+      }
+      // The tilt goes on with the repair and comes off when its clock runs
+      // out. Guarded both ways so the texture is only swapped on the frame it
+      // changes: setTexture on a sprite that is mid-animation is not free.
+      const isAlt = r.state.altLeft > 0
+      if (def.altSprite && isAlt !== wasAlt && this.textures.exists(def.altSprite)) {
+        e.wearSprite(isAlt ? def.altSprite : e.def.sprite)
+      }
+    }
+  }
+
   private tickRooster(dt: number): void {
     const rules = this.flameRules
     if (!rules) return
@@ -5508,6 +5655,7 @@ export class GameScene extends Phaser.Scene {
     // day/night rules. The harness caught it (`run.sh level6`): the Rooster
     // spawned, walked, and never once stopped or breathed.
     this.tickRooster(dt)
+    this.tickRegen(dt)
     // LEVEL 8'S HR AURA, and a no-op returning on the first line everywhere
     // else. BEFORE `tickEnemies`, like `tickNight`, because it decides how
     // much damage the hits landed this frame take off.
@@ -5707,7 +5855,7 @@ export class GameScene extends Phaser.Scene {
       } else if (d.destroys) {
         this.destroyTower(ev.target.tower, e)
       } else {
-        this.landDisable(ev.target.tower, e.def.towerDisable!.duration)
+        this.landDisable(ev.target.tower, e.def.towerDisable!.duration, e)
       }
     }
   }
@@ -5723,9 +5871,14 @@ export class GameScene extends Phaser.Scene {
   private telegraphDisable(from: Enemy, tower: Tower, windupSeconds: number,
                            destroys = false): void {
     const ms = windupSeconds * 1000
+    // A CASTER THAT THROWS NOTHING DRAWS NO BOLT. Level 9's two casters land
+    // their own overlay on the target instead -- see `DisableDef.landFx`. The
+    // ring below is drawn either way, because the ring IS the telegraph.
+    const throwsBolt = from.def.towerDisable?.landFx === undefined
     // World space, which is the default here: `syncCameras` re-splits the
     // scene every time it runs, so an effect born mid-frame is picked up by
     // the world camera without being registered anywhere.
+    if (throwsBolt) {
     const bolt = this.add.sprite(from.x, from.centreY, ART.fx.bossBolt)
     bolt.setDisplaySize(96, 82)      // the sheet's 482x412, kept in proportion
     bolt.setDepth(tower.y + 40)
@@ -5741,6 +5894,7 @@ export class GameScene extends Phaser.Scene {
       ease: 'Sine.easeIn',
       onComplete: () => bolt.destroy(),
     })
+    }
 
     // And a ring on the target, so the answer to "which one" does not depend on
     // following a fast-moving sprite across the board.
@@ -5800,7 +5954,24 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** The lights go out. */
-  private landDisable(tower: Tower, seconds: number): void {
+  /* `by` is the caster, for the overlay its own art declares; absent where
+   * nothing cast it. Written as a second comment rather than folded into the
+   * first because tests/towerdisable.test.ts slices `destroyTower` out of this
+   * file by searching for that exact line, and a slice that cannot find its
+   * end runs to the end of the file and matches everything in it. */
+  private landDisable(tower: Tower, seconds: number, by?: Enemy): void {
+    // THE CASTER'S OWN IMPACT, centred on what it just switched off. CANCER's
+    // claws close here and PERPLEXED's citations land here; the stunned marker
+    // below still goes on, because that is the state and this is the event.
+    const cast = by?.def.towerDisable
+    if (cast?.landFx && this.textures.exists(cast.landFx)) {
+      playEffect(this, cast.landFx, tower.x, tower.y - 18, {
+        size: cast.landFxSize ?? 150,
+        depth: tower.y + 70,
+        durationMs: EFFECT_MS.blastMs * 1.6,
+      })
+      this.cameras.main.shake(140, 0.004)
+    }
     tower.disabledFor = seconds
     // A disabled Shelter's aura goes dark with it, so the towers it was lifting
     // drop back to their own numbers for the duration.
@@ -6548,19 +6719,37 @@ export class GameScene extends Phaser.Scene {
       .filter((e) => e.alive && e.def.bladed === true && !e.controlled)
       .map((e) => ({ x: e.x, y: e.y }))
     if (rigs.length === 0) return
+    // WHERE THE CRASH IS DRAWN, and it is the position of whatever was hit
+    // rather than the rig's own: the damage lands on the unit, so that is the
+    // collision point and the picture goes there. Collected as this frame's
+    // cuts happen and spent once below, so two soldiers in one sweep do not
+    // start two animations on top of each other.
+    const contacts: Array<{ x: number; y: number }> = []
     const heroCut = bladeDamage({ x: this.hero.x, y: this.hero.y }, rigs, b, dt)
-    if (heroCut > 0) this.damageHero(heroCut)
+    if (heroCut > 0) { this.damageHero(heroCut); contacts.push({ x: this.hero.x, y: this.hero.y }) }
     for (const f of this.fighters) {
       if (!f.alive) continue
       const cut = bladeDamage({ x: f.x, y: f.y }, rigs, b, dt)
-      if (cut > 0) f.hurt(cut)
+      if (cut > 0) { f.hurt(cut); contacts.push({ x: f.x, y: f.y }) }
     }
     for (const g of this.garrisons) {
       for (const sol of g.soldiers) {
         if (!sol.alive) continue
         const cut = bladeDamage({ x: sol.x, y: sol.y }, rigs, b, dt)
-        if (cut > 0) sol.hurt(cut)
+        if (cut > 0) { sol.hurt(cut); contacts.push({ x: sol.x, y: sol.y }) }
       }
+    }
+    // ONE IMPACT PER INTERVAL, not one per frame. The damage is continuous and
+    // the picture must not be -- see `BladesDef.fxCooldown`.
+    this.bladeFxLeft = Math.max(0, this.bladeFxLeft - dt)
+    if (b.fx && contacts.length > 0 && this.bladeFxLeft <= 0
+        && this.textures.exists(b.fx)) {
+      const at = contacts[0]!
+      this.bladeFxLeft = b.fxCooldown ?? 0.45
+      playEffect(this, b.fx, at.x, at.y, {
+        size: b.fxSize ?? 150, depth: at.y + 20, durationMs: EFFECT_MS.blastMs * 1.4,
+      })
+      this.cameras.main.shake(120, 0.003)
     }
   }
 

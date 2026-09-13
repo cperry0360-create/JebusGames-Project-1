@@ -48,6 +48,24 @@ export interface DisableDef {
    * asking for, and the reason the bug is worth 90 peanuts.
    */
   destroys?: boolean
+  /**
+   * An overlay played CENTRED ON THE TARGET when the cast lands, instead of
+   * the travelling bolt in front of it.
+   *
+   * The Rainbow Reaper and the Glitch Bug both throw something: a bolt leaves
+   * the caster, crosses the board and arrives, and the ring on the target says
+   * where it is going. Level 9's two casters do not throw anything -- CANCER's
+   * claws close on the target from above and PERPLEXED's citations simply
+   * appear around it -- so a bolt flying out of them would be a third thing
+   * happening that nothing in the art supports. Where this is set the bolt is
+   * not drawn, the ring still is (it is the telegraph, and the telegraph is
+   * the whole point), and this plays where the ring closes.
+   *
+   * A manifest key. Absent on the Reaper and the Bug, which keep the bolt.
+   */
+  landFx?: string
+  /** How big `landFx` is drawn, in world pixels. Square. */
+  landFxSize?: number
 }
 
 /** What the picker needs to know about a tower. */

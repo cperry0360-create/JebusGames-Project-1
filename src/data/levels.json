@@ -64,6 +64,15 @@
       "waves": "waves.level8.json",
       "rules": "level8.json",
       "laneLengthPx": 3646.5
+    },
+    {
+      "id": "level9",
+      "name": "AI Override: Part 1",
+      "unlockedBy": "level8",
+      "map": "map_level9.json",
+      "waves": "waves.level9.json",
+      "rules": "level9.json",
+      "laneLengthPx": 2586.1
     }
   ],
   "_roadmap": "WHERE A LEVEL SITS ON THE WORLD MAP: nowhere in this file, because it is the level's PLACE IN THIS LIST. mapPosition used to be here, one hand-authored pair per level, and it is why the trail on that screen was wrong -- level 4 sat at x 0.03 because the old full-size cards could not be stacked and there was nowhere else to put it, so the path drawn in level order ran the width of the screen backwards and read as though it skipped level 1 altogether. Its own note admitted the corner it had been painted into. A road cannot have positions that disagree with its order, so it no longer has positions: WorldMapScene lays every node out along one curve by index and the levels here take the first slots on it. Moving a level means moving its row. Adding one means a row here and a card in art.json's worldMap.cards -- a test fails the build without both.",

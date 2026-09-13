@@ -1,0 +1,50 @@
+{
+  "_note": "EVERYTHING LEVEL 9 ADDS TO THE RULES, in one file, scoped exactly the way level5.json through level8.json are: `levelRules(id)` returns this only for level9, and every system that reads it is a no-op on null. So 'levels 1 to 8 are unaffected' is a property of the data rather than a claim about where an `if` was written.",
+  "_theGauntlet": "FOUR MINI BOSSES IN ORDER -- HAT-GTT, CANCER, NO-PILOT, PERPLEXED -- with four regulars filling the waves between them. Their stats are on the enemies.json rows this file's `roster` points at, and their abilities are systems that already shipped: the Wall of Text is `flame` below, the No-Pilot's charge is `blades` below, and CANCER's and PERPLEXED's casts are `towerDisable` on their own rows. The only new rule in the level is HAT-GTT's `regen`, which is also on its own row, because how much a hat repairs is a fact about the hat rather than about the board.",
+  "roster": {
+    "fast": "packet",
+    "basic": "corrupt",
+    "flyer": "dataBug",
+    "wall": "serverWalker",
+    "miniBossA": "hatGtt",
+    "miniBossB": "cancer",
+    "miniBossC": "noPilot",
+    "miniBossD": "perplexed"
+  },
+  "_roster": "READ BY systems/LevelArt.ts as well as by a person: `enemyIdsForLevel` walks this block and the wave table to work out which sprites this level loads, so an enemy that is in the waves and not here still loads and an enemy that is here and in no wave does not cost anything. FOUR MINI BOSSES RATHER THAN ONE BOSS, which is why the keys are `miniBossA` through `D` instead of `boss`: nothing in the engine reads these names, they are for the person reading the file.",
+  "_wallOfText": "HAT-GTT'S ATTACK IS systems/Flame.ts AND THAT IS THE WHOLE IMPLEMENTATION. That module is not rooster-shaped: it is a telegraphed CORRIDOR ahead of a boss that hurts whatever is standing in it and leaves the towers it crossed firing slower for a few seconds. Pointed at fx-wall-of-text it is document strips multiplying into a wall, slamming forward down the lane and burying a row of guns in paperwork. tools/soak/Sim.ts runs the identical module, so the win rate the soak reports is the fight the player has.",
+  "flame": {
+    "fx": "fx-wall-of-text",
+    "intervalSeconds": 7.5,
+    "stopSeconds": 1.1,
+    "telegraphSeconds": 0.85,
+    "flameSeconds": 0.9,
+    "reach": 230,
+    "width": 170,
+    "damagePerSecond": 105,
+    "tickSeconds": 0.2,
+    "scorchSeconds": 5,
+    "towerFireRateMultiplier": 0.55,
+    "scorchFx": "fx-burn",
+    "harmsEnemies": false
+  },
+  "_flame": "230 x 170 RATHER THAN LEVEL 6'S 300 x 64, and the shape is the difference between a jet of fire and a wall of paper. The rooster breathes a thin line a long way; this slams a broad, short block forward. THE CORRIDOR IS NARROWER THAN THE PICTURE, deliberately: the sheet's ink is 228 x 383 in a 512 cell and it is drawn scaled to `reach`, so what is painted is wider than what is measured. Erring that way means nothing is ever hit by something it could not see, which is the only direction this error is allowed to go in. `harmsEnemies` is false and stays false. THE STOP IS THE HALF OF THIS THAT MATTERS: a boss that stands still for 1.1 seconds of every 7.5 is a boss every gun in range keeps shooting, and level 6 soaked at 42% with its stop and 30% without it -- the mechanic is not only a cost to the player.",
+  "_blades": "THE NO-PILOT'S CHARGE IS systems/Blades.ts, level 7's Blade Rig, and it is the right system rather than a near one: a continuous cost for standing where this thing is driving, with nothing to block and nothing to aim. An out-of-control vehicle does not pick a target -- that is what makes it out of control. THE `fx` FIELD IS NEW and level 7 does not set it: that mechanic shipped with no picture at all, so a hero standing in the sweep lost health with nothing on screen to say why. Here the crash sheet plays AT THE CONTACT POINT in the frame the damage lands, rate-limited to one impact per rig per 0.4s so a hero standing in it does not start sixty overlapping animations a second.",
+  "blades": {
+    "radius": 74,
+    "damagePerSecond": 70,
+    "fx": "fx-nopilot-crash",
+    "fxSize": 165,
+    "fxCooldown": 0.4
+  },
+  "_rupture": "THE BOARD SPLITTING OPEN, played once when the last mini boss of the last wave dies and the run is won. `at` is the door the trace already ends at -- the level's fiction is that the way into Vlaude's chamber opens where the enemies were going -- and it is read from map_level9.json's exit rather than written twice. fx-tile-shatter is 8 frames of 271 on a 2168-wide sheet, NOT the 512 the other six use; the grid is verified against the file by tests/manifest.test.ts. Played ONCE and not looped, above the map and below any dialogue.",
+  "rupture": {
+    "fx": "fx-tile-shatter",
+    "x": 1177,
+    "y": 329,
+    "size": 420,
+    "durationMs": 1400,
+    "delayMs": 500,
+    "shakeMs": 700
+  }
+}

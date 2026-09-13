@@ -529,7 +529,7 @@ test('each level\'s laneLengthPx is what its own map actually walks', () => {
   const maps: Record<string, string> = {
     level1: 'map', level2: 'map_level2', level3: 'map_level3', level4: 'map_level4',
     level5: 'map_level5', level6: 'map_level6', level7: 'map_level7',
-    level8: 'map_level8',
+    level8: 'map_level8', level9: 'map_level9',
   }
   // THE ROUTE MATHS IS THE ENGINE'S, and it did not used to be. This test
   // re-derived it -- "the branch, plus the whole trunk" -- which was right for

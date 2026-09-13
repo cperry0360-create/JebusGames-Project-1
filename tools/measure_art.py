@@ -190,6 +190,56 @@ ENEMY_KEY = {
     # the same rule the Zamboni gets, because there is nothing else to cast it.
     'enemy_glitch_bug.webp':      ('enemy-glitch-bug',    0.90,  80.0),
     'boss_glitch_lich.webp':      ('enemy-glitch-lich',   0.90, 140.0),
+    # THE LEVEL 9 CAST, sized the same way and for the same reason: this art is
+    # drawn at 405-2500px, so the uniform brute scale would put the smallest of
+    # them on screen at 126px. Four regulars and four mini bosses.
+    #
+    # THE REGULARS grow 56 -> 66 -> 70 -> 88, which is the same shape as level
+    # 4's tourist tier and level 3's mascots: a family the player can rank at a
+    # glance. The Server Walker is the heaviest and is the only one over 85,
+    # because it is a quadruped carrying a rack rather than a person -- the
+    # same exception the Zamboni gets.
+    #
+    # THE MINI BOSSES sit at 100-145, under the 150 the CEO has and over every
+    # elite in the game. They are four in one level, so none of them is the
+    # 175 the Transporter gets: a gauntlet of four things each the size of a
+    # final boss reads as noise rather than as an escalation.
+    # 0.80 RATHER THAN 0.90, and it is a measuring correction. The Packet runs,
+    # and at a 0.90 band the only thing touching its ground line is the leading
+    # foot at x307-370 of 405 -- anchorX 0.836 with an 8 px shadow, which walks
+    # it with the lane under its toe. At 0.80 the trailing foot comes in at
+    # x135-173 and both are caught. Read off the ground silhouette below.
+    'enemy_packet.webp':          ('enemy-packet',        0.80,  56.0),
+    'enemy_corrupt.webp':         ('enemy-corrupt',       0.90,  66.0),
+    # A flyer, and the Glider's rules rather than a walker's: it hovers, so
+    # what reaches its ground line is a wingtip rather than a stance. Body
+    # shadow and body anchor, both below.
+    'enemy_data_bug.webp':        ('enemy-data-bug',      0.90,  70.0),
+    # 85 AND NOT 88, and it is level 3's finding applied again: every tower in
+    # the game is 87.1 px tall and tests/content.test.ts holds the rank and
+    # file under that, so an 88 px elite would be the only unit on the board
+    # taller than every building on it. 85 is what level 3's and level 4's
+    # heaviest elites already are.
+    'enemy_server_walker.webp':   ('enemy-server-walker', 0.92,  85.0),
+    # 0.80 FOR THE SAME REASON, and more of it. A crab stands on eight legs
+    # spread wide; at 0.90 only the two front ones reach the cut, giving a
+    # 36 px shadow under a 121 px body. At 0.80 the outer legs at x65 and x823
+    # come in and the footprint is the crab's.
+    'boss_cancer.webp':           ('enemy-cancer',        0.80, 100.0),
+    # The hat's two states are ONE SIZE, not two. -a and -b are the same hat at
+    # different tilts and the joke is that the transformation changes almost
+    # nothing; a size change between them would be the one difference a player
+    # actually noticed. Both are given 145 and both were downscaled on
+    # conversion by the same factor for the same reason.
+    'boss_hat_gtt.webp':          ('enemy-hat-gtt',       0.90, 145.0),
+    'boss_hat_gtt_b.webp':        ('enemy-hat-gtt-b',     0.90, 145.0),
+    # A vehicle shadows under its whole body, the same rule the Zamboni and
+    # level 7's nine get: this is a rainbow ribbon with no pilot, and there is
+    # nothing under it that is a foot.
+    'boss_nopilot.webp':          ('enemy-nopilot',       0.94, 140.0),
+    # A question mark hanging in the air. No feet, so it gets the flyer's
+    # treatment as well.
+    'boss_perplexed.webp':        ('enemy-perplexed',     0.90, 132.0),
     # THE LEVEL 5 CAST, and the first four of them are sized differently from
     # every entry above: they were cut from ONE SHEET at ONE SCALE, so their
     # sizes relative to each other are the artist's and are not re-chosen here.
@@ -334,10 +384,17 @@ ENEMY_KEY = {
 LEVEL7_VEHICLES = {'enemy-hatchback', 'enemy-musclecar', 'enemy-van', 'enemy-bladerig',
                 'enemy-transporter', 'enemy-cargo-red', 'enemy-cargo-blue',
                 'enemy-cargo-yellow', 'enemy-cargo-green'}
+# LEVEL 9 ADDS FOUR MORE THINGS WITH NO FEET: the Data Bug hovers on its wings,
+# the Hat and the Question Mark float, and the No-Pilot is a ribbon of light
+# with a vehicle's relationship to the ground -- which is to say none. All four
+# shadow under their whole body and anchor on their ink, for the reason written
+# against the Glider below.
+LEVEL9_FOOTLESS = {'enemy-data-bug', 'enemy-hat-gtt', 'enemy-hat-gtt-b',
+                   'enemy-nopilot', 'enemy-perplexed'}
 ENEMY_BODY_SHADOW = {'enemy-zamboni', 'enemy-glitch-bug', 'enemy-glider', 'enemy-rooster',
-                     'enemy-office-drone'} | LEVEL7_VEHICLES
+                     'enemy-office-drone'} | LEVEL7_VEHICLES | LEVEL9_FOOTLESS
 ENEMY_BODY_ANCHOR = ({'enemy-glider', 'enemy-rooster', 'enemy-office-drone'}
-                     | LEVEL7_VEHICLES)
+                     | LEVEL7_VEHICLES | LEVEL9_FOOTLESS)
 # Where to LOOK for feet, as fractions of the source width, for art whose
 # ground silhouette catches something that is not one.
 #

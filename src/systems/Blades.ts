@@ -25,6 +25,30 @@ export interface BladesDef {
   /** Damage per second while in contact. Applied as `rate * dt`, so a unit
    *  that clips the edge of the sweep pays for the frames it was there. */
   damagePerSecond: number
+  /**
+   * An impact sheet played AT THE CONTACT POINT, as a manifest key.
+   *
+   * Level 7's Rig has none and the mechanic worked without one, which is the
+   * fault it shipped with: a hero standing in the sweep lost health with
+   * nothing on screen to say why. Level 9's No-Pilot is the same mechanic and
+   * it is the whole character -- an out-of-control charge is nothing if the
+   * crash is invisible -- so the crash sheet plays where the damage lands, in
+   * the frame it lands.
+   *
+   * Optional, so level 7 is untouched.
+   */
+  fx?: string
+  /** How big the impact is drawn, in world pixels. Square. */
+  fxSize?: number
+  /**
+   * Seconds between impacts from one rig, however many things it is cutting.
+   *
+   * The damage is continuous and the picture must not be: at 60 fps a hero
+   * standing in the sweep for two seconds would start 120 overlapping
+   * animations, which is a white square and a frame-rate problem rather than a
+   * crash. One impact per rig per interval is what a collision looks like.
+   */
+  fxCooldown?: number
 }
 
 /** A thing that can be cut: the hero, a fighter, a garrison soldier. */
@@ -49,7 +73,13 @@ export function bladesFrom(rules: { blades?: unknown } | null): BladesDef | null
   if (typeof b.damagePerSecond !== 'number' || !(b.damagePerSecond > 0)) {
     throw new Error('level rules declare `blades` without a positive damagePerSecond')
   }
-  return { radius: b.radius, damagePerSecond: b.damagePerSecond }
+  const out: BladesDef = { radius: b.radius, damagePerSecond: b.damagePerSecond }
+  if (typeof b.fx === 'string' && b.fx) {
+    out.fx = b.fx
+    out.fxSize = typeof b.fxSize === 'number' && b.fxSize > 0 ? b.fxSize : 150
+    out.fxCooldown = typeof b.fxCooldown === 'number' && b.fxCooldown > 0 ? b.fxCooldown : 0.45
+  }
+  return out
 }
 
 /**

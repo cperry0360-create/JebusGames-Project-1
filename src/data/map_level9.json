@@ -1,0 +1,551 @@
+{
+  "plate": "level9",
+  "_plate": "art-source/level9/map_level9.png at 3840x2160, encoded to public/assets/maps/map_level9.webp at q95 and registered in art.json as `map-level9`, with `map.level9` pointing at it.",
+  "roadWidth": 47.5,
+  "_roadWidth": "47.5, the median of the trace measured over the stem, both arms and the tail by tools/trace_level9.py and re-measured to within 1% by tools/check_level9.py. The paint flares to 60 px where it meets the west frame and that mouth is left out of the median, the same way level 8 leaves its bottom mouth out. Tower bases and the lane spread are sized against this number.",
+  "note": "AI OVERRIDE PART 1: the inside of a computer, seen from directly above. A glowing cyan circuit trace over a dark blue substrate, fifteen flat grey chips as the only buildable ground, and AN EXIT THAT IS NOT A FRAME EDGE -- a door in the machine housing at (1177, 329). Every coordinate comes from tools/level9_geometry.json, which tools/trace_level9.py derived from the painted plate and tools/check_level9.py checks independently; this file is GENERATED from it by tools/build_level9_map.py and is not hand-edited. Re-derive with `python3 tools/trace_level9.py --overlay tools/L9_pads_overlay.png` and rebuild with `python3 tools/build_level9_map.py`.",
+  "spotRadius": 34,
+  "_spotRadius": "34, every other level's. World 1280 renders to 844 CSS px, so 34 world px is a 44.8 px tap diameter and anything under 44 pt is smaller than a thumb. The closest pair of pads on this board is 120.6 px apart, well over the 2 x spotRadius two tap targets need.",
+  "mainId": "north",
+  "_mainId": "THE TRUNK IS THE NORTH ARM, and the name matters for the same reason level 6's and level 8's did: the wave table names the lane it spawns on and `LaneNetwork.lane()` resolves an unknown id to main, so a table spawning on `north` against a lane called `main` would walk the right road by accident.",
+  "waypoints": [
+    [
+      -60.0,
+      324.41
+    ],
+    [
+      4.5,
+      323.0
+    ],
+    [
+      96.0,
+      321.0
+    ],
+    [
+      114.0,
+      315.9
+    ],
+    [
+      134.0,
+      301.5
+    ],
+    [
+      158.8,
+      277.0
+    ],
+    [
+      170.5,
+      261.0
+    ],
+    [
+      175.1,
+      248.0
+    ],
+    [
+      177.6,
+      232.0
+    ],
+    [
+      179.8,
+      164.0
+    ],
+    [
+      183.5,
+      148.0
+    ],
+    [
+      187.6,
+      140.0
+    ],
+    [
+      237.0,
+      89.7
+    ],
+    [
+      248.0,
+      81.9
+    ],
+    [
+      260.0,
+      77.5
+    ],
+    [
+      291.0,
+      74.0
+    ],
+    [
+      396.0,
+      74.0
+    ],
+    [
+      413.0,
+      76.2
+    ],
+    [
+      423.0,
+      80.2
+    ],
+    [
+      433.0,
+      87.5
+    ],
+    [
+      511.0,
+      165.0
+    ],
+    [
+      525.0,
+      175.7
+    ],
+    [
+      537.0,
+      179.5
+    ],
+    [
+      553.0,
+      181.5
+    ],
+    [
+      621.0,
+      183.0
+    ],
+    [
+      635.0,
+      185.9
+    ],
+    [
+      643.0,
+      189.8
+    ],
+    [
+      693.6,
+      239.0
+    ],
+    [
+      701.4,
+      250.0
+    ],
+    [
+      705.8,
+      261.0
+    ],
+    [
+      709.0,
+      283.0
+    ],
+    [
+      709.0,
+      347.0
+    ],
+    [
+      706.5,
+      365.0
+    ],
+    [
+      700.8,
+      377.0
+    ],
+    [
+      684.0,
+      393.4
+    ],
+    [
+      676.0,
+      397.2
+    ],
+    [
+      666.0,
+      399.1
+    ],
+    [
+      506.0,
+      400.0
+    ],
+    [
+      479.0,
+      401.9
+    ],
+    [
+      457.0,
+      407.7
+    ],
+    [
+      430.1,
+      430.0
+    ],
+    [
+      421.4,
+      440.0
+    ],
+    [
+      416.4,
+      449.0
+    ],
+    [
+      410.4,
+      476.0
+    ],
+    [
+      409.0,
+      525.0
+    ]
+  ],
+  "_waypoints": "THE NORTH ARM, and it carries the shared head: the computed gateway at x=-60.0, the painted mouth at (0, 323), the stem to the fork at (96, 321), then the long way round the board to the rejoin at (409, 525). 1499 px.",
+  "mainMerge": {
+    "into": "tail",
+    "atIndex": 0
+  },
+  "lanes": [
+    {
+      "id": "south",
+      "entrance": true,
+      "waypoints": [
+        [
+          -60.0,
+          324.41
+        ],
+        [
+          4.5,
+          323.0
+        ],
+        [
+          96.0,
+          321.0
+        ],
+        [
+          113.6,
+          339.0
+        ],
+        [
+          119.5,
+          349.0
+        ],
+        [
+          130.4,
+          401.0
+        ],
+        [
+          139.2,
+          422.0
+        ],
+        [
+          174.0,
+          459.0
+        ],
+        [
+          244.0,
+          527.2
+        ],
+        [
+          255.0,
+          531.7
+        ],
+        [
+          276.0,
+          534.0
+        ],
+        [
+          387.0,
+          534.0
+        ],
+        [
+          396.0,
+          532.9
+        ],
+        [
+          409.0,
+          525.0
+        ]
+      ],
+      "merge": {
+        "into": "tail",
+        "atIndex": 0
+      },
+      "_waypoints": "THE SOUTH ARM, sharing the same head: the same gateway, the same mouth, the same stem to the same fork, then the short way round the bottom-left of the board to the same rejoin. 586 px, against the north arm's 1499 -- this is the cheap road and the wave table knows it."
+    },
+    {
+      "id": "tail",
+      "waypoints": [
+        [
+          409.0,
+          525.0
+        ],
+        [
+          450.0,
+          547.9
+        ],
+        [
+          467.0,
+          552.1
+        ],
+        [
+          572.0,
+          552.2
+        ],
+        [
+          584.0,
+          549.4
+        ],
+        [
+          593.0,
+          544.2
+        ],
+        [
+          647.0,
+          490.1
+        ],
+        [
+          658.0,
+          481.5
+        ],
+        [
+          667.0,
+          477.7
+        ],
+        [
+          691.0,
+          475.0
+        ],
+        [
+          832.0,
+          475.0
+        ],
+        [
+          848.0,
+          473.3
+        ],
+        [
+          858.0,
+          468.7
+        ],
+        [
+          897.8,
+          429.0
+        ],
+        [
+          905.2,
+          419.0
+        ],
+        [
+          909.1,
+          409.0
+        ],
+        [
+          913.0,
+          379.0
+        ],
+        [
+          913.0,
+          243.0
+        ],
+        [
+          914.5,
+          227.0
+        ],
+        [
+          916.9,
+          218.0
+        ],
+        [
+          922.5,
+          209.0
+        ],
+        [
+          934.0,
+          197.5
+        ],
+        [
+          944.0,
+          191.9
+        ],
+        [
+          975.0,
+          191.7
+        ],
+        [
+          983.0,
+          194.2
+        ],
+        [
+          991.0,
+          199.5
+        ],
+        [
+          1085.4,
+          296.0
+        ],
+        [
+          1103.0,
+          326.0
+        ],
+        [
+          1177.0,
+          329.0
+        ]
+      ],
+      "_waypoints": "THE REJOIN TO THE DOOR. Waypoint 0 IS the rejoin, to 0.00 px, which is what `atIndex: 0` on both arms means. Its LAST waypoint is the door itself and is not extended off-plate, because the door is not a frame edge -- see `_exit`."
+    }
+  ],
+  "_lanes": "TWO ENTRANCES, ONE EXIT, AND NO FORK IN THE DATA. The plate paints a trace that splits just inside the mouth and rejoins at the bottom of the board, which is a diamond -- and `validateLanes` reports a diamond as \"merges in a circle\", because its cycle check shares one visited set across sibling branches instead of keeping one per path. The runtime underneath is fine; the validator is not. So the two arms are modelled as TWO ENTRANCE LANES that share the painted mouth and merge into the tail, which is levels 3 and 4's shape, needs nothing from the engine, and puts exactly the same walkers on exactly the same paint. `south` declares `entrance` because nothing merges into it; see the note on LaneDef. Both are fed by the wave table by name. See reports/2026-09-13-level-9-geometry.md for the validator bug and its one-line fix.",
+  "exit": {
+    "gateX": 1145.0,
+    "vanishX": 1177.0,
+    "_note": "AN INTERIOR EXIT, and the first in the game. The leak needed nothing new -- `Enemy.leaked` is `laneDistance >= stopDistance` and has never looked at the frame -- but without these two the enemy would wink out at full opacity in the middle of the board, because the default stopDistance is the end of a lane that used to run off the edge. The fade runs over the last 32 px into the doorway. `Gateway.distanceAtX` takes the FIRST crossing of an x, so gateX has to be above every earlier x on the route: the tail reaches x=1085 at the top of the right-hand hook and the door is at x=1177, so 1145.0 sits between them with 60 px of margin. tools/build_level9_map.py asserts that rather than trusting it."
+  },
+  "buildSpots": [
+    [
+      781.5,
+      106.0
+    ],
+    [
+      621.5,
+      108.0
+    ],
+    [
+      331.0,
+      170.0
+    ],
+    [
+      1098.5,
+      176.0
+    ],
+    [
+      805.0,
+      240.0
+    ],
+    [
+      460.0,
+      231.0
+    ],
+    [
+      344.5,
+      329.0
+    ],
+    [
+      1005.5,
+      354.0
+    ],
+    [
+      830.0,
+      358.0
+    ],
+    [
+      214.5,
+      365.5
+    ],
+    [
+      506.5,
+      469.5
+    ],
+    [
+      986.0,
+      483.0
+    ],
+    [
+      780.5,
+      579.0
+    ],
+    [
+      353.0,
+      607.5
+    ],
+    [
+      947.5,
+      641.5
+    ]
+  ],
+  "_buildSpots": "15 PADS, ONE CENTRED ON EACH PAINTED GREY CHIP. Not placed by a scoring pass the way levels 3 to 8 were: on this board the buildable ground IS the fifteen chips the artist painted, and the substrate between them is scenery. tools/check_level9.py verifies every pad's 24 px core sits on chip rather than board. THREE OF THE FIFTEEN CANNOT REACH THE ROUTE AT ALL at the shortest attacking range in towers.json (pads 1, 7 and 15, at 156, 132 and 194 px from the nearest centreline), and only three of the fifteen cover two separate passes of it. This board holds LESS effective DPS than fifteen pads suggests, not more, and every mini-boss health figure is soaked against it and against no other level.",
+  "padArt": [
+    {
+      "key": "node-chip-cabled",
+      "width": 144.0
+    },
+    {
+      "key": "node-chip-square",
+      "width": 68.0
+    },
+    {
+      "key": "node-chip-cabled",
+      "width": 133.0
+    },
+    {
+      "key": "node-chip-cabled",
+      "width": 82.0
+    },
+    {
+      "key": "node-chip-ram",
+      "width": 85.0
+    },
+    {
+      "key": "node-chip-ram",
+      "width": 63.0
+    },
+    {
+      "key": "node-chip-ram",
+      "width": 122.0
+    },
+    {
+      "key": "node-chip-fan",
+      "width": 82.0
+    },
+    {
+      "key": "node-chip-ram",
+      "width": 81.0
+    },
+    {
+      "key": "node-chip-square",
+      "width": 72.0
+    },
+    {
+      "key": "node-chip-square",
+      "width": 70.0
+    },
+    {
+      "key": "node-chip-fan",
+      "width": 71.0
+    },
+    {
+      "key": "node-chip-cabled",
+      "width": 150.0
+    },
+    {
+      "key": "node-chip-square",
+      "width": 73.0
+    },
+    {
+      "key": "node-chip-fan",
+      "width": 72.0
+    }
+  ],
+  "_padArt": "FOUR BUILD-NODE PICTURES, which no other level has -- every other board draws one pad art on every spot. The pairing is the geometry file's `suggestedNodeBalanced`: the chips are ranked by aspect and dealt into four runs in the variants' own aspect order, so all four get used and the most landscape chips get the most landscape node. `width` is the PAINTED CHIP'S width in world pixels, and it is what the node is drawn at: the art is about 500 px against chips averaging 81, so a node drawn at its own size would cover six chips. node-chip-cabled x4, node-chip-fan x3, node-chip-ram x4, node-chip-square x4.",
+  "scenery": [
+    {
+      "key": "prop-vlaude-screen",
+      "x": 1150.0,
+      "y": 630.0,
+      "height": 120.0
+    },
+    {
+      "key": "fx-electrical-arc",
+      "x": 112.0,
+      "y": 636.0,
+      "size": 105.0,
+      "loop": true
+    },
+    {
+      "key": "fx-electrical-arc",
+      "x": 975.0,
+      "y": 64.0,
+      "size": 105.0,
+      "loop": true
+    },
+    {
+      "key": "fx-electrical-arc",
+      "x": 1204.0,
+      "y": 96.0,
+      "size": 105.0,
+      "loop": true
+    }
+  ],
+  "_scenery": "DECORATION DRAWN IN THE WORLD, and the general form of the one-off that already placed level 1's tavern sign. Each entry is a manifest key, a world position and a size; `loop` marks an animation that runs continuously. Nothing here has health, takes damage, blocks a shot or occupies a spot -- `GameScene.buildScenery` adds an image or a sprite, y-sorts it and never looks at it again. THE ARCS ARE NOT A HAZARD: they are an eight-frame loop between two fixed contact points, and they are placed on the machinery in the corners where nothing is fought. Every position was scored against the traced centrelines and the fifteen pads first: the closest any of them comes to a centreline is 128 px and to a pad 132 px, so none of them covers a road, sits on a build spot or stands between a tower and a target. VLAUDE WATCHING, and he is scenery rather than a combatant: no health, no targeting, no collision, no behaviour. Bottom-right, in the data bloom beside the door he is behind. 130 px from the nearest centreline and 203 px from the nearest pad. Over the cooling tower, bottom-left. 170 px from the nearest centreline. Across the fan, top-right of centre. 128 px from the nearest centreline. On the machine housing above the door. 225 px from the nearest centreline."
+}

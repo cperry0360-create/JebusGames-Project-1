@@ -547,7 +547,14 @@ test('every boss pays a lump sum, and the rule is checked on every boss', () => 
   // at all: it is a tripwire against a boss being added and never examined.
   // Batula is the sixth row, the Rooster the seventh, and level 8's CEO the
   // eighth.
-  assert.equal(bosses.length, 9, 'the roster gained or lost a boss')
+  // TEN ROWS, NINE BOSSES, and level 9 is the tenth. Its FOUR mini bosses are
+  // not all here and that is the design rather than an oversight: HAT-GTT,
+  // CANCER and NO-PILOT are the Blade Rig's shape -- `role: boss`, `tier:
+  // elite` -- so the rules that must not touch a boss do not touch them while
+  // the level still fields exactly one boss, which is what the test above
+  // holds every wave table to. PERPLEXED is the last fight of the level and is
+  // the one carrying `tier: boss`.
+  assert.equal(bosses.length, 10, 'the roster gained or lost a boss')
   const dearest = Math.max(...Object.values(towers).map((t: any) => t.cost))
   // THE BEST ORDINARY PAYOUT, and `ordinary` is role as well as tier -- level
   // 5's Vampire Lord is a mini-boss carrying `tier: elite` (see enemies.json's

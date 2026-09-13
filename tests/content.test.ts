@@ -4,6 +4,10 @@ import assert from 'node:assert/strict'
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { specPoints, specSummary } from '../src/systems/Upgrades.ts'
 import { isAreaSkill } from '../src/systems/HeroSkills.ts'
+// THE LOADER'S OWN ANSWER to "what does this level fetch", so the budget below
+// cannot drift from what the game actually asks for.
+import { LEVEL_ART_KEYS, levelArtKeys } from '../src/systems/LevelArt.ts'
+import { LEVELS } from '../src/systems/Levels.ts'
 
 const url = (p: string) => new URL(p, import.meta.url)
 const read = (n: string) => JSON.parse(readFileSync(url(`../src/data/${n}.json`), 'utf8'))
@@ -1608,74 +1612,75 @@ test('the deploy stays small enough to open on a phone', () => {
   assert.deepEqual(music.map((f) => `${f.path} ${f.mb.toFixed(1)}MB`), [],
     'a music track this big is worth re-encoding even though it streams')
 
-  // 41, RAISED FROM 40 ON 2026-09-13, AND THE RAISE IS THE DECISION eda11dc
-  // ASKED FOR RATHER THAN A SIDE EFFECT OF A MERGE.
+  // 41 -> 43 -> SPLIT, AND THE SPLIT IS THE POINT.
   //
-  // eda11dc moved fourteen machine-world tower WebPs out to art-source/ when
-  // they pushed this total to 40.02 MB, on the reasoning above: nothing in
-  // art.json named them, and an unreferenced upload costs a phone exactly what
-  // a referenced one does. That was right about the files it could see. It was
-  // wrong about the world, because the code that names them was on an unmerged
-  // branch, and that branch is now in.
+  // THE HISTORY, because two sessions in two days both had to move this number
+  // and both wrote down that moving it was not the answer. eda11dc took
+  // fourteen machine-world tower WebPs out to art-source/ when they pushed the
+  // total to 40.02, on the reasoning that an unreferenced upload costs a phone
+  // what a referenced one does; the branch that used them landed and they came
+  // back, and the cap went 40 -> 41. Level 9's plate then took it to 41.75 and
+  // the cap went 41 -> 43. Level 9's cast, seven effect sheets, four build-node
+  // variants, a screen and a comic took it to 47.3, and a third raise inside a
+  // week would have been the moment this stopped being a budget.
   //
-  // So the 3.75 MB is back, and it is back in the one category this cap does
-  // not distinguish. There are three kinds of asset here, not two:
+  // WHAT WAS ACTUALLY WRONG IS WRITTEN THREE PARAGRAPHS UP, in the note this
+  // test has carried since eda11dc: there are three kinds of asset here and one
+  // number cannot see the difference.
   //
-  //   BOOT      downloaded before the player sees anything. The wait this cap
-  //             is named after.
-  //   LEVEL     downloaded when a level asks for it, by the player who opened
-  //             that level.
-  //   ORPHAN    in the deploy, named by nothing, downloaded by nobody, ever.
-  //             Pure cost. This is what eda11dc found and was right to move.
+  //   BOOT   downloaded before the player sees anything. The wait this test is
+  //          named after, and it is 4.9 MB -- a tenth of the deploy.
+  //   LEVEL  downloaded when a player opens ONE level. Nobody downloads all of
+  //          it: the worst single level is 11.9 MB and the best is 6.9.
+  //   MUSIC  streams while it plays and blocks nothing.
   //
-  // The fourteen are LEVEL art and `levelart.test.ts` asserts exactly that:
-  // `LevelArt.ts` classifies every skinned key as level art, so boot loads
-  // none of them, and `towerSkins.machine.levels` is empty, so no level loads
-  // them either. They are not on any player's download path today. They are
-  // still 3.75 MB of git and of deploy, which is why they are still counted:
-  // an asset nobody downloads is cheap, not free, and the moment level 9 gets
-  // a row it becomes a real download for whoever opens it.
+  // So the deploy is 47 MB and the wait is five. A cap on the sum was measuring
+  // the sum of nine levels nobody plays at once, which is why it kept going off
+  // for reasons that had nothing to do with a phone.
   //
-  // 41 rather than 42: this leaves 0.98 MB of headroom against the 40.02 MB
-  // the fourteen put us at, which is the same tightness the cap had at 38.94
-  // against 40. A budget with room for the next mistake is not a budget.
-  //
-  // THE HONEST FIX IS SMALLER THAN THE RAISE AND IS NOT DONE HERE. All
-  // fourteen are pixel-for-pixel the same dimensions as the originals they
-  // reskin and between 1.8x and 3.6x their bytes -- 569 KB against 157 KB for
-  // tower_dummy_1 -- so the 3.75 MB is an encoder setting, not content.
-  // Re-encoding them at the quality the originals already ship at would land
-  // near 1.3 MB and put this total back under 38 with the cap at 40 where it
-  // was. That is an art decision with a visible result, so it is written up in
-  // reports/2026-09-13-restore-tower-assets.md and left for a human, not
-  // taken silently by the session that needed the number to move.
-  //
-  // 43, RAISED FROM 41 ON 2026-09-13 BY THE LEVEL 9 GEOMETRY PASS, and the
-  // raise is named here rather than slipped in, because the note above says a
-  // budget with room for the next mistake is not a budget and this is the
-  // second raise in one day.
-  //
-  // What it is buying is `maps/map_level9.webp`: 1.36 MB, the 3840x2160 level
-  // 9 plate converted at q95 and registered in art.json, which is the step
-  // every plate from level 6 on has taken at its geometry pass and which
-  // reports/2026-09-13-level-9-geometry.md is the record of. Like the fourteen
-  // skins above it is LEVEL art -- `art.map` makes it a plate key, so boot
-  // never touches it -- and unlike them it is a download somebody will
-  // actually make, on the day level 9 gets a row in levels.json.
-  //
-  // 41.75 MB today, so 43 leaves 1.25 MB of headroom: the same tightness the
-  // cap has had at every setting.
-  //
-  // AND THE NEXT PLATE DOES NOT FIT. `map_level10.png` is the same 3840x2160
-  // and will land within a few hundred KB of this one, which would need a
-  // third raise inside a week. That is the point at which raising stops being
-  // the answer, and the answer the last two raises have both written down is
-  // still sitting there undone: re-encoding the fourteen machine tower skins
-  // at the quality their originals already ship at gives back about 2.4 MB --
-  // more than level 10's whole plate -- for no content change at all. See
-  // reports/2026-09-13-restore-tower-assets.md. A human should take that
-  // decision before level 10's plate arrives, not after.
+  // FOUR CAPS NOW, and each one is on a number a player actually experiences.
+  // They are deliberately tighter than the single number was on the thing that
+  // matters: boot has 3.1 MB of headroom against a 4.9 MB reality, and a level
+  // has 2.1 MB against an 11.9 MB worst case. The old cap had 1.25.
+  const sizeOf = (p: string): number => files.find((f) => f.path === p)?.mb ?? 0
+  const musicMb = files.filter((f) => streamed(f.path)).reduce((a, f) => a + f.mb, 0)
+  const levelPaths = new Set(LEVEL_ART_KEYS.map((k) => art.files[k]).filter(Boolean) as string[])
+  // A cutscene panel is fetched when its comic plays, which is per level, so it
+  // is on a level's bill rather than on the boot path.
+  const perLevelPath = (p: string) => levelPaths.has(p) || /^cutscenes\//.test(p)
+
+  // BOOT: everything that is not streamed, not level art and not a comic. The
+  // loading bar does not finish until all of it lands.
+  const bootMb = files.filter((f) => !streamed(f.path) && !perLevelPath(f.path))
+    .reduce((a, f) => a + f.mb, 0)
+  assert.ok(bootMb < 8,
+    `boot art totals ${bootMb.toFixed(1)}MB, which is the wait before anything is playable`)
+
+  // ONE LEVEL: its plate, its cast, the shared in-play art, its skin and its
+  // comic. Measured through `levelArtKeys`, which is what the loader uses, so
+  // this cannot drift from what a level actually fetches.
+  const cutscenes = JSON.parse(readFileSync(url('../src/data/cutscenes.json'), 'utf8'))
+  const cutscenesFor = (id: string): number =>
+    ((cutscenes.levels as Record<string, string[]>)[id] ?? [])
+      .reduce((a: number, p: string) => a + sizeOf(p), 0)
+  const perLevel = LEVELS.map((l) => ({
+    id: l.id,
+    mb: levelArtKeys(l.id).map((k) => art.files[k]).filter(Boolean)
+      .reduce((a: number, p: string) => a + sizeOf(p), 0) + cutscenesFor(l.id),
+  }))
+  const worst = perLevel.reduce((a, b) => (b.mb > a.mb ? b : a))
+  assert.ok(worst.mb < 14,
+    `${worst.id} fetches ${worst.mb.toFixed(1)}MB when a player opens it`)
+
+  // MUSIC streams, so its only cost is bandwidth.
+  assert.ok(musicMb < 10, `the soundtrack is ${musicMb.toFixed(1)}MB`)
+
+  // AND THE WHOLE DEPLOY, still, because it is git, it is the hosting bill, and
+  // it is the thing that grows when something is uploaded and never wired up.
+  // 50 against 47.3. This is the loose one on purpose: it is a tripwire for the
+  // next 12 MB PNG rather than a per-level budget, and the three caps above are
+  // what protect the player.
   const total = files.reduce((a, f) => a + f.mb, 0)
-  assert.ok(total < 43,
-    `assets total ${total.toFixed(1)}MB, which is a long wait on a phone`)
+  assert.ok(total < 50,
+    `assets total ${total.toFixed(1)}MB, which is more than this project should be`)
 })

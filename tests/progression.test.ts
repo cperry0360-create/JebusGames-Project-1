@@ -86,9 +86,14 @@ test('the migration reproduces exactly the levels the old save had open', () => 
   // level 7, so no old save can open any of the three however many runs it had
   // cleared. Writing a number for any of them would assert the opposite and
   // fail, which is how these entries are arrived at rather than guessed.
+  // LEVEL 9 IS `Infinity` FOR THE SAME REASON AS 6, 7 AND 8, and it is written
+  // in rather than defaulted for the reason the note above gives: `?? 0` would
+  // quietly claim a level added after the migration was written was open at
+  // zero cleared runs. It needs level 8, which needs level 7, which needs
+  // level 6, which needs level 5 -- and no migrated save records level 5.
   const oldThresholds: Record<string, number> = {
     level1: 0, level2: 1, level3: 2, level4: 3, level5: 4,
-    level6: Infinity, level7: Infinity, level8: Infinity,
+    level6: Infinity, level7: Infinity, level8: Infinity, level9: Infinity,
   }
   for (let n = 0; n <= 5; n++) {
     seed({ ...DEFAULT_SAVE, runsCleared: n, clearedLevels: undefined })

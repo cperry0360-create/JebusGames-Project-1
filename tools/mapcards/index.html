@@ -24,6 +24,7 @@ const PLATES = {
   level6: 'public/assets/maps/map_level6.webp',
   level7: 'public/assets/maps/map_level7.webp',
   level8: 'public/assets/maps/map_level8.webp',
+  level9: 'public/assets/maps/map_level9.webp',
 }
 
 async function load(path) {
@@ -114,6 +115,20 @@ const CROPS = {
   // and cactus on the right-hand shoulder.
   level7: [0.52, 0.00, 0.48, 0.5686],
   level8: [0.50, 0.10, 0.489, 0.58],
+  // LEVEL 9: THE DOOR IN THE MACHINE HOUSING, which is the thing this board
+  // has that no other board in the game has -- an exit that is not a frame
+  // edge. The trace's last approach runs into it at canvas (1177,329) of
+  // 1280x720, the housing's red strip lights sit either side of it and the
+  // purple data bloom is behind it, and the right-hand hook of the trace comes
+  // down into frame from the top left of the crop. A crop of the big loop on
+  // the west half would be a cyan squiggle on a blue board, which is the card
+  // level 1 nearly got and the card level 5 was rejected for.
+  //
+  // 0.34 x 3840 = 1305.6 wide and 0.403 x 2160 = 870.5 tall, which is 1.4999 --
+  // the card's own 3:2, so the cover fit below throws essentially nothing away.
+  // Centred on the door in y: the mouth spans canvas y300-359, which is
+  // 0.417-0.499 of the plate.
+  level9: [0.66, 0.2565, 0.34, 0.403],
 }
 
 const CARD_W = 300, CARD_H = 200

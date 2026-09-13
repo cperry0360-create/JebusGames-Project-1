@@ -166,7 +166,7 @@
     "map-level6": "maps/map_level6.webp",
     "map-level7": "maps/map_level7.webp",
     "map-level8": "maps/map_level8.webp",
-  "map-level9": "maps/map_level9.webp",
+    "map-level9": "maps/map_level9.webp",
     "enemy-hatchback": "enemies/enemy_hatchback.webp",
     "enemy-musclecar": "enemies/enemy_musclecar.webp",
     "enemy-van": "enemies/enemy_van.webp",
@@ -189,7 +189,29 @@
     "turret-dummy-t3-machine": "towers/tower_dummy_3_machine.webp",
     "unit-dummy-1-machine": "towers/soldier_dummy_1_machine.webp",
     "unit-dummy-2-machine": "towers/soldier_dummy_2_machine.webp",
-    "unit-dummy-3-machine": "towers/soldier_dummy_3_machine.webp"
+    "unit-dummy-3-machine": "towers/soldier_dummy_3_machine.webp",
+    "enemy-packet": "enemies/enemy_packet.webp",
+    "enemy-corrupt": "enemies/enemy_corrupt.webp",
+    "enemy-data-bug": "enemies/enemy_data_bug.webp",
+    "enemy-server-walker": "enemies/enemy_server_walker.webp",
+    "enemy-cancer": "enemies/boss_cancer.webp",
+    "enemy-hat-gtt": "enemies/boss_hat_gtt.webp",
+    "enemy-hat-gtt-b": "enemies/boss_hat_gtt_b.webp",
+    "enemy-nopilot": "enemies/boss_nopilot.webp",
+    "enemy-perplexed": "enemies/boss_perplexed.webp",
+    "fx-wall-of-text": "effects/fx_wall_of_text.webp",
+    "fx-hat-regenerate": "effects/fx_hat_regenerate.webp",
+    "fx-crab-claw-impact": "effects/fx_crab_claw_impact.webp",
+    "fx-nopilot-crash": "effects/fx_nopilot_crash.webp",
+    "fx-perplexed-query": "effects/fx_perplexed_query.webp",
+    "fx-tile-shatter": "effects/fx_tile_shatter.webp",
+    "fx-electrical-arc": "effects/fx_electrical_arc.webp",
+    "node-chip-square": "props/node_chip_square.webp",
+    "node-chip-ram": "props/node_chip_ram.webp",
+    "node-chip-fan": "props/node_chip_fan.webp",
+    "node-chip-cabled": "props/node_chip_cabled.webp",
+    "prop-vlaude-screen": "props/prop_vlaude_screen.webp",
+    "card-level9": "ui/card_level9.webp"
   },
   "render": {
     "turret-escalation": {
@@ -1388,6 +1410,157 @@
       "shadowWidth": 13.2,
       "contentWidth": 398,
       "contentHeight": 596
+    },
+    "enemy-packet": {
+      "anchorX": 0.6481,
+      "anchorY": 0.9676,
+      "displayHeight": 56.0,
+      "shadowWidth": 33.2,
+      "contentWidth": 378,
+      "contentHeight": 404
+    },
+    "enemy-corrupt": {
+      "anchorX": 0.5318,
+      "anchorY": 0.9752,
+      "displayHeight": 66.0,
+      "shadowWidth": 48.1,
+      "contentWidth": 475,
+      "contentHeight": 537
+    },
+    "enemy-data-bug": {
+      "anchorX": 0.4992,
+      "anchorY": 0.978,
+      "displayHeight": 70.0,
+      "shadowWidth": 71.9,
+      "contentWidth": 624,
+      "contentHeight": 607
+    },
+    "enemy-server-walker": {
+      "anchorX": 0.4995,
+      "anchorY": 0.9807,
+      "displayHeight": 85.0,
+      "shadowWidth": 107.3,
+      "contentWidth": 915,
+      "contentHeight": 697
+    },
+    "enemy-cancer": {
+      "anchorX": 0.4906,
+      "anchorY": 0.9812,
+      "displayHeight": 100.0,
+      "shadowWidth": 101.7,
+      "contentWidth": 877,
+      "contentHeight": 718
+    },
+    "enemy-hat-gtt": {
+      "anchorX": 0.4996,
+      "anchorY": 0.9914,
+      "displayHeight": 145.0,
+      "shadowWidth": 155.1,
+      "contentWidth": 1104,
+      "contentHeight": 1031
+    },
+    "enemy-hat-gtt-b": {
+      "anchorX": 0.4995,
+      "anchorY": 0.9914,
+      "displayHeight": 145.0,
+      "shadowWidth": 152.2,
+      "contentWidth": 1080,
+      "contentHeight": 1028
+    },
+    "enemy-nopilot": {
+      "anchorX": 0.4997,
+      "anchorY": 0.9931,
+      "displayHeight": 140.0,
+      "shadowWidth": 215.0,
+      "contentWidth": 1537,
+      "contentHeight": 996
+    },
+    "enemy-perplexed": {
+      "anchorX": 0.4994,
+      "anchorY": 0.9861,
+      "displayHeight": 132.0,
+      "shadowWidth": 102.0,
+      "contentWidth": 752,
+      "contentHeight": 981
+    },
+    "fx-wall-of-text": {
+      "sheet": {
+        "frameWidth": 512,
+        "frameHeight": 512,
+        "frames": 8
+      }
+    },
+    "fx-hat-regenerate": {
+      "sheet": {
+        "frameWidth": 512,
+        "frameHeight": 512,
+        "frames": 8
+      }
+    },
+    "fx-crab-claw-impact": {
+      "sheet": {
+        "frameWidth": 512,
+        "frameHeight": 512,
+        "frames": 8
+      }
+    },
+    "fx-nopilot-crash": {
+      "sheet": {
+        "frameWidth": 512,
+        "frameHeight": 512,
+        "frames": 8
+      }
+    },
+    "fx-electrical-arc": {
+      "sheet": {
+        "frameWidth": 512,
+        "frameHeight": 512,
+        "frames": 8
+      }
+    },
+    "fx-perplexed-query": {
+      "sheet": {
+        "frameWidth": 280,
+        "frameHeight": 322,
+        "frames": 8
+      }
+    },
+    "fx-tile-shatter": {
+      "sheet": {
+        "frameWidth": 271,
+        "frameHeight": 724,
+        "frames": 8
+      }
+    },
+    "node-chip-square": {
+      "anchorX": 0.5,
+      "anchorY": 1.0,
+      "contentWidth": 456,
+      "contentHeight": 420
+    },
+    "node-chip-ram": {
+      "anchorX": 0.5,
+      "anchorY": 1.0,
+      "contentWidth": 489,
+      "contentHeight": 437
+    },
+    "node-chip-fan": {
+      "anchorX": 0.5,
+      "anchorY": 1.0,
+      "contentWidth": 492,
+      "contentHeight": 480
+    },
+    "node-chip-cabled": {
+      "anchorX": 0.5,
+      "anchorY": 1.0,
+      "contentWidth": 493,
+      "contentHeight": 363
+    },
+    "prop-vlaude-screen": {
+      "anchorX": 0.5,
+      "anchorY": 1.0,
+      "contentWidth": 866,
+      "contentHeight": 926
     }
   },
   "map": {
@@ -1399,7 +1572,7 @@
     "level6": "map-level6",
     "level7": "map-level7",
     "level8": "map-level8",
-  "level9": "map-level9"
+    "level9": "map-level9"
   },
   "levelArt": {
     "_note": "ART THAT ONLY EXISTS INSIDE A LEVEL, and so is not loaded at boot. The plates went first (see `map` above and reports/2026-09-07-the-crash.md); this is the rest of the same argument. Every key here is fetched when a level starts and given back when it ends, exactly as a plate is, which took 90.8 MB of enemies, effects, signs, soldiers and in-play buttons off the title screen. THE ENEMIES ARE NOT LISTED HERE and that is deliberate: enemies.json already says which sprite each enemy wears and the wave tables already say which enemies a level fields, so the set is COMPUTED per level rather than written down twice -- systems/LevelArt.ts. A level loads its own enemies and nobody else's. What is left in `shared` is art any level might need: the effects, the props, the soldiers, the projectiles and the two in-play panels. THE DEFAULT IS BOOT. A new key that nobody adds here stays in the boot manifest, which costs memory and cannot break a screen; a menu key listed here by mistake would be a missing texture on a menu, which can. tests/levelart.test.ts checks the direction that matters -- that every enemy sprite and every ability effect is level art, and that nothing a menu draws is.",
@@ -1453,7 +1626,24 @@
     ],
     "_notDecor": "THE DECOR IS NOT HERE, and it is the one that looks like it should be. `decor-bush` and its five siblings are Kenney tiles scattered on the board -- and TitleScene.decorateBackdrop scatters twenty-six of them behind the title as well, at alpha 0.12. Listing them would have put magenta squares on the first screen of the game. They are 24 KB between them, so nothing is lost by leaving them at boot; what would have been lost is the first screen. Measured, not assumed: the audit that found them is in reports/2026-09-08-the-memory-numbers.md.",
     "_notTowers": "THE TOWER BASE SPRITES ARE NOT HERE EITHER. The loadout deals a hand of tower cards and draws each one's `sprite` from towers.json, so `turret-ledger` and the rest are menu art whether or not a level is running. Only the TIER art is level-only: `tierSprite` swaps a tower's silhouette as it upgrades and nothing outside a run ever calls it. Same for the hero roster -- every hero, powered and not, is on the loadout picker.",
-    "_notAbilityIcons": "`ability-*` ARE NOT HERE. They are 256px icons on the loadout cards and in the HUD's ability rail, 0.25 MB each; the EFFECT each ability plays is what moved, and those are the `fx-*` above."
+    "_notAbilityIcons": "`ability-*` ARE NOT HERE. They are 256px icons on the loadout cards and in the HUD's ability rail, 0.25 MB each; the EFFECT each ability plays is what moved, and those are the `fx-*` above.",
+    "byLevel": {
+      "level9": [
+        "fx-wall-of-text",
+        "fx-hat-regenerate",
+        "fx-crab-claw-impact",
+        "fx-nopilot-crash",
+        "fx-perplexed-query",
+        "fx-tile-shatter",
+        "fx-electrical-arc",
+        "node-chip-square",
+        "node-chip-ram",
+        "node-chip-fan",
+        "node-chip-cabled",
+        "prop-vlaude-screen"
+      ]
+    },
+    "_byLevel": "ART ONE LEVEL DRAWS AND NO OTHER, keyed by level id. `shared` above is every level's bill; this is one level's. Level 9 brings seven effect sheets, four build-node variants and a screen -- 3.6 MB, more than any plate -- and none of it means anything on levels 1 to 8. A key here is level art (so boot never queues it) and is loaded by exactly the level named. The same shape `towerSkins` already uses, and the reason LevelArt.ts reads both."
   },
   "ui": {
     "titleBackdrop": "ui-title-bg",
@@ -1511,7 +1701,14 @@
     "mindControl": "fx-mind-control",
     "glacier": "fx-glacier",
     "performanceScan": "fx-performance-scan",
-    "performanceBuff": "fx-performance-buff"
+    "performanceBuff": "fx-performance-buff",
+    "wallOfText": "fx-wall-of-text",
+    "hatRegenerate": "fx-hat-regenerate",
+    "crabClaw": "fx-crab-claw-impact",
+    "nopilotCrash": "fx-nopilot-crash",
+    "perplexedQuery": "fx-perplexed-query",
+    "tileShatter": "fx-tile-shatter",
+    "electricalArc": "fx-electrical-arc"
   },
   "decor": [
     "decor-bush",
@@ -1564,7 +1761,12 @@
     "signBribed": "prop-sign-courjahan",
     "signTavern": "prop-sign-tavern",
     "buildPad": "prop-pad",
-    "buildPadQuiet": "prop-pad-flagstone"
+    "buildPadQuiet": "prop-pad-flagstone",
+    "nodeChipSquare": "node-chip-square",
+    "nodeChipRam": "node-chip-ram",
+    "nodeChipFan": "node-chip-fan",
+    "nodeChipCabled": "node-chip-cabled",
+    "vlaudeScreen": "prop-vlaude-screen"
   },
   "towerTiers": {
     "turret-ledger": [
@@ -1636,7 +1838,8 @@
       "level5": "card-level5",
       "level6": "card-level6",
       "level7": "card-level7",
-      "level8": "card-level8"
+      "level8": "card-level8",
+      "level9": "card-level9"
     }
   },
   "soldierTiers": {

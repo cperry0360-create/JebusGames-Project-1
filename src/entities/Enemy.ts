@@ -176,8 +176,13 @@ export class Enemy extends Phaser.GameObjects.Container {
   private slowStacks = 0
   private sinceSlow = 0
   private bobPhase = Math.random() * Math.PI * 2
-  /** Distance from the feet to the art's frame centre, negated on a flip. */
-  private readonly artOffset: number
+  /** Distance from the feet to the art's frame centre, negated on a flip.
+   *
+   *  NOT readonly: `wearSprite` swaps the picture HAT-GTT is wearing while it
+   *  repairs itself, and -a and -b have their own `anchorX`, so the offset is
+   *  a fact about the texture rather than about the enemy. Everything else on
+   *  the board sets it once in the constructor and never touches it. */
+  private artOffset: number
   /** The scale the art was built at. NOT readonly: the Performance Review
    *  multiplies both axes into it, because it is what the emergence and the
    *  attack tween scale FROM and a live-scale write would be undone by either. */
@@ -778,6 +783,34 @@ export class Enemy extends Phaser.GameObjects.Container {
     if (amount <= 0 || !this.alive) return
     this.health = Math.min(this.maxHealth, this.health + amount)
     this.drawBar()
+  }
+
+  /**
+   * Swaps the picture this enemy is wearing, keeping everything else.
+   *
+   * HAT-GTT'S TWO STATES, and nothing else in the game uses it. The two are
+   * the same hat at different tilts, so the swap has to preserve the size, the
+   * anchor and the mirror it is currently drawn with — which means going back
+   * through `applyGroundRender` rather than calling `setTexture` and hoping,
+   * because the two keys have their own `contentWidth`, their own `anchorX`
+   * and therefore their own horizontal offset.
+   *
+   * THE EMERGENCE SCALE IS RE-READ, not re-applied. `baseScaleX`/`baseScaleY`
+   * are what `applyEmergence` and the attack tween both scale FROM, so they
+   * have to come off the new texture or a swap mid-walk would resize the boss
+   * by whatever the two sheets differ by.
+   */
+  wearSprite(key: string): void {
+    if (this.art.texture.key === key) return
+    this.art.setTexture(key)
+    this.artOffset = applyGroundRender(this.art, key)
+    this.baseScaleX = this.art.scaleX
+    this.baseScaleY = this.art.scaleY
+    // `mirroredFor` reads the DEF's facing, which does not change with the
+    // picture: -a and -b are drawn the same way round.
+    const flip = mirroredFor(this.facingLeft, this.def.artFacing)
+    this.art.setFlipX(flip)
+    this.art.x = flip ? -this.artOffset : this.artOffset
   }
 
   shredArmor(amount: number, max: number): void {

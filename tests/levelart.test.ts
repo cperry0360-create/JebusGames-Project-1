@@ -232,16 +232,14 @@ test('every piece of level art belongs to a level that loads it', () => {
   // the 3.75 MB is allowed to sit in the deploy — see the deploy cap in
   // tests/content.test.ts and reports/2026-09-13-restore-tower-assets.md.
   //
-  // AND `map-level9` IS THE FOURTH, which is the first thing on this list
-  // again: level 9's painted plate, converted and registered by the geometry
-  // pass in reports/2026-09-13-level-9-geometry.md exactly as level 7's was,
-  // with no row in levels.json to arrive with. It is level art rather than
-  // boot art the moment it has a row in `art.map`, which is why it is here and
-  // not costing every player a 1.36 MB download on the title screen. It leaves
-  // this list the day level 9 gets a row, the same way level 6's five and
-  // level 7's and 8's eight did.
+  // AND `map-level9` LEFT IT AGAIN, one commit later, exactly as the note above
+  // predicted for the third time: the plate sat here from the geometry pass
+  // until level 9 got its row in levels.json, and the row took it off. So did
+  // level 9's seven effect sheets, its four build-node variants and its
+  // screen, which never appeared here at all -- they are `levelArt.byLevel`
+  // rather than `shared`, and a key in that table is loaded by exactly the
+  // level it is filed under.
   assert.deepEqual(orphanedLevelArt(LEVELS.map((l) => l.id)).sort(), [
-    'map-level9',
     'turret-dummy-machine', 'turret-dummy-t2-machine', 'turret-dummy-t3-machine',
     'turret-escalation-machine', 'turret-extension-machine',
     'turret-ledger-machine', 'turret-ledger-t2-machine', 'turret-ledger-t3-machine',

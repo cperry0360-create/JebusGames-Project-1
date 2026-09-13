@@ -81,6 +81,12 @@ export const LEVEL_ART_KEYS: string[] = [...new Set([
   ...PLATE_KEYS,
   ...ENEMY_SPRITE_KEYS,
   ...art.levelArt.shared,
+  // AND EVERY LEVEL'S OWN ROW. `byLevel` is art one level draws and no other
+  // -- level 9's seven effect sheets, its four build-node variants and its
+  // screen, 3.6 MB that means nothing on any other board. It is level art for
+  // the same reason the shared list is (boot must not queue it) and it is
+  // loaded by one level rather than all of them, which is the difference.
+  ...Object.values(art.levelArt.byLevel ?? {}).flat(),
   // THE TOWER SKINS, and they are level art for a stricter reason than the
   // rest of this list. A plate or an enemy is art some level definitely draws;
   // a skin is art that only the levels in its own `levels` list draw, and it is
@@ -174,6 +180,11 @@ export function levelArtKeys(levelId: string | null | undefined): string[] {
     ...(plate === undefined ? [] : [plate]),
     ...enemyArtForLevel(level),
     ...art.levelArt.shared,
+    // This level's own row, and nobody else's. Asked for with the RESOLVED id
+    // for the same reason the skin below is: a board that fell back to the
+    // default level must not be handed art the unknown id would have claimed,
+    // or `freeLevelArt` would give back textures the loader never fetched.
+    ...(art.levelArt.byLevel?.[level.id] ?? []),
     // The skin, if this level wears one. Asked for with the RESOLVED id rather
     // than the caller's, so the art a level loads is the art it draws: a board
     // that fell back to the default level must not be handed the skin the

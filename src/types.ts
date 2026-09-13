@@ -216,6 +216,42 @@ export interface MapDef {
    *  far edge, where there is nothing left. Optional: without one, an enemy
    *  walks the lane to its end at full opacity and leaks there. */
   exit?: { gateX: number; vanishX: number }
+  /**
+   * One build-node picture per build spot, in the same order.
+   *
+   * Absent on every level before 9, which draw one pad art on every spot —
+   * `ART.prop.buildPad` on the one nearest the entrance and
+   * `ART.prop.buildPadQuiet` on the rest. Level 9's board is a circuit board
+   * whose pads are painted chips of four different shapes, and it carries four
+   * node variants; `width` is the PAINTED CHIP'S width in world pixels, which
+   * is what the node is drawn at. The art is about 500 px against chips
+   * averaging 81, so a node drawn at its own size would cover six of them.
+   */
+  padArt?: { key: string; width: number }[]
+  /**
+   * Decoration drawn in the world: a picture at a position, and nothing else.
+   *
+   * THE GENERAL FORM OF SOMETHING THAT ALREADY EXISTED. `buildSign` has drawn
+   * level 1's tavern board this way since it shipped — one `add.image`, sized
+   * from the manifest, depth-sorted on its foot — and it could only ever draw
+   * that one board because the field it reads is called `signs`. This is the
+   * same three lines with the picture named by the map instead.
+   *
+   * Nothing here has health, takes damage, blocks a shot or occupies a build
+   * spot. `size` sizes a square animation cell, `height` sizes a still by its
+   * painted height, and `loop` marks an animation that runs continuously —
+   * level 9's electrical arcs are the only looping animation in the game.
+   */
+  scenery?: {
+    key: string
+    x: number
+    y: number
+    /** For a still: its painted height in world pixels. */
+    height?: number
+    /** For an animation: the size of its (square) frame box. */
+    size?: number
+    loop?: boolean
+  }[]
 }
 
 export interface ServerNukeDef {
@@ -485,7 +521,18 @@ export interface DisableDef {
   duration: number
   /** How far the caster reaches, in world pixels. */
   range: number
+  /** The tower is destroyed rather than switched off. The Glitch Bug only. */
+  destroys?: boolean
+  /** An overlay played centred on the target as the cast lands, INSTEAD of a
+   *  travelling bolt. See systems/TowerDisable.ts. */
+  landFx?: string
+  /** How big `landFx` is drawn, in world pixels. Square. */
+  landFxSize?: number
 }
+
+/** Re-exported so enemies.json's shape is described in one file. See
+ *  systems/Regen.ts, which owns the rule. */
+export type RegenDef = import('./systems/Regen.ts').RegenDef
 
 export interface EnemyDef {
   name: string
@@ -773,6 +820,16 @@ export interface EnemyDef {
    * player units that are in the way rather than by one that grabbed it.
    */
   bladed?: boolean
+  /**
+   * An enemy that repairs itself, armed below a share of its health.
+   *
+   * HAT-GTT only, and the one mechanic level 9 could not build out of a system
+   * that already shipped — see systems/Regen.ts for why `onHealthThreshold`
+   * was the near miss. A block rather than a flag, unlike `flame` and
+   * `bladed`, because there is nothing level-shaped about it: how much a hat
+   * repairs is a fact about the hat.
+   */
+  regen?: RegenDef
   peanutReward: number
   livesCost: number
   damage: number
@@ -1353,7 +1410,12 @@ export interface ArtDef {
    * they are computed per level from enemies.json and the wave tables. See the
    * note in art.json and systems/LevelArt.ts.
    */
-  levelArt: { shared: string[] }
+  levelArt: {
+    shared: string[]
+    /** Art ONE level draws and no other, keyed by level id. `shared` is every
+     *  level's bill; this is one level's — see art.json's `_byLevel`. */
+    byLevel?: Record<string, string[]>
+  }
   ui: {
     /** The painted peanut, for every place the currency is shown: the sell
      *  button, the drawer's prices, and the counter plate's own end. */
@@ -1432,6 +1494,34 @@ export interface ArtDef {
      *  its life, because an enemy that suddenly speeds up with nothing on it
      *  reads as a bug. ONE FRAME, deliberately — see art.json. */
     performanceBuff: string
+    /** LEVEL 9'S SEVEN, and every one of them is eight frames. Six are
+     *  one-shots played on a target or at a point; the arc is the only one in
+     *  the game that loops. Grids verified against the files rather than
+     *  assumed — two of the seven are not 512 square. */
+    /** HAT-GTT's linear attack: document strips multiply into a wall, slam
+     *  forward, fragment and fade. 8 of 512. */
+    wallOfText: string
+    /** HAT-GTT healing itself: fragments reverse inward into a cyan repair
+     *  ring. Played OVER the hat, and it corresponds to real health. 8 of
+     *  512. */
+    hatRegenerate: string
+    /** CANCER's constellation claw, centred on the enemy's target. 8 of 512,
+     *  and frames 4-6 clip a few debris pixels at the bottom edge — cosmetic,
+     *  recorded in reports/2026-09-12-level-9-10-art-manifest.md. */
+    crabClaw: string
+    /** NO-PILOT hitting something: warning lights, impact, skid and scorch.
+     *  8 of 512, played at the collision point. */
+    nopilotCrash: string
+    /** PERPLEXED's citation storm: cards and question marks orbit, tangle and
+     *  reshuffle. 8 of 280 on a 322-tall sheet — NOT 512. */
+    perplexedQuery: string
+    /** The board splitting open at the end of the run. 8 of 271 on a
+     *  2172-wide sheet — NOT 512 — with four dead columns Phaser ignores. */
+    tileShatter: string
+    /** Decoration, and the only looping animation in the manifest: an arc
+     *  between two fixed contact points. Not an attack and not a hazard. 8 of
+     *  512, and frame 7 returns to within 13% of frame 0. */
+    electricalArc: string
   }
   decor: string[]
   /** Keys that get a greyscale copy built at boot, for unavailable states. */
