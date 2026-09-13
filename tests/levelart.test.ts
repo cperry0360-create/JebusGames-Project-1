@@ -239,11 +239,17 @@ test('every piece of level art belongs to a level that loads it', () => {
   // screen, which never appeared here at all -- they are `levelArt.byLevel`
   // rather than `shared`, and a key in that table is loaded by exactly the
   // level it is filed under.
-  assert.deepEqual(orphanedLevelArt(LEVELS.map((l) => l.id)).sort(), [
-    'turret-dummy-machine', 'turret-dummy-t2-machine', 'turret-dummy-t3-machine',
-    'turret-escalation-machine', 'turret-extension-machine',
-    'turret-ledger-machine', 'turret-ledger-t2-machine', 'turret-ledger-t3-machine',
-    'turret-rounding-machine', 'turret-shelter-machine', 'turret-writeoff-machine',
-    'unit-dummy-1-machine', 'unit-dummy-2-machine', 'unit-dummy-3-machine',
-  ], 'level art that no shipped level loads')
+  // AND THE LIST IS EMPTY AGAIN, which is the fourth time and the point of
+  // keeping it. The fourteen machine tower skins left it the same way level
+  // 6's five and level 7's and 8's eight did, and for the same reason with one
+  // extra step: they needed a level AND that level's id in
+  // `art.json towerSkins.machine.levels`, because `levelArtKeys` resolves an
+  // unknown id to the default level and a skin named before its level exists
+  // would be switched on for a board that never fetched it. Level 9 got both
+  // in one commit, so all fourteen found their level at once. 3.75 MB that
+  // arrived with nothing now arrives with a level -- and is 3.75 MB of that
+  // level's 16.2 MB, which is what the per-level cap in tests/content.test.ts
+  // now measures and what makes it the heaviest board in the game.
+  assert.deepEqual(orphanedLevelArt(LEVELS.map((l) => l.id)).sort(), [],
+    'level art that no shipped level loads')
 })

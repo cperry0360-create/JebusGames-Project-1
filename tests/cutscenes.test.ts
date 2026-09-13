@@ -44,9 +44,16 @@ beforeEach(() => { store.clear() })
 
 test('cutscenes.json names levels that exist, and only those', () => {
   assert.deepEqual(cutsceneProblems(), [])
-  assert.deepEqual(levelsWithCutscenes().sort(), ['level1', 'level2'])
+  // LEVEL 9 IS THE THIRD, and it plays ONE panel rather than three: HAT-GTT's
+  // introduction, which is the whole comic that exists for it. The closing
+  // comic is deliberately NOT here -- this file is pre-level only, and that
+  // panel is the scene ending at the level 10 gate, so it is level 10's
+  // opening and lands the day level 10 gets a row. See cutscenes.json's
+  // `_level9`.
+  assert.deepEqual(levelsWithCutscenes().sort(), ['level1', 'level2', 'level9'])
   assert.equal(panelsFor('level1').length, 3)
   assert.equal(panelsFor('level2').length, 3)
+  assert.equal(panelsFor('level9').length, 1)
 })
 
 test('a level with no entry simply has no cutscene', () => {

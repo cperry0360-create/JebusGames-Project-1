@@ -46,6 +46,16 @@ export interface CutsceneRequest {
   levelId: string
   /** The scene to start once the comic is over, however it ended. */
   then: string
+  /**
+   * The panels to show, overriding `panelsFor(levelId)`.
+   *
+   * `levels` in cutscenes.json is what plays BEFORE a level, and that is the
+   * only thing this scene could show until level 9 needed to end with one.
+   * Passing the list in keeps every rule about which panels those are in
+   * systems/Cutscenes.ts, where the tests read them, rather than teaching this
+   * scene a second lookup.
+   */
+  panels?: string[]
 }
 
 /** The panel source size. Every panel in the game is 1672x941; read off the
@@ -78,7 +88,7 @@ export class CutsceneScene extends Phaser.Scene {
   init(req: CutsceneRequest): void {
     this.levelId = req?.levelId ?? ''
     this.next = req?.then ?? 'Game'
-    this.panels = panelsFor(this.levelId)
+    this.panels = req?.panels ?? panelsFor(this.levelId)
     this.index = 0
     this.finished = false
   }

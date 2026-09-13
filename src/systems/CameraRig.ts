@@ -333,6 +333,26 @@ export class CameraRig {
   }
 
   /**
+   * Points the rig at a place in the world, and lets it ease there.
+   *
+   * THE ONLY CALLER IS THE END OF A RUN, and it exists because level 9's
+   * ending was playing where nobody was looking: the board splits open at the
+   * exit door, the world camera at a phone's zoom shows about a third of the
+   * board, and the door is off the right of it unless the player happens to
+   * have panned there. Moving the camera directly does not work -- `adopt`
+   * would take the new position but `update` eases toward the TARGET, so the
+   * next frame pulls it back -- which is the same lesson the harness's own
+   * `lookAt` learned and wrote down.
+   *
+   * Clamped by `update`'s own limits, so a point outside the world is pinned
+   * to the nearest legal view rather than showing the void beside it.
+   */
+  lookAt(x: number, y: number): void {
+    this.targetCenterX = x
+    this.targetCenterY = y
+  }
+
+  /**
    * Adopts the camera if something outside the rig moved it.
    *
    * Nothing in the game does; the test harness does, and a rig that silently

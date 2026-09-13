@@ -153,9 +153,32 @@ test('turret-extension is the filing tower and turret-shelter is the tax tower',
  * 8 built but unregistered. So every level that exists resolves to no skin and
  * every key it draws is the key it drew before this change.
  */
-test('no level that exists wears a skin, and none of them load skin art', () => {
+test('exactly one level wears the skin, and it is the one the art was drawn for', () => {
+  // THIS TEST USED TO SAY "NO LEVEL", and the change is the whole point of the
+  // mechanism rather than a relaxation. The fourteen machine files sat in the
+  // repository with `towerSkins.machine.levels` deliberately empty from the day
+  // they landed, because `levelArtKeys` resolves an unknown id to the DEFAULT
+  // level -- so naming `level9` before level 9 had a row would have switched
+  // the skin on for a board that never fetched the art, which is a missing
+  // texture on level 1. Level 9 has a row now. The assertion flips from "none"
+  // to "exactly this one", which is the same assertion doing the same job.
+  const wearing = LEVELS.filter((l) => skinForLevel(l.id) !== null).map((l) => l.id)
+  assert.deepEqual(wearing, ['level9'], 'the set of levels wearing a skin changed')
   for (const level of LEVELS) {
-    assert.equal(skinForLevel(level.id), null, `${level.id} unexpectedly wears a skin`)
+    const skin = skinForLevel(level.id)
+    if (skin !== null) {
+      // The level that wears it LOADS it: fourteen keys, every one of them in
+      // this level's manifest and nowhere near boot.
+      assert.equal(skin, 'machine')
+      const loaded = levelArtKeys(level.id).filter((k) => isSkinnedKey(k))
+      assert.equal(loaded.length, skinArtForLevel(level.id).length)
+      assert.ok(loaded.length > 0, `${level.id} wears a skin and loads none of it`)
+      for (const key of SKINNABLE_KEYS) {
+        assert.notEqual(skinnedSprite(key, level.id), key,
+          `${key} is not repainted on ${level.id}, which is what wearing a skin means`)
+      }
+      continue
+    }
     assert.deepEqual(skinArtForLevel(level.id), [], `${level.id} loads skin art`)
     const loaded = levelArtKeys(level.id).filter((k) => isSkinnedKey(k))
     assert.deepEqual(loaded, [], `${level.id} would load ${loaded.join(', ')}`)
@@ -174,13 +197,14 @@ test('outside a run, and for an unknown level, the skin is the identity', () => 
     assert.equal(skinnedSprite(key, null), key)
     assert.equal(skinnedSprite(key, undefined), key)
     assert.equal(skinnedSprite(key, ''), key)
-    // The levels this art is FOR, which do not exist yet. An unregistered id
-    // must not turn the skin on: `levelArtKeys` resolves an unknown id to the
-    // default level, so the art would never be loaded and the board would draw
-    // a texture nothing fetched. Turning the skin on is adding the id to
-    // `levels` on the day the level gets its row in levels.json.
-    assert.equal(skinnedSprite(key, 'level9'), key)
+    // LEVEL 10 IS THE UNREGISTERED ONE NOW, and the reasoning is unchanged:
+    // `levelArtKeys` resolves an unknown id to the default level, so a skin
+    // switched on for an id with no row would have the board drawing a texture
+    // nothing fetched. Turning it on is adding the id to `levels` on the day
+    // the level gets its row. Level 9 got its row, so it is NOT here any more
+    // -- it is asserted the other way round in the test above.
     assert.equal(skinnedSprite(key, 'level10'), key)
+    assert.equal(skinnedSprite(key, 'level11'), key)
   }
 })
 

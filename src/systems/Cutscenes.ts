@@ -21,12 +21,33 @@ import cutsceneData from '../data/cutscenes.json' with { type: 'json' }
 import artData from '../data/art.json' with { type: 'json' }
 import { LEVELS } from './Levels.ts'
 
-const DATA = cutsceneData as unknown as { levels: Record<string, string[]> }
+const DATA = cutsceneData as unknown as {
+  levels: Record<string, string[]>
+  outros?: Record<string, string[]>
+}
 const ASSET_ROOT = (artData as unknown as { assetRoot: string }).assetRoot
 
 /** The panels a level opens with, in order. Empty for a level with no comic. */
 export function panelsFor(levelId: string): string[] {
   return DATA.levels[levelId] ?? []
+}
+
+/**
+ * The panels a level CLOSES with, in order. Empty for a level with no outro.
+ *
+ * A SECOND MAP RATHER THAN A FLAG ON THE FIRST, because the two answer
+ * different questions and one list cannot. `levels` is "what plays before this
+ * level starts" and every consumer of it -- CutsceneScene's `init`,
+ * `shouldPlay`, LoadoutScene's hand-over -- reads it as exactly that. Level 9
+ * ends by opening the way to level 10, and that panel is neither level 9's
+ * opening nor, while level 10 has no row in levels.json, anything level 10 can
+ * carry.
+ *
+ * Held to the same rules as `levels` by `cutsceneProblems`: a known level, a
+ * non-empty list, panels under `cutscenes/`, no repeats.
+ */
+export function outroPanelsFor(levelId: string): string[] {
+  return DATA.outros?.[levelId] ?? []
 }
 
 /** Every level that has a cutscene at all. */
@@ -78,24 +99,33 @@ export function shouldPlay(levelId: string): boolean {
 export function cutsceneProblems(): string[] {
   const problems: string[] = []
   const known = new Set(LEVELS.map((l) => l.id))
-  for (const [id, panels] of Object.entries(DATA.levels)) {
+  // BOTH MAPS, through one loop. `outros` is checked by exactly the rules
+  // `levels` is, because every way it can be wrong is a way `levels` can be
+  // wrong and the failure is as silent: a key that is not a level is a comic
+  // nothing plays, and a path outside cutscenes/ is a 404 at the moment the
+  // player has just won.
+  const entries = [
+    ...Object.entries(DATA.levels).map((e) => [...e, 'cutscene'] as const),
+    ...Object.entries(DATA.outros ?? {}).map((e) => [...e, 'outro'] as const),
+  ]
+  for (const [id, panels, kind] of entries) {
     if (!known.has(id)) {
       problems.push(
-        `cutscenes.json has panels for "${id}", which is not a level in levels.json ` +
+        `cutscenes.json has ${kind} panels for "${id}", which is not a level in levels.json ` +
         `(${[...known].join(', ')})`)
       continue
     }
     if (!Array.isArray(panels) || panels.length === 0) {
-      problems.push(`${id}'s cutscene has an empty panel list, so BEGIN would open a comic with nothing in it`)
+      problems.push(`${id}'s ${kind} has an empty panel list, so it would open a comic with nothing in it`)
       continue
     }
     for (const p of panels) {
       if (typeof p !== 'string' || !p.startsWith('cutscenes/')) {
-        problems.push(`${id} names a panel "${p}" outside the cutscenes folder`)
+        problems.push(`${id}'s ${kind} names a panel "${p}" outside the cutscenes folder`)
       }
     }
     if (new Set(panels).size !== panels.length) {
-      problems.push(`${id} shows the same panel twice`)
+      problems.push(`${id}'s ${kind} shows the same panel twice`)
     }
   }
   return problems

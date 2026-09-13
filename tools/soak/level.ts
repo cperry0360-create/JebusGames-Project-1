@@ -9,7 +9,8 @@
 // tells you about the wrong thing. Same simulator, same seeds every time, so
 // a before and an after are comparable.
 import { simulate } from './Sim.ts'
-import { LEVELS } from '../../src/systems/Levels.ts'
+import { LEVELS, levelRules } from '../../src/systems/Levels.ts'
+import ENEMIES from '../../src/data/enemies.json' with { type: 'json' }
 
 /**
  * LEVELS THAT ARE BUILT AND HAVE NO ROW IN levels.json, registered here so
@@ -58,6 +59,9 @@ const leaks: Record<string, number> = {}
 const leakers: Record<string, number> = {}
 // WHICH EXIT ENDED THE RUN, over the losses. See `lostToExit` in Sim.ts.
 const killedBy: Record<string, number> = {}
+// AND WHAT WENT THROUGH IT. On a one-exit level `killedBy` has a single key and
+// says nothing; this is the field that answers "which of them kills the player".
+const killedByEnemy: Record<string, number> = {}
 let reviewed = 0
 let auraBuffed = 0
 let blastOnFriendlies = 0
@@ -68,6 +72,26 @@ let wrongLevel = ''
 const splitKills: number[] = []
 let lostToSplit = 0
 let bladeCuts = 0
+let healedTotal = 0
+let flameDamage = 0
+let disableSeconds = 0
+/**
+ * WHICH OF THE THREE ZERO-ABLE COUNTERS THIS LEVEL SHOULD PRINT EVEN AT ZERO.
+ *
+ * A mechanic worth nothing and a mechanic that never ran produce the same win
+ * rate, and `> 0` cannot tell them apart -- so the rule is asked of the LEVEL
+ * rather than of the number. Level 9's regen read zero for three soaks and the
+ * level was tuned against it anyway; see the note in Sim.ts.
+ */
+const RULES = levelRules(LEVEL) as
+  { roster?: Record<string, string>; flame?: unknown; blades?: unknown } | null
+const ROSTER = Object.values(RULES?.roster ?? {})
+const carries = (field: string): boolean =>
+  ROSTER.some((key) => (ENEMIES as Record<string, Record<string, unknown>>)[key]?.[field])
+const LEVEL_HAS_REGEN = carries('regen')
+const LEVEL_HAS_FLAME = RULES?.flame != null && carries('flame')
+const LEVEL_HAS_DISABLE = carries('towerDisable')
+const LEVEL_HAS_BLADES = RULES?.blades != null && carries('bladed')
 for (let seed = 1; seed <= RUNS; seed++) {
   const r = simulate(seed, 'normal', LEVEL, undefined, DIFFICULTY)
   if (r.outcome === 'won') { wins++; livesLeft += r.lives }
@@ -76,9 +100,13 @@ for (let seed = 1; seed <= RUNS; seed++) {
   for (const [k, v] of Object.entries(r.leaksByExit)) leaks[k] = (leaks[k] ?? 0) + v
   for (const [k, v] of Object.entries(r.leaksByEnemy)) leakers[k] = (leakers[k] ?? 0) + v
   if (r.lostToExit) killedBy[r.lostToExit] = (killedBy[r.lostToExit] ?? 0) + 1
+  if (r.lostToEnemy) killedByEnemy[r.lostToEnemy] = (killedByEnemy[r.lostToEnemy] ?? 0) + 1
   if (r.splitKillToExit !== null) splitKills.push(r.splitKillToExit)
   if (r.lostToSplit) lostToSplit++
   bladeCuts += r.bladeCuts
+  healedTotal += r.healedTotal ?? 0
+  flameDamage += r.flameDamage ?? 0
+  disableSeconds += r.disableSeconds ?? 0
   reviewed += r.reviewed
   auraBuffed += r.auraBuffed
   blastOnFriendlies += r.blastOnFriendlies
@@ -116,6 +144,12 @@ if (ended.length) {
   const total = ended.reduce((a, [, v]) => a + v, 0)
   console.log('  the exit that ended the run: ' + ended
     .map(([k, v]) => `${k} ${v} (${((v / total) * 100).toFixed(0)}% of losses)`).join('  '))
+}
+const endedBy = Object.entries(killedByEnemy).sort((a, b) => b[1] - a[1])
+if (endedBy.length) {
+  const total = endedBy.reduce((a, [, v]) => a + v, 0)
+  console.log('  what took the last life: ' + endedBy
+    .map(([k, v]) => `${k} ${v} (${((v / total) * 100).toFixed(0)}%)`).join('  '))
 }
 const got = Object.entries(leakers).sort((a, b) => b[1] - a[1])
 if (got.length) {
@@ -155,7 +189,24 @@ if (lostToSplit > 0) {
   console.log(`  runs ended by a car off the trailer: ${lostToSplit} `
     + `(${losses ? ((lostToSplit / losses) * 100).toFixed(0) : 0}% of losses)`)
 }
-if (bladeCuts > 0) {
+// PRINTED EVEN AT ZERO, unlike the counters around it, and that is the whole
+// reason it is here: a boss that repairs nothing and a boss whose repair never
+// ran produce the same win rate, and only one of them is a tuning problem. It
+// read zero for three soaks because the sim passed `e.maxHealth` to a state
+// that has no such field.
+if (LEVEL_HAS_REGEN) {
+  console.log(`  regeneration put back ${healedTotal.toFixed(0)} health across the run set `
+    + `(${(healedTotal / RUNS).toFixed(0)} a run)`)
+}
+if (LEVEL_HAS_FLAME) {
+  console.log(`  the flame did ${flameDamage.toFixed(0)} damage to the player's own units `
+    + `(${(flameDamage / RUNS).toFixed(0)} a run)`)
+}
+if (LEVEL_HAS_DISABLE) {
+  console.log(`  towers were switched off for ${disableSeconds.toFixed(0)} tower-seconds `
+    + `(${(disableSeconds / RUNS).toFixed(1)} a run)`)
+}
+if (LEVEL_HAS_BLADES || bladeCuts > 0) {
   console.log(`  the blades did ${bladeCuts.toFixed(0)} damage to the player's own units `
     + `(${(bladeCuts / RUNS).toFixed(0)} a run)`)
 }

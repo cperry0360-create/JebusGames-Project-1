@@ -2,8 +2,8 @@ import Phaser from 'phaser'
 import type { ScratchOutcome } from '../systems/Scratch.ts'
 import { NukeEarnedOverlay, NukeLaunchOverlay } from '../ui/NukeOverlays.ts'
 import type {
-  AbilityDef, DraftDef, EnemyDef, HeroAbilityDef, HeroDef, RulesDef, ThresholdDef,
-  TowerDef, TowerSpec, WavesDef,
+  AbilityDef, DraftDef, EnemyDef, HeroAbilityDef, HeroDef, RulesDef, RuptureDef,
+  ThresholdDef, TowerDef, TowerSpec, WavesDef,
 } from '../types.ts'
 import displayData from '../data/display.json'
 import rulesData from '../data/rules.json'
@@ -104,6 +104,7 @@ import { waveOutcome } from '../systems/Wave.ts'
 import { clearRun, saveRun, type SavedRun } from '../systems/RunSave.ts'
 import { TRANSFORM_BELOW } from '../systems/Transform.ts'
 import { logEvent, provideState } from '../systems/Diagnostics.ts'
+import { outroPanelsFor } from '../systems/Cutscenes.ts'
 import { heartbeat, setRunActive } from '../systems/Watchdog.ts'
 import { enterGate, leaveGate, noteInputAccepted } from '../systems/InputGates.ts'
 import {
@@ -734,6 +735,19 @@ export class GameScene extends Phaser.Scene {
     this.shots = []
     this.fighters = []
     this.garrisons = []
+    // THE TWO LISTS OF PLAIN SCENERY, and they were both wrong. A restart
+    // reuses this scene object, so a field initialiser at the top of the class
+    // runs ONCE and every later `create()` pushes onto whatever the last run
+    // left. `buildScenery` and `createArchOccluders` both append, so a second
+    // run on level 9 reported eight scenery items for a map that declares four
+    // -- four live and four pointing at objects the restart had already
+    // destroyed. The harness caught the scenery half (`level9`, section 10);
+    // the arch half is the same bug on the same mechanism, unnoticed because
+    // nothing counted it across a restart. Neither needs destroying here:
+    // Phaser clears the display list on shutdown, and these are the references
+    // to what it cleared.
+    this.sceneryArt = []
+    this.archOccluders = []
     this.hoverSpot = null
     this.selected = null
     this.heroSelected = false
@@ -5363,7 +5377,50 @@ export class GameScene extends Phaser.Scene {
     const next = won ? nextLevelId(this.level.id) : null
     const noMore = won && next === null
 
-    this.openDialog({
+    // THE BOARD SPLITTING OPEN, and only on level 9 and only on a win.
+    //
+    // The level's fiction is that beating the gauntlet opens the way into
+    // Vlaude's chamber, and the way is the door the enemies were walking to --
+    // so the rupture is centred on the exit terminal the map already declares
+    // rather than on a second copy of it. Played ONCE, above the plate and
+    // below the results dialog, which is what `delayResults` is for: the
+    // dialog dims the board to 0.68 and covers the middle of it, so opening it
+    // over the rupture would be staging the level's ending behind its own
+    // scoreboard.
+    //
+    // `levelRules` is null on every level that names no rules file and this
+    // block is absent from every rules file but level 9's, so this is a no-op
+    // everywhere else by construction rather than by an `if` on an id.
+    const rupture = won
+      ? ((levelRules(this.level.id) as { rupture?: RuptureDef } | null)?.rupture ?? null)
+      : null
+    let delayResults = 0
+    if (rupture && this.textures.exists(rupture.fx)) {
+      delayResults = rupture.delayMs + rupture.durationMs
+      // LOOK AT IT. `delayMs` is not a pause for its own sake -- it is the
+      // time the camera has to get there, and without this it never did: the
+      // world camera shows about a third of the board at a phone's zoom and
+      // the door is off the right of it unless the player had panned there
+      // themselves. The harness caught this in a frame (`level9`, section 9,
+      // 844x390) and nothing else could have: the sprite existed, played and
+      // cleaned itself up, and every number about it was correct.
+      this.rig?.lookAt(rupture.x, rupture.y)
+      this.time.delayedCall(rupture.delayMs, () => {
+        playEffect(this, rupture.fx, rupture.x, rupture.y, {
+          size: rupture.size,
+          // ABOVE THE PLATE AND BELOW THE DIALOG. `worldOverlay` is where the
+          // flame corridor sits, which is the same question answered the same
+          // way; the dialog is on the fixed UI camera and is above all of it.
+          depth: LAYER.worldOverlay + 20,
+          durationMs: rupture.durationMs,
+        })
+        this.cameras.main.shake(rupture.shakeMs, 0.007)
+        play(this, 'last-life')
+        logEvent('rupture', 'the board splits open')
+      })
+    }
+
+    const showResults = (): void => this.openDialog({
       title: won ? 'HELD THE LINE' : 'OVERRUN',
       subtitle: noMore
         ? `${verdictFor(outcome, RULES.banner)}  More levels coming soon.`
@@ -5395,10 +5452,10 @@ export class GameScene extends Phaser.Scene {
       actions: won
         ? [
           next
-            ? { label: 'NEXT LEVEL', onPick: () => this.goToLevel(next) }
-            : { label: 'LEVEL SELECT', onPick: () => this.toWorldMap() },
+            ? { label: 'NEXT LEVEL', onPick: () => this.leaveWon('Loadout', () => this.armNextLevel(next)) }
+            : { label: 'LEVEL SELECT', onPick: () => this.leaveWon('WorldMap') },
           { label: 'REPLAY', onPick: () => this.tryAgain() },
-          ...(next ? [{ label: 'LEVEL SELECT', onPick: () => this.toWorldMap() }] : []),
+          ...(next ? [{ label: 'LEVEL SELECT', onPick: () => this.leaveWon('WorldMap') }] : []),
           { label: 'MAIN MENU', onPick: () => this.toTitle() },
         ]
         : [
@@ -5407,6 +5464,11 @@ export class GameScene extends Phaser.Scene {
           { label: 'MAIN MENU', onPick: () => this.toTitle() },
         ],
     })
+    // The scene is torn down on every route off this dialog, so a pending
+    // timer cannot outlive it: `delayedCall` is the scene's clock and goes
+    // with it. Zero delay opens it on this frame, as it always did.
+    if (delayResults > 0) this.time.delayedCall(delayResults, showResults)
+    else showResults()
   }
 
   /**
@@ -5419,14 +5481,45 @@ export class GameScene extends Phaser.Scene {
    * The hand is cleared with the seed, exactly as `tryAgain` does: a new level
    * deals a new hand, and the loadout screen only deals when there is none.
    */
-  private goToLevel(id: string): void {
-    logEvent('scene', `Game -> Loadout (next level ${id})`)
+  private armNextLevel(id: string): void {
+    logEvent('scene', `arming the next level: ${id}`)
     setRunState({
       heroId: runState().heroId, levelId: id, seed: Date.now() >>> 0,
       openingTowers: [], abilities: [], reserveTowers: [], resumeFrom: null,
     })
+  }
+
+  /**
+   * The way off a WON level, through its closing comic if it has one.
+   *
+   * Level 9 is the first level in the game that ends with a panel rather than
+   * only a scoreboard: the board splits open at the door and the comic is what
+   * is through it. `outroPanelsFor` is empty on every other level, so this is
+   * `go()` everywhere else by construction rather than by an `if` on an id.
+   *
+   * ONLY ON A WIN, and only off the buttons that leave. REPLAY and the loss
+   * screen's three routes do not come through here: the door opens because the
+   * gauntlet was beaten, and a player who lost has not opened it.
+   *
+   * The panels are handed to CutsceneScene rather than looked up by it --
+   * `panelsFor` is the pre-level list and means something else. See
+   * `CutsceneRequest.panels`.
+   */
+  private leaveWon(then: string, prepare?: () => void): void {
+    prepare?.()
     this.scene.stop('Hud')
-    this.scene.start('Loadout')
+    const panels = outroPanelsFor(this.level.id)
+    if (panels.length === 0) {
+      logEvent('scene', `Game -> ${then}`)
+      this.scene.start(then)
+      return
+    }
+    logEvent('scene', `Game -> Cutscene (${this.level.id} outro) -> ${then}`)
+    // `then` is where the comic hands over, and it is the scene this button
+    // was going to anyway: a comic is a thing on the way, not a destination.
+    // `prepare` has already run, so a NEXT LEVEL that goes through a comic
+    // reaches the loadout with the same run state it would have had.
+    this.scene.start('Cutscene', { levelId: this.level.id, then, panels })
   }
 
   private toWorldMap(): void {

@@ -936,10 +936,10 @@
     "role": "fast",
     "tier": "basic",
     "sprite": "enemy-packet",
-    "maxHealth": 180,
+    "maxHealth": 72,
     "armor": 0,
     "speed": 142,
-    "peanutReward": 27,
+    "peanutReward": 11,
     "livesCost": 1,
     "damage": 6,
     "attackInterval": 0.6,
@@ -956,10 +956,10 @@
     "role": "basic",
     "tier": "basic",
     "sprite": "enemy-corrupt",
-    "maxHealth": 320,
+    "maxHealth": 175,
     "armor": 4,
     "speed": 62,
-    "peanutReward": 48,
+    "peanutReward": 27,
     "livesCost": 1,
     "damage": 13,
     "attackInterval": 1.1,
@@ -974,10 +974,10 @@
     "role": "basic",
     "tier": "basic",
     "sprite": "enemy-data-bug",
-    "maxHealth": 260,
+    "maxHealth": 140,
     "armor": 2,
     "speed": 88,
-    "peanutReward": 39,
+    "peanutReward": 22,
     "livesCost": 1,
     "damage": 12,
     "attackInterval": 1.0,
@@ -993,10 +993,10 @@
     "role": "armored",
     "tier": "elite",
     "sprite": "enemy-server-walker",
-    "maxHealth": 600,
+    "maxHealth": 500,
     "armor": 14,
     "speed": 30,
-    "peanutReward": 90,
+    "peanutReward": 78,
     "livesCost": 2,
     "damage": 22,
     "attackInterval": 2.0,
@@ -1014,8 +1014,8 @@
     "role": "boss",
     "tier": "elite",
     "sprite": "enemy-hat-gtt",
-    "maxHealth": 3200,
-    "armor": 10,
+    "maxHealth": 650,
+    "armor": 4,
     "speed": 26,
     "peanutReward": 900,
     "livesCost": 6,
@@ -1027,8 +1027,8 @@
     "flame": true,
     "regen": {
       "belowHealth": 0.75,
-      "heal": 420,
-      "cooldown": 9.0,
+      "heal": 130,
+      "cooldown": 11.0,
       "fx": "fx-hat-regenerate",
       "fxSize": 190,
       "altSprite": "enemy-hat-gtt-b",
@@ -1037,7 +1037,9 @@
     "_gauntlet": "THE GAUNTLET: four fights in one level, in this order -- HAT-GTT, CANCER, NO-PILOT, PERPLEXED. THE FIRST THREE ARE THE BLADE RIG'S SHAPE EXACTLY, which is what a mini boss is in this game: `role: boss` so every rule that must not touch a boss does not touch them, `tier: elite` so the level still fields exactly one boss, `blockable: false` so nothing parks them, and their wave names them as its `boss` so the HUD announces them. PERPLEXED IS `tier: boss` because it is the last fight of the level and something has to be: tests/rules.test.ts holds every wave table to exactly one boss sprite, which is the rule that stops a level quietly fighting two, and level 9 is not the level to relax it in. In the fiction all four are mini bosses and Vlaude is not a combatant at all. NONE OF THEM GETS A NEW COMBAT SYSTEM. Every ability is a system that already shipped, already has tests, and -- this is the part that matters -- is ALREADY RUN BY tools/soak/Sim.ts, so the win rate the soak reports is the fight the player has. HEALTH IS SOAKED AGAINST LEVEL 9'S BOARD AND NO OTHER. Fifteen pads, three of which cannot reach the route at all at the shortest tower range and only three of which cover two passes of it: this board holds LESS effective DPS than level 8's nineteen, so a number carried across from the CEO would be far too high. See reports/2026-09-13-level-9.md for the sensitivity tables.",
     "_note": "WALL OF TEXT IS `flame`, and that is the whole implementation. systems/Flame.ts is level 6's Rooster breath and it is not a rooster-shaped thing: it is a TELEGRAPHED CORRIDOR ahead of a boss that hurts what is standing in it and leaves the towers it crossed firing slower for a few seconds. Point its `fx` at fx-wall-of-text, put the numbers in level9.json, and document strips slam forward down the lane and bury a row of guns in paperwork. The telegraph is not decoration -- an unavoidable hit with no warning reads as the game cheating, which is why that module has one and why this does not get to skip it. REGENERATE IS REAL HEALTH, not a flourish. `regen` heals 420 off a 3200 pool once its health is under three quarters, every 9 seconds, and plays fx-hat-regenerate OVER the hat -- the effect sheet is the fragments reversing inward into a repair ring, and it is drawn on the hat rather than instead of it, so a second hat never appears. A player who leaves it alone is fighting an 3200 pool that keeps refilling; the answer is concentrated damage, which is the opposite of what CANCER asks for next. THE TWO STATES ARE THE JOKE. -a and -b are the same hat at different tilts and the transformation changes almost nothing. `regen` swaps to `enemy-hat-gtt-b` while it heals and back afterwards, which is the only time the second state is used and the only visual difference there is meant to be.",
     "_stunnable": "NOT DECLARED, AND THE BLADE RIG'S `stunnable: false` IS NOT COPIED. tests/level7.test.ts holds the Rig to being the only thing in the game that cannot be held, slowed or stopped -- that is its whole character -- and four more of them would take the one thing that makes it different. Level 8's CEO does not declare it either. These four are `blockable: false` and `slowable: false`, which is the boss default.",
-    "_livesCost": "SIX AND SEVEN FOR THE THREE MINI BOSSES, TWELVE FOR THE BOSS, and the gap is a gate rather than a feel: tests/wave.test.ts holds every non-boss row under the CHEAPEST boss in the game, so three things carrying `tier: elite` at 8 and 9 put the whole roster in breach. Level 7's Blade Rig -- the same shape as these three -- costs 6. PERPLEXED at 12 sits between the Politician at 10 and The Devil at 12, and under the 20 lives a run starts with, because a boss escape that ends the run on its own hides the rule instead of teaching it."
+    "_livesCost": "SIX AND SEVEN FOR THE THREE MINI BOSSES, TWELVE FOR THE BOSS, and the gap is a gate rather than a feel: tests/wave.test.ts holds every non-boss row under the CHEAPEST boss in the game, so three things carrying `tier: elite` at 8 and 9 put the whole roster in breach. Level 7's Blade Rig -- the same shape as these three -- costs 6. PERPLEXED at 12 sits between the Politician at 10 and The Devil at 12, and under the 20 lives a run starts with, because a boss escape that ends the run on its own hides the rule instead of teaching it.",
+    "_soaked": "650 HEALTH AND 130 A REPAIR, both off the soak and both a long way down from where they started. HAT-GTT opened at 1980 health with a 420 repair every 9 s and got out of 40 runs in 40 -- not a fight, a toll. The first two guesses at why were both wrong and both measured: dropping its armour from 10 to 4 moved the win rate by one point, and dropping its health to 1150 by three. What actually holds it up is the REPAIR. Level 9's board is only two or three towers deep at wave 4 and the whole board puts about 1,500 damage on it over its walk; at 1980 + ~1200 healed it could not be killed by any draft. At 650 + ~490 healed it dies in about two thirds of the runs that reach it, which is a first mini boss. See the sensitivity table in reports/2026-09-13-level-9.md: `regen.heal` moves the level nine points across its range and `armor` moves it by noise.",
+    "_armor": "4, AND THE TABLE FOR IT IS FLAT. 0, 2, 4, 8 and 12 give 42, 41, 40, 43 and 41 per cent over 120 seeds -- noise. It is not that armour does nothing: the escapes climb 38, 41, 47 straight through. What does not move is the WIN RATE, because a run that loses six more lives at wave 4 is a run that does not reach wave 16, and wave 16 is where this level is decided. 4 is chosen on feel, not on the win rate: the first mini boss should reward the cheap early towers rather than floor them at `Math.max(1, damage - armor)`."
   },
   "cancer": {
     "name": "CANCER",
@@ -1045,7 +1047,7 @@
     "role": "boss",
     "tier": "elite",
     "sprite": "enemy-cancer",
-    "maxHealth": 3800,
+    "maxHealth": 3100,
     "armor": 14,
     "speed": 24,
     "peanutReward": 950,
@@ -1064,7 +1066,8 @@
       "landFxSize": 190
     },
     "_note": "THE CONSTELLATION CLAW IS `towerDisable`, the Rainbow Reaper's cast, with the claw sheet landing on the target instead of a bolt leaving the caster. systems/TowerDisable.ts gives it the cooldown, the choice of target -- the most expensive tower in range -- the 1.4 second telegraph that makes the choice visible before anything resolves, and the rule that a caster killed mid-windup lands nothing. `landFx` is the one field added for level 9: the claws close ON the tower from above, so no bolt is drawn and the ring is the whole warning. SIX SECONDS IS A LONG DISABLE and it is the point of this fight: CANCER takes the single gun you invested in and turns it off for six seconds at a time from 300 px away, which asks for a spread board -- the exact opposite of the concentrated damage HAT-GTT asks for. Two fights, two answers, and a player who solved the first one by stacking one corner walks into the second one with the wrong board. NO MEDICAL REFERENCE AND NO ZODIAC TEXT, in the name, the flavour or the art. It is a crab made of stars.",
-    "_armor": "14 for the same reason serverWalker carries 14 -- see its note. The heaviest armour in the game, shared with the Middle Manager."
+    "_armor": "14 for the same reason serverWalker carries 14 -- see its note. The heaviest armour in the game, shared with the Middle Manager.",
+    "_soaked": "3100 HEALTH, and its armour table is flat for HAT-GTT's reason -- 6, 10, 14, 18, 22 give 43, 44, 40, 42, 40 per cent while its escapes climb 21, 28, 40. The dial that moves this fight is the CLAW: `towerDisable.cooldown` takes the level from 36% at 3.5 s to 44% at 20 s, and `duration` from 44% at 1 s to 37% at 12. 7.5/6.0 sits in the middle of both and is measured, not chosen."
   },
   "noPilot": {
     "name": "NO-PILOT",
@@ -1072,7 +1075,7 @@
     "role": "boss",
     "tier": "elite",
     "sprite": "enemy-nopilot",
-    "maxHealth": 3000,
+    "maxHealth": 3400,
     "armor": 6,
     "speed": 58,
     "peanutReward": 900,
@@ -1083,7 +1086,8 @@
     "slowable": false,
     "artFacing": "right",
     "bladed": true,
-    "_note": "THE CHARGE IS `bladed`, level 7's Blade Rig, and it is the right system for it rather than a near one: a continuous cost for standing where this thing is walking, paid by whatever is in the way, with nothing to block and nothing to aim. An out-of-control vehicle does not pick a target -- that is what makes it out of control -- and systems/Blades.ts already says so. level9.json's `blades` block points its art at fx-nopilot-crash, so the warning lights, the impact and the skid play AT THE CONTACT POINT and the damage lands there in the same frame. IT IS THE FAST ONE. 58 px/s against the other three at 24-26, and `blockable: false` on top, so it is through a stretch of board before a slow tower has fired twice. The answer is rate rather than damage, which is a third different board again."
+    "_note": "THE CHARGE IS `bladed`, level 7's Blade Rig, and it is the right system for it rather than a near one: a continuous cost for standing where this thing is walking, paid by whatever is in the way, with nothing to block and nothing to aim. An out-of-control vehicle does not pick a target -- that is what makes it out of control -- and systems/Blades.ts already says so. level9.json's `blades` block points its art at fx-nopilot-crash, so the warning lights, the impact and the skid play AT THE CONTACT POINT and the damage lands there in the same frame. IT IS THE FAST ONE. 58 px/s against the other three at 24-26, and `blockable: false` on top, so it is through a stretch of board before a slow tower has fired twice. The answer is rate rather than damage, which is a third different board again.",
+    "_soaked": "3400 HEALTH, BUT SPEED IS THE DIAL. Health moves the level from 42% at 2600 to 33% at 4200; SPEED moves it from 43% at 34 px/s to 28% at 82, and 58 is already the fastest thing in the game. It walks the LONG arm -- see the note on wave 12 in waves.level9.json -- because on the short one it reached the door in 29 seconds past a third of the guns and walked out of 40% of runs. Its blades are worth 83 damage a run to the player's own units, which is real and small; the level does not rest on them."
   },
   "perplexed": {
     "name": "PERPLEXED",
@@ -1091,7 +1095,7 @@
     "role": "boss",
     "tier": "boss",
     "sprite": "enemy-perplexed",
-    "maxHealth": 3400,
+    "maxHealth": 8100,
     "armor": 12,
     "speed": 28,
     "peanutReward": 950,
@@ -1109,6 +1113,7 @@
       "landFx": "fx-perplexed-query",
       "landFxSize": 165
     },
-    "_note": "THE CITATION STORM IS THE SAME CAST AS CANCER'S AND THE NUMBERS ARE THE MECHANIC. That is deliberate and it is said plainly rather than dressed up: one system, two settings, and they play completely differently. CANCER takes one gun away for six seconds every seven and a half from 300 px; PERPLEXED takes whatever is nearest for 1.8 seconds every 2.6 from 210 px. The first is a hole in your board. The second is a board that will not hold still -- guns flicker off and on around it and the answer is more of them rather than better ones. A BURST AND A SHORT DISRUPTION, which is what the brief for it asks for, built out of what the engine already shows clearly: the ring, the citation sheet landing on the target and the stunned marker. NO NEW STATUS SYSTEM was invented for the joke."
+    "_note": "THE CITATION STORM IS THE SAME CAST AS CANCER'S AND THE NUMBERS ARE THE MECHANIC. That is deliberate and it is said plainly rather than dressed up: one system, two settings, and they play completely differently. CANCER takes one gun away for six seconds every seven and a half from 300 px; PERPLEXED takes whatever is nearest for 1.8 seconds every 2.6 from 210 px. The first is a hole in your board. The second is a board that will not hold still -- guns flicker off and on around it and the answer is more of them rather than better ones. A BURST AND A SHORT DISRUPTION, which is what the brief for it asks for, built out of what the engine already shows clearly: the ring, the citation sheet landing on the target and the stunned marker. NO NEW STATUS SYSTEM was invented for the joke.",
+    "_soaked": "8100 HEALTH, AND THIS IS THE NUMBER THAT SETS THE LEVEL. Every other dial on this board moves the win rate by a few points or by noise; this one moves it from 52% at 7300 to 29% at 8900, and its CITATION STORM moves it further than that -- `towerDisable.duration` at 5.0 s gives a 4% win rate and at 0.5 s gives 55%. 1.8 s and 2.6 s apart is a board that flickers rather than one that goes dark, which is the joke and is also the only setting that leaves the fight winnable. 30% of all losses are this one taking the last life, which is what a finale should be."
   }
 }

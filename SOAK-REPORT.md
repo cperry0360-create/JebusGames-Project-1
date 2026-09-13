@@ -4,6 +4,222 @@ Newest first.
 
 ---
 
+## 2026-09-13 — Level 9, and four mini bosses measured one at a time
+
+### The headline
+
+**Level 9 soaks at 40% over 480 seeds on normal — 191/480 — inside the 35-45%
+band.** Levels 1 to 8 are **byte-identical** to `main` on the same 480 seeds.
+
+```
+level9 [normal]: 191/480 wins  (40%)
+  lost after wave: w3x22 w4x60 w5x24 w6x7 w7x47 w11x42 w15x87
+  what took the last life: perplexed 87 (30%)  corrupt 60 (21%)  cancer 43 (15%)
+                           noPilot 42 (15%)  packet 24 (8%)  hatGtt 22 (8%)
+                           dataBug 7 (2%)  serverWalker 4 (1%)
+  regeneration put back 247520 health across the run set (516 a run)
+  the flame did 52828 damage to the player's own units (110 a run)
+  towers were switched off for 36264 tower-seconds (75.5 a run)
+  the blades did 39744 damage to the player's own units (83 a run)
+```
+
+**HERO: CORY, every seed.** `tools/soak/level.ts` passes no hero, and
+`simulate` resolves that to `DEFAULT_HERO_ID`, which is `heroes.json`'s first
+row. It does not rotate; `run.ts` and `eli.ts` do. No hero's values were
+touched by this work.
+
+`lost after wave: wN` is `wavesReached`, which on a loss is the 0-based index of
+the wave the run died in — so `w3` is a death **in wave 4**, which is HAT-GTT's.
+The four gauntlet waves are 4, 8, 12 and 16.
+
+### The bug that made the first three soaks worthless
+
+**HAT-GTT's repair had never once run, and the soak reported a clean 38%.**
+
+`tools/soak/Sim.ts`'s enemy state carries `health` and reads its maximum off
+`e.def.maxHealth`; `tickRegens` passed `e.maxHealth`, which does not exist.
+`health >= undefined` is false, `health / undefined` is `NaN`,
+`NaN >= belowHealth` is false and `Math.min(heal, NaN)` is `NaN`, so the guard
+declined to heal and nothing threw. A level was balanced against a boss whose
+whole mechanic was inert — which is the third time this repository has recorded
+that shape (level 4's Beacon aura, level 8's HR armour aura).
+
+**FOUR COUNTERS NOW PRINT EVEN AT ZERO**, and which ones print is asked of the
+LEVEL rather than of the number, because `> 0` cannot tell a mechanic that is
+worth nothing from a mechanic that never ran:
+
+| counter | printed when | level 9, per run |
+|---|---|---|
+| `regeneration put back` | the roster carries `regen` | 516 health |
+| `the flame did` | the rules carry `flame` and the roster carries it | 110 damage |
+| `towers were switched off for` | the roster carries `towerDisable` | 75.5 tower-seconds |
+| `the blades did` | the rules carry `blades` and the roster carries `bladed` | 83 damage |
+
+### And the blades were doing nothing, on level 9 AND on level 7
+
+The blade counter read **exactly 0** the first time it was printed — and it read
+0 on **level 7**, which was tuned against it.
+
+The reason is structural rather than a typo. The blades are contact damage on
+the player's own units, and on levels 2 to 9 there is only one such unit the sim
+puts on the board: the hero. The garrison tower is drafted on **level 1 alone**,
+via `extraTowerWeights`, so no soaked board on any other level has a soldier
+standing anywhere — measured, `soldiers 0` across 60 seeds on both levels. And
+the sim parks the hero at the midpoint of the MAIN lane. On level 9 the
+No-Pilot spawned on `south`; the hero never came within **359 px** of it.
+
+Level 9's half is fixed by moving No-Pilot to the long arm, which it wanted for
+its own reasons (see below), and the blades now register 83 damage a run.
+**Level 7's is not fixed and is not mine to fix here**: the hero's single
+station is a documented approximation that every published win rate rests on,
+and moving it would move all eight.
+
+### Sensitivity, 120 seeds, one variable at a time
+
+Every row restores both JSON files from a pristine copy, changes one field,
+soaks, and restores again, so a row cannot carry the previous row's change.
+`<-` marks the shipped value.
+
+**HAT-GTT** — the repair is the fight; the armour is noise.
+
+| `maxHealth` | 450 | 550 | 650 `<-` | 850 | 1050 |
+|---|---|---|---|---|---|
+| win rate | 45% | 43% | **40%** | 38% | 35% |
+
+| `regen.heal` | 0 | 65 | 130 `<-` | 260 | 390 |
+|---|---|---|---|---|---|
+| win rate | 49% | 50% | **40%** | 35% | 35% |
+| healed/run | 0 | 216 | 507 | 928 | 1012 |
+
+| `armor` | 0 | 2 | 4 `<-` | 8 | 12 |
+|---|---|---|---|---|---|
+| win rate | 42% | 41% | **40%** | 43% | 41% |
+
+| `flame.damagePerSecond` | 0 | 50 | 105 `<-` | 160 | 220 |
+|---|---|---|---|---|---|
+| win rate | 43% | 41% | **40%** | 32% | 33% |
+| healed/run | 342 | 415 | 507 | 672 | 700 |
+
+**CANCER** — the claw is the fight; the armour is noise.
+
+| `maxHealth` | 2300 | 2700 | 3100 `<-` | 3500 | 3900 |
+|---|---|---|---|---|---|
+| win rate | 48% | 44% | **40%** | 38% | 36% |
+
+| `armor` | 6 | 10 | 14 `<-` | 18 | 22 |
+|---|---|---|---|---|---|
+| win rate | 43% | 44% | **40%** | 42% | 40% |
+
+| `towerDisable.duration` | 1.0 | 3.0 | 6.0 `<-` | 9.0 | 12.0 |
+|---|---|---|---|---|---|
+| win rate | 44% | 46% | **40%** | 43% | 37% |
+
+| `towerDisable.cooldown` | 3.5 | 5.5 | 7.5 `<-` | 11.0 | 20.0 |
+|---|---|---|---|---|---|
+| win rate | 36% | 40% | **40%** | 46% | 44% |
+
+**NO-PILOT** — speed is the fight; the blades barely register.
+
+| `maxHealth` | 2600 | 3000 | 3400 `<-` | 3800 | 4200 |
+|---|---|---|---|---|---|
+| win rate | 42% | 42% | **40%** | 38% | 33% |
+
+| `speed` | 34 | 46 | 58 `<-` | 70 | 82 |
+|---|---|---|---|---|---|
+| win rate | 43% | 42% | **40%** | 35% | 28% |
+
+| `blades.damagePerSecond` | 35 | 70 `<-` | 140 | 210 |
+|---|---|---|---|---|
+| win rate | 38% | **40%** | 40% | 41% |
+| blade damage/run | 52 | 90 | 126 | 126 |
+
+| `blades.radius` | 20 | 45 | 74 `<-` | 110 | 150 |
+|---|---|---|---|---|---|
+| win rate | 38% | 38% | **40%** | 40% | 38% |
+
+`blades.damagePerSecond = 0` is not in the table because `bladesFrom` throws on
+it — a `blades` block with no damage is a mechanic declared and not configured,
+and that assertion is correct. The 35 row is the low end instead.
+
+**PERPLEXED** — every dial on this one moves the whole level.
+
+| `maxHealth` | 7300 | 7700 | 8100 `<-` | 8500 | 8900 |
+|---|---|---|---|---|---|
+| win rate | 52% | 48% | **40%** | 33% | 29% |
+
+| `armor` | 4 | 8 | 12 `<-` | 16 | 20 |
+|---|---|---|---|---|---|
+| win rate | 48% | 45% | **40%** | 37% | 34% |
+
+| `towerDisable.duration` | 0.5 | 1.0 | 1.8 `<-` | 3.0 | 5.0 |
+|---|---|---|---|---|---|
+| win rate | 55% | 55% | **40%** | 28% | **4%** |
+
+| `towerDisable.cooldown` | 1.2 | 2.0 | 2.6 `<-` | 4.0 | 8.0 |
+|---|---|---|---|---|---|
+| win rate | 24% | 35% | **40%** | 54% | 56% |
+
+### The two flat tables, and what is behind them
+
+HAT-GTT's and CANCER's armour rows are flat, and the brief this work was done
+under says to find what controls the fight before picking a number. The armour
+is **not** doing nothing — the escapes climb monotonically with it:
+
+| | armour low | shipped | armour high |
+|---|---|---|---|
+| HAT-GTT escapes, /120 | 38 (armour 0) | 41 (4) | 47 (12) |
+| CANCER escapes, /120 | 21 (armour 6) | 28 (14) | 40 (22) |
+| deaths in wave 16 | 21-22 | 21 | 16-18 |
+
+**What is flat is the win rate, and the reason is that this level is decided at
+wave 16.** More armour on an early mini boss means more runs die early, which
+means fewer runs reach PERPLEXED, which means fewer deaths there — the losses
+move rather than multiply. So the earlier mini bosses' armour is chosen on FEEL
+(what it does to the cheap early towers, which `Math.max(1, damage - armor)`
+floors hard) and the win rate is set by PERPLEXED's three dials.
+
+### Loss distribution, 480 seeds
+
+| died in wave | count | share of losses | what it is |
+|---|---|---|---|
+| 4 | 22 | 8% | HAT-GTT |
+| 5 | 60 | 21% | the wave after HAT-GTT, paying for its six-life leak |
+| 6 | 24 | 8% | |
+| 7 | 7 | 2% | |
+| 8 | 47 | 16% | CANCER |
+| 12 | 42 | 15% | NO-PILOT |
+| 16 | 87 | 30% | PERPLEXED |
+
+**PERPLEXED kills the player most often** — 87 of 289 losses take their last
+life from it, and 87 more runs die in its wave. HAT-GTT takes the last life in
+only 8% of losses but its leak is what wave 5 finishes: those 60 are its bill,
+arriving one wave late.
+
+### One wave change, for two reasons
+
+**NO-PILOT moved from the south arm to the north.** South is 1,672 px against
+north's 2,586, and No-Pilot is the fastest thing in the game at 58 px/s, so on
+the short arm it reached the door in 29 seconds past a third of the guns and
+walked out of 16 of 40 runs. It was also the lane on which its blades could
+never touch anything (above). Every boss comes down the long arm now and the
+escorts alternate, which is the more readable board as well.
+
+### What Sim.ts models, and what it does not
+
+MODELLED, sharing the scene's own modules rather than re-implementing them:
+two entrance lanes merging into one tail, the interior exit and its per-enemy
+life cost, HAT-GTT's repair (`systems/Regen.ts`), HAT-GTT's wall of text
+(`systems/Flame.ts`, the same module level 6's Rooster uses), CANCER's and
+PERPLEXED's tower disable (`systems/TowerDisable.ts`, including the destroy
+case), NO-PILOT's blades (`systems/Blades.ts`).
+
+NOT MODELLED: the hero moves (it is parked at the main lane's midpoint, which
+is why the blades under-read), summoned fighters, any art, any animation, the
+sprite swap during a repair, the electrical arcs, and the ending. The waves 2+
+auto-start bonus is unmodelled, so every published rate here is a FLOOR.
+
+---
+
 ## 2026-09-13 — Star Rain over the whole map, measured three ways
 
 ### The headline

@@ -68,6 +68,9 @@ import {
   type FlameRules, type FlameState,
 } from '../../src/systems/Flame.ts'
 import {
+  newRegenState, tickRegen, type RegenState,
+} from '../../src/systems/Regen.ts'
+import {
   DEFAULT_DIFFICULTY_ID, startingLives, startingPeanuts,
 } from '../../src/systems/Difficulty.ts'
 import { DEFAULT_HERO_ID, HERO_IDS, resolveHeroId } from '../../src/systems/Heroes.ts'
@@ -185,10 +188,31 @@ export interface SoakResult {
    * is the one that ended it under either rule.
    */
   lostToExit: string | null
+  /** The enemy KIND whose escape took the last life, or null on a win. See the
+   *  note at the assignment: on a level with one exit and four mini bosses this
+   *  is the only field that names the killer. */
+  lostToEnemy: string | null
   blastOnFriendlies: number
   /** Total damage level 7's blades did to the player's side over the run. 0 on
    *  every other level, which is the scoping made visible in the output. */
   bladeCuts: number
+  /**
+   * LEVEL 9'S THREE, counted for exactly the reason `bladeCuts` is: a mechanic
+   * worth nothing and a mechanic that never ran produce the same flat
+   * sensitivity table, and only one of them is a tuning problem.
+   *
+   * `healedTotal` read ZERO for three soaks and the level was tuned against
+   * it anyway -- `tickRegens` passed `e.maxHealth` to a state that has no such
+   * field, every comparison against `undefined` came back false, and a 38%
+   * win rate was reported for a boss whose repair had never once run. These
+   * three exist so that cannot happen silently again.
+   */
+  healedTotal: number
+  /** Damage HAT-GTT's WALL OF TEXT put on the player's own units. */
+  flameDamage: number
+  /** Tower-seconds taken off the board by CANCER's claw and PERPLEXED's
+   *  citation storm, summed. */
+  disableSeconds: number
   /**
    * HOW MUCH ROAD WAS LEFT when the enemy that splits on death was killed, in
    * world pixels to its exit -- or null if it was never killed.
@@ -245,6 +269,9 @@ interface SimEnemy {
    *  Held on the enemy so a boss killed mid-telegraph takes its half-finished
    *  cast with it, exactly as the Disabler is. */
   flame: FlameState | null
+  /** HAT-GTT's repair clock, or null for everything that does not repair. The
+   *  scene holds the identical state and ticks it with the identical module. */
+  regen: RegenState | null
   /**
    * Which way it is walking, in radians, from the last step it took.
    *
@@ -512,6 +539,15 @@ export function simulate(
   // worth nothing and a mechanic that never ran produce the same flat
   // sensitivity table, and only one of them is a tuning problem.
   let bladeCuts = 0
+  // HOW MUCH HEALTH HAT-GTT PUT BACK over the run. Level 9's only new rule, and
+  // it is counted for the reason `bladeCuts` is: a mechanic worth nothing and a
+  // mechanic that never ran give the same flat sensitivity table, and only one
+  // of those is a tuning problem.
+  let healedTotal = 0
+  // See the three fields on SoakResult. Both are zero on every level that has
+  // no flame rule and nothing that casts a disable.
+  let flameDamage = 0
+  let disableSeconds = 0
   // See `splitKillToExit`. Set once, on the frame the splitter dies.
   let splitKillToExit: number | null = null
   let lostToSplit = false
@@ -521,6 +557,7 @@ export function simulate(
   let blastOnFriendlies = 0
   let auraBuffedCount = 0
   let lostToExit: string | null = null
+  let lostToEnemy: string | null = null
   let unlocked = opening.slice()
   const enemies: SimEnemy[] = []
   const towers: SimTower[] = []
@@ -641,6 +678,7 @@ export function simulate(
       firedThresholds: new Set<number>(), reviewed: false, reviewSpeed: 1, auraArmor: 0,
       everBuffed: false,
       flame: def.flame && FLAME ? newFlameState(FLAME) : null,
+      regen: def.regen ? newRegenState(def.regen) : null,
       // Enemies walk left to right on every map in the game, so facing east is
       // the right answer before anything has moved.
       heading: 0,
@@ -824,6 +862,36 @@ export function simulate(
     }
   }
 
+  /**
+   * HAT-GTT repairing itself, and it runs the scene's module rather than a
+   * second copy of the arithmetic.
+   *
+   * No art and no sprite swap here -- the alternate tilt is a look -- but the
+   * HEALTH is the same number the player chews through, which is the whole
+   * point of this file importing systems/Regen.ts instead of approximating it.
+   */
+  const tickRegens = (dt: number): void => {
+    for (const e of enemies) {
+      const def = e.def.regen
+      if (!def || !e.regen) continue
+      // `e.def.maxHealth` AND NOT `e.maxHealth`, because the sim's enemy state
+      // has no such field -- it carries `health` and reads its ceiling off the
+      // def, which is the one difference from the scene's Enemy that this rule
+      // touches. Written as `e.maxHealth` first, and the arithmetic came out
+      // NaN in silence: `health >= undefined` is false, `health / undefined`
+      // is NaN, `NaN >= belowHealth` is false, so the guard passed, the heal
+      // computed as NaN and `healed > 0` rejected it. The soak reported a
+      // clean 38% for a boss whose whole mechanic never ran once.
+      const max = e.def.maxHealth ?? 0
+      const r = tickRegen(e.regen, dt, e.alive, e.health, max, def)
+      e.regen = r.state
+      if (r.healed > 0) {
+        e.health = Math.min(max, e.health + r.healed)
+        healedTotal += r.healed
+      }
+    }
+  }
+
   const tickBoss = (dt: number): void => {
     if (!FLAME) return
     for (const t of towers) if (t.scorchedFor > 0) t.scorchedFor = Math.max(0, t.scorchedFor - dt)
@@ -847,6 +915,7 @@ export function simulate(
       for (let i = 0; i < r.ticks; i++) {
         if (!heroState.down && inFlame({ x: heroState.x, y: heroState.y }, from, to, FLAME)) {
           const out = applyHit(heroState.health, hero.maxHealth, per, heroState.powered)
+          flameDamage += heroState.health - out.health
           heroState.health = out.health
           if (out.triggers) {
             heroState.powered = true
@@ -857,7 +926,7 @@ export function simulate(
         for (const t of towers) {
           for (const sd of t.soldiers) {
             if (sd.respawnIn > 0) continue
-            if (inFlame({ x: sd.x, y: sd.y }, from, to, FLAME)) sd.health -= per
+            if (inFlame({ x: sd.x, y: sd.y }, from, to, FLAME)) { sd.health -= per; flameDamage += per }
           }
         }
       }
@@ -1439,6 +1508,7 @@ export function simulate(
         }
       } else {
         ev.target.disabledFor = e.def.towerDisable.duration
+        disableSeconds += e.def.towerDisable.duration
       }
     }
   }
@@ -1628,6 +1698,7 @@ export function simulate(
       // hurting the player's side on a clock -- and before the towers fire for
       // `tickArmorAura`'s reason.
       tickBlades(DT)
+      tickRegens(DT)
       tickSummons(DT)
       tickTowerDisable(DT)
       tickGarrisons(DT)
@@ -1871,6 +1942,14 @@ export function simulate(
           // running out of lives or by letting anything out on the final wave,
           // and the most recent escape is the one that did it under both.
           lostToExit = on.id
+          // AND WHAT IT WAS, under the same last-wins rule. `lostToExit` names
+          // a door and level 9 has one, so on a four-mini-boss level it answers
+          // nothing: "which of the four kills the player" is a question about
+          // the thing that walked through, not about the thing it walked
+          // through. The wave histogram is the other half and it is not a
+          // substitute -- a boss that leaks six lives on wave 4 is often
+          // finished off by a packet on wave 5, and only this field says so.
+          lostToEnemy = e.id
           // AND WHETHER IT WAS A CHILD OF A DEATH SPLIT, which on level 7 is
           // the question "did the finale end this run". Same last-wins rule.
           lostToSplit = e.summonedBy !== null
@@ -1946,9 +2025,11 @@ export function simulate(
     outcome, waves: wavesReached, lives, firstLifeLostWave, peanutsEarned, kills,
     seconds: +now.toFixed(1), bannerPoints, findings, firedTowers, firedAbilities,
     leaksByExit, leaksByEnemy, reviewed: reviewedCount, blastOnFriendlies, bladeCuts,
+    healedTotal, flameDamage, disableSeconds,
     splitKillToExit, lostToSplit: outcome === 'lost' && lostToSplit,
     auraBuffed: auraBuffedCount,
     lostToExit: outcome === 'lost' ? lostToExit : null,
+    lostToEnemy: outcome === 'lost' ? lostToEnemy : null,
   }
 }
 

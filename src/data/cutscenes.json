@@ -1,6 +1,6 @@
 {
-  "_note": "WHICH COMIC PLAYS BEFORE WHICH LEVEL, and nothing more. Keys are level ids from levels.json and a level with no entry here simply has no cutscene — that is the default, not an omission, and tests/cutscenes.test.ts holds level 3 to it. Values are ordered panel paths relative to art.json's assetRoot, so they read the same way art.json's `files` do. An id that is not a level fails cutsceneProblems() and a test, rather than being discovered at runtime by a player.",
-  "_panels": "Every panel is 1672x941, which is 16:9. They are drawn to fit rather than to fill: on a phone in portrait a panel fills the width and centres vertically with the game's own dark chrome above and below it. Cropping a comic is not an option — a speech bubble in the corner of a panel is the panel.",
+  "_note": "WHICH COMIC PLAYS BEFORE WHICH LEVEL, and nothing more. Keys are level ids from levels.json and a level with no entry here simply has no cutscene \u2014 that is the default, not an omission, and tests/cutscenes.test.ts holds level 3 to it. Values are ordered panel paths relative to art.json's assetRoot, so they read the same way art.json's `files` do. An id that is not a level fails cutsceneProblems() and a test, rather than being discovered at runtime by a player.",
+  "_panels": "Every panel is 1672x941, which is 16:9. They are drawn to fit rather than to fill: on a phone in portrait a panel fills the width and centres vertically with the game's own dark chrome above and below it. Cropping a comic is not an option \u2014 a speech bubble in the corner of a panel is the panel.",
   "levels": {
     "level1": [
       "cutscenes/cutscene_L1_01.webp",
@@ -11,6 +11,16 @@
       "cutscenes/cutscene_L2_01.webp",
       "cutscenes/cutscene_L2_02.webp",
       "cutscenes/cutscene_L2_03.webp"
+    ],
+    "level9": [
+      "cutscenes/cutscene_L9_01.webp"
     ]
-  }
+  },
+  "_level9": "LEVEL 9 PLAYS ONE PANEL, NOT THREE, and it is HAT-GTT's introduction -- the Generative Trained Transformer joke, which is that it transformed and it is a hat. One panel because there is one, and because the level's own comic page is already three sub-panels across like the shipped L1 and L2 pages. THE CLOSING COMIC IS NOT HERE AND CANNOT BE. `comic_l9_end_gate_A.png` is the scene that ends at the level 10 gate, and this file is PRE-LEVEL ONLY: its keys are the level a comic plays BEFORE, which `cutsceneProblems` and tests/cutscenes.test.ts both hold it to. That panel is level 10's opening, so it lands the day level 10 gets a row in levels.json -- one line here -- and it is deliberately not converted into public/ until then, because an 0.58 MB panel nothing can play is the ORPHAN category the deploy budget in tests/content.test.ts exists to notice. Level 9's own ending is the board splitting open, which is level9.json's `rupture` and plays in the scene. See reports/2026-09-13-level-9.md.",
+  "outros": {
+    "level9": [
+      "cutscenes/cutscene_L9_end_gate.webp"
+    ]
+  },
+  "_outros": "WHAT PLAYS WHEN A LEVEL IS WON, which `levels` above cannot say: its keys are the level a comic plays BEFORE, and every reader of it -- CutsceneScene's `init`, `shouldPlay`, the loadout hand-over -- means exactly that. LEVEL 9 ENDS BY OPENING THE WAY TO LEVEL 10. The board splits at the door (level9.json's `rupture`, played in the scene), the results screen gives the cakes, and the button off it goes through this panel on the way to the world map. It is not level 9's opening and it cannot be level 10's until level 10 has a row in levels.json, so it is neither, and this is the map for neither. SAME RULES AS `levels`, enforced by the same `cutsceneProblems`: a key that is a real level, a non-empty list, panels under cutscenes/, no repeats. A LOSS DOES NOT PLAY IT -- only the win branch of GameScene.endRun reaches it, because the fiction is that beating the gauntlet is what opens the door."
 }

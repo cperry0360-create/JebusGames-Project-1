@@ -196,11 +196,22 @@ test('the victory screen offers a way forward, and the defeat screen a way back'
 })
 
 test('NEXT LEVEL goes to the loadout, not back through the world map', () => {
+  // TWO HALVES SINCE LEVEL 9, and the claim is unchanged. The route used to be
+  // one method: set the run state, start the loadout. Level 9 ends with a comic
+  // -- the board splits open and the panel is what is through it -- so the
+  // scene start moved into `leaveWon`, which plays the outro if the level has
+  // one and starts `then` either way. `armNextLevel` is the run state half.
+  // NEXT LEVEL still goes to the loadout and still does not route through the
+  // map; it is now readable in two places instead of one.
   const game = src('scenes/GameScene.ts')
-  const go = /private goToLevel\([\s\S]*?\n {2}\}/.exec(game)
+  const go = /private armNextLevel\([\s\S]*?\n {2}\}/.exec(game)
   assert.ok(go, 'there is no next-level route at all')
-  assert.match(go[0], /this\.scene\.start\('Loadout'\)/,
+  const leave = /private leaveWon\([\s\S]*?\n {2}\}/.exec(game)
+  assert.ok(leave, 'there is no way off a won level')
+  assert.match(game, /'NEXT LEVEL', onPick: \(\) => this\.leaveWon\('Loadout', \(\) => this\.armNextLevel\(next\)\)/,
     'NEXT LEVEL does not go straight into the next level')
+  assert.match(leave[0], /this\.scene\.start\(then\)/,
+    'the way off a won level does not start the scene it was asked for')
   assert.ok(!/WorldMap/.test(go[0]),
     'NEXT LEVEL routes through the map, so the player has to find the node it just named')
   // The hand goes with the level. The loadout screen only deals when there is
@@ -314,8 +325,13 @@ test('the world map is a destination, not a router', () => {
   // NEXT LEVEL sets the run state and goes straight to the loadout. It must
   // not leave anything behind that a later visit to the map could replay.
   const game = src('scenes/GameScene.ts')
-  const go = /private goToLevel\([\s\S]*?\n  \}/.exec(game)![0]
-  assert.match(go, /this\.scene\.start\('Loadout'\)/, 'NEXT LEVEL no longer opens the loadout')
-  assert.ok(!/pending|queued|nextRoute/i.test(go),
+  const go = /private armNextLevel\([\s\S]*?\n  \}/.exec(game)![0]
+  const leave = /private leaveWon\([\s\S]*?\n  \}/.exec(game)![0]
+  assert.match(game, /this\.leaveWon\('Loadout', \(\) => this\.armNextLevel\(next\)\)/,
+    'NEXT LEVEL no longer opens the loadout')
+  // THE DESTINATION IS AN ARGUMENT, NOT A STORED FIELD. `leaveWon` takes the
+  // scene it is going to and passes it to the comic as `then`; nothing is
+  // parked on the scene for a later screen to pick up.
+  assert.ok(!/pending|queued|nextRoute/i.test(go + leave),
     'NEXT LEVEL stores a pending route, which a later screen could replay')
 })

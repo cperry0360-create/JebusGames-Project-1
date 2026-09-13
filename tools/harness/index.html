@@ -64,7 +64,7 @@ const SCENARIO_NAMES = [
   'elibar', 'elifire', 'enemyfacing', 'everyloadout', 'facing', 'fps', 'full', 'full13', 'fx',
   'game', 'gateway', 'gestures', 'glacier', 'gnomes', 'goblin', 'heroanim',
   'heroblock', 'herochip', 'herofx', 'herohp', 'lane', 'leak', 'ledger',
-  'labelprobe', 'lettering', 'level6', 'level7', 'level8', 'levelart', 'levels',
+  'labelprobe', 'lettering', 'level6', 'level7', 'level8', 'level9', 'levelart', 'levels',
   'listenerguard', 'loadout', 'locked',
   'loopthrow', 'looptrack', 'lost', 'mapedge', 'maproute', 'markers',
   'meteor', 'mix', 'modal', 'moes', 'music', 'muzzle', 'nightfall',
@@ -112,7 +112,7 @@ const ASSERTS_NOTHING = new Set([
  * scenario joins this list when its checks go through `expect`.
  */
 const USES_EXPECT = new Set([
-  'typegame', 'rotationburst', 'level7', 'level8', 'boardinput',
+  'typegame', 'rotationburst', 'level7', 'level8', 'level9', 'boardinput',
 ])
 
 /** How many checks this run actually EVALUATED, pass or fail. */
@@ -782,7 +782,20 @@ async function run() {
         + ' of ' + LA.ENEMY_SPRITE_KEYS.length + ' loaded, ' + foreign.length + ' foreign resident')
 
       // THE ANIMATIONS, AND THAT THEY HAVE FRAMES IN THEM.
-      for (const s of SHEETS) {
+      //
+      // SCOPED TO THE SHEETS THIS LEVEL ACTUALLY FETCHES, which it did not
+      // have to be until level 9. Every animated sheet used to be boot art and
+      // every level therefore carried every animation, so walking SHEETS whole
+      // was the same list either way. Level 9's seven sheets are level art --
+      // `art.levelArt.byLevel.level9` -- so on level 1 they are correctly NOT
+      // resident and NOT cut, and asserting them there reported seven faults a
+      // level for a loader doing exactly its job.
+      //
+      // The other half of the claim still has to hold and is checked below: a
+      // sheet this level does NOT fetch must not be left cut against a texture
+      // that has been freed, because `anims` is global and `anims.exists` would
+      // skip re-cutting it.
+      for (const s of SHEETS.filter((x) => mine.has(x.key))) {
         const anim = g.anims.get(s.key)
         if (!anim) { bad(label + ': no animation for ' + s.key); continue }
         if (anim.frames.length !== s.frames) {
@@ -795,7 +808,21 @@ async function run() {
           && f.frame.texture === game.textures.get(s.key))
         if (!live) bad(label + ': ' + s.key + ' frames point at a texture that is gone')
       }
-      note('  ' + SHEETS.length + ' effect animations cut against live textures')
+      note('  ' + SHEETS.filter((x) => mine.has(x.key)).length + ' of ' + SHEETS.length
+        + ' effect animations cut against live textures')
+
+      // AND NOTHING LEFT BEHIND. An animation whose texture this level freed is
+      // the quiet failure `forgetEffectAnims` exists to prevent: it plays zero
+      // frames and draws nothing, and the next level to load that sheet is
+      // skipped by `anims.exists`. Level 9 is the first level that can produce
+      // it, because it is the first with sheets of its own.
+      for (const s of SHEETS.filter((x) => !mine.has(x.key))) {
+        const anim = g.anims.get(s.key)
+        if (!anim) continue
+        if (!game.textures.exists(s.key)) {
+          bad(label + ': ' + s.key + ' is still cut, but its texture is gone')
+        }
+      }
 
       // WHAT THIS LEVEL COSTS. `texmem` walks level 1 because that is the
       // path a player takes; the peak is whichever level is dearest, and the
@@ -825,7 +852,12 @@ async function run() {
     // five much larger ones -- so the peak is not level 1's, and each hop is
     // also the case that proves the freeing works: if the level before it were
     // still resident, its enemies would be reported foreign here.
-    for (const id of ['level1', 'level2', 'level3', 'level4', 'level5']) {
+    // LEVEL 9 IS IN THE LIST AND IT IS THE REASON THE LIST GREW. It fields
+    // eight enemy pictures and SEVEN new effect sheets, and `registerEffectAnims`
+    // is the only thing that cuts them -- `anims` is a GLOBAL manager, so an
+    // animation left behind by a freed texture is the exact fault case 3 above
+    // describes. Nothing else in this repository looks at a frame of them.
+    for (const id of ['level1', 'level2', 'level3', 'level4', 'level5', 'level9']) {
       await checkLevel(id, id.replace('level', 'level '))
     }
     // AND BACK TO THE FIRST, which re-loads what four shutdowns have freed.
@@ -15544,6 +15576,515 @@ async function run() {
 
     note('RESULT ' + (ASSERT_FAILS === 0
       ? ASSERTIONS + ' checks, all passed'
+      : '*** ' + ASSERT_FAILS + ' of ' + ASSERTIONS + ' checks failed ***'))
+    return
+  }
+
+  if (scenario === 'level9') {
+    /*
+     * LEVEL 9, IN A RENDERED FRAME.
+     *
+     * Nothing in tests/ can see any of this: no test in this repository
+     * imports Phaser, so a green suite says nothing about a texture, a camera,
+     * an animation or a pixel. Every claim below is read off the live scene.
+     *
+     * The order is the order a player meets them: the registry, the board, the
+     * two mouths and the one interior door, the skin, the four fights, the
+     * decoration, the ending, and then the cleanup on the way out.
+     */
+    const L9 = await import('./js/systems/Levels.js')
+    const RS9 = await import('./js/systems/RunState.js')
+    const LA9 = await import('./js/systems/LevelArt.js')
+    const TS9 = await import('./js/systems/TowerSkins.js')
+    const FX9 = await import('./js/systems/Effects.js')
+    const Enemy9 = (await import('./js/entities/Enemy.js')).Enemy
+    const ENEMIES9 = (await import('./js/data/enemies.json', { with: { type: 'json' } })).default
+    const ART9 = (await import('./js/data/art.json', { with: { type: 'json' } })).default
+
+    /* ---- 1: THE REGISTRY, AND THE ROAD TO IT ---- */
+    const row9 = L9.LEVELS.find((l) => l.id === 'level9')
+    expect(!!row9, 'level 9 has no row in levels.json, so the world map cannot show it')
+    expect(row9 && row9.unlockedBy === 'level8',
+      'level 9 is unlocked by ' + (row9 && row9.unlockedBy) + ', not level8')
+    expect(row9 && row9.name === 'AI Override: Part 1',
+      'the level is called ' + (row9 && row9.name))
+    expect(!L9.isLevelUnlocked('level9', ['level1', 'level2', 'level3', 'level4',
+      'level5', 'level6', 'level7']),
+    'level 9 is open to a player who has not beaten level 8')
+    expect(L9.isLevelUnlocked('level9', ['level8']),
+      'level 9 stays locked to a player who HAS beaten level 8')
+    note('registry: ' + L9.LEVELS.map((l) => l.id).join(' '))
+
+    /* ---- 2: THE BOARD ---- */
+    for (const k of ['Title', 'WorldMap', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+    RS9.setRunState({
+      heroId: 'cory', levelId: 'level9', seed: 11, abilities: ['molotov', 'glacier'],
+      openingTowers: ['withholding', 'writeoff'], reserveTowers: [], resumeFrom: null,
+    })
+    game.scene.start('Game')
+    if (!(await until(() => running('Game') && scene('Game').hero, 25000))) {
+      expect(false, 'level 9 did not start')
+      note('RESULT level 9 did not build'); return
+    }
+    const G = scene('Game')
+    await until(() => running('Hud'), 12000)
+    await sleep(800)
+    expect(G.level.id === 'level9', 'the scene is running ' + G.level.id + ', not level9')
+    const laneIds = G.lanes.lanes.map((l) => l.id)
+    // `entrance` is on the DEF, not on the built Lane -- `LaneNetwork` keeps
+    // id, path and merge and nothing else -- so this reads the map the way
+    // `validateLanes` does rather than a field that is not there.
+    const LN9 = await import('./js/systems/Lanes.js')
+    const entrances = LN9.laneDefs(G.level.map).filter((d) => d.entrance).map((d) => d.id)
+    const exits = G.lanes.lanes.filter((l) => l.merge === null).map((l) => l.id)
+    note('lanes=' + JSON.stringify(laneIds) + '  entrances=' + JSON.stringify(entrances)
+      + '  exits=' + JSON.stringify(exits) + '  pads=' + G.build.spots.length)
+    expect(G.build.spots.length === 15, '15 pads expected, got ' + G.build.spots.length)
+    expect(entrances.length === 2, 'expected two entrance lanes, got ' + JSON.stringify(entrances))
+    expect(exits.length === 1, 'expected ONE exit, got ' + JSON.stringify(exits))
+
+    // THE DOOR IS NOT ON A FRAME EDGE, which is the whole shape of this map and
+    // the one thing a screenshot cannot settle: a terminal 3 px from the right
+    // edge and one 100 px inside it look identical at a glance.
+    {
+      const p = G.lanes.lane(exits[0]).path
+      const end = p.pointAt(p.totalLength)
+      const DIS = (await import('./js/data/display.json', { with: { type: 'json' } })).default
+      const W = DIS.width, H = DIS.height
+      const inset = Math.min(end.x, W - end.x, end.y, H - end.y)
+      note('  the door: (' + Math.round(end.x) + ', ' + Math.round(end.y) + '), '
+        + Math.round(inset) + ' px inside the nearest frame edge of ' + W + 'x' + H)
+      expect(inset > 60, 'the exit is ' + Math.round(inset) + ' px from the frame edge, '
+        + 'which is an edge exit rather than an interior door')
+    }
+    for (const id of laneIds) {
+      const p = G.lanes.lane(id).path
+      note('  lane ' + id + ': ' + Math.round(p.totalLength) + ' px, '
+        + JSON.stringify([Math.round(p.pointAt(0).x), Math.round(p.pointAt(0).y)]) + ' -> '
+        + JSON.stringify([Math.round(p.pointAt(p.totalLength).x),
+          Math.round(p.pointAt(p.totalLength).y)]))
+    }
+    await shot('level9-1-board-' + VP.w + 'x' + VP.h)
+
+    /* ---- 3: THE MACHINE SKIN, HERE AND NOWHERE ELSE ---- */
+    {
+      const skin = TS9.skinForLevel('level9')
+      expect(skin === 'machine', 'level 9 wears skin ' + skin)
+      const others = ['level1', 'level2', 'level3', 'level4', 'level5', 'level6',
+        'level7', 'level8'].filter((id) => TS9.skinForLevel(id) !== null)
+      expect(others.length === 0, 'levels 1-8 are wearing a skin: ' + others.join(', '))
+      // RESIDENT, not merely mapped: the skinned key has to be a texture on
+      // this board or Art.ts falls back to the original and the board looks
+      // unchanged while every list says otherwise.
+      const want = TS9.skinArtForLevel('level9')
+      const absent = want.filter((k) => !game.textures.exists(k))
+      note('  skin "machine": ' + want.length + ' keys, ' + (want.length - absent.length)
+        + ' resident on this board')
+      expect(absent.length === 0, 'skinned art not loaded: ' + absent.join(', '))
+    }
+
+    /* ---- 4: BOTH MOUTHS SPAWN, AND THE DOOR COSTS LIVES ---- */
+    G.status.peanuts = 999999
+    const spawnOn = async (laneId, key) => {
+      const lane = G.lanes.lane(laneId)
+      const e = new Enemy9(G, ENEMIES9[key], lane.path, G.gateway,
+        { lanes: G.lanes, laneId, startAt: { laneDistance: 4, distance: 0 } })
+      G.enemies.push(e)
+      await sleep(260)
+      return e
+    }
+    const a = await spawnOn('north', 'packet')
+    const b = await spawnOn('south', 'packet')
+    note('  north spawn at (' + Math.round(a.x) + ', ' + Math.round(a.y) + ')'
+      + '  south spawn at (' + Math.round(b.x) + ', ' + Math.round(b.y) + ')')
+    expect(a.alive && b.alive, 'an enemy did not survive its own spawn')
+    await shot('level9-2-both-mouths-' + VP.w + 'x' + VP.h)
+
+    {
+      // Driven rather than walked: an enemy put a few pixels short of the
+      // terminal and stepped over it takes the same code path a 2,586 px walk
+      // does, in half a second instead of a minute and a half.
+      const before = G.status.lives
+      const tail = G.lanes.lane(exits[0])
+      const e = new Enemy9(G, ENEMIES9.packet, tail.path, G.gateway,
+        { lanes: G.lanes, laneId: exits[0],
+          startAt: { laneDistance: tail.path.totalLength - 6, distance: 0 } })
+      G.enemies.push(e)
+      await sleep(700)
+      note('  a leak at the interior door: lives ' + before + ' -> ' + G.status.lives)
+      expect(before - G.status.lives >= 1,
+        'getting through the door cost ' + (before - G.status.lives) + ' lives')
+    }
+
+    /* ---- 5: A TOWER ON EVERY ONE OF THE FIFTEEN PADS ---- */
+    {
+      const reach = []
+      // Through the scene's own `place`, which is what the ring calls on
+      // confirm -- the level 6 scenario reaches it the same way and for the
+      // same reason: what is being checked here is the fifteen pads, not the
+      // build UI, and driving the ring needs a camera move per pad.
+      for (const spot of G.build.spots) G.place('withholding', spot)
+      const built = G.towers.length
+      note('  towers built: ' + built + ' of ' + G.build.spots.length)
+      expect(built === G.build.spots.length,
+        'only ' + built + ' of ' + G.build.spots.length + ' pads took a tower')
+      // AND WHICH OF THEM CAN ACTUALLY SHOOT THE ROAD. Three cannot at the
+      // shortest tower's range; that is in the paint and is reported by
+      // tools/check_level9.py, not a fault here. It is measured so a later
+      // change to the pads or the ranges cannot make it worse unnoticed.
+      const pts = []
+      for (const id of laneIds) {
+        const p = G.lanes.lane(id).path
+        for (let d = 0; d <= p.totalLength; d += 8) pts.push(p.pointAt(d))
+      }
+      for (const t of G.towers) {
+        let best = Infinity
+        for (const p of pts) best = Math.min(best, Math.hypot(t.x - p.x, t.y - p.y))
+        reach.push(Math.round(best))
+      }
+      const short = reach.filter((d) => d > 132).length
+      note('  pad standoff: ' + reach.sort((x, y) => x - y).join(' '))
+      note('  ' + short + ' pad(s) are further than 132 px from any road point '
+        + '(the shortest tower\'s range)')
+      expect(short <= 3, short + ' pads cannot reach the road at range 132; the geometry says 3')
+      await shot('level9-3-fifteen-towers-' + VP.w + 'x' + VP.h)
+    }
+
+    /* ---- 6: THE BUG HOVERS, AND IS STILL A GROUND TARGET ---- */
+    {
+      const bug = await spawnOn('north', 'dataBug')
+      if (!bug) { expect(false, 'the bug did not spawn') }
+      expect(ENEMIES9.dataBug.glides === true,
+        'the bug does not glide; it would walk the floor of the board')
+      expect(ENEMIES9.dataBug.flying !== true,
+        'the bug is marked flying, which would need an air-tower check this level has no towers for')
+      // THE HOVER IS THE PICTURE, and this is the honest version of that claim.
+      // `glides` on level 5 means two things -- ground hazards and ground slow
+      // miss it -- and BOTH are read off `NightRules.gliding`, which
+      // `NightRules.from` returns null for on any level without a `phases`
+      // block. Level 9 has no day/night clock and must not grow one to hold a
+      // hover, so on this board `glides` is a STATEMENT with no behaviour yet,
+      // exactly as level 7's Blade Rig says of its own copy of the flag. What
+      // is checkable is that it is not an AIR unit and that an ordinary tower
+      // can still shoot it, which is the half that would break the level.
+      const NR9 = await import('./js/systems/NightRules.js')
+      expect(NR9.NightRules.from(L9.levelRules('level9')) === null,
+        'level 9 has grown a day/night clock')
+      expect(bug.def.layer === undefined,
+        'the bug is on the ' + bug.def.layer + ' layer, which needs an anti-air tier')
+      // HITTABLE. A glider is still on the ground lane, so an ordinary tower
+      // must be able to pick it: the hover is art, not a flight rule.
+      const before = bug.health
+      const t = G.towers[0]
+      if (t) {
+        bug.x = t.x; bug.y = t.y - 10
+        await sleep(1600)
+      }
+      note('  after 1.6 s beside a tower: ' + Math.round(before) + ' -> ' + Math.round(bug.health))
+      expect(bug.health < before, 'a ground tower could not hurt the hovering bug')
+      bug.die()
+      await shot('level9-4-bug-' + VP.w + 'x' + VP.h)
+    }
+
+    /* ---- 7: THE FOUR FIGHTS, FRAME BY FRAME ON THEIR OWN TARGET ---- */
+    // Each sheet is played through the scene's own path and then read back:
+    // which frame it is on, where it is, and that it ends. A sheet with no
+    // frames plays instantly and draws nothing, and nothing anywhere says so.
+    const frames = (key) => (ART9.render[key] && ART9.render[key].sheet
+      ? ART9.render[key].sheet.frames : 0)
+    const playedAt = async (key, x, y, size) => {
+      const before = G.children.list.length
+      const s = FX9.playEffect(G, key, x, y, { size, depth: 99999, durationMs: 700 })
+      await sleep(150)
+      const anim = s.anims && s.anims.currentAnim
+      const frame = s.anims && s.anims.currentFrame
+      const ok = !!(anim && frame && anim.frames.length === frames(key))
+      expect(ok, key + ' played ' + (anim ? anim.frames.length : 0) + ' frames, manifest says '
+        + frames(key))
+      note('    ' + key.padEnd(22) + ' frame ' + (frame ? frame.index : '-') + ' of '
+        + (anim ? anim.frames.length : 0) + ' at (' + Math.round(s.x) + ', ' + Math.round(s.y)
+        + ') size ' + Math.round(s.displayWidth) + 'x' + Math.round(s.displayHeight))
+      expect(Math.round(s.x) === Math.round(x) && Math.round(s.y) === Math.round(y),
+        key + ' drew at (' + Math.round(s.x) + ', ' + Math.round(s.y) + '), not its target')
+      // AND IT TERMINATES. A one-shot that never completes never destroys
+      // itself, and a board that plays one every few seconds ends as a heap of
+      // sprites holding their last frame.
+      await sleep(900)
+      expect(!s.scene, key + ' is still on the board after its animation ended')
+      return before
+    }
+    const victim = G.towers[0] || { x: 640, y: 360 }
+    note('  HAT-GTT')
+    await playedAt('fx-wall-of-text', victim.x, victim.y, 200)
+    await playedAt('fx-hat-regenerate', victim.x, victim.y - 20, 190)
+    note('  CANCER')
+    await playedAt('fx-crab-claw-impact', victim.x, victim.y - 18, 190)
+    note('  NO-PILOT')
+    await playedAt('fx-nopilot-crash', victim.x, victim.y, 165)
+    note('  PERPLEXED')
+    await playedAt('fx-perplexed-query', victim.x, victim.y - 18, 165)
+    note('  THE ENDING')
+    await playedAt('fx-tile-shatter', 1177, 329, 420)
+    // RETRIGGER: the same key again, which is where a destroyed texture or a
+    // stale animation shows up.
+    note('  and again, to prove the animation survives its own first play')
+    await playedAt('fx-perplexed-query', victim.x, victim.y - 18, 165)
+    await shot('level9-5-effects-' + VP.w + 'x' + VP.h)
+
+    /* ---- 8: THE DECORATION ---- */
+    {
+      const items = G.level.map.scenery || []
+      const arcs = G.sceneryArt.filter((o) => o.texture && o.texture.key === 'fx-electrical-arc')
+      const screen = G.sceneryArt.find((o) => o.texture && o.texture.key === 'prop-vlaude-screen')
+      note('  scenery declared ' + items.length + ', built ' + G.sceneryArt.length
+        + ' (' + arcs.length + ' arc(s), ' + (screen ? 'a screen' : 'NO screen') + ')')
+      expect(G.sceneryArt.length === items.length,
+        items.length + ' scenery items declared, ' + G.sceneryArt.length + ' built')
+      expect(!!screen, 'the Vlaude screen is not on the board')
+      // THE ARC LOOPS. `repeat: -1` is the only looping play in the game;
+      // everything else destroys itself on ANIMATION_COMPLETE.
+      for (const s of arcs) {
+        const a = s.anims && s.anims.currentAnim
+        expect(!!(a && s.anims.isPlaying), 'an electrical arc is not playing')
+        expect(!!(s.anims && s.anims.repeat === -1), 'an electrical arc is not looping')
+      }
+      const f0 = arcs[0] && arcs[0].anims.currentFrame.index
+      await sleep(700)
+      const f1 = arcs[0] && arcs[0].anims.currentFrame.index
+      note('  the arc advanced from frame ' + f0 + ' to ' + f1 + ' and is still alive='
+        + !!(arcs[0] && arcs[0].scene))
+      expect(!!(arcs[0] && arcs[0].scene), 'the looping arc destroyed itself')
+      // VLAUDE IS A PROP. Not an enemy, not a tower, not on a pad, not on the
+      // trace. The brief is explicit and each half is checkable.
+      if (screen) {
+        expect(!G.enemies.includes(screen) && !G.towers.includes(screen),
+          'the Vlaude screen is in a combat list')
+        let nearest = Infinity
+        for (const id of laneIds) {
+          const p = G.lanes.lane(id).path
+          for (let d = 0; d <= p.totalLength; d += 8) {
+            const q = p.pointAt(d)
+            nearest = Math.min(nearest, Math.hypot(screen.x - q.x, screen.y - q.y))
+          }
+        }
+        let nearestPad = Infinity
+        for (const s of G.build.spots) {
+          nearestPad = Math.min(nearestPad, Math.hypot(screen.x - s.x, screen.y - s.y))
+        }
+        note('  the screen at (' + Math.round(screen.x) + ', ' + Math.round(screen.y) + '): '
+          + Math.round(nearest) + ' px off the trace, ' + Math.round(nearestPad)
+          + ' px from the nearest pad, drawn ' + Math.round(screen.displayWidth) + 'x'
+          + Math.round(screen.displayHeight))
+        expect(nearest > G.level.map.roadWidth / 2,
+          'the Vlaude screen is sitting on the trace')
+        expect(nearestPad > G.level.map.spotRadius,
+          'the Vlaude screen is covering a build pad')
+      }
+    }
+
+    /* ---- 9: THE RUPTURE, ONCE, AND THE TRANSITION ---- */
+    {
+      const rules = L9.levelRules('level9')
+      const rup = rules && rules.rupture
+      expect(!!rup, 'level 9 declares no rupture')
+      const before = G.children.list.filter((o) => o.texture
+        && o.texture.key === 'fx-tile-shatter').length
+      G.status.lives = 20
+      // POINTED AT THE WRONG END OF THE BOARD FIRST, and zoomed in, so this
+      // check cannot pass by accident. At the default zoom the world camera
+      // happens to show all 1280 px and "is the rupture in view" is true of
+      // any camera at all; that is exactly the shape of a check that looks
+      // green and measures nothing.
+      if (G.rig) { G.rig.setTargetZoom(2.0); G.rig.lookAt(80, 620) }
+      await sleep(900)
+      // WHETHER THE NEXT CHECK CAN SAY ANYTHING, recorded rather than assumed.
+      // `setTargetZoom` is a multiple of COVER zoom and cover is a function of
+      // the viewport, so at a viewport whose shape already shows all 1280x720
+      // -- a desktop window at the design aspect -- no pan can put the door off
+      // screen and "is the rupture in view" is true of every camera. That is a
+      // fact about the window, not a pass: it is said out loud here so the
+      // green at 1280x720 is not read as the same evidence as the green at
+      // 844x390, which is where the bug was actually caught.
+      let panMeaningful = false
+      {
+        const v = G.cameras.main.worldView
+        panMeaningful = !v.contains(1177, 329)
+        note('  before the ending, the camera sees ' + Math.round(v.x) + ',' + Math.round(v.y)
+          + ' ' + Math.round(v.width) + 'x' + Math.round(v.height)
+          + '  rupture in view=' + v.contains(1177, 329)
+          + (panMeaningful ? '  -- the pan has somewhere to go'
+            : '  -- this viewport shows the whole board, so the pan check below is vacuous here'))
+      }
+      G.endRun('won')
+      // The rupture is a delayedCall, so this waits past `delayMs` and then
+      // reads the board rather than assuming.
+      await sleep((rup ? rup.delayMs : 0) + 250)
+      const during = G.children.list.filter((o) => o.texture
+        && o.texture.key === 'fx-tile-shatter')
+      note('  rupture sprites on the board ' + before + ' -> ' + during.length
+        + ' at (' + during.map((o) => Math.round(o.x) + ',' + Math.round(o.y)).join(' ') + ')')
+      // AND THE CAMERA IS LOOKING AT IT. The level's ending played off screen
+      // at every phone viewport before `CameraRig.lookAt` existed: the sprite
+      // was there, on the right frame, and nobody saw it.
+      {
+        const v = G.cameras.main.worldView
+        note('  the world camera sees ' + Math.round(v.x) + ',' + Math.round(v.y) + ' '
+          + Math.round(v.width) + 'x' + Math.round(v.height))
+        expect(v.contains(rup.x, rup.y),
+          'the rupture at ' + rup.x + ',' + rup.y + ' is outside the world camera')
+        if (!panMeaningful) {
+          note('  (vacuous at this viewport -- see the note above; 844x390 and 667x375 are the real ones)')
+        }
+      }
+      expect(during.length === 1, during.length + ' rupture sprites, expected exactly 1')
+      if (during[0]) {
+        const a = during[0].anims && during[0].anims.currentAnim
+        expect(!!(during[0].anims && during[0].anims.repeat === 0),
+          'the rupture is looping; it plays once')
+        note('  it is on frame ' + during[0].anims.currentFrame.index + ' of '
+          + (a ? a.frames.length : 0))
+      }
+      await shot('level9-6-rupture-' + VP.w + 'x' + VP.h)
+      await sleep((rup ? rup.durationMs : 0) + 600)
+      const after = G.children.list.filter((o) => o.texture
+        && o.texture.key === 'fx-tile-shatter').length
+      note('  after it finishes: ' + after + ' rupture sprite(s) left')
+      expect(after === 0, 'the rupture did not clean itself up')
+
+      /* ---- AND THEN THE COMIC, which is the way on to level 10 ---- */
+      // The brief's ending is two things and the rupture is only the first:
+      // the board splits open AND the player is shown what is through it.
+      // `outros` in cutscenes.json is a separate map from `levels` because
+      // `levels` means "plays BEFORE this level" -- see the note there.
+      const CS9 = await import('./js/systems/Cutscenes.js')
+      const outro = CS9.outroPanelsFor('level9')
+      note('  level 9 closes with ' + outro.length + ' panel(s): ' + outro.join(', '))
+      expect(outro.length === 1, 'level 9 has ' + outro.length + ' closing panels')
+      expect(CS9.panelsFor('level9').length === 1,
+        'level 9 opens with ' + CS9.panelsFor('level9').length + ' panels')
+      expect(CS9.cutsceneProblems().length === 0,
+        'cutscenes.json: ' + CS9.cutsceneProblems().join('; '))
+      // THE COMIC ITSELF, through the same call `leaveWon` makes. The results
+      // dialog's buttons are not reachable from here -- GameScene keeps them in
+      // a local -- and a `note` that prints "(not readable)" every run is the
+      // kind of measurement this harness exists to not have.
+      // GAMESCENE GOES FIRST, which is what `leaveWon` does and what the
+      // screenshot needs: started alongside, the results dialog is still drawn
+      // over the comic and the frame shows the scoreboard rather than the
+      // panel -- which is exactly how this shot read the first time.
+      for (const k of ['Game', 'Hud']) game.scene.stop(k)
+      game.scene.start('Cutscene', {
+        levelId: 'level9', then: 'WorldMap', panels: outro,
+      })
+      const upCS = await until(() => running('Cutscene')
+        && scene('Cutscene').placement !== undefined, 20000)
+      expect(upCS, 'the closing comic did not open')
+      if (upCS) {
+        await sleep(700)
+        const cs = scene('Cutscene')
+        const img = cs.children.list.find((o) => o.texture
+          && o.texture.key === CS9.panelKey(outro[0]))
+        note('  the closing panel is drawn ' + (img
+          ? Math.round(img.displayWidth) + 'x' + Math.round(img.displayHeight)
+            + ' at ' + Math.round(img.x) + ',' + Math.round(img.y)
+          : 'NOWHERE'))
+        expect(!!img, 'the closing panel has no image on screen')
+        expect(!!(img && img.displayWidth > 100 && img.displayHeight > 60),
+          'the closing panel is drawn at nothing')
+        await shot('level9-10-closing-comic-' + VP.w + 'x' + VP.h)
+      }
+    }
+
+    /* ---- 10: REACHABLE FROM THE WORLD MAP, AND ENTERABLE ---- */
+    // A row in levels.json is not the same claim as a node a player can reach
+    // and press. This marks levels 1-8 cleared, opens the map, and looks for
+    // level 9's card in the scene graph.
+    {
+      const SV9 = await import('./js/systems/Save.js')
+      for (const k of ['Game', 'Hud']) game.scene.stop(k)
+      for (const id of ['level1', 'level2', 'level3', 'level4', 'level5',
+        'level6', 'level7', 'level8']) SV9.recordRunCleared(id)
+      const open = L9.unlockedLevels(SV9.clearedLevels()).map((l) => l.id)
+      note('  cleared ' + JSON.stringify(SV9.clearedLevels()))
+      note('  open to this player: ' + JSON.stringify(open))
+      expect(open.includes('level9'), 'level 9 is not open to a player who has cleared level 8')
+      expect(L9.furthestUnlocked(SV9.clearedLevels()).id === 'level9',
+        'START RUN would begin ' + L9.furthestUnlocked(SV9.clearedLevels()).id)
+
+      game.scene.start('WorldMap')
+      await until(() => running('WorldMap'), 12000)
+      await sleep(900)
+      const wm = scene('WorldMap')
+      let card = null
+      const visit = (o) => {
+        if (o.texture && o.texture.key === 'card-level9') card = o
+        if (o.list) o.list.forEach(visit)
+      }
+      wm.children.list.forEach(visit)
+      note('  card-level9 on the map: ' + (card
+        ? Math.round(card.x) + ',' + Math.round(card.y) + ' at '
+          + Math.round(card.displayWidth) + 'x' + Math.round(card.displayHeight)
+        : 'NOT DRAWN'))
+      expect(!!card, 'level 9 has no card on the world map')
+      await shot('level9-8-on-the-map-' + VP.w + 'x' + VP.h)
+
+      // AND IT STARTS. Through Loadout, which is the screen between the node
+      // and the board and the one that reads the level id back out.
+      RS9.setRunState({
+        heroId: 'cory', levelId: 'level9', seed: 3, abilities: ['molotov', 'glacier'],
+        openingTowers: ['withholding', 'writeoff'], reserveTowers: [], resumeFrom: null,
+      })
+      game.scene.stop('WorldMap')
+      game.scene.start('Game')
+      const up = await until(() => running('Game') && scene('Game').hero, 25000)
+      expect(up && scene('Game').level.id === 'level9',
+        'entering level 9 from the map ran ' + (up ? scene('Game').level.id : 'nothing'))
+      await sleep(600)
+      // A SECOND BUILD OF THE SAME BOARD, which is also the restart path: the
+      // pads, the scenery and the seven animations all have to come back after
+      // the first run tore them down.
+      const G2 = scene('Game')
+      note('  on the second build: pads=' + G2.build.spots.length
+        + ' scenery=' + G2.sceneryArt.length + ' lanes=' + G2.lanes.lanes.length)
+      expect(G2.build.spots.length === 15, 'the rebuilt board has ' + G2.build.spots.length + ' pads')
+      expect(G2.sceneryArt.length === (G2.level.map.scenery || []).length,
+        'the rebuilt board has ' + G2.sceneryArt.length + ' scenery items')
+      for (const k of ['fx-wall-of-text', 'fx-hat-regenerate', 'fx-crab-claw-impact',
+        'fx-nopilot-crash', 'fx-perplexed-query', 'fx-tile-shatter', 'fx-electrical-arc']) {
+        const anim = G2.anims.get(k)
+        expect(!!(anim && anim.frames.length === frames(k)),
+          k + ' came back with ' + (anim ? anim.frames.length : 0) + ' frames, not ' + frames(k))
+      }
+      // AND A DEFEAT TEARS IT DOWN THE SAME WAY A WIN DOES.
+      G2.status.lives = 0
+      G2.endRun('lost')
+      await sleep(1400)
+      note('  after a defeat: the scene is ' + (running('Game') ? 'still up' : 'stopped'))
+      await shot('level9-9-defeat-' + VP.w + 'x' + VP.h)
+    }
+
+    /* ---- 11: LEAVING CLEANS UP ---- */
+    {
+      for (const k of ['Game', 'Hud']) game.scene.stop(k)
+      game.scene.start('WorldMap')
+      await until(() => running('WorldMap'), 12000)
+      await sleep(800)
+      const held = LA9.levelArtKeys('level9').filter((k) => game.textures.exists(k))
+      note('  level-9 art still resident on the world map: ' + held.length
+        + ' of ' + LA9.levelArtKeys('level9').length)
+      expect(held.length === 0, 'left behind: ' + held.join(', '))
+      // And the animations went with the textures, which is the half that
+      // `anims.exists` would otherwise skip re-cutting next time.
+      const stale = ['fx-wall-of-text', 'fx-hat-regenerate', 'fx-crab-claw-impact',
+        'fx-nopilot-crash', 'fx-perplexed-query', 'fx-tile-shatter', 'fx-electrical-arc']
+        .filter((k) => game.anims.exists(k))
+      note('  level-9 effect animations still cut: ' + (stale.length ? stale.join(', ') : 'none'))
+      expect(stale.length === 0, 'animations left cut against freed textures: ' + stale.join(', '))
+      await shot('level9-7-worldmap-' + VP.w + 'x' + VP.h)
+    }
+
+    note('RESULT ' + (ASSERT_FAILS === 0
+      ? ASSERTIONS + ' checks on level 9, all passing'
       : '*** ' + ASSERT_FAILS + ' of ' + ASSERTIONS + ' checks failed ***'))
     return
   }

@@ -47,7 +47,7 @@
         },
         {
           "enemy": "packet",
-          "count": 5,
+          "count": 1,
           "interval": 1.0,
           "delay": 7,
           "lane": "south"
@@ -165,21 +165,21 @@
         },
         {
           "enemy": "serverWalker",
-          "count": 4,
+          "count": 3,
           "interval": 4.2,
           "delay": 8,
           "lane": "south"
         },
         {
           "enemy": "corrupt",
-          "count": 6,
+          "count": 5,
           "interval": 1.7,
           "delay": 22,
           "lane": "north"
         },
         {
           "enemy": "packet",
-          "count": 6,
+          "count": 5,
           "interval": 1.0,
           "delay": 34,
           "lane": "south"
@@ -191,7 +191,7 @@
       "spawns": [
         {
           "enemy": "packet",
-          "count": 12,
+          "count": 11,
           "interval": 0.7,
           "delay": 0,
           "lane": "south"
@@ -205,10 +205,17 @@
         },
         {
           "enemy": "dataBug",
-          "count": 4,
-          "interval": 1.5,
+          "count": 7,
+          "interval": 1.4,
           "delay": 18,
           "lane": "south"
+        },
+        {
+          "enemy": "corrupt",
+          "count": 3,
+          "interval": 1.7,
+          "delay": 28,
+          "lane": "north"
         }
       ]
     },
@@ -218,21 +225,21 @@
         {
           "enemy": "serverWalker",
           "count": 4,
-          "interval": 3.6,
+          "interval": 3.4,
           "delay": 0,
           "lane": "north"
         },
         {
           "enemy": "corrupt",
           "count": 6,
-          "interval": 1.6,
+          "interval": 1.5,
           "delay": 10,
           "lane": "south"
         },
         {
           "enemy": "dataBug",
           "count": 5,
-          "interval": 1.4,
+          "interval": 1.3,
           "delay": 22,
           "lane": "north"
         }
@@ -250,8 +257,8 @@
         },
         {
           "enemy": "serverWalker",
-          "count": 3,
-          "interval": 3.8,
+          "count": 4,
+          "interval": 3.4,
           "delay": 4,
           "lane": "north"
         },
@@ -264,8 +271,8 @@
         },
         {
           "enemy": "corrupt",
-          "count": 5,
-          "interval": 1.8,
+          "count": 6,
+          "interval": 1.6,
           "delay": 26,
           "lane": "north"
         }
@@ -280,30 +287,31 @@
           "count": 1,
           "interval": 2.0,
           "delay": 0,
-          "lane": "south"
+          "lane": "north"
         },
         {
           "enemy": "serverWalker",
           "count": 5,
-          "interval": 4.0,
+          "interval": 3.4,
           "delay": 6,
           "lane": "north"
         },
         {
           "enemy": "corrupt",
           "count": 8,
-          "interval": 1.8,
+          "interval": 1.5,
           "delay": 20,
           "lane": "south"
         },
         {
           "enemy": "packet",
           "count": 12,
-          "interval": 0.8,
+          "interval": 0.7,
           "delay": 32,
           "lane": "north"
         }
-      ]
+      ],
+      "_lane": "NO-PILOT MOVED SOUTH -> NORTH, for two reasons and both were measured. DESIGN: south is 1672 px against north's 2586, and No-Pilot is the fastest thing in the game at 58 px/s -- so on the short arm it reached the door in 29 seconds past a third of the guns, and 16 of 40 soaked runs had it walk out. A charger needs runway or it is not a fight, it is a timer. MEASUREMENT: its blades are contact damage, and the only thing on levels 2-9 they can cut is the hero -- the garrison tower is drafted on level 1 alone, via `extraTowerWeights`, so no soaked board on this level has a soldier standing anywhere. The soak parks the hero midway down the MAIN lane, which is north, so a No-Pilot on south never came within 359 px of the one thing its ability works on and the blades measured exactly 0 damage a run. Level 7's Blade Rig measures the same zero for the same reason -- see reports/2026-09-13-level-9.md. SO EVERY BOSS COMES DOWN THE LONG ARM NOW and the escorts alternate, which is also the more readable board: the player learns where the boss enters and builds for it."
     },
     {
       "name": "Hot Path",
@@ -311,23 +319,30 @@
         {
           "enemy": "dataBug",
           "count": 8,
-          "interval": 1.1,
+          "interval": 1.0,
           "delay": 0,
           "lane": "north"
         },
         {
           "enemy": "packet",
-          "count": 12,
-          "interval": 0.7,
+          "count": 14,
+          "interval": 0.6,
           "delay": 6,
           "lane": "south"
         },
         {
           "enemy": "serverWalker",
           "count": 5,
-          "interval": 3.6,
+          "interval": 3.2,
           "delay": 18,
           "lane": "north"
+        },
+        {
+          "enemy": "corrupt",
+          "count": 5,
+          "interval": 1.6,
+          "delay": 30,
+          "lane": "south"
         }
       ]
     },
@@ -337,23 +352,30 @@
         {
           "enemy": "serverWalker",
           "count": 6,
-          "interval": 3.2,
+          "interval": 2.8,
           "delay": 0,
           "lane": "south"
         },
         {
           "enemy": "corrupt",
-          "count": 8,
-          "interval": 1.5,
+          "count": 9,
+          "interval": 1.3,
           "delay": 8,
           "lane": "north"
         },
         {
           "enemy": "dataBug",
           "count": 7,
-          "interval": 1.3,
+          "interval": 1.1,
           "delay": 24,
           "lane": "south"
+        },
+        {
+          "enemy": "packet",
+          "count": 9,
+          "interval": 0.7,
+          "delay": 34,
+          "lane": "north"
         }
       ]
     },
@@ -362,29 +384,29 @@
       "spawns": [
         {
           "enemy": "packet",
-          "count": 14,
-          "interval": 0.6,
+          "count": 16,
+          "interval": 0.5,
           "delay": 0,
           "lane": "south"
         },
         {
           "enemy": "serverWalker",
-          "count": 4,
-          "interval": 3.4,
+          "count": 6,
+          "interval": 2.8,
           "delay": 6,
           "lane": "north"
         },
         {
           "enemy": "dataBug",
-          "count": 8,
-          "interval": 1.1,
+          "count": 9,
+          "interval": 1.0,
           "delay": 18,
           "lane": "south"
         },
         {
           "enemy": "corrupt",
-          "count": 8,
-          "interval": 1.5,
+          "count": 10,
+          "interval": 1.2,
           "delay": 28,
           "lane": "north"
         }
@@ -403,29 +425,29 @@
         },
         {
           "enemy": "serverWalker",
-          "count": 5,
-          "interval": 3.6,
+          "count": 7,
+          "interval": 2.8,
           "delay": 8,
           "lane": "south"
         },
         {
           "enemy": "dataBug",
-          "count": 8,
-          "interval": 1.2,
+          "count": 9,
+          "interval": 1.0,
           "delay": 18,
           "lane": "north"
         },
         {
           "enemy": "packet",
-          "count": 14,
-          "interval": 0.6,
+          "count": 19,
+          "interval": 0.5,
           "delay": 28,
           "lane": "south"
         },
         {
           "enemy": "corrupt",
-          "count": 8,
-          "interval": 1.4,
+          "count": 11,
+          "interval": 1.2,
           "delay": 38,
           "lane": "north"
         }

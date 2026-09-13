@@ -254,6 +254,38 @@ export interface MapDef {
   }[]
 }
 
+/**
+ * The board splitting open at the end of a level, once, on a win.
+ *
+ * Level 9 only, and it lives in that level's rules file rather than in the
+ * scene for the reason every other per-level block does: `levelRules` returns
+ * null for a level that names no rules file, so this is a no-op everywhere
+ * else by construction. `x`/`y` are the world point it is centred on — level
+ * 9 uses the exit terminal its own map declares, because the fiction is that
+ * the way out opens where the enemies were going.
+ */
+export interface RuptureDef {
+  /** The sheet, as an art.json key. Eight frames, played once. */
+  fx: string
+  x: number
+  y: number
+  /** The size of the (square) frame box on screen, in world pixels. */
+  size: number
+  durationMs: number
+  /**
+   * Milliseconds between the run ending and the split starting.
+   *
+   * NOT DEAD TIME: it is how long the world camera has to get there.
+   * `GameScene.endRun` points the rig at `x`/`y` on the same frame the run
+   * ends and the rig eases over this delay, because the camera shows about a
+   * third of the board at a phone's zoom and the door is off the right of it
+   * unless the player had panned there themselves. Shorten this and the ending
+   * plays before the camera arrives.
+   */
+  delayMs: number
+  shakeMs: number
+}
+
 export interface ServerNukeDef {
   abilityId: string
   /** Chance per qualifying kill, 0-1. */
