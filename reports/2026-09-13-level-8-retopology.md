@@ -306,3 +306,12 @@ STEP 3's visuals, STEP 4 whole.
 5. **Level 7 carries 22 pads and level 1 carries 7.** The 14-15 habit is worth
    either adopting as a rule or abandoning explicitly, because boss health is
    measured per board and the spread is now 3x.
+6. **`claude/context.md` goes stale the moment this branch merges**, in three
+   named places, and it is another session's living record so this branch did
+   not edit it: line 187 lists pads for levels 1-8 only (nine levels now, the
+   ninth carrying 15); line 241 publishes level 8 at 41% (42% after the
+   re-topology, though the line already defers to `SOAK-REPORT.md`, which this
+   branch updated); and lines 315-316 say neither level 9 nor 10 is wired up and
+   that the level 9 geometry "is on a branch" — level 9 ships here. Whoever
+   merges should refresh those three lines; nothing else in that file is
+   contradicted.
