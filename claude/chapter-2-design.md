@@ -31,10 +31,15 @@ It opens with the comic: the boys asking for more, the mechanics pile-up, the
 survival stage with a boss, cleared or failed. This reuses the story
 progression model already in the repo rather than inventing a second one.
 
-Note for the world map: this touches open item 9 in `claude/context.md`. The
-map shows 20 slots against a scope of 10 story levels. Other Game levels are a
-candidate for the back half, but they need their own entry point rather than
-sitting on the story road.
+Note for the world map: the padlock question this used to raise is settled.
+`claude/context.md` carried it as an open item — the map showed 20 slots against
+a scope of 10 story levels — and it was closed on 2026-09-13: `plannedLevels` is
+10 and the road folds into two rows of five that fit the 1280 design box with no
+scrollbar. So there is no spare back half to put Other Game levels in, and
+raising the count is not free: eleven slots is a third row, and two rows already
+spend 498 of the band's 522 units. Other Game levels need their own entry point
+rather than a place on the story road — which is what this document already
+argues for on its own terms.
 
 ## The comic library
 
@@ -105,8 +110,12 @@ the nearest enemy with no input. This caps buttons at two, and it makes each
 hero feel different for free without authoring anything new.
 
 Courtland as the worked example: Mind Laser is the auto weapon, held on the
-nearest target. Seismic and Mind Control are the two buttons. That finally
-gives `fx_mind_control` a mechanic, which is open item 4 in the context doc.
+nearest target. Seismic and Mind Control are the two buttons. **These are his
+real names and his real powers now** — `heroes.json` gives him Seismic, Mind
+Control and Mind Laser, each bound to the icon it was drawn for, and Mind
+Control sets `Enemy.controlled` so `fx_mind_control` has a mechanic in story
+mode. The context doc used to carry both of those as open items; both closed on
+2026-09-13. Nothing here has to invent them.
 
 Open: do heroes keep the 50% health buff and temporary invincibility as a
 survival beat, or does it go with the transform? Recommend keeping it as a
