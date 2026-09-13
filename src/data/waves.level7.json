@@ -1,11 +1,11 @@
 {
   "_note": "LEVEL 7, THE HIGHWAY: thirteen waves over THREE independent lanes. Every group names the lane it walks in from -- `north`, `middle` or `south` -- because on this map that is the only thing that decides which road an enemy takes. There is no fork and no `exit` field anywhere in this table: the three highways never touch, so where a group comes in is where it goes out.",
-  "_lanes": "THE THREE ARE NOT EQUIVALENT, AND THAT IS THE LEVEL.\n\nMIDDLE is the best-defended road on any board in the game: 94.1% of it is inside a tower's reach, because both medians touch it and twenty of the 22 pads stand in one of them.\n\nNORTH is 90.2% covered. Its only weakness is the first 72 px, where a pad cannot stand close enough to the frame to reach.\n\nSOUTH is 83.1%, AND ITS LAST 189 px ARE UNREACHABLE -- from x=1090 to the exit no pad can cover it, because the rusted pickup in the lower median classifies as road and no pad core fits beside it. Anything that survives to x=1090 in the south lane is out, whatever the player does. See map_level7.json's `_coverage`.\n\nSo the table leans on which lane carries the weight rather than treating them as one road three times. Early waves come down the north lane, where a player who has not looked at the board will be short of guns. The middle arrives once there is something worth putting in a median. The south is held back until the player has had a reason to look at the far end of it.",
+  "_lanes": "THE THREE ARE NOT EQUIVALENT, AND THAT IS THE LEVEL.\n\nMIDDLE is the best-defended road on any board in the game: 94.1% of it is inside a tower's reach, because BOTH medians touch it and twenty of the 22 pads stand in one of them. Measured, about four towers bear on any point of it.\n\nNORTH is 90.2% covered, by the upper median's nine pads and nothing else -- about two towers on any point, half the middle's.\n\nSOUTH is 83.1%, covered by the lower median's ten pads and one lone pad below it, AND ITS LAST 189 px ARE UNREACHABLE: from x=1090 to the exit no pad can cover it, because the rusted pickup in the lower median classifies as road and no pad core fits beside it. Anything that survives to x=1090 in the south lane is out, whatever the player does. See map_level7.json's `_coverage`.\n\nSO THE TABLE DOES NOT SPLIT ITS TRAFFIC EVENLY, and the soak is why. North and middle carry about 38% of the level's health each and the south 24% -- roughly in proportion to the guns that bear on each -- and even at that share the south exit still takes 68% of every life lost. An even split put the level at 0% at every rank-and-file health from 40% to 100% of the brief's.",
   "_allThree": "ALL THREE LANES AT ONCE IS AN EVENT, NOT THE NORM, which is why exactly three waves do it: 7, 10 and 12. Nine of the other ten run on two lanes and wave 1 runs on one. A table that filled all three every time would make the board's twenty double-covering pads compulsory rather than clever, and the whole design of this map is that a tower in a median is a choice that pays twice.",
-  "_pacing": "THE LANES ARE SHORT AND THE PACING IS BUILT FOR THAT, not for level 6's. Gateway to gateway is 1400 px on every lane, so a Rust Bucket at 125 px/s crosses in 11.2 s, a Roadrager at 150 in 9.3 s, a Delivery at 55 in 25.5 s, a Blade Rig at 45 in 31.1 s and the Transporter at 38 in 36.8 s. Anything past the guns reaches the exit almost immediately, so the intervals here are tight and the delays are short: a group that starts 14 s late on a level like this is a group that arrives after the wave is over.",
+  "_pacing": "THE LANES ARE SHORT AND THE PACING IS BUILT FOR THAT, not for level 6's. Gateway to gateway is 1400 px on every lane -- THE SHORTEST ROUTE IN THE GAME -- so a Rust Bucket at 125 px/s crosses in 11.2 s, a Roadrager at 190 in 7.4 s, a Delivery at 55 in 25.5 s, a Blade Rig at 45 in 31.1 s and the Transporter at 38 in 36.8 s.\n\nWHAT THAT DOES TO A TOWER is the number this table was rebuilt around. A tower at the house standoff covers about 238 px of the lane beside it, which is 1.9 SECONDS of a Rust Bucket -- against 4.1 s on level 1 and 2.9 s on level 6. The brief's opening of six cars at 85 health on three roads was, measured, nearly twice the demand of the worst wave 1 in the game, and the level soaked at 0/40 at every health from 34 to 85. It opens with THREE on one road now, and the whole curve is 240 health growing at 36% a wave.",
   "_economy": "THE ECONOMY IS rules.json'S, UNCHANGED: 100 starting peanuts on normal, 35 a wave cleared, and each enemy's own reward. Nothing here sets a purse. The rewards are the roster's -- Rust Bucket 10, Roadrager 18, The Delivery 32 -- and the four cars off the Transporter's trailer pay NOTHING, which is what stops the finale being a payday at the moment there is nothing left to spend it on.",
   "_bladeRig": "THE BLADE RIG APPEARS TWICE, AT WAVES 8 AND 11, ONE AT A TIME AND NEVER TOGETHER. It cannot be blocked, slowed or stunned and it cuts any player ground unit it drives through, so the answer to it is guns and getting out of the way rather than crowd control. Its first appearance is on the MIDDLE lane, the best-covered road on the board, because the lesson should be learnable; its second is on the SOUTH, where the last 189 px are nobody's, because by then the lesson has been learned.\n\nBoth waves carry `boss` so the Rig gets a name card and the bar across the top. It is `tier: elite` rather than `tier: boss` on its own row -- see enemies.json -- so this is a mini boss being announced, which is what it is.",
-  "_boss": "THE TRANSPORTER ARRIVES AT WAVE 13 AND NOWHERE ELSE, ROUTED SOUTH. That is the whole fight: 1,150 px of covered road between the gateway and x=1090 at 38 px/s is 30.3 seconds of exposure, and after that no tower on the board can touch it. A player whose guns cannot finish it inside that window does not get a second chance -- it walks out and takes 18 lives with it.\n\nAND WHEN IT DIES IT UNLOADS. Four cars come off the trailer at the place it died, one red, one blue, one yellow and one green, already rolling, and the wave does not end until all four are dead or out. Kill it early and they have most of a highway to cross. Kill it at x=1080 and four cars are 10 px from a stretch no gun reaches, and eight lives go with them. There is no clamp and no grace period; see enemies.json's `_finale`.",
+  "_boss": "THE TRANSPORTER ARRIVES AT WAVE 13 AND NOWHERE ELSE, ROUTED DOWN THE MIDDLE -- and it is routed there because the south lane was measured and rejected. On the south highway only 11 of the 22 pads can reach it and its last 189 px are nobody's, so the fight is a deadline against a stretch of road rather than a contest with the board: soaked at 40 seeds the level lands in band at 650 HEALTH there, which is LESS than the wave 8 mini boss's and reads as a finale weaker than the wave before it. Down the middle -- 94.1% covered, both medians bearing on it -- the same band costs 3,000, and the sensitivity table is steep and clean either way. The numbers are in reports/2026-09-13-level-7.md.\n\nAND WHEN IT DIES IT UNLOADS. Four cars come off the trailer at the place it fell, one red, one blue, one yellow and one green, already rolling, and the wave does not end until all four are dead or out. Kill it early and they have most of a highway to cross; kill it on the exit line and four cars are on the exit line and eight lives go with them. There is no clamp and no grace period -- see enemies.json's `_finale` -- and the soak measures what that actually costs: over 60 runs the boss fell with a MEAN of 504 px of road left, never once inside the last 300, and the cars still ended 47% of the losing runs.",
   "waves": [
     {
       "name": "Merging Traffic",
@@ -13,9 +13,9 @@
       "spawns": [
         {
           "enemy": "hatchback",
-          "count": 6,
-          "interval": 1.4,
-          "delay": 0,
+          "count": 4,
+          "interval": 1.6,
+          "delay": 1,
           "lane": "north"
         }
       ]
@@ -26,17 +26,17 @@
       "spawns": [
         {
           "enemy": "hatchback",
-          "count": 5,
-          "interval": 1.2,
-          "delay": 0,
+          "count": 3,
+          "interval": 1.4,
+          "delay": 1,
           "lane": "north"
         },
         {
           "enemy": "hatchback",
-          "count": 3,
-          "interval": 1.2,
+          "count": 2,
+          "interval": 1.4,
           "delay": 3,
-          "lane": "south"
+          "lane": "middle"
         }
       ]
     },
@@ -46,24 +46,17 @@
       "spawns": [
         {
           "enemy": "hatchback",
-          "count": 6,
-          "interval": 1.0,
-          "delay": 0,
-          "lane": "middle"
-        },
-        {
-          "enemy": "musclecar",
-          "count": 1,
-          "interval": 2.0,
-          "delay": 4,
+          "count": 4,
+          "interval": 1.2,
+          "delay": 1,
           "lane": "middle"
         },
         {
           "enemy": "hatchback",
           "count": 3,
           "interval": 1.2,
-          "delay": 2,
-          "lane": "north"
+          "delay": 3,
+          "lane": "south"
         }
       ]
     },
@@ -71,25 +64,32 @@
       "name": "Rush Hour",
       "spawns": [
         {
-          "enemy": "hatchback",
-          "count": 7,
-          "interval": 0.9,
-          "delay": 0,
-          "lane": "south"
-        },
-        {
           "enemy": "musclecar",
-          "count": 2,
-          "interval": 2.0,
-          "delay": 3,
+          "count": 1,
+          "interval": 1.5,
+          "delay": 2,
           "lane": "south"
         },
         {
           "enemy": "hatchback",
           "count": 4,
           "interval": 1.1,
-          "delay": 5,
-          "lane": "middle"
+          "delay": 1,
+          "lane": "south"
+        },
+        {
+          "enemy": "musclecar",
+          "count": 1,
+          "interval": 1.5,
+          "delay": 4,
+          "lane": "north"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 2,
+          "interval": 1.1,
+          "delay": 3,
+          "lane": "north"
         }
       ]
     },
@@ -98,31 +98,31 @@
       "_name": "The Delivery, first appearance: 420 health, 12 armour and 55 px/s, which is a wall that takes 25 seconds to cross a lane the rest of the traffic clears in eleven. It comes down the middle, so the wall is fought where a median tower can reach it.",
       "spawns": [
         {
-          "enemy": "van",
+          "enemy": "musclecar",
           "count": 1,
-          "interval": 3.0,
-          "delay": 0,
+          "interval": 1.5,
+          "delay": 2,
           "lane": "middle"
         },
         {
           "enemy": "hatchback",
           "count": 6,
-          "interval": 0.9,
-          "delay": 2,
+          "interval": 1.0,
+          "delay": 1,
           "lane": "middle"
         },
         {
           "enemy": "musclecar",
-          "count": 2,
-          "interval": 1.8,
-          "delay": 5,
+          "count": 1,
+          "interval": 1.5,
+          "delay": 4,
           "lane": "north"
         },
         {
           "enemy": "hatchback",
           "count": 4,
-          "interval": 1.1,
-          "delay": 4,
+          "interval": 1.0,
+          "delay": 3,
           "lane": "north"
         }
       ]
@@ -131,31 +131,31 @@
       "name": "Hard Shoulder",
       "spawns": [
         {
+          "enemy": "musclecar",
+          "count": 2,
+          "interval": 1.5,
+          "delay": 2,
+          "lane": "north"
+        },
+        {
           "enemy": "hatchback",
-          "count": 8,
-          "interval": 0.8,
-          "delay": 0,
+          "count": 7,
+          "interval": 0.9,
+          "delay": 1,
           "lane": "north"
         },
         {
           "enemy": "musclecar",
-          "count": 3,
-          "interval": 1.6,
-          "delay": 3,
-          "lane": "north"
-        },
-        {
-          "enemy": "van",
           "count": 1,
-          "interval": 3.0,
-          "delay": 1,
+          "interval": 1.5,
+          "delay": 4,
           "lane": "south"
         },
         {
           "enemy": "hatchback",
-          "count": 4,
-          "interval": 1.0,
-          "delay": 6,
+          "count": 7,
+          "interval": 0.9,
+          "delay": 3,
           "lane": "south"
         }
       ]
@@ -165,45 +165,45 @@
       "_name": "THE FIRST EVENT WAVE. All three highways carrying at once, with the weight on the south -- which is the lane whose east end nobody can reach. Twenty-two pads is a lot of board and this is the wave that asks whether the player used the medians or stacked everything on one road.",
       "spawns": [
         {
-          "enemy": "van",
-          "count": 2,
-          "interval": 3.4,
-          "delay": 0,
-          "lane": "south"
-        },
-        {
-          "enemy": "hatchback",
-          "count": 6,
-          "interval": 0.8,
-          "delay": 3,
-          "lane": "south"
-        },
-        {
           "enemy": "musclecar",
           "count": 2,
-          "interval": 1.6,
+          "interval": 1.5,
           "delay": 2,
+          "lane": "south"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 7,
+          "interval": 0.9,
+          "delay": 1,
+          "lane": "south"
+        },
+        {
+          "enemy": "musclecar",
+          "count": 1,
+          "interval": 1.5,
+          "delay": 4,
           "lane": "middle"
         },
         {
           "enemy": "hatchback",
-          "count": 4,
+          "count": 7,
           "interval": 0.9,
-          "delay": 5,
+          "delay": 3,
           "lane": "middle"
         },
         {
           "enemy": "musclecar",
-          "count": 2,
-          "interval": 1.6,
-          "delay": 4,
+          "count": 1,
+          "interval": 1.5,
+          "delay": 6,
           "lane": "north"
         },
         {
           "enemy": "hatchback",
-          "count": 2,
-          "interval": 1.0,
-          "delay": 7,
+          "count": 5,
+          "interval": 0.9,
+          "delay": 5,
           "lane": "north"
         }
       ]
@@ -221,17 +221,17 @@
           "lane": "middle"
         },
         {
-          "enemy": "hatchback",
-          "count": 10,
-          "interval": 0.8,
+          "enemy": "musclecar",
+          "count": 2,
+          "interval": 1.5,
           "delay": 6,
           "lane": "north"
         },
         {
-          "enemy": "musclecar",
-          "count": 3,
-          "interval": 1.6,
-          "delay": 10,
+          "enemy": "hatchback",
+          "count": 7,
+          "interval": 0.9,
+          "delay": 5,
           "lane": "north"
         }
       ]
@@ -241,31 +241,45 @@
       "spawns": [
         {
           "enemy": "van",
-          "count": 2,
-          "interval": 3.2,
+          "count": 1,
+          "interval": 3.0,
           "delay": 0,
-          "lane": "south"
-        },
-        {
-          "enemy": "hatchback",
-          "count": 8,
-          "interval": 0.7,
-          "delay": 3,
-          "lane": "south"
+          "lane": "middle"
         },
         {
           "enemy": "musclecar",
-          "count": 5,
-          "interval": 1.4,
+          "count": 3,
+          "interval": 1.5,
           "delay": 2,
           "lane": "middle"
         },
         {
           "enemy": "hatchback",
-          "count": 6,
+          "count": 7,
           "interval": 0.8,
-          "delay": 6,
+          "delay": 1,
           "lane": "middle"
+        },
+        {
+          "enemy": "van",
+          "count": 1,
+          "interval": 3.0,
+          "delay": 2,
+          "lane": "south"
+        },
+        {
+          "enemy": "musclecar",
+          "count": 2,
+          "interval": 1.5,
+          "delay": 4,
+          "lane": "south"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 5,
+          "interval": 0.8,
+          "delay": 3,
+          "lane": "south"
         }
       ]
     },
@@ -275,44 +289,65 @@
       "spawns": [
         {
           "enemy": "van",
-          "count": 2,
+          "count": 1,
           "interval": 3.0,
           "delay": 0,
           "lane": "north"
         },
         {
-          "enemy": "hatchback",
-          "count": 8,
-          "interval": 0.7,
+          "enemy": "musclecar",
+          "count": 3,
+          "interval": 1.5,
           "delay": 2,
           "lane": "north"
         },
         {
-          "enemy": "musclecar",
-          "count": 3,
-          "interval": 1.4,
-          "delay": 5,
+          "enemy": "hatchback",
+          "count": 9,
+          "interval": 0.8,
+          "delay": 1,
           "lane": "north"
         },
         {
           "enemy": "van",
           "count": 1,
           "interval": 3.0,
-          "delay": 1,
+          "delay": 2,
           "lane": "middle"
         },
         {
           "enemy": "musclecar",
-          "count": 3,
-          "interval": 1.4,
+          "count": 2,
+          "interval": 1.5,
           "delay": 4,
           "lane": "middle"
         },
         {
           "enemy": "hatchback",
-          "count": 6,
+          "count": 4,
           "interval": 0.8,
           "delay": 3,
+          "lane": "middle"
+        },
+        {
+          "enemy": "van",
+          "count": 1,
+          "interval": 3.0,
+          "delay": 4,
+          "lane": "south"
+        },
+        {
+          "enemy": "musclecar",
+          "count": 2,
+          "interval": 1.5,
+          "delay": 6,
+          "lane": "south"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 1,
+          "interval": 0.8,
+          "delay": 5,
           "lane": "south"
         }
       ]
@@ -330,25 +365,39 @@
           "lane": "south"
         },
         {
-          "enemy": "hatchback",
-          "count": 12,
-          "interval": 0.7,
+          "enemy": "van",
+          "count": 1,
+          "interval": 3.0,
           "delay": 4,
           "lane": "middle"
         },
         {
           "enemy": "musclecar",
-          "count": 4,
-          "interval": 1.3,
-          "delay": 8,
+          "count": 3,
+          "interval": 1.5,
+          "delay": 6,
           "lane": "middle"
         },
         {
-          "enemy": "van",
-          "count": 1,
-          "interval": 3.0,
-          "delay": 2,
+          "enemy": "hatchback",
+          "count": 6,
+          "interval": 0.8,
+          "delay": 5,
           "lane": "middle"
+        },
+        {
+          "enemy": "musclecar",
+          "count": 1,
+          "interval": 1.5,
+          "delay": 8,
+          "lane": "north"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 6,
+          "interval": 0.8,
+          "delay": 7,
+          "lane": "north"
         }
       ]
     },
@@ -358,65 +407,65 @@
       "spawns": [
         {
           "enemy": "van",
-          "count": 2,
-          "interval": 2.8,
+          "count": 1,
+          "interval": 3.0,
           "delay": 0,
-          "lane": "middle"
-        },
-        {
-          "enemy": "hatchback",
-          "count": 7,
-          "interval": 0.65,
-          "delay": 3,
           "lane": "middle"
         },
         {
           "enemy": "musclecar",
           "count": 3,
-          "interval": 1.3,
-          "delay": 6,
+          "interval": 1.5,
+          "delay": 2,
+          "lane": "middle"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 11,
+          "interval": 0.75,
+          "delay": 1,
           "lane": "middle"
         },
         {
           "enemy": "van",
           "count": 1,
           "interval": 3.0,
-          "delay": 1,
-          "lane": "north"
-        },
-        {
-          "enemy": "hatchback",
-          "count": 6,
-          "interval": 0.7,
-          "delay": 4,
+          "delay": 2,
           "lane": "north"
         },
         {
           "enemy": "musclecar",
-          "count": 2,
-          "interval": 1.4,
-          "delay": 2,
+          "count": 3,
+          "interval": 1.5,
+          "delay": 4,
+          "lane": "north"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 10,
+          "interval": 0.75,
+          "delay": 3,
           "lane": "north"
         },
         {
           "enemy": "van",
           "count": 1,
           "interval": 3.0,
-          "delay": 2,
-          "lane": "south"
-        },
-        {
-          "enemy": "hatchback",
-          "count": 5,
-          "interval": 0.7,
-          "delay": 5,
+          "delay": 4,
           "lane": "south"
         },
         {
           "enemy": "musclecar",
-          "count": 2,
-          "interval": 1.4,
-          "delay": 8,
+          "count": 3,
+          "interval": 1.5,
+          "delay": 6,
+          "lane": "south"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 7,
+          "interval": 0.75,
+          "delay": 5,
           "lane": "south"
         }
       ]
@@ -431,35 +480,56 @@
           "count": 1,
           "interval": 2.0,
           "delay": 0,
-          "lane": "south"
+          "lane": "middle"
         },
         {
-          "enemy": "musclecar",
-          "count": 6,
-          "interval": 1.4,
-          "delay": 8,
-          "lane": "north"
-        },
-        {
-          "enemy": "hatchback",
-          "count": 8,
-          "interval": 0.7,
+          "enemy": "van",
+          "count": 1,
+          "interval": 3.0,
           "delay": 4,
           "lane": "north"
         },
         {
-          "enemy": "van",
+          "enemy": "musclecar",
           "count": 3,
-          "interval": 2.8,
+          "interval": 1.5,
           "delay": 6,
+          "lane": "north"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 6,
+          "interval": 0.8,
+          "delay": 5,
+          "lane": "north"
+        },
+        {
+          "enemy": "van",
+          "count": 1,
+          "interval": 3.0,
+          "delay": 6,
+          "lane": "middle"
+        },
+        {
+          "enemy": "musclecar",
+          "count": 3,
+          "interval": 1.5,
+          "delay": 8,
           "lane": "middle"
         },
         {
           "enemy": "hatchback",
           "count": 6,
-          "interval": 0.7,
-          "delay": 12,
+          "interval": 0.8,
+          "delay": 7,
           "lane": "middle"
+        },
+        {
+          "enemy": "hatchback",
+          "count": 4,
+          "interval": 1.0,
+          "delay": 10,
+          "lane": "south"
         }
       ]
     }

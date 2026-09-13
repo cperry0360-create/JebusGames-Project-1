@@ -747,16 +747,18 @@
     "role": "basic",
     "tier": "basic",
     "sprite": "enemy-hatchback",
-    "maxHealth": 85,
+    "maxHealth": 60,
     "armor": 0,
     "speed": 125,
-    "peanutReward": 10,
+    "peanutReward": 26,
     "livesCost": 1,
     "damage": 7,
     "attackInterval": 0.7,
     "blockable": true,
     "slowable": true,
-    "artFacing": "right"
+    "artFacing": "right",
+    "_peanutReward": "26, not the brief's 10, AND THE LEVEL DOES NOT WORK WITHOUT IT. Measured: at the brief's rewards the scripted player had 3 towers by wave 6 where level 6 had 18, and level 7 soaked at 0/30 at every rank-and-file health from 40% to 100% of the brief's. Three independent lanes need roughly three times the guns of one, and each tower only gets 1.9 seconds on a passing Rust Bucket against level 1's 4.1, so the board has to come up fast or it never comes up. 26 is the Scrapper's number on level 6, which is the closest level in shape.",
+    "_maxHealth": "60, not the brief's 85. A tower at this board's standoff covers about 238 px of the lane beside it, which is 1.9 seconds of a 125 px/s car and about 32 damage -- so at 85 the FIRST tower a player builds cannot kill anything at all, and the level opened 0/30. At 60 it dies to two passes, which is roughly what level 1's Late Filer costs its opening tower."
   },
   "musclecar": {
     "name": "Roadrager",
@@ -764,10 +766,10 @@
     "role": "fast",
     "tier": "basic",
     "sprite": "enemy-musclecar",
-    "maxHealth": 190,
+    "maxHealth": 100,
     "armor": 0,
     "speed": 190,
-    "peanutReward": 18,
+    "peanutReward": 55,
     "livesCost": 1,
     "damage": 14,
     "attackInterval": 1.2,
@@ -776,7 +778,9 @@
     "artFacing": "right",
     "_speed": "190 px/s, THE FASTEST THING IN THE GAME, past Baby Frank's 172. The brief's starting value was 150 and it could not stay there: tests/rules.test.ts asks that a level's `fast` role be more than 1.5x its `basic`, and 150 against the Rust Bucket's 125 is 1.20x -- a fast enemy that is not fast. The choice was to slow the Rust Bucket to 95 or to speed this up, and a muscle car on a motorway outrunning a baby Frankenstein is the answer that matches what the level is; slowing the basic would have made level 7's rank and file the slowest in the game for no reason but a ratio. tests/level6.test.ts records the new ranking rather than being relaxed, which is what it already did when level 8's Intern took third place.",
     "_armor": "ZERO, not the brief's 5. Same rule, same test: a `fast` enemy may not carry armour at all -- `${level}: ${e.name} is fast AND armoured` -- because the point of the role is that it gets past you rather than through you. The 5 points are given back as speed.",
-    "_attackInterval": "1.2s, not the brief's 0.9. tests/rules.test.ts holds Cory to ten seconds against three of the heaviest rank-and-file attacker at once, and his 360 health over a block capacity of 3 puts the ceiling at exactly 12.0 damage a second. 14 over 0.9 is 15.6 and would have left him 5.3 seconds. The briefed DAMAGE is kept and the interval carries the change, because 'hits hard' is the character and 'hits often' is the arithmetic."
+    "_attackInterval": "1.2s, not the brief's 0.9. tests/rules.test.ts holds Cory to ten seconds against three of the heaviest rank-and-file attacker at once, and his 360 health over a block capacity of 3 puts the ceiling at exactly 12.0 damage a second. 14 over 0.9 is 15.6 and would have left him 5.3 seconds. The briefed DAMAGE is kept and the interval carries the change, because 'hits hard' is the character and 'hits often' is the arithmetic.",
+    "_peanutReward": "55, scaled with the Rust Bucket's. See its `_peanutReward`.",
+    "_maxHealth": "100, not the brief's 190. At 190 px/s a Roadrager is inside a tower's reach for 1.25 seconds -- 21 damage -- so 190 health is nine tower passes and nothing on this board kills one before wave 9."
   },
   "van": {
     "name": "The Delivery",
@@ -787,14 +791,15 @@
     "maxHealth": 420,
     "armor": 12,
     "speed": 55,
-    "peanutReward": 32,
+    "peanutReward": 90,
     "livesCost": 2,
     "damage": 20,
     "attackInterval": 1.7,
     "blockable": true,
     "slowable": true,
     "artFacing": "right",
-    "_attackInterval": "1.7s, not the brief's 1.4, for the Roadrager's reason: 20 over 1.4 is 14.3 damage a second against a 12.0 ceiling. See `musclecar._attackInterval`."
+    "_attackInterval": "1.7s, not the brief's 1.4, for the Roadrager's reason: 20 over 1.4 is 14.3 damage a second against a 12.0 ceiling. See `musclecar._attackInterval`.",
+    "_peanutReward": "90, AND IT IS A CEILING RATHER THAN A CHOICE. tests/rules.test.ts asks every boss in the game to pay at least ten times the best ordinary kill, and the smallest boss purse is the Politician's 900 -- so no rank-and-file enemy anywhere may pay more than 90 without retuning level 1. The soak wanted more: level 7 is three roads with a 1400 px lane, so it needs about three times the towers of a one-road level and it needs them early, and at the brief's 32 the board never came up at all. 90 is as far as the rule allows and it was enough."
   },
   "cargoRed": {
     "name": "Red Runaway",
@@ -874,7 +879,7 @@
     "role": "boss",
     "tier": "elite",
     "sprite": "enemy-bladerig",
-    "maxHealth": 2600,
+    "maxHealth": 600,
     "armor": 10,
     "speed": 45,
     "peanutReward": 400,
@@ -889,7 +894,8 @@
     "artFacing": "right",
     "_unstoppable": "THREE FLAGS SAYING ONE THING: it cannot be held, slowed or stopped. `blockable: false` and `slowable: false` already existed; `stunnable: false` is new and is the reason it had to be -- the Politician and the Rainbow Reaper are both unblockable and unslowable and both perfectly stunnable, because on those fights a 0.6s Amendment is a reward for good play. Here it is the off switch. `glides: true` is the fourth: nothing lying ON the ground touches it. LEVEL 7 HAS NO GROUND HAZARD for it to ignore -- there is no acid, no scorch and no rules block that lays anything down -- so today that flag is a statement rather than a behaviour, and it is here so that it stays true the day one is added rather than becoming a bug then.",
     "_damage": "ZERO DAMAGE AND A 99s INTERVAL, which is the Rooster's and the CEO's row and means the same thing: those two fields are what an enemy does to whatever is HOLDING it, and nothing ever holds this. What it does to the player's units is `bladed`, which is the other direction -- a cost for standing where it is driving, paid by anything of the player's in the way. The numbers are level7.json's `blades`.",
-    "_tier": "`tier` IS elite AND `role` IS boss, the Vampire Lord's split and for his reason: `tier` is what the rules read, and a `boss` tier takes the health bar across the top of the screen. The Rig appears TWICE and is not the level's boss; the Transporter is. `role` is what a reader and the draft read, and this is a mini boss."
+    "_tier": "`tier` IS elite AND `role` IS boss, the Vampire Lord's split and for his reason: `tier` is what the rules read, and a `boss` tier takes the health bar across the top of the screen. The Rig appears TWICE and is not the level's boss; the Transporter is. `role` is what a reader and the draft read, and this is a mini boss.",
+    "_maxHealth": "600, AND IT IS SOAKED RATHER THAN BRIEFED. The sensitivity table at 40 seeds: 400 -> 40%, 800 -> 35%, 1200 -> 35%, 1600 -> 28%. It is small because this board's lanes are short: at 45 px/s the Rig is inside one tower's reach for 5.3 seconds, and on its second appearance it walks the SOUTH highway, where only 11 of the 22 pads can reach it at all. Do not compare it to another level's boss -- see map_level7.json's `_buildSpots`."
   },
   "transporter": {
     "name": "The Transporter",
@@ -897,7 +903,7 @@
     "role": "boss",
     "tier": "boss",
     "sprite": "enemy-transporter",
-    "maxHealth": 7000,
+    "maxHealth": 3000,
     "armor": 12,
     "speed": 38,
     "peanutReward": 2000,
@@ -921,6 +927,7 @@
     },
     "_finale": "IT DOES NOT DIE, IT UNLOADS. At zero health the Transporter vanishes in a puff and the four cars on its trailer come off AT THE PLACE IT DIED, in its own lane, already rolling -- one red, one blue, one yellow, one green, which are the four painted on the art the player has been shooting for the last minute. `holdsWave: true` is what makes the level wait for them: everywhere else a summoned child is kept out of the wave-over count on purpose, and here the children ARE the end of the level.\n\nWHERE IT DIES IS THE WHOLE DESIGN. Kill it early and four cars have most of a highway left to walk past your guns. Kill it on the exit line and four cars are on the exit line, and eight lives go with them. Eli raised that during design and Cory decided the risk stays, because it is what makes killing it early matter. THERE IS NO CLAMP, no minimum spawn distance and no grace period, and adding one would be reverting the decision rather than fixing a bug.\n\n`spacingPx: 44` strings them back along the lane the way a trailer actually empties -- the FIRST car is still exactly on the death point, so the worst case is not softened -- and `emergeSeconds: 0.35` is the beat between one and the next. Both are here rather than in the code so they can be tuned without a build.",
     "_slowable": "SLOWABLE, unlike the Blade Rig and unlike the CEO. It is the opposite kind of fight: the Rig's identity is that nothing stops it, and this one's is WHERE it stops. A player who slows the Transporter is buying exactly the thing the finale is about -- more road between the wreck and the exit -- and taking that away would make the only decision in the fight unavailable.",
-    "_peanutReward": "2000, the largest in the game, and it is paid on a wave that has four cars still to come. That is deliberate: it is the one boss payout a player can still spend."
+    "_peanutReward": "2000, the largest in the game, and it is paid on a wave that has four cars still to come. That is deliberate: it is the one boss payout a player can still spend.",
+    "_maxHealth": "3,000, SOAKED AND NOT BRIEFED, and it is a number about THIS board and no other. The table at 40 seeds, routed down the middle: 650 -> 68%, 1500 -> 68%, 2500 -> 57%, 3500 -> 38%. Routed down the SOUTH highway instead -- 11 pads bearing rather than 20, and 189 px at the end that nobody reaches -- the same band costs 650, which is less than the wave 8 mini boss's and reads as a finale weaker than the wave before it; that is why it is not routed there. Its ARMOUR was swept too and the table came back flat (0 -> 43%, 6 -> 45%, 12 -> 43%, 18 -> 43%), so health is what controls this fight and armour is flavour. Full numbers in reports/2026-09-13-level-7.md."
   }
 }

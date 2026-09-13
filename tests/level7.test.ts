@@ -369,11 +369,15 @@ test('the Blade Rig arrives twice, in the back half, one at a time', () => {
   const bossWaves = W.map((w, i) => ({ w, i }))
     .filter(({ w }) => w.spawns.some((s) => s.enemy === 'transporter'))
   assert.deepEqual(bossWaves.map(({ i }) => i), [12], 'the Transporter is not a wave 13 exclusive')
-  assert.equal(bossWaves[0]!.w.spawns.find((s) => s.enemy === 'transporter')!.lane, 'south',
-    'the Transporter is not routed down the lane whose east end nobody can reach')
+  // ROUTED DOWN THE MIDDLE, and the south lane was measured and rejected rather
+  // than not considered: on the south highway the level lands in band at 650
+  // boss health, which is less than the wave 8 mini boss's. See
+  // waves.level7.json's `_boss`.
+  assert.equal(bossWaves[0]!.w.spawns.find((s) => s.enemy === 'transporter')!.lane, 'middle',
+    'the Transporter is not routed down the best-covered highway')
 })
 
-test('the finale is routed through the one stretch no tower reaches', () => {
+test('the south highway is the weak one, and the level knows it', () => {
   // THE MEASUREMENT THE LEVEL IS BUILT ON. The south highway's last 189 px are
   // uncovered, so the Transporter has a hard deadline rather than a health bar:
   // if the board cannot finish it before x=1090 it walks out with 18 lives.

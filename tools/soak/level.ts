@@ -15,28 +15,20 @@ import { LEVELS } from '../../src/systems/Levels.ts'
  * LEVELS THAT ARE BUILT AND HAVE NO ROW IN levels.json, registered here so
  * this file can soak them.
  *
- * WHY THIS EXISTS. `loadLevel` resolves an unknown id to the DEFAULT level, so
- * `level.ts 120 level8` would have printed LEVEL 1's win rate under level 8's
- * name -- and level 8 genuinely has no row, because it is unlocked by level 7
- * and level 7 has no row either. Sim.ts now reports a `wrong-level` finding
- * when that happens; this is the other half, which makes the soak possible.
+ * IT IS EMPTY NOW, and that is the state of the repository rather than a
+ * deleted feature. Level 8 was the one entry -- built, checked and soaked,
+ * with no row because it is unlocked by level 7 and level 7 had no row either
+ * -- and registering level 7 gave it the prerequisite it was waiting for, so
+ * both rows landed together and there is nothing left parked.
  *
- * IT IS A TOOLS-ONLY MUTATION and it has to stay one: pushing the row into the
- * shipped registry would put a permanently locked node on the world map (see
- * src/data/level8.json's `_theRowIsNotThereYet`). The row here is exactly the
- * one level 8 will have the day level 7 exists, `laneLengthPx` included --
- * 3646.5, the longer of its two routes, measured through `LaneNetwork`.
+ * WHY IT STAYS. `loadLevel` resolves an unknown id to the DEFAULT level, so
+ * `level.ts 120 level9` would print LEVEL 1's win rate under level 9's name.
+ * Sim.ts reports a `wrong-level` finding when that happens and this is the
+ * other half: the next built-but-unregistered level needs exactly this list,
+ * and a tools-only mutation is how it gets soaked without putting a
+ * permanently locked node on the world map.
  */
-const PARKED = [
-  {
-    id: 'level8',
-    name: 'The Optimization',
-    unlockedBy: 'level7',
-    waves: 'waves.level8.json',
-    laneLengthPx: 3646.5,
-    rules: 'level8.json',
-  },
-]
+const PARKED: Array<Record<string, unknown>> = []
 for (const row of PARKED) {
   if (!LEVELS.some((l) => l.id === row.id)) LEVELS.push(row as never)
 }
@@ -70,6 +62,12 @@ let reviewed = 0
 let auraBuffed = 0
 let blastOnFriendlies = 0
 let wrongLevel = ''
+// LEVEL 7'S FINALE, MEASURED. Where the splitting boss was killed relative to
+// its exit, and how many runs the cars off its trailer ended. Both are empty on
+// every other level, because nothing else in the game splits AND holds its wave.
+const splitKills: number[] = []
+let lostToSplit = 0
+let bladeCuts = 0
 for (let seed = 1; seed <= RUNS; seed++) {
   const r = simulate(seed, 'normal', LEVEL, undefined, DIFFICULTY)
   if (r.outcome === 'won') { wins++; livesLeft += r.lives }
@@ -78,6 +76,9 @@ for (let seed = 1; seed <= RUNS; seed++) {
   for (const [k, v] of Object.entries(r.leaksByExit)) leaks[k] = (leaks[k] ?? 0) + v
   for (const [k, v] of Object.entries(r.leaksByEnemy)) leakers[k] = (leakers[k] ?? 0) + v
   if (r.lostToExit) killedBy[r.lostToExit] = (killedBy[r.lostToExit] ?? 0) + 1
+  if (r.splitKillToExit !== null) splitKills.push(r.splitKillToExit)
+  if (r.lostToSplit) lostToSplit++
+  bladeCuts += r.bladeCuts
   reviewed += r.reviewed
   auraBuffed += r.auraBuffed
   blastOnFriendlies += r.blastOnFriendlies
@@ -131,4 +132,30 @@ if (auraBuffed) {
 if (blastOnFriendlies) {
   console.log(`  consultant blasts on the player's own units: ${blastOnFriendlies} damage `
     + `(${(blastOnFriendlies / RUNS).toFixed(0)} a run)`)
+}
+
+// LEVEL 7'S FINALE. Where the boss was actually killed, and what that cost --
+// the brief's question, and the one the design turns on: the four cars come off
+// the trailer AT THE PLACE IT FELL, so a kill 200 px from the exit is four cars
+// 200 px from the exit. There is deliberately no clamp; this is how the risk is
+// checked rather than designed around.
+if (splitKills.length > 0) {
+  const sorted = [...splitKills].sort((a, b) => a - b)
+  const mean = sorted.reduce((a, b) => a + b, 0) / sorted.length
+  const median = sorted[Math.floor(sorted.length / 2)]!
+  const late = sorted.filter((d) => d < 300).length
+  console.log(`  the splitting boss was killed ${splitKills.length} times, `
+    + `with a mean of ${mean.toFixed(0)} px of road left (median ${median.toFixed(0)}, `
+    + `worst ${sorted[0]!.toFixed(0)}, best ${sorted[sorted.length - 1]!.toFixed(0)})`)
+  console.log(`  killed inside the last 300 px: ${late} of ${splitKills.length} `
+    + `(${((late / splitKills.length) * 100).toFixed(0)}%)`)
+}
+if (lostToSplit > 0) {
+  const losses = RUNS - wins - stuck
+  console.log(`  runs ended by a car off the trailer: ${lostToSplit} `
+    + `(${losses ? ((lostToSplit / losses) * 100).toFixed(0) : 0}% of losses)`)
+}
+if (bladeCuts > 0) {
+  console.log(`  the blades did ${bladeCuts.toFixed(0)} damage to the player's own units `
+    + `(${(bladeCuts / RUNS).toFixed(0)} a run)`)
 }

@@ -217,7 +217,11 @@ test('the scene and the sim summon by the same rule', () => {
 
   const sim = readFileSync(new URL('../tools/soak/Sim.ts', import.meta.url), 'utf8')
   assert.match(sim, /e\.summonedBy === parent/, 'the sim does not cap per summoner')
-  assert.match(sim, /!enemies\.some\(\(e\) => e\.summonedBy === null\)/,
+  // The sim's wave-over asks the same two questions the scene's does: is
+  // anything SCRIPTED still alive, and is anything holding the wave open on
+  // purpose. The second is level 7's finale and nothing else -- see
+  // `Enemy.holdsWave` and `SimEnemy.heldWave`.
+  assert.match(sim, /!enemies\.some\(\(e\) => e\.summonedBy === null \|\| e\.heldWave\)/,
     'the sim wave-over does not ignore summons, so its numbers would not match the game')
   // ...and, since level 5, down its parent's ARM of the crossroads too.
   assert.match(sim,

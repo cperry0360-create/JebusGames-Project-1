@@ -84,6 +84,7 @@ import {
   crossedGate, gateRules, reviewable, type GateRules,
 } from '../../src/systems/PerformanceGate.ts'
 import { armorAuraRules, auraArmorAt, type ArmorAuraRules } from '../../src/systems/EnemyAura.ts'
+import { bladeDamage, bladesFrom, type BladesDef } from '../../src/systems/Blades.ts'
 import { defaultRally, soldierStations } from '../../src/systems/Rally.ts'
 import { Disabler } from '../../src/systems/TowerDisable.ts'
 import { BuildSystem } from '../../src/systems/BuildSystem.ts'
@@ -185,6 +186,26 @@ export interface SoakResult {
    */
   lostToExit: string | null
   blastOnFriendlies: number
+  /** Total damage level 7's blades did to the player's side over the run. 0 on
+   *  every other level, which is the scoping made visible in the output. */
+  bladeCuts: number
+  /**
+   * HOW MUCH ROAD WAS LEFT when the enemy that splits on death was killed, in
+   * world pixels to its exit -- or null if it was never killed.
+   *
+   * THE MEASUREMENT THE LEVEL 7 BRIEF ASKED FOR AND ITS DESIGN DEPENDS ON.
+   * The Transporter does not die, it unloads: four cars come off the trailer
+   * AT THE PLACE IT FELL. Kill it early and they have most of a highway to
+   * cross; kill it on the exit line and four cars are on the exit line, and
+   * eight lives go with them. Eli raised that during design and Cory kept it,
+   * so it is a thing to MEASURE rather than to clamp -- and a number here is
+   * the only way to know whether the losses it causes are earned or
+   * unavoidable.
+   */
+  splitKillToExit: number | null
+  /** True where the LAST leak of a losing run was a child of a death split --
+   *  a run that level 7's finale ended. False on every other level. */
+  lostToSplit: boolean
 }
 
 interface SimEnemy {
@@ -264,6 +285,10 @@ interface SimEnemy {
    *  wave ends when its SCRIPTED spawns are gone, so this is what the
    *  wave-over check filters on. */
   summonedBy: SimEnemy | null
+  /** True for a summoned child that HOLDS THE WAVE OPEN anyway: the four cars
+   *  off level 7's Transporter, and nothing else in the game. Mirrors
+   *  `Enemy.holdsWave`. */
+  heldWave: boolean
   /** Counts down to the next burst. Only a summoner uses it. */
   summonTimer: number
   /** The tower-disable clock, or null for everything that does not cast one.
@@ -445,6 +470,10 @@ export function simulate(
   // to 7 on the same seeds proves rather than claims.
   const GATE: GateRules | null = gateRules(levelRules(levelId))
   const AURA: ArmorAuraRules | null = armorAuraRules(levelRules(levelId))
+  // LEVEL 7'S BLADES, null everywhere else, asserted by the same module the
+  // scene asserts them with -- so a malformed block fails the soak rather than
+  // silently producing a level where the mini boss does nothing.
+  const BLADES: BladesDef | null = bladesFrom(levelRules(levelId) as { blades?: unknown } | null)
   const BLAST: { radius: number; damage: number; hitsPlayerUnits: boolean } | null = (() => {
     const b = (levelRules(levelId) as any)?.deathBlast
     return b && b.radius && b.damage
@@ -478,6 +507,14 @@ export function simulate(
   let firstLifeLostWave = -1
   let kills = 0
   // Level 8's three measurements. Zero everywhere else, by construction.
+  // HOW MUCH DAMAGE THE BLADES DID over the run, summed over the hero and the
+  // lads. It exists for the reason level 8's `auraBuffed` does: a mechanic
+  // worth nothing and a mechanic that never ran produce the same flat
+  // sensitivity table, and only one of them is a tuning problem.
+  let bladeCuts = 0
+  // See `splitKillToExit`. Set once, on the frame the splitter dies.
+  let splitKillToExit: number | null = null
+  let lostToSplit = false
   const leaksByExit: Record<string, number> = {}
   const leaksByEnemy: Record<string, number> = {}
   let reviewedCount = 0
@@ -552,11 +589,39 @@ export function simulate(
     return out
   }
 
+  /**
+   * Children that have been decided on but are not on the road yet, with the
+   * seconds left before each appears.
+   *
+   * A QUEUE RATHER THAN A FLAG ON THE ENEMY, which is `GameScene.pendingSplits`
+   * exactly and for its reason: a car that does not exist yet must not be
+   * shot at, blocked, counted for the wave, or caught in an aura. Eight
+   * separate target filters in this file ask `e.alive`, and a flag would have
+   * needed every one of them to ask a second question. Empty on every frame of
+   * every level but 7.
+   */
+  const pendingSplits: Array<{ args: Parameters<typeof spawn>; left: number }> = []
+  const releasePending = (dt: number): void => {
+    if (pendingSplits.length === 0) return
+    for (let i = pendingSplits.length - 1; i >= 0; i--) {
+      const p = pendingSplits[i]!
+      p.left -= dt
+      if (p.left > 0) continue
+      pendingSplits.splice(i, 1)
+      spawn(p.args[0], p.args[1], p.args[2], p.args[3], p.args[4], p.args[5], p.args[6], 0)
+    }
+  }
+
   const spawn = (id: string, at = 0, summonedBy: SimEnemy | null = null,
                  laneId: string = MAIN_LANE, laneAt = at,
-                 routePick = routeRng()): void => {
+                 routePick = routeRng(), heldWave = false, emergeIn = 0): void => {
     const def = ENEMIES[id]
     if (!def) { note('missing-data', `wave names unknown enemy "${id}"`); return }
+    if (emergeIn > 0) {
+      pendingSplits.push({ args: [id, at, summonedBy, laneId, laneAt, routePick, heldWave, 0],
+        left: emergeIn })
+      return
+    }
     const on = net.lane(laneId)
     const p = on.path.pointAt(laneAt)
     enemies.push({
@@ -583,7 +648,7 @@ export function simulate(
       slowFactor: 0, slowRemaining: 0, slowStacks: 0, sinceSlow: 99,
       stunRemaining: 0, stunLockout: 0, stunStacks: 0, sinceStun: 99,
       armorShred: 0, attackTimer: 0, blockedBy: null,
-      summonedBy,
+      summonedBy, heldWave,
       // The first burst waits a full interval, so a boss does not arrive with
       // a crowd already around it.
       summonTimer: def.summons?.interval ?? 0,
@@ -710,6 +775,55 @@ export function simulate(
    * on the board at all, so the fire has two kinds of victim here and three in
    * the game.
    */
+  /**
+   * Level 7's Blade Rig, one frame at a time.
+   *
+   * WHAT IS MODELLED: the hero and the garrison lads, through the same
+   * subtraction their own fights use, against `bladeDamage` -- the identical
+   * pure function the scene calls, imported rather than re-derived, so the two
+   * cannot drift the way a re-implementation would.
+   *
+   * WHAT IS NOT MODELLED: the summoned fighters, for `tickBoss`'s reason --
+   * this file does not put them on the board at all. So the blades have two
+   * kinds of victim here and three in the game, and the mini boss is measured
+   * slightly LIGHT: a player whose gnomes are standing in the road loses units
+   * the simulation does not.
+   *
+   * WHAT IS NOT A CONCERN: towers. They are out of scope in the rule itself,
+   * so there is nothing to leave out.
+   */
+  const tickBlades = (dt: number): void => {
+    if (!BLADES) return
+    const rigs = enemies.filter((e) => e.alive && e.def.bladed === true)
+      .map((e) => ({ x: e.x, y: e.y }))
+    if (rigs.length === 0) return
+    if (!heroState.down) {
+      const cut = bladeDamage({ x: heroState.x, y: heroState.y }, rigs, BLADES, dt)
+      if (cut > 0) {
+        const out = applyHit(heroState.health, hero.maxHealth, cut, heroState.powered)
+        heroState.health = out.health
+        if (out.triggers) {
+          heroState.powered = true
+          heroState.poweredGrace = TRANSFORM_INVULNERABLE_SECONDS
+          heroState.invulnerable = TRANSFORM_INVULNERABLE_SECONDS
+        }
+        if (out.down) {
+          heroState.down = true
+          heroState.powered = false
+          heroState.reviveIn = hero.reviveSeconds
+        }
+        bladeCuts += cut
+      }
+    }
+    for (const t of towers) {
+      for (const sd of t.soldiers) {
+        if (sd.respawnIn > 0) continue
+        const cut = bladeDamage({ x: sd.x, y: sd.y }, rigs, BLADES, dt)
+        if (cut > 0) { sd.health -= cut; bladeCuts += cut }
+      }
+    }
+  }
+
   const tickBoss = (dt: number): void => {
     if (!FLAME) return
     for (const t of towers) if (t.scorchedFor > 0) t.scorchedFor = Math.max(0, t.scorchedFor - dt)
@@ -836,10 +950,26 @@ export function simulate(
       // Gliders, at the place and on the lane it died on, carrying its route
       // pick. `summonedBy` keeps them out of the wave-over count, exactly as
       // the scene's do.
+      // ONE KIND OR SEVERAL, and level 7's Transporter is the several: four
+      // cars off its trailer, one of each colour, strung back along the lane
+      // from the place it fell and released over a short beat. The first is at
+      // the death point exactly, which is what keeps the late-kill case as bad
+      // here as it is in the game -- see `GameScene.splitOnDeath`.
       const sp = e.def.splitsOnDeath
       if (sp) {
-        for (let i = 0; i < sp.count; i++) {
-          spawn(sp.enemy, e.distance, e, e.laneId, e.laneDistance, e.routePick)
+        // HOW FAR FROM ITS EXIT it was when it fell, which on level 7 is the
+        // whole design of the finale. `routeLength` is the lane's own, so this
+        // is road left rather than road walked.
+        splitKillToExit = Math.max(0, net.routeLength(e.laneId) - e.laneDistance)
+        const ids: string[] = sp.enemies ?? (sp.enemy ? [sp.enemy] : [])
+        const spacing: number = sp.spacingPx ?? 0
+        const stagger: number = sp.emergeSeconds ?? 0
+        const holds: boolean = sp.holdsWave === true
+        if (ids.length > 0) {
+          for (let i = 0; i < sp.count; i++) {
+            spawn(ids[i % ids.length]!, Math.max(0, e.distance - spacing * i), e, e.laneId,
+              Math.max(0, e.laneDistance - spacing * i), e.routePick, holds, stagger * i)
+          }
         }
       }
       deathBlast(e)
@@ -1057,8 +1187,76 @@ export function simulate(
     return best
   })
 
-  const byReach = [...build.spots].sort(
-    (a, b) => (padRank[a.index] ?? 0) - (padRank[b.index] ?? 0))
+  /**
+   * THE FILL ORDER, nearest the road first -- AND SPREAD ACROSS THE ROADS WHEN
+   * THAT LEAVES A TIE.
+   *
+   * `padRank` alone was right for every level up to 6, where the pads sit at
+   * irregular distances and a sort by distance is a total order. LEVEL 7 BROKE
+   * IT COMPLETELY: its board is two medians of ten pads each, every one of
+   * them placed at exactly the house standoff, so TWENTY pads rank 91.0 and
+   * the sort falls back to the order the array happens to list them in. That
+   * order is the tracer's, which filled the north median before the south one
+   * -- so the scripted player bought eight towers in a row 276 px from the
+   * south highway and never touched it. Measured: 55-71% of all lives lost
+   * came out of the south exit, at every rank-and-file health from 40% to
+   * 100%, and the level read as unwinnable at 0/40 on all four.
+   *
+   * IT IS THE LEVEL 6 FLANK FAILURE AGAIN, in the other disguise: there the
+   * ranking was meaningful and the traffic was not, here the traffic is fine
+   * and the ranking has no information in it. Both report a board nobody would
+   * play that way as impossible.
+   *
+   * SO A TIE IS BROKEN BY SPREADING. Pads that rank the same are dealt out
+   * round-robin over the lane each is nearest to, which is what a player
+   * looking at three roads does: cover one, then the next, then the next. A
+   * tie group of one -- every group on levels 1 to 6 -- comes out in exactly
+   * the order it went in, so those levels are bit-identical and the re-soak in
+   * reports/2026-09-13-level-7.md says so.
+   */
+  const nearestLaneOf: string[] = build.spots.map((spot) => {
+    let best = rankAgainst[0]?.id ?? net.main.id
+    let bestD = Infinity
+    for (const l of rankAgainst) {
+      const d = l.path.distanceTo(spot.x, spot.y)
+      if (d < bestD) { bestD = d; best = l.id }
+    }
+    return best
+  })
+  const byReach = ((): typeof build.spots => {
+    const sorted = [...build.spots].sort(
+      (a, b) => (padRank[a.index] ?? 0) - (padRank[b.index] ?? 0))
+    const out: typeof build.spots = []
+    for (let i = 0; i < sorted.length;) {
+      // One group of pads that rank the same, to a tenth of a pixel -- the
+      // precision the placement itself was done at.
+      let j = i
+      const at = padRank[sorted[i]!.index] ?? 0
+      while (j < sorted.length && Math.abs((padRank[sorted[j]!.index] ?? 0) - at) < 0.05) j++
+      const group = sorted.slice(i, j)
+      i = j
+      if (group.length <= 1) { out.push(...group); continue }
+      // Deal them out, one lane at a time, keeping each lane's own order.
+      const queues = new Map<string, typeof build.spots>()
+      for (const spot of group) {
+        const id = nearestLaneOf[spot.index] ?? net.main.id
+        if (!queues.has(id)) queues.set(id, [])
+        queues.get(id)!.push(spot)
+      }
+      const ids = [...queues.keys()]
+      for (let k = 0; out.length < i; k++) {
+        let dealt = false
+        for (const id of ids) {
+          const q = queues.get(id)!
+          if (k >= q.length) continue
+          out.push(q[k]!)
+          dealt = true
+        }
+        if (!dealt) break
+      }
+    }
+    return out
+  })()
 
   const spend = (): void => {
     if (mode === 'nobuild') return
@@ -1353,6 +1551,10 @@ export function simulate(
   }
 
   const applyStun = (e: SimEnemy, seconds: number): void => {
+    // THE SIMULATOR HAS TO MODEL THIS or the soak reports a mini boss the game
+    // does not have. Same flag, same place as `Enemy.applyStun`: level 7's
+    // Blade Rig is the only false, absent means true.
+    if (e.def.stunnable === false) return
     if (seconds <= 0 || !canStun(e.stunRemaining, e.stunLockout)) return
     const d = RULES.combat.stunDiminish
     if (e.sinceStun > d.windowSeconds) e.stunStacks = 0
@@ -1414,6 +1616,11 @@ export function simulate(
       // much damage the hits landed this frame take off.
       tickArmorAura()
       tickBoss(DT)
+      // LEVEL 7'S BLADE RIG, and a no-op returning on the first line everywhere
+      // else. Beside `tickBoss` because it is the same kind of thing -- a boss
+      // hurting the player's side on a clock -- and before the towers fire for
+      // `tickArmorAura`'s reason.
+      tickBlades(DT)
       tickSummons(DT)
       tickTowerDisable(DT)
       tickGarrisons(DT)
@@ -1536,6 +1743,11 @@ export function simulate(
         }
       }
 
+      // The cars still coming off a trailer. BEFORE the enemy loop, so one
+      // released this frame takes its first step this frame rather than
+      // standing still for one -- the order `GameScene.update` uses.
+      releasePending(DT)
+
       // Enemies.
       for (const e of enemies) {
         if (!e.alive) continue
@@ -1652,6 +1864,10 @@ export function simulate(
           // running out of lives or by letting anything out on the final wave,
           // and the most recent escape is the one that did it under both.
           lostToExit = on.id
+          // AND WHETHER IT WAS A CHILD OF A DEATH SPLIT, which on level 7 is
+          // the question "did the finale end this run". Same last-wins rule.
+          lostToSplit = e.summonedBy !== null
+            && (e.summonedBy.def.splitsOnDeath !== undefined)
           // Measurement only: where the difficulty first bites. A run that
           // ends 20/20 and a run that ends 20/20 having nearly lost one on
           // wave 11 are the same number and very different games.
@@ -1670,7 +1886,13 @@ export function simulate(
       if (lives <= 0) { outcome = 'lost'; break runLoop }
       // Scripted spawns only, as in the scene: a summoner that kept bursting
       // would otherwise hold the wave open for as long as it could summon.
-      if (spawner.done && !enemies.some((e) => e.summonedBy === null)) break
+      // Scripted spawns only -- EXCEPT for a split that says otherwise. Level
+      // 7's finale is the one: the four cars are summoned children and they
+      // ARE the end of the level, so the wave waits for them. `heldWave`
+      // mirrors `Enemy.holdsWave` and is false for everything else, which is
+      // what keeps the Vampire Lord's Gliders out of wave 11's count.
+      if (spawner.done && pendingSplits.length === 0
+          && !enemies.some((e) => e.summonedBy === null || e.heldWave)) break
     }
 
     const last = waveIndex + 1 >= WAVES.length
@@ -1716,7 +1938,8 @@ export function simulate(
     seed, hero: heroId, abilities: draftedAbilities, towers: opening,
     outcome, waves: wavesReached, lives, firstLifeLostWave, peanutsEarned, kills,
     seconds: +now.toFixed(1), bannerPoints, findings, firedTowers, firedAbilities,
-    leaksByExit, leaksByEnemy, reviewed: reviewedCount, blastOnFriendlies,
+    leaksByExit, leaksByEnemy, reviewed: reviewedCount, blastOnFriendlies, bladeCuts,
+    splitKillToExit, lostToSplit: outcome === 'lost' && lostToSplit,
     auraBuffed: auraBuffedCount,
     lostToExit: outcome === 'lost' ? lostToExit : null,
   }
