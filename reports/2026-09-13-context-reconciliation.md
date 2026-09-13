@@ -622,7 +622,8 @@ middle one reverses a finding in the report you have just read.
 
 | commit | what | CI |
 | --- | --- | --- |
-| `<pending>` | Correct the harness count, retire the medallion item, reconcile CLAUDE.md | filled in below |
+| `935963e` | Correct the harness count, retire the medallion item, reconcile CLAUDE.md | [run 356](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34784037391): **green at job level** — `changes` success, `test` success, `typecheck` success, `deploy` **skipped** (markdown only) |
+| `<the commit adding this row>` | Fills in the row above | documentation only; its result is in the reply that carried this file |
 
 Documentation only again — `CLAUDE.md`, `claude/context.md`,
 `claude/chapter-2-design.md`. No code, JSON, test or asset touched, so `deploy`
