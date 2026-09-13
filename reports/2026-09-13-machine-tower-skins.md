@@ -26,7 +26,11 @@ byte-identical to the control.
 | commit | what | CI |
 |---|---|---|
 | `68cbede` | the manifest keys, `towerSkins`, `TowerSkins.ts`, the two draw sites, the tests | run 300 — **`test`, `typecheck` and `changes` green**; `deploy` skipped, because this is a branch |
-| `<this line>` | this report | markdown only; CI cell above was filled in after run 300 finished |
+| `5343be9` | this report | run 301 — **`test`, `typecheck` and `changes` green**; `deploy` skipped |
+| `<this line>` | the two CI cells above, filled in once both runs had finished | markdown only |
+
+Two runs and not one: the code and the report were pushed separately, so GitHub
+ran the checks on each. Run 300 is the one that covers the code.
 
 `origin/main` is at `bda5eaf` and the branch is that plus these commits,
 fast-forward. **Not merged** — see the bottom of this file.
@@ -379,10 +383,9 @@ files and manifest data.
 
 ## Where this leaves the repository
 
-**In flight.** Branch `claude/machine-tower-skins-6looer`, one commit, head
-`68cbede`, CI run 300 green on `test`, `typecheck` and `changes`. **Not merged.**
-`origin/main` is at `bda5eaf` and the branch is that plus this commit, a clean
-fast-forward:
+**In flight.** Branch `claude/machine-tower-skins-6looer`, three commits, CI green on `test`, `typecheck` and `changes` across runs 300 and 301.
+**Not merged.** `origin/main` is at `bda5eaf` and the branch is that plus these
+commits, a clean fast-forward:
 
 ```
 git checkout main && git merge --ff-only claude/machine-tower-skins-6looer && git push origin main
