@@ -16,7 +16,7 @@ is the level a player restarts.
 | commit | what | CI |
 | --- | --- | --- |
 | `18d6b4e` | The HUD stops carrying a pause across a run, and the board answers again | run 323: **green** (`npm test` pass, `npx tsc --noEmit` pass, deploy skipped: not `main`) |
-| `REPORT`  | This report | run 324: filled in below |
+| `3d9a470` | This report | run 324: **green** (`npm test` pass, `npx tsc --noEmit` pass, deploy skipped: not `main`) |
 
 Branch: `claude/level-8-soft-lock-9bmho0`. Base: `67acfc1`, which is
 `origin/main` and the commit the fault was reported at.
@@ -278,8 +278,8 @@ alone**, so a level whose first pad is unreachable still fails.
 
 ## Where this leaves the repository
 
-**On `claude/level-8-soft-lock-9bmho0` at `18d6b4e`, fast-forwardable onto
-`main` at `67acfc1`.** The session cannot push to `main`; the merge command is
+**On `claude/level-8-soft-lock-9bmho0` at `3d9a470`, green on runs 323 and 324,
+and fast-forwardable onto `main` at `67acfc1`.** The session cannot push to `main`; the merge command is
 the first line of the closing message.
 
 **Landed**
