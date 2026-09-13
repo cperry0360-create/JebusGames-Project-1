@@ -35,6 +35,10 @@ export interface GateRules {
   speedMultiplier: number
   scanMs: number
   markerHeight: number
+  /** How wide the scan sheet is drawn, in world pixels. Its HEIGHT is derived
+   *  from the sheet's own cell aspect at the call site, so the picture cannot
+   *  be stretched by a second authored number. */
+  scanWidth: number
 }
 
 /**
@@ -57,6 +61,7 @@ export function gateRules(rules: LevelRules | null): GateRules | null {
     speedMultiplier: g.speedMultiplier,
     scanMs: g.scanMs ?? 420,
     markerHeight: g.markerHeight ?? 24,
+    scanWidth: g.scanWidth ?? 72,
   }
 }
 

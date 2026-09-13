@@ -102,24 +102,42 @@ test('the parked level is registered in Levels.ts so nothing but the row is miss
 
 /* -------------------------------------------------------------------- map */
 
-test('one spawn, two exits, and both of them cost lives', () => {
+test('two spawns, one exit, and the beam is on the road they share', () => {
+  /*
+   * THE RE-TOPOLOGY, PINNED. This level shipped one entrance on the west and
+   * TWO exits, east and south, with the Performance Review standing on the
+   * south arm -- which is to say on one of two ways OUT. Measured over 40
+   * seeds, 10.6 of 239 enemies a run ever set foot on that arm.
+   *
+   * The east arm is walked the other way now: in through the wall instead of
+   * out through it. Both mouths feed the same last 2,315 px, and the beam is
+   * standing on it, so reaching the exit means crossing it.
+   */
   assert.deepEqual(validateLanes(map as never), [], 'the lane network does not validate')
   const terminals = net.lanes.filter((l) => net.continuations(l.id).length === 0)
-  assert.deepEqual(terminals.map((l) => l.id).sort(), ['east', 'south'],
-    'level 8 is one entrance and two exits')
-  // ONE SPAWN. Every group in the table comes in on the trunk, which is the
-  // only lane anything is spawned on -- the two arms are fed by the split.
+  assert.deepEqual(terminals.map((l) => l.id).sort(), ['south'],
+    'level 8 is two entrances and ONE exit')
+
+  // TWO SPAWNS, and both are used by the table.
   const spawnLanes = new Set(W.flatMap((w) => w.spawns.map((s: any) => s.lane ?? 'main')))
-  assert.deepEqual([...spawnLanes], ['shared'], 'something spawns on an arm rather than the trunk')
+  assert.deepEqual([...spawnLanes].sort(), ['east', 'west'],
+    'something spawns on a lane that is not one of the two mouths')
+
+  // NEITHER MOUTH IS A TERMINAL and both hand over at the fork.
+  for (const id of ['west', 'east']) {
+    const conts = net.continuations(id)
+    assert.equal(conts.length, 1, `${id} does not run into exactly one lane`)
+    assert.equal(conts[0]!.lane.id, 'south', `${id} runs into ${conts[0]!.lane.id}`)
+  }
+
   // AND NOTHING ABOUT LEAKING IS PER-EXIT. `GameScene.leak` charges the
-  // enemy's own livesCost wherever it got out, so "both exits cost lives" is a
-  // property of there being no code that asks which exit it was. Read as text
-  // because the scene needs Phaser to construct.
+  // enemy's own livesCost wherever it got out. Read as text because the scene
+  // needs Phaser to construct.
   const scene = readFileSync(url('../src/scenes/GameScene.ts'), 'utf8')
   const leak = scene.slice(scene.indexOf('private leak(enemy: Enemy)'))
   assert.match(leak.slice(0, 600), /this\.status\.lives -= enemy\.def\.livesCost/)
   assert.doesNotMatch(leak.slice(0, 600), /laneId|east|south/,
-    'the leak path asks which exit it was; both exits are meant to cost the same')
+    'the leak path asks which exit it was; there is one exit and it must not care')
 })
 
 test('the map is the geometry file, not a copy of it', () => {
@@ -127,7 +145,11 @@ test('the map is the geometry file, not a copy of it', () => {
   assert.equal(M.spotRadius, GEOMETRY.padFootprintRadius)
   assert.equal(M.plate, 'level8')
   assert.deepEqual(M.buildSpots, GEOMETRY.buildSpots)
-  assert.equal(M.buildSpots.length, 19, 'nineteen pads, the largest board in the game')
+  // NINETEEN, AND NOT THE LARGEST BOARD -- level 7 carries 22. The counts are
+  // 7, 15, 15, 14, 14, 18, 22, 19, 15, so the 14-15 that five levels sit at is
+  // a habit rather than a rule. Pinned here because boss health is measured
+  // against a pad count and does not carry between boards.
+  assert.equal(M.buildSpots.length, 19, 'level 8 is not nineteen pads any more')
   // Every pad is at least `2 x spotRadius` from every other, or two tap
   // targets overlap. tools/check_level8.py measures this off the plate; this
   // measures it off the shipped map.
@@ -149,71 +171,81 @@ test('the map is the geometry file, not a copy of it', () => {
   const south = M.lanes.find((l) => l.id === 'south')!
   assert.equal(east.waypoints.length, GEOMETRY.branches.east.length + 1)
   assert.equal(south.waypoints.length, GEOMETRY.branches.south.length + 1)
-  assert.deepEqual(east.waypoints.slice(0, -1), GEOMETRY.branches.east)
+  // THE EAST ARM IS THE TRACER'S OWN POLYLINE, REVERSED -- not a re-trace and
+  // not a hand-edit. It used to run fork -> opening as an exit; it runs
+  // opening -> fork as an entrance, and every coordinate in it is still the
+  // one tools/trace_level8.py wrote.
+  assert.deepEqual(east.waypoints.slice(1), [...GEOMETRY.branches.east].reverse(),
+    'the east entrance is not the traced east branch walked backwards')
   assert.deepEqual(south.waypoints.slice(0, -1), GEOMETRY.branches.south)
   // The three gateways are off the plate, which is what makes an enemy walk on
-  // and off rather than appear and vanish.
-  assert.ok(M.waypoints[0]![0] < 0, 'the spawn gateway is on the plate')
-  assert.ok(east.waypoints[east.waypoints.length - 1]![0] > 1280, 'the east gateway is on the plate')
+  // and off rather than appear and vanish. TWO of them are now entrances.
+  assert.ok(M.waypoints[0]![0] < 0, 'the west gateway is on the plate')
+  assert.ok(east.waypoints[0]![0] > 1280, 'the east gateway is on the plate')
   assert.ok(south.waypoints[south.waypoints.length - 1]![1] > 720, 'the south gateway is on the plate')
-  // BOTH ARMS JOIN AT THE FORK, which is what `atIndex: 0` means.
-  for (const m of M.mainMerge) assert.equal(m.atIndex, 0)
-  assert.deepEqual(east.waypoints[0], M.waypoints[M.waypoints.length - 1])
-  assert.deepEqual(south.waypoints[0], M.waypoints[M.waypoints.length - 1])
+  // BOTH MOUTHS END ON THE FORK and the exit starts there, which is what
+  // `atIndex: 0` means on both merges.
+  assert.equal((M.mainMerge as { atIndex: number }).atIndex, 0)
+  assert.equal((east.merge as { atIndex: number }).atIndex, 0)
+  assert.deepEqual(M.waypoints[M.waypoints.length - 1], south.waypoints[0])
+  assert.deepEqual(east.waypoints[east.waypoints.length - 1], south.waypoints[0])
 })
 
 test('the two routes are the lengths the level is designed around', () => {
-  // The figures the wave table and the report are written against, measured
-  // through the shipped network rather than quoted. `laneLengthPx` on the row
-  // will have to equal the longer of the two; there is no row yet, so this is
-  // where the number lives until there is.
-  const routes = net.routeLengths('shared').sort((a, b) => a - b)
-  assert.equal(routes.length, 2, 'the trunk does not reach two exits')
-  assert.ok(Math.abs(routes[0]! - 1778.9) < 1, `the east route walks ${routes[0]!.toFixed(1)}`)
-  assert.ok(Math.abs(routes[1]! - 3646.5) < 1, `the south route walks ${routes[1]!.toFixed(1)}`)
-  // THE SOUTH ARM IS THE LONG ONE AND THE EAST ARM IS THE UNDER-DEFENDED ONE.
-  // Both halves matter to the waves, so both are pinned.
-  assert.ok(GEOMETRY.coverage.east < 0.4, 'the east arm is no longer the cheap exit')
+  // Measured through the shipped network rather than quoted. BOTH ROUTES NOW
+  // END AT THE SAME PLACE: what differs is how far in the mouth is.
+  const west = net.routeLengths('west')
+  const east = net.routeLengths('east')
+  assert.equal(west.length, 1, 'the west mouth does not reach exactly one exit')
+  assert.equal(east.length, 1, 'the east mouth does not reach exactly one exit')
+  assert.ok(Math.abs(west[0]! - 3646.5) < 1, `the west route walks ${west[0]!.toFixed(1)}`)
+  assert.ok(Math.abs(east[0]! - 2741.0) < 1, `the east route walks ${east[0]!.toFixed(1)}`)
+  assert.ok(west[0]! > east[0]!, 'the west mouth is no longer the long way in')
+  // THE EAST ARM IS STILL THE UNDER-DEFENDED ONE, and it matters more now than
+  // it did: it is a way IN, so a thin arm is a short unguarded run at the
+  // START of a walk rather than at the end of one.
+  assert.ok(GEOMETRY.coverage.east < 0.4, 'the east arm is no longer the thin one')
   assert.ok(GEOMETRY.coverage.south > 0.7, 'the south arm is no longer the covered one')
 })
 
 /* --------------------------------------------------------------- routing */
 
-test('a wave group can name its exit, and every name in the table resolves', () => {
+test('no wave group routes by exit any more, because there is one', () => {
+  // `exit` on a spawn picks which arm of a SPLIT a group takes. The split is
+  // gone -- both mouths merge into the one exit -- so a group carrying `exit`
+  // would be naming a choice that no longer exists.
   for (const w of W) {
     for (const s of w.spawns) {
-      if (s.exit === undefined) continue
-      const pick = pickForTerminal(net, s.lane ?? 'main', s.exit)
-      assert.notEqual(pick, null, `wave "${w.name}" routes to "${s.exit}", which no pick reaches`)
-      // AND IT ACTUALLY ARRIVES. The pick is run through the same
-      // `followMerges` the scene and the soak move walkers with, from the end
-      // of the trunk, and has to land on the named arm.
-      const at = followMerges(net, {
-        laneId: s.lane ?? 'main',
-        laneDistance: net.lane(s.lane ?? 'main').path.totalLength,
-        routePick: pick!,
-      })
-      assert.equal(at.laneId, s.exit, `wave "${w.name}" aims at ${s.exit} and arrives at ${at.laneId}`)
+      assert.equal(s.exit, undefined,
+        `wave "${w.name}" still routes to an exit, and the level has only one`)
+    }
+  }
+  // And every lane a group DOES name resolves to a real lane rather than
+  // falling through to main.
+  for (const w of W) {
+    for (const s of w.spawns) {
+      const id = s.lane ?? 'main'
+      assert.ok(net.lanes.some((l) => l.id === id),
+        `wave "${w.name}" spawns on "${id}", which is not a lane`)
     }
   }
 })
 
-test('both exits carry weight, and which one is heavier changes', () => {
-  // The brief asks for both exits to be used and for the heavier group to
-  // change sides rather than the two being treated as one road twice.
-  const per = (exit: string) => W.map((w) => w.spawns
-    .filter((s: any) => s.exit === exit)
+test('both mouths carry weight, and which one is heavier changes', () => {
+  // The same property the two exits used to be held to, asked of the two
+  // entrances instead: both used, and not the same one heavier every wave.
+  const per = (lane: string) => W.map((w) => w.spawns
+    .filter((s: any) => (s.lane ?? 'main') === lane)
     .reduce((a: number, s: any) => a + s.count, 0))
   const east = per('east')
-  const south = per('south')
-  assert.ok(east.reduce((a, b) => a + b, 0) > 40, 'the east exit is barely used')
-  assert.ok(south.reduce((a, b) => a + b, 0) > 40, 'the south exit is barely used')
-  const heavier = W.map((_, i) => (east[i]! === south[i]! ? '=' : east[i]! > south[i]! ? 'e' : 's'))
-  assert.ok(heavier.includes('e') && heavier.includes('s'),
-    'the same exit carries the heavier group in every wave')
-  // Every wave uses at least one arm, and no wave leaves both empty.
+  const west = per('west')
+  assert.ok(east.reduce((a, b) => a + b, 0) > 40, 'the east mouth is barely used')
+  assert.ok(west.reduce((a, b) => a + b, 0) > 40, 'the west mouth is barely used')
+  const heavier = W.map((_, i) => (east[i]! === west[i]! ? '=' : east[i]! > west[i]! ? 'e' : 'w'))
+  assert.ok(heavier.includes('e') && heavier.includes('w'),
+    'the same mouth carries the heavier group in every wave')
   for (let i = 0; i < W.length; i++) {
-    assert.ok(east[i]! + south[i]! > 0, `wave ${i + 1} routes nothing anywhere`)
+    assert.ok(east[i]! + west[i]! > 0, `wave ${i + 1} spawns nothing anywhere`)
   }
 })
 
@@ -473,7 +505,12 @@ test('fourteen waves, one boss, and it arrives last', () => {
   }
   const ceoSpawns = W.flatMap((w) => w.spawns.filter((s: any) => s.enemy === 'ceo'))
   assert.equal(ceoSpawns.length, 1, 'the CEO arrives more than once')
-  assert.equal(ceoSpawns[0]!.exit, 'south', 'the CEO is routed down the short arm')
+  // THE CEO COMES IN FROM THE WEST, which is the LONG way in now -- 3,646 px
+  // against the east mouth's 2,741. He used to be routed to the south EXIT,
+  // which was the long way out of a single western mouth; the arithmetic is
+  // the same walk and the field that names it is the lane he spawns on.
+  assert.equal(ceoSpawns[0]!.exit, undefined, 'the CEO still names an exit')
+  assert.equal(ceoSpawns[0]!.lane, 'west', 'the CEO no longer takes the long walk')
   // The four types arrive in the order the brief asks for: Interns early,
   // Middle Management in the middle, HR and the Consultant between.
   const first = (id: string) => W.findIndex((w) => w.spawns.some((s: any) => s.enemy === id))

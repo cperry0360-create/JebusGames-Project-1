@@ -168,6 +168,9 @@ export interface SoakResult {
    *  friendly damage the Consultants' explosions did. Both 0 everywhere but
    *  level 8, which is the scoping made visible in the output. */
   reviewed: number
+  /** Eligible enemies that reached the gate's distance. `reviewed` without this
+   *  is a number with no denominator. */
+  atGate: number
   /** And how many ever stood inside an HR's armour aura. See `everBuffed`. */
   auraBuffed: number
   /**
@@ -192,6 +195,9 @@ export interface SoakResult {
    *  note at the assignment: on a level with one exit and four mini bosses this
    *  is the only field that names the killer. */
   lostToEnemy: string | null
+  /** The mouth the enemy whose escape took the last life came in through. */
+  lostToEntrance: string | null
+  leaksByEntrance: Record<string, number>
   blastOnFriendlies: number
   /** Total damage level 7's blades did to the player's side over the run. 0 on
    *  every other level, which is the scoping made visible in the output. */
@@ -253,6 +259,20 @@ interface SimEnemy {
   firedThresholds: Set<number>
   /** True once level 8's Performance Review has buffed it. Once, ever. */
   reviewed: boolean
+  /**
+   * WHICH MOUTH IT CAME IN THROUGH, kept because `laneId` does not answer it:
+   * that field follows the walker through every merge, so by the time an enemy
+   * leaks it says `south` whichever entrance it started at. On a map with two
+   * ways in and one way out, "which entrance did the enemies that killed me
+   * come from" is the question the wave table is built to answer and there was
+   * nothing to answer it with.
+   */
+  spawnLane: string
+  /** Has it ever stood at or past the gate's distance on the gate's lane?
+   *  Separate from `reviewed`: a summoned child spawning BEYOND the line is at
+   *  the gate and is never buffed by it, and the gap between the two counts is
+   *  exactly that case. */
+  atGate: boolean
   /** 1.2 once reviewed, 1 otherwise. Beside `speedScale` rather than inside
    *  it, exactly as on the shipped Enemy. */
   reviewSpeed: number
@@ -553,11 +573,18 @@ export function simulate(
   let lostToSplit = false
   const leaksByExit: Record<string, number> = {}
   const leaksByEnemy: Record<string, number> = {}
+  /** Lives lost, by the mouth the enemy that took them WALKED IN THROUGH. */
+  const leaksByEntrance: Record<string, number> = {}
   let reviewedCount = 0
+  /** Eligible enemies that got as far as the gate's distance on its lane --
+   *  the only sensible denominator for `reviewedCount`. See the note at the
+   *  count site. */
+  let atGateCount = 0
   let blastOnFriendlies = 0
   let auraBuffedCount = 0
   let lostToExit: string | null = null
   let lostToEnemy: string | null = null
+  let lostToEntrance: string | null = null
   let unlocked = opening.slice()
   const enemies: SimEnemy[] = []
   const towers: SimTower[] = []
@@ -675,7 +702,15 @@ export function simulate(
       // and levels 1 to 4 bit-identical.
       routePick,
       speedScale: 1, selfHeld: false, bleed: NO_BLEED,
-      firedThresholds: new Set<number>(), reviewed: false, reviewSpeed: 1, auraArmor: 0,
+      // A SUMMONED CHILD INHERITS ITS PARENT'S MOUTH rather than taking the
+      // lane it was dropped on. The CEO's drones appear wherever he happens to
+      // be standing, which on this map is `south` -- the road both entrances
+      // share -- so attributing them to `south` would report a third entrance
+      // that does not exist and would credit none of them to the mouth the
+      // boss that made them walked in through.
+      spawnLane: summonedBy?.spawnLane ?? laneId,
+      firedThresholds: new Set<number>(), reviewed: false, atGate: false, reviewSpeed: 1,
+      auraArmor: 0,
       everBuffed: false,
       flame: def.flame && FLAME ? newFlameState(FLAME) : null,
       regen: def.regen ? newRegenState(def.regen) : null,
@@ -1901,6 +1936,16 @@ export function simulate(
         e.laneId = moved.laneId
         e.laneDistance = moved.laneDistance
         e.distance = moved.distance
+        // THE DENOMINATOR, counted beside the numerator so the review count can
+        // never again be read without one. `reviewed: 6.5 a run` was true of
+        // level 8 for its whole life and said nothing: 6.5 out of 239 enemies
+        // is a mechanic that touches one in forty, and 6.5 out of 7 would be a
+        // mechanic working perfectly on a level where nothing survives. Only
+        // the pair means anything.
+        if (GATE && !e.atGate && reviewable(e.def)) {
+          const c = GATE.crossings.find((x) => x.lane === e.laneId)
+          if (c && e.laneDistance >= c.distance) { e.atGate = true; atGateCount++ }
+        }
         if (GATE && !e.reviewed && reviewable(e.def)) {
           // The merge case is asked rather than assumed, exactly as the scene
           // asks it: if the step crossed the junction, where it JOINED the new
@@ -1938,6 +1983,7 @@ export function simulate(
           // WHICH EXIT IT GOT OUT OF. One key on every map before level 8.
           leaksByExit[on.id] = (leaksByExit[on.id] ?? 0) + e.def.livesCost
           leaksByEnemy[e.id] = (leaksByEnemy[e.id] ?? 0) + 1
+          leaksByEntrance[e.spawnLane] = (leaksByEntrance[e.spawnLane] ?? 0) + e.def.livesCost
           // THE LAST LEAK WINS, overwritten every time. A run ends either by
           // running out of lives or by letting anything out on the final wave,
           // and the most recent escape is the one that did it under both.
@@ -1950,6 +1996,7 @@ export function simulate(
           // substitute -- a boss that leaks six lives on wave 4 is often
           // finished off by a packet on wave 5, and only this field says so.
           lostToEnemy = e.id
+          lostToEntrance = e.spawnLane
           // AND WHETHER IT WAS A CHILD OF A DEATH SPLIT, which on level 7 is
           // the question "did the finale end this run". Same last-wins rule.
           lostToSplit = e.summonedBy !== null
@@ -2024,12 +2071,14 @@ export function simulate(
     seed, hero: heroId, abilities: draftedAbilities, towers: opening,
     outcome, waves: wavesReached, lives, firstLifeLostWave, peanutsEarned, kills,
     seconds: +now.toFixed(1), bannerPoints, findings, firedTowers, firedAbilities,
-    leaksByExit, leaksByEnemy, reviewed: reviewedCount, blastOnFriendlies, bladeCuts,
+    leaksByExit, leaksByEnemy, reviewed: reviewedCount, atGate: atGateCount, blastOnFriendlies, bladeCuts,
     healedTotal, flameDamage, disableSeconds,
     splitKillToExit, lostToSplit: outcome === 'lost' && lostToSplit,
     auraBuffed: auraBuffedCount,
     lostToExit: outcome === 'lost' ? lostToExit : null,
     lostToEnemy: outcome === 'lost' ? lostToEnemy : null,
+    lostToEntrance: outcome === 'lost' ? lostToEntrance : null,
+    leaksByEntrance,
   }
 }
 

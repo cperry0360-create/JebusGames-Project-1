@@ -64,7 +64,7 @@ const SCENARIO_NAMES = [
   'elibar', 'elifire', 'enemyfacing', 'everyloadout', 'facing', 'fps', 'full', 'full13', 'fx',
   'game', 'gateway', 'gestures', 'glacier', 'gnomes', 'goblin', 'heroanim',
   'heroblock', 'herochip', 'herofx', 'herohp', 'lane', 'leak', 'ledger',
-  'labelprobe', 'lanemarkers', 'lettering', 'level6', 'level7', 'level8', 'level9', 'levelart', 'levels',
+  'labelprobe', 'lanemarkers', 'lettering', 'level6', 'level7', 'level8', 'level8retopo', 'level9', 'levelart', 'levels',
   'listenerguard', 'loadout', 'locked',
   'loopthrow', 'looptrack', 'lost', 'mapedge', 'maproute', 'markers',
   'meteor', 'mix', 'modal', 'moes', 'music', 'muzzle', 'nightfall',
@@ -112,7 +112,7 @@ const ASSERTS_NOTHING = new Set([
  * scenario joins this list when its checks go through `expect`.
  */
 const USES_EXPECT = new Set([
-  'typegame', 'rotationburst', 'level7', 'level8', 'level9', 'boardinput', 'lanemarkers',
+  'typegame', 'rotationburst', 'level7', 'level8', 'level9', 'boardinput', 'lanemarkers', 'level8retopo',
 ])
 
 /** How many checks this run actually EVALUATED, pass or fail. */
@@ -15763,6 +15763,242 @@ async function run() {
     note('derived ' + totalDerived + ' markers across ' + LVm.LEVELS.length + ' levels')
     note('RESULT ' + (ASSERT_FAILS === 0
       ? ASSERTIONS + ' checks on the lane markers, all passing'
+      : '*** ' + ASSERT_FAILS + ' of ' + ASSERTIONS + ' failed ***'))
+    return
+  }
+
+  if (scenario === 'level8retopo') {
+    /*
+     * LEVEL 8 AFTER THE RE-TOPOLOGY, in a rendered frame.
+     *
+     * Two mouths, one door, and a beam on the road they share. Everything here
+     * is read off the live scene: no test in tests/ imports Phaser, so the
+     * scan animating frame by frame and the buff marker keeping its portrait
+     * proportion are claims only a frame can settle.
+     */
+    const RS8 = await import('./js/systems/RunState.js')
+    const LV8 = await import('./js/systems/Levels.js')
+    const PG8 = await import('./js/systems/PerformanceGate.js')
+    const AR8 = (await import('./js/data/art.json', { with: { type: 'json' } })).default
+    const EN8 = (await import('./js/data/enemies.json', { with: { type: 'json' } })).default
+    const Enemy8 = (await import('./js/entities/Enemy.js')).Enemy
+
+    for (const k of ['Title', 'WorldMap', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+    RS8.setRunState({
+      heroId: 'cory', levelId: 'level8', seed: 11, abilities: ['molotov', 'glacier'],
+      openingTowers: ['withholding', 'writeoff'], reserveTowers: [], resumeFrom: null,
+    })
+    game.scene.start('Game')
+    if (!(await until(() => running('Game') && scene('Game').hero, 25000))) {
+      expect(false, 'level 8 did not start'); note('RESULT level 8 did not build'); return
+    }
+    const G = scene('Game')
+    await until(() => running('Hud'), 12000)
+    await sleep(700)
+    G.status.peanuts = 999999
+
+    /* ---- the board ---- */
+    const laneIds = G.lanes.lanes.map((l) => l.id)
+    const exits = G.lanes.lanes.filter((l) => l.merge === null).map((l) => l.id)
+    const LN8 = await import('./js/systems/Lanes.js')
+    const entrances = LN8.laneDefs(G.level.map).filter((d) => d.entrance).map((d) => d.id)
+    note('lanes=' + JSON.stringify(laneIds) + '  entrances=' + JSON.stringify(entrances)
+      + '  exits=' + JSON.stringify(exits) + '  pads=' + G.build.spots.length)
+    expect(exits.length === 1 && exits[0] === 'south', 'exits are ' + JSON.stringify(exits))
+    expect(G.build.spots.length === 19, G.build.spots.length + ' pads, expected 19')
+    for (const id of laneIds) {
+      const p = G.lanes.lane(id).path
+      note('  ' + id.padEnd(6) + Math.round(p.totalLength) + ' px  '
+        + JSON.stringify([Math.round(p.pointAt(0).x), Math.round(p.pointAt(0).y)]) + ' -> '
+        + JSON.stringify([Math.round(p.pointAt(p.totalLength).x),
+          Math.round(p.pointAt(p.totalLength).y)]))
+    }
+    await shot('l8retopo-1-board-' + VP.w + 'x' + VP.h)
+
+    /* ---- BOTH MOUTHS SPAWN ---- */
+    const spawnOn = async (laneId) => {
+      const lane = G.lanes.lane(laneId)
+      const e = new Enemy8(G, EN8.intern, lane.path, G.gateway,
+        { lanes: G.lanes, laneId, startAt: { laneDistance: 4, distance: 0 } })
+      G.enemies.push(e)
+      await sleep(260)
+      return e
+    }
+    const w = await spawnOn('west'), e2 = await spawnOn('east')
+    note('  west spawn at (' + Math.round(w.x) + ', ' + Math.round(w.y) + ')'
+      + '   east spawn at (' + Math.round(e2.x) + ', ' + Math.round(e2.y) + ')')
+    expect(w.alive && e2.alive, 'an enemy did not survive its own spawn')
+    expect(Math.abs(w.x - e2.x) > 900, 'the two mouths are not at opposite edges')
+    await shot('l8retopo-2-both-mouths-' + VP.w + 'x' + VP.h)
+    w.die(); e2.die()
+
+    /* ---- EVERY ENEMY FROM BOTH MOUTHS CROSSES THE BEAM ---- */
+    // Driven rather than walked: an enemy is put a few pixels short of the
+    // gate's distance on the shared arm and stepped over it, from BOTH picks.
+    const g8 = PG8.gateRules(LV8.levelRules('level8'))
+    const cross = g8.crossings[0]
+    note('  the beam crosses ' + cross.lane + ' at distance ' + cross.distance
+      + ', world (' + cross.at[0] + ', ' + cross.at[1] + ')')
+    expect(cross.lane === 'south', 'the beam is on ' + cross.lane + ', not the shared arm')
+    // The shared arm is the ONLY exit, so both mouths reach it: assert that
+    // from the network rather than from the picture.
+    for (const id of ['west', 'east']) {
+      const conts = G.lanes.continuations(id)
+      expect(conts.length === 1 && conts[0].lane.id === cross.lane,
+        id + ' does not run into the lane the beam is on')
+    }
+    let scanSeen = null
+    {
+      const south = G.lanes.lane('south')
+      const before = G.enemies.length
+      const e = new Enemy8(G, EN8.intern, south.path, G.gateway,
+        { lanes: G.lanes, laneId: 'south',
+          startAt: { laneDistance: cross.distance - 30, distance: 0 } })
+      G.enemies.push(e)
+      expect(!e.reviewed, 'the enemy was reviewed before it reached the beam')
+      const wasSize = e.displayHeight
+      await sleep(900)
+      note('  after walking over the beam: reviewed=' + e.reviewed
+        + '  height ' + wasSize.toFixed(1) + ' -> ' + e.displayHeight.toFixed(1))
+      expect(e.reviewed, 'an enemy walked over the beam and was not reviewed')
+      // THE SCAN, frame by frame rather than one stretched image.
+      scanSeen = G.children.list.find((o) => o.texture
+        && o.texture.key === AR8.fx.performanceScan)
+      void before
+    }
+
+    /* ---- THE SCAN ANIMATES, AND IS NOT ONE STRETCHED IMAGE ---- */
+    {
+      const key = AR8.fx.performanceScan
+      const sheet = AR8.render[key].sheet
+      const anim = G.anims.get(key)
+      expect(!!anim, 'there is no animation for the scan sheet')
+      expect(anim && anim.frames.length === sheet.frames,
+        'the scan has ' + (anim ? anim.frames.length : 0) + ' frames, the manifest says ' + sheet.frames)
+      const FX8 = await import('./js/systems/Effects.js')
+      const ratio = sheet.frameHeight / sheet.frameWidth
+      const wide = LV8.levelRules('level8').performanceReview.scanWidth
+      const s = FX8.playEffect(G, key, 640, 360,
+        { size: wide, height: wide * ratio, depth: 99999, durationMs: 700 })
+      const seen = new Set()
+      for (let i = 0; i < 10; i++) {
+        await sleep(70)
+        if (s.anims && s.anims.currentFrame) seen.add(s.anims.currentFrame.index)
+      }
+      note('  the scan played frames ' + [...seen].sort((a, b) => a - b).join(',')
+        + ' of ' + sheet.frames + '  drawn ' + Math.round(s.displayWidth) + 'x'
+        + Math.round(s.displayHeight) + ' from a ' + sheet.frameWidth + 'x' + sheet.frameHeight + ' cell')
+      expect(seen.size >= 3, 'the scan showed ' + seen.size + ' distinct frames; it is not animating')
+      // THE STRETCH, measured rather than eyeballed.
+      const cell = sheet.frameWidth / sheet.frameHeight
+      const drawn = s.displayWidth / s.displayHeight
+      note('  cell aspect ' + cell.toFixed(4) + ', drawn aspect ' + drawn.toFixed(4)
+        + '  = ' + ((drawn / cell - 1) * 100).toFixed(1) + '% wider than proportional')
+      expect(Math.abs(drawn / cell - 1) < 0.02,
+        'the scan is drawn ' + ((drawn / cell - 1) * 100).toFixed(0) + '% off its own aspect')
+      await shot('l8retopo-3-scan-' + VP.w + 'x' + VP.h)
+    }
+
+    /* ---- THE BUFF MARKER RIDES ABOVE, AND IS NOT STRETCHED ---- */
+    {
+      await sleep(400)
+      const key = AR8.fx.performanceBuff
+      const cfg = AR8.render[key]
+      const marks = G.children.list.filter((o) => o.texture && o.texture.key === key)
+      note('  buff markers on the board: ' + marks.length)
+      expect(marks.length >= 1, 'no buff marker over the reviewed enemy')
+      if (marks[0]) {
+        const m = marks[0]
+        // THE CANVAS ASPECT, NOT THE INK ASPECT. `statusMarker` scales the whole
+        // image by one factor -- `height / contentHeight` -- so the sprite that
+        // reaches the screen is the 703x1172 canvas scaled uniformly, and its
+        // displayed aspect is the canvas's. Comparing it against the INK's
+        // 680x1148 reported a 1% stretch on a sprite that is scaled uniformly
+        // by construction; the ink is smaller than the canvas and a different
+        // shape, which is the whole reason contentWidth exists.
+        const want = m.texture.source[0].width / m.texture.source[0].height
+        const got = m.displayWidth / m.displayHeight
+        note('  marker ' + Math.round(m.displayWidth) + 'x' + Math.round(m.displayHeight)
+          + '  ink ' + cfg.contentWidth + 'x' + cfg.contentHeight
+          + '  aspect wanted ' + want.toFixed(4) + ' got ' + got.toFixed(4))
+        expect(Math.abs(got / want - 1) < 0.01,
+          'the PORTRAIT buff marker is drawn ' + ((got / want - 1) * 100).toFixed(0) + '% off its aspect')
+        expect(cfg.contentHeight > cfg.contentWidth, 'the marker is not portrait any more')
+        const owner = G.enemies.find((x) => x.reviewed && x.alive)
+        if (owner) {
+          expect(m.y < owner.y, 'the marker is not above the enemy it belongs to')
+        }
+      }
+      await shot('l8retopo-4-marker-' + VP.w + 'x' + VP.h)
+    }
+
+    /* ---- LEAVING AT THE BOTTOM COSTS A LIFE ---- */
+    {
+      const before = G.status.lives
+      const south = G.lanes.lane('south')
+      const e = new Enemy8(G, EN8.intern, south.path, G.gateway,
+        { lanes: G.lanes, laneId: 'south',
+          startAt: { laneDistance: south.path.totalLength - 6, distance: 0 } })
+      G.enemies.push(e)
+      await sleep(700)
+      note('  a leak at the bottom door: lives ' + before + ' -> ' + G.status.lives)
+      expect(before - G.status.lives >= 1, 'getting out of the bottom door cost nothing')
+    }
+
+    /* ---- A TOWER ON EVERY PAD ---- */
+    {
+      for (const spot of G.build.spots) G.place('withholding', spot)
+      note('  towers built: ' + G.towers.length + ' of ' + G.build.spots.length)
+      expect(G.towers.length === G.build.spots.length,
+        'only ' + G.towers.length + ' of ' + G.build.spots.length + ' pads took a tower')
+      await shot('l8retopo-5-nineteen-' + VP.w + 'x' + VP.h)
+    }
+
+    /* ---- RESTART, DEFEAT AND LEAVING ---- */
+    {
+      G.status.lives = 0
+      G.endRun('lost')
+      await sleep(900)
+      note('  after a defeat the scene is ' + (running('Game') ? 'still up' : 'stopped'))
+      for (const k of ['Game', 'Hud']) game.scene.stop(k)
+      RS8.setRunState({
+        heroId: 'cory', levelId: 'level8', seed: 4, abilities: ['molotov', 'glacier'],
+        openingTowers: ['withholding', 'writeoff'], reserveTowers: [], resumeFrom: null,
+      })
+      game.scene.start('Game')
+      expect(await until(() => running('Game') && scene('Game').hero, 25000), 'the restart did not build')
+      await sleep(600)
+      const G2 = scene('Game')
+      note('  on the second build: pads=' + G2.build.spots.length
+        + ' lanes=' + G2.lanes.lanes.length + ' scenery=' + G2.sceneryArt.length)
+      expect(G2.build.spots.length === 19, 'the rebuilt board has ' + G2.build.spots.length + ' pads')
+      const LA8 = await import('./js/systems/LevelArt.js')
+      // `sceneryArt` holds the lane MARKERS as well as any authored scenery --
+      // level 8 declares none, and still draws six sprites for its two mouths
+      // and one door. Counting only `map.scenery` expected zero and reported a
+      // doubling on a board that has exactly what it should.
+      const MKH = await import('./js/systems/Markers.js')
+      const CFGH = (await import('./js/data/markers.json', { with: { type: 'json' } })).default
+      const DSPH = (await import('./js/data/display.json', { with: { type: 'json' } })).default
+      const wantScenery = (G2.level.map.scenery || []).length
+        + MKH.markersFor(G2.level.map, CFGH,
+          MKH.badgeWorldWidth(CFGH, DSPH.camera.defaultZoom),
+          { width: DSPH.width, height: DSPH.height }).length * 2
+      note('  scenery sprites: ' + G2.sceneryArt.length + ', expected ' + wantScenery)
+      expect(G2.sceneryArt.length === wantScenery, 'scenery doubled on the restart')
+      for (const k of ['Game', 'Hud']) game.scene.stop(k)
+      game.scene.start('WorldMap')
+      await until(() => running('WorldMap'), 12000)
+      await sleep(700)
+      const held = LA8.levelArtKeys('level8').filter((k) => game.textures.exists(k))
+      note('  level-8 art resident on the world map: ' + held.length
+        + ' of ' + LA8.levelArtKeys('level8').length)
+      expect(held.length === 0, 'left behind: ' + held.join(', '))
+      await shot('l8retopo-6-worldmap-' + VP.w + 'x' + VP.h)
+    }
+
+    note('RESULT ' + (ASSERT_FAILS === 0
+      ? ASSERTIONS + ' checks on level 8, all passing'
       : '*** ' + ASSERT_FAILS + ' of ' + ASSERTIONS + ' failed ***'))
     return
   }

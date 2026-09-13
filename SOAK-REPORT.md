@@ -4,6 +4,170 @@ Newest first.
 
 ---
 
+## 2026-09-13 — Level 8 re-topologised, and the gate measured with a denominator
+
+### The headline
+
+**Level 8 soaks at 42% over 480 seeds on normal — 200/480 — inside the 35-45%
+band.** Levels 1 to 7 and 9 are **byte-identical** on the same 480 seeds; level 8
+is the only line that moved, 195/480 to 200/480.
+
+**Its published win rate before this was measured on a board whose signature
+mechanic touched one enemy in forty**, so the number was not wrong so much as
+about a different game. The CEO's health is re-derived: 8,500 → **8,100**.
+
+**HERO: CORY, every seed.** `tools/soak/level.ts` passes no hero and `simulate`
+resolves that to `DEFAULT_HERO_ID`, the first row in heroes.json. It does not
+rotate; `run.ts` and `eli.ts` do. No hero's values were touched.
+
+### What changed on the board
+
+One entrance (west) and two exits (east, south) became **two entrances (west,
+east) and one exit (south)**. The three traced arms are the same three arms: the
+east branch is the tracer's own polyline walked the other way. Route lengths:
+west 3,646 px (unchanged), east 2,741 px.
+
+**The Performance Review beam did not move.** It is at `south` distance 142.68,
+where it always was. What moved is the road around it: the arms now feed the
+south arm instead of diverging from it, so the beam stands on the only way out.
+
+### The gate, with its denominator
+
+**The 2.6% figure in the previous report is a share of ENEMIES, not of lane.**
+It was `reviewed / (kills + leaks)` — enemies buffed, over enemies that resolved
+in a run. The trigger has no length to be a share of: it is a single distance
+along the lane polyline, and its keys are `["lane","distance","at"]`.
+
+| per run, 40 seeds | before | after |
+|---|---|---|
+| resolved (killed or leaked) | 239.0 | 160.1 |
+| ever on the gate lane | **10.6** | **86.6** |
+| reached the gate distance | 9.2 | 83.9 |
+| …and eligible (non-boss) | 8.3 | 83.4 |
+| **actually reviewed** | **6.1** | **80.8** |
+| reviewed / resolved | **2.6%** | **50.5%** |
+| reviewed / eligible-at-the-beam | 73.5% | **96.9%** |
+
+**100% of enemies is not reachable and it is worth saying why.** An enemy killed
+before the beam never crosses it, and 97.6% of everything spawned dies somewhere;
+that is what the towers are for. The achievable target is *every eligible enemy
+that reaches the beam crosses it*, and that is at **96.9%**. The residual 3.1% is
+named below.
+
+`tools/soak/level.ts` now prints the pair rather than the numerator:
+
+```
+performance reviews: 81.9 a run of the 84.3 eligible enemies that reached the beam (97.2%)
+```
+
+### Which of the three hypotheses it was: none of them
+
+**H1 — the trigger volume is too small or off the lane polyline. NO.** It is not
+a volume. It is a distance, and the point it declares sits on the polyline at
+that distance to within **0.0113 px**.
+
+**H2 — a point-in-volume test evaluated once per tick, so a fast enemy steps over
+it between frames. NO, and the proposed fix is the existing implementation.**
+`crossedGate` is already a segment test against the tick's movement segment
+(`from < d <= to`). Driven directly:
+
+| step | fires? |
+|---|---|
+| 0 → 1 (short of it) | no |
+| 142 → 143 (across it) | **yes** |
+| 0 → 5000, a single step faster than anything in the game | **yes** |
+| 200 → 4000 (starts past it) | no |
+| 143 → 142 (walking backwards) | no |
+
+**H3 — it fires only for a subset of enemy types. YES, partially, and both parts
+are by design.** After the re-topology:
+
+| type | reached the beam | reviewed |
+|---|---|---|
+| intern | 61.55 | **61.55** |
+| consultant | 7.72 | **7.72** |
+| manager | 6.90 | **6.90** |
+| hr | 4.15 | **4.15** |
+| officeDrone | 3.10 | 0.50 |
+| ceo | 0.50 | 0.00 |
+
+Every ordinary type is exact. The CEO is boss-immune by `reviewable()`. The
+drones are **summoned by the CEO at his own position**, and 66% of them appear
+already past the line — median join distance 299 against a beam at 142.68, max
+1,476. `level8.json`'s `_once` note describes that case as intended. Together
+they are the whole 3.1% shortfall.
+
+**THE DOMINANT CAUSE WAS PLACEMENT, which is not on the list.** Before the
+re-topology only 10.6 of 239 enemies a run ever set foot on the gate's lane: the
+beam was on one of two arms, downstream of 1,342 px of shared road and most of a
+19-pad board's killing power.
+
+### Sensitivity, 120 seeds, one variable at a time
+
+Every row restores both JSON files from a pristine copy, changes one field,
+soaks, and restores again. All rows taken at the shipped CEO health of 8,100.
+
+**The buff does something now.** `speedMultiplier` at 1.0 is the buff switched
+off:
+
+| `performanceReview.speedMultiplier` | 1.0 | 1.1 | **1.2** | 1.4 | 1.7 | 2.2 |
+|---|---|---|---|---|---|---|
+| win rate | 50% | 43% | **40%** | 33% | 20% | 13% |
+| buffed / eligible at the beam | 94/97 | 89/92 | 83/85 | 65/67 | 52/53 | 42/43 |
+
+**The buff is worth ten points of win rate.** Before the re-topology this table
+would have been flat, and a flat table would have said nothing about the buff —
+only that nothing was walking through it.
+
+**The control, and it is exactly flat, which is the right answer.**
+`sizeMultiplier` is documented as render-only:
+
+| `performanceReview.sizeMultiplier` | 1.0 | **1.1** | 1.5 |
+|---|---|---|---|
+| win rate | 40% | **40%** | 40% |
+
+Three identical numbers on a field that is supposed to change nothing is what
+makes the gradient in the table above trustworthy.
+
+| `ceo.maxHealth` | 6500 | 7500 | 7900 | **8100** | 8300 | 8500 | 9500 | 10500 |
+|---|---|---|---|---|---|---|---|---|
+| win rate | 50% | 47% | 43% | **40%** | 37% | 36% | 26% | 18% |
+
+| `intern.maxHealth` | 90 | 110 | 130 | 150 |
+|---|---|---|---|---|
+| win rate | 16% | 6% | 1% | **0%** |
+
+**The level is intern-bound**, and steeply: 186 of its 261 enemies are interns,
+and twenty extra health on each of them is the difference between a level and a
+wall. The shipped 75 is untouched.
+
+### Loss distribution, 480 seeds
+
+| died in wave | count | share of losses |
+|---|---|---|
+| 4 | 95 | 34% |
+| 5 | 85 | 30% |
+| 6 | 21 | 8% |
+| 7 | 23 | 8% |
+| 8 | 10 | 4% |
+| 14 (the CEO) | 46 | 16% |
+
+**By the mouth the killing enemies came in through:**
+
+| | lives lost | runs ended |
+|---|---|---|
+| **east** | 7,494 (**88%**) | 220 (**79%**) |
+| west | 988 (12%) | 60 (21%) |
+
+**The east mouth is far the cheaper way in, and this is the finding to carry
+forward.** It is 2,741 px against the west's 3,646, and the east arm is only 36%
+covered by pads against the south's 77% — so an enemy entering there walks a
+shorter road past fewer guns. The wave table was NOT rebalanced for it: the brief
+asked for counts and composition to be held so the re-soak measured the topology
+and nothing else, and 88/12 is what that measures.
+
+---
+
 ## 2026-09-13 — Level 9, and four mini bosses measured one at a time
 
 ### The headline

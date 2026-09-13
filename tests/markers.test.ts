@@ -35,8 +35,11 @@ test('every way in and every way out of every level gets exactly one marker', ()
     // and drew two badges where the board has three.
     level6: '3S 2E',
     level7: '3S 3E',
-    // LEVEL 8: one way in, two ways out.
-    level8: '1S 2E',
+    // LEVEL 8 AFTER THE RE-TOPOLOGY: two ways in, one way out. It shipped the
+    // other way round -- one western mouth and two exits -- and the
+    // Performance Review stood on one of the two exits, where 10.6 of 239
+    // enemies a run ever reached it.
+    level8: '2S 1E',
     // LEVEL 9: two entrance lanes that SHARE one painted mouth, so one badge,
     // and one exit that is a door in the middle of the map rather than a frame
     // edge -- still an exit, still marked.
@@ -64,8 +67,11 @@ test('two lanes out of one mouth draw one badge', () => {
   assert.deepEqual([...nine[0]!.lanes].sort(), ['north', 'south'],
     'the one badge does not stand for both arms')
   // And it must NOT fire on two markers a player reads as separate: level 8's
-  // two exits are 437px apart and both keep their own.
-  assert.equal(of('level8').filter((m) => m.kind === 'exit').length, 2)
+  // two MOUTHS are at opposite edges of the plate and both keep their own.
+  const eight = of('level8').filter((m) => m.kind === 'spawn')
+  assert.equal(eight.length, 2, 'level 8\'s two entrances collapsed into one badge')
+  assert.ok(Math.hypot(eight[0]!.x - eight[1]!.x, eight[0]!.y - eight[1]!.y) > 1000,
+    'level 8\'s two mouths are not at opposite edges any more')
 })
 
 test('every badge lands on the painted plate', () => {

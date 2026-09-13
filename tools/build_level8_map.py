@@ -108,13 +108,29 @@ def main():
     # exit it is the last point, so that one is reversed. Getting this backwards
     # extended the entry gateway on the heading of the FORK and put it at
     # (-60, 10204) -- a spawn point five screens below the map.
-    entry = extend_x(shared, ENTRY_X)
+    # TWO ENTRANCES, ONE EXIT. The three traced arms are the same three arms;
+    # what changed is which way two of them are walked.
+    #
+    # `extend_x` wants the lane's TERMINAL first, and both entrances are
+    # extended OUTWARD from the opening they come in through. For the west that
+    # is the trunk's own waypoint 0; for the east it is the branch's LAST point,
+    # so that list is reversed before it is measured and stays reversed after,
+    # because the walk now runs from the east opening inward to the fork.
+    west_gate = extend_x(shared, ENTRY_X)
     east_gate = extend_x(east[::-1], EXIT_X)
     south_gate = straight_down(south[::-1], EXIT_Y)
 
-    trunk = [entry] + shared
-    east_lane = east + [east_gate]
+    west_lane = [west_gate] + shared
+    east_lane = [east_gate] + east[::-1]
     south_lane = south + [south_gate]
+
+    # BOTH ENTRANCES END ON THE FORK and the exit starts there, which is what
+    # makes `atIndex: 0` honest on both merges -- and, more to the point, is
+    # what puts the Performance Review on road that EVERY enemy walks. The gate
+    # is a distance along `south`; with the arms feeding into it rather than
+    # diverging from it, reaching the exit means crossing it.
+    assert west_lane[-1] == east_lane[-1] == south_lane[0], (
+        west_lane[-1], east_lane[-1], south_lane[0])
 
     out = {
         'plate': 'level8',
@@ -143,60 +159,75 @@ def main():
                        'anything under 44 pt is smaller than a thumb. Two pads need 2 x '
                        'spotRadius between centres before their tap targets overlap; '
                        'tools/check_level8.py measures the closest pair.',
-        'mainId': 'shared',
-        '_mainId': 'THE TRUNK IS CALLED `shared`, not `main`, for the reason level 6 '
-                   "renamed its own: the wave table names the lane it spawns on, and "
-                   '`LaneNetwork.lane()` resolves an unknown id to main -- so a table '
-                   'spawning on `shared` against a lane called `main` would walk the right '
-                   'road by accident and the wrong one the day a second spawn lane '
-                   'arrives. It is the geometry file\'s name for the same run of road.',
-        'waypoints': trunk,
-        '_waypoints': 'THE TRUNK, from the west opening to the fork at '
+        'mainId': 'west',
+        '_mainId': 'THE WEST ENTRANCE, and it was called `shared` when this arm WAS the '
+                   'shared trunk that both exits hung off. It is not shared any more: it '
+                   'is one of two ways in, and the road every enemy has in common is '
+                   '`south`. Renamed rather than left, for the reason level 6 renamed its '
+                   'own -- the wave table names the lane it spawns on and '
+                   '`LaneNetwork.lane()` resolves an unknown id to main, so a stale name '
+                   'walks the right road by accident until the day it does not.',
+        'waypoints': west_lane,
+        '_waypoints': 'THE WEST ENTRANCE, from the west opening to the fork at '
                       f"({g['fork'][0]}, {g['fork'][1]}). {len(shared)} traced points plus ONE "
                       f'computed gateway at x={ENTRY_X}, put on the heading of the first '
                       'traced segment measured over 40 px rather than on the first stub -- '
                       'the same extension levels 2, 3, 4 and 6 use, and the only '
                       'non-traced coordinate on this lane.',
-        'mainMerge': [
-            {'into': 'east', 'atIndex': 0, 'weight': 1},
-            {'into': 'south', 'atIndex': 0, 'weight': 1},
-        ],
-        '_mainMerge': 'A SPLIT, NOT A MERGE, and level 8 is the first map to use the shape: '
-                      'the trunk ends at the fork and each walker takes ONE arm, chosen '
-                      'once from its own `routePick` so nothing flickers at the junction. '
-                      'The weights are EVEN and they are the fallback rather than the '
-                      'design -- waves.level8.json routes most of its groups explicitly '
-                      'with `exit`, and an even split is what an unrouted group gets. '
-                      'Summoned children inherit their parent\'s pick, so the CEO\'s '
-                      'drones follow him down his own arm.',
+        'mainMerge': {'into': 'south', 'atIndex': 0},
+        '_mainMerge': 'A MERGE NOW, NOT A SPLIT, and that one change is the level\'s '
+                      'whole re-topology. The west arm used to END at the fork and hand '
+                      'each walker ONE of two exits, chosen from its own `routePick`; it '
+                      'now runs INTO the south arm, and so does the east. There is one '
+                      'exit and no choice at the junction, so no weight and no pick: every '
+                      'enemy from either mouth walks the same last 2,315 px and through '
+                      'the Performance Review beam standing on it.',
         'lanes': [
             {
                 'id': 'east',
                 'waypoints': east_lane,
-                '_waypoints': f'{len(east)} traced points from the fork to the east opening, '
-                              f'plus one computed gateway at x={EXIT_X}. Waypoint 0 IS the '
-                              'fork, to 0.00 px, which is what `atIndex: 0` on the trunk\'s '
-                              'continuation means.',
+                'entrance': True,
+                'merge': {'into': 'south', 'atIndex': 0},
+                '_waypoints': f'THE EAST ENTRANCE: one computed gateway at x={EXIT_X}, then '
+                              f'the same {len(east)} traced points the east EXIT used, '
+                              'walked the other way -- from the opening in the wall inward '
+                              'to the fork. Not a new trace and not a hand-edit: the '
+                              'tracer\'s own polyline, reversed. Its last waypoint IS the '
+                              'fork, which is what `atIndex: 0` on its merge means.',
+                '_entrance': 'DECLARED, because nothing merges into this lane and '
+                             '`validateLanes` would otherwise read a lane that reaches an '
+                             'exit with no feed as a route with no gate. Level 6\'s '
+                             '`lower` carries it for the same reason.',
             },
             {
                 'id': 'south',
                 'waypoints': south_lane,
-                '_waypoints': f'{len(south)} traced points from the fork to the bottom '
-                              f'opening, plus one computed gateway at y={EXIT_Y} -- computed '
-                              'in Y because this road leaves through a horizontal edge and '
-                              'extending it to an X would put the gateway sideways. '
-                              'Waypoint 0 IS the fork.',
+                '_waypoints': f'THE ONLY EXIT: {len(south)} traced points from the fork to '
+                              f'the bottom opening, plus one computed gateway at y={EXIT_Y} '
+                              '-- computed in Y because this road leaves through a '
+                              'horizontal edge and extending it to an X would put the '
+                              'gateway sideways. Waypoint 0 IS the fork, and BOTH '
+                              'entrances hand their walkers over to it there.',
             },
         ],
-        '_lanes': 'ONE ENTRANCE, TWO EXITS, AND BOTH COST LIVES. Neither branch declares '
-                  '`entrance`: both are fed by the trunk\'s split, so `validateLanes` sees '
-                  'two terminals that something merges into and is satisfied -- the rule '
-                  'that used to demand exactly one terminal was replaced when level 5 '
-                  'shipped two exits. Nothing about leaking is per-exit: `GameScene.leak` '
-                  'charges the enemy\'s own `livesCost` wherever it got out.',
+        '_lanes': 'TWO ENTRANCES, ONE EXIT, AND THE BEAM IS ON THE ROAD THEY SHARE. '
+                  'This level shipped the other way round -- one entrance on the west and '
+                  'two exits, east and south -- and the Performance Review sat on the '
+                  'south arm, which is to say on ONE of two ways out. Measured over 40 '
+                  'seeds, 10.6 of 239 enemies a run ever set foot on that arm and 6.1 were '
+                  'buffed: the gate touched one enemy in forty. Reversing the east arm '
+                  'into an entrance and making the bottom mouth the only exit puts every '
+                  'walker from both mouths on the same last 2,315 px, with the beam '
+                  'standing on it. See reports/2026-09-13-level-8-retopology.md.',
         'buildSpots': [list(p) for p in g['buildSpots']],
-        '_buildSpots': f"{len(g['buildSpots'])} PADS, MORE THAN ANY OTHER LEVEL IN THE GAME "
-                       '(levels 2 to 6 carry 15, 15, 14, 14 and 18). Placed by '
+        '_buildSpots': f"{len(g['buildSpots'])} PADS, AND THE 'MORE THAN ANY OTHER LEVEL' "
+                       'THIS NOTE USED TO CLAIM IS NO LONGER TRUE: level 7 carries 22. '
+                       'The count per level is 7, 15, 15, 14, 14, 18, 22, 19, 15 -- so the '
+                       '14-15 that levels 2 to 5 and 9 sit at is a HABIT rather than a '
+                       'convention, and three boards are well past it. It matters because '
+                       'cross-level difficulty reasoning leans on it: 19 pads hold more '
+                       'DPS than 14, so a boss health figure does not carry between '
+                       'boards. Placed by '
                        'tools/trace_level8.py on levels 3 and 4\'s four properties and '
                        'verified by tools/check_level8.py: each pad\'s 24 px core sits '
                        'entirely on classified carpet, 90-114 px from the nearest lane '
@@ -220,15 +251,15 @@ def main():
 
     json.dump(out, open(OUT, 'w'), indent=2)
     print(f'wrote {os.path.relpath(OUT, ROOT)}')
-    print(f'  trunk  {len(trunk):3d} points, {polyline_length(trunk):8.2f} px '
+    print(f'  west   {len(west_lane):3d} points, {polyline_length(west_lane):8.2f} px '
           f'(traced {polyline_length(shared):.2f})')
     print(f'  east   {len(east_lane):3d} points, {polyline_length(east_lane):8.2f} px '
           f'(traced {polyline_length(east):.2f})')
     print(f'  south  {len(south_lane):3d} points, {polyline_length(south_lane):8.2f} px '
           f'(traced {polyline_length(south):.2f})')
-    print(f'  route to the east exit  {polyline_length(trunk) + polyline_length(east_lane):8.2f} px')
-    print(f'  route to the south exit {polyline_length(trunk) + polyline_length(south_lane):8.2f} px')
-    print(f'  gateways: entry {entry}, east {east_gate}, south {south_gate}')
+    print(f'  route in from the west  {polyline_length(west_lane) + polyline_length(south_lane):8.2f} px')
+    print(f'  route in from the east  {polyline_length(east_lane) + polyline_length(south_lane):8.2f} px')
+    print(f'  gateways: west {west_gate}, east {east_gate}, south {south_gate}')
     print(f'  {len(out["buildSpots"])} build spots, road width {out["roadWidth"]}')
 
 

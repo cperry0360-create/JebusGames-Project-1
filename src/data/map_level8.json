@@ -6,8 +6,8 @@
   "note": "THE OPTIMIZATION: an abandoned corporate office floor, one entrance on the west edge and TWO exits -- east through the wall at 75% of the height, and south through the bottom edge at 84% of the width. Both cost lives. Every coordinate comes from tools/level8_geometry.json, which tools/trace_level8.py derived from the painted plate and tools/check_level8.py checks independently; this file is GENERATED from it by tools/build_level8_map.py and is not hand-edited. Re-derive with `python3 tools/trace_level8.py --overlay tools/L8_pads_overlay.png` and rebuild with `python3 tools/build_level8_map.py`.",
   "spotRadius": 34,
   "_spotRadius": "34, every other level's. World 1280 renders to 844 CSS px, so 34 world px is a 44.8 px tap diameter and anything under 44 pt is smaller than a thumb. Two pads need 2 x spotRadius between centres before their tap targets overlap; tools/check_level8.py measures the closest pair.",
-  "mainId": "shared",
-  "_mainId": "THE TRUNK IS CALLED `shared`, not `main`, for the reason level 6 renamed its own: the wave table names the lane it spawns on, and `LaneNetwork.lane()` resolves an unknown id to main -- so a table spawning on `shared` against a lane called `main` would walk the right road by accident and the wrong one the day a second spawn lane arrives. It is the geometry file's name for the same run of road.",
+  "mainId": "west",
+  "_mainId": "THE WEST ENTRANCE, and it was called `shared` when this arm WAS the shared trunk that both exits hung off. It is not shared any more: it is one of two ways in, and the road every enemy has in common is `south`. Renamed rather than left, for the reason level 6 renamed its own -- the wave table names the lane it spawns on and `LaneNetwork.lane()` resolves an unknown id to main, so a stale name walks the right road by accident until the day it does not.",
   "waypoints": [
     [
       -60.0,
@@ -226,98 +226,96 @@
       356
     ]
   ],
-  "_waypoints": "THE TRUNK, from the west opening to the fork at (1072, 356). 53 traced points plus ONE computed gateway at x=-60.0, put on the heading of the first traced segment measured over 40 px rather than on the first stub -- the same extension levels 2, 3, 4 and 6 use, and the only non-traced coordinate on this lane.",
-  "mainMerge": [
-    {
-      "into": "east",
-      "atIndex": 0,
-      "weight": 1
-    },
-    {
-      "into": "south",
-      "atIndex": 0,
-      "weight": 1
-    }
-  ],
-  "_mainMerge": "A SPLIT, NOT A MERGE, and level 8 is the first map to use the shape: the trunk ends at the fork and each walker takes ONE arm, chosen once from its own `routePick` so nothing flickers at the junction. The weights are EVEN and they are the fallback rather than the design -- waves.level8.json routes most of its groups explicitly with `exit`, and an even split is what an unrouted group gets. Summoned children inherit their parent's pick, so the CEO's drones follow him down his own arm.",
+  "_waypoints": "THE WEST ENTRANCE, from the west opening to the fork at (1072, 356). 53 traced points plus ONE computed gateway at x=-60.0, put on the heading of the first traced segment measured over 40 px rather than on the first stub -- the same extension levels 2, 3, 4 and 6 use, and the only non-traced coordinate on this lane.",
+  "mainMerge": {
+    "into": "south",
+    "atIndex": 0
+  },
+  "_mainMerge": "A MERGE NOW, NOT A SPLIT, and that one change is the level's whole re-topology. The west arm used to END at the fork and hand each walker ONE of two exits, chosen from its own `routePick`; it now runs INTO the south arm, and so does the east. There is one exit and no choice at the junction, so no weight and no pick: every enemy from either mouth walks the same last 2,315 px and through the Performance Review beam standing on it.",
   "lanes": [
     {
       "id": "east",
       "waypoints": [
         [
-          1072,
-          356
-        ],
-        [
-          1072,
-          358
-        ],
-        [
-          1028,
-          402
-        ],
-        [
-          1028,
-          432
-        ],
-        [
-          1046,
-          450
-        ],
-        [
-          1064,
-          456
-        ],
-        [
-          1088,
-          469
-        ],
-        [
-          1112,
-          479
-        ],
-        [
-          1140,
-          498
-        ],
-        [
-          1147,
-          500
-        ],
-        [
-          1157,
-          508
-        ],
-        [
-          1171,
-          513
-        ],
-        [
-          1176,
-          518
-        ],
-        [
-          1197,
-          526
-        ],
-        [
-          1202,
-          530
-        ],
-        [
-          1228,
-          539
+          1340.0,
+          549.98
         ],
         [
           1279,
           544
         ],
         [
-          1340.0,
-          549.98
+          1228,
+          539
+        ],
+        [
+          1202,
+          530
+        ],
+        [
+          1197,
+          526
+        ],
+        [
+          1176,
+          518
+        ],
+        [
+          1171,
+          513
+        ],
+        [
+          1157,
+          508
+        ],
+        [
+          1147,
+          500
+        ],
+        [
+          1140,
+          498
+        ],
+        [
+          1112,
+          479
+        ],
+        [
+          1088,
+          469
+        ],
+        [
+          1064,
+          456
+        ],
+        [
+          1046,
+          450
+        ],
+        [
+          1028,
+          432
+        ],
+        [
+          1028,
+          402
+        ],
+        [
+          1072,
+          358
+        ],
+        [
+          1072,
+          356
         ]
       ],
-      "_waypoints": "17 traced points from the fork to the east opening, plus one computed gateway at x=1340.0. Waypoint 0 IS the fork, to 0.00 px, which is what `atIndex: 0` on the trunk's continuation means."
+      "entrance": true,
+      "merge": {
+        "into": "south",
+        "atIndex": 0
+      },
+      "_waypoints": "THE EAST ENTRANCE: one computed gateway at x=1340.0, then the same 17 traced points the east EXIT used, walked the other way -- from the opening in the wall inward to the fork. Not a new trace and not a hand-edit: the tracer's own polyline, reversed. Its last waypoint IS the fork, which is what `atIndex: 0` on its merge means.",
+      "_entrance": "DECLARED, because nothing merges into this lane and `validateLanes` would otherwise read a lane that reaches an exit with no feed as a route with no gate. Level 6's `lower` carries it for the same reason."
     },
     {
       "id": "south",
@@ -611,10 +609,10 @@
           779.0
         ]
       ],
-      "_waypoints": "71 traced points from the fork to the bottom opening, plus one computed gateway at y=779.0 -- computed in Y because this road leaves through a horizontal edge and extending it to an X would put the gateway sideways. Waypoint 0 IS the fork."
+      "_waypoints": "THE ONLY EXIT: 71 traced points from the fork to the bottom opening, plus one computed gateway at y=779.0 -- computed in Y because this road leaves through a horizontal edge and extending it to an X would put the gateway sideways. Waypoint 0 IS the fork, and BOTH entrances hand their walkers over to it there."
     }
   ],
-  "_lanes": "ONE ENTRANCE, TWO EXITS, AND BOTH COST LIVES. Neither branch declares `entrance`: both are fed by the trunk's split, so `validateLanes` sees two terminals that something merges into and is satisfied -- the rule that used to demand exactly one terminal was replaced when level 5 shipped two exits. Nothing about leaking is per-exit: `GameScene.leak` charges the enemy's own `livesCost` wherever it got out.",
+  "_lanes": "TWO ENTRANCES, ONE EXIT, AND THE BEAM IS ON THE ROAD THEY SHARE. This level shipped the other way round -- one entrance on the west and two exits, east and south -- and the Performance Review sat on the south arm, which is to say on ONE of two ways out. Measured over 40 seeds, 10.6 of 239 enemies a run ever set foot on that arm and 6.1 were buffed: the gate touched one enemy in forty. Reversing the east arm into an entrance and making the bottom mouth the only exit puts every walker from both mouths on the same last 2,315 px, with the beam standing on it. See reports/2026-09-13-level-8-retopology.md.",
   "buildSpots": [
     [
       202,
@@ -693,6 +691,6 @@
       598
     ]
   ],
-  "_buildSpots": "19 PADS, MORE THAN ANY OTHER LEVEL IN THE GAME (levels 2 to 6 carry 15, 15, 14, 14 and 18). Placed by tools/trace_level8.py on levels 3 and 4's four properties and verified by tools/check_level8.py: each pad's 24 px core sits entirely on classified carpet, 90-114 px from the nearest lane centreline, at least 74 px from another pad, and at least 34 px from a frame edge so its tap target is on the board. The count is what those rules allow and is not a target -- the placement stops when the best remaining pad adds no uncovered lane. BOSS HEALTH IS MEASURED AGAINST THIS BOARD and against no other: 19 pads hold more DPS than 14, so the CEO's number does not transfer to or from another level.",
+  "_buildSpots": "19 PADS, AND THE 'MORE THAN ANY OTHER LEVEL' THIS NOTE USED TO CLAIM IS NO LONGER TRUE: level 7 carries 22. The count per level is 7, 15, 15, 14, 14, 18, 22, 19, 15 -- so the 14-15 that levels 2 to 5 and 9 sit at is a HABIT rather than a convention, and three boards are well past it. It matters because cross-level difficulty reasoning leans on it: 19 pads hold more DPS than 14, so a boss health figure does not carry between boards. Placed by tools/trace_level8.py on levels 3 and 4's four properties and verified by tools/check_level8.py: each pad's 24 px core sits entirely on classified carpet, 90-114 px from the nearest lane centreline, at least 74 px from another pad, and at least 34 px from a frame edge so its tap target is on the board. The count is what those rules allow and is not a target -- the placement stops when the best remaining pad adds no uncovered lane. BOSS HEALTH IS MEASURED AGAINST THIS BOARD and against no other: 19 pads hold more DPS than 14, so the CEO's number does not transfer to or from another level.",
   "_coverage": "HOW MUCH OF EACH LANE THE PADS CAN REACH, from the geometry file: shared 71%, south 77%, east 36%. THE EAST BRANCH IS THE CHEAP EXIT and the wave table is built knowing it: a third of that arm is inside somebody's range and two thirds of it is not, so an enemy routed east walks past far fewer guns than one routed south. It is the shortest arm as well -- 1720 px against the south's 3644."
 }

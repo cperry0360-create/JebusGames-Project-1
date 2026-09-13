@@ -13,8 +13,7 @@
           "count": 7,
           "interval": 1.2,
           "delay": 0,
-          "lane": "shared",
-          "exit": "east"
+          "lane": "east"
         }
       ]
     },
@@ -26,16 +25,14 @@
           "count": 6,
           "interval": 0.9,
           "delay": 0,
-          "lane": "shared",
-          "exit": "east"
+          "lane": "east"
         },
         {
           "enemy": "intern",
           "count": 4,
           "interval": 0.9,
           "delay": 6,
-          "lane": "shared",
-          "exit": "south"
+          "lane": "west"
         }
       ]
     },
@@ -48,16 +45,14 @@
           "count": 8,
           "interval": 0.8,
           "delay": 0,
-          "lane": "shared",
-          "exit": "south"
+          "lane": "west"
         },
         {
           "enemy": "intern",
           "count": 4,
           "interval": 1.0,
           "delay": 4,
-          "lane": "shared",
-          "exit": "east"
+          "lane": "east"
         }
       ]
     },
@@ -70,24 +65,21 @@
           "count": 1,
           "interval": 2.0,
           "delay": 0,
-          "lane": "shared",
-          "exit": "east"
+          "lane": "east"
         },
         {
           "enemy": "intern",
           "count": 6,
           "interval": 0.9,
           "delay": 2,
-          "lane": "shared",
-          "exit": "east"
+          "lane": "east"
         },
         {
           "enemy": "intern",
           "count": 5,
           "interval": 0.9,
           "delay": 8,
-          "lane": "shared",
-          "exit": "south"
+          "lane": "west"
         }
       ]
     },
@@ -100,24 +92,21 @@
           "count": 2,
           "interval": 3.0,
           "delay": 0,
-          "lane": "shared",
-          "exit": "south"
+          "lane": "west"
         },
         {
           "enemy": "intern",
           "count": 8,
           "interval": 0.8,
           "delay": 3,
-          "lane": "shared",
-          "exit": "south"
+          "lane": "west"
         },
         {
           "enemy": "intern",
           "count": 5,
           "interval": 1.0,
           "delay": 10,
-          "lane": "shared",
-          "exit": "east"
+          "lane": "east"
         }
       ]
     },
@@ -130,24 +119,21 @@
           "count": 2,
           "interval": 4.0,
           "delay": 0,
-          "lane": "shared",
-          "exit": "east"
+          "lane": "east"
         },
         {
           "enemy": "intern",
           "count": 8,
           "interval": 0.8,
           "delay": 4,
-          "lane": "shared",
-          "exit": "south"
+          "lane": "west"
         },
         {
           "enemy": "hr",
           "count": 1,
           "interval": 2.0,
           "delay": 2,
-          "lane": "shared",
-          "exit": "east"
+          "lane": "east"
         }
       ]
     },
@@ -159,24 +145,21 @@
           "count": 2,
           "interval": 5.0,
           "delay": 0,
-          "lane": "shared",
-          "exit": "south"
+          "lane": "west"
         },
         {
           "enemy": "consultant",
           "count": 3,
           "interval": 2.6,
           "delay": 3,
-          "lane": "shared",
-          "exit": "south"
+          "lane": "west"
         },
         {
           "enemy": "intern",
           "count": 10,
           "interval": 0.7,
           "delay": 8,
-          "lane": "shared",
-          "exit": "east"
+          "lane": "east"
         }
       ]
     },
@@ -188,24 +171,21 @@
           "count": 3,
           "interval": 3.6,
           "delay": 0,
-          "lane": "shared",
-          "exit": "south"
+          "lane": "west"
         },
         {
           "enemy": "consultant",
           "count": 3,
           "interval": 2.4,
           "delay": 6,
-          "lane": "shared",
-          "exit": "east"
+          "lane": "east"
         },
         {
           "enemy": "intern",
           "count": 9,
           "interval": 0.7,
           "delay": 10,
-          "lane": "shared",
-          "exit": "east"
+          "lane": "east"
         }
       ]
     },
@@ -218,32 +198,28 @@
           "count": 3,
           "interval": 3.4,
           "delay": 0,
-          "lane": "shared",
-          "exit": "east"
+          "lane": "east"
         },
         {
           "enemy": "manager",
           "count": 2,
           "interval": 3.4,
           "delay": 4,
-          "lane": "shared",
-          "exit": "south"
+          "lane": "west"
         },
         {
           "enemy": "hr",
           "count": 2,
           "interval": 4.0,
           "delay": 2,
-          "lane": "shared",
-          "exit": "east"
+          "lane": "east"
         },
         {
           "enemy": "intern",
           "count": 10,
           "interval": 0.6,
           "delay": 12,
-          "lane": "shared",
-          "exit": "south"
+          "lane": "west"
         }
       ]
     },
@@ -255,32 +231,28 @@
           "count": 5,
           "interval": 2.2,
           "delay": 0,
-          "lane": "shared",
-          "exit": "south"
+          "lane": "west"
         },
         {
           "enemy": "hr",
           "count": 2,
           "interval": 4.0,
           "delay": 4,
-          "lane": "shared",
-          "exit": "south"
+          "lane": "west"
         },
         {
           "enemy": "intern",
           "count": 14,
           "interval": 0.6,
           "delay": 8,
-          "lane": "shared",
-          "exit": "east"
+          "lane": "east"
         },
         {
           "enemy": "manager",
           "count": 2,
           "interval": 3.4,
           "delay": 14,
-          "lane": "shared",
-          "exit": "east"
+          "lane": "east"
         }
       ]
     },
@@ -292,32 +264,28 @@
           "count": 3,
           "interval": 3.2,
           "delay": 0,
-          "lane": "shared",
-          "exit": "south"
+          "lane": "west"
         },
         {
           "enemy": "consultant",
           "count": 4,
           "interval": 2.2,
           "delay": 5,
-          "lane": "shared",
-          "exit": "east"
+          "lane": "east"
         },
         {
           "enemy": "hr",
           "count": 2,
           "interval": 3.6,
           "delay": 3,
-          "lane": "shared",
-          "exit": "south"
+          "lane": "west"
         },
         {
           "enemy": "intern",
           "count": 14,
           "interval": 0.55,
           "delay": 12,
-          "lane": "shared",
-          "exit": "south"
+          "lane": "west"
         }
       ]
     },
@@ -329,32 +297,28 @@
           "count": 20,
           "interval": 0.45,
           "delay": 0,
-          "lane": "shared",
-          "exit": "east"
+          "lane": "east"
         },
         {
           "enemy": "intern",
           "count": 16,
           "interval": 0.5,
           "delay": 6,
-          "lane": "shared",
-          "exit": "south"
+          "lane": "west"
         },
         {
           "enemy": "hr",
           "count": 3,
           "interval": 3.4,
           "delay": 10,
-          "lane": "shared",
-          "exit": "east"
+          "lane": "east"
         },
         {
           "enemy": "consultant",
           "count": 4,
           "interval": 2.2,
           "delay": 14,
-          "lane": "shared",
-          "exit": "south"
+          "lane": "west"
         }
       ]
     },
@@ -367,40 +331,35 @@
           "count": 3,
           "interval": 3.0,
           "delay": 0,
-          "lane": "shared",
-          "exit": "south"
+          "lane": "west"
         },
         {
           "enemy": "manager",
           "count": 3,
           "interval": 3.0,
           "delay": 6,
-          "lane": "shared",
-          "exit": "east"
+          "lane": "east"
         },
         {
           "enemy": "consultant",
           "count": 5,
           "interval": 2.0,
           "delay": 10,
-          "lane": "shared",
-          "exit": "east"
+          "lane": "east"
         },
         {
           "enemy": "hr",
           "count": 4,
           "interval": 3.2,
           "delay": 4,
-          "lane": "shared",
-          "exit": "south"
+          "lane": "west"
         },
         {
           "enemy": "intern",
           "count": 18,
           "interval": 0.5,
           "delay": 16,
-          "lane": "shared",
-          "exit": "south"
+          "lane": "west"
         }
       ]
     },
@@ -413,43 +372,39 @@
           "count": 1,
           "interval": 2.0,
           "delay": 0,
-          "lane": "shared",
-          "exit": "south"
+          "lane": "west"
         },
         {
           "enemy": "manager",
           "count": 3,
           "interval": 3.4,
           "delay": 10,
-          "lane": "shared",
-          "exit": "east"
+          "lane": "east"
         },
         {
           "enemy": "consultant",
           "count": 4,
           "interval": 2.4,
           "delay": 18,
-          "lane": "shared",
-          "exit": "south"
+          "lane": "west"
         },
         {
           "enemy": "intern",
           "count": 14,
           "interval": 0.6,
           "delay": 26,
-          "lane": "shared",
-          "exit": "east"
+          "lane": "east"
         },
         {
           "enemy": "hr",
           "count": 3,
           "interval": 3.4,
           "delay": 34,
-          "lane": "shared",
-          "exit": "south"
+          "lane": "west"
         }
       ]
     }
   ],
-  "_curve": "THE CURVE WAS FIXED THE DAY THIS LEVEL GOT A ROW, and that is how it was found. tests/content.test.ts's `the wave curve has no cliff in it` runs over every table in levels.json, and level 8 had no row until level 7 landed -- so its curve had never once been measured. Five of its thirteen steps were faults: wave 2 was 100% heavier than wave 1, wave 8 was 56.8%, wave 13 was 90.7%, and waves 10 and 12 were LIGHTER than the waves before them. Six counts moved and nothing else: wave 1 gained two Interns, waves 8 and 9 lost one and two, wave 11 lost a Middle Management and an HR, and wave 13 lost three Middle Managements off a 2,400-point spike. The level was re-soaked afterwards -- see SOAK-REPORT.md and reports/2026-09-13-level-7.md -- because level 8 is purse-bound and a body count is a difficulty number on it."
+  "_curve": "THE CURVE WAS FIXED THE DAY THIS LEVEL GOT A ROW, and that is how it was found. tests/content.test.ts's `the wave curve has no cliff in it` runs over every table in levels.json, and level 8 had no row until level 7 landed -- so its curve had never once been measured. Five of its thirteen steps were faults: wave 2 was 100% heavier than wave 1, wave 8 was 56.8%, wave 13 was 90.7%, and waves 10 and 12 were LIGHTER than the waves before them. Six counts moved and nothing else: wave 1 gained two Interns, waves 8 and 9 lost one and two, wave 11 lost a Middle Management and an HR, and wave 13 lost three Middle Managements off a 2,400-point spike. The level was re-soaked afterwards -- see SOAK-REPORT.md and reports/2026-09-13-level-7.md -- because level 8 is purse-bound and a body count is a difficulty number on it.",
+  "_lanes": "TWO ENTRANCES NOW, AND THE SPLIT THAT USED TO BE A CHOICE OF EXIT IS A CHOICE OF MOUTH. Every group in this table spawned on `shared` and carried an `exit` of `east` or `south`, which the fork honoured; there is one exit now, so `exit` is gone and the same groups enter from the two mouths instead. THE MAPPING IS ONE-TO-ONE AND DELIBERATE: a group that was routed to the east exit now comes IN through the east mouth, and one routed south keeps the long walk from the west. TOTAL COUNTS AND COMPOSITION ARE UNCHANGED, wave for wave and enemy for enemy, so the re-soak measures the topology and nothing else. The routes are no longer the same length in the same direction: west is 3,646 px as it always was, east is 2,741, and both end on the same last 2,315 px through the Performance Review."
 }

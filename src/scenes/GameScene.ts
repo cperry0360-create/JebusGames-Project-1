@@ -6532,8 +6532,14 @@ export class GameScene extends Phaser.Scene {
     }
     const hit = crossedGate(g, e.laneId, from, e.laneDistance)
     if (!hit || !e.review(g.sizeMultiplier, g.speedMultiplier)) return
+    // UNIFORM, and the height is derived rather than authored. This was
+    // `markerHeight * 3` by `markerHeight * 6` -- 72 by 144 out of a 272x610
+    // cell, which is 12% wider than the art. The sheet's own grid is the only
+    // thing that knows the right proportion, so it is asked.
+    const cell = renderFor(ART.fx.performanceScan).sheet
+    const ratio = cell ? cell.frameHeight / cell.frameWidth : 1
     playEffect(this, ART.fx.performanceScan, hit.at[0], hit.at[1], {
-      size: g.markerHeight * 3, height: g.markerHeight * 6,
+      size: g.scanWidth, height: g.scanWidth * ratio,
       depth: OVERLAY_DEPTH, durationMs: g.scanMs,
     })
     play(this, 'hit-b', 0.5)

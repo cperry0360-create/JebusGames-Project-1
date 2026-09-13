@@ -62,7 +62,13 @@ const killedBy: Record<string, number> = {}
 // AND WHAT WENT THROUGH IT. On a one-exit level `killedBy` has a single key and
 // says nothing; this is the field that answers "which of them kills the player".
 const killedByEnemy: Record<string, number> = {}
+/** Lives lost, and runs ended, by the MOUTH the enemy came in through. On a map
+ *  with two ways in and one way out this is the question the wave table is
+ *  built to answer, and `leaksByExit` cannot answer it: there is one exit. */
+const leaksByEntrance: Record<string, number> = {}
+const endedByEntrance: Record<string, number> = {}
 let reviewed = 0
+let atGate = 0
 let auraBuffed = 0
 let blastOnFriendlies = 0
 let wrongLevel = ''
@@ -101,6 +107,10 @@ for (let seed = 1; seed <= RUNS; seed++) {
   for (const [k, v] of Object.entries(r.leaksByEnemy)) leakers[k] = (leakers[k] ?? 0) + v
   if (r.lostToExit) killedBy[r.lostToExit] = (killedBy[r.lostToExit] ?? 0) + 1
   if (r.lostToEnemy) killedByEnemy[r.lostToEnemy] = (killedByEnemy[r.lostToEnemy] ?? 0) + 1
+  if (r.lostToEntrance) endedByEntrance[r.lostToEntrance] = (endedByEntrance[r.lostToEntrance] ?? 0) + 1
+  for (const [k, v] of Object.entries(r.leaksByEntrance ?? {})) {
+    leaksByEntrance[k] = (leaksByEntrance[k] ?? 0) + v
+  }
   if (r.splitKillToExit !== null) splitKills.push(r.splitKillToExit)
   if (r.lostToSplit) lostToSplit++
   bladeCuts += r.bladeCuts
@@ -108,6 +118,7 @@ for (let seed = 1; seed <= RUNS; seed++) {
   flameDamage += r.flameDamage ?? 0
   disableSeconds += r.disableSeconds ?? 0
   reviewed += r.reviewed
+  atGate += r.atGate ?? 0
   auraBuffed += r.auraBuffed
   blastOnFriendlies += r.blastOnFriendlies
   const wrong = r.findings.find((f) => f.kind === 'wrong-level')
@@ -151,13 +162,28 @@ if (endedBy.length) {
   console.log('  what took the last life: ' + endedBy
     .map(([k, v]) => `${k} ${v} (${((v / total) * 100).toFixed(0)}%)`).join('  '))
 }
+const byMouth = Object.entries(leaksByEntrance).sort((a, b) => b[1] - a[1])
+if (byMouth.length > 1) {
+  const total = byMouth.reduce((a, [, v]) => a + v, 0)
+  console.log('  lives lost by the mouth they came in through: ' + byMouth
+    .map(([k, v]) => `${k} ${v} (${((v / total) * 100).toFixed(0)}%)`).join('  '))
+  const ended = Object.entries(endedByEntrance).sort((a, b) => b[1] - a[1])
+  const et = ended.reduce((a, [, v]) => a + v, 0)
+  if (et) {
+    console.log('  the mouth that ended the run: ' + ended
+      .map(([k, v]) => `${k} ${v} (${((v / et) * 100).toFixed(0)}% of losses)`).join('  '))
+  }
+}
 const got = Object.entries(leakers).sort((a, b) => b[1] - a[1])
 if (got.length) {
   console.log('  what got out: ' + got.map(([k, v]) => `${k} x${v}`).join('  '))
 }
 if (reviewed) {
-  console.log(`  performance reviews: ${reviewed} enemies buffed `
-    + `(${(reviewed / RUNS).toFixed(1)} a run)`)
+  // WITH ITS DENOMINATOR, ALWAYS. `6.5 a run` was true of level 8 for its whole
+  // life and meant nothing without the 239 it was out of.
+  console.log(`  performance reviews: ${(reviewed / RUNS).toFixed(1)} a run of the `
+    + `${(atGate / RUNS).toFixed(1)} eligible enemies that reached the beam `
+    + `(${atGate ? ((reviewed / atGate) * 100).toFixed(1) : '0'}%)`)
 }
 if (auraBuffed) {
   console.log(`  HR aura: ${auraBuffed} enemies stood in one at some point `
