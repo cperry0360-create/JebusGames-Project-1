@@ -757,7 +757,7 @@ test('every hero declares a whole list of whole abilities', () => {
   // picture on its button, and putting it here rather than in a switch in the
   // scene is what makes a new hero's effects a data edit.
   const FIELDS = ['name', 'icon', 'fx', 'effect', 'cooldown', 'poweredOnly', 'activation',
-    'castRadius', 'range', 'radius', 'damage', 'ignoresArmor', 'knockbackPixels',
+    'castRadius', 'range', 'radius', 'coversMap', 'damage', 'ignoresArmor', 'knockbackPixels',
     'stunSeconds', 'slowFactor', 'slowSeconds', 'burnPerSecond', 'burnSeconds', 'hits',
     'gapSeconds', 'durationSeconds', 'tickSeconds', 'targets', 'holdSeconds', 'beamWidth',
     'sound', 'voice']
@@ -784,6 +784,21 @@ test('every hero declares a whole list of whole abilities', () => {
       assert.ok(cues.includes(a.sound), `${at} plays "${a.sound}", which is not a cue`)
       if (a.voice !== null) {
         assert.ok(cues.includes(a.voice), `${at}'s voice line "${a.voice}" is not a cue`)
+      }
+
+      // `coversMap` SAYS WHERE A VOLLEY FALLS, so it belongs to `rain` and to
+      // nothing else -- no other effect has a volley to place. And a map-wide
+      // one has to be able to hit what it picks: `radius` is the jitter round
+      // the chosen enemy there, so a jitter wider than the disc one strike
+      // actually damages would let a volley land fourteen stars and miss with
+      // all of them.
+      assert.equal(typeof a.coversMap, 'boolean',
+        `${at} does not say whether it covers the map`)
+      if (a.coversMap) {
+        assert.equal(a.effect, 'rain', `${at} covers the map but is not a volley`)
+        assert.ok(a.radius <= pres.heroFx.strikeLength,
+          `${at} jitters ${a.radius}px round its target but damages only `
+          + `${pres.heroFx.strikeLength}px, so it can miss the enemy it chose`)
       }
 
       if (a.activation === 'instant') {
@@ -859,10 +874,13 @@ test('every hero declares a whole list of whole abilities', () => {
     assert.ok(['left', 'right'].includes(h.artFacing), `${id}'s artFacing is not a side`)
   }
 
-  // COURTLAND IS THE ONE WITH THREE, and the other four are untouched. If this
-  // shape is applied to them later it is this line that says so deliberately.
+  // COURTLAND AND ELI HAVE THREE, and the other three are untouched. Eli's
+  // third arrived because his brother has three and he asked for parity, which
+  // is exactly the reason this line is a deliberate statement rather than a
+  // derived one: applying the shape to a hero is a decision, and it gets
+  // written down here when it is made.
   const counts = Object.fromEntries(heroEntries().map(([id, h]) => [id, h.abilities.length]))
-  assert.deepEqual(counts, { cory: 2, courtland: 3, han: 2, eli: 2, bailey: 2 })
+  assert.deepEqual(counts, { cory: 2, courtland: 3, han: 2, eli: 3, bailey: 2 })
 })
 
 test('Depreciation fully strips the cast it was tuned against, and dents the rest', () => {
@@ -1232,12 +1250,20 @@ test('every hero power draws real art, sized to the power', () => {
         `${key} has no content box, so HeroFx cannot size it to the ability's radius`)
     }
   }
-  // THE THREE THAT ARE STRETCHED ALONG A LINE. Their length is whatever the
+  // THE FOUR THAT ARE STRETCHED ALONG A LINE. Their length is whatever the
   // player aimed at, so they are anchored at the hero's END of the picture
-  // rather than at its middle, and all three are authored travelling right.
-  for (const key of ['fx-ice-beam', 'fx-zoomies', 'fx-mind-laser']) {
+  // rather than at its middle, and all four are authored travelling right.
+  //
+  // NEAR THE END, NOT EXACTLY ON IT. Three of them start their ink at x0 and
+  // record anchorX 0; `fx-eli-fire` paints 31px of muzzle glow BEHIND the hand
+  // and so registers at 0.0814, which is the same claim about which end is the
+  // hero's. What the rule is defending against is an anchor in the MIDDLE --
+  // a measurement that latched onto the wrong feature -- so the bound is a
+  // tenth of the frame rather than a single value.
+  for (const key of ['fx-ice-beam', 'fx-zoomies', 'fx-mind-laser', 'fx-eli-fire']) {
     assert.equal(art.render[key].stretch, 'line', `${key} must declare that it is stretched`)
-    assert.equal(art.render[key].anchorX, 0, `${key} must be anchored at the hero's end`)
+    const a = art.render[key].anchorX
+    assert.ok(a <= 0.1 || a >= 0.9, `${key} is anchored at ${a}, not at the hero's end`)
   }
 })
 
@@ -1251,7 +1277,8 @@ test('the hero medallions are round and the drafted plates are not', () => {
   // sample: a rectangular icon in a round socket is what says "this is a
   // drafted card" to a player reading the bar at a glance.
   const medallions = heroEntries().flatMap(([, h]) => (h.abilities as any[]).map((a) => a.icon))
-  assert.equal(medallions.length, 11, 'the roster has eleven hero buttons: Courtland has three')
+  assert.equal(medallions.length, 12,
+    'the roster has twelve hero buttons: Courtland has three and so does Eli')
   for (const k of medallions) {
     assert.ok(Math.abs(ratio(k) - 1) < 0.15, `${k} is ${ratio(k).toFixed(2)}:1, not a square medallion`)
   }

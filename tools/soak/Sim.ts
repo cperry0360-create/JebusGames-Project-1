@@ -1478,9 +1478,15 @@ export function simulate(
       const target = area ? null : pickNearest(
         enemies.filter((e) => e.alive) as any, heroState.x, heroState.y, k.range,
       ) as SimEnemy | null
+      // A `coversMap` volley reaches the WHOLE BOARD, so what it can catch is
+      // every live enemy rather than the ones standing round the hero. The
+      // scatter inside that set is still the scatter -- `rainPoints` picks a
+      // target per star -- so this only widens the candidate list.
       const caught = area
-        ? withinRadius(enemies.filter((e) => e.alive) as any,
-                       heroState.x, heroState.y, k.radius) as SimEnemy[]
+        ? (k.coversMap
+          ? enemies.filter((e) => e.alive) as SimEnemy[]
+          : withinRadius(enemies.filter((e) => e.alive) as any,
+                         heroState.x, heroState.y, k.radius) as SimEnemy[])
         : []
       if (target || caught.length > 0) {
         cooldowns.start(SLOT1)
@@ -1519,7 +1525,8 @@ export function simulate(
           // times it on one target. The same rainPoints the scene calls, off
           // the run's own rng so a seed still reproduces.
           const strike = (presentationData as { heroFx: { strikeLength: number } }).heroFx.strikeLength
-          for (const pt of rainPoints(k, { x: heroState.x, y: heroState.y }, rng)) {
+          for (const pt of rainPoints(k, { x: heroState.x, y: heroState.y }, rng,
+            caught.map((e) => ({ x: e.x, y: e.y })))) {
             for (const e of caught) {
               if (!e.alive) continue
               if (Math.hypot(e.x - pt.x, e.y - pt.y) > strike) continue

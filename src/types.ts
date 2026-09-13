@@ -903,8 +903,32 @@ export interface HeroAbilityDef {
    *  `laser`'s beam. 0 for one centred on the hero. */
   range: number
   /** The effect's own radius: the blast, the scatter, the dash corridor's
-   *  half-width, or how near the tapped point `control` looks for enemies. */
+   *  half-width, or how near the tapped point `control` looks for enemies.
+   *
+   *  A `coversMap` rain reads it as the JITTER round each star's chosen
+   *  target rather than as the area, so it is small there and not a reach. */
   radius: number
+  /**
+   * `rain` only: the volley falls over the WHOLE PLAYFIELD rather than over a
+   * disc round the hero.
+   *
+   * WHY THIS IS NOT JUST A BIGGER RADIUS. A strike damages what is within
+   * `presentation.json`'s `heroFx.strikeLength` -- 26 world pixels -- of where
+   * it lands, which is 2,124 px of a 921,600 px board. Scattering fourteen of
+   * those uniformly over the board would catch a given enemy 0.03 times: the
+   * ability would reach everywhere and do nothing anywhere, and matching
+   * today's per-enemy damage that way needs about a thousand strikes.
+   *
+   * So the volley is spread over the ENEMIES rather than over the empty board.
+   * Each star picks a live enemy at random, anywhere on the map, and falls
+   * within `radius` of it -- which keeps every property the scatter had: which
+   * enemy gets how many stars is random, a star that lands on one of a clump
+   * still catches its neighbours, and the volley is worth `hits * damage`
+   * spread over whoever is out there rather than all of it landing on one
+   * unlucky enemy. What changes is only the REACH. When the board is empty the
+   * stars fall on open ground so the picture is still a rain across the map.
+   */
+  coversMap: boolean
   damage: number
   ignoresArmor: boolean
   knockbackPixels: number

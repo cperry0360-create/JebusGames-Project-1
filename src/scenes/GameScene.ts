@@ -3688,11 +3688,16 @@ export class GameScene extends Phaser.Scene {
     x: number, y: number,
     p: {
       hits: number; radius: number; damage: number; gapSeconds: number
-      ignoresArmor: boolean; fx: string
+      ignoresArmor: boolean; fx: string; coversMap?: boolean
     },
   ): void {
     const fx = p.fx
-    const points = rainPoints(p, { x, y }, () => Math.random())
+    // THE WHOLE BOARD'S ENEMIES, for a `coversMap` volley -- `rainPoints`
+    // spreads the stars over THEM rather than over the empty map, which is
+    // what makes a map-wide scatter land on anything at all. A volley that is
+    // not map-wide never reads this list. See `coversMap` in types.ts.
+    const points = rainPoints(p, { x, y }, () => Math.random(),
+      p.coversMap ? this.enemies.filter((e) => e.alive).map((e) => ({ x: e.x, y: e.y })) : [])
     // NO RING OVER THE WHOLE DISC ANY MORE. The placeholder drew one, because
     // a scatter of two-line stabs could not say how far the volley reached.
     // The real art can: fourteen falling stars ARE the shape, and a circle

@@ -56,6 +56,7 @@
     "ability-han-2": "abilities/ability_han_2.webp",
     "ability-eli-1": "abilities/ability_eli_1.webp",
     "ability-eli-2": "abilities/ability_eli_2.webp",
+    "ability-eli-3": "abilities/ability_eli_3.webp",
     "ability-bailey-1": "abilities/ability_bailey_1.webp",
     "ability-bailey-2": "abilities/ability_bailey_2.webp",
     "hud-peanuts": "ui/hud_peanuts.webp",
@@ -130,6 +131,7 @@
     "fx-mind-control": "effects/fx_mind_control.webp",
     "fx-mind-laser": "effects/fx_mind_laser.webp",
     "fx-star-rain": "effects/fx_star_rain.webp",
+    "fx-eli-fire": "effects/fx_eli_fire.webp",
     "fx-ice-beam": "effects/fx_ice_beam.webp",
     "fx-fireball-impact": "effects/fx_fireball_impact.webp",
     "fx-burn": "effects/fx_burn.webp",
@@ -888,6 +890,12 @@
       "contentWidth": 256,
       "contentHeight": 254
     },
+    "ability-eli-3": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 254,
+      "contentHeight": 252
+    },
     "ability-bailey-1": {
       "anchorX": 0.5,
       "anchorY": 0.5,
@@ -923,6 +931,23 @@
       "anchorY": 1.0,
       "contentWidth": 226,
       "contentHeight": 180
+    },
+    "fx-eli-fire": {
+      "_note": "RUSSINGA IS FIRE, the second held beam. TWELVE 381x330 cells in ONE ROW, and it MUST NOT BE RE-SLICED OR RE-GRIDDED: the export was a 4x3 grid whose frames each had their muzzle somewhere different, drifting 51px across and 151px down, and it was flattened to a row with every muzzle registered on one point before it reached the repository. Re-gridding it puts the drift back.",
+      "_anchor": "THE MUZZLE, as a fraction of the cell. anchorX 0.0814 is x31.0 of 381, which sits inside the ink of all twelve frames and 13-21px in from each one's left edge -- the fire starts at the hand and its glow spills back behind it, exactly as fx-mind-laser's does. anchorY is the CORE'S CENTRE LINE over the sustain frames, which is what tools/measure_art.py's beam-strip section measures: it reads 0.5955, against the 0.5909 the brief proposed, and the measurement is what is recorded. Re-run that section after any re-export.",
+      "_content": "contentWidth IS NOT THE CELL. `GameScene.aimHeld` scales the sprite by `range / contentWidth`, and the sprite's origin is the muzzle -- so this has to be the distance from the muzzle to the PAINTED TIP if the fire is to end where the damage corridor ends. The union ink runs x10-370, so that is 370 - 31 = 339. fx-mind-laser records 225, its whole cell, and gets away with it only because its muzzle is at x0 and its ink reaches x224: the two coincide there and do not here. contentHeight is the union ink height, y10-316.",
+      "anchorX": 0.0814,
+      "anchorY": 0.5955,
+      "contentWidth": 339,
+      "contentHeight": 307,
+      "beamCoreHeight": 108,
+      "_beamCoreHeight": "THE PAINTED CORE, not the cell, and this is the number fx-mind-laser shipped wrong. `beamWidth` describes the corridor that is DAMAGED, so dividing it by the 330px cell -- most of which is muzzle glow and rolling smoke -- squeezes a 108px flame into a fifth of its drawn thickness and flattens every highlight into a gradient. Measured over the sustain frames by tools/measure_art.py. At range 420 and beamWidth 72 the scales are 1.24 across and 0.67 down, an anisotropy of 1.86:1 against the laser's 3.14:1.",
+      "stretch": "line",
+      "sheet": {
+        "frameWidth": 381,
+        "frameHeight": 330,
+        "frames": 12
+      }
     },
     "fx-mind-laser": {
       "anchorX": 0.0,
@@ -1256,6 +1281,7 @@
       "fx-boss-bolt",
       "fx-burn",
       "fx-death-puff",
+      "fx-eli-fire",
       "fx-explosion",
       "fx-fireball-impact",
       "fx-glacier",
@@ -1401,6 +1427,7 @@
     "ability-han-2",
     "ability-eli-1",
     "ability-eli-2",
+    "ability-eli-3",
     "ability-bailey-1",
     "ability-bailey-2"
   ],

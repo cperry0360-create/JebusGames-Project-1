@@ -17,6 +17,10 @@
 
 import type { HeroAbilityDef } from '../types.ts'
 import { abilityUsable } from './HeroSkills.ts'
+// The board a map-wide volley falls over, which is the design box every other
+// world coordinate in the game is measured in. With the import attribute, so
+// the test runner can import this module for real rather than read it as text.
+import displayData from '../data/display.json' with { type: 'json' }
 
 export interface Point {
   x: number
@@ -120,15 +124,38 @@ export function withinDash(p: Point, from: Point, to: Point, radius: number): bo
  *
  * The random source is passed in, so the harness and the tests can drive a
  * known scatter and a soak run is reproducible from its seed.
+ *
+ * `targets` is every live enemy on the board and is read ONLY by a `coversMap`
+ * volley; a disc round the hero ignores it and draws exactly the two random
+ * numbers per strike it always did, so nothing that is not map-wide moves.
  */
 export function rainPoints(
-  def: { hits: number; radius: number }, at: Point, rng: () => number,
+  def: { hits: number; radius: number; coversMap?: boolean },
+  at: Point,
+  rng: () => number,
+  targets: readonly Point[] = [],
 ): Point[] {
   const out: Point[] = []
   for (let i = 0; i < def.hits; i++) {
+    // MAP-WIDE SCATTERS OVER THE ENEMIES, NOT OVER THE EMPTY BOARD. See
+    // `coversMap` in types.ts for why a bigger radius cannot do this job: a
+    // strike damages 2,124 px of a 921,600 px board, so a uniform volley of
+    // fourteen would reach everywhere and do nothing anywhere. Picking a
+    // target per star keeps the scatter random -- which enemy gets how many
+    // stars is still the roll -- and moves only the reach.
+    const centre = def.coversMap
+      ? (targets.length > 0 ? targets[Math.floor(rng() * targets.length)]! : null)
+      : at
+    if (centre === null) {
+      // Nothing out there: the stars still fall, over the whole board, so a
+      // volley cast on an empty lane looks like the ability rather than like a
+      // button that did nothing.
+      out.push({ x: rng() * displayData.width, y: rng() * displayData.height })
+      continue
+    }
     const angle = rng() * Math.PI * 2
     const r = Math.sqrt(rng()) * def.radius
-    out.push({ x: at.x + Math.cos(angle) * r, y: at.y + Math.sin(angle) * r })
+    out.push({ x: centre.x + Math.cos(angle) * r, y: centre.y + Math.sin(angle) * r })
   }
   return out
 }

@@ -527,14 +527,18 @@ test('every hero and every hero button is called one thing, everywhere', () => {
    * Cut, which is gone from the game. Slot 2 is Ice Beam, which is new.
    */
   const heroes = read('heroes') as Record<string, any>
-  // COURTLAND HAS THREE. He is the roster's first hero with more than two
-  // abilities and the reason `abilities` is a list; the other four are
-  // unchanged, which is what this checks.
+  // COURTLAND HAS THREE AND SO DOES ELI, whose little brother asked for
+  // parity. `abilities` is a list because of Courtland; the remaining three
+  // heroes have two, which is what this checks -- a hero's button count is a
+  // fact about that hero, not a shape the roster shares.
+  //
+  // RUSSINGA IS FIRE is spelt exactly that way on purpose and is the longest
+  // ability label in the game, which is the loadout's widest-label column.
   const expected: Record<string, [string, string[]]> = {
     cory: ['Cory', ['Haymaker', 'Spike Strip']],
     courtland: ['Courtland', ['Seismic', 'Mind Control', 'Mind Laser']],
     han: ['Han', ['Ember', 'Fireball']],
-    eli: ['Eli', ['Star Rain', 'Ice Beam']],
+    eli: ['Eli', ['Star Rain', 'Ice Beam', 'Russinga is Fire']],
     bailey: ['Bailey', ['Bark', 'Zoomies']],
   }
   const ids = Object.keys(heroes).filter((k) => !k.startsWith('_'))

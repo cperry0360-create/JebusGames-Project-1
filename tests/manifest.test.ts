@@ -228,7 +228,13 @@ test('anchors stay well inside the frame', () => {
     // both are authored travelling right. That is an authored fact, not a
     // measurement that latched onto a prop, and `stretch` is what says so.
     if (cfg.stretch === 'line') {
-      assert.ok(cfg.anchorX === 0 || cfg.anchorX === 1,
+      // NEAR AN END RATHER THAN EXACTLY ON ONE. `fx-eli-fire` paints 31px of
+      // muzzle glow behind the hand it leaves, so the hero's end of that
+      // picture is 0.0814 of the way in and not its left edge. That is the
+      // same authored fact the other three state as 0; what this is defending
+      // against is an anchor out in the MIDDLE of a line effect, so a tenth of
+      // the frame is the tolerance rather than a single value.
+      assert.ok(cfg.anchorX <= 0.1 || cfg.anchorX >= 0.9,
         `${key} is stretched along a line, so it must be anchored at one END`)
       continue
     }
