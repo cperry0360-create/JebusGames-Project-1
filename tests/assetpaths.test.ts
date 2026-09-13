@@ -174,3 +174,26 @@ test('a missing texture is drawn at the size of the thing it replaced', () => {
     'the stand-in canvas changed size; the point is that it is much larger than a slot, '
     + 'which is why it has to be fitted rather than trusted')
 })
+
+test('the hero chip does not carry a texture key across a level change', () => {
+  /*
+   * THE THIRD SIGHTING OF THE SAME STAND-IN, and the one that was not about a
+   * file either.
+   *
+   * `chipPortrait` is constructed wearing the 256px missing-icon stand-in and
+   * is given its real texture -- and its fit -- by `drawHeroChip`, but only
+   * `if (key !== this.chipKey)`. `chipKey` is a plain field on a scene Phaser
+   * constructs ONCE and re-`create()`s on every restart, so on the second
+   * level of a session it still held the first level's portrait key. A player
+   * takes the same hero from one level to the next, so the comparison matched,
+   * the branch was skipped, and a brand-new image sat on the ability bar at
+   * 256x256 drawing an exclamation mark.
+   *
+   * The cache describes the sprite, so it is cleared where the sprite is made.
+   */
+  const hud = read('src/scenes/HudScene.ts')
+  const build = /private buildHeroChip\([\s\S]*?\n  \}/.exec(hud)
+  assert.ok(build, 'buildHeroChip has moved; this test is checking nothing')
+  assert.match(build[0], /this\.chipPortrait = this\.add\.image\([\s\S]{0,1400}?this\.chipKey = ''/,
+    'buildHeroChip makes a new portrait without clearing the texture key cached for the old one')
+})

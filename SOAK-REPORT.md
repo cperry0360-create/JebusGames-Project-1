@@ -4,6 +4,80 @@ Newest first.
 
 ---
 
+## 2026-09-13 — Star Rain over the whole map, measured three ways
+
+### The headline
+
+**Star Rain is map-wide, and it is worth +2.7 to +11.5 points of win rate on
+the hero-rotated shape and +22.3 to +73.1 on Eli's own seeds.** Nothing was
+re-tuned. **The published Cory-pinned rates did not move at all** — they are
+byte-identical before and after, on all eight levels.
+
+**Hero rotation: all three, on the same seeds.** This is the first entry here
+that is not Cory-only, because the change is to a hero the Cory-pinned driver
+never fields.
+
+```bash
+node --experimental-strip-types tools/soak/eli.ts 480 out.json
+```
+
+`tools/soak/eli.ts` is new. `level.ts` pins `DEFAULT_HERO_ID`, so a change to
+Eli cannot move a number it prints; `run.ts` rotates and dilutes by about 7×;
+`heroes.ts` does both but stops at level 5 and reports Courtland. This runs the
+same seeds three ways on every built level:
+
+- **cory** — `DEFAULT_HERO_ID` on every seed. A CONTROL: Eli never takes the
+  field, so a number that moves here is collateral.
+- **rotated** — `run.ts`'s own rotation,
+  `["cory","cory","cory","courtland","han","eli","bailey"]`. Eli plays
+  `seed % 7 === 5`, which is **68 of 480**. This is the shape the aggregate is
+  in.
+- **eli** — Eli on every seed: the effect undiluted.
+
+### The numbers
+
+| level | cory-pinned (control) | rotated | eli-pinned |
+|---|---|---|---|
+| level1 | 89.2% → 89.2% **+0.0** | 73.1% → 79.6% **+6.5** | 56.2% → 95.2% **+39.0** |
+| level2 | 53.1% → 53.1% **+0.0** | 40.4% → 48.5% **+8.1** | 18.3% → 79.2% **+60.8** |
+| level3 | 87.9% → 87.9% **+0.0** | 66.2% → 77.7% **+11.5** | 26.9% → 100.0% **+73.1** |
+| level4 | 62.3% → 62.3% **+0.0** | 61.7% → 68.3% **+6.7** | 45.6% → 93.8% **+48.1** |
+| level5 | 45.4% → 45.4% **+0.0** | 37.7% → 41.0% **+3.3** | 33.8% → 56.0% **+22.3** |
+| level6 | 43.8% → 43.8% **+0.0** | 27.1% → 29.8% **+2.7** | 9.8% → 38.1% **+28.3** |
+| level7 | 41.2% → 41.2% **+0.0** | 38.8% → 45.0% **+6.2** | 37.9% → 73.3% **+35.4** |
+| level8 | 40.6% → 40.6% **+0.0** | 38.5% → 46.9% **+8.3** | 33.8% → 89.6% **+55.8** |
+
+**The control cross-checks against this document.** The cory column reproduces
+the win rates published in the entries below, to the run: level4 299/480,
+level5 218/480, level6 210/480, level7 198/480, level8 195/480. Same instrument,
+same game; only Eli moved.
+
+**The 35-45% band is a statement about the cory column, and it is unchanged.**
+No level is outside it that was not outside it before.
+
+### What moved, and what to do about it
+
+Nothing was tuned to compensate, as the brief instructed. The two numbers worth
+a decision are **level 3 at 100% and level 8 at 89.6% on Eli's own seeds**. The
+levers are `hits`, `damage` and `cooldown` on Star Rain in `heroes.json`; none
+was touched.
+
+### AND THE SIMULATOR STILL CANNOT SEE A POWERED-FORM ABILITY
+
+`Sim.ts` registers `heroSlotId(0)` and reads `hero.abilities[0]`. It has no
+code for a powered-form or held ability, so Ice Beam, Mind Control, the Mind
+Laser and Eli's new Russinga is Fire are worth **exactly zero** in every soak
+this project has run.
+
+Measured, not assumed: the same tree with Eli's third ability deleted from
+`heroes.json`, soaked at 120 seeds × 8 levels × 3 rotations, gives **all 24
+numbers identical**. Anything below this line that compares heroes is comparing
+their slot 1s.
+
+See `reports/2026-09-13-eli-fire-and-star-rain.md`.
+
+---
+
 ## 2026-09-13 — level 7 soaked, and a board the scripted player could not see
 
 ### The headline

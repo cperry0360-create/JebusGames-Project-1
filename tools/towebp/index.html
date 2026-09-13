@@ -11,20 +11,35 @@
 // Every file is checked before it is kept: identical dimensions, an alpha
 // channel that still matches, and PSNR over the pixels a player can actually
 // see (alpha > 0), which is the only place a lossy encoder can hurt.
+//
+// A TARGET MAY ALSO SAY WHERE IT GOES AND HOW BIG, as `src|dest|WxH`. Both
+// extra fields are optional, so a bare path still lands beside its source at
+// its own size. Art arrives from the painter at whatever size the painter
+// exported -- 1234x1219 for a 256px medallion -- and there is no PIL, no
+// ImageMagick and no cwebp here to resample it with either, so the same
+// Chromium that does the encoding does the resize. WHEN A TARGET IS RESIZED
+// THE COMPARISON MOVES WITH IT: the reference pixels are the RESAMPLED ones,
+// because what is being checked is whether the encoder hurt the picture, not
+// whether 1234px of source survived being made 256px wide.
 const QUALITY = 0.95
 const targets = await (await fetch('/list')).json()
 const log = (m) => fetch('/log', { method: 'POST', body: m })
 
 const results = []
-for (const src of targets) {
+for (const target of targets) {
+  const [src, destSpec, sizeSpec] = String(target).split('|')
   const img = new Image()
   img.src = '/' + src
   await img.decode()
-  const w = img.naturalWidth, h = img.naturalHeight
+  const [w, h] = sizeSpec
+    ? sizeSpec.split('x').map(Number)
+    : [img.naturalWidth, img.naturalHeight]
 
   const cv = new OffscreenCanvas(w, h)
   const ctx = cv.getContext('2d', { willReadFrequently: true })
-  ctx.drawImage(img, 0, 0)
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, 0, 0, w, h)
   const ref = ctx.getImageData(0, 0, w, h).data
 
   const blob = await cv.convertToBlob({ type: 'image/webp', quality: QUALITY })
@@ -59,8 +74,9 @@ for (const src of targets) {
   const psnr = mse === 0 ? Infinity : 10 * Math.log10(255 * 255 / mse)
   const rec = {
     src,
-    dest: src.replace(/\.png$/, '.webp'),
+    dest: destSpec || src.replace(/\.png$/, '.webp'),
     w, h,
+    source: img.naturalWidth + 'x' + img.naturalHeight,
     sameSize: bmp.width === w && bmp.height === h,
     srcBytes: (await (await fetch('/' + src)).blob()).size,
     bytes: blob.size,

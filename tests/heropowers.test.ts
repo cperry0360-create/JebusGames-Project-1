@@ -28,6 +28,10 @@ const IDS = Object.keys(HEROES).filter((k) => !k.startsWith('_'))
 const ART_RENDER = JSON.parse(readFileSync(url('../src/data/art.json'), 'utf8')).render
 const PRESENTATION_LASER =
   JSON.parse(readFileSync(url('../src/data/presentation.json'), 'utf8')).heroFx.laser
+/** The radius one strike of a rain actually damages, and the board it falls on. */
+const STRIKE_LENGTH =
+  JSON.parse(readFileSync(url('../src/data/presentation.json'), 'utf8')).heroFx.strikeLength
+const DISPLAY = JSON.parse(readFileSync(url('../src/data/display.json'), 'utf8'))
 const at = (id: string, i: number): HeroAbilityDef => HEROES[id].abilities[i]
 const skill = (id: string): HeroAbilityDef => at(id, 0)
 const power = (id: string): HeroAbilityDef => at(id, 1)
@@ -229,13 +233,16 @@ test('Zoomies hurts what she runs through, not what is at the end', () => {
 
 test('Star Rain scatters evenly over its area, and lands over time', () => {
   // ELI'S SLOT 1 NOW, not his slot 2 -- so the def under test is the skill.
-  // `rainPoints` takes the two fields it reads rather than a whole power def
+  // `rainPoints` takes the fields it reads rather than a whole power def
   // for exactly this reason: the scatter is the same scatter either way.
   const p = skill('eli')
-  // A known scatter: the rng is passed in, so the test drives it.
+  // The disc form, which is what every rain that is NOT map-wide still does.
+  // Driven off a def with `coversMap` cleared rather than off Star Rain's own,
+  // so this keeps testing the disc after Eli's went board-wide.
+  const disc = { ...p, coversMap: false }
   let n = 0
   const seq = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
-  const points = rainPoints(p, { x: 100, y: 100 }, () => seq[n++ % seq.length]!)
+  const points = rainPoints(disc, { x: 100, y: 100 }, () => seq[n++ % seq.length]!)
   assert.equal(points.length, p.hits, 'the rain does not land the hits it declares')
   for (const q of points) {
     assert.ok(Math.hypot(q.x - 100, q.y - 100) <= p.radius + 0.001,
@@ -245,7 +252,7 @@ test('Star Rain scatters evenly over its area, and lands over time', () => {
   // bunch in the middle, because a disc has more area further out. Half the
   // radius holds a quarter of the area, so about a quarter of the strikes.
   let inner = 0
-  const many = rainPoints({ ...p, hits: 4000 }, { x: 0, y: 0 }, () => Math.random())
+  const many = rainPoints({ ...disc, hits: 4000 }, { x: 0, y: 0 }, () => Math.random())
   for (const q of many) if (Math.hypot(q.x, q.y) <= p.radius / 2) inner++
   assert.ok(Math.abs(inner / many.length - 0.25) < 0.04,
     `${((inner / many.length) * 100).toFixed(0)}% of strikes fell in the inner quarter, not ~25%`)
@@ -259,6 +266,83 @@ test('Star Rain scatters evenly over its area, and lands over time', () => {
   // makes it a skill rather than a placed power.
   assert.match(game, /case 'rain': this\.rainOver\(this\.hero\.x, this\.hero\.y, a\)/,
     'the instant rain is not dropped on the hero')
+})
+
+test('a map-wide rain falls on the enemies, anywhere on the board', () => {
+  /*
+   * ELI WANTED IT OVER THE ENTIRE MAP, and a bigger radius cannot give him
+   * that. A strike damages `strikeLength` -- 26 world pixels -- of a 1280x720
+   * board, which is 0.23% of it, so fourteen strikes scattered uniformly over
+   * the playfield would catch a given enemy 0.03 times. The ability would
+   * reach everywhere and do nothing anywhere.
+   *
+   * So `coversMap` spreads the volley over the ENEMIES rather than over the
+   * empty board: each star picks a live one at random, wherever it is, and
+   * falls within `radius` of it. Three claims, and all three are what make it
+   * the same ability at a different reach.
+   */
+  const k = skill('eli')
+  assert.equal(k.coversMap, true, 'Star Rain is not map-wide')
+
+  // 1. A STAR THAT PICKS AN ENEMY HITS IT. `radius` is the jitter round the
+  //    target, so it has to be inside the disc a strike actually damages --
+  //    otherwise a map-wide volley could land fourteen stars and miss with all
+  //    of them.
+  assert.ok(k.radius <= STRIKE_LENGTH,
+    `a map-wide star jitters ${k.radius}px round its target but only damages `
+    + `${STRIKE_LENGTH}px, so it can miss the enemy it chose`)
+
+  // 2. IT REACHES ACROSS THE WHOLE BOARD. Two enemies at opposite corners,
+  //    with the "hero" parked in one of them: both are struck.
+  const far = [{ x: 40, y: 40 }, { x: 1240, y: 680 }]
+  const hit = [0, 0]
+  const points = rainPoints({ ...k, hits: 400 }, far[0]!, () => Math.random(), far)
+  for (const q of points) {
+    for (const [i, t] of far.entries()) {
+      if (Math.hypot(q.x - t.x, q.y - t.y) <= STRIKE_LENGTH) hit[i]!++
+    }
+  }
+  assert.ok(hit[0]! > 0 && hit[1]! > 0,
+    `the far corner took ${hit[1]} of 400 stars; a map-wide volley reaches it`)
+  // Evenly between them, which is what keeps it a scatter rather than a beam
+  // at whoever is nearest.
+  assert.ok(Math.abs(hit[0]! - hit[1]!) < 400 * 0.15,
+    `${hit[0]} stars on one enemy and ${hit[1]} on the other is not an even scatter`)
+  // And every star landed on one of them, so none of the volley is wasted on
+  // empty board while there is something to hit.
+  assert.equal(hit[0]! + hit[1]!, 400, 'a star fell on neither enemy')
+
+  // 3. AN EMPTY BOARD STILL RAINS, over the whole playfield, so a volley cast
+  //    on a clear lane looks like the ability rather than like a dead button.
+  const empty = rainPoints({ ...k, hits: 500 }, { x: 0, y: 0 }, () => Math.random(), [])
+  for (const q of empty) {
+    assert.ok(q.x >= 0 && q.x <= DISPLAY.width && q.y >= 0 && q.y <= DISPLAY.height,
+      'a star fell off the board')
+  }
+  const spread = {
+    x: Math.max(...empty.map((q) => q.x)) - Math.min(...empty.map((q) => q.x)),
+    y: Math.max(...empty.map((q) => q.y)) - Math.min(...empty.map((q) => q.y)),
+  }
+  assert.ok(spread.x > DISPLAY.width * 0.9 && spread.y > DISPLAY.height * 0.9,
+    `an empty-board volley covered ${Math.round(spread.x)}x${Math.round(spread.y)} `
+    + `of a ${DISPLAY.width}x${DISPLAY.height} board`)
+
+  // A rain that is NOT map-wide never looks at the list, so nothing else moved.
+  const local = rainPoints({ ...k, coversMap: false, hits: 200 },
+    { x: 600, y: 300 }, () => Math.random(), far)
+  for (const q of local) {
+    assert.ok(Math.hypot(q.x - 600, q.y - 300) <= k.radius + 0.001,
+      'a disc rain was pulled onto the enemy list')
+  }
+
+  // THE WHOLE BOARD IS WHAT THE SCENE OFFERS IT, not the enemies near the
+  // hero: `rainOver` is called with the hero's position and has to hand over
+  // every live enemy regardless of where that is.
+  const game = code('scenes/GameScene.ts')
+  const over = game.slice(game.indexOf('private rainOver('))
+  assert.match(over.slice(0, over.indexOf('\n  }')),
+    /p\.coversMap \? this\.enemies\.filter\(\(e\) => e\.alive\)/,
+    'the scene does not hand a map-wide volley the enemies it is supposed to fall on')
 })
 
 /* ------------------------------------------------------------ Eli's two */
