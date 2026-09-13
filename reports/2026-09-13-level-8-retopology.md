@@ -2,7 +2,8 @@
 
 | commit | what | CI |
 |---|---|---|
-| *this commit* | The re-topology, the gate measurement, the re-soak, the harness scenario, this report | *pending — closed below* |
+| `49e3b7a` | The re-topology, the gate measurement, the re-soak, the harness scenario | [run 347](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34782565856) — **green** (`changes`, `typecheck`, `test`; `deploy` skipped on a branch) |
+| *this commit* | Closes the row above | docs only |
 
 ---
 
