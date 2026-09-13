@@ -1,0 +1,11 @@
+{
+  "_note": "SPAWN AND EXIT BADGES, PLACED FROM LANE GEOMETRY. Nothing here names a level or a coordinate: systems/Markers.ts walks every lane in the level's own map and puts a spawn badge on the first waypoint of every lane an enemy can enter from and an exit badge on the last waypoint of every lane that runs to an exit. Re-tracing a plate moves them; adding a level adds them. The four numbers below are the only things authored.",
+  "badgeScreenWidth": 40,
+  "_badgeScreenWidth": "THE BADGE IS 40 CSS PIXELS ACROSS AT DEFAULT ZOOM, which is the unit it was asked for in and the only one that means anything for a thing you look at. The WORLD width falls out of it -- 40 / camera.defaultZoom -- exactly as buildPad.quietScreenWidth does, so changing the zoom band does not silently resize the badge. Deriving it the other way round, from a hardcoded world size, is what makes a prop that is the right size on a desktop and wrong on a phone.",
+  "arrowOffset": 0.736,
+  "_arrowOffset": "THE ARROW'S CENTRE SITS 0.736 x THE BADGE'S RENDERED WIDTH from the badge's centre, along the lane's direction of travel. At rotation 0 that reproduces the original render exactly, which is where the number comes from -- it is a measurement of how the two pieces were drawn together, not a taste. It is a fraction of the RENDERED width rather than a pixel count so it survives the badge being resized.",
+  "alpha": 1.0,
+  "_alpha": "1.0, AND IT EXISTS TO BE TURNED DOWN LATER WITHOUT A RE-RENDER. The badges are navigational furniture rather than art anybody chose to look at, and the moment they read as clutter the answer is a number here rather than a re-export or a code change. Shipping at 1.0 is deliberate: a prop that arrives already faded cannot be judged.",
+  "mergeWithin": 1.0,
+  "_mergeWithin": "HOW CLOSE TWO MARKERS OF THE SAME KIND HAVE TO BE, IN BADGE WIDTHS, BEFORE ONLY ONE IS DRAWN. Level 8's two exits are 437 px apart and both get one; level 9's two entrance lanes SHARE a painted mouth and start at the same point, so without this they would draw two badges exactly on top of each other and the overlap would read as a rendering fault. 1.0 badge width is the smallest threshold that cannot fire on two markers a player would read as separate."
+}

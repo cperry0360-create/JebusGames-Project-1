@@ -45,6 +45,10 @@ import { WaveSpawner } from '../systems/WaveSpawner.ts'
 import { withinRadius, pickNearest } from '../systems/Targeting.ts'
 import { auraAt, darkCount, type AuraSource } from '../systems/Support.ts'
 import { GROUND_DEPTH, ySort } from '../systems/DepthSort.ts'
+import MARKERS from '../data/markers.json'
+import {
+  arrowAt, badgeWorldWidth, markersFor, type MarkerConfig, type MarkerKind,
+} from '../systems/Markers.ts'
 import { newRegenState, tickRegen, type RegenState } from '../systems/Regen.ts'
 import { boardBounds, coverZoom, openingView } from '../systems/CameraMath.ts'
 import { distanceAtX, laneGates, type EmergeConfig, type GateDistances } from '../systems/Gateway.ts'
@@ -880,6 +884,7 @@ export class GameScene extends Phaser.Scene {
     this.drawPlate()
     this.buildSign()
     this.buildScenery()
+    this.buildLaneMarkers()
 
     this.markerLayer = this.add.graphics().setDepth(GROUND_DEPTH + 6)
     // Above the pads and below everything that stands on them, so the mark
@@ -1448,6 +1453,66 @@ export class GameScene extends Phaser.Scene {
         ySort(img)
         this.sceneryArt.push(img)
       }
+    }
+  }
+
+  /**
+   * THE SPAWN AND EXIT BADGES, placed from this level's own lane waypoints.
+   *
+   * IT EXTENDS THE PROP LAYER RATHER THAN ADDING A SECOND ONE. `sceneryArt` and
+   * `buildScenery` arrived with level 9 as the general form of the one-off that
+   * had placed level 1's tavern sign; these go into the same list and are torn
+   * down by the same code. Two layers that both mean "world-positioned
+   * decoration" is two places to remember on every shutdown.
+   *
+   * WHERE THEY SIT: above the painted plate and below every entity. NOT
+   * y-sorted -- `ySort` would put a badge at the bottom of the board in FRONT
+   * of an enemy standing above it, and a navigational label that occludes the
+   * thing it is labelling is worse than no label. A fixed depth just over the
+   * ground layer is the whole rule.
+   *
+   * THEY NEVER TAKE A TAP. No `setInteractive`, on either sprite, ever: a badge
+   * sits on the road at a spawn mouth and the player has to be able to drag the
+   * board from under it.
+   *
+   * TWO SPRITES PER MARKER. The badge is upright always -- a reaper drawn
+   * sideways is a bug, not a direction -- and only the arrow rotates, to the
+   * lane's own heading at that waypoint. The arrow's offset is a fraction of
+   * the badge's RENDERED width so it survives a resize; see markers.json.
+   */
+  private buildLaneMarkers(): void {
+    const cfg = MARKERS as MarkerConfig
+    const badgeW = badgeWorldWidth(cfg, displayData.camera.defaultZoom)
+    const pairs: Record<MarkerKind, [string, string]> = {
+      spawn: [ART.prop.markerSpawn, ART.prop.markerSpawnArrow],
+      exit: [ART.prop.markerExit, ART.prop.markerExitArrow],
+    }
+    const plate = { width: displayData.width, height: displayData.height }
+    for (const m of markersFor(this.level.map, cfg, badgeW, plate)) {
+      const [badgeKey, arrowKey] = pairs[m.kind]
+      if (!this.textures.exists(badgeKey)) continue
+
+      // ONE SCALE FOR BOTH SPRITES, and it is what makes `arrowOffset` mean
+      // anything. The badge and the arrow were drawn together at one size, so
+      // the arrow's proportion to the badge is the artist's and is not
+      // re-chosen here: scale both by the same factor and rotation 0
+      // reproduces the original render exactly, which is the sentence
+      // `arrowOffset` was measured from.
+      //
+      // NOT `fitInBox`, which fits a SQUARE -- it takes `min(box/w, box/h)`, so
+      // a 400x441 badge asked for a 40-wide box comes out 36 wide. The badge is
+      // specified by its WIDTH; see `badgeScreenWidth`.
+      const scale = badgeW / (renderFor(badgeKey).contentWidth ?? 400)
+      const badge = this.add.image(m.x, m.y, badgeKey).setOrigin(0.5, 0.5)
+      badge.setScale(scale).setDepth(GROUND_DEPTH + 3).setAlpha(cfg.alpha)
+      this.sceneryArt.push(badge)
+
+      if (!this.textures.exists(arrowKey)) continue
+      const at = arrowAt(m, badge.displayWidth, cfg)
+      const arrow = this.add.image(at.x, at.y, arrowKey).setOrigin(0.5, 0.5)
+      arrow.setScale(scale).setRotation(m.angle)
+      arrow.setDepth(GROUND_DEPTH + 4).setAlpha(cfg.alpha)
+      this.sceneryArt.push(arrow)
     }
   }
 

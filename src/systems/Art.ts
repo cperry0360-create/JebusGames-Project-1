@@ -37,10 +37,10 @@ export const ART = {
    *  resolves to the visible stand-in instead of an empty texture key. */
   icons: (art.ui as { icons?: Record<string, string> }).icons ?? {},
   /** Props painted onto the map rather than owned by an entity. */
-  prop: art.prop as {
-    signDefault: string; signBribed: string; signTavern: string
-    buildPad: string; buildPadQuiet?: string
-  },
+  // Cast to the shape in types.ts rather than re-listing the keys here, which
+  // is what made adding a prop a two-file change and then a type error in a
+  // third. `ArtDef['prop']` is the one declaration.
+  prop: art.prop as ArtDef['prop'],
   optional: (art as { optional?: string[] }).optional ?? [],
   fx: art.fx,
   decor: art.decor,

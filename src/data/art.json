@@ -211,7 +211,11 @@
     "node-chip-fan": "props/node_chip_fan.webp",
     "node-chip-cabled": "props/node_chip_cabled.webp",
     "prop-vlaude-screen": "props/prop_vlaude_screen.webp",
-    "card-level9": "ui/card_level9.webp"
+    "card-level9": "ui/card_level9.webp",
+    "marker-spawn": "props/marker_spawn.webp",
+    "marker-spawn-arrow": "props/marker_spawn_arrow.webp",
+    "marker-exit": "props/marker_exit.webp",
+    "marker-exit-arrow": "props/marker_exit_arrow.webp"
   },
   "render": {
     "turret-escalation": {
@@ -1561,6 +1565,22 @@
       "anchorY": 1.0,
       "contentWidth": 866,
       "contentHeight": 926
+    },
+    "marker-spawn": {
+      "contentWidth": 400,
+      "contentHeight": 441
+    },
+    "marker-spawn-arrow": {
+      "contentWidth": 158,
+      "contentHeight": 169
+    },
+    "marker-exit": {
+      "contentWidth": 400,
+      "contentHeight": 440
+    },
+    "marker-exit-arrow": {
+      "contentWidth": 158,
+      "contentHeight": 169
     }
   },
   "map": {
@@ -1600,13 +1620,17 @@
       "fx-star-rain",
       "fx-stunned",
       "fx-zoomies",
+      "marker-exit",
+      "marker-exit-arrow",
+      "marker-spawn",
+      "marker-spawn-arrow",
+      "projectile-rocket",
+      "projectile-rocket-big",
       "prop-pad",
       "prop-pad-flagstone",
       "prop-sign-courjahan",
       "prop-sign-moes",
       "prop-sign-tavern",
-      "projectile-rocket",
-      "projectile-rocket-big",
       "shot-heavy",
       "shot-ring",
       "shot-small",
@@ -1767,7 +1791,11 @@
     "nodeChipRam": "node-chip-ram",
     "nodeChipFan": "node-chip-fan",
     "nodeChipCabled": "node-chip-cabled",
-    "vlaudeScreen": "prop-vlaude-screen"
+    "vlaudeScreen": "prop-vlaude-screen",
+    "markerSpawn": "marker-spawn",
+    "markerSpawnArrow": "marker-spawn-arrow",
+    "markerExit": "marker-exit",
+    "markerExitArrow": "marker-exit-arrow"
   },
   "towerTiers": {
     "turret-ledger": [
@@ -1879,5 +1907,6 @@
   "_optional": "Art that may legitimately be absent. A key here is skipped by the loader with a console warning rather than a missing-texture error, and every one belongs to a family with a named fallback -- tests/boot.test.ts enforces that. IT IS NOT A LICENCE TO SHIP WITHOUT THE FILE. `queueArt` requests every key in `files`, optional or not -- it cannot know which are absent without asking the server -- so a listed key whose file is missing is a 404 on every boot for every player, and three of them shipped that way. tests/assets.test.ts now fails on exactly that. The eight icons left here are the tower-panel glyphs, which have a generated stand-in.",
   "_greyable": "A greyscale copy is built for each of these at boot (BootScene, systems/Desaturate.ts) and the HUD swaps to it when the thing is unavailable. EVERY HERO ABILITY ICON IS HERE BECAUSE OF THE POWERED-FORM GATE. An ability with `poweredOnly` is greyed out until the hero transforms, and a tint cannot say that -- Phaser's tint multiplies, so a tinted icon reads as \"in shadow\" rather than as \"switched off\". It used to read as neither: the key was absent from this list, `greyKey` named a texture that had never been built, the swap was skipped and the button kept its full colour with only a dim tint on it. The word LOCKED being painted into the placeholder art was what made that survivable, and that word is gone with the placeholders.",
   "_fx": "EFFECTS THE GAME DRAWS FOR ITSELF, by role. `spark`, `blast`, `puff` and `muzzle` are combat feedback; `bossBolt` is one boss's projectile; `stunned`, `burn` and `mindControl` are STATUS MARKERS drawn over an enemy for as long as the status lasts, which is why they are here rather than in heroes.json beside the ability that applied them -- a burn is a fact about the enemy, and anything that can set something alight draws the same flame. `mindControl` is live now: Courtland's Mind Control sets `Enemy.controlled` and `enemyMarker` in GameScene draws this over every enemy it turns, which is what keeps two enemies fighting each other from reading as a bug.",
-  "_heroHeight": "WHY hero-cory-power CARRIES NO displayHeight. Every other sprite's on-screen height is a manifest field, and CLAUDE.md rule 7 says so. The Rivian is the exception because its height is a decision about ONE HERO rather than about one picture: it is 1.51:1, so at the roster's height it would be wider than the road, and the number that fixes that belongs beside the hero it is about. `heroes.json cory.poweredHeight` is it, and it is the only copy -- a second one here is how the two come to disagree. Hero.ts asks the roster first and falls back to this entry, so a hero with no `poweredHeight` is sized by its art exactly as before, and tests/heroes.test.ts fails if a powered form has a height from neither."
+  "_heroHeight": "WHY hero-cory-power CARRIES NO displayHeight. Every other sprite's on-screen height is a manifest field, and CLAUDE.md rule 7 says so. The Rivian is the exception because its height is a decision about ONE HERO rather than about one picture: it is 1.51:1, so at the roster's height it would be wider than the road, and the number that fixes that belongs beside the hero it is about. `heroes.json cory.poweredHeight` is it, and it is the only copy -- a second one here is how the two come to disagree. Hero.ts asks the roster first and falls back to this entry, so a hero with no `poweredHeight` is sized by its art exactly as before, and tests/heroes.test.ts fails if a powered form has a height from neither.",
+  "_markers": "THE SPAWN AND EXIT BADGES, and they are SHARED level art rather than any one level's: every level draws them, derived from its own lane waypoints by systems/Markers.ts. contentWidth/contentHeight are the INK extents from tools/measure_art.py and on these four they happen to equal the canvas -- the artwork reaches every edge, there is no transparent margin -- which is a MEASUREMENT rather than an assumption. Recorded because the usual failure is the opposite: hud-peanut shipped 512x512 against a 498x400 painting and drew 3% small forever."
 }

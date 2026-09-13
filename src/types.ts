@@ -1494,6 +1494,16 @@ export interface ArtDef {
     buildPad: string
     /** The painted flagstone every other free spot carries. */
     buildPadQuiet?: string
+    /**
+     * THE SPAWN AND EXIT BADGES, placed from lane geometry rather than painted
+     * into a plate or authored per level. The badge never rotates; the arrow
+     * turns to the lane's direction of travel. See systems/Markers.ts and
+     * src/data/markers.json.
+     */
+    markerSpawn: string
+    markerSpawnArrow: string
+    markerExit: string
+    markerExitArrow: string
   }
   fx: {
     /** Landed hit: a projectile, a chain link, the Haymaker, the sign bribe. */
