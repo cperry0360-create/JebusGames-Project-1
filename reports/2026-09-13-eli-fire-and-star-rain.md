@@ -6,15 +6,17 @@
 | `75e5bbc` | Star Rain falls on the whole map, and Eli gets Russinga is Fire | **green** — run 317 |
 | `4511950` | Harness: an ability-bar sweep, Eli's three, and both held beams | **green** — run 317 |
 | `7924e0a` | This report and its SOAK-REPORT entry | **green** — [run 318](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34760292998) |
+| `c74dac1` | Fill in this report's own CI row | **green** — [run 319](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34760386878) |
 
 Run 317 is one run over the first three commits, pushed together: `test`
 **success**, `typecheck` **success**, `changes` **success**, `deploy`
 **skipped** (this is a branch, not `main`). Run 318 is the same four jobs on
 the report commit. Tests **1069 → 1072**.
 
-One commit is not in the table and cannot be: the one that fills the table in.
-It is the branch's last, it is markdown only, and its run is named at the end
-of this file.
+One commit is not in the table and cannot be: the one that adds the row above
+for `c74dac1`. It is the branch's last, it is markdown only, and it carries the
+same three green jobs — the exact hash and run are in the session's closing
+message, because a file cannot name the commit that writes it.
 
 ---
 
