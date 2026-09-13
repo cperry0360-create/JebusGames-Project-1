@@ -29,7 +29,10 @@ gives the smaller fix that would let it go back to 40.
 | `7ce9868` | merge of `claude/machine-tower-skins-6looer`, two conflicts resolved | run 314 — same run |
 | `4458584` | deploy cap 40 → 41, with the reasoning in the test | run 314 — same run |
 | `8d50981` | the sweep rule in `CLAUDE.md`, and the `towertiers` pad fix | run 314 — same run |
-| `<this line>` | this report | markdown only; the table stops here, as every commit touching a file the checks read is already listed |
+| `46cee1f` | this report | run 315 — **green**; `deploy` skipped |
+
+Both runs: `test`, `typecheck` and `changes` green, `deploy` skipped because
+this is a branch and not `main`. 1080 of 1080 tests pass.
 
 ## 1. What happened, corrected
 
