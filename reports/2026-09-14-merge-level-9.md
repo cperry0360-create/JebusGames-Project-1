@@ -13,7 +13,14 @@ whoever merged it.
 |---|---|---|
 | `6c309b4` | the branch head, fast-forwarded onto `main` (no merge commit) | **run 360 green — typecheck, test, changes, `deploy / build`, `deploy / deploy` all success** |
 | `83efa67` | `claude/context.md` reconciled, and this report | **run 361 green — typecheck, test, changes; `deploy` skipped, which is the `changes` gate working on a markdown-only push, not a failed deploy** |
-| _this commit_ | this table's own CI row | markdown only, so the same shape as run 361: three green jobs and `deploy` skipped |
+| `a6f3aac` | the two rows above | **run 362 green — typecheck, test, changes; `deploy` skipped** |
+| _this commit_ | run 362's row | not recorded, and it cannot be: a row for the commit that writes the row needs a commit after it. The table closes here on purpose. |
+
+A note on reading run 362 through the API: `list_workflow_jobs` reported its
+`test` job `in_progress` for ten minutes after the run had finished, while the
+run-level endpoint had it `completed / success` at 12:40:42Z. **The per-job
+endpoint served stale data; the run-level one did not.** Worth knowing before
+anyone concludes a job has hung.
 
 ## The merge
 
