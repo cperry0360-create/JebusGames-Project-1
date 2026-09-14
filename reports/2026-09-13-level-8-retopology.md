@@ -7,6 +7,8 @@
 | `c07d16a` | Open item 6: what merging this makes stale in `claude/context.md` | [run 351](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34782780336) — **green** |
 | `3402f49` | Closes the two rows above | reports only |
 | `b05564f` | Merges main a second time (the context.md reconciliation report) | [run 354](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34782849837) — **green** on the final head |
+| `0c12c57` | Fills in the row above | reports only |
+| `a merge` + `1cc926a` | Merges main a third time (the CLAUDE.md reconciliation) and corrects its level count | [run 358](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34807753154) — **green** |
 | *this commit* | Fills in the row above | reports only |
 
 ---
