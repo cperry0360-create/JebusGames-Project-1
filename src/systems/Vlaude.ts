@@ -59,10 +59,18 @@ export interface VlaudeRules {
   berthSprites: { chat: string; code: string }
   laneEnemy: string
   displayHeight: number
+  /** The berthed form's idle rise and fall, in world px and seconds per cycle.
+   *  Here rather than in presentation.json because it is how BIG he is and how
+   *  slowly he breathes, which is this character's and no other's. */
+  bobPixels: number
+  bobSeconds: number
   float: {
     holdMs: number
     travelMs: number
     invulnerable: boolean
+    /** A Phaser ease name. Read rather than hardcoded so the beat can be
+     *  retimed without touching the scene. */
+    landingEase: string
     telegraphFx: string
     telegraphSize: number
     shakeMs: number
@@ -85,6 +93,18 @@ export interface VlaudeRules {
   powers: Record<string, Record<string, unknown>>
   callbackOrder: string[]
   callbackFx: string
+  /** The recall portal's picture, in the three numbers the scene needs to
+   *  play it. DECORATION ONLY -- the unit is already in the wave table. */
+  callbackSize: number
+  callbackLeadMs: number
+  callbackDurationMs: number
+  /** Which indicator is shown for which state. Manifest keys, all four of
+   *  them art this level already ships. */
+  hud: { buildLocked: string; hasted: string; countermeasureActive: string }
+  /** The full-screen card before the level, or null for a level without one.
+   *  `audioCue` is a NAMED HOOK THAT IS DELIBERATELY SILENT -- see the note in
+   *  level10.json and reports/2026-09-14-level-10-the-fight.md. */
+  titleCard: { panel: string; holdMs: number; fadeMs: number; audioCue: string } | null
 }
 
 /**
@@ -104,6 +124,8 @@ export function vlaudeRules(rules: LevelRules | null): VlaudeRules | null {
     vlaude?: Record<string, unknown>
     manipulations?: Record<string, unknown>
     callbacks?: Record<string, unknown>
+    hud?: Record<string, unknown>
+    titleCard?: Record<string, unknown>
   } | null
   const v = r?.vlaude
   const m = r?.manipulations
@@ -124,7 +146,12 @@ export function vlaudeRules(rules: LevelRules | null): VlaudeRules | null {
   if (!berth?.chat || !berth.code || typeof v.laneEnemy !== 'string') return null
   const schedule = (m.schedule as ScheduleRow[] | undefined) ?? []
   if (schedule.length === 0) return null
-  const cb = r?.callbacks as { fx?: string; order?: string[] } | undefined
+  const cb = r?.callbacks as {
+    fx?: string; order?: string[]; size?: number; leadMs?: number; durationMs?: number
+  } | undefined
+  const hud = r?.hud as Record<string, string> | undefined
+  const tc = r?.titleCard as
+    { panel?: string; holdMs?: number; fadeMs?: number; audioCue?: string } | undefined
   return {
     phases: {
       chatFromWave: p.chatFromWave,
@@ -135,6 +162,8 @@ export function vlaudeRules(rules: LevelRules | null): VlaudeRules | null {
     berthSprites: { chat: berth.chat, code: berth.code },
     laneEnemy: v.laneEnemy,
     displayHeight: (v.displayHeight as number) ?? 200,
+    bobPixels: (v.bobPixels as number) ?? 0,
+    bobSeconds: (v.bobSeconds as number) ?? 1,
     float: v.float as VlaudeRules['float'],
     exitEndsRun: v.exitEndsRun === true,
     defeat: v.defeat as VlaudeRules['defeat'],
@@ -147,6 +176,25 @@ export function vlaudeRules(rules: LevelRules | null): VlaudeRules | null {
     ),
     callbackOrder: cb?.order ?? [],
     callbackFx: cb?.fx ?? '',
+    callbackSize: cb?.size ?? 300,
+    callbackLeadMs: cb?.leadMs ?? 0,
+    callbackDurationMs: cb?.durationMs ?? 800,
+    hud: {
+      buildLocked: hud?.buildLocked ?? '',
+      hasted: hud?.hasted ?? '',
+      countermeasureActive: hud?.countermeasureActive ?? '',
+    },
+    // NULL RATHER THAN A HALF-BUILT CARD. A card with no panel is a black
+    // screen the player has to tap through, which is worse than no card --
+    // the same reason `NightRules.from` refuses a sky with no day in it.
+    titleCard: tc?.panel
+      ? {
+        panel: tc.panel,
+        holdMs: tc.holdMs ?? 0,
+        fadeMs: tc.fadeMs ?? 0,
+        audioCue: tc.audioCue ?? '',
+      }
+      : null,
   }
 }
 

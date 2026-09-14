@@ -215,6 +215,10 @@
    "icon": "icon-tower-boost",
    "_icon": "REPURPOSED. It was drawn as a tower-boost indicator and route switching's cancellation left this level needing a 'hostile hardware is on the board' light instead. Recorded rather than quietly reused.",
    "peanutReward": 90,
+   "towerHealth": 420,
+   "_towerHealth": "ADDED BY THE FIGHT, BECAUSE THE GAME HAS NO TOWER HEALTH AND THIS IS THE FIRST THING THAT SHOOTS ONE. Every other attack on a tower in this game is a DISABLE -- the Rainbow Reaper switches one off, the Glitch Bug takes one away -- and neither carries a damage number. The countermeasure does (26 a shot, every 1.6s), so it needs something to take that damage off: this is how much countermeasure fire one tower absorbs before its lights go out. 420 is sixteen shots, which is 25.6 seconds of one turret's undivided attention -- long enough that the player can answer it by killing the turret, short enough that ignoring it costs a gun. Held per tower and REFILLED the moment it goes dark, so a countermeasure suppresses rather than accumulates: the player never loses the investment, which is the same rule `buildLock` is held to. See reports/2026-09-14-level-10-the-fight.md.",
+   "towerDownSeconds": 8,
+   "_towerDownSeconds": "HOW LONG THE TOWER STAYS OFF once `towerHealth` is spent, through systems/TowerDisable.ts's own `landDisable` -- the same lights-out the Rainbow Reaper causes, so a player who has met one already knows what they are looking at. IT IS NEVER DESTROYED. 8 seconds is a little over twice the Reaper's 3.5, because this one has to be worth crossing the board for.",
    "occupiesPad": true,
    "_occupiesPad": "IT STANDS ON A BUILD PAD AND HOLDS IT. Killing it gives the pad back. That is the answer to it and it is why it goes on an EMPTY pad -- taking a pad the player has already built on would destroy investment, which `buildLock` is deliberately forbidden from doing and this must not do either."
   },
@@ -232,6 +236,13 @@
    "intervalSeconds": 1.1,
    "maxAliveFromThisPower": 9
   }
+ },
+ "titleCard": {
+  "_note": "THE FULL-SCREEN CARD BEFORE THE LEVEL. `cutscenes/titlecard_level10.webp` has been on disk since the asset pass and nothing played it. It is NOT a comic panel: cutscenes.json is keyed by level and its two maps mean 'what plays before' and 'what plays after', and a title card is neither a comic nor an outro -- it is the level announcing itself. It is played by CutsceneScene all the same, because that scene already fits a 16:9 picture to any viewport, preloads it and takes a tap; teaching a second scene to do the same would be two places holding one layout.\nHOLD IT LONGER THAN FEELS COMFORTABLE. 4200ms is about twice a comic panel's reading beat and is the whole joke: the machine has taken the title card as well.\nTHE AUDIO CUE IS A NAMED HOOK AND IT IS SILENT. 'Oh boy' does not exist -- no clip was recorded and none was substituted. `audioCue` names the beat so the day a clip is recorded it is one row in audio.json and nothing here; systems/Audio.ts's `play` is a no-op for a cue it does not know, which is what makes wiring a silent hook safe rather than a crash waiting for a file. See reports/2026-09-14-level-10-the-fight.md.",
+  "panel": "cutscenes/titlecard_level10.webp",
+  "holdMs": 4200,
+  "fadeMs": 450,
+  "audioCue": "vlaude-oh-boy"
  },
  "hud": {
   "_note": "WHICH INDICATOR IS SHOWN FOR WHICH STATE, and all four are art this level already ships. They are listed here rather than in art.json's `ui` because they are about level 10's rules rather than about the HUD's furniture.",

@@ -184,6 +184,8 @@
     "quietJitterScale": 0.05,
     "quietJitterDegrees": 0,
     "quietAlpha": 0.95,
+  "lockedAlpha": 0.35,
+  "_lockedAlpha": "HOW DIM A BUILD PAD GOES WHILE IT IS LOCKED SHUT. Level 10's `buildLock` is the only thing that shuts one, and the node stays DRAWN rather than disappearing: a pad that vanished would say the ground had gone, and what has actually happened is that it is temporarily out of bounds. A tower already standing on a locked pad is untouched -- it keeps firing and keeps its upgrades -- so this is the only visible half of the power on an empty pad, alongside the padlock icon level10.json's `hud.buildLocked` names. It is here rather than in level10.json because it is how a BUILD PAD is drawn, and every other number about that is on this block.",
     "glowAffordableAlpha": 0.34,
     "glowIdleAlpha": 0.12,
     "glowPulseMs": 1900,

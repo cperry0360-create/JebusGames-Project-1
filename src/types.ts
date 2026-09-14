@@ -166,6 +166,28 @@ export interface MapDef {
    */
   mainMerge?: MergeContinuation | MergeContinuation[]
   buildSpots: number[][]
+  /**
+   * Places on the road a level's own hazards may be put, traced from the plate
+   * beside the build spots and evenly spread along the lane.
+   *
+   * LEVEL 10 ONLY so far -- `generateWall` picks one of these for each wall it
+   * makes. `atFraction` is how far along the lane the spot sits, kept so a
+   * future mechanic can ask for a hazard near the exit rather than anywhere.
+   */
+  hazardSpots?: Array<{ x: number; y: number; atFraction: number }>
+  /**
+   * Where Vlaude is parked while he is not in the fight: in front of the
+   * cracked crystal core, off the lane. Level 10 only, and absent everywhere
+   * else -- which is what makes the whole berth a no-op on every other board
+   * rather than an `if` on a level id.
+   *
+   * DERIVED RATHER THAN PLACED. See reports/2026-09-14-level-10.md: the
+   * crystal is cracked, so the biggest single purple mass is a shard on the
+   * WEST edge, and this is the bounding box of every purple mass in the
+   * upper-right quadrant instead -- centre x, BOTTOM y, so he stands in front
+   * of the core rather than inside it.
+   */
+  vlaudeBerth?: { x: number; y: number }
   /** The blank painted boards, and the rectangle a lettering overlay is drawn
    *  in on each. See systems/SignPlacement.
    *

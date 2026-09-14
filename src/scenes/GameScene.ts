@@ -31,9 +31,14 @@ import {
 import {
   crossedGate, gateRules, reviewable, type GateRules,
 } from '../systems/PerformanceGate.ts'
-import { NightRules } from '../systems/NightRules.ts'
+import { NightRules, type GlidingRules } from '../systems/NightRules.ts'
 import {
-  leakEndsRun, vlaudeRules, type VlaudeRules,
+  HASTE_OFF, armedAt, berthSprite, buildable, combinationProblems, copyCount, copyTargets,
+  defeatReachedFade, defeatSpriteFrames, effectSheetKeys, hasteMultiplier, hasteSeconds,
+  leakEndsRun, lockTargets, lockedPadStillFires, parked, phaseForWave, targetable, tickSchedule,
+  vlaudeRules, wallLook, weaponPad, whiteWashMs,
+  type ArmedPower, type Lockable, type PowerId, type VlaudePhase, type VlaudeRules,
+  type WallState,
 } from '../systems/Vlaude.ts'
 import { convertedHealth } from '../systems/Vampirism.ts'
 import { puddleAlpha } from '../systems/AcidPuddle.ts'
@@ -270,6 +275,63 @@ const ARCH_NEAR_KEY = 'gen-arch-near'
 interface LiveHazard { state: Hazard; art: HazardArt }
 
 /**
+ * One of Vlaude's walls, standing on the road. Empty on every other level.
+ *
+ * `blocks` is written from `wallLook` and from nowhere else, so the collision
+ * and the picture are the same decision -- see the note on that function.
+ */
+interface LiveWall {
+  state: WallState
+  art: Phaser.GameObjects.Image
+  x: number
+  y: number
+  /** Which of the two rubble pieces it breaks into. Rolled once, at placement,
+   *  so a wall does not flicker between them as it is redrawn. */
+  rubblePick: number
+  /** Seconds before it goes on its own, and then before the rubble does. */
+  left: number
+  rubbleLeft: number
+  blocks: boolean
+  width: number
+  armor: number
+  /** The hero's swing clock against THIS wall, so breaking one is paced by his
+   *  own attack interval rather than by the frame rate. */
+  strikeTimer: number
+}
+
+/** One of Vlaude's countermeasure turrets. Empty on every other level. */
+interface LiveCountermeasure {
+  art: Phaser.GameObjects.Image
+  bar: Phaser.GameObjects.Graphics
+  x: number
+  y: number
+  /** The build pad it is standing on and holding. Given back when it dies. */
+  pad: number
+  health: number
+  maxHealth: number
+  /** Seconds until its next shot. */
+  cooldown: number
+  /** The hero's swing clock against it, for `LiveWall.strikeTimer`'s reason. */
+  strikeTimer: number
+}
+
+/**
+ * An enemy def back to the id it is filed under.
+ *
+ * `copyTargets` excludes bosses and callbacks BY ID, and an `Enemy` carries
+ * its def rather than its id. Built once from the same map `ENEMIES` is, so
+ * the lookup cannot drift from the file -- and by object identity rather than
+ * by name, because the four callbacks deliberately share their originals'
+ * names and a name lookup would answer the wrong one.
+ */
+const ENEMY_ID_BY_DEF = new Map<EnemyDef, string>(
+  Object.entries(ENEMIES).map(([id, def]) => [def, id]),
+)
+function enemyIdOf(def: EnemyDef): string {
+  return ENEMY_ID_BY_DEF.get(def) ?? ''
+}
+
+/**
  * A held beam, live between the press and whatever stops it.
  *
  * The only thing in the game that spans input events, which is why every field
@@ -372,6 +434,47 @@ export class GameScene extends Phaser.Scene {
    *  can compare by object identity rather than by name -- the four callbacks
    *  deliberately share their originals' names. */
   private vlaudeBossDef: EnemyDef | undefined
+  /**
+   * WHAT HOVERING COSTS AND SAVES, on the level being played.
+   *
+   * Level 5's block, read through `levelRules` DIRECTLY rather than off
+   * `night`. `NightRules.from` answers null for a level with no sky, and level
+   * 10 has none -- so reading the gliding rules off it made them unreachable on
+   * the one level whose BOSS hovers. Level 5 gets the same object it always
+   * did, from the same file, so nothing there moves.
+   */
+  private gliding: GlidingRules | null = null
+  /** The berthed form, or null once he is on the lane. NOT an Enemy: see
+   *  `syncVlaudeBerth`. */
+  private vlaudeArt: Phaser.GameObjects.Image | null = null
+  private vlaudePhase: VlaudePhase = 'chat'
+  private vlaudeBobPhase = 0
+  private vlaudeBerthY = 0
+  /** True for the scripted float only. Handed to `targetable`, which is the
+   *  one place that decides whether anything may damage him. */
+  private vlaudeFloating = false
+  /** The float is once per run. A scene restart clears it with everything else. */
+  private vlaudeFloated = false
+  /** The schedule rows switched on by the current wave, with their own clocks. */
+  private vlaudeArmed: ArmedPower[] = []
+  /** Seconds since the last cast STARTED, for the global cooldown floor. */
+  private vlaudeSinceCast = 0
+  /** Casts that have telegraphed and not yet landed. */
+  private vlaudePending: Array<{ left: number; powers: PowerId[] }> = []
+  /** Pad index -> seconds of lock left. NOTHING here ever touches `occupied`. */
+  private padLocks = new Map<number, number>()
+  private padLockArt = new Map<number, Phaser.GameObjects.Image>()
+  /** Seconds of haste left on the board. The multiplier itself lives on each
+   *  `Enemy.hasteSpeed` and is ASSIGNED, never accumulated. */
+  private hasteLeft = 0
+  private vlaudeWalls: LiveWall[] = []
+  private countermeasures: LiveCountermeasure[] = []
+  /** Countermeasure damage a tower has yet to absorb, per tower. See
+   *  `hitTowerWithCountermeasure`: the game has no tower health and this does
+   *  not add one to `Tower`. */
+  private towerPools = new Map<Tower, number>()
+  private vlaudeHudIcon: Phaser.GameObjects.Image | null = null
+  private vlaudeDefeatPlaying = false
   /** The full-board tint. A rectangle above the plate and below everything
    *  that stands on it, so the painted contrast still reads through. */
   private skyTint: Phaser.GameObjects.Rectangle | null = null
@@ -877,6 +980,30 @@ export class GameScene extends Phaser.Scene {
     // beside the sky and the gate, so nothing downstream has to ask twice.
     this.vlaude = vlaudeRules(levelRules(this.level.id))
     this.vlaudeBossDef = this.vlaude ? ENEMIES[this.vlaude.laneEnemy] : undefined
+    // THE GLIDE RULES, off `levelRules` rather than off the sky. See the field.
+    this.gliding = (levelRules(this.level.id)?.gliding as GlidingRules | undefined) ?? null
+    // EVERY FIELD CARRYING STATE FROM THE LAST RUN, cleared here rather than at
+    // the top of the class: a restart reuses this scene object, so an
+    // initialiser runs once and every later `create()` inherits whatever the
+    // last run left. That is the bug `sceneryArt` and the arch occluders both
+    // shipped, one comment up.
+    this.vlaudePhase = 'chat'
+    this.vlaudeArt = null
+    this.vlaudeFloating = false
+    this.vlaudeFloated = false
+    this.vlaudeBobPhase = 0
+    this.vlaudeArmed = []
+    this.vlaudeSinceCast = 0
+    this.vlaudePending = []
+    this.padLocks = new Map()
+    this.padLockArt = new Map()
+    this.hasteLeft = 0
+    this.vlaudeWalls = []
+    this.countermeasures = []
+    this.towerPools = new Map()
+    this.vlaudeHudIcon = null
+    this.vlaudeDefeatPlaying = false
+    if (this.vlaude) this.checkVlaudeData(this.vlaude)
     // LEVEL 6'S ROOSTER, and null on every other level -- `levelRules` returns
     // null for a level that names no rules file, so this whole mechanic is one
     // `if` away from not existing anywhere else.
@@ -2017,9 +2144,18 @@ export class GameScene extends Phaser.Scene {
       const img = this.pads[spot.index]
       if (!img) continue
       // A pad with a tower on it is gone; the tower is standing there now.
+      //
+      // `isFree` AND NOT `padOpen`. A LOCKED pad is still drawn -- it is empty
+      // ground the player is being told they may not use, and hiding it would
+      // say the pad had gone rather than that it was shut. The padlock over it
+      // is what says which; see `castBuildLock`. Only a pad with a tower or a
+      // countermeasure standing on it disappears.
       const free = this.build.isFree(spot.index)
       img.setVisible(free)
       if (!free) continue
+      // Shut ground reads as shut: the node is drawn and dimmed rather than
+      // lit and tappable, and `padOpen` is the same question the tap path asks.
+      img.setAlpha(this.padOpen(spot.index) ? 1 : PRESENTATION.buildPad.lockedAlpha)
       const hot = this.hoverSpot?.index === spot.index
       img.setTint(tint(hot ? cfg.hoverTint : placing ? cfg.placingTint : cfg.restTint))
 
@@ -2376,7 +2512,7 @@ export class GameScene extends Phaser.Scene {
     // takes the tap even when a menu is already open, so a click on the next
     // pad moves the menu there rather than being spent dismissing it.
     const spot = this.build.spotAt(w.x, w.y)
-    if (spot && this.build.isFree(spot.index)) {
+    if (spot && this.padOpen(spot.index)) {
       if (this.drawerOn()) {
         // THE FLOW RUNS BOTH WAYS. A tower then a node, or a node then a
         // tower — an empty node is a destination when something is picked and
@@ -2469,6 +2605,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   private orderHero(x: number, y: number): void {
+    // A STANDING WALL DENIES THE GROUND. That is the whole of what
+    // `generateWall` does -- `blocksEnemies` is false, so it never stops a
+    // walker -- and the hero is who it is denying it to. Refused rather than
+    // clamped: an order that silently landed somewhere else is an order the
+    // player cannot trust. `wallBlocks` is false the instant the wall is
+    // rubble, because `wallLook` clears the collision on the frame it draws
+    // the rubble.
+    if (this.wallBlocks(x, y)) {
+      this.refuse('A wall of text is in the way.')
+      return
+    }
     // Asked before the order, because the order is what ends the fight.
     const wasFighting = this.hero.engaged
     this.hero.setRally(x, y)
@@ -2638,7 +2785,7 @@ export class GameScene extends Phaser.Scene {
   private placeFromDrawer(spot: BuildSpot): void {
     const id = this.drawerPick
     if (!id) return
-    if (!this.build.isFree(spot.index)) return
+    if (!this.padOpen(spot.index)) return
     if (this.status.peanuts < TOWERS[id]!.cost) return
     this.place(id, spot)
     this.drawer.select(null)
@@ -2657,7 +2804,7 @@ export class GameScene extends Phaser.Scene {
    * `setOpen(true)` on an open drawer is a no-op, which is the point.
    */
   private chooseSpotFirst(spot: BuildSpot): void {
-    if (!this.build.isFree(spot.index)) return
+    if (!this.padOpen(spot.index)) return
     this.pendingSpot = spot
     // TOWERS. The other two tabs are not populated yet, but the node is asking
     // for a tower specifically, so this says so rather than relying on TOWERS
@@ -2679,12 +2826,12 @@ export class GameScene extends Phaser.Scene {
   private nodeTakesPick(spot: BuildSpot): boolean {
     const id = this.drawerPick
     if (!id) return false
-    return this.build.isFree(spot.index) && this.status.peanuts >= TOWERS[id]!.cost
+    return this.padOpen(spot.index) && this.status.peanuts >= TOWERS[id]!.cost
   }
 
   /** The pad or tower's position, on the glass, right now. */
   private padAnchor(spot: BuildSpot): { x: number; y: number } | null {
-    if (!this.build.isFree(spot.index)) return null
+    if (!this.padOpen(spot.index)) return null
     // CSS pixels, which is what the ring's geometry is written in. Doing this
     // by hand here returned canvas pixels and put the ring 401px from the pad
     // on a dpr-3 phone; see worldToScreen.
@@ -2777,7 +2924,7 @@ export class GameScene extends Phaser.Scene {
    *  scorch rather than the build UI. */
   private place(id: string, spot: BuildSpot): void {
     const def = TOWERS[id]
-    if (!this.build.isFree(spot.index)) return
+    if (!this.padOpen(spot.index)) return
     if (this.status.peanuts < def.cost) {
       // Silence here reads as a broken button, so say what is missing.
       this.status.alert = `${def.name} costs ${def.cost} peanuts — ${def.cost - this.status.peanuts} short.`
@@ -3389,7 +3536,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.selected) this.rangeRing.clear()
 
     const spot = this.build.spotAt(w.x, w.y)
-    const next = spot && this.build.isFree(spot.index) ? spot : null
+    const next = spot && this.padOpen(spot.index) ? spot : null
     if (next?.index !== this.hoverSpot?.index) {
       this.hoverSpot = next
       this.drawSpots()
@@ -4542,7 +4689,11 @@ export class GameScene extends Phaser.Scene {
           // separate questions and two separate flags, because they are the
           // open decision on this level: with both true Cory's Spike Strip is
           // a dead ability for waves 6 to 12. See level5.json's `_glider`.
-          const g = e.def.glides ? this.night?.gliding : null
+          // `this.gliding` RATHER THAN `this.night?.gliding`: level 10 has no
+          // sky, so `NightRules.from` answers null there and this read was
+          // unreachable on the one level whose boss hovers. Level 5 gets the
+          // same object out of the same file.
+          const g = e.def.glides ? this.gliding : null
           if (!g?.ignoresGroundHazards) {
             this.damageEnemy(e, h.state.def.damage, h.state.def.ignoresArmor, 0, false)
             floatingDamage(this, e.x, e.centreY, h.state.def.damage, false)
@@ -4578,6 +4729,10 @@ export class GameScene extends Phaser.Scene {
     this.regenStates.clear()
     this.flameArt?.destroy()
     this.flameArt = null
+    // LEVEL 10'S WALLS, TURRETS AND PADLOCKS. Same reason as the scorch above:
+    // all three can still be on the board when a run ends, and a padlock left
+    // over a pad on the next run would be a lock nothing is counting down.
+    this.clearVlaude()
     this.night?.clear()
   }
 
@@ -4995,9 +5150,17 @@ export class GameScene extends Phaser.Scene {
       // Ordered, and the review comes LAST on purpose: a burning enemy that
       // has also been reviewed shows the fire, because the fire is the one
       // that is killing it. The review is permanent and can wait.
+      // LEVEL 10'S HASTE COMES LAST, because it is the one that comes back
+      // OFF: a burning, controlled or reviewed enemy that is also hasted shows
+      // the thing that is not going to stop by itself. Asked as a question
+      // about the enemy rather than tracked by the power, which is why a body
+      // that dies mid-haste cannot leave an icon behind.
       const kind = !e.alive
         ? ''
-        : e.burning ? 'burn' : e.controlled ? 'control' : e.reviewed ? 'review' : ''
+        : e.burning ? 'burn'
+          : e.controlled ? 'control'
+            : e.reviewed ? 'review'
+              : e.hasteSpeed !== HASTE_OFF ? 'haste' : ''
       const held = this.statusMarkers.get(e)
       if (kind === '') {
         if (held) { held.art.destroy(); this.statusMarkers.delete(e) }
@@ -5011,7 +5174,8 @@ export class GameScene extends Phaser.Scene {
       if (!entry) {
         const key = kind === 'burn' ? ART.fx.burn
           : kind === 'review' ? ART.fx.performanceBuff
-            : ART.fx.mindControl
+            : kind === 'haste' ? (this.vlaude?.hud.hasted ?? ART.fx.mindControl)
+              : ART.fx.mindControl
         entry = { kind, art: statusMarker(this, key, g.markerHeight, OVERLAY_DEPTH) }
         this.statusMarkers.set(e, entry)
       }
@@ -5328,6 +5492,11 @@ export class GameScene extends Phaser.Scene {
     // The dusk flip is timed from the wave's own first spawn, not from the run
     // -- see DayNight.ts for why it is seconds rather than a fraction.
     this.night?.beginWave(this.status.wave)
+    // LEVEL 10'S SCHEDULE, re-armed for the wave that is now running. Beside
+    // the spawner and the dusk clock because it is the same kind of thing: a
+    // per-wave clock that starts when the wave does.
+    this.armVlaudeSchedule()
+    this.queueRecallPortals()
     logEvent('wave-start', `${this.status.wave + 1} ${this.level.waveTable.waves[this.status.wave].name} bonus=${bonus}`)
     this.status.phase = 'wave'
     play(this, 'wave-start')
@@ -5376,7 +5545,13 @@ export class GameScene extends Phaser.Scene {
     this.grantTowerUnlocks()
 
     if (runEnds) {
-      this.endRun(runEnds)
+      // LEVEL 10'S ENDING PLAYS FIRST AND ENDS THE RUN ITSELF. The wave is
+      // over on the frame Vlaude dies, so without this the results dialog
+      // opens over the top of his defeat animation -- which is exactly the
+      // mistake level 9's rupture made and `delayResults` exists to prevent.
+      // The bookkeeping above has already run, so the screen still says 18 of
+      // 18; `whiteWash` is what calls `endRun`.
+      if (!this.vlaudeDefeatPlaying) this.endRun(runEnds)
       return
     }
     this.status.phase = 'ready'
@@ -5750,6 +5925,14 @@ export class GameScene extends Phaser.Scene {
     // hanging over the board by a wave ending underneath it.
     this.syncStatusMarkers()
 
+    // LEVEL 10, and a no-op returning on the first line everywhere else.
+    // OUTSIDE THE PHASE GATE BELOW, deliberately: the berth is what the player
+    // looks at between waves as much as during them, and a bob that stopped on
+    // a wave boundary would read as him freezing rather than waiting. The bob
+    // runs on REAL time with the camera, for the same reason the camera does.
+    this.syncVlaudeBerth()
+    this.bobVlaude(real)
+
     if (this.status.phase === 'won' || this.status.phase === 'lost') return
 
     this.tickReadyCountdown(real)
@@ -5841,6 +6024,11 @@ export class GameScene extends Phaser.Scene {
     // spawned, walked, and never once stopped or breathed.
     this.tickRooster(dt)
     this.tickRegen(dt)
+    // LEVEL 10'S SIX POWERS, and a no-op returning on the first line
+    // everywhere else. BEFORE `tickEnemies`, like `tickNight` and the HR aura,
+    // because a haste that lands this frame should be in the step this frame
+    // rather than one behind it.
+    this.tickVlaude(dt)
     // LEVEL 8'S HR AURA, and a no-op returning on the first line everywhere
     // else. BEFORE `tickEnemies`, like `tickNight`, because it decides how
     // much damage the hits landed this frame take off.
@@ -6381,6 +6569,15 @@ export class GameScene extends Phaser.Scene {
   private orderRally(tower: Tower, x: number, y: number): void {
     const g = this.garrisons.find((q) => q.tower === tower)
     if (!g) return
+    // A STANDING WALL DENIES THE GROUND TO A GARRISON TOO. It is the second
+    // half of what `generateWall` does: the hero cannot walk through it and a
+    // garrison cannot hold the lane behind it. Said out loud, like every other
+    // refusal on this path.
+    if (this.wallBlocks(x, y)) {
+      this.status.alert = 'A wall of text is in the way. Break it or pick another spot.'
+      play(this, 'error')
+      return
+    }
     const { spot, refused } = rallyFromTap(this.lanes, { x: tower.x, y: tower.y }, tower.range, x, y)
     // THE TWO REFUSALS ARE NOT THE SAME REFUSAL, and they get different
     // answers. `out-of-range` is the right idea at the wrong distance -- the
@@ -6791,6 +6988,12 @@ export class GameScene extends Phaser.Scene {
       // children on the board before the blast looks for something to catch.
       // Nothing does both today; the order is the one a reader would expect.
       this.deathBlastAt(enemy)
+      // VLAUDE GOES DOWN, AND IT IS THE END OF THE GAME. By def identity, not
+      // by name -- the four callbacks deliberately carry their originals'
+      // names, which is the same reason `leakEndsRun` compares this way.
+      if (this.vlaude && enemy.def === this.vlaudeBossDef) {
+        this.playVlaudeDefeat({ x: enemy.x, y: enemy.centreY })
+      }
     } else {
       this.checkHealthThreshold(enemy)
       // Rotated, because a wave lands far more hits than one sample can carry
@@ -7320,6 +7523,971 @@ export class GameScene extends Phaser.Scene {
       t.grantedPierce = gain.pierce
     }
     this.darkSupports = darkCount(sources)
+  }
+
+  // ------------------------------------------------- level 10: the fight
+  //
+  // EVERY RULE BELOW IS systems/Vlaude.ts's AND NOT THIS FILE'S. What is here
+  // is the scene half only -- what is drawn, when a tween runs, which sprite
+  // is on the board -- and every decision (which phase, which pads, which
+  // enemies may be copied, which picture a wall wears, how many frames of the
+  // defeat are drawn) is a call into that module. The split is the one every
+  // other level mechanic uses, and it is why 26 tests can execute the rules
+  // without a canvas.
+  //
+  // EVERY ONE OF THESE RETURNS ON ITS FIRST LINE ON THE OTHER NINE LEVELS,
+  // because `this.vlaude` is null there.
+
+  /**
+   * What is wrong with level 10's data, said LOUDLY on the way in.
+   *
+   * TWO CHECKS, BOTH OF THINGS THAT ARE SILENT OTHERWISE.
+   *
+   * `combinationProblems` refuses a schedule row that fires two powers
+   * together on a wave that introduces either of them -- the player would be
+   * taught two rules in one telegraph and could not tell which did what. A
+   * schedule is hand-written JSON and this is the only thing that reads it.
+   *
+   * And every effect sheet the fight plays has to be in this level's own art
+   * list, because `freeLevelArt` drops the ANIMATION cut from every texture in
+   * that list and removes the texture. A sheet inside the list is handled by
+   * construction; one outside it would leave a dangling animation for the next
+   * level, which is the null-frame crash in
+   * reports/2026-09-10-the-null-frame.md.
+   *
+   * Loud rather than fatal: a level that refused to build over a note in its
+   * own data would be a worse failure than one that says what is wrong and
+   * plays. `tests/level10.test.ts` is what makes it fatal in CI.
+   */
+  private checkVlaudeData(v: VlaudeRules): void {
+    for (const problem of combinationProblems(v)) {
+      logEvent('vlaude-data', `BAD SCHEDULE: ${problem}`)
+      this.status.alert = `Level 10 schedule: ${problem}`
+    }
+    const owned = new Set(levelArtKeys(this.level.id))
+    for (const key of effectSheetKeys(v)) {
+      if (owned.has(key)) continue
+      logEvent('vlaude-data',
+        `BAD ART: ${key} is played by this level and is not in its art list`)
+    }
+  }
+
+  /**
+   * The berthed form, and the swap when the wave count turns a phase.
+   *
+   * HE IS NOT AN ENEMY AND MUST NEVER BECOME ONE HERE. This adds an Image to
+   * the display list and nothing else: no `Enemy`, no health, no bar, no
+   * `setInteractive`, so there is nothing for a tower, an ability or a pointer
+   * to find. `targetable(phase, floating)` is the only place that question is
+   * answered and there is deliberately no second flag beside it.
+   *
+   * Y-SORTED like every other thing standing on the board, so a walker in
+   * front of the core draws over him -- which is CLAUDE.md rule 3 and also
+   * what keeps him behind the HUD, because the HUD is a different SCENE and
+   * depth cannot cross a scene boundary at all.
+   */
+  private syncVlaudeBerth(): void {
+    const v = this.vlaude
+    if (!v) return
+    const phase = phaseForWave(v, this.status.wave + 1)
+    if (phase !== this.vlaudePhase) {
+      logEvent('vlaude', `phase ${this.vlaudePhase} -> ${phase} on wave ${this.status.wave + 1}`)
+      this.vlaudePhase = phase
+      this.vlaudeArt?.destroy()
+      this.vlaudeArt = null
+      // ENTERING PHASE 3 IS THE FLOAT'S CUE, and the only one. `parked` is
+      // what says a phase keeps him at the core, so the scene never compares
+      // a phase name itself.
+      if (!parked(phase)) this.beginVlaudeFloat()
+    }
+    if (this.vlaudeArt || this.vlaudeFloating) return
+    const key = berthSprite(v, phase)
+    const at = this.level.map.vlaudeBerth
+    if (key === null || !at || !this.textures.exists(key)) return
+    const img = this.add.image(at.x, at.y, key)
+    fitContentHeight(img, key, v.displayHeight)
+    ySort(img)
+    this.vlaudeArt = img
+    this.vlaudeBerthY = at.y
+  }
+
+  /**
+   * The idle bob, on the REAL clock.
+   *
+   * He is not part of the simulation -- nothing he does at the berth is timed
+   * against a wave -- so holding the world still for a hit pause must not hold
+   * his breathing still with it.
+   */
+  private bobVlaude(real: number): void {
+    const v = this.vlaude
+    const art = this.vlaudeArt
+    if (!v || !art || this.vlaudeFloating || v.bobSeconds <= 0) return
+    this.vlaudeBobPhase += (real * Math.PI * 2) / v.bobSeconds
+    art.y = this.vlaudeBerthY + Math.sin(this.vlaudeBobPhase) * v.bobPixels
+  }
+
+  /**
+   * THE FLOAT: he leaves the core.
+   *
+   * Hold at the berth, a telegraph over his head, then a single eased
+   * traversal to the lane's FIRST WAYPOINT -- which is the west gate, which is
+   * where the wave table's own `vlaude` spawn walks in from. That is why the
+   * float ends there and not in the middle of the road: the animation and the
+   * spawn have to agree about where he went.
+   *
+   * HE IS INVULNERABLE FOR THE WHOLE TRAVERSAL, and not because a flag says
+   * so. There is still no `Enemy`: this is an Image on a tween. `floating` is
+   * handed to `targetable` so that the one function answering "may anything
+   * damage him" sees both reasons it can be false.
+   *
+   * THE CAMERA IS SENT TO LOOK AT IT. A phone's world camera shows about a
+   * third of the board, and the core is in the upper right; without this the
+   * whole beat happens off the side of the screen. Level 9's rupture learned
+   * the same lesson from a rendered frame.
+   */
+  private beginVlaudeFloat(): void {
+    const v = this.vlaude
+    const at = this.level.map.vlaudeBerth
+    if (!v || !at || this.vlaudeFloated) return
+    this.vlaudeFloated = true
+    // THE CODE FORM IS WHAT FALLS. He leaves the core whole and the landing is
+    // what damages him, which is why the wave table's Vlaude wears
+    // `enemy-vlaude-damaged` and this does not.
+    const key = v.berthSprites.code
+    if (!this.textures.exists(key)) return
+    const art = this.add.image(at.x, at.y, key)
+    fitContentHeight(art, key, v.displayHeight)
+    ySort(art)
+    this.vlaudeArt = art
+    this.vlaudeFloating = true
+    logEvent('vlaude', `the float begins; targetable=${targetable(this.vlaudePhase, true)}`)
+    this.rig?.lookAt(at.x, at.y)
+
+    const f = v.float
+    const land = this.lanes.lane(this.vlaudeLaneId()).path.pointAt(0)
+    this.time.delayedCall(f.holdMs, () => {
+      if (!art.active) return
+      if (this.textures.exists(f.telegraphFx)) {
+        playEffect(this, f.telegraphFx, art.x, art.y - art.displayHeight / 2, {
+          size: f.telegraphSize,
+          depth: LAYER.worldOverlay + 10,
+          durationMs: EFFECT_MS.blastMs * 2,
+        })
+      }
+      this.tweens.add({
+        targets: art,
+        x: land.x,
+        y: land.y,
+        duration: f.travelMs,
+        ease: f.landingEase,
+        onUpdate: () => ySort(art),
+        onComplete: () => {
+          this.cameras.main.shake(f.shakeMs, 0.008)
+          art.destroy()
+          if (this.vlaudeArt === art) this.vlaudeArt = null
+          // THE FRAME HE IS TARGETABLE, and not one earlier. From here the
+          // wave table owns him: its `vlaude` spawn builds the Enemy, which is
+          // the same Enemy `leakEndsRun` compares by identity.
+          this.vlaudeFloating = false
+          logEvent('vlaude',
+            `the float lands; targetable=${targetable(this.vlaudePhase, false)}`)
+        },
+      })
+    })
+  }
+
+  /** The lane he comes in on: the one the wave table spawns into. */
+  private vlaudeLaneId(): string {
+    return spawnLaneIds(this.level.waveTable)[0] ?? 'main'
+  }
+
+  /* --------------------------------------------- the telegraph and the clock */
+
+  /**
+   * Re-arms the schedule for the wave that is about to run.
+   *
+   * `armedAt` hands back a FRESHLY CLOCKED list, so every power's first cast
+   * of a wave is a full interval away rather than landing on the wave's first
+   * frame. Called from `startWave`, which is also where the spawner is begun.
+   */
+  private armVlaudeSchedule(): void {
+    const v = this.vlaude
+    if (!v) return
+    this.vlaudeArmed = armedAt(v, this.status.wave + 1)
+    this.vlaudeSinceCast = v.globalCooldownSeconds
+    logEvent('vlaude',
+      `wave ${this.status.wave + 1} arms ${this.vlaudeArmed.map((a) => a.power).join(',') || 'nothing'}`)
+  }
+
+  /**
+   * Everything level 10 does, one frame at a time.
+   *
+   * ORDERED, and the order is load-bearing. The schedule first, because a cast
+   * this frame should telegraph this frame. Then the temporary modifiers, so a
+   * haste that expires is off before anything walks. Then the things standing
+   * on the board.
+   */
+  private tickVlaude(dt: number): void {
+    const v = this.vlaude
+    if (!v) return
+    this.tickVlaudeLocks(dt)
+    this.tickHaste(dt)
+    this.tickVlaudeWalls(dt)
+    this.tickCountermeasures(dt)
+    this.tickPendingCasts(dt)
+    if (this.status.phase !== 'wave' || this.vlaudeArmed.length === 0) return
+    const step = tickSchedule(this.vlaudeArmed, dt, this.vlaudeSinceCast, v.globalCooldownSeconds)
+    this.vlaudeSinceCast = step.sinceLast
+    for (const row of step.fired) this.telegraphCast(row)
+  }
+
+  /**
+   * One cast: the telegraph now, the effect `leadSeconds` later.
+   *
+   * THE LEAD IS THE WHOLE POINT. A rule that changed on the frame it was cast
+   * would read as the game malfunctioning; a second of warning over the board
+   * is what makes it a mechanic. `with` fires a second power on the SAME
+   * telegraph -- one warning, two changes -- which is what an authored
+   * combination is, and `combinationProblems` has already refused any row that
+   * would introduce a power the player has not met alone.
+   */
+  private telegraphCast(row: ArmedPower): void {
+    const v = this.vlaude
+    if (!v) return
+    const t = v.telegraph
+    const at = this.vlaudeCastPoint()
+    if (this.textures.exists(t.fx)) {
+      playEffect(this, t.fx, at.x, at.y, {
+        size: t.size, depth: LAYER.worldOverlay + 8, durationMs: t.leadSeconds * 1000,
+      })
+    }
+    const powers: PowerId[] = row.with ? [row.power, row.with] : [row.power]
+    logEvent('vlaude-cast', `${powers.join('+')} telegraphed, landing in ${t.leadSeconds}s`)
+    this.vlaudePending.push({ left: t.leadSeconds, powers })
+  }
+
+  /** Where a telegraph is drawn: over him if he is on the board, over the
+   *  berth if he is not. He is the one casting it either way. */
+  private vlaudeCastPoint(): { x: number; y: number } {
+    const onLane = this.vlaudeOnLane()
+    if (onLane) return { x: onLane.x, y: onLane.centreY }
+    const at = this.level.map.vlaudeBerth
+    return at
+      ? { x: at.x, y: at.y - (this.vlaude?.displayHeight ?? 200) / 2 }
+      : { x: HERO_START[0], y: HERO_START[1] }
+  }
+
+  /** The lane Vlaude, once the wave table has spawned him. Null before. */
+  private vlaudeOnLane(): Enemy | undefined {
+    const def = this.vlaudeBossDef
+    if (!def) return undefined
+    return this.enemies.find((e) => e.def === def && e.alive)
+  }
+
+  /** Telegraphed casts still counting down to their effect. */
+  private tickPendingCasts(dt: number): void {
+    for (let i = this.vlaudePending.length - 1; i >= 0; i--) {
+      const p = this.vlaudePending[i]!
+      p.left -= dt
+      if (p.left > 0) continue
+      this.vlaudePending.splice(i, 1)
+      for (const id of p.powers) this.landPower(id)
+    }
+  }
+
+  /** One power, landing. The six are below; this is only the dispatch. */
+  private landPower(id: PowerId): void {
+    switch (id) {
+      case 'buildLock': this.castBuildLock(); return
+      case 'speedAlter': this.castSpeedAlter(); return
+      case 'duplicateEnemy': this.castDuplicate(); return
+      case 'generateWall': this.castWall(); return
+      case 'generateWeapon': this.castWeapon(); return
+      case 'createEnemies': this.castEnemies(); return
+      default: return
+    }
+  }
+
+  /* --------------------------------------------------------- 1. build lock */
+
+  /** Every pad as a lock cast sees it. `occupied` is read off BuildSystem and
+   *  is never written by anything on this page -- the lock is on BUILDING. */
+  private lockablePads(): Lockable[] {
+    return this.build.spots.map((s) => ({
+      index: s.index,
+      occupied: !this.build.isFree(s.index),
+      locked: this.padLocks.has(s.index),
+    }))
+  }
+
+  /** Whether a pad may be built on NOW: free of a tower and free of a lock. */
+  private padOpen(index: number): boolean {
+    return buildable({
+      index,
+      occupied: !this.build.isFree(index),
+      locked: this.padLocks.has(index),
+    })
+  }
+
+  private castBuildLock(): void {
+    const v = this.vlaude
+    if (!v) return
+    const cfg = v.powers.buildLock ?? {}
+    const seconds = (cfg.durationSeconds as number) ?? 0
+    const taken = lockTargets(v, this.lockablePads())
+    if (taken.length === 0) return
+    for (const index of taken) {
+      this.padLocks.set(index, seconds)
+      const spot = this.build.spots[index]
+      if (!spot || !this.textures.exists(v.hud.buildLocked)) continue
+      const icon = this.add.image(spot.x, spot.y - 18, v.hud.buildLocked)
+      fitContentHeight(icon, v.hud.buildLocked, 34)
+      icon.setDepth(LAYER.worldOverlay + 4)
+      this.padLockArt.set(index, icon)
+    }
+    // A TOWER ON A LOCKED PAD SURVIVES AND KEEPS FIRING. Nothing above
+    // destroys, sells, disables or releases anything -- the only writes are to
+    // `padLocks`, which `padOpen` reads and `Tower.tick` does not.
+    logEvent('vlaude-cast',
+      `build lock on pads ${taken.join(',')} for ${seconds}s `
+      + `(towers on them keep firing: ${lockedPadStillFires()})`)
+    this.status.alert = 'Vlaude locks the ground. Towers already there keep firing.'
+    this.drawSpots()
+  }
+
+  private tickVlaudeLocks(dt: number): void {
+    if (this.padLocks.size === 0) return
+    let changed = false
+    for (const [index, left] of [...this.padLocks]) {
+      const next = left - dt
+      if (next > 0) { this.padLocks.set(index, next); continue }
+      this.padLocks.delete(index)
+      this.padLockArt.get(index)?.destroy()
+      this.padLockArt.delete(index)
+      changed = true
+    }
+    if (changed) this.drawSpots()
+  }
+
+  /* -------------------------------------------------------- 2. speed alter */
+
+  /**
+   * ASSIGNED, NEVER ACCUMULATED, and taken off by assigning HASTE_OFF.
+   *
+   * `appliesTo: onBoard` -- everything already walking, not the spawner. A
+   * speed change that applied to future spawns would be invisible for as long
+   * as the wave took to reach the board, which is the opposite of a
+   * telegraphed power.
+   */
+  private castSpeedAlter(): void {
+    const v = this.vlaude
+    if (!v) return
+    const m = hasteMultiplier(v)
+    for (const e of this.enemies) if (e.alive) e.hasteSpeed = m
+    this.hasteLeft = hasteSeconds(v)
+    logEvent('vlaude-cast', `haste x${m} on ${this.enemies.length} for ${this.hasteLeft}s`)
+    this.status.alert = 'Vlaude speeds the line up.'
+  }
+
+  private tickHaste(dt: number): void {
+    if (this.hasteLeft <= 0) return
+    const m = this.vlaude ? hasteMultiplier(this.vlaude) : HASTE_OFF
+    // ANYTHING THAT SPAWNED DURING THE WINDOW gets the same multiplier rather
+    // than walking at base speed beside a hasted crowd -- a sweep, for
+    // `syncStatusMarkers`'s reason: applying it once at the cast and unwinding
+    // it once at the end leaks the moment the board changes underneath it.
+    for (const e of this.enemies) if (e.alive) e.hasteSpeed = m
+    this.hasteLeft -= dt
+    if (this.hasteLeft > 0) return
+    this.hasteLeft = 0
+    for (const e of this.enemies) e.hasteSpeed = HASTE_OFF
+    logEvent('vlaude-cast', 'haste off; every speed is back to base')
+  }
+
+  /* ----------------------------------------------------- 3. duplicate enemy */
+
+  private castDuplicate(): void {
+    const v = this.vlaude
+    if (!v) return
+    const cfg = v.powers.duplicateEnemy ?? {}
+    // WHO MAY BE COPIED IS THE MODULE'S DECISION. Bosses and callbacks are
+    // excluded by id and a copy carries depth 1, so a duplicate can never
+    // duplicate -- which is the one rule in this level that is correctness
+    // rather than tuning, because the failure is exponential.
+    const field = this.enemies.filter((e) => e.alive && !e.controlled)
+    const targets = copyTargets(v, field.map((e) => ({ id: enemyIdOf(e.def), copyDepth: e.copyDepth })))
+    const wanted = copyCount(v, targets.length)
+    if (wanted === 0) return
+    const picked = field.filter((e) => targets.some((t) => t.id === enemyIdOf(e.def)))
+      .slice(0, wanted)
+    const fx = cfg.fx as string | undefined
+    const size = (cfg.fxSize as number) ?? 170
+    const delay = (cfg.durationMs as number) ?? 0
+    for (const src of picked) {
+      if (fx && this.textures.exists(fx)) {
+        playEffect(this, fx, src.x, src.centreY, {
+          size, depth: LAYER.worldOverlay + 6, durationMs: delay,
+        })
+      }
+      const at = { laneId: src.laneId, laneDistance: src.laneDistance, distance: src.distance }
+      const frac = src.maxHealth > 0 ? src.health / src.maxHealth : 1
+      const def = src.def
+      const routePick = src.routePick
+      this.time.delayedCall(delay, () => {
+        if (this.status.phase !== 'wave') return
+        const lane = this.lanes.lane(at.laneId)
+        const copy = new Enemy(this, def, lane.path, this.gateway, {
+          lanes: this.lanes,
+          laneId: at.laneId,
+          startAt: { laneDistance: at.laneDistance, distance: at.distance },
+          routePick,
+          // IT DOES NOT HOLD THE WAVE OPEN. A copy is not something the wave
+          // table sent, and a wave that waited for Vlaude's own output would
+          // never end while he was still casting.
+          holdsWave: false,
+        })
+        // THE MARK THAT MAKES THE RULE TRUE. `copyTargets` refuses anything at
+        // or above `copyDepth`, and this is the only place the mark is set.
+        copy.copyDepth = src.copyDepth + 1
+        copy.health = Math.max(1, Math.round(copy.maxHealth * frac))
+        this.enemies.push(copy)
+        logEvent('vlaude-cast', `duplicated ${def.name} at depth ${copy.copyDepth}`)
+      })
+    }
+    this.status.alert = 'Vlaude duplicates the line.'
+  }
+
+  /* ------------------------------------------------------- 4. generate wall */
+
+  /**
+   * A wall on the road.
+   *
+   * `blocksEnemies` IS FALSE AND THAT IS THE POINT. A wall that stopped his
+   * own walkers would be a gift -- the player would let him build them and
+   * shoot the queue. What it does is deny the GROUND: the hero cannot be
+   * ordered through it and a garrison cannot be rallied behind it.
+   *
+   * THE PICTURE AND THE COLLISION COME FROM ONE CALL. `wallLook` returns
+   * `art` and `blocks` together, so a broken wall cannot end up drawn as
+   * rubble while still stopping things -- which is the shape of bug only a
+   * player ever finds.
+   */
+  private castWall(): void {
+    const v = this.vlaude
+    if (!v) return
+    const cfg = v.powers.generateWall ?? {}
+    const maxAlive = (cfg.maxAlive as number) ?? 1
+    if (this.vlaudeWalls.length >= maxAlive) return
+    const spots = this.level.map.hazardSpots ?? []
+    const open = spots.filter((s) => !this.vlaudeWalls.some((w) => w.x === s.x && w.y === s.y))
+    const spot = open[Math.floor(Math.random() * open.length)]
+    if (!spot) return
+    const fx = cfg.fx as string | undefined
+    const fxSize = (cfg.fxSize as number) ?? 190
+    if (fx && this.textures.exists(fx)) {
+      playEffect(this, fx, spot.x, spot.y, {
+        size: fxSize, depth: LAYER.worldOverlay + 6, durationMs: EFFECT_MS.blastMs,
+      })
+    }
+    const state: WallState = {
+      health: (cfg.health as number) ?? 1,
+      maxHealth: (cfg.health as number) ?? 1,
+      broken: false,
+    }
+    const look = wallLook(v, state, Math.floor(Math.random() * 2))
+    if (!this.textures.exists(look.art)) return
+    const art = this.add.image(spot.x, spot.y, look.art)
+    fitContentWidth(art, look.art, (cfg.width as number) ?? 96)
+    ySort(art)
+    this.vlaudeWalls.push({
+      state,
+      art,
+      x: spot.x,
+      y: spot.y,
+      rubblePick: Math.floor(Math.random() * 2),
+      left: (cfg.durationSeconds as number) ?? 0,
+      rubbleLeft: (cfg.rubbleSeconds as number) ?? 0,
+      blocks: look.blocks,
+      width: (cfg.width as number) ?? 96,
+      armor: (cfg.armor as number) ?? 0,
+      strikeTimer: 0,
+    })
+    logEvent('vlaude-cast', `wall at ${Math.round(spot.x)},${Math.round(spot.y)}`)
+    this.status.alert = 'Vlaude walls the road. Break it or walk round it.'
+  }
+
+  /**
+   * Every live wall, one frame on.
+   *
+   * THE HERO IS THE ANSWER TO IT. He is what the wall is denying ground to, so
+   * he is what takes it down: standing inside his own attack range of one, he
+   * swings at it on his own interval for his own damage. Nothing else in the
+   * game damages a structure, so there is no second path to keep in step.
+   */
+  private tickVlaudeWalls(dt: number): void {
+    const v = this.vlaude
+    if (!v || this.vlaudeWalls.length === 0) return
+    for (let i = this.vlaudeWalls.length - 1; i >= 0; i--) {
+      const w = this.vlaudeWalls[i]!
+      if (!w.state.broken) {
+        w.left -= dt
+        w.strikeTimer -= dt
+        const reach = w.width / 2 + this.hero.attackRange
+        if (!this.hero.down && Math.hypot(this.hero.x - w.x, this.hero.y - w.y) <= reach) {
+          if (w.strikeTimer <= 0) {
+            w.strikeTimer = this.hero.attackInterval
+            const hit = Math.max(1, this.hero.damage - (this.hero.def.ignoresArmor ? 0 : w.armor))
+            w.state.health -= hit
+            floatingDamage(this, w.x, w.y - 20, hit, false)
+            this.impactSpark(w.x, w.y - 12)
+          }
+        }
+        if (w.left <= 0 || w.state.health <= 0) w.state.broken = true
+      } else {
+        w.rubbleLeft -= dt
+      }
+      // ONE CALL, BOTH ANSWERS. The rubble is drawn and the collision is
+      // cleared on the same frame because they come out of the same function.
+      const look = wallLook(v, w.state, w.rubblePick)
+      if (look.art && w.art.texture.key !== look.art && this.textures.exists(look.art)) {
+        w.art.setTexture(look.art)
+        fitContentWidth(w.art, look.art, w.width)
+        ySort(w.art)
+      }
+      if (w.blocks !== look.blocks) {
+        logEvent('vlaude', `wall ${look.blocks ? 'blocks' : 'clears its collision'}`)
+      }
+      w.blocks = look.blocks
+      if (w.state.broken && w.rubbleLeft <= 0) {
+        w.art.destroy()
+        this.vlaudeWalls.splice(i, 1)
+      }
+    }
+  }
+
+  /** Whether a point is inside a standing wall, which is what denies the
+   *  ground to the hero and to a garrison's rally. False once it is rubble,
+   *  because `wallLook` has already cleared `blocks`. */
+  private wallBlocks(x: number, y: number): boolean {
+    return this.vlaudeWalls.some((w) => w.blocks
+      && Math.abs(x - w.x) <= w.width / 2 && Math.abs(y - w.y) <= w.width / 2)
+  }
+
+  /* ----------------------------------------------------- 5. generate weapon */
+
+  /**
+   * A hostile turret on an EMPTY pad.
+   *
+   * IT IS VLAUDE'S, NOT THE PLAYER'S: it cannot be built, upgraded, sold or
+   * selected, it is purple machine plating against the tax world's stone, and
+   * it shoots the player's towers and hero. It takes the pad and gives it back
+   * when it dies, which is the answer to it -- and it goes on an EMPTY pad
+   * because taking one the player has already built on would destroy
+   * investment, which is the one thing this level's powers never do.
+   */
+  private castWeapon(): void {
+    const v = this.vlaude
+    if (!v) return
+    const cfg = v.powers.generateWeapon ?? {}
+    const maxAlive = (cfg.maxAlive as number) ?? 1
+    if (this.countermeasures.length >= maxAlive) return
+    const index = weaponPad(this.lockablePads())
+    if (index === null) return
+    const spot = this.build.spots[index]
+    const sprite = cfg.sprite as string | undefined
+    if (!spot || !sprite || !this.textures.exists(sprite)) return
+    const fx = cfg.fx as string | undefined
+    if (fx && this.textures.exists(fx)) {
+      playEffect(this, fx, spot.x, spot.y, {
+        size: (cfg.fxSize as number) ?? 190,
+        depth: LAYER.worldOverlay + 6,
+        durationMs: EFFECT_MS.blastMs,
+      })
+    }
+    const art = this.add.image(spot.x, spot.y, sprite)
+    fitContentHeight(art, sprite, (cfg.displayHeight as number) ?? 87.1)
+    ySort(art)
+    const bar = this.add.graphics()
+    const health = (cfg.health as number) ?? 1
+    // OCCUPIES THE PAD. The player cannot build there until it is dead, which
+    // is the same `occupied` every tower writes -- so nothing else in the
+    // build path has to learn what a countermeasure is.
+    if (cfg.occupiesPad !== false) this.build.occupy(index)
+    this.countermeasures.push({
+      art, bar, x: spot.x, y: spot.y, pad: index, health, maxHealth: health, cooldown: 0,
+      strikeTimer: 0,
+    })
+    this.drawSpots()
+    this.refreshMenuOptions()
+    logEvent('vlaude-cast', `countermeasure on pad ${index}`)
+    this.status.alert = 'Vlaude builds a countermeasure. Kill it to get the pad back.'
+    this.syncVlaudeHud()
+  }
+
+  private tickCountermeasures(dt: number): void {
+    const v = this.vlaude
+    if (!v || this.countermeasures.length === 0) return
+    const cfg = v.powers.generateWeapon ?? {}
+    const range = (cfg.range as number) ?? 0
+    const damage = (cfg.damage as number) ?? 0
+    const interval = (cfg.fireIntervalSeconds as number) ?? 1
+    const armor = (cfg.armor as number) ?? 0
+    for (let i = this.countermeasures.length - 1; i >= 0; i--) {
+      const c = this.countermeasures[i]!
+      // The hero answers it the way he answers a wall, and for the same
+      // reason: there is nothing else in this game that can shoot a structure.
+      c.strikeTimer -= dt
+      if (!this.hero.down
+        && Math.hypot(this.hero.x - c.x, this.hero.y - c.y) <= this.hero.attackRange + 30) {
+        if (c.strikeTimer <= 0) {
+          c.strikeTimer = this.hero.attackInterval
+          const hit = Math.max(1, this.hero.damage - (this.hero.def.ignoresArmor ? 0 : armor))
+          c.health -= hit
+          floatingDamage(this, c.x, c.y - 30, hit, false)
+          this.impactSpark(c.x, c.y - 20)
+        }
+      }
+      if (c.health <= 0) {
+        this.killCountermeasure(i)
+        continue
+      }
+      this.drawCountermeasureBar(c)
+
+      c.cooldown -= dt
+      if (c.cooldown > 0) continue
+      const target = cfg.targetsTowers === false
+        ? null
+        : this.nearestTower(c.x, c.y, range)
+      if (target) {
+        c.cooldown = interval
+        this.hitTowerWithCountermeasure(target, damage)
+        this.countermeasureShot(c, target.x, target.y)
+        continue
+      }
+      if (cfg.targetsHero !== false && !this.hero.down
+        && Math.hypot(this.hero.x - c.x, this.hero.y - c.y) <= range) {
+        c.cooldown = interval
+        this.damageHero(damage)
+        this.countermeasureShot(c, this.hero.x, this.hero.y)
+      }
+    }
+  }
+
+  /**
+   * The nearest LIT tower inside a radius, or null.
+   *
+   * Its own function rather than `pickNearest`, which is typed for things that
+   * can be shot at on the lane and takes an `alive` flag a tower does not
+   * have. A tower already out is skipped: shooting one that is dark would
+   * spend the countermeasure's whole clock on a gun that is not firing anyway,
+   * which reads as the turret being broken.
+   */
+  private nearestTower(x: number, y: number, radius: number): Tower | null {
+    let best: Tower | null = null
+    let bestDist = radius
+    for (const t of this.towers) {
+      if (t.disabledFor > 0) continue
+      const d = Math.hypot(t.x - x, t.y - y)
+      if (d > bestDist) continue
+      best = t
+      bestDist = d
+    }
+    return best
+  }
+
+  /** The bolt, drawn rather than simulated: a countermeasure's shot never
+   *  misses and has nothing to travel past. */
+  private countermeasureShot(c: LiveCountermeasure, x: number, y: number): void {
+    this.impactSpark(x, y)
+    const line = this.add.graphics().setDepth(LAYER.worldOverlay + 2)
+    line.lineStyle(3, 0xb35cff, 0.85)
+    line.lineBetween(c.x, c.y - 40, x, y - 10)
+    this.tweens.add({
+      targets: line, alpha: 0, duration: 180, onComplete: () => line.destroy(),
+    })
+  }
+
+  /**
+   * A tower under countermeasure fire.
+   *
+   * THE GAME HAS NO TOWER HEALTH and this deliberately does not add one to
+   * `Tower`. What it keeps is a damage POOL per tower, spent by this weapon
+   * and by nothing else; when it runs out the tower's lights go out through
+   * the SAME `landDisable` the Rainbow Reaper uses, and the pool refills. The
+   * tower is never destroyed, never loses a tier and never loses its pad --
+   * the player loses the gun for eight seconds, which is an option rather than
+   * an investment. See level10.json's `_towerHealth`.
+   */
+  private hitTowerWithCountermeasure(tower: Tower, damage: number): void {
+    const cfg = this.vlaude?.powers.generateWeapon ?? {}
+    const pool = (cfg.towerHealth as number) ?? 0
+    const left = (this.towerPools.get(tower) ?? pool) - damage
+    floatingDamage(this, tower.x, tower.y - 30, damage, false)
+    if (left > 0) {
+      this.towerPools.set(tower, left)
+      return
+    }
+    this.towerPools.set(tower, pool)
+    this.landDisable(tower, (cfg.towerDownSeconds as number) ?? 0)
+    logEvent('vlaude-cast', `countermeasure put ${tower.def.name} out`)
+  }
+
+  private drawCountermeasureBar(c: LiveCountermeasure): void {
+    const w = 46
+    const frac = Math.max(0, c.health / c.maxHealth)
+    c.bar.clear()
+    c.bar.setDepth(c.y + 60)
+    c.bar.fillStyle(0x0d1016, 0.75)
+    c.bar.fillRect(c.x - w / 2 - 1, c.y - 96, w + 2, 7)
+    c.bar.fillStyle(0xb35cff, 1)
+    c.bar.fillRect(c.x - w / 2, c.y - 95, w * frac, 5)
+  }
+
+  private killCountermeasure(i: number): void {
+    const c = this.countermeasures[i]
+    if (!c) return
+    const reward = (this.vlaude?.powers.generateWeapon?.peanutReward as number) ?? 0
+    this.countermeasures.splice(i, 1)
+    this.blast(c.x, c.y, 70)
+    c.art.destroy()
+    c.bar.destroy()
+    // THE PAD COMES BACK. That is the answer to the power and the reason it
+    // was put on an empty one.
+    this.build.release(c.pad)
+    if (reward > 0) this.earn(reward)
+    play(this, 'death')
+    logEvent('vlaude-cast', `countermeasure down; pad ${c.pad} free, +${reward} peanuts`)
+    this.status.alert = `Countermeasure down. +${reward} peanuts and the pad is yours.`
+    this.drawSpots()
+    this.refreshMenuOptions()
+    this.syncVlaudeHud()
+  }
+
+  /* ------------------------------------------------------ 6. create enemies */
+
+  private castEnemies(): void {
+    const v = this.vlaude
+    if (!v) return
+    const cfg = v.powers.createEnemies ?? {}
+    const pool = (cfg.pool as string[]) ?? []
+    const cap = (cfg.maxAliveFromThisPower as number) ?? 0
+    const count = (cfg.count as number) ?? 0
+    const gap = (cfg.intervalSeconds as number) ?? 0
+    if (pool.length === 0 || count === 0) return
+    const laneId = this.vlaudeLaneId()
+    const lane = this.lanes.lane(laneId)
+    const fx = cfg.fx as string | undefined
+    const mouth = lane.path.pointAt(0)
+    if (fx && this.textures.exists(fx)) {
+      playEffect(this, fx, mouth.x + 40, mouth.y, {
+        size: (cfg.fxSize as number) ?? 190,
+        depth: LAYER.worldOverlay + 6,
+        durationMs: EFFECT_MS.blastMs,
+      })
+    }
+    for (let n = 0; n < count; n++) {
+      this.time.delayedCall(n * gap * 1000, () => {
+        if (this.status.phase !== 'wave') return
+        if (this.madeAlive().length >= cap) return
+        const id = pool[Math.floor(Math.random() * pool.length)]!
+        const def = ENEMIES[id]
+        if (!def) return
+        // REAL UNITS WITH REAL STATS, and they do not hold the wave open: they
+        // are not what the wave table sent, and a wave that waited for
+        // Vlaude's own output would never end while he was still casting.
+        const made = new Enemy(this, def, lane.path, this.gateway,
+          { lanes: this.lanes, laneId, holdsWave: false })
+        made.madeByVlaude = true
+        this.enemies.push(made)
+        logEvent('vlaude-cast', `created ${def.name}`)
+      })
+    }
+    this.status.alert = 'Vlaude makes more of them.'
+  }
+
+  /** Everything this power currently has on the board, for its own cap. */
+  private madeAlive(): Enemy[] {
+    return this.enemies.filter((e) => e.madeByVlaude && e.alive)
+  }
+
+  /* ------------------------------------------------------ the recall portal */
+
+  /**
+   * THE PORTAL IS DECORATION AND NOTHING ELSE.
+   *
+   * The unit is already a real enemy in the wave table with its own stats and
+   * its own behaviour; this draws a picture at the mouth it is coming out of,
+   * `leadMs` before it gets there. The art is abstract silhouettes and must
+   * not be read as CONTAINING the unit -- nothing here spawns anything, and
+   * the four callbacks would arrive on exactly the same frames with this
+   * function deleted.
+   */
+  private queueRecallPortals(): void {
+    const v = this.vlaude
+    if (!v || v.callbackOrder.length === 0) return
+    const wave = this.level.waveTable.waves[this.status.wave]
+    if (!wave) return
+    for (const group of wave.spawns) {
+      if (!v.callbackOrder.includes(group.enemy)) continue
+      // AHEAD OF THE UNIT BY `leadMs`, WORKED OUT FROM THE WAVE TABLE rather
+      // than from the spawner, which only ever reports a spawn that has
+      // already happened. The group's own delay is in SIMULATION seconds and
+      // `delayedCall` is on the wall clock, so it is divided by the game speed
+      // -- the same multiple every wave is walked at.
+      const dueMs = (group.delay / RULES.pacing.gameSpeed) * 1000
+      const at = Math.max(0, dueMs - v.callbackLeadMs)
+      const lane = group.lane ?? this.vlaudeLaneId()
+      this.time.delayedCall(at, () => {
+        if (this.status.phase !== 'wave') return
+        this.recallPortal(lane)
+      })
+    }
+  }
+
+  private recallPortal(laneId: string): void {
+    const v = this.vlaude
+    if (!v || !v.callbackFx || !this.textures.exists(v.callbackFx)) return
+    const mouth = this.lanes.lane(laneId).path.pointAt(0)
+    playEffect(this, v.callbackFx, mouth.x + 60, mouth.y, {
+      size: v.callbackSize,
+      depth: LAYER.worldOverlay + 5,
+      durationMs: v.callbackDurationMs,
+    })
+    logEvent('vlaude', 'recall portal at the spawn mouth (decoration only)')
+  }
+
+  /* -------------------------------------------------------------- the ending */
+
+  /**
+   * Vlaude goes down.
+   *
+   * FRAMES 0 TO 6 ONLY. `defeatSpriteFrames` is 7 of the sheet's 8, and frame
+   * 7 is a hard-edged white rectangle filling its cell -- over this dark
+   * chamber that reads as a rendering bug rather than as a flash. So the sheet
+   * is played by HAND, one frame at a time, and the moment
+   * `defeatReachedFade` says the eighth has been reached the sprite comes off
+   * and a real full-screen white wash takes over IN SCREEN SPACE.
+   */
+  private playVlaudeDefeat(at: { x: number; y: number }): void {
+    const v = this.vlaude
+    if (!v || this.vlaudeDefeatPlaying) return
+    this.vlaudeDefeatPlaying = true
+    const d = v.defeat
+    const frames = defeatSpriteFrames(v)
+    logEvent('vlaude', `defeat: drawing frames 0..${frames - 1} of ${d.totalFrames}`)
+    this.cameras.main.shake(d.shakeMs, 0.01)
+    if (!this.textures.exists(d.fx)) {
+      this.whiteWash()
+      return
+    }
+    const art = this.add.sprite(at.x, at.y, d.fx, 0)
+    art.setDisplaySize(d.size, d.size)
+    art.setDepth(LAYER.worldOverlay + 30)
+    let frame = 0
+    // ONE TIMER, NOT AN ANIMATION. `playEffect` would run the clip to its end
+    // and the end is the frame that must never be drawn.
+    this.time.addEvent({
+      delay: d.frameMs,
+      repeat: d.totalFrames,
+      callback: () => {
+        frame++
+        if (defeatReachedFade(v, frame)) {
+          art.destroy()
+          this.whiteWash()
+          return
+        }
+        if (art.active) art.setFrame(frame)
+      },
+    })
+  }
+
+  /**
+   * The white wash, and it is SCREEN SPACE.
+   *
+   * CLAUDE.md hard rule 4: a rectangle covering the board is a WORLD object
+   * unless it is registered, and a world object slides off the corner of a
+   * panned or zoomed board -- which is exactly what a full-screen flash must
+   * never do. `asScreenSpace` is what hands it to the fixed UI camera.
+   */
+  private whiteWash(): void {
+    const v = this.vlaude
+    if (!v) return
+    const d = v.defeat
+    const wash = this.add.rectangle(0, 0, viewW(this) * 4, viewH(this) * 4, 0xffffff, 0)
+      .setOrigin(0, 0)
+      .setDepth(LAYER.modal + 10)
+    wash.setPosition(-viewW(this), -viewH(this))
+    this.asScreenSpace([wash])
+    logEvent('vlaude', `white wash ${whiteWashMs(v)}ms, screen space`)
+    this.tweens.add({
+      targets: wash,
+      alpha: 1,
+      duration: d.whiteFadeInMs,
+      onComplete: () => {
+        this.tweens.add({
+          targets: wash,
+          alpha: 0,
+          delay: d.whiteHoldMs,
+          duration: d.whiteFadeOutMs,
+          onComplete: () => wash.destroy(),
+        })
+        // THE RUN ENDS INSIDE THE WHITE, so the results dialog and the comic
+        // that follows it are what the player comes out of the flash into.
+        this.endRun('won')
+      },
+    })
+  }
+
+  /* ------------------------------------------------------------ the HUD light */
+
+  /** The "hostile hardware is on the board" light, while any is alive. */
+  private syncVlaudeHud(): void {
+    const v = this.vlaude
+    if (!v) return
+    const want = this.countermeasures.length > 0
+    if (want === (this.vlaudeHudIcon !== null)) return
+    if (!want) {
+      this.vlaudeHudIcon?.destroy()
+      this.vlaudeHudIcon = null
+      return
+    }
+    const key = v.hud.countermeasureActive
+    if (!key || !this.textures.exists(key)) return
+    const icon = this.add.image(0, 0, key)
+    fitContentHeight(icon, key, 30)
+    icon.setDepth(OVERLAY_DEPTH + 2)
+    this.asScreenSpace([icon])
+    this.vlaudeHudIcon = icon
+    this.placeVlaudeHud()
+  }
+
+  /** Under the wave counter and clear of everything the HUD guarantees. */
+  private placeVlaudeHud(): void {
+    const icon = this.vlaudeHudIcon
+    if (!icon) return
+    const area = this.layout.panelArea
+    icon.setPosition(area.x + 20, area.y + 20)
+  }
+
+  /** Everything level 10 put on the board, taken off again. Called from
+   *  `clearHazards`, which a run ending and a restart both go through. */
+  private clearVlaude(): void {
+    for (const w of this.vlaudeWalls) w.art.destroy()
+    this.vlaudeWalls.length = 0
+    for (const c of this.countermeasures) { c.art.destroy(); c.bar.destroy() }
+    this.countermeasures.length = 0
+    for (const a of this.padLockArt.values()) a.destroy()
+    this.padLockArt.clear()
+    this.padLocks.clear()
+    this.towerPools.clear()
+    this.vlaudePending.length = 0
+    this.vlaudeArmed.length = 0
+    this.hasteLeft = 0
+    this.vlaudeHudIcon?.destroy()
+    this.vlaudeHudIcon = null
+    this.vlaudeArt?.destroy()
+    this.vlaudeArt = null
+    this.vlaudeFloating = false
   }
 
   /** Exposed for the HUD. */

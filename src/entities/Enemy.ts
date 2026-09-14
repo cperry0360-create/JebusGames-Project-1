@@ -157,6 +157,28 @@ export class Enemy extends Phaser.GameObjects.Container {
    */
   hasteSpeed = 1
   /**
+   * How many times this body is itself a copy of another one. A duplicate is 1.
+   *
+   * THE MARK THAT MAKES "A DUPLICATE MUST NOT DUPLICATE" TRUE, and it is on
+   * the enemy rather than in a list held by the power so that it cannot go
+   * stale: the mark dies with the body. `Vlaude.copyTargets` refuses anything
+   * at or above `duplicateEnemy.copyDepth`, which is 1 -- without it the board
+   * doubles every cast and the failure is exponential, so it does not look
+   * like a balance problem while it is happening.
+   *
+   * 0 on every enemy in the game except level 10's copies.
+   */
+  copyDepth = 0
+  /**
+   * True for a unit `createEnemies` put on the board, which is the only thing
+   * that enemy's own cap counts.
+   *
+   * A REAL UNIT WITH REAL STATS -- it is worth its own peanuts and kills like
+   * any other. This flag exists only so `maxAliveFromThisPower` can count what
+   * that power is responsible for rather than the whole board.
+   */
+  madeByVlaude = false
+  /**
    * Armour granted by something on the enemy's OWN side standing nearby:
    * level 8's Human Resources, and nothing else so far.
    *
