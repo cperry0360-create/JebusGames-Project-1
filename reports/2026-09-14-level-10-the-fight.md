@@ -22,7 +22,8 @@ CLAUDE.md's standing fact about a green suite and a sprite.
 | `afaee71` | the re-soak: 36,000 → 26,000, and levels 1–9 unmoved | covered by run 378 **green** |
 | `525ffff` | fourteen tests for the fight | [run 378](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34907129792) **green** |
 | `e7809bf` | the countermeasure's HUD light, checked in a frame | [run 379](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34907285344) **green** |
-| *this commit* | this report | it adds one markdown file; the table closes here for the reason the level 10 report's did — a CI row for the commit that writes the CI row needs a further commit, forever |
+| `fe9736a` | this report, and CLAUDE.md and `claude/context.md` reconciled with a level that has a fight | [run 380](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34907622764) **green** |
+| *this commit* | run 380's row | it edits this table and nothing else. The table closes here for the reason the level 10 report's did — a CI row for the commit that writes the CI row needs a further commit, forever |
 
 Branch `claude/vlaude-fight-scene-jrb368`. **The merge command is the first
 line of this session's reply**, and the branch fast-forwards onto `main`.
@@ -486,7 +487,7 @@ himself, because something is hastening them, doubling them and adding to them.
 | `sh tools/harness/run.sh titlecard` | **20 assertions, 0 failures** at 1400×708 and 844×390 |
 | `sh tools/harness/run.sh levelart` | level art complete on every level; 92 keys asked for, 92 resident on level 10 |
 | `sh tools/harness/run.sh screens` | unchanged from the previous session's baseline — see below |
-| CI | runs 378 and 379 **green** |
+| CI | runs 378, 379 and 380 **green** |
 
 **The one tsdiff line is cascade, and it is the kind CLAUDE.md warns about.**
 `Scene.time` is public Phaser API and every other scene in this repository uses
@@ -603,8 +604,9 @@ manifest.
 
 ## Where this leaves the repository
 
-**IN FLIGHT:** branch `claude/vlaude-fight-scene-jrb368`, seventeen commits,
-green on runs 367, 368, 370–373, 376, 378 and 379, fast-forwardable onto `main`.
+**IN FLIGHT:** branch `claude/vlaude-fight-scene-jrb368`, eighteen commits,
+green on runs 367, 368, 370–373, 376, 378, 379 and 380, fast-forwardable onto
+`main`.
 It carries the asset pass, the level, and now the fight.
 
 1. **`main` is `692a1fc` and has none of it.** Three sessions' work is on one
