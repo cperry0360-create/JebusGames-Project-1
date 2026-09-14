@@ -1402,3 +1402,98 @@ is worse than none:
 
 The Chromium harness under `tools/harness/` covers a lot of that, run by run
 rather than at scale. The two are complements.
+
+---
+
+# Level 10 — AI Override: Part 2, and a number that does not mean what the others do
+
+**2026-09-14.** Vlaude soaks at **40.0% over 480 seeds on normal — 192/480 —
+inside the 35-45% band**, with Cory on every seed. Read the next section before
+quoting it: **it is not a win rate comparable to levels 1 to 9.**
+
+## The method, reproduced against two published figures
+
+`node --experimental-strip-types tools/soak/tune10.ts 480 level10 normal cory`
+
+The last two arguments are the whole of it and both are easy to get wrong.
+`normal` runs every seed in normal mode; omitted, the seeds rotate through
+`run.ts`'s seven modes, three of which are deliberately crippled. `cory` runs
+one hero; omitted, the hero rotates by seed, Cory on three sevenths.
+
+**The combination is checked rather than assumed.** With `480 <level> normal
+cory` this driver returns **level 8's published 200/480 as the same integer**
+and **level 9's published 40% as 191/480 (39.8%)**. Any other combination moves
+both by several points — the mode rotation puts level 10 at 31.7% where
+Cory-every-seed puts it at 45.0% **on the same health**, and it moves level 9
+the other way, to 44.2%. A figure quoted without its method is not comparable
+to anything.
+
+## What the number measures, and what it does not
+
+**The runner cannot respond to three of Vlaude's six powers, and cannot even
+perceive two of them.** Checked in the source rather than assumed:
+
+| power | can the runner answer it? | why |
+|---|---|---|
+| build lock | **no, and it cannot see one** | `systems/BuildSystem.ts` models `occupied` and nothing else. There is no lock state for `isFree` to read. The nearest thing it has is the Glitch Bug DESTROYING a tower, which calls `build.release` — it can free a pad, never forbid one. |
+| generate wall | **no, and it cannot see one** | the sim's hero is a fixed point at `lane.path.totalLength * 0.5` and never moves. A wall that denies ground to the hero and to garrison units is invisible to something that never walks. |
+| generate weapon | **no** | the sim models a tower being switched OFF (`disableSeconds`) and a tower being DESTROYED outright. It has no tower health, so a turret that damages towers over time is a third thing it cannot express. |
+| speed alter | partly | the multiplier arithmetic is the sim's own and would apply; what it cannot do is change plan because of it. |
+| duplicate enemy | partly | an inserted body is an inserted body. |
+| create enemies | partly | as above. |
+
+**So the 40.0% is a survivability check on the phase 3 walk**: can the board
+the player has built by wave 18 kill a 36,000 hp hoverer before he crosses
+3,440 px of road. It answers that, and it is the right question to have
+answered, because it is the one question a fixed-strategy runner CAN answer
+about this level.
+
+**It is not a measure of the level's difficulty**, because the level's
+difficulty is meant to come from adapting to rule changes, and no rule change
+fires in it. `systems/Vlaude.ts` is the rules; the scene does not play them yet.
+The number will need re-deriving the day it does.
+
+## The sensitivity table
+
+480 seeds each, normal, Cory. The shape of the level 4, 7, 8 and 9 tables.
+
+| Vlaude health | 30,000 | 34,000 | **36,000** | 38,000 | 42,000 |
+|---|---|---|---|---|---|
+| win rate | 52.5% | 45.0% | **40.0%** | 36.3% | 30.6% |
+
+A coarse 120-seed pass ran first and put the knee between 20,000 (85.5%) and
+28,000 (52.2%). **The two resolutions disagree by more than the band is wide**:
+31,000 reads 39.1% over 120 seeds and 45.5% over 480, a 6.4 point swing on the
+same value. Iterate at 120, confirm at 480, and do not publish a 120.
+
+**36,000 is four and a half times PERPLEXED's 8,100, and that is the board
+rather than the boss.** Level 10 funnels every walker past every gun on one long
+road; level 9 splits its traffic across two arms and three of its fifteen pads
+cannot reach the road at all. Level 10 fields MORE total wave health than level
+9 — 103,122 against 69,893 — and still won **98.6%** of normal runs at the 9,000
+Vlaude's row was first drafted with.
+
+**Vlaude leaks in 281 of the 480 runs**, and on this level a leak by him ends the
+run outright rather than costing lives. He is the dominant loss cause, which is
+what a final boss whose escape is the stake should be.
+
+## Levels 1 to 9, re-soaked, and nothing moved
+
+Two changes in this work touch shared code: `NightRules.from` now asks for the
+day/night SHAPE rather than for the key, and `Enemy` gained a third speed
+multiplier slot that defaults to 1. Both could in principle reach another level,
+so both were measured rather than argued about — **the same seeds, the same
+method, on the tree before the change and on the tree after it**:
+
+| | level 5 | level 8 | level 9 |
+|---|---|---|---|
+| before | 218/480 | 200/480 | 191/480 |
+| after | **218/480** | **200/480** | **191/480** |
+
+Identical integers, not close ones. Level 5 is the one that matters for the
+`NightRules` change — it is the only level with a sky — and level 8 is the one
+whose published figure this method reproduces exactly.
+
+The whole set at the published method, for the record: level 1 89.2%, level 2
+53.1%, level 3 87.9%, level 4 62.3%, level 5 45.4%, level 6 43.8%, level 7
+41.3%, level 8 41.7%, level 9 39.8%, **level 10 40.0%**.
