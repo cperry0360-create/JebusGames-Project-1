@@ -15,8 +15,8 @@
   "callback4": "callbackLich",
   "boss": "vlaude"
  },
- "phases": {
-  "_note": "WHICH WAVE EACH PHASE STARTS ON, AND THIS IS A BALANCING RECOMMENDATION. Vlaude is parked off the lane and UNTARGETABLE in phases 1 and 2 -- no tower, no hero ability and no ultimate can put a point of damage on him -- so there is no health bar for a phase to advance on and the wave count is the only clock the level has. The three numbers below are the shape the level was authored to (six waves of chat, six of code, six of the ending) and are the first thing to move if the soak says the middle sags. `chat` is 1 rather than 0 because a phase starting before the first wave has nothing to have survived.",
+ "vlaudePhases": {
+  "_note": "WHICH WAVE EACH PHASE STARTS ON, AND THIS IS A BALANCING RECOMMENDATION. Vlaude is parked off the lane and UNTARGETABLE in phases 1 and 2 -- no tower, no hero ability and no ultimate can put a point of damage on him -- so there is no health bar for a phase to advance on and the wave count is the only clock the level has. The three numbers below are the shape the level was authored to (six waves of chat, six of code, six of the ending) and are the first thing to move if the soak says the middle sags. `chatFromWave` is 1 rather than 0 because a phase starting before the first wave has nothing to have survived.\nIT IS CALLED `vlaudePhases` AND NOT `phases`, WHICH IT WAS FOR AN HOUR. `phases` is LEVEL 5's day/night flip, and systems/NightRules.ts returns a live object for any level whose rules carry that key -- so level 10 got a NightRules whose `phases.day` was undefined, and the board threw `Cannot read properties of undefined (reading 'tint')` before it finished building. No test saw it: nothing in tests/ constructs a scene. The harness's `levelart` scenario reported 'level10: the level did not build' on the first run after the level was wired up, which is the whole reason that scenario exists. Two mechanics must not share a key name, and NightRules.from now also asks for the day/night SHAPE rather than for the key.",
   "chatFromWave": 1,
   "codeFromWave": 7,
   "damagedFromWave": 13,

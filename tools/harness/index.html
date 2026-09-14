@@ -857,7 +857,16 @@ async function run() {
     // is the only thing that cuts them -- `anims` is a GLOBAL manager, so an
     // animation left behind by a freed texture is the exact fault case 3 above
     // describes. Nothing else in this repository looks at a frame of them.
-    for (const id of ['level1', 'level2', 'level3', 'level4', 'level5', 'level9']) {
+    // LEVEL 10 JOINS IT FOR THE SAME REASON LEVEL 9 DID, and it is the harder
+    // case of the two: it fields NINE enemy pictures, FIVE new effect sheets
+    // and the machine tower skin, and it is the first level whose sheets are
+    // played by a level system rather than by an ability -- so an animation
+    // left cut against a freed texture would show up as a manipulation that
+    // telegraphs nothing, which is silent. It also runs immediately after
+    // level 9 in this list, which is the one hop in the game where two levels
+    // share a skin: if the skin were not freed between them, level 10 would be
+    // drawing level 9's textures and nothing would say so.
+    for (const id of ['level1', 'level2', 'level3', 'level4', 'level5', 'level9', 'level10']) {
       await checkLevel(id, id.replace('level', 'level '))
     }
     // AND BACK TO THE FIRST, which re-loads what four shutdowns have freed.

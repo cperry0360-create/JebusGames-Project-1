@@ -116,7 +116,23 @@ export class NightRules {
    * object that had puddles but no clock would be a worse failure than none.
    */
   static from(rules: LevelRules | null): NightRules | null {
-    if (!rules || !rules.phases) return null
+    if (!rules) return null
+    // THE SHAPE, NOT THE KEY, AND THE DIFFERENCE COST LEVEL 10 A BOARD.
+    //
+    // This read `if (!rules.phases) return null`, which was exact for as long
+    // as `phases` meant one thing. Level 10 called its three WAVE THRESHOLDS
+    // `phases` too -- a reasonable name for a different mechanic -- and got
+    // back a NightRules whose `phases.day` was undefined, so the first frame
+    // that reached for `phases.day.tint` threw and the level never finished
+    // building. NOTHING IN tests/ COULD SEE IT: no test constructs a scene.
+    // The harness's `levelart` scenario reported "the level did not build".
+    //
+    // Level 10's block is `vlaudePhases` now, so this guard is belt and
+    // braces -- but it is the half that survives the NEXT level choosing an
+    // obvious name for something, which is the failure that actually happened
+    // rather than the one that was imagined.
+    const p = rules.phases as { day?: unknown; night?: unknown } | undefined
+    if (!p || !p.day || !p.night) return null
     return new NightRules(rules)
   }
 

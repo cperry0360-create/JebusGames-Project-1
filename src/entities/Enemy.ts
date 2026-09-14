@@ -133,6 +133,30 @@ export class Enemy extends Phaser.GameObjects.Container {
    */
   reviewSpeed = 1
   /**
+   * What VLAUDE is doing to this one's legs, and the only one of these three
+   * multipliers that is meant to be taken off again.
+   *
+   * A THIRD SLOT RATHER THAN A WRITE TO EITHER OF THE OTHER TWO, for the
+   * reason written on `reviewSpeed`: `speedScale` is the level's own sky and
+   * `reviewSpeed` is the scanner's, and a mechanic that overwrites another
+   * one's field is the bug that only shows up on the level carrying both.
+   *
+   * IT IS NOT `review()` AND THAT IS DELIBERATE. The Performance Review is
+   * PERMANENT -- `reviewed` is a latch that refuses a second crossing -- it is
+   * once only, and it also makes the enemy 10% bigger. Level 10's haste is
+   * temporary and repeats every twenty seconds, so routing it through the
+   * scanner would grow every enemy it touched by 10% for good and could never
+   * be taken off. What is reused is the PATTERN the scanner established: a
+   * named multiplier slot, defaulting to 1, multiplied in at one place.
+   *
+   * ASSIGNED, NEVER ACCUMULATED, which is what makes the restoration exact
+   * rather than nearly exact: `hasteSpeed = Vlaude.HASTE_OFF` puts the base
+   * speed back bit for bit however many times it has been applied. A `*=` here
+   * would drift, and level10.json's whole contract is that every temporary
+   * modifier restores.
+   */
+  hasteSpeed = 1
+  /**
    * Armour granted by something on the enemy's OWN side standing nearby:
    * level 8's Human Resources, and nothing else so far.
    *
@@ -881,9 +905,11 @@ export class Enemy extends Phaser.GameObjects.Container {
       // owns one and the scanner owns the other, and both multiply the DEF's
       // speed before `slowedSpeed` takes its cut -- so a slow still bites a
       // reviewed enemy for the same fraction it bites anything else.
+      // `hasteSpeed` is the third of them and is Vlaude's, on the same terms
+      // and for the same reason. It is the only one that comes back off.
       const step = this.selfHeld
         ? 0
-        : slowedSpeed(this.def.speed * this.speedScale * this.reviewSpeed,
+        : slowedSpeed(this.def.speed * this.speedScale * this.reviewSpeed * this.hasteSpeed,
                       this.slowFactor, this.slowed) * dt
       if (this.controlled) {
         // BACK DOWN THE LANE IT CAME UP, on its own lane and no other.
