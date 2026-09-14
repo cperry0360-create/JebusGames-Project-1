@@ -366,6 +366,64 @@ ENEMY_KEY = {
     'enemy_cargo_blue.webp':      ('enemy-cargo-blue',     0.90,  72.0),
     'enemy_cargo_yellow.webp':    ('enemy-cargo-yellow',   0.90,  72.0),
     'enemy_cargo_green.webp':     ('enemy-cargo-green',    0.90,  72.0),
+    # THE LEVEL 10 CAST, and the heights are art-side defaults rather than a
+    # brief's: level 10 has no row in levels.json and no roster in
+    # enemies.json, so nothing has tuned them yet. Each is the house size
+    # CLASS the picture belongs to, which is a decision this file can defend
+    # and a guess it cannot:
+    #
+    #   VLAUDE IS 200 ACROSS ALL THREE FORMS, and the pin is the point. The
+    #   three sources are 3706, 1494 and 1489 px tall, so anything that scaled
+    #   him from his own source would shrink him by 60% the moment he took
+    #   damage. 200 is the largest round height rule 7 supports against the
+    #   SHORTEST of the three (1489 / 7.11 = 209), and the full form was
+    #   re-encoded at 836x1478 so that its INK height is 1466 -- the code
+    #   form's exactly. What is left is a 1% difference in drawn ink, which is
+    #   the full form's tighter canvas margin (0.8% against 1.9%) and cannot
+    #   be resampled away.
+    #
+    #   THE FOUR CALLBACKS ARE 100, which is `enemy-cancer`'s height: they are
+    #   returning bosses. THE FOUR MASH-UPS ARE 85, which is what levels 3, 5
+    #   and 6's heaviest elites are and is under the 87.1 px shortest tower --
+    #   the rule content.test.ts holds the rank and file to. If level 10 makes
+    #   a mash-up a boss, raising it is one number here and one in art.json.
+    #
+    # ALL EIGHT WERE EXPORTED TO A NORMALISED FRAME: every one of their ink
+    # boxes is exactly 700 px tall (693 for the drone) inside a ~728 px
+    # canvas, so the art carries NO information about their sizes relative to
+    # each other. That is why the classes above are stated rather than
+    # measured off the pictures.
+    'boss_vlaude.webp':           ('enemy-vlaude',         0.90, 200.0),
+    'boss_vlaude_code.webp':      ('enemy-vlaude-code',    0.90, 200.0),
+    'boss_vlaude_damaged.webp':   ('enemy-vlaude-damaged', 0.90, 200.0),
+    # 0.94 FOR THE DEVIL AND THE LICH, and the Lich's is the interesting one:
+    # his glitched sword runs down to the right and its tip is caught at 0.90
+    # as a third foot -- a group at x657-782 of 797, which drags the anchor to
+    # 0.5665. At 0.94 the tip is above the cut and only his two boots are
+    # left, x121-267 and x536-595. It is the Lich King's ENEMY_FOOT_WINDOW
+    # problem, solved by the band instead of by a window.
+    'enemy_callback_devil.webp':  ('enemy-callback-devil', 0.94, 100.0),
+    'enemy_callback_lich.webp':   ('enemy-callback-lich',  0.94, 100.0),
+    # 0.92 AND NOT DEEPER: at 0.94 his trailing shoe is gone and the anchor
+    # jumps from 0.5742 to 0.7646, which would walk him with the lane under
+    # his elbow. The same failure Cory's 0.85 band is written against.
+    'enemy_callback_politician.webp': ('enemy-callback-politician', 0.92, 100.0),
+    # A QUADRUPED, like the Server Walker: its footprint really is its stance,
+    # three groups across 548 px of a 790 px canvas, and 0.90 is the deepest
+    # cut that still holds all three. Its rainbow tail is nowhere near the
+    # ground line, so nothing needs excluding.
+    'enemy_callback_unicorn.webp': ('enemy-callback-unicorn', 0.90, 100.0),
+    'enemy_mash_bull_tourist.webp': ('enemy-mash-bull-tourist', 0.94, 85.0),
+    'enemy_mash_drone_cameraman.webp': ('enemy-mash-drone-cameraman', 0.90, 85.0),
+    # 0.92 AND IT IS THE ROOSTER'S PROBLEM WITH A DIFFERENT ANSWER. Like
+    # `boss_rooster`, this bird is drawn with tail plumes sweeping down: at
+    # 0.90 the silhouette finds a third group at x68-139, which is feathers,
+    # and the anchor lands at 0.4460. At 0.92 the plumes are above the cut and
+    # exactly two groups are left, x190-335 and x409-543, which ARE its two
+    # feet. So it is measured from its stance rather than body-shadowed, which
+    # is what the Rooster needed and this one does not.
+    'enemy_mash_rooster_phoenix.webp': ('enemy-mash-rooster-phoenix', 0.92, 85.0),
+    'enemy_mash_unicorn_car.webp': ('enemy-mash-unicorn-car', 0.90, 85.0),
 }
 # Enemies whose shadow is cast by the whole body, not by the feet.
 # A GLIDER HAS NO FEET ON THE GROUND. It hovers, so its foot band catches the
@@ -391,10 +449,20 @@ LEVEL7_VEHICLES = {'enemy-hatchback', 'enemy-musclecar', 'enemy-van', 'enemy-bla
 # against the Glider below.
 LEVEL9_FOOTLESS = {'enemy-data-bug', 'enemy-hat-gtt', 'enemy-hat-gtt-b',
                    'enemy-nopilot', 'enemy-perplexed'}
-ENEMY_BODY_SHADOW = {'enemy-zamboni', 'enemy-glitch-bug', 'enemy-glider', 'enemy-rooster',
-                     'enemy-office-drone'} | LEVEL7_VEHICLES | LEVEL9_FOOTLESS
+# LEVEL 10 ADDS FIVE MORE, AND NOT ONE OF THEM IS A NEW CASE. All three of
+# Vlaude's forms are a monolith hanging in the air off a bundle of cables --
+# the Hat's case exactly -- so the deepest thing in the silhouette is a cable
+# tip, and a footprint measured there would be a shadow one cable wide under a
+# whole boss. The drone cameraman is a quadcopter, which is the Office Drone
+# again, and the unicorn car is a car, which is the level 7 vehicles again.
+# Body shadow and body anchor for all five.
+LEVEL10_FOOTLESS = {'enemy-vlaude', 'enemy-vlaude-code', 'enemy-vlaude-damaged',
+                    'enemy-mash-drone-cameraman', 'enemy-mash-unicorn-car'}
+ENEMY_BODY_SHADOW = ({'enemy-zamboni', 'enemy-glitch-bug', 'enemy-glider', 'enemy-rooster',
+                      'enemy-office-drone'}
+                     | LEVEL7_VEHICLES | LEVEL9_FOOTLESS | LEVEL10_FOOTLESS)
 ENEMY_BODY_ANCHOR = ({'enemy-glider', 'enemy-rooster', 'enemy-office-drone'}
-                     | LEVEL7_VEHICLES | LEVEL9_FOOTLESS)
+                     | LEVEL7_VEHICLES | LEVEL9_FOOTLESS | LEVEL10_FOOTLESS)
 # Where to LOOK for feet, as fractions of the source width, for art whose
 # ground silhouette catches something that is not one.
 #

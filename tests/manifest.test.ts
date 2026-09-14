@@ -352,7 +352,19 @@ test('a ground shadow covers the footprint and not the whole sprite', () => {
       // swallowed -- what lies under a four-legged walker carrying a server
       // rack is the walker. Unlike the five above it is NOT in
       // LEVEL9_FOOTLESS; its shadow really is its stance.
-      'enemy-server-walker'])
+      'enemy-server-walker',
+      // LEVEL 10 ADDS FIVE, AND EVERY ONE IS A CASE ALREADY ON THIS LIST.
+      // All three of Vlaude's forms are a floating monolith hanging off a
+      // bundle of cables -- the Hat's case exactly, an object over a board
+      // with no underside -- so the deepest thing in the silhouette is a
+      // cable tip and a footprint measured there would be the mismeasurement
+      // this test is for. The drone cameraman is a quadcopter, which is the
+      // Office Drone for the second time, and the unicorn car is a car, which
+      // is the level 7 vehicles for the tenth. Their shadows and their x
+      // anchors come off the body. See LEVEL10_FOOTLESS in
+      // tools/measure_art.py and reports/2026-09-14-level-10-assets.md.
+      'enemy-vlaude', 'enemy-vlaude-code', 'enemy-vlaude-damaged',
+      'enemy-mash-drone-cameraman', 'enemy-mash-unicorn-car'])
     // `heroes/` as well as `enemies/`. It used to name one file --
     // `hero/hero_cory.webp` -- because Cory was the only hero whose art this
     // script had measured; the other four lived in `heroes/` and were checked
@@ -508,6 +520,36 @@ test('every file in the manifest is bound to something that draws it', () => {
     for (const key of Object.keys(art.files)) {
       if (new RegExp(`"${key}"`).test(body)) claimed.add(key)
     }
+  }
+
+  // ART THAT LANDED AHEAD OF ITS LEVEL, named here rather than let through by
+  // a looser rule.
+  //
+  // Level 10's cast and its tower are on disk, measured and in `files`, and
+  // nothing can draw them: the roster lives in enemies.json and the tower in
+  // towers.json, and level 10 has no row in either -- nor in levels.json. The
+  // machine tower skins were in this exact state and escaped this test because
+  // `towerSkins.keys` happens to name both halves of a pairing; a plate escapes
+  // it because `map` is a role. An enemy has no such section, so without this
+  // list the only ways to register level 10's cast are to invent gameplay data
+  // or to leave twenty-one files on disk that art.json does not know about.
+  //
+  // THIS IS A LIST OF WHAT IS WAITING, NOT AN EXEMPTION LIST. Every key here
+  // is also in `art.levelArt.byLevel.level10`, so it is level art, so
+  // `orphanedLevelArt` in tests/levelart.test.ts names it too -- and that list
+  // is the one that empties itself the day level 10 ships. DELETE THIS BLOCK
+  // THEN: enemies.json and towers.json will claim every key in it, and a key
+  // still needing it is a key nothing draws.
+  const AWAITING_LEVEL_10 = [
+    'enemy-vlaude', 'enemy-vlaude-code', 'enemy-vlaude-damaged',
+    'enemy-callback-devil', 'enemy-callback-lich', 'enemy-callback-politician',
+    'enemy-callback-unicorn', 'enemy-mash-bull-tourist',
+    'enemy-mash-drone-cameraman', 'enemy-mash-rooster-phoenix',
+    'enemy-mash-unicorn-car', 'turret-vlaude-countermeasure',
+  ]
+  for (const k of AWAITING_LEVEL_10) {
+    assert.ok(art.files[k], `${k} is on the level 10 waiting list but not in the manifest`)
+    claim(k)
   }
 
   const orphans = Object.keys(art.files).filter((k) => !claimed.has(k))

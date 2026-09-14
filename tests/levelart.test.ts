@@ -250,6 +250,36 @@ test('every piece of level art belongs to a level that loads it', () => {
   // arrived with nothing now arrives with a level -- and is 3.75 MB of that
   // level's 16.2 MB, which is what the per-level cap in tests/content.test.ts
   // now measures and what makes it the heaviest board in the game.
-  assert.deepEqual(orphanedLevelArt(LEVELS.map((l) => l.id)).sort(), [],
+  //
+  // AND IT IS NOT EMPTY ANY MORE, for the fifth time and for the same reason
+  // every previous entry was here: level 10's art has landed and level 10 has
+  // not. Twenty-two keys -- the plate, Vlaude's three forms, four callback
+  // bosses, four mash-ups, the countermeasure tower, five effect sheets and
+  // four wall pieces, 7.6 MB converted -- filed under
+  // `art.levelArt.byLevel.level10` and `art.map.level10` so that boot never
+  // queues them. Being level art is what makes them cost nothing: not at boot,
+  // because `queueArt` skips level art, and not on levels 1 to 9, because no
+  // level asks for level 10's row.
+  //
+  // THE LIST EMPTIES ITSELF the day level 10 gets a row in levels.json, which
+  // is what happened when level 6's five entries landed, when level 7's and
+  // 8's eight landed together, when `map-level9` left, and when the fourteen
+  // machine tower skins left. Anything appearing here that is NOT level 10's
+  // is the bug this test is for.
+  //
+  // `level10` DOES NOT JOIN `towerSkins.machine.levels` YET, and must not:
+  // `levelArtKeys` resolves an unknown id to the DEFAULT level, so naming it
+  // there now would switch the skin on for level 1. See art.json's
+  // `_towerSkins` and `_level10`.
+  assert.deepEqual(orphanedLevelArt(LEVELS.map((l) => l.id)).sort(), [
+    'enemy-callback-devil', 'enemy-callback-lich', 'enemy-callback-politician',
+    'enemy-callback-unicorn', 'enemy-mash-bull-tourist',
+    'enemy-mash-drone-cameraman', 'enemy-mash-rooster-phoenix',
+    'enemy-mash-unicorn-car', 'enemy-vlaude', 'enemy-vlaude-code',
+    'enemy-vlaude-damaged', 'fx-vlaude-defeat', 'fx-vlaude-duplication',
+    'fx-vlaude-generation', 'fx-vlaude-path-change', 'fx-vlaude-recall-portal',
+    'map-level10', 'prop-wall-cracked', 'prop-wall-intact',
+    'prop-wall-rubble-a', 'prop-wall-rubble-b', 'turret-vlaude-countermeasure',
+  ].sort(),
     'level art that no shipped level loads')
 })

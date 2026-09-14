@@ -215,7 +215,33 @@
     "marker-spawn": "props/marker_spawn.webp",
     "marker-spawn-arrow": "props/marker_spawn_arrow.webp",
     "marker-exit": "props/marker_exit.webp",
-    "marker-exit-arrow": "props/marker_exit_arrow.webp"
+    "marker-exit-arrow": "props/marker_exit_arrow.webp",
+    "map-level10": "maps/map_level10.webp",
+    "enemy-vlaude": "enemies/boss_vlaude.webp",
+    "enemy-vlaude-code": "enemies/boss_vlaude_code.webp",
+    "enemy-vlaude-damaged": "enemies/boss_vlaude_damaged.webp",
+    "enemy-callback-devil": "enemies/enemy_callback_devil.webp",
+    "enemy-callback-lich": "enemies/enemy_callback_lich.webp",
+    "enemy-callback-politician": "enemies/enemy_callback_politician.webp",
+    "enemy-callback-unicorn": "enemies/enemy_callback_unicorn.webp",
+    "enemy-mash-bull-tourist": "enemies/enemy_mash_bull_tourist.webp",
+    "enemy-mash-drone-cameraman": "enemies/enemy_mash_drone_cameraman.webp",
+    "enemy-mash-rooster-phoenix": "enemies/enemy_mash_rooster_phoenix.webp",
+    "enemy-mash-unicorn-car": "enemies/enemy_mash_unicorn_car.webp",
+    "turret-vlaude-countermeasure": "towers/tower_vlaude_countermeasure.webp",
+    "fx-vlaude-path-change": "effects/fx_vlaude_path_change.webp",
+    "fx-vlaude-duplication": "effects/fx_vlaude_duplication.webp",
+    "fx-vlaude-generation": "effects/fx_vlaude_generation.webp",
+    "fx-vlaude-recall-portal": "effects/fx_vlaude_recall_portal.webp",
+    "fx-vlaude-defeat": "effects/fx_vlaude_defeat.webp",
+    "prop-wall-intact": "props/prop_wall_intact.webp",
+    "prop-wall-cracked": "props/prop_wall_cracked.webp",
+    "prop-wall-rubble-a": "props/prop_wall_rubble_a.webp",
+    "prop-wall-rubble-b": "props/prop_wall_rubble_b.webp",
+    "icon-build-locked": "ui/icon_build_locked.webp",
+    "icon-haste": "ui/icon_haste.webp",
+    "icon-route-locked": "ui/icon_route_locked.webp",
+    "icon-tower-boost": "ui/icon_tower_boost.webp"
   },
   "render": {
     "turret-escalation": {
@@ -1581,6 +1607,185 @@
     "marker-exit-arrow": {
       "contentWidth": 158,
       "contentHeight": 169
+    },
+    "enemy-vlaude": {
+      "anchorX": 0.4994,
+      "anchorY": 0.9959,
+      "displayHeight": 200.0,
+      "shadowWidth": 113.1,
+      "contentWidth": 824,
+      "contentHeight": 1466
+    },
+    "enemy-vlaude-code": {
+      "anchorX": 0.5,
+      "anchorY": 0.9906,
+      "displayHeight": 200.0,
+      "shadowWidth": 124.4,
+      "contentWidth": 902,
+      "contentHeight": 1466
+    },
+    "enemy-vlaude-damaged": {
+      "anchorX": 0.4994,
+      "anchorY": 0.9906,
+      "displayHeight": 200.0,
+      "shadowWidth": 114.3,
+      "contentWidth": 823,
+      "contentHeight": 1461
+    },
+    "enemy-callback-devil": {
+      "anchorX": 0.5991,
+      "anchorY": 0.9807,
+      "displayHeight": 100.0,
+      "shadowWidth": 41.1,
+      "contentWidth": 436,
+      "contentHeight": 700
+    },
+    "enemy-callback-lich": {
+      "anchorX": 0.4492,
+      "anchorY": 0.9808,
+      "displayHeight": 100.0,
+      "shadowWidth": 65.2,
+      "contentWidth": 769,
+      "contentHeight": 700
+    },
+    "enemy-callback-politician": {
+      "anchorX": 0.5742,
+      "anchorY": 0.9808,
+      "displayHeight": 100.0,
+      "shadowWidth": 41.6,
+      "contentWidth": 484,
+      "contentHeight": 700
+    },
+    "enemy-callback-unicorn": {
+      "anchorX": 0.5171,
+      "anchorY": 0.9808,
+      "displayHeight": 100.0,
+      "shadowWidth": 75.3,
+      "contentWidth": 762,
+      "contentHeight": 700
+    },
+    "enemy-mash-bull-tourist": {
+      "anchorX": 0.6148,
+      "anchorY": 0.9808,
+      "displayHeight": 85.0,
+      "shadowWidth": 33.4,
+      "contentWidth": 534,
+      "contentHeight": 700
+    },
+    "enemy-mash-drone-cameraman": {
+      "anchorX": 0.4994,
+      "anchorY": 0.9806,
+      "displayHeight": 85.0,
+      "shadowWidth": 107.0,
+      "contentWidth": 880,
+      "contentHeight": 693
+    },
+    "enemy-mash-rooster-phoenix": {
+      "anchorX": 0.535,
+      "anchorY": 0.9808,
+      "displayHeight": 85.0,
+      "shadowWidth": 41.3,
+      "contentWidth": 657,
+      "contentHeight": 700
+    },
+    "enemy-mash-unicorn-car": {
+      "anchorX": 0.4994,
+      "anchorY": 0.9808,
+      "displayHeight": 85.0,
+      "shadowWidth": 106.0,
+      "contentWidth": 880,
+      "contentHeight": 700
+    },
+    "turret-vlaude-countermeasure": {
+      "anchorX": 0.4039,
+      "anchorY": 0.9813,
+      "displayHeight": 87.1,
+      "shadowWidth": 73.5,
+      "contentWidth": 789,
+      "contentHeight": 722
+    },
+    "fx-vlaude-path-change": {
+      "sheet": {
+        "frameWidth": 512,
+        "frameHeight": 512,
+        "frames": 8
+      }
+    },
+    "fx-vlaude-duplication": {
+      "sheet": {
+        "frameWidth": 512,
+        "frameHeight": 512,
+        "frames": 8
+      }
+    },
+    "fx-vlaude-generation": {
+      "sheet": {
+        "frameWidth": 512,
+        "frameHeight": 512,
+        "frames": 8
+      }
+    },
+    "fx-vlaude-recall-portal": {
+      "sheet": {
+        "frameWidth": 512,
+        "frameHeight": 512,
+        "frames": 8
+      }
+    },
+    "fx-vlaude-defeat": {
+      "sheet": {
+        "frameWidth": 320,
+        "frameHeight": 320,
+        "frames": 8
+      }
+    },
+    "prop-wall-intact": {
+      "anchorX": 0.5,
+      "anchorY": 1.0,
+      "contentWidth": 482,
+      "contentHeight": 178
+    },
+    "prop-wall-cracked": {
+      "anchorX": 0.5,
+      "anchorY": 1.0,
+      "contentWidth": 480,
+      "contentHeight": 179
+    },
+    "prop-wall-rubble-a": {
+      "anchorX": 0.5,
+      "anchorY": 1.0,
+      "contentWidth": 172,
+      "contentHeight": 178
+    },
+    "prop-wall-rubble-b": {
+      "anchorX": 0.5,
+      "anchorY": 1.0,
+      "contentWidth": 172,
+      "contentHeight": 179
+    },
+    "icon-build-locked": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 210,
+      "contentHeight": 222
+    },
+    "icon-haste": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 222,
+      "contentHeight": 148
+    },
+    "icon-route-locked": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 207,
+      "contentHeight": 222
+    },
+    "icon-tower-boost": {
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "contentWidth": 221,
+      "contentHeight": 222
     }
   },
   "map": {
@@ -1592,7 +1797,8 @@
     "level6": "map-level6",
     "level7": "map-level7",
     "level8": "map-level8",
-    "level9": "map-level9"
+    "level9": "map-level9",
+    "level10": "map-level10"
   },
   "levelArt": {
     "_note": "ART THAT ONLY EXISTS INSIDE A LEVEL, and so is not loaded at boot. The plates went first (see `map` above and reports/2026-09-07-the-crash.md); this is the rest of the same argument. Every key here is fetched when a level starts and given back when it ends, exactly as a plate is, which took 90.8 MB of enemies, effects, signs, soldiers and in-play buttons off the title screen. THE ENEMIES ARE NOT LISTED HERE and that is deliberate: enemies.json already says which sprite each enemy wears and the wave tables already say which enemies a level fields, so the set is COMPUTED per level rather than written down twice -- systems/LevelArt.ts. A level loads its own enemies and nobody else's. What is left in `shared` is art any level might need: the effects, the props, the soldiers, the projectiles and the two in-play panels. THE DEFAULT IS BOOT. A new key that nobody adds here stays in the boot manifest, which costs memory and cannot break a screen; a menu key listed here by mistake would be a missing texture on a menu, which can. tests/levelart.test.ts checks the direction that matters -- that every enemy sprite and every ability effect is level art, and that nothing a menu draws is.",
@@ -1666,8 +1872,32 @@
         "node-chip-fan",
         "node-chip-cabled",
         "prop-vlaude-screen"
+      ],
+      "level10": [
+        "enemy-vlaude",
+        "enemy-vlaude-code",
+        "enemy-vlaude-damaged",
+        "enemy-callback-devil",
+        "enemy-callback-lich",
+        "enemy-callback-politician",
+        "enemy-callback-unicorn",
+        "enemy-mash-bull-tourist",
+        "enemy-mash-drone-cameraman",
+        "enemy-mash-rooster-phoenix",
+        "enemy-mash-unicorn-car",
+        "turret-vlaude-countermeasure",
+        "fx-vlaude-path-change",
+        "fx-vlaude-duplication",
+        "fx-vlaude-generation",
+        "fx-vlaude-recall-portal",
+        "fx-vlaude-defeat",
+        "prop-wall-intact",
+        "prop-wall-cracked",
+        "prop-wall-rubble-a",
+        "prop-wall-rubble-b"
       ]
     },
+    "_level10": "LEVEL 10'S ART, LANDED AHEAD OF LEVEL 10. Every key in this row is on disk, measured and registered, and NOTHING DRAWS ANY OF IT: level 10 has no row in levels.json, no roster in enemies.json and no tower in towers.json, so `levelArtKeys` never resolves the id and `orphanedLevelArt` names all twenty-one of them plus `map-level10`. That list in tests/levelart.test.ts is the register of what is WAITING, and it empties itself the day level 10 gets its row -- the same way level 6's five entries, level 7's and 8's eight, and the fourteen machine tower skins each left it.\nWHY THE ROW EXISTS AT ALL RATHER THAN LEAVING THE KEYS AT BOOT: a key that is not level art is queued by `queueArt` on every boot by every player, so twenty-one unused textures would be about 5.4 MB on the loading bar for art no board can show. Filed here they cost nothing anywhere -- not at boot, and not on levels 1 to 9, because no level asks for them.\n`map-level10` IS NOT IN THIS LIST and does not need to be: it is in `map` above, which makes it a PLATE_KEY, which is already level art. `level10` JOINS `towerSkins.machine.levels` THE DAY IT GETS A ROW and not before, for the reason written there.\nTHE THREE LEVEL 10 COMIC PANELS AND THE TITLE CARD ARE CONVERTED AND ARE DELIBERATELY NOT NAMED HERE. Comic panels have never been in this manifest -- cutscenes.json owns them -- and naming one here fails tests/manifest.test.ts twice over: `cutscenes` becomes an asset directory that systems/Cutscenes.ts names as a string literal, and a panel is bound to no role that draws it. They sit under public/assets/cutscenes/ waiting for a row in cutscenes.json, which cannot be written until level 10 is a level. See reports/2026-09-14-level-10-assets.md.",
     "_byLevel": "ART ONE LEVEL DRAWS AND NO OTHER, keyed by level id. `shared` above is every level's bill; this is one level's. Level 9 brings seven effect sheets, four build-node variants and a screen -- 3.6 MB, more than any plate -- and none of it means anything on levels 1 to 8. A key here is level art (so boot never queues it) and is loaded by exactly the level named. The same shape `towerSkins` already uses, and the reason LevelArt.ts reads both.\nENEMY-HAT-GTT-B IS IN THIS LIST AND HAD TO BE PUT THERE BY HAND, which is the one gap in the derivation above. `ENEMY_SPRITE_KEYS` is derived from enemies.json's `sprite` field, and the hat's alternate tilt is named by `regen.altSprite` instead -- so it was classified as ordinary art, downloaded at BOOT by every player on every level, and freed by nothing. 0.19 MB on the loading bar for a picture only level 9 can show. Found by diffing the boot path against main rather than by any test: `levelart.test.ts` checks that nothing in a level's list is missing, not that nothing missing from a list should be in it. Any future field that names a second sprite for an enemy needs a row here too."
   },
   "ui": {
@@ -1733,7 +1963,12 @@
     "nopilotCrash": "fx-nopilot-crash",
     "perplexedQuery": "fx-perplexed-query",
     "tileShatter": "fx-tile-shatter",
-    "electricalArc": "fx-electrical-arc"
+    "electricalArc": "fx-electrical-arc",
+    "vlaudePathChange": "fx-vlaude-path-change",
+    "vlaudeDuplication": "fx-vlaude-duplication",
+    "vlaudeGeneration": "fx-vlaude-generation",
+    "vlaudeRecallPortal": "fx-vlaude-recall-portal",
+    "vlaudeDefeat": "fx-vlaude-defeat"
   },
   "decor": [
     "decor-bush",
@@ -1795,7 +2030,11 @@
     "markerSpawn": "marker-spawn",
     "markerSpawnArrow": "marker-spawn-arrow",
     "markerExit": "marker-exit",
-    "markerExitArrow": "marker-exit-arrow"
+    "markerExitArrow": "marker-exit-arrow",
+    "wallIntact": "prop-wall-intact",
+    "wallCracked": "prop-wall-cracked",
+    "wallRubbleA": "prop-wall-rubble-a",
+    "wallRubbleB": "prop-wall-rubble-b"
   },
   "towerTiers": {
     "turret-ledger": [
@@ -1817,7 +2056,11 @@
     "icon-damage",
     "icon-range",
     "icon-firerate",
-    "icon-armor"
+    "icon-armor",
+    "icon-build-locked",
+    "icon-haste",
+    "icon-route-locked",
+    "icon-tower-boost"
   ],
   "hero": {
     "_note": "THE ROSTER AND NOTHING ELSE. This section used to carry Cory's own frame lists as well -- `idle`, `walk`, `attack` and their per-set anchors -- because he was the only hero and his walk sheet was the animation system. All five heroes are single pictures now, so the lists are gone with the sheet and `roster` is the whole of it. `attackImpactFrame` stays: the swing still lands on a frame of a clock even though nothing swaps a texture on it, and the damage timing is a tuned number.",

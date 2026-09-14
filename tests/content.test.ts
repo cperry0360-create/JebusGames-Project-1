@@ -1711,10 +1711,34 @@ test('the deploy stays small enough to open on a phone', () => {
 
   // AND THE WHOLE DEPLOY, still, because it is git, it is the hosting bill, and
   // it is the thing that grows when something is uploaded and never wired up.
-  // 50 against 47.9. This is the loose one on purpose: it is a tripwire for the
+  // 58 against 55.6. This is the loose one on purpose: it is a tripwire for the
   // next 12 MB PNG rather than a per-level budget, and the three caps above are
   // what protect the player.
+  //
+  // 50 -> 58, AND THIS IS THE RAISE THE SPLIT ABOVE WAS DESIGNED TO ALLOW.
+  // Level 10's art landed: thirty files, 7.64 MB converted at the house q95,
+  // the largest single batch this repository has taken. The three caps a player
+  // actually experiences did not move with it, which is the whole point of
+  // having split them -- BOOT went 6.57 -> 6.63 MB against a cap of 8 (the
+  // 0.06 is four UI icons; every other level 10 key is level art and
+  // `queueArt` skips it), the worst single LEVEL is unchanged at 17.06 MB
+  // (level 9) because level 10 has no row in levels.json and no level fetches
+  // its row, and MUSIC did not move at all. Measured both sides of the change
+  // on 271 files and then on 301.
+  //
+  // WHAT THIS NUMBER IS MEASURING RIGHT NOW is 7.64 MB of art that no player
+  // can reach, which is the ORPHAN case this cap's own note names -- and it is
+  // orphaned deliberately and with a register: every key is in
+  // `orphanedLevelArt`'s list in tests/levelart.test.ts, which empties itself
+  // when level 10 ships. If level 10 is ever cancelled, this is the 7.64 MB to
+  // take back out and the cap goes back to 50.
+  //
+  // AND THE PER-LEVEL CAP IS STILL THE ONE TO WATCH. The note on it predicted
+  // level 10 would not fit in 18 MB, and nothing here has tested that: its
+  // plate is 1.59 MB and its cast 1.95, so on the day it gets a row it lands
+  // near level 9's 17.06 before its comics are counted. That bill comes due
+  // with the level, not with its art.
   const total = files.reduce((a, f) => a + f.mb, 0)
-  assert.ok(total < 50,
+  assert.ok(total < 58,
     `assets total ${total.toFixed(1)}MB, which is more than this project should be`)
 })

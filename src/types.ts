@@ -1504,6 +1504,12 @@ export interface ArtDef {
     markerSpawnArrow: string
     markerExit: string
     markerExitArrow: string
+    /** LEVEL 10'S WALL, in three states and two rubble pieces. Registered art,
+     *  drawn by nothing: level 10 has no row in levels.json. */
+    wallIntact?: string
+    wallCracked?: string
+    wallRubbleA?: string
+    wallRubbleB?: string
   }
   fx: {
     /** Landed hit: a projectile, a chain link, the Haymaker, the sign bribe. */
@@ -1564,6 +1570,23 @@ export interface ArtDef {
      *  between two fixed contact points. Not an attack and not a hazard. 8 of
      *  512, and frame 7 returns to within 13% of frame 0. */
     electricalArc: string
+    /** LEVEL 10'S FIVE, all eight frames and all SQUARE cells, which is why
+     *  none of them needs the `height` field EffectOptions carries for the
+     *  sheets that are not: `size` alone places a square cell correctly.
+     *  Grids re-verified against the files rather than taken from a brief.
+     *  NOTHING PLAYS ANY OF THEM YET -- level 10 has no row in levels.json --
+     *  see art.json's `_level10` and reports/2026-09-14-level-10-assets.md. */
+    /** Vlaude rewriting the route under the walkers. 8 of 512. */
+    vlaudePathChange: string
+    /** Vlaude copying himself. 8 of 512. */
+    vlaudeDuplication: string
+    /** Vlaude generating something new onto the board. 8 of 512. */
+    vlaudeGeneration: string
+    /** The portal Vlaude recalls through. 8 of 512. */
+    vlaudeRecallPortal: string
+    /** Vlaude coming apart at the end of the run. 8 of 320, on a 2560-wide
+     *  sheet -- the only one of the five that is not a 512 cell. */
+    vlaudeDefeat: string
   }
   decor: string[]
   /** Keys that get a greyscale copy built at boot, for unavailable states. */
