@@ -12,7 +12,8 @@ number the build will need is now on disk instead of in a painter's export.
 | commit | what | CI |
 |---|---|---|
 | `b9214cc` | the thirty files, the twenty-six manifest keys, the three test lists, `measure_art.py`'s new rows | [run 367](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34887454564) **green** — `changes`, `typecheck`, `test` all success; `deploy` skipped because this is a branch, not because the `changes` gate said documentation |
-| *this commit* | this report | markdown only; it edits nothing the build reads |
+| `e64fa42` | this report, and the two stale claims in the brief corrected | [run 368](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34888054639) **green** — `changes`, `typecheck`, `test`; `deploy` skipped, because this is a branch |
+| *this commit* | run 368's row | it edits this table and nothing else. The table closes here on purpose: a CI row for the commit that writes the CI row needs a further commit, forever. |
 
 Branch `claude/level-10-assets-2kqch4`. **This session could not push to `main`**
 — the merge command is the first line of its reply. At the time of writing the
@@ -573,8 +574,8 @@ python3 tools/harness/shrink.py tools/harness/shots/screens-5-game-844x390.png 9
 
 ## Where this leaves the repository
 
-**IN FLIGHT:** branch `claude/level-10-assets-2kqch4`, one commit, green on run
-367, fast-forwardable onto `main`. The merge command is the first line of this
+**IN FLIGHT:** branch `claude/level-10-assets-2kqch4`, three commits, green on
+runs 367 and 368, fast-forwardable onto `main`. The merge command is the first line of this
 session's reply.
 
 1. **The deploy artifact size is unconfirmed until this is on `main`.** Baseline
