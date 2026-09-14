@@ -70,7 +70,21 @@ test('every planned level has a slot, built or not', () => {
   for (const [i, l] of LEVELS.entries()) assert.equal(nodes[i]!.level?.id, l.id)
   const unbuilt = nodes.filter((n) => n.level === null)
   assert.equal(unbuilt.length, ROAD_SLOTS - LEVELS.length)
-  assert.ok(unbuilt.length > 0, 'there is no road ahead; the map ends at the last built level')
+  // THE ROAD RAN OUT, AND THAT IS THE CAMPAIGN FINISHING RATHER THAN A FAULT.
+  //
+  // This line used to read `assert.ok(unbuilt.length > 0, 'there is no road
+  // ahead; the map ends at the last built level')`, and it was right for as
+  // long as there was more road to build. levels.json's `_plannedLevels` says
+  // TEN IS THE SCOPE AND IT IS FINAL, and says what raising it costs: eleven
+  // slots is a third row on a screen where two already use 498 of the band's
+  // 522 units. Level 10 is the tenth, so every slot holds a level and the map
+  // shows a finished campaign instead of a promise.
+  //
+  // The assertion above it is untouched and is the one with the teeth: the
+  // number of empty slots is exactly the gap between the plan and what is
+  // built, whatever either number is. A level added without a slot, or a slot
+  // lost, still fails. Only "there must be a gap" goes, because keeping it
+  // would mean this test could pass only while the game was unfinished.
   // An unbuilt slot is locked, always, whatever the save says. There is
   // nothing behind it to unlock.
   for (const n of unbuilt) assert.equal(nodeState(n, LEVELS.map((l) => l.id)), 'locked')

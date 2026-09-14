@@ -212,6 +212,7 @@
     "node-chip-cabled": "props/node_chip_cabled.webp",
     "prop-vlaude-screen": "props/prop_vlaude_screen.webp",
     "card-level9": "ui/card_level9.webp",
+    "card-level10": "ui/card_level10.webp",
     "marker-spawn": "props/marker_spawn.webp",
     "marker-spawn-arrow": "props/marker_spawn_arrow.webp",
     "marker-exit": "props/marker_exit.webp",
@@ -2111,7 +2112,8 @@
       "level6": "card-level6",
       "level7": "card-level7",
       "level8": "card-level8",
-      "level9": "card-level9"
+      "level9": "card-level9",
+      "level10": "card-level10"
     }
   },
   "soldierTiers": {
@@ -2124,7 +2126,8 @@
   "towerSkins": {
     "machine": {
       "levels": [
-        "level9"
+        "level9",
+        "level10"
       ],
       "keys": {
         "turret-ledger": "turret-ledger-machine",

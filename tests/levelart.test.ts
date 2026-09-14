@@ -251,35 +251,20 @@ test('every piece of level art belongs to a level that loads it', () => {
   // level's 16.2 MB, which is what the per-level cap in tests/content.test.ts
   // now measures and what makes it the heaviest board in the game.
   //
-  // AND IT IS NOT EMPTY ANY MORE, for the fifth time and for the same reason
-  // every previous entry was here: level 10's art has landed and level 10 has
-  // not. Twenty-two keys -- the plate, Vlaude's three forms, four callback
-  // bosses, four mash-ups, the countermeasure tower, five effect sheets and
-  // four wall pieces, 7.6 MB converted -- filed under
-  // `art.levelArt.byLevel.level10` and `art.map.level10` so that boot never
-  // queues them. Being level art is what makes them cost nothing: not at boot,
-  // because `queueArt` skips level art, and not on levels 1 to 9, because no
-  // level asks for level 10's row.
+  // AND IT EMPTIED ITSELF AGAIN, which is the fifth time and the whole reason
+  // this list is kept. It held twenty-two keys the day before this: level 10's
+  // plate, Vlaude's three forms, four callback bosses, four mash-ups, the
+  // countermeasure tower, five effect sheets and four wall pieces -- 7.6 MB
+  // converted and registered by the asset pass with no level to arrive with.
+  // Level 10 has a row in levels.json now, so `levelArtKeys('level10')`
+  // resolves and every one of them found its level at once, exactly as level
+  // 6's five did, and level 7's and 8's eight, and `map-level9`, and the
+  // fourteen machine tower skins.
   //
-  // THE LIST EMPTIES ITSELF the day level 10 gets a row in levels.json, which
-  // is what happened when level 6's five entries landed, when level 7's and
-  // 8's eight landed together, when `map-level9` left, and when the fourteen
-  // machine tower skins left. Anything appearing here that is NOT level 10's
-  // is the bug this test is for.
-  //
-  // `level10` DOES NOT JOIN `towerSkins.machine.levels` YET, and must not:
-  // `levelArtKeys` resolves an unknown id to the DEFAULT level, so naming it
-  // there now would switch the skin on for level 1. See art.json's
-  // `_towerSkins` and `_level10`.
-  assert.deepEqual(orphanedLevelArt(LEVELS.map((l) => l.id)).sort(), [
-    'enemy-callback-devil', 'enemy-callback-lich', 'enemy-callback-politician',
-    'enemy-callback-unicorn', 'enemy-mash-bull-tourist',
-    'enemy-mash-drone-cameraman', 'enemy-mash-rooster-phoenix',
-    'enemy-mash-unicorn-car', 'enemy-vlaude', 'enemy-vlaude-code',
-    'enemy-vlaude-damaged', 'fx-vlaude-defeat', 'fx-vlaude-duplication',
-    'fx-vlaude-generation', 'fx-vlaude-path-change', 'fx-vlaude-recall-portal',
-    'map-level10', 'prop-wall-cracked', 'prop-wall-intact',
-    'prop-wall-rubble-a', 'prop-wall-rubble-b', 'turret-vlaude-countermeasure',
-  ].sort(),
+  // THIS IS A LIST OF WHAT IS WAITING, NOT A LIST OF EXCEPTIONS, and there is
+  // nothing left to wait for: levels.json's `_plannedLevels` says ten is the
+  // scope and it is final. Anything that appears here now is the bug this test
+  // is for.
+  assert.deepEqual(orphanedLevelArt(LEVELS.map((l) => l.id)).sort(), [],
     'level art that no shipped level loads')
 })

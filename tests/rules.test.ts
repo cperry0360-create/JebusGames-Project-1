@@ -554,7 +554,15 @@ test('every boss pays a lump sum, and the rule is checked on every boss', () => 
   // the level still fields exactly one boss, which is what the test above
   // holds every wave table to. PERPLEXED is the last fight of the level and is
   // the one carrying `tier: boss`.
-  assert.equal(bosses.length, 10, 'the roster gained or lost a boss')
+  // ELEVEN ROWS, TEN BOSSES, and level 10 is the eleventh. ITS FOUR CALLBACKS
+  // ARE NOT HERE and that is the design rather than an oversight, for exactly
+  // the reason level 9's three mini bosses are not: the Politician, the Devil,
+  // the Reaper and the Lich King come back through the recall portal carrying
+  // `role: boss, tier: elite`, which is the Blade Rig's shape, so the rules
+  // that must not touch a boss do not touch them -- and the level still fields
+  // exactly one boss sprite, which is what the test above holds every wave
+  // table to. Vlaude is that one.
+  assert.equal(bosses.length, 11, 'the roster gained or lost a boss')
   const dearest = Math.max(...Object.values(towers).map((t: any) => t.cost))
   // THE BEST ORDINARY PAYOUT, and `ordinary` is role as well as tier -- level
   // 5's Vampire Lord is a mini-boss carrying `tier: elite` (see enemies.json's

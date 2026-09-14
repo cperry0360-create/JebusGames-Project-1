@@ -162,8 +162,14 @@ test('exactly one level wears the skin, and it is the one the art was drawn for'
   // the skin on for a board that never fetched the art, which is a missing
   // texture on level 1. Level 9 has a row now. The assertion flips from "none"
   // to "exactly this one", which is the same assertion doing the same job.
+  // AND NOW IT IS TWO, which is the same flip a second time and for the same
+  // reason. Level 10 is the other half of AI Override -- the same machine one
+  // floor further in -- so it wears the same repaint, and it could not be named
+  // in `levels` until it had a row in levels.json for exactly the reason level 9
+  // could not. Both have one now. The art was drawn for these two boards and for
+  // no others, which is what this assertion is really holding.
   const wearing = LEVELS.filter((l) => skinForLevel(l.id) !== null).map((l) => l.id)
-  assert.deepEqual(wearing, ['level9'], 'the set of levels wearing a skin changed')
+  assert.deepEqual(wearing, ['level9', 'level10'], 'the set of levels wearing a skin changed')
   for (const level of LEVELS) {
     const skin = skinForLevel(level.id)
     if (skin !== null) {
@@ -197,14 +203,16 @@ test('outside a run, and for an unknown level, the skin is the identity', () => 
     assert.equal(skinnedSprite(key, null), key)
     assert.equal(skinnedSprite(key, undefined), key)
     assert.equal(skinnedSprite(key, ''), key)
-    // LEVEL 10 IS THE UNREGISTERED ONE NOW, and the reasoning is unchanged:
+    // LEVEL 11 IS THE UNREGISTERED ONE NOW, and the reasoning is unchanged:
     // `levelArtKeys` resolves an unknown id to the default level, so a skin
     // switched on for an id with no row would have the board drawing a texture
-    // nothing fetched. Turning it on is adding the id to `levels` on the day
-    // the level gets its row. Level 9 got its row, so it is NOT here any more
-    // -- it is asserted the other way round in the test above.
-    assert.equal(skinnedSprite(key, 'level10'), key)
+    // nothing fetched. Level 10 got its row, so it is NOT here any more -- it
+    // is asserted the other way round in the test above, beside level 9.
+    // THERE IS NO LEVEL 11 AND THERE IS NOT MEANT TO BE: levels.json's
+    // `_plannedLevels` says ten is the scope and it is final. The id is used
+    // here precisely because nothing will ever define it.
     assert.equal(skinnedSprite(key, 'level11'), key)
+    assert.equal(skinnedSprite(key, 'level12'), key)
   }
 })
 

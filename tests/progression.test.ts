@@ -94,6 +94,14 @@ test('the migration reproduces exactly the levels the old save had open', () => 
   const oldThresholds: Record<string, number> = {
     level1: 0, level2: 1, level3: 2, level4: 3, level5: 4,
     level6: Infinity, level7: Infinity, level8: Infinity, level9: Infinity,
+    // LEVEL 10 IS `Infinity` FOR THE SAME REASON AS 6 THROUGH 9, and it is the
+    // last one this table will ever gain: it needs level 9, which needs 8,
+    // which needs 7, which needs 6, which needs 5 -- and `MIGRATION_ORDER` in
+    // Save.ts is frozen at ['level1'..'level4'], so no migrated save records
+    // level 5 as cleared. Written in rather than defaulted, because `?? 0`
+    // would claim the last level of the campaign was open at zero cleared runs
+    // for anybody upgrading from the old save format.
+    level10: Infinity,
   }
   for (let n = 0; n <= 5; n++) {
     seed({ ...DEFAULT_SAVE, runsCleared: n, clearedLevels: undefined })

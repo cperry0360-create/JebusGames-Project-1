@@ -75,7 +75,19 @@ test('the Devil summons underlings, capped, on a timer', () => {
   // the point of the list is that a level cannot quietly GAIN a mechanic, and
   // a count would not notice the mechanic moving to a different enemy.
   const summoners = Object.entries(E).filter(([, v]) => (v as any).summons).map(([k]) => k)
-  assert.deepEqual(summoners, ['theDevil', 'glitchLich', 'glitchLichReturn'])
+  // THREE BECAME FIVE WHEN LEVEL 10 SHIPPED, and the two it adds are the same
+  // two summoners returning through Vlaude's recall portal rather than a new
+  // mechanic: `callbackDevil` is level 2's block with the cap down from 6 to 5
+  // and the interval out from 5 to 5.5, `callbackLich` is level 4's with the
+  // cap down from 8 to 6 and the interval out from 6 to 6.5. Both are eased
+  // because on level 10 they arrive with Vlaude already on the lane and the
+  // other callbacks queued behind them, not with the board to themselves.
+  // Still asserted BY NAME for the reason it always was: a level must not
+  // quietly gain a mechanic, and a count would not notice one moving.
+  assert.deepEqual(summoners, ['theDevil', 'glitchLich', 'glitchLichReturn',
+    'callbackDevil', 'callbackLich'])
+  assert.deepEqual(E.callbackDevil.summons, { enemy: 'directReport', count: 1, interval: 5.5, cap: 5 })
+  assert.deepEqual(E.callbackLich.summons, { enemy: 'tinyGlitch', count: 2, interval: 6.5, cap: 6 })
   assert.deepEqual(E.glitchLich.summons, { enemy: 'tinyGlitch', count: 2, interval: 6, cap: 8 })
   assert.deepEqual(E.glitchLichReturn.summons, { enemy: 'tinyGlitch', count: 2, interval: 4, cap: 8 })
   assert.ok(E[E.glitchLich.summons.enemy], 'the Lich King summons an enemy that does not exist')

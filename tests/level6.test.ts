@@ -153,12 +153,26 @@ test('the Sprinter is fast, and the collision with Baby Frank is recorded', () =
   // Rust Bucket at 125, so anything under 188 would have been a fast enemy
   // that is not fast. See the `_speed` note on its enemies.json row for why
   // the Rust Bucket was not slowed instead.
+  // AND AGAIN ON LEVEL 10, which is the third time and the reason this is a
+  // recorded ranking rather than a relaxed one. Vlaude's Rainbow Runabout is a
+  // car with a unicorn in it at 158, so it takes third and the Sprinter is
+  // fourth. ITS SPEED IS NOT A FREE CHOICE EITHER, exactly as the Roadrager's
+  // was not: tests/rules.test.ts requires a level's `fast` role to be more
+  // than 1.5x its `basic`, level 10's fastest basic is level 9's Data Bug at
+  // 88, and the same rule requires a fast enemy to carry NO armour. So the
+  // Runabout is 158 with 0 armour and pays for it in health, and the Content
+  // Drone beside it is 140 with 0 -- both above the 132 floor.
+  //
+  // The two facts this test exists for are still untouched: the Roadrager is
+  // the fastest thing in the game and Baby Frank is second.
   assert.equal(speeds[0]![0], 'musclecar', 'something has overtaken the Roadrager')
   assert.equal(speeds[1]![0], 'babyFrank', 'Baby Frank is no longer second fastest')
-  assert.equal(speeds[2]![0], 'sprinter', 'the Sprinter is no longer third fastest')
+  assert.equal(speeds[2]![0], 'mashUnicornCar', 'the third fastest moved')
+  assert.equal(speeds[3]![0], 'sprinter', 'the Sprinter is no longer fourth fastest')
   assert.equal((speeds[0]![1] as any).speed, 190)
   assert.equal((speeds[1]![1] as any).speed, 172)
-  assert.equal((speeds[2]![1] as any).speed, 150)
+  assert.equal((speeds[2]![1] as any).speed, 158)
+  assert.equal((speeds[3]![1] as any).speed, 150)
   // THIRD PLACE CHANGED HANDS WHEN LEVEL 8 LANDED, and this records it rather
   // than being relaxed: it was level 3's Tiny Glitch at 140 and it is level
   // 8's Intern at 145. The two facts this test exists for are untouched --
@@ -167,8 +181,13 @@ test('the Sprinter is fast, and the collision with Baby Frank is recorded', () =
   // Performance Review multiplies its 145 to 174, which is faster than
   // anything else on any board, and is a thing done TO it rather than a
   // number on its row.
-  assert.equal(speeds[3]![0], 'intern', 'the fourth fastest moved')
-  assert.equal((speeds[3]![1] as any).speed, 145, 'the fourth fastest moved')
+  // The Intern's row moves down one and is otherwise untouched. THE LIST STOPS
+  // HERE rather than growing a row per level: below fifth the field bunches --
+  // level 9's Packet is 142, level 3's Tiny Glitch and level 10's Content Drone
+  // are both 140 -- and asserting an order inside a tie is a test that fails on
+  // a re-sort rather than on a change anybody made.
+  assert.equal(speeds[4]![0], 'intern', 'the Intern is no longer fifth fastest')
+  assert.equal((speeds[4]![1] as any).speed, 145, 'the Intern is no longer fifth fastest')
 })
 
 /* ------------------------------------------------------------------- the waves */

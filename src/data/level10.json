@@ -1,0 +1,243 @@
+{
+ "_note": "LEVEL 10, AI OVERRIDE PART 2. Every number the level's own systems read. Nothing here is hardcoded in a .ts file -- CLAUDE.md's first hard rule -- and everything here is a balancing recommendation rather than a measured fact unless its own note says otherwise. The board this is tuned against carries TWELVE PADS, which is the second-smallest in the game; see map_level10.json's `_buildSpots`.",
+ "roster": {
+  "fast": "packet",
+  "basic": "corrupt",
+  "flyer": "dataBug",
+  "wall": "serverWalker",
+  "madeFast": "mashDroneCameraman",
+  "madeHeavy": "mashBullTourist",
+  "madeElite": "mashRoosterPhoenix",
+  "madeRunner": "mashUnicornCar",
+  "callback1": "callbackPolitician",
+  "callback2": "callbackDevil",
+  "callback3": "callbackUnicorn",
+  "callback4": "callbackLich",
+  "boss": "vlaude"
+ },
+ "phases": {
+  "_note": "WHICH WAVE EACH PHASE STARTS ON, AND THIS IS A BALANCING RECOMMENDATION. Vlaude is parked off the lane and UNTARGETABLE in phases 1 and 2 -- no tower, no hero ability and no ultimate can put a point of damage on him -- so there is no health bar for a phase to advance on and the wave count is the only clock the level has. The three numbers below are the shape the level was authored to (six waves of chat, six of code, six of the ending) and are the first thing to move if the soak says the middle sags. `chat` is 1 rather than 0 because a phase starting before the first wave has nothing to have survived.",
+  "chatFromWave": 1,
+  "codeFromWave": 7,
+  "damagedFromWave": 13,
+  "transitionSeconds": 2.2
+ },
+ "vlaude": {
+  "_note": "THE BOSS, AND HE IS NOT A NORMAL ONE. In phases 1 and 2 he is not an Enemy at all: systems/Vlaude.ts draws him at the berth straight from these art keys, so 'untargetable' is not a flag that could drift out of step with anything -- there is nothing on the board to target. He becomes an enemy at the END of the float, which is the same instant he touches the lane.",
+  "berthSprites": {
+   "chat": "enemy-vlaude",
+   "code": "enemy-vlaude-code"
+  },
+  "laneEnemy": "vlaude",
+  "displayHeight": 200,
+  "_displayHeight": "PINNED ACROSS ALL THREE FORMS by art.json's render entries, which all read 200.0, and repeated here only so a reader of this file can see that the swap does not resize him. The three sources are 3706, 1494 and 1489 px tall; anything that scaled him from his own source would shrink him by 60% mid-fight. See reports/2026-09-14-level-10-assets.md.",
+  "bobPixels": 7,
+  "bobSeconds": 2.6,
+  "float": {
+   "_note": "THE SCRIPTED FLOAT, phase 3's opening. It is an ANIMATION, not a fight: he is invulnerable for the whole traversal and becomes targetable on the frame he lands. The path is a two-point ease from the berth to the lane's first waypoint; `holdMs` is the beat at the berth before he moves, so the player sees him leave the core.",
+   "holdMs": 900,
+   "travelMs": 3200,
+   "landingEase": "Sine.easeInOut",
+   "invulnerable": true,
+   "shakeMs": 600,
+   "telegraphFx": "fx-vlaude-path-change",
+   "telegraphSize": 340
+  },
+  "exitEndsRun": true,
+  "_exitEndsRun": "IF VLAUDE REACHES THE EXIT THE RUN IS OVER, whatever the life count says. It is the level's clock and its stake, and it is checked BEFORE lives are deducted, so it is not a life deduction that happens to be fatal. enemies.json's `vlaude.livesCost` is 19 and is never charged; its note says why it is there at all.",
+  "defeat": {
+   "_note": "THE ENDING. fx_vlaude_defeat is eight frames and ONLY SEVEN OF THEM ARE DRAWN AS A SPRITE. Frame 8 is a hard-edged white rectangle: over this dark chamber it reads as a rendering bug rather than as a flash, so reaching it is the CUE for a full-screen white fade drawn in screen space, and the sprite is taken off on the same frame. `spriteFrames` is the half-open count of frames played, so 7 means 0..6.",
+   "fx": "fx-vlaude-defeat",
+   "spriteFrames": 7,
+   "totalFrames": 8,
+   "frameMs": 110,
+   "size": 260,
+   "whiteFadeInMs": 420,
+   "whiteHoldMs": 500,
+   "whiteFadeOutMs": 900,
+   "shakeMs": 900
+  }
+ },
+ "gliding": {
+  "_note": "VLAUDE HOVERS, AND SO DOES THE CONTENT DRONE. This is level 5's block, read by systems/NightRules.ts through `levelRules(id)`, and it is the same block because it is the same question -- what a thing off the ground is out of reach OF. Reusing it rather than writing a parallel one is the brief's instruction and is also why a Spike Strip behaves the same way on level 5 and on level 10.",
+  "ignoresGroundSlow": true,
+  "ignoresGroundHazards": true,
+  "bobPixels": 5,
+  "bobSeconds": 1.9,
+  "shadowAlpha": 0.22,
+  "shadowGapPixels": 7
+ },
+ "callbacks": {
+  "_note": "THE RECALL PORTAL. The four callbacks are spawned by the WAVE TABLE, one per wave from 13 to 16 in level order, and this says what is drawn when one arrives. THE PORTAL ART IS ABSTRACT SILHOUETTES and is decoration only: the unit that walks out of it is an ordinary enemy wearing its own sprite, with its own stats and its own behaviour. Nothing here spawns anything.",
+  "fx": "fx-vlaude-recall-portal",
+  "size": 300,
+  "leadMs": 900,
+  "durationMs": 880,
+  "order": [
+   "callbackPolitician",
+   "callbackDevil",
+   "callbackUnicorn",
+   "callbackLich"
+  ],
+  "_order": "LEVELS 1, 2, 3, 4, and the order is asserted by a test against the wave table rather than trusted. It is the whole joke."
+ },
+ "manipulations": {
+  "_note": "VLAUDE'S SIX POWERS, and the two that were cut. ROUTE SWITCHING IS NOT HERE and must not be added: the plate paints one lane with no forks (measured -- tools/trace_level10.py reports zero enclosed regions) and synthesising a fork in data over paint that does not show one is a lie the player can see. TOWER COST MANIPULATION IS NOT HERE EITHER. `prop_route_gate_open/closed` and `icon_route_locked` are the assets those two would have used; the first two stay unconverted in art-source/ and the icon is registered and unused.\nEVERY POWER HAS THREE BEATS: the telegraph below, a visible change on the board or in the HUD, and a clean restoration. `tests/level10.test.ts` runs a level that fires every one of them and asserts that speed, fire rate and buildability all come back to base.",
+  "telegraph": {
+   "fx": "fx-vlaude-path-change",
+   "_fx": "THE GENERIC 'VLAUDE IS CHANGING A RULE' TELEGRAPH, played before every manipulation. It was drawn for route switching, which was cut; repurposing it is deliberate and is recorded in reports/2026-09-14-level-10-assets.md.",
+   "leadSeconds": 1.1,
+   "size": 300
+  },
+  "globalCooldownSeconds": 9,
+  "_globalCooldown": "NO TWO MANIPULATIONS MAY START WITHIN THIS OF EACH OTHER, whatever their own cooldowns say. Without it the schedule below can stack three telegraphs on one another in a busy wave and the player cannot read any of them.",
+  "schedule": [
+   {
+    "fromWave": 3,
+    "power": "speedAlter",
+    "everySeconds": 22,
+    "_first": "the first power the player ever sees, and the simplest to read: one icon, one number, and it comes back."
+   },
+   {
+    "fromWave": 5,
+    "power": "duplicateEnemy",
+    "everySeconds": 20
+   },
+   {
+    "fromWave": 7,
+    "power": "buildLock",
+    "everySeconds": 26
+   },
+   {
+    "fromWave": 9,
+    "power": "generateWall",
+    "everySeconds": 24
+   },
+   {
+    "fromWave": 11,
+    "power": "generateWeapon",
+    "everySeconds": 30
+   },
+   {
+    "fromWave": 12,
+    "power": "createEnemies",
+    "everySeconds": 21
+   },
+   {
+    "fromWave": 14,
+    "power": "buildLock",
+    "everySeconds": 22,
+    "with": "speedAlter",
+    "_with": "THE FIRST COMBINATION, and both halves have been seen alone for nine waves and seven. The brief's rule is that a combination may not introduce either of its parts."
+   },
+   {
+    "fromWave": 16,
+    "power": "generateWall",
+    "everySeconds": 20,
+    "with": "generateWeapon"
+   }
+  ],
+  "_schedule": "ONE POWER AT A TIME, AUTHORED, WITH COOLDOWNS AND CAPS -- not free randomness. A row starts applying on `fromWave` and keeps applying for the rest of the run; `with` fires a second power on the same telegraph, and a combination row may only name powers whose own rows started at least two waves earlier, which a test asserts.",
+  "buildLock": {
+   "_note": "LOCKS BUILD SPACES, AND NEVER DESTROYS ONE. A tower already standing on a locked pad SURVIVES, keeps firing, keeps its upgrades and can still be sold -- the lock is on BUILDING, not on the tower. That is the whole rule and it is what keeps the power tense rather than unfair: the player loses options, never investment.",
+   "count": 3,
+   "_count": "3 OF 12 PADS, which is a quarter of the board. The count is low because the board is: level 10 carries twelve pads against level 7's twenty-two, so a lock of three here is worth a lock of five there. It is the first number to move if the soak says phase 2 is flat.",
+   "durationSeconds": 12,
+   "icon": "icon-build-locked",
+   "preferEmpty": true,
+   "_preferEmpty": "EMPTY PADS FIRST. Locking an occupied pad is legal and does nothing visible except put the padlock on it, so preferring empty ones is what makes the power land as a restriction rather than as decoration. When fewer than `count` pads are empty the rest are taken from the occupied ones."
+  },
+  "speedAlter": {
+   "_note": "MODIFIES ENEMY SPEED, through the SAME machinery level 8's Performance Review gate uses -- systems/PerformanceGate.ts applies a multiplier to an enemy and takes it off again. Reusing it is the brief's instruction and it is also the only way the restoration is provably clean: one code path that already had a test.",
+   "multiplier": 1.45,
+   "durationSeconds": 10,
+   "icon": "icon-haste",
+   "appliesTo": "onBoard",
+   "_appliesTo": "EVERYTHING ALREADY WALKING, not the spawner. A speed change that applied to future spawns would be invisible for as long as the wave took to reach the board, which is the opposite of a telegraphed power."
+  },
+  "duplicateEnemy": {
+   "_note": "COPIES ONE ENEMY ON THE BOARD. The fx plays OVER the original, then the copy is inserted at the same lane position with the same health fraction.",
+   "fx": "fx-vlaude-duplication",
+   "fxSize": 170,
+   "count": 2,
+   "maxPerCast": 2,
+   "durationMs": 880,
+   "copyDepth": 1,
+   "_copyDepth": "A DUPLICATE MUST NOT DUPLICATE. The copy is marked and the power skips anything already marked, so the board cannot double every nine seconds. This is the one number in the block that is a correctness rule rather than a tuning knob, and tests/level10.test.ts asserts it directly.",
+   "excludes": [
+    "vlaude",
+    "callbackPolitician",
+    "callbackDevil",
+    "callbackUnicorn",
+    "callbackLich"
+   ],
+   "_excludes": "NO BOSS AND NO CALLBACK. Two Lich Kings is not a harder wave, it is a different level; and two Vlaudes would mean two ways to lose the run at once."
+  },
+  "generateWall": {
+   "_note": "PLACES A WALL ON THE ROAD at one of map_level10.json's `hazardSpots`. The wall BLOCKS, takes damage, and goes through prop-wall-intact -> prop-wall-cracked -> one of the two rubble pieces; COLLISION CLEARS THE MOMENT IT BREAKS, on the same frame the rubble is drawn, so the rubble is decoration and never a wall that still stops things. Level 5's acid puddles are the nearest existing authored ground hazard and this is their shape, with a health bar instead of a timer.",
+   "fx": "fx-vlaude-generation",
+   "fxSize": 190,
+   "maxAlive": 2,
+   "health": 900,
+   "armor": 6,
+   "blocksEnemies": false,
+   "_blocksEnemies": "IT BLOCKS THE PLAYER'S UNITS AND THE HERO, NOT VLAUDE'S OWN WALKERS. A wall that stopped the enemies would be a gift: the player would let Vlaude build them and shoot the queue. What it does is deny the ground -- the hero cannot walk through it and a garrison cannot hold the lane behind it.",
+   "durationSeconds": 26,
+   "rubbleSeconds": 6,
+   "art": {
+    "intact": "prop-wall-intact",
+    "cracked": "prop-wall-cracked",
+    "rubble": [
+     "prop-wall-rubble-a",
+     "prop-wall-rubble-b"
+    ]
+   },
+   "crackedBelowHealth": 0.45,
+   "width": 96
+  },
+  "generateWeapon": {
+   "_note": "PLACES A HOSTILE COUNTERMEASURE TURRET on an EMPTY build pad. It is Vlaude's, not the player's: it cannot be built, cannot be upgraded, cannot be sold, and it shoots the player's towers and hero. It is visually distinct from every family tower -- purple and black machine plating against the tax world's stone -- and while one is alive the HUD shows `icon-tower-boost`.",
+   "fx": "fx-vlaude-generation",
+   "fxSize": 190,
+   "sprite": "turret-vlaude-countermeasure",
+   "displayHeight": 87.1,
+   "_displayHeight": "THE SAME HEIGHT AS EVERY TIER-1 FAMILY TOWER, which is what makes it read as a tower rather than as scenery. Its painted base measures 73.5 on-screen px against the tower set's 73.0 median, so the art was drawn to the same scale.",
+   "maxAlive": 2,
+   "health": 1400,
+   "armor": 8,
+   "range": 210,
+   "damage": 26,
+   "fireIntervalSeconds": 1.6,
+   "targetsTowers": true,
+   "targetsHero": true,
+   "lifetimeSeconds": 0,
+   "_lifetimeSeconds": "0 MEANS IT STANDS UNTIL IT IS KILLED. A countermeasure that expired on a timer would be a thing to walk away from; one that has to be shot is a decision about where the player's damage goes, which is the point of it.",
+   "icon": "icon-tower-boost",
+   "_icon": "REPURPOSED. It was drawn as a tower-boost indicator and route switching's cancellation left this level needing a 'hostile hardware is on the board' light instead. Recorded rather than quietly reused.",
+   "peanutReward": 90,
+   "occupiesPad": true,
+   "_occupiesPad": "IT STANDS ON A BUILD PAD AND HOLDS IT. Killing it gives the pad back. That is the answer to it and it is why it goes on an EMPTY pad -- taking a pad the player has already built on would destroy investment, which `buildLock` is deliberately forbidden from doing and this must not do either."
+  },
+  "createEnemies": {
+   "_note": "SPAWNS VLAUDE-MADE UNITS mid-wave, at the lane gate, on top of whatever the wave table is already sending. The four mash-ups are his, they are REAL UNITS with real stats and real peanut rewards, and the player has met every one of them in a wave before this power can pick it -- which is why this row starts at wave 12 and the last mash-up is introduced by the table at wave 10.",
+   "fx": "fx-vlaude-generation",
+   "fxSize": 190,
+   "pool": [
+    "mashDroneCameraman",
+    "mashBullTourist",
+    "mashRoosterPhoenix",
+    "mashUnicornCar"
+   ],
+   "count": 3,
+   "intervalSeconds": 1.1,
+   "maxAliveFromThisPower": 9
+  }
+ },
+ "hud": {
+  "_note": "WHICH INDICATOR IS SHOWN FOR WHICH STATE, and all four are art this level already ships. They are listed here rather than in art.json's `ui` because they are about level 10's rules rather than about the HUD's furniture.",
+  "buildLocked": "icon-build-locked",
+  "hasted": "icon-haste",
+  "countermeasureActive": "icon-tower-boost",
+  "_unused": "icon-route-locked IS REGISTERED AND DRAWN BY NOTHING. Route switching was cut. It is named here so that a sweep looking for unreferenced art finds a sentence instead of a candidate for deletion."
+ }
+}

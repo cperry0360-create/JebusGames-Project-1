@@ -25,6 +25,7 @@ const PLATES = {
   level7: 'public/assets/maps/map_level7.webp',
   level8: 'public/assets/maps/map_level8.webp',
   level9: 'public/assets/maps/map_level9.webp',
+  level10: 'public/assets/maps/map_level10.webp',
 }
 
 async function load(path) {
@@ -129,6 +130,19 @@ const CROPS = {
   // Centred on the door in y: the mouth spans canvas y300-359, which is
   // 0.417-0.499 of the plate.
   level9: [0.66, 0.2565, 0.34, 0.403],
+
+  // LEVEL 10 HOLDS THE CRACKED CRYSTAL CORE, which is the thing this board has
+  // that no other board has and the thing Vlaude is parked in front of for two
+  // thirds of the level. The rest of the plate is a cyan lane on grey hex
+  // plating, and a crop of that would be level 9's card in different colours --
+  // which is the mistake level 5's card was rejected for.
+  //
+  // 0.30 x 3840 = 1152 wide and 0.3556 x 2160 = 768.1 tall, which is 1.4998 --
+  // the card's own 3:2, so the cover fit throws essentially nothing away.
+  // Anchored at the top edge because the ball is clipped by the frame there:
+  // tools/trace_level10.py measures the core structure at canvas 804,0-1279,269,
+  // which is 0.628-0.999 of the plate in x and 0-0.374 in y.
+  level10: [0.68, 0.0, 0.30, 0.3556],
 }
 
 const CARD_W = 300, CARD_H = 200

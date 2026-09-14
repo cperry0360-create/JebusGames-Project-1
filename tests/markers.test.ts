@@ -44,6 +44,13 @@ test('every way in and every way out of every level gets exactly one marker', ()
     // and one exit that is a door in the middle of the map rather than a frame
     // edge -- still an exit, still marked.
     level9: '1S 1E',
+    // LEVEL 10: ONE LANE, ONE WAY IN, ONE WAY OUT, and both badges are derived
+    // from the lane like every other level's rather than placed. The plate
+    // draws a piece of machine housing OVER the lane at each frame edge, so
+    // tools/trace_level10.py bridges the housing before it walks the
+    // centreline -- which is why the lane reaches the frame at all and why
+    // these two badges land on the mouths a player can see.
+    level10: '1S 1E',
   }, 'a level gained or lost a way in or out and the markers did not follow')
 })
 

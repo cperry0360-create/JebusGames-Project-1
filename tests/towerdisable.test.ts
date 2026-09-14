@@ -29,7 +29,13 @@ test('four enemies carry the ability, and they differ by their numbers', () => {
   // 1.8 seconds every 2.6. The first is a hole in the board and the second is
   // a board that will not hold still. Neither destroys. The list is asserted
   // by name for the reason it always was: levels 1 and 2 must not gain one.
-  assert.deepEqual(casters, ['unicornBoss', 'glitchBug', 'cancer', 'perplexed'],
+  // FOUR BECAME FIVE ON LEVEL 10, and the fifth is the first of the four --
+  // the Rainbow Reaper, recalled through Vlaude's portal with the same block
+  // and the cooldown out from 7 to 7.5. It is not a new mechanic; it is the
+  // joke that it is the same fight. The list is still asserted by name, and
+  // levels 1 and 2 still must not gain one.
+  assert.deepEqual(casters, ['unicornBoss', 'glitchBug', 'cancer', 'perplexed',
+    'callbackUnicorn'],
     'the set of tower-attackers changed; levels 1 and 2 must not gain one')
   // AND THE TWO INVARIANTS ARE ASKED OF ALL FOUR rather than of the Reaper
   // alone, which is what they were worth all along: a windup that outlasts its

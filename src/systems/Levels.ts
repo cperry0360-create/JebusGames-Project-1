@@ -27,6 +27,7 @@ import mapLevel6 from '../data/map_level6.json' with { type: 'json' }
 import mapLevel7 from '../data/map_level7.json' with { type: 'json' }
 import mapLevel8 from '../data/map_level8.json' with { type: 'json' }
 import mapLevel9 from '../data/map_level9.json' with { type: 'json' }
+import mapLevel10 from '../data/map_level10.json' with { type: 'json' }
 import wavesLevel1 from '../data/waves.json' with { type: 'json' }
 import wavesLevel2 from '../data/waves.level2.json' with { type: 'json' }
 import wavesLevel3 from '../data/waves.level3.json' with { type: 'json' }
@@ -36,11 +37,13 @@ import wavesLevel6 from '../data/waves.level6.json' with { type: 'json' }
 import wavesLevel7 from '../data/waves.level7.json' with { type: 'json' }
 import wavesLevel8 from '../data/waves.level8.json' with { type: 'json' }
 import wavesLevel9 from '../data/waves.level9.json' with { type: 'json' }
+import wavesLevel10 from '../data/waves.level10.json' with { type: 'json' }
 import rulesLevel5 from '../data/level5.json' with { type: 'json' }
 import rulesLevel6 from '../data/level6.json' with { type: 'json' }
 import rulesLevel7 from '../data/level7.json' with { type: 'json' }
 import rulesLevel8 from '../data/level8.json' with { type: 'json' }
 import rulesLevel9 from '../data/level9.json' with { type: 'json' }
+import rulesLevel10 from '../data/level10.json' with { type: 'json' }
 
 /** A row of levels.json: what the registry records about a level. */
 export interface LevelDef {
@@ -161,6 +164,12 @@ const MAPS: Record<string, MapDef> = {
   // both `entrance: true` in effect (the main lane always is), merging into
   // one tail.
   level9: mapLevel9 as unknown as MapDef,
+  // LEVEL 10 IS ONE LANE, NO FORKS, NO MERGES AND NO INTERIOR EXIT -- levels 1
+  // to 4's shape, on the longest painted road in the game. See
+  // map_level10.json's `_waypoints` for the one thing about it that is not
+  // ordinary: the lane runs UNDER a piece of machine housing at each end, so the
+  // tracer bridges the housing before it walks the centreline.
+  level10: mapLevel10 as unknown as MapDef,
 }
 
 /** Wave tables by the filename levels.json names them with. */
@@ -174,6 +183,7 @@ const WAVE_TABLES: Record<string, WavesDef> = {
   'waves.level7.json': wavesLevel7 as unknown as WavesDef,
   'waves.level8.json': wavesLevel8 as unknown as WavesDef,
   'waves.level9.json': wavesLevel9 as unknown as WavesDef,
+  'waves.level10.json': wavesLevel10 as unknown as WavesDef,
 }
 
 /** Rules blocks by the filename levels.json names them with. */
@@ -183,6 +193,7 @@ const LEVEL_RULES: Record<string, LevelRules> = {
   'level7.json': rulesLevel7 as unknown as LevelRules,
   'level8.json': rulesLevel8 as unknown as LevelRules,
   'level9.json': rulesLevel9 as unknown as LevelRules,
+  'level10.json': rulesLevel10 as unknown as LevelRules,
 }
 
 export const LEVELS: LevelDef[] = (levelsData as unknown as { levels: LevelDef[] }).levels

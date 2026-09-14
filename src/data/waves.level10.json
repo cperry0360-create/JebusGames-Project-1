@@ -1,0 +1,460 @@
+{
+ "_note": "LEVEL 10, AI OVERRIDE PART 2. Eighteen waves on one lane, and the lane is the longest painted in the game at 3440 walked px. THE WAVE NUMBER IS THE LEVEL'S CLOCK: Vlaude cannot be damaged in phases 1 and 2, so the phases advance on waves survived rather than on his health, and level10.json's `phases` says where. Waves 1-6 are chat mode, 7-12 are code mode, 13-18 are damaged mode.",
+ "_roster": "THE MACHINE'S OWN UNITS ARE LEVEL 9'S -- packet, corrupt, dataBug and serverWalker -- because this is the same machine one floor further in, and reusing them costs nothing at boot (they are already this level's art by the same derivation) and says something the art cannot. THE FOUR MASH-UPS ARE VLAUDE'S OWN and are introduced one at a time from wave 5 on, so that the `createEnemies` manipulation in phase 2 is a unit the player has already met arriving at a time they did not choose, rather than a new enemy and a new rule at once.",
+ "_callbacks": "ONE PER WAVE, WAVES 13 TO 16, IN LEVEL ORDER: the Politician (level 1), the Devil (level 2), the Rainbow Reaper (level 3), the Lich King (level 4). Paced one at a time so the joke lands and so the player can answer each one -- the Reaper switches a tower off, the Devil and the Lich King both bring children, and meeting two of those in one wave is a different fight from meeting them in order. They are `tier: elite`, so this level still fields exactly one BOSS sprite and that is Vlaude.",
+ "_economy": "Peanuts per wave rise with the health on the board rather than with the wave index: the four callback waves pay 700-900 each on top of their escort, which is what funds the board the player needs for wave 18.",
+ "waves": [
+  {
+   "name": "Handshake",
+   "spawns": [
+    {
+     "enemy": "packet",
+     "count": 8,
+     "interval": 1.2,
+     "delay": 0
+    }
+   ]
+  },
+  {
+   "name": "Null Pointer",
+   "spawns": [
+    {
+     "enemy": "packet",
+     "count": 12,
+     "interval": 1.0,
+     "delay": 0
+    }
+   ]
+  },
+  {
+   "name": "Race Condition",
+   "spawns": [
+    {
+     "enemy": "packet",
+     "count": 10,
+     "interval": 0.9,
+     "delay": 0
+    },
+    {
+     "enemy": "corrupt",
+     "count": 3,
+     "interval": 1.6,
+     "delay": 7
+    }
+   ]
+  },
+  {
+   "name": "Memory Leak",
+   "spawns": [
+    {
+     "enemy": "corrupt",
+     "count": 5,
+     "interval": 1.4,
+     "delay": 0
+    },
+    {
+     "enemy": "dataBug",
+     "count": 3,
+     "interval": 1.2,
+     "delay": 6
+    },
+    {
+     "enemy": "packet",
+     "count": 6,
+     "interval": 0.9,
+     "delay": 14
+    }
+   ]
+  },
+  {
+   "name": "Content Pipeline",
+   "spawns": [
+    {
+     "enemy": "mashDroneCameraman",
+     "count": 3,
+     "interval": 1.9,
+     "delay": 0
+    },
+    {
+     "enemy": "dataBug",
+     "count": 6,
+     "interval": 1.2,
+     "delay": 4
+    },
+    {
+     "enemy": "packet",
+     "count": 10,
+     "interval": 0.8,
+     "delay": 13
+    }
+   ]
+  },
+  {
+   "name": "Load Bearing",
+   "spawns": [
+    {
+     "enemy": "serverWalker",
+     "count": 2,
+     "interval": 3.0,
+     "delay": 0
+    },
+    {
+     "enemy": "corrupt",
+     "count": 7,
+     "interval": 1.3,
+     "delay": 5
+    },
+    {
+     "enemy": "mashDroneCameraman",
+     "count": 4,
+     "interval": 1.6,
+     "delay": 16
+    }
+   ]
+  },
+  {
+   "name": "Refactor",
+   "spawns": [
+    {
+     "enemy": "mashBullTourist",
+     "count": 4,
+     "interval": 2.6,
+     "delay": 0
+    },
+    {
+     "enemy": "packet",
+     "count": 14,
+     "interval": 0.7,
+     "delay": 4
+    },
+    {
+     "enemy": "dataBug",
+     "count": 7,
+     "interval": 1.2,
+     "delay": 14
+    }
+   ]
+  },
+  {
+   "name": "Hotfix",
+   "spawns": [
+    {
+     "enemy": "corrupt",
+     "count": 10,
+     "interval": 1.2,
+     "delay": 0
+    },
+    {
+     "enemy": "serverWalker",
+     "count": 3,
+     "interval": 2.8,
+     "delay": 6
+    },
+    {
+     "enemy": "mashDroneCameraman",
+     "count": 6,
+     "interval": 1.4,
+     "delay": 18
+    }
+   ]
+  },
+  {
+   "name": "Fork Bomb",
+   "spawns": [
+    {
+     "enemy": "mashRoosterPhoenix",
+     "count": 4,
+     "interval": 2.8,
+     "delay": 0
+    },
+    {
+     "enemy": "packet",
+     "count": 16,
+     "interval": 0.6,
+     "delay": 3
+    },
+    {
+     "enemy": "mashBullTourist",
+     "count": 4,
+     "interval": 2.4,
+     "delay": 16
+    },
+    {
+     "enemy": "dataBug",
+     "count": 8,
+     "interval": 1.0,
+     "delay": 28
+    }
+   ]
+  },
+  {
+   "name": "Ship It",
+   "spawns": [
+    {
+     "enemy": "mashUnicornCar",
+     "count": 5,
+     "interval": 2.2,
+     "delay": 0
+    },
+    {
+     "enemy": "corrupt",
+     "count": 11,
+     "interval": 1.1,
+     "delay": 6
+    },
+    {
+     "enemy": "serverWalker",
+     "count": 3,
+     "interval": 2.8,
+     "delay": 18
+    },
+    {
+     "enemy": "packet",
+     "count": 12,
+     "interval": 0.7,
+     "delay": 28
+    }
+   ]
+  },
+  {
+   "name": "Technical Debt",
+   "spawns": [
+    {
+     "enemy": "mashBullTourist",
+     "count": 6,
+     "interval": 2.2,
+     "delay": 0
+    },
+    {
+     "enemy": "mashRoosterPhoenix",
+     "count": 5,
+     "interval": 2.6,
+     "delay": 8
+    },
+    {
+     "enemy": "dataBug",
+     "count": 10,
+     "interval": 1.0,
+     "delay": 18
+    },
+    {
+     "enemy": "packet",
+     "count": 16,
+     "interval": 0.6,
+     "delay": 30
+    }
+   ]
+  },
+  {
+   "name": "Scope Creep",
+   "spawns": [
+    {
+     "enemy": "mashUnicornCar",
+     "count": 6,
+     "interval": 2.0,
+     "delay": 0
+    },
+    {
+     "enemy": "serverWalker",
+     "count": 4,
+     "interval": 2.7,
+     "delay": 6
+    },
+    {
+     "enemy": "corrupt",
+     "count": 12,
+     "interval": 1.1,
+     "delay": 16
+    },
+    {
+     "enemy": "mashDroneCameraman",
+     "count": 4,
+     "interval": 1.5,
+     "delay": 30
+    }
+   ]
+  },
+  {
+   "name": "RECALL: THE POLITICIAN",
+   "spawns": [
+    {
+     "enemy": "callbackPolitician",
+     "count": 1,
+     "interval": 2.0,
+     "delay": 0
+    },
+    {
+     "enemy": "corrupt",
+     "count": 12,
+     "interval": 1.1,
+     "delay": 8
+    },
+    {
+     "enemy": "dataBug",
+     "count": 10,
+     "interval": 1.0,
+     "delay": 20
+    },
+    {
+     "enemy": "packet",
+     "count": 16,
+     "interval": 0.6,
+     "delay": 32
+    }
+   ]
+  },
+  {
+   "name": "RECALL: THE DEVIL",
+   "spawns": [
+    {
+     "enemy": "callbackDevil",
+     "count": 1,
+     "interval": 2.0,
+     "delay": 0
+    },
+    {
+     "enemy": "serverWalker",
+     "count": 4,
+     "interval": 2.7,
+     "delay": 8
+    },
+    {
+     "enemy": "corrupt",
+     "count": 12,
+     "interval": 1.1,
+     "delay": 20
+    },
+    {
+     "enemy": "mashDroneCameraman",
+     "count": 6,
+     "interval": 1.4,
+     "delay": 32
+    }
+   ]
+  },
+  {
+   "name": "RECALL: THE REAPER",
+   "spawns": [
+    {
+     "enemy": "callbackUnicorn",
+     "count": 1,
+     "interval": 2.0,
+     "delay": 0
+    },
+    {
+     "enemy": "mashBullTourist",
+     "count": 6,
+     "interval": 2.2,
+     "delay": 8
+    },
+    {
+     "enemy": "packet",
+     "count": 20,
+     "interval": 0.55,
+     "delay": 20
+    },
+    {
+     "enemy": "dataBug",
+     "count": 13,
+     "interval": 0.95,
+     "delay": 32
+    }
+   ]
+  },
+  {
+   "name": "RECALL: THE LICH KING",
+   "spawns": [
+    {
+     "enemy": "callbackLich",
+     "count": 1,
+     "interval": 2.0,
+     "delay": 0
+    },
+    {
+     "enemy": "serverWalker",
+     "count": 5,
+     "interval": 2.6,
+     "delay": 8
+    },
+    {
+     "enemy": "mashRoosterPhoenix",
+     "count": 5,
+     "interval": 2.6,
+     "delay": 22
+    },
+    {
+     "enemy": "packet",
+     "count": 14,
+     "interval": 0.65,
+     "delay": 34
+    }
+   ]
+  },
+  {
+   "name": "Everything, All At Once",
+   "spawns": [
+    {
+     "enemy": "mashUnicornCar",
+     "count": 8,
+     "interval": 1.8,
+     "delay": 0
+    },
+    {
+     "enemy": "mashBullTourist",
+     "count": 7,
+     "interval": 2.1,
+     "delay": 8
+    },
+    {
+     "enemy": "mashRoosterPhoenix",
+     "count": 4,
+     "interval": 2.6,
+     "delay": 18
+    },
+    {
+     "enemy": "corrupt",
+     "count": 14,
+     "interval": 1.0,
+     "delay": 28
+    },
+    {
+     "enemy": "packet",
+     "count": 20,
+     "interval": 0.5,
+     "delay": 40
+    }
+   ]
+  },
+  {
+   "name": "VLAUDE",
+   "boss": "vlaude",
+   "spawns": [
+    {
+     "enemy": "vlaude",
+     "count": 1,
+     "interval": 2.0,
+     "delay": 0
+    },
+    {
+     "enemy": "corrupt",
+     "count": 9,
+     "interval": 1.2,
+     "delay": 10
+    },
+    {
+     "enemy": "dataBug",
+     "count": 8,
+     "interval": 1.1,
+     "delay": 24
+    },
+    {
+     "enemy": "packet",
+     "count": 12,
+     "interval": 0.7,
+     "delay": 36
+    }
+   ]
+  }
+ ],
+ "_curve": "HEALTH ON THE BOARD PER WAVE, which is the curve tests/content.test.ts measures rather than the body count: 576, 864, 1245, 1727, 2175, 3045, 3348, 4480, 5352, 6439, 6742, 7500, 7552, 8630, 9200, 10258, 11430, and then the boss wave's 3559 escort. EVERY STEP IS POSITIVE AND NONE IS OVER 55%, which are the two halves of that rule; the boss wave is exempt from the first, which is what a boss is for.\nTHE FOUR CALLBACK WAVES ARE THE AWKWARD ONES and they are why the callbacks rise in health. A wave that is one mini boss plus an escort has to be heavier than the forty-body wave before it, so either the callbacks get fatter in the order they arrive or the escorts do -- and an escort large enough to carry the curve past a 2900 hp Politician is fifty bodies walking round a fight the player is supposed to be watching. Level 9 answered the same question the same way: 650, 3100, 3400, 8100 across its four. The first draft here had the four flat and dipped 43% at wave 13."
+}
