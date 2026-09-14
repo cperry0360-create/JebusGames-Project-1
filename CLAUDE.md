@@ -325,20 +325,26 @@ governs scope is hard rule 5 — build what the task asks for and nothing furthe
 the ten-level story scope in `levels.json`, which is final and whose `_plannedLevels`
 note explains what raising it costs.
 
-**All ten levels are built. The live edge is now inside level 10, not ahead of it.**
-Level 10 "AI Override: Part 2" shipped on 2026-09-14 — board, cast, waves, and a
-Vlaude who spawns from the west gate on wave 18 and walks the lane. What is NOT built
-is the scene side of that fight, which is most of what makes him Vlaude: he does not
-sit at the crystal core, does not swap forms, does not float, and not one of his six
-manipulations fires. The rules for all of them exist and are tested in
-`src/systems/Vlaude.ts`; nothing in `GameScene` plays them yet.
-`reports/2026-09-14-level-10.md` lists the eight pieces in build order.
+**All ten levels are built AND the Vlaude fight is built.** Level 10 "AI Override:
+Part 2" shipped on 2026-09-14 with board, cast, waves and rules; the scene side of the
+fight landed the same day — the berth at the crystal core, the form swap at wave 7,
+the float at wave 13, the telegraph and schedule, all six manipulations, the recall
+portal, the defeat, the white wash, the outro comics, the credits roll and the title
+card. `reports/2026-09-14-level-10-the-fight.md` is the write-up, and
+`tools/harness/run.sh vlaude` is the only thing in this repository that can see any of
+it — every claim about it came from a rendered frame.
 
-**So level 10's 40% is not a win rate comparable to levels 1 to 9.** It was soaked
-with Vlaude walking and no power firing, which makes it a survivability check on the
-phase 3 walk. It needs re-deriving the day the fight lands, and the soak runner
-cannot express three of the six powers at all — `enemies.json`'s `_health` note and
-the report both say which three and why.
+**Vlaude is 26,000 hp, re-derived once the powers actually fired.** The old 36,000 was
+measured with none of them firing and the two numbers are not comparable; at 36,000
+with the powers live the same pass reads 12.5%.
+
+**And 40.6% is still not quite a win rate comparable to levels 1 to 9.** The soak
+fires THREE of the six powers through the same `systems/Vlaude.ts` functions the scene
+calls, and provably cannot express the other three — build lock, generate wall,
+generate weapon, because `BuildSystem` has no lock state, the sim's hero is a fixed
+point and there is no tower health. So the number is measured against a board easier
+than the one the player gets. `enemies.json`'s `_health` note and `SOAK-REPORT.md`
+both say so in those words.
 
 The asset-sweep standing fact above is now **discharged for every level**: `main`
 references level 10's art itself. The two route-gate props in `art-source/level10/`

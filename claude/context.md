@@ -326,8 +326,8 @@ wired into the game at all, and it crosses lanes. Pad 2 is dead by construction:
 Levels **7 ("The Highway", 22 pads, 41%)**, **8 ("The Optimization", 19 pads, CEO
 boss, 42% after the 13 September re-topology — it published at 41% before it)**,
 **9 ("AI Override: Part 1", 15 pads, four mini bosses rather than one, 40%)** and
-**10 ("AI Override: Part 2", 12 pads, Vlaude at 36,000 hp, 40% — but see the caveat
-in the status section, because that number is not the same kind of number)** followed
+**10 ("AI Override: Part 2", 12 pads, Vlaude at 26,000 hp, 41% — re-derived on
+2026-09-14 once the fight was built; see the caveat in the status section)** followed
 on 12–14 September. See `reports/2026-09-11-level-6.md`,
 `2026-09-12-level-6-fixes.md`, `2026-09-13-level-7.md`, `2026-09-12-level-8.md`,
 `2026-09-13-level-8-retopology.md` and `2026-09-13-level-9.md`; `SOAK-REPORT.md` is
@@ -363,15 +363,16 @@ Crossroads, `level6` Two Roads, `level7` The Highway, `level8` The Optimization,
 wave table and soaked boss. `plannedLevels` is **10**, so the road shows ten built
 rows and **no COMING SOON** — the first time that has been true.
 
-**Level 10 shipped on 2026-09-14** with the merge of
-`claude/level-10-assets-2kqch4`, and the thing to know about it is what is NOT in it.
-The board, the twelve pads, the cast, the waves and the stake are all real, and
-**Vlaude himself is a 36,000 hp walker**: he spawns from the west gate on wave 18 and
-walks the lane like an ordinary boss. The scene side of the fight does not exist — he
-does not sit at the crystal core, does not swap forms, does not float, and **none of
-his six manipulations fires**. The rules for all six are written and executed by tests
-in `src/systems/Vlaude.ts`; `GameScene` does not play them. Eight pieces, in build
-order, in `reports/2026-09-14-level-10.md`.
+**Level 10 is complete as of 2026-09-14, fight included.** The board, the twelve
+pads, the cast, the waves and the stake shipped with the level; the scene side of the
+fight — the berth at the crystal core, the form swap, the float, the schedule, all six
+manipulations, the recall portal, the defeat, the white wash, the outro comics, the
+credits and the title card — landed the same day on
+`claude/vlaude-fight-scene-jrb368`. **Vlaude is 26,000 hp**, re-derived by soak once
+the powers actually fired; the old 36,000 was measured with none of them firing and is
+not comparable. `reports/2026-09-14-level-10-the-fight.md` is the write-up, and
+`tools/harness/run.sh vlaude` is the only thing in the repository that can see any of
+it — no test in `tests/` imports Phaser.
 
 So **story mode is content-complete in rows and not in content**, and the next brief
 should say which of those two it means.
@@ -424,18 +425,17 @@ names them as deliberately unused.
 items instead. **Renumber again if you close one, and do not cite these by number
 from another document.**
 
-**Highest value: the level 10 Vlaude fight, which is rules without a scene.**
-`src/systems/Vlaude.ts` decides the phase clock, targetability, the duplication depth
-guard, build locking, the wall, the haste slot, the defeat frames, the exit stake and
-the four callbacks — all of it executed by 23 tests in `tests/level10.test.ts`. None
-of it is played. Today Vlaude spawns from the west gate on wave 18 and walks the lane
-like an ordinary boss: no crystal core, no form swap, no float, no manipulation.
-`reports/2026-09-14-level-10.md` lists the eight pieces in the order they should be
-built. **Two consequences that are easy to miss:** the level's 40% is a
-survivability figure for that walk and has to be re-derived when the fight lands, and
-the soak runner provably cannot express three of the six powers (build lock, generate
-wall, generate weapon — no lock state, a fixed-point hero, no tower health), so the
-re-derivation will need more than a re-run.
+**THE LEVEL 10 VLAUDE FIGHT IS BUILT. This item is closed.** All eight pieces of
+`reports/2026-09-14-level-10.md`'s build order landed on 2026-09-14 and every one of
+them is verified from a rendered frame by `tools/harness/run.sh vlaude` (88
+assertions) and `run.sh titlecard` (20). Vlaude's health was re-derived to **26,000**.
+**What is left of it is the soak's half:** the runner fires three of the six powers
+and provably cannot express the other three (build lock, generate wall, generate
+weapon — no lock state in `BuildSystem`, a fixed-point hero, no tower health), so
+40.6% is measured against a board EASIER than the one the player gets. Teaching it
+those three is a change to the SIMULATOR, not to the level, and it is the only way
+the other three powers ever reach a win rate. See
+`reports/2026-09-14-level-10-the-fight.md`.
 
 **THE ABILITY MEDALLIONS ARE NOT BROKEN. Do not re-open this.** It was item 1 here
 and it is deleted, on Cory's word that the medallions and the Nuke button work in
