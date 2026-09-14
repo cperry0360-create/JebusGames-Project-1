@@ -308,7 +308,7 @@ misleading text in the repository. Measured against `DESIGN.md`'s own four phase
 
 - **Phase 1 — done.** Its exit condition was "stop here and play it", and it was
   cleared long ago.
-- **Phase 2 — mostly done.** All five family heroes with Last Stand. Nine built
+- **Phase 2 — mostly done.** All five family heroes with Last Stand. Ten built
   levels, each with its own map, wave table and soak-tuned boss. Save/load in
   `src/systems/Save.ts`. Short of the brief on breadth: **7 towers** against 16,
   **7 abilities** against 12, and no passives tree. **Banner tree and Boons are NOT
@@ -325,12 +325,25 @@ governs scope is hard rule 5 — build what the task asks for and nothing furthe
 the ten-level story scope in `levels.json`, which is final and whose `_plannedLevels`
 note explains what raising it costs.
 
-**Level 10 is the live edge.** Its art is uploaded to `art-source/` and it is not
-wired up. Level 9 shipped on 2026-09-13 and is a built level like any other. Read
-the asset-sweep standing fact above before deleting any level 10 art for being
-unreferenced — and note that the sweep hazard it describes is exactly what this
-paragraph used to invite, because it named level 9's art as unwired while the branch
-that used it was in flight.
+**All ten levels are built. The live edge is now inside level 10, not ahead of it.**
+Level 10 "AI Override: Part 2" shipped on 2026-09-14 — board, cast, waves, and a
+Vlaude who spawns from the west gate on wave 18 and walks the lane. What is NOT built
+is the scene side of that fight, which is most of what makes him Vlaude: he does not
+sit at the crystal core, does not swap forms, does not float, and not one of his six
+manipulations fires. The rules for all of them exist and are tested in
+`src/systems/Vlaude.ts`; nothing in `GameScene` plays them yet.
+`reports/2026-09-14-level-10.md` lists the eight pieces in build order.
+
+**So level 10's 40% is not a win rate comparable to levels 1 to 9.** It was soaked
+with Vlaude walking and no power firing, which makes it a survivability check on the
+phase 3 walk. It needs re-deriving the day the fight lands, and the soak runner
+cannot express three of the six powers at all — `enemies.json`'s `_health` note and
+the report both say which three and why.
+
+The asset-sweep standing fact above is now **discharged for every level**: `main`
+references level 10's art itself. The two route-gate props in `art-source/level10/`
+are deliberately unconverted and deliberately unused — route switching was cut from
+the design — so leave them alone rather than reading them as a loose end.
 
 `claude/context.md` carries the working state — open items, branches, per-level win
 rates — and is reconciled against the repository rather than written from memory.

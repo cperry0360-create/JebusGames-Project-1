@@ -132,18 +132,26 @@ from the source so neither can rot the way the old one did.
 | scenario | exit | what that means |
 |---|---|---|
 | `muzzle` `rockets` `retreat` `regressions` `meteor` | **7** | declared, asserts nothing |
-| `ui` | **5** | asserts, and is RED — see below |
-| `buildall` | **5** | asserts, and is RED — see below |
+| `ui` | **0** | asserts and passes — **was 5/RED, fixed since; see below** |
+| `buildall` | **0** | asserts and passes — **was 5/RED, fixed since; see below** |
 | `typegame` | **0** | asserts and passes |
 | `poor` | **6** | deleted; the scenario does not exist |
 
-`ui` and `buildall` are the two worth knowing about, because a report that lists them
-as "not asserting" hides a live failure. **`ui` fails on `A TAP ON THE HERO DOES NOT
-SELECT HIM`** — its own note says `selectHero()` works when called directly and
-`hero.hits()` is true at the tapped point, so the pointer ROUTE is broken rather than
-the selection. **`buildall` fails on `only 6 of 7 pads could be built on`**: pad 3 at
-world 578,612 reports `ringOnTap=false` while the other six are fine. Both are
-pre-existing and neither is diagnosed here.
+**`ui` and `buildall` are GREEN as of 2026-09-14 and this table used to say they were
+red.** Both were re-run at 844x390 on `main` at `6100c78` rather than taken from a
+report: `ui` exits 0 with `RESULT the pad beats the ground, and the hero moves only
+when he has been picked up`, `buildall` exits 0 with `RESULT every one of the 7 pads
+took a tower at 844x390`, and both report `assertFails: 0`. The two failures this
+paragraph used to describe — `A TAP ON THE HERO DOES NOT SELECT HIM`, and `only 6 of 7
+pads could be built on` with pad 3 at world 578,612 reporting `ringOnTap=false` — do
+not reproduce. That closes the open item
+`reports/2026-09-14-merge-level-9.md` left carrying them as red and undiagnosed.
+
+**Their exit 0 is worth exactly one caveat**: both report `assertionsExpected: false`,
+meaning neither is in `USES_EXPECT`, so nothing forces them to have reached a check.
+Their green rests on the `RESULT` line and the `assertFails` counter, which is weaker
+than `typegame`'s guarantee (`assertionsExpected: true`) and stronger than a bare
+exit 0. Promoting them into `USES_EXPECT` is not done and is not asked for.
 
 **And there is a sixth that asserts nothing and is NOT declared: `abilitybar`.** It
 contains no `expect()`, no fault counter and no `RESULT` line, so it exits 0 whatever
@@ -154,7 +162,7 @@ items.
 **A green run still is not evidence about anything rendered**, for a different and
 larger reason that survives all of the above: **no test in `tests/` imports Phaser.**
 About 25 mention it, and every mention reads a source file as text and matches a
-regex. So "1099 passing" says nothing about a sprite's size, a camera transform, a
+regex. So "1122 passing" says nothing about a sprite's size, a camera transform, a
 texture that failed to load or a shader — the harness is the only thing that looks at
 a frame. See CLAUDE.md, "The test suite cannot see Phaser at all".
 
@@ -209,7 +217,7 @@ scalar may need revisiting.
 
 ## THE BOARD-SIZE PROBLEM (found 2026-09-07, convention settled since)
 
-**Build pads per level: 7, 15, 15, 14, 14, 18, 22, 19, 15** for levels 1 to 9. No
+**Build pads per level: 7, 15, 15, 14, 14, 18, 22, 19, 15, 12** for levels 1 to 10. No
 documented convention when this was written. Boss HP only means something relative to
 how much DPS a board can hold, so **level 1's and level 2's boss numbers were never on
 the same scale**, and cross-level difficulty reasoning done before this was found is
@@ -263,8 +271,12 @@ wave-table job, not a boss-health one, and nothing has attempted it.
 **All the win rates in this section are the 2026-09-07 instrument and none of them
 reproduce today.** The soak has been reworked several times since. The current
 published Cory-pinned figures at 480 seeds on normal are **level 1 89%, level 2 53%,
-level 3 88%, level 4 62%, level 5 45%, level 6 44%, level 7 41%, level 8 41%**.
-`SOAK-REPORT.md` is the living record; read it rather than any number in this file.
+level 3 88%, level 4 62%, level 5 45%, level 6 44%, level 7 41%, level 8 42%,
+level 9 40%**, and **level 10 40% with a caveat that makes it a different kind of
+number** — it was soaked with Vlaude walking the lane and not one of his powers
+firing, so it is a survivability check on the phase 3 walk rather than a win rate
+comparable to the nine above it. `SOAK-REPORT.md` is the living record; read it
+rather than any number in this file.
 
 ## Level 4 boss: settled
 
@@ -312,8 +324,10 @@ behind four levels cleared, and a Rooster boss at **7,500 HP** soaking at **210/
 wired into the game at all, and it crosses lanes. Pad 2 is dead by construction: it is
 248.8 px from any lane against a 112 range, it is painted on the plate, and it stays.
 Levels **7 ("The Highway", 22 pads, 41%)**, **8 ("The Optimization", 19 pads, CEO
-boss, 42% after the 13 September re-topology — it published at 41% before it)** and
-**9 ("AI Override: Part 1", 15 pads, four mini bosses rather than one, 40%)** followed
+boss, 42% after the 13 September re-topology — it published at 41% before it)**,
+**9 ("AI Override: Part 1", 15 pads, four mini bosses rather than one, 40%)** and
+**10 ("AI Override: Part 2", 12 pads, Vlaude at 36,000 hp, 40% — but see the caveat
+in the status section, because that number is not the same kind of number)** followed
 on 12–14 September. See `reports/2026-09-11-level-6.md`,
 `2026-09-12-level-6-fixes.md`, `2026-09-13-level-7.md`, `2026-09-12-level-8.md`,
 `2026-09-13-level-8-retopology.md` and `2026-09-13-level-9.md`; `SOAK-REPORT.md` is
@@ -323,35 +337,49 @@ the figure of record for all of them.
 
 A hero survivors-like that drops tower placement entirely: drag to move, heroes locked in
 ultimate form auto-attacking, swarms on an open bounded arena. Hidden until story level 10
-is cleared, then it appears as its own entry point, which is the joke. A comic library over
+is cleared, then it appears as its own entry point, which is the joke. **That unlock
+condition became reachable on 2026-09-14** — level 10 exists and is winnable — so this
+is no longer gated behind content that does not exist. Nothing of Chapter 2 is built,
+and the 45fps-with-200-enemies proof below is still the thing to do first. A comic library over
 the comic art already in the game unlocks alongside it. Full design in
 `claude/chapter-2-design.md`, art render rules in `claude/chapter-2-art-rules.md`. Highest
 risk unknown: holding 45fps with 200 concurrent enemies on a phone. Prove that before
 building anything on top of it.
 
-## Status as of 2026-09-13 evening
+## Status as of 2026-09-14 evening
 
-**The last commit that changed the GAME is `eb2bf4d`**, the level 8 soft-lock merge,
-and that is the durable number — `main`'s tip moves with every documentation commit
-and had gone `d9686c8` → `b23e311` → `699259c` in the hours around this note being
-written. Checks on each were green at JOB level, not merely at run level: `changes`,
-`test` and `typecheck` all success, `deploy` **skipped**, because a markdown-only push
-is the `changes` job working as designed. Do not read a skipped deploy as a failure,
-and do not trust a tip hash written in this file — check it.
+**The last commit that changed the GAME is `6100c78`**, the level 10 merge, and that
+is the durable number — `main`'s tip moves with every documentation commit. Do not
+trust a tip hash written in this file; check it. Read Checks at JOB level, not merely
+at run level: a markdown-only push to `main` is green with `deploy` **skipped**, which
+is the `changes` job working as designed and not a failed deploy. The level 10 merge
+is the other case, and it is worth knowing what it looks like: it touched `src/` and
+`public/`, so `deploy / build` and `deploy / deploy` both **ran**.
 
-**Nine levels are built and playable**, not four: `level1` Courjahan Village,
-`level2` Head Office, `level3` Sports Complex at Dusk, `level4` The Conundrum,
-`level5` The Crossroads, `level6` Two Roads, `level7` The Highway, `level8` The
-Optimization, `level9` AI Override: Part 1. Each has its own map, wave table and
-soaked boss. `plannedLevels` is **10**, so the road shows nine built rows and one
-COMING SOON. **Level 9 shipped on 2026-09-14** with the merge of
-`claude/level-9-geometry-uac8ax`; level 10's art is uploaded to `art-source/` and
-level 10 is not wired up.
+**All ten levels are built and playable**: `level1` Courjahan Village, `level2` Head
+Office, `level3` Sports Complex at Dusk, `level4` The Conundrum, `level5` The
+Crossroads, `level6` Two Roads, `level7` The Highway, `level8` The Optimization,
+`level9` AI Override: Part 1, `level10` AI Override: Part 2. Each has its own map,
+wave table and soaked boss. `plannedLevels` is **10**, so the road shows ten built
+rows and **no COMING SOON** — the first time that has been true.
 
-Health: **1099 tests passing, 0 failing** (`npm test`, in this sandbox, no
-`node_modules` needed). `sh tools/tsdiff.sh d9686c8` reports **213 distinct errors on
+**Level 10 shipped on 2026-09-14** with the merge of
+`claude/level-10-assets-2kqch4`, and the thing to know about it is what is NOT in it.
+The board, the twelve pads, the cast, the waves and the stake are all real, and
+**Vlaude himself is a 36,000 hp walker**: he spawns from the west gate on wave 18 and
+walks the lane like an ordinary boss. The scene side of the fight does not exist — he
+does not sit at the crystal core, does not swap forms, does not float, and **none of
+his six manipulations fires**. The rules for all six are written and executed by tests
+in `src/systems/Vlaude.ts`; `GameScene` does not play them. Eight pieces, in build
+order, in `reports/2026-09-14-level-10.md`.
+
+So **story mode is content-complete in rows and not in content**, and the next brief
+should say which of those two it means.
+
+Health: **1122 tests passing, 0 failing** (`npm test`, in this sandbox, no
+`node_modules` needed). `sh tools/tsdiff.sh 0496f2d` reports **213 distinct errors on
 both sides and nothing introduced** — all 213 are the known `phaser` resolve cascade,
-and CI's real `npx tsc --noEmit` is green. Working tree clean.
+and CI's real `npx tsc --noEmit` is green on `main` at `6100c78`. Working tree clean.
 
 **Four of the six branches this section used to list are gone**, deleted since. Of the
 five remote branches other than `main`:
@@ -360,18 +388,32 @@ five remote branches other than `main`:
 |---|---|
 | `claude/level-8-soft-lock-9bmho0` | **fully contained in `main`** (merged as PR #8); safe to delete |
 | `claude/level-9-geometry-uac8ax` | **merged to `main` 2026-09-14, fast-forward; fully contained in `main`, safe to delete** |
-| `claude/deployment-status-review-a661d6` | 7 ahead, 102 behind; still unmerged and still uninspected, from 05 September |
-| `claude/github-pages-deploy-trigger-x8b598` | 294 ahead, 102 behind; same |
-| `claude/phaser-4-migration-spike-hage91` | 144 ahead, 102 behind; salvaged onto `main`, and GitHub answered 403 twice to deleting the ref |
+| `claude/level-10-assets-2kqch4` | **merged to `main` 2026-09-14, fast-forward; fully contained in `main`, safe to delete** |
+| `claude/deployment-status-review-a661d6` | **326 ahead, 128 behind**; still unmerged and still uninspected, from 05 September |
+| `claude/github-pages-deploy-trigger-x8b598` | **294 ahead, 128 behind**; same |
+| `claude/phaser-4-migration-spike-hage91` | **471 ahead, 128 behind**; salvaged onto `main`, and GitHub answered 403 twice to deleting the ref |
 
 `level2-volcanic-map-recreation`, `main-branch-ci-checks`, `scatter-props-tree-line`
 and `soak/overnight` no longer exist. (The old entry said "five" and then listed six.)
 
-`claude/level-9-geometry-uac8ax` **was** the one that mattered and it has landed, so
-the asset-sweep hazard it carried is discharged for level 9: `main` now references the
-level 9 art itself. The standing fact still applies to **level 10** — its art sits in
-`art-source/` with nothing on `main` using it, so check every open branch's `art.json`
-before deleting any of it for being unreferenced.
+**The three ahead/behind figures above were re-measured on 2026-09-14 and two of them
+had been wrong for some time** — `a661d6` was recorded as 7 ahead and is 326;
+`hage91` was recorded as 144 and is 471. The inflation is not work: these branches
+carry `main` history that the current `main` no longer descends from, which is also
+why none of them is fast-forwardable. Re-measure rather than quoting this table, with
+`git rev-list --count main..origin/claude/<branch>` and the reverse.
+
+**The asset-sweep hazard is now discharged for every level.** It was live for level 9
+until `uac8ax` landed and live for level 10 until `2kqch4` landed; `main` references
+both levels' art itself now, and none of the five remaining branches is holding art
+that `main` cannot see. The standing fact does not retire — it applies to the next
+upload — but there is no currently-loaded gun.
+
+**Two files are unreferenced ON PURPOSE**, and a sweep should leave them alone rather
+than treat them as the hazard's next instance: `art-source/level10/prop_route_gate_open.png`
+and `prop_route_gate_closed.png`. Route switching was cut from the design. They were
+never converted and never registered, and `reports/2026-09-14-level-10-assets.md`
+names them as deliberately unused.
 
 ## Open items
 
@@ -382,8 +424,18 @@ before deleting any of it for being unreferenced.
 items instead. **Renumber again if you close one, and do not cite these by number
 from another document.**
 
-**Highest value:** nothing on this list. The old highest-value item — the fake harness
-scenarios — is closed; see THE TEST SUITE LIES above.
+**Highest value: the level 10 Vlaude fight, which is rules without a scene.**
+`src/systems/Vlaude.ts` decides the phase clock, targetability, the duplication depth
+guard, build locking, the wall, the haste slot, the defeat frames, the exit stake and
+the four callbacks — all of it executed by 23 tests in `tests/level10.test.ts`. None
+of it is played. Today Vlaude spawns from the west gate on wave 18 and walks the lane
+like an ordinary boss: no crystal core, no form swap, no float, no manipulation.
+`reports/2026-09-14-level-10.md` lists the eight pieces in the order they should be
+built. **Two consequences that are easy to miss:** the level's 40% is a
+survivability figure for that walk and has to be re-derived when the fight lands, and
+the soak runner provably cannot express three of the six powers (build lock, generate
+wall, generate weapon — no lock state, a fixed-point hero, no tower health), so the
+re-derivation will need more than a re-run.
 
 **THE ABILITY MEDALLIONS ARE NOT BROKEN. Do not re-open this.** It was item 1 here
 and it is deleted, on Cory's word that the medallions and the Nuke button work in
