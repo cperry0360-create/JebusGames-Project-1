@@ -13,14 +13,18 @@ Full design in `DESIGN.md`. Read it before implementing any gameplay feature.
 - **Phaser 3** for rendering
 - **Vite** for build
 - **TypeScript**
-- **GitHub Pages** for hosting, auto-deploy on push to `main`
+- **GitHub Pages** for hosting. Deploy is a job inside `checks.yml`, gated on
+  `test`, `typecheck` and a `changes` job, so a push to `main` republishes only if
+  it touched something that is not a `.md` or under `reports/`. **A green run on
+  `main` with `deploy` skipped is a documentation commit behaving correctly, not a
+  failed deploy.** Read the job list, not the run's conclusion.
 
 ## Hard rules
 
 **1. All balance numbers live in JSON under `/src/data/`.**
 Tower stats, enemy stats, wave composition, ability values, hero stats, Last Stand thresholds, Holdings costs, node costs. Never hardcode a number that might need tuning. If you find yourself typing a number into a `.ts` file that affects gameplay, it belongs in JSON instead.
 
-**2. `/reference/prototype.html` is reference, not a starting point.**
+**2. `/reference/courjahan-defense.html` is reference, not a starting point.**
 It is an old single-file HTML prototype. Read it to understand how the explosion and two-fighter abilities behaved, and what the wave pacing and tuning felt like. Do not port its code. Do not copy its architecture. Build fresh in the stack above.
 
 **3. Rendering is a flat square grid with 3/4 perspective art.**
@@ -53,11 +57,13 @@ Propose the approach first and wait for confirmation before rewriting anything t
     source height >= world height x maxZoom x devicePixelRatio
 
 This rule used to say "roughly 2x the render size, not 5x", and it was
-measured in the wrong unit. Cory renders at 75.8 world px, so the old rule
-asked for a 152px source — but the canvas draws at device resolution now, and
-at maxZoom 2.37 on a devicePixelRatio-3 phone he occupies 539 physical pixels.
+measured in the wrong unit. Cory renders at 78.0 world px, so the old rule
+asked for a 156px source — but the canvas draws at device resolution now, and
+at maxZoom 2.37 on a devicePixelRatio-3 phone he occupies 555 physical pixels.
 The rule was under-provisioning a retina screen by 3x, and the art that broke
-it (470px, 6.2x the render size) is the art that is very nearly right.
+it (470px, 6.0x the render size) is the art that is very nearly right.
+(This example said 75.8 world px and 539 physical until 2026-09-13; his
+`displayHeight` is 78.0. Which is the point of the next paragraph: recompute.)
 
 Both failure directions are real, so aim at the formula rather than above it:
 
@@ -65,8 +71,10 @@ Both failure directions are real, so aim at the formula rather than above it:
   what the map plate does today at 1672px for a 1280-world-px surface.
 - **Too large** and the GPU minifies heavily. A 4px outline sampled down past
   about 2x becomes a grey smear, which is what happened to the whole cast the
-  first time round, and there are no mipmaps to soften it (WebGL1, and 67 of
-  109 textures are non-power-of-two — see RENDER-QUALITY.md).
+  first time round, and there are no mipmaps to soften it (WebGL1, and most
+  textures are non-power-of-two — RENDER-QUALITY.md counted 67 of 109, and
+  `art.json` declares 186 image paths now, so the ratio wants re-deriving
+  before it is quoted again; the conclusion does not change).
 
 With today's numbers — maxZoom 2.37, dpr capped at 3 by `Resolution.ts` — the
 multiplier on a sprite's world height is about **7x**, and the floor of the
@@ -293,5 +301,34 @@ last one landed.
 
 ## Current phase
 
-**Phase 1 — prove the loop is fun.**
-Placeholder art from Kenney's free CC0 tower defense pack. One map, one path, Cory only. No Banner tree, no boons, no Holdings, no siege enemies until Phase 1 is playable and confirmed fun.
+**Phase 1 is finished and the repository is well past it.** This section described
+Kenney placeholder art, one map, one path and Cory alone until 2026-09-13, which was
+several weeks out of date and auto-loads into every session — so it was the most
+misleading text in the repository. Measured against `DESIGN.md`'s own four phases:
+
+- **Phase 1 — done.** Its exit condition was "stop here and play it", and it was
+  cleared long ago.
+- **Phase 2 — mostly done.** All five family heroes with Last Stand. Eight built
+  levels, each with its own map, wave table and soak-tuned boss. Save/load in
+  `src/systems/Save.ts`. Short of the brief on breadth: **7 towers** against 16,
+  **7 abilities** against 12, and no passives tree. **Banner tree and Boons are NOT
+  built** — points were deliberately taken out of story mode, which pays in cakes
+  instead, and the module is kept whole for run mode with a test guarding it. Boons
+  do not exist in `src/` or `src/data/` at all.
+- **Phase 3 — largely done, out of order.** The art pass happened early. Kenney is
+  down to **three projectile tiles and the title scenery**; everything else the game
+  draws is original. Audio, damage numbers, shake and hit pause are in.
+- **Phase 4 — not started.** No classes. Still Phase 4. Not before.
+
+**So the phase gate is no longer the thing to check before building.** What still
+governs scope is hard rule 5 — build what the task asks for and nothing further — and
+the ten-level story scope in `levels.json`, which is final and whose `_plannedLevels`
+note explains what raising it costs.
+
+**Levels 9 and 10 are the live edge.** Their art is uploaded to `art-source/` and
+neither level is wired up; the geometry work for level 9 sits on an unmerged branch.
+Read the asset-sweep standing fact above before deleting any of it for being
+unreferenced.
+
+`claude/context.md` carries the working state — open items, branches, per-level win
+rates — and is reconciled against the repository rather than written from memory.

@@ -162,7 +162,11 @@ build menu, no economy. It reuses tower art and tower firing code unchanged.
 It is also the joke: one tower survived the genre change.
 
 Do not rebuild the pad system for this. The build menu is already deleted and
-seven harness scenarios still drive its ghost.
+nothing drives its ghost any more. Eleven blind harness scenarios were found on
+2026-09-07 -- not the seven this used to say -- nine repaired and two deleted,
+and `tests/harness.test.ts` now fails the build if any scenario reaches for
+`g.menu` or `g.panel` again. Rebuilding the control means re-earning all of
+that.
 
 ## Maps and art
 

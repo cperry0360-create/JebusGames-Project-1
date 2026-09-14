@@ -126,6 +126,31 @@ on any of them, so their numbers can no longer be mistaken for a passing check.
 exits 8 if none was evaluated. `tests/harness-scenarios.test.ts` re-derives both lists
 from the source so neither can rot the way the old one did.
 
+**Five is the number, re-derived by running them rather than by reading any document,
+2026-09-13.** A brief circulating that day named nine. Every candidate, at 844x390:
+
+| scenario | exit | what that means |
+|---|---|---|
+| `muzzle` `rockets` `retreat` `regressions` `meteor` | **7** | declared, asserts nothing |
+| `ui` | **5** | asserts, and is RED — see below |
+| `buildall` | **5** | asserts, and is RED — see below |
+| `typegame` | **0** | asserts and passes |
+| `poor` | **6** | deleted; the scenario does not exist |
+
+`ui` and `buildall` are the two worth knowing about, because a report that lists them
+as "not asserting" hides a live failure. **`ui` fails on `A TAP ON THE HERO DOES NOT
+SELECT HIM`** — its own note says `selectHero()` works when called directly and
+`hero.hits()` is true at the tapped point, so the pointer ROUTE is broken rather than
+the selection. **`buildall` fails on `only 6 of 7 pads could be built on`**: pad 3 at
+world 578,612 reports `ringOnTap=false` while the other six are fine. Both are
+pre-existing and neither is diagnosed here.
+
+**And there is a sixth that asserts nothing and is NOT declared: `abilitybar`.** It
+contains no `expect()`, no fault counter and no `RESULT` line, so it exits 0 whatever
+it sees, which is the exact hole `ASSERTS_NOTHING` exists to close. Its `DEAD` output
+has now been read as a product bug twice. It is not one — see the note under the open
+items.
+
 **A green run still is not evidence about anything rendered**, for a different and
 larger reason that survives all of the above: **no test in `tests/` imports Phaser.**
 About 25 mention it, and every mention reads a source file as text and matches a
@@ -302,11 +327,13 @@ building anything on top of it.
 
 ## Status as of 2026-09-13 evening
 
-**`main` is at `d9686c8`.** Checks run 342 is green at JOB level, not merely at run
-level: `changes` success, `test` success, `typecheck` success, `deploy` **skipped** —
-because that push was markdown only, which is the `changes` job working as designed.
-The last commit that actually republished Pages is `eb2bf4d`, the level 8 soft-lock
-merge, earlier the same day.
+**The last commit that changed the GAME is `eb2bf4d`**, the level 8 soft-lock merge,
+and that is the durable number — `main`'s tip moves with every documentation commit
+and had gone `d9686c8` → `b23e311` → `699259c` in the hours around this note being
+written. Checks on each were green at JOB level, not merely at run level: `changes`,
+`test` and `typecheck` all success, `deploy` **skipped**, because a markdown-only push
+is the `changes` job working as designed. Do not read a skipped deploy as a failure,
+and do not trust a tip hash written in this file — check it.
 
 **Eight levels are built and playable**, not four: `level1` Courjahan Village,
 `level2` Head Office, `level3` Sports Complex at Dusk, `level4` The Conundrum,
@@ -341,22 +368,39 @@ any level 9 or 10 asset for being unreferenced.
 
 ## Open items
 
-**These are renumbered.** Six of the original ten closed between 07 and 13 September;
-what is left keeps its wording and gets a new number, so a citation of "open item 4"
-written before 2026-09-13 does not mean item 4 here. `claude/chapter-2-design.md` used
-to carry two such citations and now describes the items instead.
+**These are renumbered, twice now.** Seven of the original ten closed between 07 and
+13 September; what is left keeps its wording and gets a new number, so a citation of
+"open item 4" written before 2026-09-13 does not mean item 4 here.
+`claude/chapter-2-design.md` used to carry two such citations and now describes the
+items instead. **Renumber again if you close one, and do not cite these by number
+from another document.**
 
 **Highest value:** nothing on this list. The old highest-value item — the fake harness
 scenarios — is closed; see THE TEST SUITE LIES above.
 
+**THE ABILITY MEDALLIONS ARE NOT BROKEN. Do not re-open this.** It was item 1 here
+and it is deleted, on Cory's word that the medallions and the Nuke button work in
+play, and on a diagnosis of what the harness was actually measuring.
+
+`abilitybar` probes the slots in bar order, and `serverNuke` is the slot immediately
+before the two hero slots. Tapping it calls `armAbility`, which for the nuke opens the
+launch confirmation — `NukeLaunchOverlay`, whose `blocker` is a full-screen
+`1266 x 585` rectangle at 72% dim, `setInteractive()`, with `pointerdown` bound to a
+deliberate no-op so a stray tap cannot throw away a once-per-run ability. **The probe
+never closes it.** Its cleanup resets `pendingAbility` and `mode` and nothing else, so
+the next two taps land on the scrim, `armAbility` and `castHeroSlot` are never called,
+and the probe prints `DEAD`. The four-slot pass has no nuke slot, no overlay, and all
+four read `REACHED` — which is the whole of the "evidence" that something breaks after
+the drop.
+
+Proved rather than argued: the blocker rectangle and `ui-nuke-up` are both still in
+the run's own final scene dump, and `rebuilds over 1s after the drop: 0` retires the
+every-frame-rebuild theory the scenario was written around. **`DEAD` means "a modal
+this probe opened is covering the bar", not "the button is dead"** — which is CLAUDE.md's
+own warning about first red results, in the exact form it names: a modal left open.
+
 **Real player impact:**
-1. **The hero's two ability medallions go dead after the Server Nuke drops.**
-   Pre-existing, and still reproduces on `d9686c8`:
-   `sh tools/harness/run.sh abilitybar 180 844x390` reports `tap heroSlot1: DEAD` and
-   `tap heroSlot2: DEAD` in the five-slot block, while `molotov`, `glacier` and
-   `serverNuke` all read `REACHED`. Four slots, before the drop, are all four
-   `REACHED`. A hero losing half their kit mid-run deserves its own session.
-2. **Twenty canvas-vs-ink content boxes**, up from nine. All nine originals are
+1. **Twenty canvas-vs-ink content boxes**, up from nine. All nine originals are
    untouched — `icon-firerate` 34.8% small, `icon-locked` 29.3%, `icon-upgrade` 22.7%,
    `icon-armor` 21.9%, `icon-cancel` 19.5%, `icon-range` 18.4%, `ui-nuke-down` 13.5%,
    `icon-damage` 7.4%, `icon-target` 3.9% — and eleven enemy entries have joined them,
@@ -366,10 +410,10 @@ scenarios — is closed; see THE TEST SUITE LIES above.
    visibly larger, which is a UI change that wants a look at the ring first.
 
 **Polish and decisions:**
-3. Cake tiers are probably too generous: level 4 averages 18.8 lives left on a win, so
+2. Cake tiers are probably too generous: level 4 averages 18.8 lives left on a win, so
    most wins likely pay three cakes. Three numbers in `cakes.json`; wants a soak that
    records cakes rather than wins. Nothing under `tools/soak/` records a cake yet.
-4. The verdict line and the 2-cake tier still disagree at exactly half, and both halves
+3. The verdict line and the 2-cake tier still disagree at exactly half, and both halves
    are confirmed in code: `Cakes.cakesFor` awards on `share >= t.livesFraction` with
    the 2-cake tier at `0.5`, while `Banner.verdictFor` uses
    `livesRemaining > maxLives * cleanLivesFraction` with `cleanLivesFraction` also
@@ -385,8 +429,9 @@ and height through `tapFloor`, and `Dialog` reserves the grown height so it cann
 the card's text); world-map node cakes at 24 CSS px (`presentation.cakes.nodeSize` is
 57 design units, measured at 32.0 CSS px at 844x390, and the row is now allowed to be
 wider than its 160-unit card); the world map's 20 slots (`plannedLevels` is 10,
-`171f02d`); and the build-pad convention (settled before level 5 — see THE BOARD-SIZE
-PROBLEM). Written up in `reports/2026-09-13-context-reconciliation.md`.
+`171f02d`); the build-pad convention (settled before level 5 — see THE BOARD-SIZE
+PROBLEM); and the dead ability medallions, which were never dead. Written up in
+`reports/2026-09-13-context-reconciliation.md`.
 
 **Brief-vs-test conflicts: not a bug.** Three tests enforce real invariants and the
 invariant should win. Update the brief, not the code: Overpacker height 90→85 px,

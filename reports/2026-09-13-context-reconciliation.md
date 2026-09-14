@@ -45,6 +45,12 @@ established. Ordered as the doc had them.
 
 ### 1. The hero's two ability medallions go dead after the Server Nuke drops — STILL OPEN
 
+> **SUPERSEDED — see the addendum at the foot of this file.** This conclusion is
+> wrong. The medallions work in play; `abilitybar`'s own probe opens the Server Nuke
+> launch modal one tap earlier and then taps through its scrim. The measurement below
+> is real, the inference from it is not. Left in place rather than rewritten, because
+> how it was got wrong is the useful part.
+
 **Doc:** "Pre-existing and confirmed. A hero losing half their kit mid-run deserves its
 own session."
 
@@ -579,8 +585,8 @@ number, so it needed nothing.
 
 **Open, and now correctly stated in `context.md`**
 
-1. The hero's two ability medallions go dead after the Server Nuke drops. Reproduces on
-   `d9686c8`. Wants its own session.
+1. ~~The hero's two ability medallions go dead after the Server Nuke drops.~~
+   **Withdrawn — see the addendum. Not a product bug.**
 2. Twenty canvas-vs-ink content boxes, up from nine. Fixing the eight tower-menu glyphs
    is a visible UI change and wants a look at the ring first.
 3. Cake tiers probably too generous, and the soak that would settle it does not exist
@@ -604,3 +610,295 @@ Nothing. The one item that was waiting — the Devil at 5200 — was decided and
   `level-8-soft-lock` is fully contained and safe to delete. All four are Cory's call.
 - `reports/2026-09-13-chapter-2-design-docs.md` carries the ten-item list as though it
   were current. It is now superseded by this file.
+
+---
+
+# Addendum, same day: the harness count, the medallions, and CLAUDE.md
+
+A second pass, after the above was filed. Three things came out of it, and the
+middle one reverses a finding in the report you have just read.
+
+## Commits
+
+| commit | what | CI |
+| --- | --- | --- |
+| `935963e` | Correct the harness count, retire the medallion item, reconcile CLAUDE.md | [run 356](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34784037391): **green at job level** — `changes` success, `test` success, `typecheck` success, `deploy` **skipped** (markdown only) |
+| `<the commit adding this row>` | Fills in the row above | documentation only; its result is in the reply that carried this file |
+
+Documentation only again — `CLAUDE.md`, `claude/context.md`,
+`claude/chapter-2-design.md`. No code, JSON, test or asset touched, so `deploy`
+skips for the third time and Pages still serves `eb2bf4d`.
+
+---
+
+## 1. What `chapter-2-design.md` actually said
+
+The brief asked for both passages quoted as they stand, on the grounds that the
+previous session edited the file and its own description of it should not be
+trusted. Correct instinct, and it caught something.
+
+**"Towers as a crossover", before this pass:**
+
+> Do not rebuild the pad system for this. The build menu is already deleted and
+> seven harness scenarios still drive its ghost.
+
+**"Heroes", before this pass:**
+
+> Courtland as the worked example: Mind Laser is the auto weapon, held on the
+> nearest target. Seismic and Mind Control are the two buttons. **These are his
+> real names and his real powers now** — `heroes.json` gives him Seismic, Mind
+> Control and Mind Laser, each bound to the icon it was drawn for, and Mind
+> Control sets `Enemy.controlled` so `fx_mind_control` has a mechanic in story
+> mode. The context doc used to carry both of those as open items; both closed
+> on 2026-09-13. Nothing here has to invent them.
+
+**So half the instruction was already satisfied and needed nothing.** The brief
+said to delete the `fx_mind_control` claim *if it still asserts the mechanic
+does not exist*. It does not — it asserts the opposite, correctly, and names the
+`Enemy.controlled` path. It was rewritten in the first pass. **No change made.**
+The surrounding design point about base-form powers becoming the auto weapon is
+untouched either way.
+
+The harness sentence was wrong and is corrected below.
+
+## 2. The non-asserting scenarios: five, and it is not the five anyone expected
+
+Three documents disagreed. Re-derived from `tools/harness/server.py` and by
+running every candidate at 844x390, rather than from any of them.
+
+The mechanism first, because the exit codes are the whole answer.
+`server.py` reports a report's `assertsNothing` flag as **exit 7**, and that flag
+is set from `ASSERTS_NOTHING` in `tools/harness/index.html`. Unknown scenarios
+exit 6, a scenario that reported a fault exits 5, a clean asserting run exits 0.
+
+| scenario | exit | what it means |
+|---|---|---|
+| `muzzle` | **7** | declared, asserts nothing |
+| `rockets` | **7** | declared, asserts nothing |
+| `retreat` | **7** | declared, asserts nothing |
+| `regressions` | **7** | declared, asserts nothing |
+| `meteor` | **7** | declared, asserts nothing |
+| `ui` | **5** | asserts, and is RED |
+| `buildall` | **5** | asserts, and is RED |
+| `typegame` | **0** | asserts and passes |
+| `poor` | **6** | deleted; not dispatched at all |
+
+**The count is five.** The nine-name list in the brief is the pre-`39cca69`
+list, which was wrong when it was written and has been wrong since: `ui`,
+`buildall` and `typegame` were repaired, `poor` was deleted, and `meteor` — which
+is genuinely non-asserting — was not on it.
+
+### Two of them are red right now, which a "does not assert" label would hide
+
+This is the part worth carrying forward. Calling `ui` and `buildall`
+non-asserting would have filed two live failures as "nothing to see".
+
+- **`ui`** — `RESULT *** 1 faults ***`, on
+  `A TAP ON THE HERO DOES NOT SELECT HIM`. Its own note is careful about what it
+  has ruled out: `selectHero()` works when called directly, `hero.hits()` is true
+  at the tapped point, no ring is open and no pad is under him, so **the pointer
+  route is broken, not the selection**. Self-documented as reported and not
+  fixed.
+- **`buildall`** — `RESULT *** only 6 of 7 pads could be built on ***`. Pad 3, at
+  world `578,612` / screen `381,318`, reports `ringOnTap=false` while the other
+  six report `ringOnTap=true bought=true`.
+
+Both are pre-existing, both are about a tap not routing, and **neither is
+diagnosed here.** They are recorded so the next session does not have to
+rediscover that they are red.
+
+### And the build menu's ghost is gone entirely
+
+`chapter-2-design.md` said seven scenarios still drive it. Applying
+`tests/harness.test.ts`'s own comment-stripping and word-boundary regex to
+`tools/harness/index.html`: **`g.menu` 0 real references, `g.panel` 0.** The 19
+raw grep hits are comments explaining the removal plus `g.ring.panelBounds`,
+which is why the test matches on code only. The test passes.
+
+Corrected in the design doc to say nothing drives the ghost any more, that
+eleven were found and not seven, and that a test now fails the build if one
+comes back — which is a better argument against rebuilding the pad system than
+the stale number was.
+
+## 3. The ability medallions are not broken, and the earlier report was wrong to imply they were
+
+**Cory confirms the medallions and the Nuke button work in play.** The report
+above says item 1 "still reproduces on `d9686c8`" and quotes `heroSlot1: DEAD`.
+The observation was real; the conclusion drawn from it was not.
+
+### What `abilitybar` is actually measuring
+
+`tapReaches(i)` monkeypatches `g.armAbility` and `g.castHeroSlot` to count calls,
+clicks the slot's hit rectangle, and prints `REACHED` if either fired and `DEAD`
+if neither did. Both are dispatched late through `this.world.…` in
+`HudScene`'s `pointerdown` handler, so the patch is visible and the probe is
+sound in principle.
+
+**The probe taps the slots in bar order, and `serverNuke` is the slot
+immediately before the two hero slots.** Tapping it calls `armAbility`, which for
+the nuke does this (`GameScene.ts:3210`):
+
+```ts
+if (id === RULES.serverNuke.abilityId) {
+  if (this.status.rareAbility !== id) return
+  // Never fired straight off the icon. It is once per run and a misfire
+  // is unrecoverable, so the tap opens a confirmation ...
+  this.openNukeLaunch()
+  return
+}
+```
+
+`openNukeLaunch()` constructs `NukeLaunchOverlay`, whose first act is
+(`src/ui/NukeOverlays.ts:284`):
+
+```ts
+this.blocker = scene.add
+  .rectangle(W / 2, H / 2, W * 1.5, H * 1.5, 0x000000, LAUNCH.dim)
+  .setDepth(LAYER.modalDim)
+  .setInteractive()
+// Deliberately does nothing. Tapping outside the two controls must not
+// launch and must not cancel: a modal that closes on a stray tap is how a
+// once-per-run ability gets thrown away.
+this.blocker.on('pointerdown', () => {})
+```
+
+A full-screen interactive scrim at `dim: 0.72` that swallows `pointerdown` on
+purpose. **The probe never closes it** — its cleanup resets
+`status.pendingAbility` and `status.mode` and nothing else, and `openNukeLaunch`
+early-returns on `this.nukeLaunch?.active`, so it stays up for the rest of the
+run. The next two taps land on the scrim, neither `armAbility` nor
+`castHeroSlot` is called, and the probe prints `DEAD`.
+
+The four-slot pass has no `serverNuke` slot, so no overlay, and all four slots
+read `REACHED`. **That asymmetry was the entire evidence that something breaks
+after the drop, and it is an artefact of probe ordering.**
+
+### Proved, not reasoned
+
+- The blocker is in the run's own final scene dump: a `1266 x 585` rectangle at
+  `422,195`, which is `W*1.5 x H*1.5` centred on the 844x390 viewport.
+- `ui-nuke-up`, the launch dome, is in the same dump. The overlay is still on
+  screen when the run ends.
+- `rebuilds over 1s after the drop: 0` — and `0` before it. **The theory the
+  scenario was written around is dead.** Its header says "Count rebuilds. Every
+  frame is the failure mode" and annotates the line "(every frame is the bug)";
+  the bar rebuilt every frame once and does not now. The label survived the fix.
+
+`DEAD` means "a modal this probe opened is covering the bar." It does not mean
+the button is dead.
+
+This is CLAUDE.md's own warning, in the exact form it names: *"a modal left open
+makes every later check pass"* — same mechanism, opposite sign, and it fooled two
+consecutive sessions including the one that wrote the report above.
+
+### `abilitybar` is a sixth non-asserting scenario, and it is undeclared
+
+The block contains **zero** `expect(` calls, zero `fail(`, no `faults` counter,
+no `*** ` line and no `RESULT` line. It only `note()`s. It is on neither
+`ASSERTS_NOTHING` nor `USES_EXPECT`, so `server.py` has nothing to gate on and it
+**exits 0 whatever it observes** — which is precisely the hole those two lists
+exist to close.
+
+So it should be declared, and the honest answer to "does it belong on the list"
+is **yes as it stands, and no if it is repaired instead.** Repairing it is the
+better outcome and is a small job: dismiss the launch overlay inside
+`tapReaches`'s cleanup, or probe the hero slots before the rare slot, then give
+it `expect()` calls. **Not done here — the brief said report the cause and do not
+fix it**, and it is a change to a harness scenario rather than to documentation.
+
+## 4. CLAUDE.md, reconciled
+
+It auto-loads into every session, so a wrong line in it costs more than a wrong
+line in `context.md`. Four corrections, same method.
+
+**The "Current phase" section was the worst text in the repository.** It read:
+
+> **Phase 1 — prove the loop is fun.** Placeholder art from Kenney's free CC0
+> tower defense pack. One map, one path, Cory only. No Banner tree, no boons, no
+> Holdings, no siege enemies until Phase 1 is playable and confirmed fun.
+
+Against `DESIGN.md`'s own four phases and the repository:
+
+| | brief | repo |
+|---|---|---|
+| heroes | Cory only | **5**, all with Last Stand |
+| maps | one map, one path | **8 maps**; levels 3-8 are multi-lane, level 5 has three |
+| art | Kenney placeholder | Kenney is **3 projectile tiles and the title scenery**; `art.json` and `ATTRIBUTIONS.md` both say everything else is original |
+| towers / abilities | 6 / 4 (Phase 1) | **7 / 7** — short of Phase 2's 16 / 12 |
+| enemies | 4 types | **45** |
+| save/load | Phase 2 | present, `src/systems/Save.ts` |
+| Banner tree, Boons | Phase 2 | **not built.** `grep` finds no `boon` or `Holdings` in `src/` or `src/data/` at all; Banner points were deliberately removed from story mode, which pays in cakes |
+| classes | Phase 4 | not started |
+
+Rewritten to say Phase 1 is finished, Phase 2 is mostly done but short on
+breadth, Phase 3 largely happened out of order, Phase 4 has not started — and,
+more usefully, that **the phase gate is no longer the thing to check before
+building.** What governs scope now is hard rule 5 and the ten-level story scope.
+It also points at levels 9 and 10 as the live edge and at `context.md` for
+working state.
+
+**Hard rule 2 named a file that does not exist.** It said
+`/reference/prototype.html`. There is no such path. The single-file prototype is
+`/reference/courjahan-defense.html`, 959 KB, and it is the only HTML file in
+`reference/`. The rule is right; only the filename was wrong. Corrected.
+
+**The Stack section said "auto-deploy on push to `main`".** True when written and
+not now — the same `changes`-job gate described earlier in this report. Corrected,
+with the practical consequence spelled out where a session will actually hit it:
+a skipped `deploy` on a docs commit is correct, read the job list.
+
+**Hard rule 7's worked example had drifted.** It says Cory renders at 75.8 world
+px and occupies 539 physical pixels at maxZoom 2.37 on a dpr-3 phone. His
+`displayHeight` in `art.json` is **78.0**, which makes it 555, and the old-rule
+figure 156 rather than 152. The rule and its formula are unaffected — 2.37 x 3 is
+still about 7x, `display.json` still says `maxZoom: 2.37`, `Resolution.ts` still
+caps at 3 — but the illustration was quoting a number the data no longer carries,
+which is exactly what the rule's own last paragraph warns about. Corrected, with
+a parenthesis recording the change so the next reader knows the numbers moved.
+
+**Flagged, not changed: "67 of 109 textures are non-power-of-two."** `art.json`
+declares **186 image paths** today, so the denominator is stale by a wide margin.
+The numerator cannot be re-derived without decoding every image, and
+`measure_art.py` does not report it. The conclusion — most textures are NPOT,
+there are no mipmaps, so heavy minification has nothing to soften it — is not in
+doubt. The line now says the ratio wants re-deriving before it is quoted again.
+
+**Checked and correct, left alone:** the two-camera rule; the flat-grid rule; the
+`screens` walk (`run.sh screens` really does report `1-TITLE`, `2-WORLDMAP`,
+`3-LOADOUT`, `4-CUTSCENE`, `5-GAME`); the typechecking section; all three
+standing facts, including the Phaser grep, which still returns **0 hits** in
+`tests/`; the Heroes section; and the Merging section.
+
+---
+
+## Where this leaves the repository, revised
+
+**Open items in `context.md`, now three.** The medallion item is gone. Renumbered
+again — which is itself a warning: **do not cite these by number from another
+document.** The renumbering note at the head of the list now says so.
+
+1. Twenty canvas-vs-ink content boxes.
+2. Cake tiers probably too generous, and the soak that would settle it does not
+   exist.
+3. The verdict line and the 2-cake tier disagree at exactly half.
+
+**New, and not on that list because they are harness rather than product:**
+
+- `ui` is red on a hero tap that does not route. Pre-existing, undiagnosed.
+- `buildall` is red on pad 3 of level 1. Pre-existing, undiagnosed.
+- `abilitybar` asserts nothing and is undeclared. Repair it or declare it; until
+  then its output is not evidence in either direction.
+- `screens` at 844x390 exits 5 on one SMALL fault, the Title version stamp, which
+  the scenario itself annotates as a hidden dev door and not a tap target. Known
+  and benign, recorded so it is not read as a regression.
+
+**Still true from the first pass:** `claude/level-9-geometry-uac8ax` is 15 ahead
+and unmerged, and it is the reason to check before any level 9/10 asset sweep.
+
+**The methodological point, twice over.** The first pass caught a report that
+carried an open-items list forward without re-reading the code. This pass caught
+the first pass doing a subtler version of the same thing: it *did* run the
+harness, and it believed the output without asking what the probe was doing. A
+measurement is not evidence until you know what it measures — and CLAUDE.md
+already said so, in the section about not trusting a first red result. Both
+failures were on the same page of the same file.
