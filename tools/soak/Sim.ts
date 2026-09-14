@@ -62,6 +62,10 @@ import draftData from '../../src/data/draft.json' with { type: 'json' }
 
 import { DEFAULT_LEVEL_ID, levelRules, loadLevel, towerWeightsFor } from '../../src/systems/Levels.ts'
 import { NightRules } from '../../src/systems/NightRules.ts'
+import {
+  HASTE_OFF, armedAt, copyCount, copyTargets, hasteMultiplier, hasteSeconds, tickSchedule,
+  vlaudeRules, type ArmedPower, type PowerId, type VlaudeRules,
+} from '../../src/systems/Vlaude.ts'
 import { NO_BLEED, convertedHealth, type BleedState } from '../../src/systems/Vampirism.ts'
 import {
   flameEnd, inFlame, newFlameState, scorchIntervalMultiplier, tickFlame,
@@ -276,6 +280,22 @@ interface SimEnemy {
   /** 1.2 once reviewed, 1 otherwise. Beside `speedScale` rather than inside
    *  it, exactly as on the shipped Enemy. */
   reviewSpeed: number
+  /**
+   * LEVEL 10'S HASTE, and 1 on every other level.
+   *
+   * The third multiplier slot, beside `speedScale` and `reviewSpeed` and
+   * multiplied into the same line -- which is the shipped `Enemy.hasteSpeed`
+   * exactly. ASSIGNED, NEVER ACCUMULATED, and put back to `HASTE_OFF`, so the
+   * restoration is bit-for-bit the same here as it is on the board.
+   */
+  hasteSpeed: number
+  /** How many times this body is itself a copy. A duplicate is 1, and
+   *  `copyTargets` refuses anything at or above the limit -- the same
+   *  function the scene calls, so a duplicate cannot duplicate in either. */
+  copyDepth: number
+  /** True for a unit `createEnemies` made, which is what that power's own cap
+   *  counts. */
+  madeByVlaude: boolean
   /** Armour lent by a living HR standing nearby. Recomputed every frame. */
   auraArmor: number
   /** True once this one has stood inside an HR's aura at all.
@@ -710,6 +730,7 @@ export function simulate(
       // boss that made them walked in through.
       spawnLane: summonedBy?.spawnLane ?? laneId,
       firedThresholds: new Set<number>(), reviewed: false, atGate: false, reviewSpeed: 1,
+      hasteSpeed: HASTE_OFF, copyDepth: 0, madeByVlaude: false,
       auraArmor: 0,
       everBuffed: false,
       flame: def.flame && FLAME ? newFlameState(FLAME) : null,
@@ -924,6 +945,153 @@ export function simulate(
         e.health = Math.min(max, e.health + r.healed)
         healedTotal += r.healed
       }
+    }
+  }
+
+  /* ------------------------------------------- level 10: three of six */
+
+  /**
+   * VLAUDE'S MANIPULATIONS, AND THE SIM CAN ONLY EXPRESS THREE OF THE SIX.
+   *
+   * WHAT RUNS HERE, through the SAME functions the scene calls -- `armedAt`,
+   * `tickSchedule`, `copyTargets`, `copyCount`, `hasteMultiplier`,
+   * `hasteSeconds` -- so the pacing, the global cooldown, the combination rows
+   * and the no-duplicate-of-a-duplicate rule are one implementation and not
+   * two:
+   *
+   *   speedAlter      a multiplier slot on every walker, set and restored.
+   *   duplicateEnemy  a second body at the original's place and health share.
+   *   createEnemies   real units from the pool, at the gate, under their cap.
+   *
+   * WHAT DOES NOT, AND IT IS DELIBERATE RATHER THAN UNFINISHED:
+   *
+   *   buildLock       BuildSystem models `occupied` and nothing else. There is
+   *                   no lock state for `isFree` to read, and the nearest
+   *                   thing this file has is a Glitch Bug DESTROYING a tower,
+   *                   which frees a pad and can never forbid one.
+   *   generateWall    the hero here is a fixed point at `totalLength * 0.5`
+   *                   and never moves, so ground denied to the hero and to a
+   *                   garrison is invisible to it.
+   *   generateWeapon  there is no tower health, and a turret that suppresses a
+   *                   tower over time is a third thing this file cannot say.
+   *
+   * Teaching it those three is a change to the SIMULATOR rather than to the
+   * level, it was decided against, and the win rate below is quoted with that
+   * stated rather than hidden. See reports/2026-09-14-level-10-the-fight.md.
+   */
+  const VLAUDE: VlaudeRules | null = vlaudeRules(levelRules(levelId))
+  let vArmed: ArmedPower[] = []
+  let vSince = 0
+  let vHasteLeft = 0
+  /** Casts that have telegraphed and not yet landed. The lead is real time in
+   *  the scene and is real time here. */
+  const vPending: Array<{ left: number; powers: PowerId[] }> = []
+  /** Units `createEnemies` still owes, each with the seconds left on it. */
+  const vMaking: Array<{ left: number; id: string }> = []
+  /** Copies waiting out `duplicateEnemy.durationMs` before they appear, which
+   *  is the fx playing over the original in the scene. */
+  const vInserts: Array<{ left: number; made: { id: string; laneId: string; laneAt: number
+    at: number; pick: number; share: number } }> = []
+  /** How many casts of each power this file could not answer, so a report can
+   *  say so with a number rather than a claim. */
+  const vUnmodelled = new Map<PowerId, number>()
+
+  const vArm = (wave: number): void => {
+    if (!VLAUDE) return
+    vArmed = armedAt(VLAUDE, wave)
+    vSince = VLAUDE.globalCooldownSeconds
+    vPending.length = 0
+    vMaking.length = 0
+  }
+
+  const vLand = (id: PowerId): void => {
+    if (!VLAUDE) return
+    if (id === 'speedAlter') {
+      const m = hasteMultiplier(VLAUDE)
+      for (const e of enemies) if (e.alive) e.hasteSpeed = m
+      vHasteLeft = hasteSeconds(VLAUDE)
+      return
+    }
+    if (id === 'duplicateEnemy') {
+      const field = enemies.filter((e) => e.alive)
+      const targets = copyTargets(VLAUDE, field.map((e) => ({ id: e.id, copyDepth: e.copyDepth })))
+      const want = copyCount(VLAUDE, targets.length)
+      const picked = field.filter((e) => targets.some((t) => t.id === e.id)).slice(0, want)
+      const delay = ((VLAUDE.powers.duplicateEnemy ?? {}).durationMs as number ?? 0) / 1000
+      for (const src of picked) {
+        const share = (src.def.maxHealth ?? 0) > 0 ? src.health / src.def.maxHealth : 1
+        // DEFERRED BY THE FX'S OWN DURATION, exactly as the scene defers it:
+        // the picture plays over the original and the copy is inserted when it
+        // finishes, so the two are the same beat in both.
+        vInserts.push({ left: delay, made: { id: src.id, laneId: src.laneId,
+          laneAt: src.laneDistance, at: src.distance, pick: src.routePick, share } })
+      }
+      return
+    }
+    if (id === 'createEnemies') {
+      const cfg = VLAUDE.powers.createEnemies ?? {}
+      const pool = (cfg.pool as string[]) ?? []
+      const count = (cfg.count as number) ?? 0
+      const gap = (cfg.intervalSeconds as number) ?? 0
+      if (pool.length === 0) return
+      for (let n = 0; n < count; n++) {
+        vMaking.push({ left: n * gap, id: pool[Math.floor(routeRng() * pool.length)]! })
+      }
+      return
+    }
+    // buildLock, generateWall and generateWeapon: see the note above. Counted
+    // so a report can say how many casts this file could not answer.
+    vUnmodelled.set(id, (vUnmodelled.get(id) ?? 0) + 1)
+  }
+
+  const tickVlaude = (dt: number): void => {
+    if (!VLAUDE) return
+    if (vHasteLeft > 0) {
+      const m = hasteMultiplier(VLAUDE)
+      for (const e of enemies) if (e.alive) e.hasteSpeed = m
+      vHasteLeft -= dt
+      if (vHasteLeft <= 0) {
+        vHasteLeft = 0
+        for (const e of enemies) e.hasteSpeed = HASTE_OFF
+      }
+    }
+    for (let i = vInserts.length - 1; i >= 0; i--) {
+      const p = vInserts[i]!
+      p.left -= dt
+      if (p.left > 0) continue
+      vInserts.splice(i, 1)
+      const m = p.made
+      spawn(m.id, m.at, null, m.laneId, m.laneAt, m.pick)
+      const copy = enemies[enemies.length - 1]
+      if (copy) {
+        copy.copyDepth = 1
+        copy.health = Math.max(1, Math.round((copy.def.maxHealth ?? 1) * m.share))
+      }
+    }
+    for (let i = vMaking.length - 1; i >= 0; i--) {
+      const m = vMaking[i]!
+      m.left -= dt
+      if (m.left > 0) continue
+      vMaking.splice(i, 1)
+      const cap = (VLAUDE.powers.createEnemies ?? {}).maxAliveFromThisPower as number ?? 0
+      if (enemies.filter((e) => e.madeByVlaude && e.alive).length >= cap) continue
+      spawn(m.id, 0, null, MAIN_LANE, 0, routeRng())
+      const made = enemies[enemies.length - 1]
+      if (made) made.madeByVlaude = true
+    }
+    for (let i = vPending.length - 1; i >= 0; i--) {
+      const p = vPending[i]!
+      p.left -= dt
+      if (p.left > 0) continue
+      vPending.splice(i, 1)
+      for (const id of p.powers) vLand(id)
+    }
+    if (vArmed.length === 0) return
+    const step = tickSchedule(vArmed, dt, vSince, VLAUDE.globalCooldownSeconds)
+    vSince = step.sinceLast
+    for (const row of step.fired) {
+      const powers: PowerId[] = row.with ? [row.power, row.with] : [row.power]
+      vPending.push({ left: VLAUDE.telegraph.leadSeconds, powers })
     }
   }
 
@@ -1690,6 +1858,10 @@ export function simulate(
     spawner.begin(WAVES[waveIndex])
     // The dusk flip's clock is the WAVE's, not the run's. See DayNight.ts.
     night?.beginWave(waveIndex)
+    // LEVEL 10'S SCHEDULE, re-armed per wave beside the spawner and the dusk
+    // clock, for their reason: it is a per-wave clock that starts when the
+    // wave does. `armedAt` counts waves from 1.
+    vArm(waveIndex + 1)
     let escaped = 0
     const waveStart = now
 
@@ -1723,6 +1895,10 @@ export function simulate(
         spawn(sp.enemy, 0, null, sp.lane ?? MAIN_LANE, 0, pick)
       }
       tickNight(DT)
+      // LEVEL 10'S THREE, and a no-op returning on the first line everywhere
+      // else. BEFORE the aura and the walk, like `tickNight`, because a haste
+      // that lands this frame belongs in this frame's step.
+      tickVlaude(DT)
       // LEVEL 8'S HR AURA, and a no-op returning on the first line everywhere
       // else. Before anything shoots, like the scene's, because it decides how
       // much damage the hits landed this frame take off.
@@ -1923,7 +2099,7 @@ export function simulate(
         // same three lines the scene's walk branch runs, in the same order.
         const step = e.selfHeld
           ? 0
-          : slowedSpeed(e.def.speed * e.speedScale * e.reviewSpeed,
+          : slowedSpeed(e.def.speed * e.speedScale * e.reviewSpeed * e.hasteSpeed,
                         e.slowFactor, e.slowRemaining > 0) * DT
         // WHERE IT WAS BEFORE THE STEP, for the Performance Review, read only
         // on a level that has one. The gate is a distance test rather than a

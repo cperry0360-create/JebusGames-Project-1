@@ -4,6 +4,111 @@ Newest first.
 
 ---
 
+## 2026-09-14 — Vlaude's powers fire, and his health comes down by ten thousand
+
+### The headline
+
+**Level 10 soaks at 40.6% over 480 seeds on normal — 195/480 — inside the 35-45%
+band, with Vlaude at 26,000.** He was 36,000. Levels 1 to 9 are **identical on
+the same 480 seeds**, every one of them.
+
+**The 36,000 was not wrong; it was measured on a different level.** It was taken
+with Vlaude walking the lane from the gate and NOT ONE MANIPULATION FIRING,
+because `systems/Vlaude.ts` was the rules and `GameScene` did not play them. The
+scene plays them now, and the soak fires the three of the six it can express. At
+36,000 with those three live, the same 120-seed pass reads **12.5%**.
+
+The board did not change. The boss did not change. What changed is that the
+level does what its own data always said it did.
+
+**METHOD: 480 seeds, every seed in normal mode, Cory on every seed** —
+`node --experimental-strip-types tools/soak/tune10.ts 480 level10 normal cory`.
+That is what every published per-level figure in this file is, and it is
+measured rather than assumed: the same driver returns level 8's published
+200/480 and level 9's 191/480 as the same integers. No hero's values were
+touched.
+
+### The sensitivity table
+
+480 seeds each, same method.
+
+| Vlaude health | 20,000 | 22,000 | 24,000 | **26,000** | 28,000 |
+|---|---|---|---|---|---|
+| win rate (480, normal, Cory) | 66.0% | 56.9% | 48.3% | **40.6%** | 35.6% |
+
+The coarse 120-seed pass that found the knee: 10,000 → 91.7%, 14,000 → 88.3%,
+20,000 → 60.8%, 22,000 → 50.0%, 23,000 → 45.8%, 24,000 → 40.8%, 25,000 → 34.2%,
+26,000 → 32.5%, 36,000 → 12.5%.
+
+**120 AND 480 DISAGREE BY EIGHT POINTS ON THE CHOSEN VALUE** — 26,000 reads
+32.5% over 120 and 40.6% over 480 — which is why iterating is done at 120 and
+publishing never is. `tune10.ts`'s own header warned about a 6.4-point swing;
+this is a bigger one.
+
+### THE CAVEAT, AND IT IS THE WHOLE OF IT: THREE POWERS OF SIX
+
+The runner fires three and **cannot express the other three at all**. This is
+read out of the source rather than asserted, and it is unchanged from the
+previous report except that three have moved from the first list to the second.
+
+| power | in the sim | why |
+|---|---|---|
+| `speedAlter` | **yes** | a third multiplier slot on the sim's enemy, beside `speedScale` and `reviewSpeed`, through `hasteMultiplier` / `HASTE_OFF` / `hasteSeconds` |
+| `duplicateEnemy` | **yes** | through `copyTargets` and `copyCount`, with the copy carrying depth 1, so a duplicate cannot duplicate in either |
+| `createEnemies` | **yes** | real rows from the pool, at the gate, staggered by `intervalSeconds` and under `maxAliveFromThisPower` |
+| `buildLock` | **no** | `BuildSystem` models `occupied` and nothing else. There is no lock state for `isFree` to read; the nearest thing it has is a Glitch Bug DESTROYING a tower, which frees a pad and can never forbid one |
+| `generateWall` | **no** | the sim's hero is a fixed point at `totalLength * 0.5` and never moves, so ground denied to the hero and to a garrison is invisible to it |
+| `generateWeapon` | **no** | there is no tower health, so a turret that suppresses a tower over time is a third thing this file cannot say |
+
+Teaching it those three is a change to the SIMULATOR rather than to the level,
+and it was decided against deliberately. **So 26,000 is tuned against a board
+that is EASIER than the one the player gets, and the real fight is harder than
+40.6%.** Quote the number with that sentence attached or do not quote it.
+
+The three that DO run go through the same `systems/Vlaude.ts` functions
+`GameScene` calls — `armedAt`, `tickSchedule`, `copyTargets`, `copyCount`,
+`hasteMultiplier`, `hasteSeconds` — so the pacing, the global cooldown, the
+combination rows on waves 14 and 16 and the no-duplicate-of-a-duplicate rule are
+one implementation and not two.
+
+### Levels 1 to 9, same seeds, nothing moved
+
+`tools/soak/Sim.ts` grew three fields on its enemy struct and one tick
+function. `vlaudeRules` answers null on every level but the tenth, so
+`tickVlaude` returns on its first line there — and that is measured rather than
+argued:
+
+| level | published | this pass | |
+|---|---|---|---|
+| level1 | 428/480 (89.2%) | 428/480 (89.2%) | identical |
+| level2 | 255/480 (53.1%) | 255/480 (53.1%) | identical |
+| level3 | 422/480 (87.9%) | 422/480 (87.9%) | identical |
+| level4 | 299/480 (62.3%) | 299/480 (62.3%) | identical |
+| level5 | 218/480 (45.4%) | 218/480 (45.4%) | identical |
+| level6 | 210/480 (43.8%) | 210/480 (43.8%) | identical |
+| level7 | 198/480 (41.3%) | 198/480 (41.3%) | identical |
+| level8 | 200/480 (41.7%) | 200/480 (41.7%) | identical |
+| level9 | 191/480 (39.8%) | 191/480 (39.8%) | identical |
+
+**Levels 1 and 3 are still outside the band at 89% and 88%.** Pre-existing,
+carried forward again, and not touched by this pass.
+
+### What the leaks say
+
+At 26,000, over 480 seeds: `vlaude` 258, `packet` 247, `dataBug` 219,
+`serverWalker` 189, `corrupt` 137, `mashDroneCameraman` 25. Median waves
+reached 17, min 4, max 18.
+
+**The rank order changed, and that is the powers showing up in the numbers.**
+Before, the escort barely leaked at all — `vlaude` 281, `packet` 164, `corrupt`
+107, `dataBug` 92 — because nothing was hastening it, doubling it or adding to
+it. Level 9's units now get through in numbers that put them within thirty of
+the boss himself.
+
+Full write-up: `reports/2026-09-14-level-10-the-fight.md`.
+
+---
+
 ## 2026-09-13 — Level 8 re-topologised, and the gate measured with a denominator
 
 ### The headline
