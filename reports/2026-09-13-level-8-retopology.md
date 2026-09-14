@@ -319,3 +319,12 @@ STEP 3's visuals, STEP 4 whole.
    that the level 9 geometry "is on a branch" — level 9 ships here. Whoever
    merges should refresh those three lines; nothing else in that file is
    contradicted.
+
+   **`CLAUDE.md` said the same two things and this branch DID edit it**, because
+   it auto-loads into every session and the reconciliation that landed on main
+   while this branch was in flight had just called that section the most
+   misleading text in the repository. "Eight built levels" is nine, and the
+   "Levels 9 and 10 are the live edge" paragraph is now level 10 alone. The
+   asset-sweep hazard is worth seeing here: that paragraph named level 9's art
+   as unwired while the branch consuming it was unmerged, which is the precise
+   shape of the `eda11dc` incident the standing fact above records.

@@ -308,7 +308,7 @@ misleading text in the repository. Measured against `DESIGN.md`'s own four phase
 
 - **Phase 1 — done.** Its exit condition was "stop here and play it", and it was
   cleared long ago.
-- **Phase 2 — mostly done.** All five family heroes with Last Stand. Eight built
+- **Phase 2 — mostly done.** All five family heroes with Last Stand. Nine built
   levels, each with its own map, wave table and soak-tuned boss. Save/load in
   `src/systems/Save.ts`. Short of the brief on breadth: **7 towers** against 16,
   **7 abilities** against 12, and no passives tree. **Banner tree and Boons are NOT
@@ -325,10 +325,12 @@ governs scope is hard rule 5 — build what the task asks for and nothing furthe
 the ten-level story scope in `levels.json`, which is final and whose `_plannedLevels`
 note explains what raising it costs.
 
-**Levels 9 and 10 are the live edge.** Their art is uploaded to `art-source/` and
-neither level is wired up; the geometry work for level 9 sits on an unmerged branch.
-Read the asset-sweep standing fact above before deleting any of it for being
-unreferenced.
+**Level 10 is the live edge.** Its art is uploaded to `art-source/` and it is not
+wired up. Level 9 shipped on 2026-09-13 and is a built level like any other. Read
+the asset-sweep standing fact above before deleting any level 10 art for being
+unreferenced — and note that the sweep hazard it describes is exactly what this
+paragraph used to invite, because it named level 9's art as unwired while the branch
+that used it was in flight.
 
 `claude/context.md` carries the working state — open items, branches, per-level win
 rates — and is reconciled against the repository rather than written from memory.
