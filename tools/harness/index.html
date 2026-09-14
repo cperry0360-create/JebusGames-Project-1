@@ -77,8 +77,8 @@ const SCENARIO_NAMES = [
   'scheduleguard', 'screens', 'scrim', 'settings', 'sharesheet',
   'shortviewport', 'signs', 'skilled', 'softlock', 'spec', 'spot5',
   'sprites', 'standalone', 'startrun', 'stuckcast', 'stuckguard', 'stun',
-  'stunlock', 'texmem', 'ticket', 'title', 'towerpanel', 'towerring',
-  'towertiers', 'transform', 'type', 'typegame', 'ui', 'ultimate', 'voices',
+  'stunlock', 'texmem', 'ticket', 'title', 'titlecard', 'towerpanel', 'towerring',
+  'towertiers', 'transform', 'type', 'typegame', 'ui', 'ultimate', 'vlaude', 'voices',
   'wave1', 'webglwatch', 'worldmap'
 ]
 
@@ -113,6 +113,7 @@ const ASSERTS_NOTHING = new Set([
  */
 const USES_EXPECT = new Set([
   'typegame', 'rotationburst', 'level7', 'level8', 'level9', 'boardinput', 'lanemarkers', 'level8retopo',
+  'vlaude', 'titlecard',
 ])
 
 /** How many checks this run actually EVALUATED, pass or fail. */
@@ -16009,6 +16010,749 @@ async function run() {
     note('RESULT ' + (ASSERT_FAILS === 0
       ? ASSERTIONS + ' checks on level 8, all passing'
       : '*** ' + ASSERT_FAILS + ' of ' + ASSERTIONS + ' failed ***'))
+    return
+  }
+
+  if (scenario === 'titlecard') {
+    /*
+     * WHAT WRAPS LEVEL 10: the title card in front of it and the comics behind
+     * it, both in rendered frames.
+     *
+     * The previous session's report lists both as NOT CHECKED, and the reason
+     * it gives is the right one: "no run has been played to a win through
+     * them". A comic is three scene transitions and a texture load, and no
+     * test in this repository can see any of that.
+     */
+    const RSC = await import('./js/systems/RunState.js')
+    const LVC = await import('./js/systems/Levels.js')
+    const VLC = await import('./js/systems/Vlaude.js')
+    const CUT = await import('./js/systems/Cutscenes.js')
+    const CARD = VLC.vlaudeRules(LVC.levelRules('level10')).titleCard
+    expect(!!CARD, 'level 10 has no title card block')
+
+    /* ---- 1: THE CARD PLAYS BEFORE THE LEVEL ---- */
+    for (const k of ['Title', 'WorldMap', 'Loadout', 'Game', 'Hud', 'Cutscene', 'Credits']) {
+      game.scene.stop(k)
+    }
+    RSC.setRunState({
+      heroId: 'cory', levelId: 'level10', seed: 7, abilities: ['molotov', 'glacier'],
+      openingTowers: ['withholding', 'writeoff'], reserveTowers: [], resumeFrom: null,
+    })
+    game.scene.start('Loadout')
+    await until(() => running('Loadout') && scene('Loadout').buttonsForProbe, 20000)
+    const LO = scene('Loadout')
+    await sleep(500)
+    const begin = LO.buttonsForProbe[LO.buttonsForProbe.length - 1]
+    expect(!!begin, 'the loadout has no BEGIN button')
+    note('pressing "' + begin.text.text + '"')
+    // `pointerdown` ON THE HIT RECTANGLE, which is where `plateButton` wires
+    // its handler. Pressing the plate art or emitting `pointerup` does
+    // nothing, and a probe that pressed nothing would report the level as
+    // starting without a card.
+    begin.hit.emit('pointerdown')
+    if (!(await until(() => running('Cutscene'), 12000))) {
+      expect(false, 'BEGIN did not reach a cutscene; the title card never plays')
+      note('RESULT the title card does not play'); return
+    }
+    const C = scene('Cutscene')
+    await until(() => C.image, 12000)
+    await sleep(400)
+    note('title card: panels ' + JSON.stringify(C.panels)
+      + '  holdMs ' + C.holdMs + '  then ' + C.next
+      + '  drawn ' + (C.image ? Math.round(C.image.displayWidth) + 'x'
+        + Math.round(C.image.displayHeight) : 'nothing'))
+    expect(C.panels.length === 1 && C.panels[0] === CARD.panel,
+      'the first thing BEGIN shows is ' + JSON.stringify(C.panels))
+    expect(C.holdMs === CARD.holdMs,
+      'the card holds for ' + C.holdMs + 'ms, not ' + CARD.holdMs)
+    expect(!!C.image && C.image.displayWidth > 0, 'the card is not drawn')
+    // FULL SCREEN, which on a 16:9 panel in a 16:9 window is the whole glass
+    // and on a phone is full width with the game's own chrome above and below.
+    const fill = C.image ? (C.image.displayWidth * C.image.displayHeight)
+      / (VP.w * VP.h) : 0
+    note('  it covers ' + Math.round(fill * 100) + '% of the viewport')
+    expect(fill > 0.55, 'the card covers only ' + Math.round(fill * 100) + '% of the screen')
+    await shot('titlecard-1-card-' + VP.w + 'x' + VP.h)
+    // AND IT ADVANCES BY ITSELF. Nothing is tapped below this line.
+    const held = Date.now()
+    if (!(await until(() => running('Game'), CARD.holdMs + 15000))) {
+      expect(false, 'the card never handed over to the level')
+    } else {
+      note('  it advanced by itself after ' + (Date.now() - held) + 'ms '
+        + '(asked for ' + CARD.holdMs + ') with no tap')
+      expect(Date.now() - held >= CARD.holdMs - 400,
+        'the card was over in ' + (Date.now() - held) + 'ms')
+    }
+    await until(() => scene('Game') && scene('Game').hero, 20000)
+    await shot('titlecard-2-into-the-level-' + VP.w + 'x' + VP.h)
+
+    /* ---- 2: A LOSS PLAYS NO COMIC ---- */
+    {
+      const G = scene('Game')
+      await until(() => running('Hud'), 12000)
+      await sleep(500)
+      G.endRun('lost')
+      await sleep(900)
+      note('a loss: phase ' + G.status.phase + ', Cutscene running=' + running('Cutscene')
+        + ', Credits running=' + running('Credits'))
+      expect(!running('Cutscene'), 'a LOSS played the outro comic')
+      expect(!running('Credits'), 'a LOSS rolled the credits')
+      expect(CUT.outroPanelsFor('level10').length === 3,
+        'level 10 has ' + CUT.outroPanelsFor('level10').length + ' outro panels, not 3')
+      await shot('titlecard-3-loss-no-comic-' + VP.w + 'x' + VP.h)
+    }
+
+    /* ---- 3: A WIN PLAYS THEM IN ORDER, AND THE CREDITS FOLLOW ---- */
+    for (const k of ['Game', 'Hud', 'Cutscene', 'Credits']) game.scene.stop(k)
+    await sleep(300)
+    RSC.setRunState({
+      heroId: 'cory', levelId: 'level10', seed: 7, abilities: ['molotov', 'glacier'],
+      openingTowers: ['withholding', 'writeoff'], reserveTowers: [], resumeFrom: null,
+    })
+    game.scene.start('Game')
+    await until(() => running('Game') && scene('Game').hero, 20000)
+    const W = scene('Game')
+    await until(() => running('Hud'), 12000)
+    await sleep(500)
+    W.status.wave = W.status.waveCount
+    W.endRun('won')
+    await sleep(900)
+    // The results dialog is what the win opens; the comic is behind the button
+    // off it, because a comic that played over the scoreboard would be the
+    // level 9 rupture mistake again.
+    expect(W.status.phase === 'won', 'the run did not end as a win')
+    await shot('titlecard-4-won-' + VP.w + 'x' + VP.h)
+    W.leaveWon('WorldMap')
+    if (!(await until(() => running('Cutscene'), 12000))) {
+      expect(false, 'a WIN on level 10 did not play the outro comic')
+      note('RESULT the outro does not play'); return
+    }
+    const O = scene('Cutscene')
+    await until(() => O.image, 12000)
+    await sleep(400)
+    note('outro: panels ' + JSON.stringify(O.panels) + '  then ' + O.next
+      + '  thenData ' + JSON.stringify(O.nextData))
+    expect(O.panels.length === 3, 'the outro is ' + O.panels.length + ' panel(s)')
+    expect(JSON.stringify(O.panels) === JSON.stringify(CUT.outroPanelsFor('level10')),
+      'the outro plays panels in a different order from cutscenes.json')
+    // THE CREDITS ARE WHERE IT HANDS OVER, because this is the last level.
+    expect(O.next === 'Credits',
+      'the last level\'s comic hands over to ' + O.next + ', not the credits')
+    expect(O.nextData && O.nextData.then === 'WorldMap',
+      'the button the player pressed was thrown away: ' + JSON.stringify(O.nextData))
+    // IN ORDER, one tap at a time, and each one is a frame.
+    for (let i = 0; i < 3; i++) {
+      const path = O.panels[O.index]
+      note('  panel ' + (O.index + 1) + '/' + O.panels.length + ': ' + path
+        + '  drawn=' + (O.image ? O.image.texture.key : 'nothing'))
+      expect(!!O.image && O.image.texture.key === CUT.panelKey(path),
+        'panel ' + (O.index + 1) + ' draws ' + (O.image && O.image.texture.key))
+      await shot('titlecard-5-outro-' + (i + 1) + '-' + VP.w + 'x' + VP.h)
+      O.advance()
+      await sleep(900)
+      if (running('Credits')) break
+    }
+    if (!(await until(() => running('Credits'), 12000))) {
+      expect(false, 'the comic ended and the credits did not roll')
+    } else {
+      const CR = scene('Credits')
+      await sleep(700)
+      note('credits: rolling, handing over to ' + CR.next
+        + ', ' + CR.roll.list.length + ' objects in the roll')
+      expect(CR.roll && CR.roll.list.length > 10, 'the roll is empty')
+      expect(CR.next === 'WorldMap',
+        'the roll hands over to ' + CR.next + ' rather than where the player was going')
+      await shot('titlecard-6-credits-' + VP.w + 'x' + VP.h)
+    }
+    note('RESULT the card plays, the comics play on a win only, and the credits follow')
+    return
+  }
+
+  if (scenario === 'vlaude') {
+    /*
+     * LEVEL 10'S FIGHT, IN RENDERED FRAMES.
+     *
+     * The previous session could verify NONE of this because none of it
+     * existed: its own report says "no frame in this report contains Vlaude at
+     * the core, a float, a telegraph, a padlock, a wall, a countermeasure or a
+     * white fade". Every one of those is below, read off the live scene.
+     *
+     * AND NOTHING IN tests/ CAN SEE ANY OF IT. No test in this repository
+     * imports Phaser: `tests/level10.test.ts` executes the RULES, which is
+     * arithmetic, and says nothing about a sprite, a texture, a camera or an
+     * animation frame. This is the only thing that looks at a picture.
+     *
+     * The order is the order a player meets them: the berth, the swap, the
+     * float, the lane, the six powers, the portal, the ending.
+     */
+    const RSV = await import('./js/systems/RunState.js')
+    const LV = await import('./js/systems/Levels.js')
+    const VL = await import('./js/systems/Vlaude.js')
+    const EnemyV = (await import('./js/entities/Enemy.js')).Enemy
+    const ENEMIESV = (await import('./js/data/enemies.json', { with: { type: 'json' } })).default
+    const RULESV = VL.vlaudeRules(LV.levelRules('level10'))
+    expect(!!RULESV, 'level 10 has no vlaude rules; nothing below can fire')
+
+    /* ---- 0: THE DATA REFUSES A BAD SCHEDULE ---- */
+    {
+      const problems = VL.combinationProblems(RULESV)
+      note('combinationProblems: ' + (problems.length === 0 ? 'none' : problems.join(' | ')))
+      expect(problems.length === 0, 'the shipped schedule has ' + problems.length + ' problem(s)')
+      const LAV = await import('./js/systems/LevelArt.js')
+      const owned = new Set(LAV.levelArtKeys('level10'))
+      const sheets = VL.effectSheetKeys(RULESV)
+      const outside = sheets.filter((k) => !owned.has(k))
+      note('effect sheets: ' + sheets.join(' ') + '  outside this level\'s art list: '
+        + (outside.length === 0 ? 'none' : outside.join(' ')))
+      expect(outside.length === 0,
+        'a sheet this level plays is not in its own art list: ' + outside.join(', '))
+    }
+
+    /* ---- 1: HE SITS AT THE CRYSTAL CORE IN CHAT MODE ---- */
+    for (const k of ['Title', 'WorldMap', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+    RSV.setRunState({
+      heroId: 'cory', levelId: 'level10', seed: 10, abilities: ['molotov', 'glacier'],
+      openingTowers: ['withholding', 'writeoff'], reserveTowers: [], resumeFrom: null,
+    })
+    game.scene.start('Game')
+    if (!(await until(() => running('Game') && scene('Game').hero, 25000))) {
+      expect(false, 'level 10 did not start')
+      note('RESULT level 10 did not build'); return
+    }
+    const G = scene('Game')
+    await until(() => running('Hud'), 12000)
+    await sleep(700)
+    expect(G.level.id === 'level10', 'the scene is running ' + G.level.id)
+    const berth = G.level.map.vlaudeBerth
+    const at = () => G.vlaudeArt
+    expect(!!at(), 'nothing is drawn at the berth')
+    note('berth sprite: ' + (at() && at().texture.key)
+      + ' at (' + Math.round(at().x) + ', ' + Math.round(at().y) + ')'
+      + '  asked for (' + berth.x + ', ' + berth.y + ')'
+      + '  displayHeight ' + (at() ? Math.round(at().displayHeight) : 0))
+    expect(at() && at().texture.key === 'enemy-vlaude',
+      'the chat form wears ' + (at() && at().texture.key))
+    expect(at() && Math.abs(at().x - berth.x) < 1 && Math.abs(at().y - berth.y) < 12,
+      'the berthed form is not at the berth')
+    expect(at() && Math.abs(at().displayHeight - RULESV.displayHeight) < 2,
+      'he is ' + Math.round(at().displayHeight) + ' px, not ' + RULESV.displayHeight)
+
+    /* HE CANNOT BE DAMAGED, and the reason is that there is nothing to damage. */
+    const bossDef = ENEMIESV[RULESV.laneEnemy]
+    const onBoard = () => G.enemies.filter((e) => e.def === bossDef).length
+    expect(onBoard() === 0, 'Vlaude is an Enemy while he is parked at the core')
+    expect(VL.targetable(G.vlaudePhase, G.vlaudeFloating) === false,
+      'targetable() says the chat form can be hit')
+    expect(at() && !at().input, 'the berthed form takes pointer events')
+    // A tower built next to the core finds nothing to shoot.
+    G.status.peanuts = 999999
+    {
+      let near = null, best = Infinity
+      for (const s of G.build.spots) {
+        const d = Math.hypot(s.x - berth.x, s.y - berth.y)
+        if (d < best) { best = d; near = s }
+      }
+      G.place('withholding', near)
+      await sleep(900)
+      note('  a tower ' + Math.round(best) + ' px from the core: '
+        + G.towers.length + ' built, ' + G.enemies.length + ' enemies on the board')
+      expect(G.enemies.length === 0, 'something is on the board for it to shoot')
+    }
+    await shot('vlaude-1-berth-chat-' + VP.w + 'x' + VP.h)
+
+    /* ---- 2: THE CODE FORM AT WAVE 7, STILL UNTOUCHABLE ---- */
+    G.status.wave = RULESV.phases.codeFromWave - 1
+    await sleep(500)
+    note('wave ' + (G.status.wave + 1) + ': phase ' + G.vlaudePhase
+      + '  sprite ' + (at() && at().texture.key))
+    expect(G.vlaudePhase === 'code', 'wave ' + (G.status.wave + 1) + ' is phase ' + G.vlaudePhase)
+    expect(at() && at().texture.key === 'enemy-vlaude-code',
+      'the code form wears ' + (at() && at().texture.key))
+    expect(VL.targetable(G.vlaudePhase, G.vlaudeFloating) === false,
+      'targetable() says the code form can be hit')
+    expect(onBoard() === 0, 'the code form is an Enemy')
+    await shot('vlaude-2-berth-code-' + VP.w + 'x' + VP.h)
+
+    /* ---- 3: THE FLOAT AT WAVE 13 ---- */
+    const floatStart = Date.now()
+    G.status.wave = RULESV.phases.damagedFromWave - 1
+    await sleep(120)
+    expect(G.vlaudePhase === 'damaged',
+      'wave ' + (G.status.wave + 1) + ' is phase ' + G.vlaudePhase)
+    expect(G.vlaudeFloating === true, 'the float did not begin')
+    await shot('vlaude-3-float-hold-' + VP.w + 'x' + VP.h)
+    // INVULNERABLE FOR THE WHOLE TRAVERSAL. Sampled every 120ms until it
+    // lands: one frame in which `targetable` was true would be a frame a
+    // tower could have shot him.
+    let sampled = 0, everTargetable = false, everAnEnemy = false
+    const deadline = Date.now() + RULESV.float.holdMs + RULESV.float.travelMs + 6000
+    while (G.vlaudeFloating && Date.now() < deadline) {
+      sampled++
+      if (VL.targetable(G.vlaudePhase, G.vlaudeFloating)) everTargetable = true
+      if (onBoard() > 0) everAnEnemy = true
+      if (sampled === 14) await shot('vlaude-4-float-travel-' + VP.w + 'x' + VP.h)
+      await sleep(120)
+    }
+    const flew = Date.now() - floatStart
+    note('the float: ' + sampled + ' samples over ' + flew + 'ms'
+      + '  (hold ' + RULESV.float.holdMs + ' + travel ' + RULESV.float.travelMs + ')'
+      + '  targetable at any point: ' + everTargetable
+      + '  an Enemy at any point: ' + everAnEnemy)
+    expect(sampled > 10, 'the float was over in ' + sampled + ' samples; it was not watched')
+    expect(!everTargetable, 'he was targetable mid-float')
+    expect(!everAnEnemy, 'he was an Enemy mid-float')
+    expect(!G.vlaudeFloating, 'the float never landed')
+    expect(!G.vlaudeArt, 'the berthed sprite is still on the board after the landing')
+    expect(VL.targetable(G.vlaudePhase, G.vlaudeFloating) === true,
+      'he is still untargetable after the float landed')
+    await shot('vlaude-5-float-landed-' + VP.w + 'x' + VP.h)
+
+    /* ---- 4: ON THE LANE, HOVERING, AND SHOT BY ANYTHING ---- */
+    const laneId = G.vlaudeLaneId()
+    const spawnAt = (key, d) => {
+      const lane = G.lanes.lane(laneId)
+      const e = new EnemyV(G, ENEMIESV[key], lane.path, G.gateway,
+        { lanes: G.lanes, laneId, startAt: { laneDistance: d, distance: d } })
+      G.enemies.push(e)
+      return e
+    }
+    {
+      const v = spawnAt(RULESV.laneEnemy, 340)
+      await sleep(600)
+      expect(v.alive, 'the lane Vlaude did not survive his own spawn')
+      expect(ENEMIESV[RULESV.laneEnemy].glides === true, 'he does not hover')
+      expect(ENEMIESV[RULESV.laneEnemy].layer === undefined,
+        'he is an air unit, which would make him unshootable by half the roster')
+      // THE SHADOW IS REAL AND IS HIS OWN CHILD. Every Enemy carries one; what
+      // is checked is that it is there, visible and under him.
+      const kids = v.list ? v.list.length : 0
+      const shadow = v.list && v.list[0]
+      note('  lane Vlaude at (' + Math.round(v.x) + ', ' + Math.round(v.y) + ')'
+        + '  hp ' + v.health + '/' + v.maxHealth
+        + '  children ' + kids + '  shadow ' + (shadow ? shadow.type : 'none')
+        + ' visible=' + (shadow ? shadow.visible : 'n/a'))
+      expect(kids >= 2, 'he has ' + kids + ' children; a shadow and a body is two')
+      expect(!!shadow && shadow.visible, 'he casts no shadow')
+      // HIT BY ANTI-GLIDER FIRE. Every tower in the game can shoot a Glider --
+      // that is the whole reason he has no `layer` -- so a tower's own damage
+      // path is what is driven here.
+      const before = v.health
+      G.damageEnemy(v, 500, false)
+      await sleep(200)
+      note('  a tower\'s hit: ' + before + ' -> ' + v.health)
+      expect(v.health < before, 'a hit that reached a Glider did not reach him')
+      await shot('vlaude-6-on-the-lane-' + VP.w + 'x' + VP.h)
+      v.destroy()
+      G.enemies = G.enemies.filter((e) => e !== v)
+    }
+
+    /* ---- 5: REACHING THE EXIT ENDS THE RUN, BEFORE A LIFE IS DEDUCTED ---- */
+    {
+      const tail = G.lanes.lane(laneId).path
+      const lives = G.status.lives
+      const v = spawnAt(RULESV.laneEnemy, tail.totalLength - 6)
+      await until(() => G.status.phase === 'lost', 6000)
+      note('  the exit: lives ' + lives + ' -> ' + G.status.lives
+        + ', phase ' + G.status.phase + ' (livesCost ' + ENEMIESV[RULESV.laneEnemy].livesCost + ')')
+      expect(G.status.phase === 'lost', 'Vlaude reached the exit and the run went on')
+      expect(G.status.lives === lives,
+        'the run ended AND ' + (lives - G.status.lives) + ' lives were charged')
+      if (v && v.destroy) { /* the scene has already taken it off */ }
+      await shot('vlaude-7-exit-ends-run-' + VP.w + 'x' + VP.h)
+    }
+
+    /* ---- 6: THE SIX POWERS, ON A FRESH BOARD ---- */
+    game.scene.stop('Hud')
+    game.scene.stop('Game')
+    await sleep(300)
+    RSV.setRunState({
+      heroId: 'cory', levelId: 'level10', seed: 10, abilities: ['molotov', 'glacier'],
+      openingTowers: ['withholding', 'writeoff'], reserveTowers: [], resumeFrom: null,
+    })
+    game.scene.start('Game')
+    await until(() => running('Game') && scene('Game').hero, 20000)
+    const P = scene('Game')
+    await until(() => running('Hud'), 12000)
+    await sleep(600)
+    P.status.peanuts = 999999
+    P.status.wave = 13
+    P.status.phase = 'wave'
+    // THE WAVE IS HELD OPEN FOR THE WHOLE PROBE, and this is not decoration.
+    // `checkWaveOver` ends a wave the moment the spawner is done and the field
+    // is empty -- which, on a board driven by hand, is between every two
+    // sections below. Phase then leaves 'wave', and `duplicateEnemy` and
+    // `createEnemies` both check it inside their own delayed insert, so both
+    // silently did nothing. A group with a 9999s delay is never done, so the
+    // wave cannot end underneath the probe.
+    P.spawner.begin({ name: 'probe', spawns: [
+      { enemy: 'corrupt', count: 1, interval: 1, delay: 9999 },
+    ] })
+    const fired = {}
+    // One enemy on the lane, at a distance, through the same constructor the
+    // wave spawner uses. `startAt` is what makes it appear on the road rather
+    // than walk in from the gate, which is how level 9's scenario drives a
+    // fight in half a second instead of ninety.
+    const spawnOnP = (S, key, d) => {
+      const id = S.vlaudeLaneId()
+      const lane = S.lanes.lane(id)
+      const e = new EnemyV(S, ENEMIESV[key], lane.path, S.gateway,
+        { lanes: S.lanes, laneId: id, startAt: { laneDistance: d, distance: d } })
+      S.enemies.push(e)
+      return e
+    }
+
+    /* 6a: BUILD LOCK. A tower already standing keeps firing. */
+    {
+      const pad = P.build.spots[0]
+      P.place('withholding', pad)
+      await sleep(1200)
+      const tower = P.towers.find((t) => t.spot === pad.index)
+      expect(!!tower, 'the tower under test was not built')
+      // Lock every pad, so the one carrying the tower is certainly among them.
+      const all = P.build.spots.map((s) => s.index)
+      P.landPower('buildLock')
+      await sleep(200)
+      const locked = [...P.padLocks.keys()].sort((a, b) => a - b)
+      note('buildLock: locked ' + JSON.stringify(locked)
+        + ' of ' + all.length + ' pads for '
+        + RULESV.powers.buildLock.durationSeconds + 's'
+        + '  padlock sprites ' + P.padLockArt.size)
+      expect(locked.length === RULESV.powers.buildLock.count,
+        'locked ' + locked.length + ' pads, not ' + RULESV.powers.buildLock.count)
+      expect(P.padLockArt.size === locked.length, 'a locked pad has no padlock on it')
+      for (const i of locked) {
+        expect(P.padOpen(i) === false, 'pad ' + i + ' is locked and still buildable')
+      }
+      // AND THE OCCUPIED ONE IS UNTOUCHED. The tower is alive, on its pad, and
+      // firing: `cooldown` moves and `build.isFree` still says the pad is taken.
+      const lockedOccupied = []
+      for (const i of locked) if (!P.build.isFree(i)) lockedOccupied.push(i)
+      // Lock the tower's own pad directly, so this is not left to the picker.
+      P.padLocks.set(tower.spot, 12)
+      const alive = P.towers.includes(tower)
+      // ON THE ROAD IN FRONT OF THE TOWER, not at the gate. A pad is up to
+      // 114 px off the lane and the gate is 3,440 px away from most of them;
+      // an enemy spawned at distance 0 proves nothing about whether a gun
+      // fires, because no gun on this board can reach it.
+      const lane0 = P.lanes.lane(P.vlaudeLaneId()).path
+      let near0 = 0, bestD = Infinity
+      for (let d = 0; d <= lane0.totalLength; d += 6) {
+        const pt = lane0.pointAt(d)
+        const dist = Math.hypot(pt.x - tower.x, pt.y - tower.y)
+        if (dist < bestD) { bestD = dist; near0 = d }
+      }
+      note('  the tower is ' + Math.round(bestD) + ' px from the road at '
+        + Math.round(near0) + ' px along it; range ' + Math.round(tower.range))
+      const e = spawnOnP(P, 'packet', near0)
+      await sleep(2000)
+      note('  a tower on a locked pad: alive=' + P.towers.includes(tower)
+        + ' pad still occupied=' + (!P.build.isFree(tower.spot))
+        + ' lockedPadStillFires()=' + VL.lockedPadStillFires()
+        + ' enemy hp ' + Math.round(e.health) + '/' + e.maxHealth)
+      expect(P.towers.includes(tower) && alive, 'the tower on a locked pad was destroyed')
+      expect(!P.build.isFree(tower.spot), 'the locked pad gave up its tower\'s occupancy')
+      expect(e.health < e.maxHealth || !e.alive,
+        'the tower on a locked pad did not fire: enemy at full health')
+      fired.buildLock = true
+      await shot('vlaude-8-build-lock-' + VP.w + 'x' + VP.h)
+      for (const [i] of [...P.padLocks]) P.padLocks.set(i, 0.01)
+      await sleep(400)
+    }
+
+    /* 6b: SPEED ALTER. Assigned, never accumulated, restored to HASTE_OFF. */
+    {
+      const a = spawnOnP(P, 'corrupt', 60)
+      const b = spawnOnP(P, 'corrupt', 80)
+      await sleep(200)
+      P.landPower('speedAlter')
+      await sleep(200)
+      const m = VL.hasteMultiplier(RULESV)
+      note('speedAlter: multiplier ' + m + ' for ' + VL.hasteSeconds(RULESV) + 's'
+        + '  a=' + a.hasteSpeed + ' b=' + b.hasteSpeed)
+      expect(a.hasteSpeed === m && b.hasteSpeed === m, 'the haste did not reach the board')
+      // CAST AGAIN INSIDE THE WINDOW: assigned, so it does not stack.
+      P.landPower('speedAlter')
+      await sleep(200)
+      expect(a.hasteSpeed === m, 'a second cast accumulated to ' + a.hasteSpeed)
+      const marker = P.statusMarkers.get(a)
+      note('  status marker: ' + (marker ? marker.kind : 'none'))
+      expect(!!marker && marker.kind === 'haste', 'no haste icon over a hasted enemy')
+      fired.speedAlter = true
+      await shot('vlaude-9-haste-' + VP.w + 'x' + VP.h)
+      P.hasteLeft = 0.01
+      await until(() => a.hasteSpeed === VL.HASTE_OFF, 4000)
+      note('  restored: a=' + a.hasteSpeed + ' b=' + b.hasteSpeed
+        + ' (HASTE_OFF is ' + VL.HASTE_OFF + ')')
+      expect(a.hasteSpeed === VL.HASTE_OFF && b.hasteSpeed === VL.HASTE_OFF,
+        'the haste did not come back off')
+      for (const e of [a, b]) { e.destroy() }
+      P.enemies = P.enemies.filter((e) => e.alive)
+    }
+
+    /* 6c: DUPLICATE. And a duplicate does not duplicate. */
+    {
+      P.enemies = P.enemies.filter((e) => e.alive)
+      const src0 = spawnOnP(P, 'corrupt', 120)
+      const before = P.enemies.length
+      P.landPower('duplicateEnemy')
+      await sleep(RULESV.powers.duplicateEnemy.durationMs + 700)
+      const copies = P.enemies.filter((e) => e.copyDepth > 0)
+      note('duplicateEnemy: ' + before + ' -> ' + P.enemies.length + ' on the board, '
+        + copies.length + ' marked as copies (depths '
+        + copies.map((c) => c.copyDepth).join(',') + ')')
+      expect(copies.length >= 1, 'nothing was duplicated')
+      expect(copies.every((c) => c.copyDepth === 1), 'a copy carries the wrong depth')
+      // THE RULE: cast again with only copies eligible and nothing comes back.
+      const offered = VL.copyTargets(RULESV,
+        copies.map((c) => ({ id: 'corrupt', copyDepth: c.copyDepth })))
+      note('  copyTargets over copies only: ' + offered.length + ' offered')
+      expect(offered.length === 0, 'a duplicate was offered for duplication')
+      const n = P.enemies.length
+      for (const e of P.enemies) if (e !== src0) e.copyDepth = 1
+      src0.destroy()
+      P.enemies = P.enemies.filter((e) => e !== src0)
+      P.landPower('duplicateEnemy')
+      await sleep(RULESV.powers.duplicateEnemy.durationMs + 700)
+      note('  a cast with only copies on the board: ' + (n - 1) + ' -> ' + P.enemies.length)
+      expect(P.enemies.length <= n, 'a duplicate duplicated')
+      fired.duplicateEnemy = true
+      await shot('vlaude-10-duplicate-' + VP.w + 'x' + VP.h)
+      for (const e of [...P.enemies]) e.destroy()
+      P.enemies = []
+    }
+
+    /* 6d: A WALL, DOWN TO RUBBLE, AND THE COLLISION CLEARS WITH IT. */
+    {
+      P.landPower('generateWall')
+      await sleep(400)
+      expect(P.vlaudeWalls.length === 1, 'no wall was placed')
+      const w = P.vlaudeWalls[0]
+      note('generateWall: ' + w.art.texture.key + ' at ('
+        + Math.round(w.x) + ', ' + Math.round(w.y) + ')  blocks=' + w.blocks
+        + '  hp ' + w.state.health + '/' + w.state.maxHealth)
+      expect(w.art.texture.key === 'prop-wall-intact', 'a fresh wall is already damaged')
+      expect(w.blocks === true, 'a standing wall does not block')
+      expect(P.wallBlocks(w.x, w.y) === true, 'the ground under a standing wall is free')
+      await shot('vlaude-11-wall-intact-' + VP.w + 'x' + VP.h)
+      // CRACKED, then RUBBLE, through the one function that owns both answers.
+      w.state.health = w.state.maxHealth * (RULESV.powers.generateWall.crackedBelowHealth - 0.05)
+      await sleep(300)
+      note('  below ' + RULESV.powers.generateWall.crackedBelowHealth + ': '
+        + w.art.texture.key + '  blocks=' + w.blocks)
+      expect(w.art.texture.key === 'prop-wall-cracked', 'a cracked wall is not drawn cracked')
+      expect(w.blocks === true, 'a cracked wall has already stopped blocking')
+      await shot('vlaude-12-wall-cracked-' + VP.w + 'x' + VP.h)
+      w.state.health = 0
+      await sleep(300)
+      note('  at zero: ' + w.art.texture.key + '  blocks=' + w.blocks
+        + '  wallBlocks() at its centre=' + P.wallBlocks(w.x, w.y))
+      expect(/^prop-wall-rubble-/.test(w.art.texture.key),
+        'a broken wall is drawn as ' + w.art.texture.key)
+      expect(w.blocks === false, 'the rubble is still blocking')
+      expect(P.wallBlocks(w.x, w.y) === false, 'the ground under the rubble is still denied')
+      fired.generateWall = true
+      await shot('vlaude-13-wall-rubble-' + VP.w + 'x' + VP.h)
+      w.rubbleLeft = 0.01
+      await sleep(400)
+    }
+
+    /* 6e: A COUNTERMEASURE, KILLED, PAYING PEANUTS AND GIVING THE PAD BACK. */
+    {
+      const free = P.build.spots.filter((s) => P.build.isFree(s.index)).length
+      P.landPower('generateWeapon')
+      await sleep(400)
+      expect(P.countermeasures.length === 1, 'no countermeasure was placed')
+      const c = P.countermeasures[0]
+      note('generateWeapon: ' + c.art.texture.key + ' on pad ' + c.pad
+        + '  hp ' + c.health + '/' + c.maxHealth
+        + '  pad free before=' + free + ' after=' + P.build.spots.filter(
+          (s) => P.build.isFree(s.index)).length)
+      expect(c.art.texture.key === 'turret-vlaude-countermeasure',
+        'the countermeasure wears ' + c.art.texture.key)
+      expect(!P.build.isFree(c.pad), 'the countermeasure does not hold its pad')
+      expect(P.padOpen(c.pad) === false, 'the player can build under a countermeasure')
+      // AND IT SHOOTS. A tower inside its range goes dark.
+      {
+        let target = null, best = Infinity
+        for (const t of P.towers) {
+          const d = Math.hypot(t.x - c.x, t.y - c.y)
+          if (d < best) { best = d; target = t }
+        }
+        if (target) {
+          target.x = c.x + 40
+          target.y = c.y + 10
+          const pool = RULESV.powers.generateWeapon.towerHealth
+          const shots = Math.ceil(pool / RULESV.powers.generateWeapon.damage)
+          c.cooldown = 0
+          for (let i = 0; i < shots + 1 && target.disabledFor <= 0; i++) {
+            P.hitTowerWithCountermeasure(target, RULESV.powers.generateWeapon.damage)
+          }
+          note('  ' + shots + ' shots at ' + target.def.name + ': disabledFor='
+            + Math.round(target.disabledFor) + 's, still on its pad='
+            + P.towers.includes(target))
+          expect(target.disabledFor > 0, 'the countermeasure never put a tower out')
+          expect(P.towers.includes(target), 'the countermeasure DESTROYED a tower')
+        }
+      }
+      await shot('vlaude-14-countermeasure-' + VP.w + 'x' + VP.h)
+      const purse = P.status.peanuts
+      c.health = 0
+      await until(() => P.countermeasures.length === 0, 4000)
+      note('  killed: peanuts ' + purse + ' -> ' + P.status.peanuts
+        + ' (reward ' + RULESV.powers.generateWeapon.peanutReward + ')'
+        + '  pad ' + c.pad + ' free=' + P.build.isFree(c.pad))
+      expect(P.countermeasures.length === 0, 'the countermeasure survived zero health')
+      expect(P.status.peanuts - purse === RULESV.powers.generateWeapon.peanutReward,
+        'it paid ' + (P.status.peanuts - purse) + ' peanuts')
+      expect(P.build.isFree(c.pad), 'the pad did not come back')
+      fired.generateWeapon = true
+      await shot('vlaude-15-countermeasure-down-' + VP.w + 'x' + VP.h)
+    }
+
+    /* 6f: CREATE ENEMIES. Real units, under their own cap. */
+    {
+      for (const e of [...P.enemies]) e.destroy()
+      P.enemies = []
+      P.landPower('createEnemies')
+      const cfg = RULESV.powers.createEnemies
+      await sleep(cfg.count * cfg.intervalSeconds * 1000 + 1500)
+      const made = P.enemies.filter((e) => e.madeByVlaude)
+      note('createEnemies: ' + made.length + ' of ' + cfg.count + ' asked for'
+        + '  ids ' + made.map((e) => e.def.name).join(', ')
+        + '  cap ' + cfg.maxAliveFromThisPower)
+      expect(made.length >= 1, 'nothing was created')
+      expect(made.length <= cfg.maxAliveFromThisPower, 'the cap was exceeded')
+      expect(made.every((e) => e.maxHealth > 0 && e.def.peanutReward > 0),
+        'a created unit has no stats')
+      fired.createEnemies = true
+      await shot('vlaude-16-created-' + VP.w + 'x' + VP.h)
+    }
+
+    /* ---- 7: THE TELEGRAPH, AND A COMBINATION FIRING BOTH HALVES ---- */
+    {
+      const armed = VL.armedAt(RULESV, 16)
+      note('armedAt(16): ' + armed.map((a) => a.power + (a.with ? '+' + a.with : '')).join(' '))
+      expect(armed.length >= 6, 'wave 16 arms only ' + armed.length + ' rows')
+      const before = P.vlaudePending.length
+      const combo = armed.find((a) => a.with)
+      expect(!!combo, 'no combination row is armed by wave 16')
+      P.telegraphCast(combo)
+      await sleep(120)
+      const pend = P.vlaudePending[P.vlaudePending.length - 1]
+      note('  telegraphed ' + JSON.stringify(pend.powers) + ', landing in '
+        + pend.left.toFixed(2) + 's (leadSeconds ' + RULESV.telegraph.leadSeconds + ')')
+      expect(P.vlaudePending.length === before + 1, 'the cast did not queue')
+      expect(pend.powers.length === 2, 'a combination queued ' + pend.powers.length + ' power(s)')
+      expect(pend.left > 0, 'the effect landed on the frame it was telegraphed')
+      await shot('vlaude-17-telegraph-' + VP.w + 'x' + VP.h)
+      P.vlaudePending.length = 0
+    }
+
+    /* ---- 8: THE RECALL PORTAL IS DECORATION ---- */
+    {
+      const before = P.enemies.length
+      P.recallPortal(P.vlaudeLaneId())
+      await sleep(300)
+      note('recall portal: enemies ' + before + ' -> ' + P.enemies.length)
+      expect(P.enemies.length === before, 'the portal spawned something')
+      await shot('vlaude-18-portal-' + VP.w + 'x' + VP.h)
+    }
+
+    /* ---- 9: THE DEFEAT DRAWS 0..6 AND NEVER THE WHITE RECTANGLE ---- */
+    {
+      const d = RULESV.defeat
+      const frames = VL.defeatSpriteFrames(RULESV)
+      note('defeat: spriteFrames ' + frames + ' of totalFrames ' + d.totalFrames
+        + '  defeatReachedFade(' + (frames - 1) + ')=' + VL.defeatReachedFade(RULESV, frames - 1)
+        + '  (' + frames + ')=' + VL.defeatReachedFade(RULESV, frames))
+      expect(VL.defeatReachedFade(RULESV, frames - 1) === false, 'frame 6 already triggers the fade')
+      expect(VL.defeatReachedFade(RULESV, frames) === true, 'frame 7 does not trigger the fade')
+      // WATCHED FRAME BY FRAME. Every frame index the sprite is ever seen
+      // wearing is recorded; frame 7 appearing once is the bug.
+      const seen = new Set()
+      let sawSprite = false
+      let shotMid = false
+      P.playVlaudeDefeat({ x: 640, y: 360 })
+      const stop = Date.now() + d.frameMs * (d.totalFrames + 3) + 2500
+      while (Date.now() < stop) {
+        for (const o of P.children.list) {
+          if (o.texture && o.texture.key === d.fx && o.visible) {
+            sawSprite = true
+            seen.add(o.frame ? Number(o.frame.name) : -1)
+          }
+        }
+        if (seen.size === 3 && !shotMid) { shotMid = true; await shot('vlaude-19a-defeat-frames-' + VP.w + 'x' + VP.h) }
+        await sleep(20)
+      }
+      const drawn = [...seen].filter((n) => !Number.isNaN(n)).sort((a, b) => a - b)
+      note('  frames drawn as a sprite: ' + JSON.stringify(drawn))
+      expect(sawSprite, 'the defeat sheet never appeared')
+      expect(!drawn.includes(frames), 'frame ' + frames + ' -- the white rectangle -- was DRAWN')
+      expect(drawn.length >= 3, 'only ' + drawn.length + ' frame(s) of the defeat were drawn')
+      await shot('vlaude-19-defeat-' + VP.w + 'x' + VP.h)
+    }
+
+    /* ---- 10: THE WHITE WASH IS SCREEN SPACE AND SURVIVES A PAN ---- */
+    {
+      // A FRESH ONE, DRIVEN AND CAUGHT AT FULL OPACITY. The wash the defeat
+      // above raised has already faded out by now -- that is the point of it
+      // -- and a screenshot of a transparent rectangle proves nothing about
+      // where it was drawn. `whiteWash` is the same function the defeat's
+      // last frame calls.
+      P.whiteWash()
+      await sleep(RULESV.defeat.whiteFadeInMs + 120)
+      const wash = P.children.list.filter(
+        (o) => o.type === 'Rectangle' && o.fillColor === 0xffffff)
+      note('white wash: ' + wash.length + ' rectangle(s), alpha '
+        + wash.map((o) => (o.alpha ?? 1).toFixed(2)).join(','))
+      for (const o of wash) {
+        note('    rect at (' + Math.round(o.x) + ', ' + Math.round(o.y) + ') '
+          + Math.round(o.displayWidth) + 'x' + Math.round(o.displayHeight)
+          + ' depth ' + o.depth + ' visible ' + o.visible
+          + ' originX ' + o.originX + ' filter ' + o.cameraFilter
+          + ' fillAlpha ' + o.fillAlpha + ' inUi ' + P.screenSpace.includes(o))
+      }
+      note('    ui camera: ' + (P.uiCam ? [P.uiCam.x, P.uiCam.y, P.uiCam.width,
+        P.uiCam.height].join(',') : 'none') + '  zoom ' + (P.uiCam ? P.uiCam.zoom : 0)
+        + '  scroll ' + (P.uiCam ? P.uiCam.scrollX + ',' + P.uiCam.scrollY : ''))
+      // ALPHA AND FILL ALPHA ARE TWO DIFFERENT NUMBERS, and asking only about
+      // the first is how a wash that never painted anything read as fully
+      // white. Both are checked, and the frame beside them is the real proof.
+      expect(wash.some((o) => (o.alpha ?? 0) > 0.9 && (o.fillAlpha ?? 0) > 0.9),
+        'the wash never reached full white (alpha/fillAlpha '
+        + wash.map((o) => (o.alpha ?? 0).toFixed(2) + '/' + (o.fillAlpha ?? 0).toFixed(2))
+          .join(' ') + ')')
+      await shot('vlaude-20a-white-full-' + VP.w + 'x' + VP.h)
+      expect(wash.length >= 1, 'no white wash was created')
+      const w = wash[wash.length - 1]
+      // SCREEN SPACE means the WORLD camera ignores it and the fixed UI camera
+      // draws it. That is exactly what `asScreenSpace` does, and it is
+      // readable off the camera's own ignore list.
+      const worldIgnores = P.cameras.main.renderList === undefined
+      const ignored = !!(w.cameraFilter & P.cameras.main.id)
+      note('  cameraFilter=' + w.cameraFilter + '  world camera id=' + P.cameras.main.id
+        + '  ui camera id=' + (P.uiCam ? P.uiCam.id : 'none')
+        + '  ignored by the world camera=' + ignored)
+      expect(ignored, 'the white wash is a WORLD object and would pan off the board')
+      // AND THE PROOF: pan and zoom the board underneath it. A world rectangle
+      // moves with the map; a screen-space one does not.
+      const at0 = { x: w.x, y: w.y }
+      P.cameras.main.setScroll(P.cameras.main.scrollX + 400, P.cameras.main.scrollY + 200)
+      P.cameras.main.setZoom(P.cameras.main.zoom * 1.4)
+      await sleep(250)
+      note('  after a 400x200 pan and a 1.4x zoom: ('
+        + Math.round(at0.x) + ', ' + Math.round(at0.y) + ') -> ('
+        + Math.round(w.x) + ', ' + Math.round(w.y) + ')')
+      expect(w.x === at0.x && w.y === at0.y, 'the wash moved with the board')
+      await shot('vlaude-20-white-screen-space-' + VP.w + 'x' + VP.h)
+    }
+
+    const missing = ['buildLock', 'speedAlter', 'duplicateEnemy', 'generateWall',
+      'generateWeapon', 'createEnemies'].filter((id) => !fired[id])
+    note('powers fired in a rendered frame: '
+      + (missing.length === 0 ? 'all six' : 'MISSING ' + missing.join(', ')))
+    expect(missing.length === 0, 'these powers never fired: ' + missing.join(', '))
+    note('RESULT the fight plays')
     return
   }
 

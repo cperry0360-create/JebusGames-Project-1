@@ -8429,9 +8429,20 @@ export class GameScene extends Phaser.Scene {
     const v = this.vlaude
     if (!v) return
     const d = v.defeat
-    const wash = this.add.rectangle(0, 0, viewW(this) * 4, viewH(this) * 4, 0xffffff, 0)
+    // THE SIXTH ARGUMENT IS THE FILL ALPHA, NOT THE OBJECT'S.
+    //
+    // It was 0 here, and the tween below animates the GAME OBJECT's alpha --
+    // so the wash reached alpha 1 with a fill that was still fully
+    // transparent, and the screen never went white. Every number about it was
+    // correct: it existed, it was on the fixed camera, its depth was above the
+    // dialog, and the harness read `alpha 1.00` off it. NOTHING BUT A
+    // RENDERED FRAME COULD HAVE CAUGHT THIS, which is the whole of CLAUDE.md's
+    // note about a green suite and a sprite. So: an opaque fill, and the
+    // object starts transparent and is faded in.
+    const wash = this.add.rectangle(0, 0, viewW(this) * 4, viewH(this) * 4, 0xffffff, 1)
       .setOrigin(0, 0)
       .setDepth(LAYER.modal + 10)
+    wash.setAlpha(0)
     wash.setPosition(-viewW(this), -viewH(this))
     this.asScreenSpace([wash])
     logEvent('vlaude', `white wash ${whiteWashMs(v)}ms, screen space`)
