@@ -515,41 +515,27 @@ test('every file in the manifest is bound to something that draws it', () => {
   // ...and anything a LEVEL'S OWN rules name. level5.json's `acid.fx` is the
   // acid puddle, which no role and no shared data file mentions: it belongs to
   // one level, so it is named where that level's numbers are.
-  for (const name of ['towers', 'enemies', 'abilities', 'heroes', 'map', 'level5', 'level6']) {
+  // ...and LEVEL 10's, which is the third level to name art in its own rules
+  // block and the first to name three pieces of it that nothing else can.
+  // `enemy-vlaude` and `enemy-vlaude-code` are the berthed forms: they are not
+  // enemies.json rows, because in phases 1 and 2 Vlaude is not an Enemy at all
+  // -- systems/Vlaude.ts draws him at the crystal core from these two keys, and
+  // that is exactly what makes him untargetable. `turret-vlaude-countermeasure`
+  // is a HOSTILE turret, so it is not a towers.json row either: it cannot be
+  // built, upgraded or sold. All three are named in level10.json and by nothing
+  // else, which is the same shape level5.json's acid and level6.json's flame
+  // already have.
+  //
+  // THIS REPLACES A TWELVE-NAME `AWAITING_LEVEL_10` LIST that the asset pass
+  // put here when the art landed with no level to claim it. Nine of its twelve
+  // entries are enemies.json rows now and claim themselves; these three needed
+  // the mechanism that was already here rather than a list.
+  for (const name of ['towers', 'enemies', 'abilities', 'heroes', 'map', 'level5', 'level6',
+    'level10']) {
     const body = readFileSync(url(`../src/data/${name}.json`), 'utf8')
     for (const key of Object.keys(art.files)) {
       if (new RegExp(`"${key}"`).test(body)) claimed.add(key)
     }
-  }
-
-  // ART THAT LANDED AHEAD OF ITS LEVEL, named here rather than let through by
-  // a looser rule.
-  //
-  // Level 10's cast and its tower are on disk, measured and in `files`, and
-  // nothing can draw them: the roster lives in enemies.json and the tower in
-  // towers.json, and level 10 has no row in either -- nor in levels.json. The
-  // machine tower skins were in this exact state and escaped this test because
-  // `towerSkins.keys` happens to name both halves of a pairing; a plate escapes
-  // it because `map` is a role. An enemy has no such section, so without this
-  // list the only ways to register level 10's cast are to invent gameplay data
-  // or to leave twenty-one files on disk that art.json does not know about.
-  //
-  // THIS IS A LIST OF WHAT IS WAITING, NOT AN EXEMPTION LIST. Every key here
-  // is also in `art.levelArt.byLevel.level10`, so it is level art, so
-  // `orphanedLevelArt` in tests/levelart.test.ts names it too -- and that list
-  // is the one that empties itself the day level 10 ships. DELETE THIS BLOCK
-  // THEN: enemies.json and towers.json will claim every key in it, and a key
-  // still needing it is a key nothing draws.
-  const AWAITING_LEVEL_10 = [
-    'enemy-vlaude', 'enemy-vlaude-code', 'enemy-vlaude-damaged',
-    'enemy-callback-devil', 'enemy-callback-lich', 'enemy-callback-politician',
-    'enemy-callback-unicorn', 'enemy-mash-bull-tourist',
-    'enemy-mash-drone-cameraman', 'enemy-mash-rooster-phoenix',
-    'enemy-mash-unicorn-car', 'turret-vlaude-countermeasure',
-  ]
-  for (const k of AWAITING_LEVEL_10) {
-    assert.ok(art.files[k], `${k} is on the level 10 waiting list but not in the manifest`)
-    claim(k)
   }
 
   const orphans = Object.keys(art.files).filter((k) => !claimed.has(k))
