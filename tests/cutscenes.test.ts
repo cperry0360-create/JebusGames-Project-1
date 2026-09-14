@@ -160,7 +160,10 @@ test('skipping still advances into the level, and so does reading to the end', (
     'Skip no longer hands over')
   assert.match(scene, /this\.handOver\('read to the end'\)/,
     'reading to the end no longer hands over')
-  assert.match(scene, /private handOver\([\s\S]{0,400}this\.scene\.start\(this\.next\)/,
+  // `this.nextData` is what carries the NEXT hop's request -- level 10 goes
+  // card -> comic -> game and its win goes comic -> credits -> wherever the
+  // button was headed -- so the exit starts the next scene WITH it.
+  assert.match(scene, /private handOver\([\s\S]{0,400}this\.scene\.start\(this\.next, this\.nextData\)/,
     'handOver does not start the next scene')
   // And tap-to-advance is still wired.
   assert.match(scene, /advance\(/, 'nothing advances the comic any more')
@@ -236,7 +239,14 @@ test('panels resolve to urls under the asset root', () => {
 
 test('the comic sits in front of a run beginning, not in front of a resume', () => {
   const loadout = src('src/scenes/LoadoutScene.ts')
-  assert.match(loadout, /if \(shouldPlay\(level\)\) \{[\s\S]{0,160}start\('Cutscene'/,
+  // BEGIN asks `shouldPlay` and, when the answer is yes, the only thing it
+  // does with the answer is start the comic. The shape moved when level 10's
+  // TITLE CARD arrived -- the card is chained in front of the comic, so the
+  // comic is built as a request and started rather than started inline -- and
+  // what is being held here is unchanged: the comic is reached from BEGIN.
+  assert.match(loadout, /const comic = shouldPlay\(level\)/,
+    'BEGIN no longer asks whether this level has a comic')
+  assert.match(loadout, /this\.scene\.start\('Cutscene', comic\)/,
     'BEGIN does not route through the cutscene')
   // A resume goes straight to the game: the run is already under way and its
   // opening has been and gone.
@@ -509,7 +519,7 @@ test('one layout path serves the first panel, every later panel and the resize',
   // The hand-over into the game is untouched by any of this, and still goes
   // through the one exit.
   assert.match(scene, /private handOver\(why: string\): void/)
-  assert.match(scene, /this\.scene\.start\(this\.next\)/)
+  assert.match(scene, /this\.scene\.start\(this\.next, this\.nextData\)/)
 })
 
 test('every number the comic is laid out with is in presentation.json', () => {

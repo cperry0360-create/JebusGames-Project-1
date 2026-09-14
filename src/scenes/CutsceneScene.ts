@@ -56,6 +56,25 @@ export interface CutsceneRequest {
    * scene a second lookup.
    */
   panels?: string[]
+  /**
+   * What to hand `then` when the comic is over.
+   *
+   * Level 10's win goes Game -> comic -> Credits -> wherever the player's
+   * button was going, and the roll needs to be told that last part. Passed
+   * THROUGH rather than looked up, for `panels`'s reason: the scene counts
+   * taps and draws pictures, and every decision about where a comic sits in a
+   * sequence belongs to whoever started it.
+   */
+  thenData?: Record<string, unknown>
+  /**
+   * Seconds -- milliseconds -- to hold the panel before advancing by itself.
+   *
+   * 0, which is every comic in the game, means it waits for a tap. Level 10's
+   * TITLE CARD is the one thing that does not: a card is shown, not read, and
+   * one that waited for a tap would be a tap between the loadout and the
+   * level.
+   */
+  holdMs?: number
 }
 
 /** The panel source size. Every panel in the game is 1672x941; read off the
@@ -69,6 +88,8 @@ const CFG = PRESENTATION.cutscene
 export class CutsceneScene extends Phaser.Scene {
   private levelId = ''
   private next = 'Game'
+  private nextData: Record<string, unknown> | undefined
+  private holdMs = 0
   private panels: string[] = []
   private index = 0
   private image?: Phaser.GameObjects.Image
@@ -89,6 +110,8 @@ export class CutsceneScene extends Phaser.Scene {
     this.levelId = req?.levelId ?? ''
     this.next = req?.then ?? 'Game'
     this.panels = req?.panels ?? panelsFor(this.levelId)
+    this.nextData = req?.thenData
+    this.holdMs = req?.holdMs ?? 0
     this.index = 0
     this.finished = false
   }
@@ -142,6 +165,10 @@ export class CutsceneScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-ESC', () => this.skip())
 
     this.preloadAhead()
+    // A CARD ADVANCES ITSELF. A tap still works -- nobody is held here -- but
+    // the beat is timed rather than waited for. `holdMs` is 0 for every comic,
+    // so this is one `if` away from not existing for any of them.
+    if (this.holdMs > 0) this.time.delayedCall(this.holdMs, () => this.advance())
     logEvent('cutscene', `${this.levelId} panel 1/${this.panels.length}`)
   }
 
@@ -286,6 +313,6 @@ export class CutsceneScene extends Phaser.Scene {
     if (this.finished) return
     this.finished = true
     logEvent('cutscene', `${this.levelId} ${why} -> ${this.next}`)
-    this.scene.start(this.next)
+    this.scene.start(this.next, this.nextData)
   }
 }

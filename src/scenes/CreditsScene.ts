@@ -86,8 +86,25 @@ export class CreditsScene extends Phaser.Scene {
   /** Where each card sits in the roll, so the scroll can stop on it. */
   cardStops: number[] = []
 
+  /**
+   * Where the roll hands over, and the default is the title screen.
+   *
+   * IT HAS A SECOND CALLER NOW. The credits were only ever reachable from the
+   * title screen, where "back to the title" is the only thing they could mean.
+   * Level 10's win comes through here as well -- the last level of the story
+   * ends with its comic and then with the roll -- and the button the player
+   * pressed on the results screen is still where they asked to go, so it is
+   * carried through the comic and through the roll rather than being thrown
+   * away at the end of the game.
+   */
+  private next = 'Title'
+
   constructor() {
     super('Credits')
+  }
+
+  init(req?: { then?: string }): void {
+    this.next = req?.then ?? 'Title'
   }
 
   create(): void {
@@ -158,7 +175,7 @@ export class CreditsScene extends Phaser.Scene {
   private leave(): void {
     this.tween?.stop()
     play(this, 'click')
-    this.scene.start('Title')
+    this.scene.start(this.next)
   }
 
   /** Lays every block out top to bottom and returns how tall the roll ended up. */

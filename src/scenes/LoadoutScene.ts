@@ -7,8 +7,9 @@ import abilitiesData from '../data/abilities.json'
 import draftData from '../data/draft.json'
 import { draftAbilities, draftOpeningTowers, makeRng, reserveTowers } from '../systems/Draft.ts'
 import { runState, setRunState } from '../systems/RunState.ts'
-import { shouldPlay } from '../systems/Cutscenes.ts'
-import { towerWeightsFor } from '../systems/Levels.ts'
+import { panelsFor, shouldPlay } from '../systems/Cutscenes.ts'
+import { levelRules, towerWeightsFor } from '../systems/Levels.ts'
+import { vlaudeRules } from '../systems/Vlaude.ts'
 import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI, uiSize } from '../ui/Theme.ts'
 import {
   panelChrome, panelInset, plateButton, platePanel, type PlateButton,
@@ -191,6 +192,27 @@ export class LoadoutScene extends Phaser.Scene {
    * a draft into a shopping trip, and the point of the screen is that the run
    * dealt you this and you play it.
    */
+  /**
+   * THE TITLE CARD'S AUDIO BEAT, AND IT IS DELIBERATELY SILENT.
+   *
+   * The "Oh boy" clip DOES NOT EXIST. None was recorded, none was generated,
+   * and no other line was substituted for it -- a stand-in voice line would be
+   * a lie about whose voice it is, on a game whose credits name the three
+   * people who actually recorded one.
+   *
+   * So the beat is WIRED and the hook is named. `Audio.play` takes a `Cue`,
+   * which is `keyof audio.json's cues`, so a cue with no row is not a silent
+   * no-op here -- it does not typecheck. That is the right answer: the day the
+   * clip is recorded it is one row in audio.json and one line here, and until
+   * then this logs the beat at the exact moment it would have played, where a
+   * crash report or a soak log will show it.
+   *
+   * level10.json's `titleCard.audioCue` is the name. Nothing else reads it.
+   */
+  private titleCardCue(cue: string): void {
+    logEvent('audio-hook', `${cue}: no clip recorded, the beat is silent`)
+  }
+
   private reroll(): void {
     if (this.rerollsLeft <= 0) return
     this.rerollsLeft -= 1
@@ -632,8 +654,39 @@ export class LoadoutScene extends Phaser.Scene {
         // directly when they resume a saved one, and a comic in front of a
         // run already under way would be showing the opening twice.
         const level = runState().levelId
-        if (shouldPlay(level)) {
-          this.scene.start('Cutscene', { levelId: level, then: 'Game' })
+        // THE TITLE CARD COMES FIRST, where a level has one.
+        //
+        // Level 10 is the only one, and it is NOT a comic: cutscenes.json's
+        // two maps mean "what plays before" and "what plays after", and a card
+        // is a level announcing itself rather than either. It is drawn by
+        // CutsceneScene all the same, because that scene already fits a 16:9
+        // picture to any viewport and preloads it, and a second scene doing
+        // the same would be two places holding one layout.
+        //
+        // CARD, THEN COMIC, THEN THE LEVEL, chained through `thenData`. Level
+        // 10 has no opening comic today, so the middle link is empty and this
+        // is card -> Game -- but the order is the one a reader would expect
+        // and a level with both gets it for free.
+        const card = vlaudeRules(levelRules(level))?.titleCard ?? null
+        const comic = shouldPlay(level)
+          ? { levelId: level, then: 'Game', panels: panelsFor(level) }
+          : undefined
+        if (card) {
+          // THE "OH BOY" BEAT, AND IT IS SILENT. The clip does not exist and
+          // nothing was substituted for it. See `cue` below and
+          // level10.json's `titleCard._note`.
+          this.titleCardCue(card.audioCue)
+          this.scene.start('Cutscene', {
+            levelId: level,
+            then: 'Cutscene',
+            panels: [card.panel],
+            holdMs: card.holdMs,
+            thenData: comic ?? { levelId: level, then: 'Game', panels: [] },
+          })
+          return
+        }
+        if (comic) {
+          this.scene.start('Cutscene', comic)
           return
         }
         this.scene.start('Game')

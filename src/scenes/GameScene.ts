@@ -5781,12 +5781,28 @@ export class GameScene extends Phaser.Scene {
       this.scene.start(then)
       return
     }
-    logEvent('scene', `Game -> Cutscene (${this.level.id} outro) -> ${then}`)
+    // AND THEN THE CREDITS, when this was the last level of the story.
+    //
+    // `nextLevelId` is null exactly once -- at the end of the road -- so this
+    // is a question about the game being over rather than an `if` on level 10,
+    // and it is asked here because the comic is the only thing between beating
+    // the last boss and the roll. The player's own button is carried THROUGH
+    // both: a LEVEL SELECT that ended up on the title screen would be the game
+    // deciding where they go after its own ending.
+    const over = nextLevelId(this.level.id) === null
+    const first = over ? 'Credits' : then
+    logEvent('scene',
+      `Game -> Cutscene (${this.level.id} outro) -> ${first}${over ? ` -> ${then}` : ''}`)
     // `then` is where the comic hands over, and it is the scene this button
     // was going to anyway: a comic is a thing on the way, not a destination.
     // `prepare` has already run, so a NEXT LEVEL that goes through a comic
     // reaches the loadout with the same run state it would have had.
-    this.scene.start('Cutscene', { levelId: this.level.id, then, panels })
+    this.scene.start('Cutscene', {
+      levelId: this.level.id,
+      then: first,
+      panels,
+      thenData: over ? { then } : undefined,
+    })
   }
 
   private toWorldMap(): void {
