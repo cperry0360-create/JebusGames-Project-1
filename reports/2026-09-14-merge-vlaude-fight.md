@@ -18,11 +18,31 @@ the merge could know, plus two measurements that contradicted the file.
 | commit | what | CI |
 |---|---|---|
 | `3f1a805` | the branch head, fast-forwarded onto `main` (no merge commit) | **run 382 green — `changes`, `typecheck`, `test`, `deploy / build`, `deploy / deploy` all success. Pages artifact 58,430,175 bytes, uploaded 23:27:28Z; `actions/deploy-pages@v4` success** |
-| `_this commit_` | `claude/context.md`'s three merge-only lines, the two re-measurements below, and this report | not recorded, and it cannot be: a row for the commit that writes the row needs a commit after it. **Expect `deploy` to SKIP on it** — every changed path is a `.md` or under `reports/`, which is the `changes` gate working, not a failed deploy. |
+| `232d59d` | `claude/context.md`'s three merge-only lines, the two re-measurements below, and this report | **run 383 green — `changes`, `typecheck`, `test` all success; `deploy` SKIPPED**, which is the markdown gate working as designed: every changed path is a `.md` or under `reports/`. Predicted in this row before the push and confirmed after it. |
+| _this commit_ | run 383's row, `232d59d`'s real hash, and the API-lag note below | not recorded, and it cannot be: a row for the commit that writes the row needs a commit after it. |
 
 The table closes here on purpose, the same way the last three reports' did. A report
 written before its own commit exists cannot know that commit's SHA, and guessing one
-produces a table that looks authoritative and points at nothing.
+produces a table that looks authoritative and points at nothing. **The row above
+carried a placeholder until this commit**; the convention is write the row, then fill
+it in from the next commit.
+
+Both deploy cases are now in one table, which is what `CLAUDE.md` asks for when it
+says to read the job list rather than the run's conclusion: run 382 touched `src/` and
+**ran** the deploy, run 383 touched only markdown and **skipped** it. Two green runs,
+two different job lists, and only one of them republished the site.
+
+### The Actions API lag, in a sharper form
+
+`reports/2026-09-14-merge-level-10.md` records a seven-minute lag in which completed
+jobs read as frozen mid-step. That did not reproduce here — jobs and steps were
+accurate within seconds both times. **What did happen is narrower and easier to
+misread:** `list_workflow_runs` filtered to `branch: main` did not return run 383 at
+all while the unfiltered listing already had it, queued, with the right head SHA.
+
+So the two views of the same endpoint disagreed, and the filtered one was the stale
+half. **If a run you just pushed is missing from a branch-filtered listing, drop the
+filter before concluding the push did not trigger anything.**
 
 ## The merge
 
@@ -66,7 +86,9 @@ authority on all of it. Nothing about the fight was re-verified here.
 | check | result |
 |---|---|
 | `npm test` on merged `main` | **1136 passing, 0 failing** (1122 before) |
+| `npm test` after the doc commit | **1136 passing, 0 failing** |
 | run 382, `main` at `3f1a805` | green: all five jobs, **`deploy` ran** |
+| run 383, `main` at `232d59d` | green: `changes`, `typecheck`, `test`; **`deploy` skipped** by the markdown gate |
 | `changes` | success, and it let the deploy through — `src/` was touched |
 | `typecheck` (`npx tsc --noEmit`, with real `node_modules`) | success, 23:26:33Z |
 | `deploy / build` | success — build, both post-build assertions, artifact uploaded 23:27:28Z |
