@@ -348,13 +348,13 @@ building anything on top of it.
 
 ## Status as of 2026-09-14 evening
 
-**The last commit that changed the GAME is `6100c78`**, the level 10 merge, and that
-is the durable number — `main`'s tip moves with every documentation commit. Do not
-trust a tip hash written in this file; check it. Read Checks at JOB level, not merely
-at run level: a markdown-only push to `main` is green with `deploy` **skipped**, which
-is the `changes` job working as designed and not a failed deploy. The level 10 merge
-is the other case, and it is worth knowing what it looks like: it touched `src/` and
-`public/`, so `deploy / build` and `deploy / deploy` both **ran**.
+**The last commit that changed the GAME is `afaee71`**, the Vlaude fight's re-soak,
+and that is the durable number — `main`'s tip moves with every documentation commit.
+Do not trust a tip hash written in this file; check it. Read Checks at JOB level, not
+merely at run level: a markdown-only push to `main` is green with `deploy` **skipped**,
+which is the `changes` job working as designed and not a failed deploy. The fight merge
+is the other case: it touched `src/`, so on run 382 `deploy / build` and
+`deploy / deploy` both **ran** and Pages reported success.
 
 **All ten levels are built and playable**: `level1` Courjahan Village, `level2` Head
 Office, `level3` Sports Complex at Dusk, `level4` The Conundrum, `level5` The
@@ -368,7 +368,8 @@ pads, the cast, the waves and the stake shipped with the level; the scene side o
 fight — the berth at the crystal core, the form swap, the float, the schedule, all six
 manipulations, the recall portal, the defeat, the white wash, the outro comics, the
 credits and the title card — landed the same day on
-`claude/vlaude-fight-scene-jrb368`. **Vlaude is 26,000 hp**, re-derived by soak once
+`claude/vlaude-fight-scene-jrb368`, **merged to `main` 2026-09-14 by fast-forward**.
+**Vlaude is 26,000 hp**, re-derived by soak once
 the powers actually fired; the old 36,000 was measured with none of them firing and is
 not comparable. `reports/2026-09-14-level-10-the-fight.md` is the write-up, and
 `tools/harness/run.sh vlaude` is the only thing in the repository that can see any of
@@ -377,22 +378,35 @@ it — no test in `tests/` imports Phaser.
 So **story mode is content-complete in rows and not in content**, and the next brief
 should say which of those two it means.
 
-Health: **1122 tests passing, 0 failing** (`npm test`, in this sandbox, no
-`node_modules` needed). `sh tools/tsdiff.sh 0496f2d` reports **213 distinct errors on
-both sides and nothing introduced** — all 213 are the known `phaser` resolve cascade,
-and CI's real `npx tsc --noEmit` is green on `main` at `6100c78`. Working tree clean.
+Health: **1136 tests passing, 0 failing** (`npm test`, in this sandbox, no
+`node_modules` needed), and CI's real `npx tsc --noEmit` is green on `main` at
+`3f1a805`. Working tree clean.
+
+**`sh tools/tsdiff.sh 0496f2d` now reports one INTRODUCED error, and it is a false
+positive** — 213 on the baseline against 214 on the tree,
+`src/scenes/CutsceneScene.ts: TS2339: Property 'time' does not exist on type
+'CutsceneScene'`. `this.time` is new in that file (`git show
+0496f2d:src/scenes/CutsceneScene.ts` has no hit) and `time` is a public
+`Phaser.Time.Clock` on `Phaser.Scene`, so with `node_modules` present it resolves — CI
+typechecked the same commit green. **`CLAUDE.md` documents tsdiff's blindness in one
+direction only** (it cannot see an error that needs real Phaser types). This is the
+other direction: **a first use of an inherited Phaser member in a file that did not
+use one before shows up as an introduced error that does not exist.** Check whether a
+new red line is a `Phaser.Scene` member before treating it as a regression; do not
+change code to silence it.
 
 **Four of the six branches this section used to list are gone**, deleted since. Of the
-five remote branches other than `main`:
+six remote branches other than `main`:
 
 | branch | state |
 |---|---|
 | `claude/level-8-soft-lock-9bmho0` | **fully contained in `main`** (merged as PR #8); safe to delete |
 | `claude/level-9-geometry-uac8ax` | **merged to `main` 2026-09-14, fast-forward; fully contained in `main`, safe to delete** |
 | `claude/level-10-assets-2kqch4` | **merged to `main` 2026-09-14, fast-forward; fully contained in `main`, safe to delete** |
-| `claude/deployment-status-review-a661d6` | **326 ahead, 128 behind**; still unmerged and still uninspected, from 05 September |
-| `claude/github-pages-deploy-trigger-x8b598` | **294 ahead, 128 behind**; same |
-| `claude/phaser-4-migration-spike-hage91` | **471 ahead, 128 behind**; salvaged onto `main`, and GitHub answered 403 twice to deleting the ref |
+| `claude/vlaude-fight-scene-jrb368` | **merged to `main` 2026-09-14, fast-forward; `main` IS its head (`0 ahead, 0 behind`), safe to delete** |
+| `claude/deployment-status-review-a661d6` | **326 ahead, 120 behind**; still unmerged and still uninspected, from 05 September |
+| `claude/github-pages-deploy-trigger-x8b598` | **294 ahead, 120 behind**; same |
+| `claude/phaser-4-migration-spike-hage91` | **471 ahead, 120 behind**; salvaged onto `main`, and GitHub answered 403 twice to deleting the ref |
 
 `level2-volcanic-map-recreation`, `main-branch-ci-checks`, `scatter-props-tree-line`
 and `soak/overnight` no longer exist. (The old entry said "five" and then listed six.)
@@ -404,9 +418,16 @@ carry `main` history that the current `main` no longer descends from, which is a
 why none of them is fast-forwardable. Re-measure rather than quoting this table, with
 `git rev-list --count main..origin/claude/<branch>` and the reverse.
 
+**The behind-counts moved DOWN when `main` moved forward, which is a sign the earlier
+figure did not come from that command.** These read 120 on `main` at `3f1a805`; run
+the same command with `main` at `6100c78`, the tip they were recorded against, and it
+answers **110**, not the 128 on file. A behind-count cannot fall as `main` gains
+commits, so 128 was measured some other way. The ahead-counts reproduce exactly. This
+is a second reason to re-measure rather than quote.
+
 **The asset-sweep hazard is now discharged for every level.** It was live for level 9
 until `uac8ax` landed and live for level 10 until `2kqch4` landed; `main` references
-both levels' art itself now, and none of the five remaining branches is holding art
+both levels' art itself now, and none of the six remaining branches is holding art
 that `main` cannot see. The standing fact does not retire — it applies to the next
 upload — but there is no currently-loaded gun.
 
