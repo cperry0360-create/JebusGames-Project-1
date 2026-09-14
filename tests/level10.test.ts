@@ -602,3 +602,313 @@ test('NightRules answers null for level 10, and a sky for level 5', async () => 
     'a half a sky is accepted')
   assert.equal(NightRules.from(null), null)
 })
+
+/* ===================================================================== */
+/* THE FIGHT — the scene half, 2026-09-14.                               */
+/*                                                                       */
+/* WHAT THESE CAN SAY AND WHAT THEY CANNOT, again, because the split gets */
+/* wider here than anywhere else in the file. Everything below is either  */
+/* a rule executed or a SOURCE-TEXT assertion about GameScene.ts, and a   */
+/* source-text assertion catches a deleted line and nothing else. That a  */
+/* padlock is drawn, that the float is invulnerable for every frame of    */
+/* its traversal, that the defeat never paints frame 7 and that the white */
+/* wash is really white are checked in `tools/harness/run.sh vlaude`,     */
+/* which is the only thing in this repository that looks at a pixel.      */
+/* ===================================================================== */
+
+const scene = readFileSync(url('../src/scenes/GameScene.ts'), 'utf8')
+
+test('the berthed form is drawn from the manifest and is never an Enemy', () => {
+  const berth = scene.slice(scene.indexOf('private syncVlaudeBerth()'))
+    .split('\n  }\n')[0]!
+  assert.ok(berth.length > 0, 'GameScene does not draw the berth')
+  assert.match(berth, /berthSprite\(v, phase\)/,
+    'the scene picks the berth sprite itself instead of asking the module')
+  assert.match(berth, /phaseForWave\(v, this\.status\.wave \+ 1\)/,
+    'the phase is decided somewhere other than phaseForWave')
+  assert.match(berth, /this\.add\.image\(/, 'the berthed form is not an Image')
+  // THE WHOLE OF "HE CANNOT BE TARGETED" IS THAT THERE IS NOTHING TO TARGET.
+  assert.doesNotMatch(berth, /new Enemy\(/, 'the berthed form is an Enemy')
+  assert.doesNotMatch(berth, /setInteractive/, 'the berthed form takes pointer events')
+  assert.doesNotMatch(berth, /health|maxHealth/, 'the berthed form has health')
+  // And `parked` is what says which phases keep him at the core, so the scene
+  // never compares a phase name to a string itself.
+  assert.match(berth, /!parked\(phase\)/, 'the scene decides "parked" for itself')
+})
+
+test('the float hands `floating` to targetable and to nothing else', () => {
+  const float = scene.slice(scene.indexOf('private beginVlaudeFloat()'))
+    .split('\n  }\n')[0]!
+  assert.ok(float.length > 0, 'GameScene does not play the float')
+  assert.match(float, /this\.vlaudeFloating = true/, 'the float never sets `floating`')
+  assert.match(float, /this\.vlaudeFloating = false/, 'the float never clears `floating`')
+  assert.match(float, /targetable\(this\.vlaudePhase, true\)/,
+    'the float does not ask targetable() whether he can be hit on the way')
+  assert.match(float, /ease: f\.landingEase/, 'the ease is not read from the data')
+  assert.match(float, /duration: f\.travelMs/, 'the travel time is not read from the data')
+  assert.match(float, /shake\(f\.shakeMs/, 'the landing does not shake')
+  assert.doesNotMatch(float, /new Enemy\(/,
+    'the float creates an Enemy, so he is damageable before he lands')
+  // THE FLOAT'S NUMBERS ARE ALL IN THE DATA, so it can be retimed without this
+  // file. `landingEase` is a Phaser ease name and the module now carries it.
+  assert.equal(typeof R.float.landingEase, 'string')
+  assert.ok(R.float.holdMs > 0 && R.float.travelMs > 0 && R.float.shakeMs > 0)
+  assert.ok(R.bobPixels > 0 && R.bobSeconds > 0, 'the berthed form does not bob')
+})
+
+test('the schedule is driven from the module, and holds a blocked cast', () => {
+  assert.match(scene, /armedAt\(v, this\.status\.wave \+ 1\)/,
+    'the scene arms the schedule itself')
+  assert.match(scene, /tickSchedule\(this\.vlaudeArmed, dt, this\.vlaudeSinceCast, v\.globalCooldownSeconds\)/,
+    'the scene paces the schedule itself')
+  assert.match(scene, /combinationProblems\(v\)/,
+    'nothing checks the schedule at level load')
+  // The telegraph leads the effect rather than landing with it.
+  const cast = scene.slice(scene.indexOf('private telegraphCast('))
+    .split('\n  }\n')[0]!
+  assert.match(cast, /durationMs: t\.leadSeconds \* 1000/,
+    'the telegraph does not run for its own lead time')
+  assert.match(cast, /left: t\.leadSeconds/, 'the effect does not wait for the telegraph')
+  assert.match(cast, /row\.with \? \[row\.power, row\.with\]/,
+    'a combination row fires only one of its halves')
+})
+
+test('a build lock touches nothing but the lock', () => {
+  const lock = scene.slice(scene.indexOf('private castBuildLock()'))
+    .split('\n  }\n')[0]!
+  assert.ok(lock.length > 0, 'GameScene does not lock pads')
+  assert.match(lock, /lockTargets\(v, this\.lockablePads\(\)\)/,
+    'the scene picks the pads itself')
+  // THE RULE THE WHOLE POWER TURNS ON: a tower already standing survives,
+  // keeps firing and keeps its pad. Nothing in the cast may reach `occupied`,
+  // sell, destroy, disable or release.
+  for (const forbidden of ['build.occupy', 'build.release', 'destroyTower',
+    'sellTower', 'landDisable', 'disabledFor']) {
+    assert.ok(!lock.includes(forbidden),
+      `the build lock calls ${forbidden}, which costs the player investment`)
+  }
+  assert.equal(lockedPadStillFires(), true)
+  // And the gate for NEW placement is the module's `buildable`, asked in one
+  // place that every build path goes through.
+  const open = scene.slice(scene.indexOf('private padOpen(index: number)'))
+    .split('\n  }\n')[0]!
+  assert.match(open, /buildable\(\{/, 'padOpen does not ask buildable()')
+  assert.ok(scene.split('this.padOpen(').length - 1 >= 6,
+    'the build paths do not all go through padOpen')
+})
+
+test('the haste is assigned and restored, and never routed through review()', () => {
+  const haste = scene.slice(scene.indexOf('private castSpeedAlter()'))
+    .split('\n  }\n')[0]!
+  assert.match(haste, /e\.hasteSpeed = m/, 'the haste is not assigned')
+  assert.ok(!/\*=/.test(haste), 'the haste accumulates')
+  assert.ok(!/review\(/.test(haste),
+    'the haste goes through the Performance Review, which is permanent and grows the enemy')
+  const tick = scene.slice(scene.indexOf('private tickHaste('))
+    .split('\n  }\n')[0]!
+  assert.match(tick, /e\.hasteSpeed = HASTE_OFF/, 'the haste never comes back off')
+  assert.equal(HASTE_OFF, 1)
+})
+
+test('a wall gets its picture and its collision from one call', () => {
+  const tick = scene.slice(scene.indexOf('private tickVlaudeWalls('))
+    .split('\n  }\n')[0]!
+  assert.ok(tick.length > 0, 'GameScene does not tick the walls')
+  assert.match(tick, /const look = wallLook\(v, w\.state, w\.rubblePick\)/,
+    'the scene decides what a wall looks like for itself')
+  assert.match(tick, /w\.blocks = look\.blocks/,
+    'the collision is set from something other than the call that picked the picture')
+  // `blocksEnemies` IS FALSE and must stay false: a wall that stopped Vlaude's
+  // own walkers would be a gift.
+  assert.equal((R.powers.generateWall as { blocksEnemies: boolean }).blocksEnemies, false,
+    'the wall blocks enemies, which turns the power into a present')
+  // What it DOES deny is the ground, and both halves of that are refused out
+  // loud rather than silently clamped.
+  assert.match(scene, /private wallBlocks\(/, 'nothing asks whether a wall denies a point')
+  // TWO CALL SITES, AND THEY ARE THE TWO THE POWER IS ABOUT: the hero's move
+  // order and a garrison's rally. Both refuse OUT LOUD rather than clamping
+  // the point somewhere else, because an order that silently landed elsewhere
+  // is an order the player cannot trust.
+  assert.equal(scene.split('this.wallBlocks(').length - 1, 2,
+    'the wall denies the ground to something other than the hero and a garrison')
+  for (const fn of ['private orderHero(', 'private orderRally(']) {
+    const body = scene.slice(scene.indexOf(fn)).split('\n  }\n')[0]!
+    assert.match(body, /this\.wallBlocks\(x, y\)/, `${fn} walks through a wall`)
+  }
+})
+
+test('the countermeasure suppresses a tower and never destroys one', () => {
+  const hit = scene.slice(scene.indexOf('private hitTowerWithCountermeasure('))
+    .split('\n  }\n')[0]!
+  assert.ok(hit.length > 0, 'nothing shoots a tower')
+  assert.match(hit, /this\.landDisable\(tower,/,
+    'the countermeasure does something other than switch the lights off')
+  assert.ok(!/destroyTower|build\.release/.test(hit),
+    'the countermeasure destroys a tower, which costs the player investment')
+  // THE TWO NUMBERS THAT ARE NEW, and they are new because this game has no
+  // tower health and this is the first thing that shoots one.
+  const w = R.powers.generateWeapon as Record<string, number>
+  assert.ok(w.towerHealth > 0, 'there is no damage pool for a tower to absorb')
+  assert.ok(w.towerDownSeconds > 0, 'a suppressed tower never comes back')
+  assert.ok(w.towerHealth / w.damage >= 8,
+    'a tower goes dark in under eight shots, which is not a decision the player can answer')
+  // It takes a pad and gives it back, which is the answer to it.
+  assert.equal(w.occupiesPad as unknown as boolean, true)
+  assert.ok(w.peanutReward > 0, 'killing it pays nothing')
+  const kill = scene.slice(scene.indexOf('private killCountermeasure('))
+    .split('\n  }\n')[0]!
+  assert.match(kill, /this\.build\.release\(c\.pad\)/, 'the pad never comes back')
+  assert.match(kill, /this\.earn\(reward\)/, 'it pays no peanuts')
+})
+
+test('the recall portal is decoration, and is paced off the wave table', () => {
+  const portal = scene.slice(scene.indexOf('private recallPortal('))
+    .split('\n  }\n')[0]!
+  assert.ok(portal.length > 0, 'GameScene does not draw the portal')
+  assert.ok(!/new Enemy\(|spawn\(/.test(portal), 'the portal spawns something')
+  const queue = scene.slice(scene.indexOf('private queueRecallPortals()'))
+    .split('\n  }\n')[0]!
+  assert.match(queue, /v\.callbackOrder\.includes\(group\.enemy\)/,
+    'the portal is not matched against the callbacks')
+  assert.match(queue, /dueMs - v\.callbackLeadMs/,
+    'the portal does not open ahead of the unit it belongs to')
+  assert.ok(R.callbackLeadMs > 0, 'the portal has no lead time')
+  assert.ok(R.callbackSize > 0 && R.callbackDurationMs > 0)
+})
+
+test('the defeat is played by hand, and the eighth frame is never a sprite', () => {
+  const defeat = scene.slice(scene.indexOf('private playVlaudeDefeat('))
+    .split('\n  }\n')[0]!
+  assert.ok(defeat.length > 0, 'GameScene does not play the defeat')
+  // NOT `playEffect`, which runs the clip to its end -- and the end is the one
+  // frame that must never be drawn.
+  assert.ok(!/playEffect\(/.test(defeat),
+    'the defeat plays through playEffect, which would draw the white rectangle')
+  assert.match(defeat, /defeatSpriteFrames\(v\)/, 'the frame count is not read from the module')
+  assert.match(defeat, /defeatReachedFade\(v, frame\)/, 'the fade cue is decided elsewhere')
+  assert.match(defeat, /art\.setFrame\(frame\)/, 'the frames are not advanced by hand')
+  assert.equal(defeatSpriteFrames(R), 7)
+  assert.equal(R.defeat.totalFrames, 8)
+  assert.equal(defeatReachedFade(R, 6), false)
+  assert.equal(defeatReachedFade(R, 7), true)
+})
+
+test('the white wash is screen space, and ends the run from inside itself', () => {
+  const wash = scene.slice(scene.indexOf('private whiteWash()'))
+    .split('\n  }\n')[0]!
+  assert.ok(wash.length > 0, 'GameScene does not draw the wash')
+  // CLAUDE.md HARD RULE 4. A rectangle covering the board is a WORLD object
+  // unless it is registered, and a world object slides off a panned board.
+  assert.match(wash, /this\.asScreenSpace\(\[wash\]\)/,
+    'the white wash is a world object and would pan off the board')
+  // AND IT IS OPAQUE. `add.rectangle`'s sixth argument is the FILL alpha, not
+  // the object's; it was 0 here while the tween animated the object's, so the
+  // wash reached alpha 1 painting nothing and the screen never went white.
+  // Every number about it was correct and only the frame was wrong.
+  assert.match(wash, /0xffffff, 1\)/, 'the wash is created with a transparent fill')
+  assert.match(wash, /wash\.setAlpha\(0\)/, 'the wash starts opaque instead of fading in')
+  assert.match(wash, /duration: d\.whiteFadeInMs/)
+  assert.match(wash, /delay: d\.whiteHoldMs/)
+  assert.match(wash, /duration: d\.whiteFadeOutMs/)
+  assert.match(wash, /this\.endRun\('won'\)/, 'the run does not end inside the white')
+  assert.ok(whiteWashMs(R) > 1000, 'the whole wash is over in under a second')
+  // AND THE RESULTS DIALOG WAITS FOR IT. Level 9's rupture learned this from a
+  // rendered frame: a scoreboard over the level's own ending is the ending
+  // staged behind it.
+  assert.match(scene, /if \(!this\.vlaudeDefeatPlaying\) this\.endRun\(runEnds\)/,
+    'the results dialog opens over the top of the defeat')
+})
+
+test('the title card plays before the level, and its audio hook is silent', () => {
+  const card = R.titleCard
+  assert.ok(card, 'level 10 has no title card')
+  assert.ok(card!.panel.startsWith('cutscenes/'),
+    `the card names ${card!.panel}, which is outside the cutscenes folder`)
+  assert.doesNotThrow(
+    () => readFileSync(url(`../public/assets/${card!.panel}`)),
+    `${card!.panel} is not in public/`)
+  // HELD LONGER THAN FEELS COMFORTABLE. A comic panel waits for a tap; this
+  // does not, and the length is the joke.
+  assert.ok(card!.holdMs >= 3000,
+    `the card holds for ${card!.holdMs}ms, which is a flash rather than a beat`)
+  // AND IT IS NOT A COMIC. cutscenes.json's two maps mean "before" and
+  // "after", and a card is neither -- naming it there would make
+  // `cutsceneProblems` or `panelsFor` wrong about what a comic is.
+  const cutscenes = read('cutscenes')
+  assert.ok(!JSON.stringify(cutscenes.levels).includes('titlecard'),
+    'the title card is filed as an opening comic')
+  assert.ok(!JSON.stringify(cutscenes.outros).includes('titlecard'),
+    'the title card is filed as an outro comic')
+
+  // THE "OH BOY" CLIP DOES NOT EXIST AND NOTHING WAS SUBSTITUTED FOR IT.
+  // The hook is named, it is wired, and it is deliberately NOT routed through
+  // Audio.play -- whose `Cue` type is `keyof audio.json's cues`, so wiring it
+  // would have needed a fake row for a file nobody recorded.
+  assert.ok(card!.audioCue.length > 0, 'the beat has no name')
+  const audio = read('audio')
+  assert.equal(audio.cues[card!.audioCue], undefined,
+    `audio.json has a row for ${card!.audioCue}; if a clip was recorded, wire it through play()`)
+  const loadout = readFileSync(url('../src/scenes/LoadoutScene.ts'), 'utf8')
+  assert.match(loadout, /private titleCardCue\(cue: string\): void \{\n\s*logEvent\(/,
+    'the silent hook does something other than log')
+  assert.match(loadout, /this\.titleCardCue\(card\.audioCue\)/, 'the beat is not wired')
+})
+
+test('the last level ends in the credits, and only on a win', () => {
+  const leave = scene.slice(scene.indexOf('private leaveWon('))
+    .split('\n  }\n')[0]!
+  assert.match(leave, /nextLevelId\(this\.level\.id\) === null/,
+    'the credits are gated on a level id rather than on the game being over')
+  assert.match(leave, /const first = over \? 'Credits' : then/,
+    'the last level\'s comic does not hand over to the credits')
+  assert.match(leave, /thenData: over \? \{ then \} : undefined/,
+    'the button the player pressed is thrown away at the end of the game')
+  // ONLY ON A WIN. `leaveWon` is reached from the win branch alone, which is
+  // what the outro map's own note says and what this holds it to.
+  const end = scene.slice(scene.indexOf("endRun(phase: 'won' | 'lost')"))
+  assert.ok(!/lost[\s\S]{0,400}leaveWon/.test(end.slice(0, 4000)),
+    'a loss reaches leaveWon, so a loss would play the outro')
+  // And level 10 really is the last: nothing is unlocked by it.
+  const unlockedByTen = LEVELS.filter((l) => l.unlockedBy === 'level10')
+  assert.deepEqual(unlockedByTen, [], 'something comes after level 10')
+})
+
+test('the gliding block is read off levelRules, not off the sky', () => {
+  // THE BUG THIS CLOSES: `glides` cost two things on level 5 and both were
+  // read off `NightRules.gliding`, which is null for any level without a
+  // day/night block -- so on level 10, whose BOSS hovers, the flag did
+  // nothing at all. Level 5 gets the same object out of the same file.
+  assert.match(scene, /private gliding: GlidingRules \| null = null/,
+    'the scene has no gliding field of its own')
+  assert.match(scene, /this\.gliding = \(levelRules\(this\.level\.id\)\?\.gliding/,
+    'the gliding rules are not read from levelRules')
+  assert.match(scene, /const g = e\.def\.glides \? this\.gliding : null/,
+    'the hazard check still reads the sky for the gliding rules')
+  const g5 = (levelRules('level5') as { gliding?: unknown } | null)?.gliding
+  const g10 = (levelRules('level10') as { gliding?: unknown } | null)?.gliding
+  assert.ok(g5 && g10, 'a level lost its gliding block')
+  assert.deepEqual(Object.keys(g10 as object).filter((k) => !k.startsWith('_')).sort(),
+    Object.keys(g5 as object).filter((k) => !k.startsWith('_')).sort(),
+    'the two gliding blocks are different shapes, so one of them is not level 5\'s')
+})
+
+test('the soak fires three of the six, and fakes none of the other three', () => {
+  const sim = readFileSync(url('../tools/soak/Sim.ts'), 'utf8')
+  // THE THREE THAT RUN go through the SAME module functions the scene calls,
+  // so the pacing and the no-duplicate-of-a-duplicate rule are one
+  // implementation rather than two.
+  for (const fn of ['armedAt(', 'tickSchedule(', 'copyTargets(', 'copyCount(',
+    'hasteMultiplier(', 'hasteSeconds(']) {
+    assert.ok(sim.includes(fn), `the sim reimplements ${fn} instead of calling it`)
+  }
+  assert.match(sim, /e\.def\.speed \* e\.speedScale \* e\.reviewSpeed \* e\.hasteSpeed/,
+    'the sim has no haste slot, so speedAlter does nothing in it')
+  // THE THREE THAT DO NOT are counted rather than approximated. A sim that
+  // guessed at a build lock would publish a win rate for a level nobody plays.
+  assert.match(sim, /vUnmodelled\.set\(id/,
+    'the sim does not record the casts it cannot answer')
+  for (const forbidden of ['towerHealth', 'towerDownSeconds', 'padLocks', 'wallBlocks']) {
+    assert.ok(!sim.includes(forbidden),
+      `the sim reads ${forbidden}, so it is pretending to model a power it cannot`)
+  }
+})
