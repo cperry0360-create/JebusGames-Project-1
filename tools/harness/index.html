@@ -16571,6 +16571,13 @@ async function run() {
         'the countermeasure wears ' + c.art.texture.key)
       expect(!P.build.isFree(c.pad), 'the countermeasure does not hold its pad')
       expect(P.padOpen(c.pad) === false, 'the player can build under a countermeasure')
+      // THE HUD LIGHT, which is the third beat every power owes: a telegraph,
+      // a visible change, and a clean restoration.
+      note('  hud light: ' + (P.vlaudeHudIcon ? P.vlaudeHudIcon.texture.key : 'none')
+        + '  (asked for ' + RULESV.hud.countermeasureActive + ')')
+      expect(!!P.vlaudeHudIcon
+        && P.vlaudeHudIcon.texture.key === RULESV.hud.countermeasureActive,
+      'no "hostile hardware is on the board" light while a countermeasure is alive')
       // AND IT SHOOTS. A tower inside its range goes dark.
       {
         let target = null, best = Infinity
@@ -16605,6 +16612,8 @@ async function run() {
       expect(P.status.peanuts - purse === RULESV.powers.generateWeapon.peanutReward,
         'it paid ' + (P.status.peanuts - purse) + ' peanuts')
       expect(P.build.isFree(c.pad), 'the pad did not come back')
+      note('  hud light after: ' + (P.vlaudeHudIcon ? P.vlaudeHudIcon.texture.key : 'none'))
+      expect(!P.vlaudeHudIcon, 'the countermeasure light is still on with none alive')
       fired.generateWeapon = true
       await shot('vlaude-15-countermeasure-down-' + VP.w + 'x' + VP.h)
     }
