@@ -12,8 +12,8 @@ whoever merged it.
 | commit | what | CI |
 |---|---|---|
 | `6c309b4` | the branch head, fast-forwarded onto `main` (no merge commit) | **run 360 green — typecheck, test, changes, `deploy / build`, `deploy / deploy` all success** |
-| _this commit_ | `claude/context.md` reconciled, and this report | run pending — hash and result filled in by the follow-up commit below |
-| _follow-up_ | this table's own CI row | to be filled in |
+| `83efa67` | `claude/context.md` reconciled, and this report | **run 361 green — typecheck, test, changes; `deploy` skipped, which is the `changes` gate working on a markdown-only push, not a failed deploy** |
+| _this commit_ | this table's own CI row | markdown only, so the same shape as run 361: three green jobs and `deploy` skipped |
 
 ## The merge
 
