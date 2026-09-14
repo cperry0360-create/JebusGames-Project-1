@@ -441,13 +441,21 @@ test('the defeat draws seven of its eight frames, and the eighth is the cue', ()
 
 test('reaching the exit ends the run, and it is not a life deduction', () => {
   assert.equal(R.exitEndsRun, true)
-  assert.equal(leakEndsRun(R, enemies.vlaude, 'vlaude'), true)
-  assert.equal(leakEndsRun(R, enemies.corrupt, 'corrupt'), false,
+  const boss = enemies[R.laneEnemy]
+  assert.equal(leakEndsRun(R, boss, boss), true)
+  assert.equal(leakEndsRun(R, enemies.corrupt, boss), false,
     'an ordinary leak ends the run')
-  assert.equal(leakEndsRun(R, enemies.callbackLich, 'callbackLich'), false,
+  assert.equal(leakEndsRun(R, enemies.callbackLich, boss), false,
     'a callback reaching the exit ends the run')
-  assert.equal(leakEndsRun(null, enemies.vlaude, 'vlaude'), false,
+  assert.equal(leakEndsRun(null, boss, boss), false,
     'a level with no rules block ends its run on a leak')
+  assert.equal(leakEndsRun(R, undefined, boss), false)
+  assert.equal(leakEndsRun(R, boss, undefined), false)
+  // BY DEF IDENTITY AND NOT BY NAME, which matters here more than anywhere
+  // else in the game: the four callbacks deliberately carry their originals'
+  // names, so a name comparison would be wrong for exactly the reason the
+  // level is funny.
+  assert.equal(enemies.callbackLich.name, enemies.glitchLich.name)
   // NOT A LIFE DEDUCTION. His livesCost is a backstop that is never charged,
   // and it is under the starting life count so that removing the flag would
   // leave the player alive rather than silently winning.
@@ -455,6 +463,20 @@ test('reaching the exit ends the run, and it is not a life deduction', () => {
   assert.ok(enemies.vlaude.livesCost < rules.startingLives,
     'Vlaude\'s leak is an instant loss through the life count, which hides the rule')
   assert.ok(enemies.vlaude.livesCost >= 5)
+
+  // AND THE SCENE ASKS BEFORE IT CHARGES. Read as text, because GameScene
+  // needs Phaser to construct and nothing in tests/ can build one -- so what
+  // this can prove is the ORDER, which is the whole rule: the branch is above
+  // the line that deducts lives, not below it.
+  const game = readFileSync(url('../src/scenes/GameScene.ts'), 'utf8')
+  const leak = game.slice(game.indexOf('private leak(enemy: Enemy)'))
+  const body = leak.slice(0, leak.indexOf('\n  }'))
+  assert.match(body, /leakEndsRun\(this\.vlaude, enemy\.def, this\.vlaudeBossDef\)/,
+    'GameScene.leak never asks whether this leak ends the run')
+  assert.ok(body.indexOf('leakEndsRun') < body.indexOf('this.status.lives -='),
+    'the run-ending check is BELOW the life deduction, so a life is charged first')
+  assert.match(body, /this\.endRun\('lost'\)\n      return/,
+    'the run-ending branch does not return, so it charges lives as well')
 })
 
 test('the comics play on a win and the title card is not one of them', () => {

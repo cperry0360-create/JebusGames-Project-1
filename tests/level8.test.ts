@@ -133,9 +133,21 @@ test('two spawns, one exit, and the beam is on the road they share', () => {
   // AND NOTHING ABOUT LEAKING IS PER-EXIT. `GameScene.leak` charges the
   // enemy's own livesCost wherever it got out. Read as text because the scene
   // needs Phaser to construct.
+  //
+  // THE SLICE IS 2400 AND WAS 600. Level 10 put a branch at the top of `leak`
+  // -- Vlaude reaching the exit ends the run outright, checked before any life
+  // is deducted -- and the comment explaining why pushed the line this looks
+  // for past the old window. The window is widened rather than the assertion
+  // weakened, and the claim is unchanged: what this level cares about is that
+  // the charge is the ENEMY's own cost and not a per-EXIT number, and it still
+  // is. Level 10's branch is per-ENEMY and per-LEVEL, which is a different
+  // thing and is asserted in tests/level10.test.ts.
   const scene = readFileSync(url('../src/scenes/GameScene.ts'), 'utf8')
   const leak = scene.slice(scene.indexOf('private leak(enemy: Enemy)'))
-  assert.match(leak.slice(0, 600), /this\.status\.lives -= enemy\.def\.livesCost/)
+  assert.match(leak.slice(0, 2400), /this\.status\.lives -= enemy\.def\.livesCost/)
+  assert.ok(!/exit|gate/i.test(
+    /this\.status\.lives -= enemy\.def\.livesCost/.exec(leak)?.[0] ?? ''),
+    'the life charge reads which exit was used')
   assert.doesNotMatch(leak.slice(0, 600), /laneId|east|south/,
     'the leak path asks which exit it was; there is one exit and it must not care')
 })

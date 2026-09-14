@@ -32,6 +32,9 @@ import {
   crossedGate, gateRules, reviewable, type GateRules,
 } from '../systems/PerformanceGate.ts'
 import { NightRules } from '../systems/NightRules.ts'
+import {
+  leakEndsRun, vlaudeRules, type VlaudeRules,
+} from '../systems/Vlaude.ts'
 import { convertedHealth } from '../systems/Vampirism.ts'
 import { puddleAlpha } from '../systems/AcidPuddle.ts'
 import {
@@ -357,6 +360,18 @@ export class GameScene extends Phaser.Scene {
    * cannot move, and that is a property of the data rather than of an `if`.
    */
   private night: NightRules | null = null
+  /**
+   * Level 10's rules, or null on every other level.
+   *
+   * The same null-is-the-common-case shape the sky and the Performance Review
+   * gate already use: nine levels answer null and every call site has nothing
+   * to do. See systems/Vlaude.ts.
+   */
+  private vlaude: VlaudeRules | null = null
+  /** The def `vlaude.laneEnemy` names, resolved once. Held so the leak check
+   *  can compare by object identity rather than by name -- the four callbacks
+   *  deliberately share their originals' names. */
+  private vlaudeBossDef: EnemyDef | undefined
   /** The full-board tint. A rectangle above the plate and below everything
    *  that stands on it, so the painted contrast still reads through. */
   private skyTint: Phaser.GameObjects.Rectangle | null = null
@@ -858,6 +873,10 @@ export class GameScene extends Phaser.Scene {
     this.build = new BuildSystem(this.level.map.buildSpots, this.level.map.spotRadius)
     this.spawner = new WaveSpawner()
     this.night = NightRules.from(levelRules(this.level.id))
+    // LEVEL 10'S RULES, or null on every other level. Read once on the way in,
+    // beside the sky and the gate, so nothing downstream has to ask twice.
+    this.vlaude = vlaudeRules(levelRules(this.level.id))
+    this.vlaudeBossDef = this.vlaude ? ENEMIES[this.vlaude.laneEnemy] : undefined
     // LEVEL 6'S ROOSTER, and null on every other level -- `levelRules` returns
     // null for a level that names no rules file, so this whole mechanic is one
     // `if` away from not existing anywhere else.
@@ -7228,6 +7247,28 @@ export class GameScene extends Phaser.Scene {
     // Counted, not just charged for: an escape is what stops a wave being a
     // clear, and stops the last wave being a win.
     this.escapedThisWave++
+
+    // VLAUDE REACHING THE EXIT ENDS THE RUN, AND IT IS NOT A LIFE DEDUCTION.
+    //
+    // Checked BEFORE the lives are touched, which is the whole of the rule: on
+    // level 10 the boss getting out is the level's clock and its stake, not an
+    // arithmetic coincidence about the life count. His `livesCost` is 19 of 20
+    // and is never charged -- it exists so that deleting this branch would
+    // leave the player with one life rather than silently winning, which is
+    // the failure mode a 99 would have hidden.
+    //
+    // BY DEF IDENTITY, not by name: the four callbacks deliberately carry
+    // their originals' names, so `enemy.def.name === 'Vlaude'` would be wrong
+    // for exactly the reason the level is funny. Every def is the same object
+    // every time, so `===` is exact and costs nothing.
+    if (leakEndsRun(this.vlaude, enemy.def, this.vlaudeBossDef)) {
+      logEvent('escape', `${enemy.def.name} reached the exit; the run is over`)
+      enemy.destroy()
+      play(this, 'last-life')
+      this.endRun('lost')
+      return
+    }
+
     logEvent('escape', `${enemy.def.name} -${enemy.def.livesCost} lives`)
     this.status.lives -= enemy.def.livesCost
 

@@ -454,10 +454,18 @@ export function whiteWashMs(rules: VlaudeRules): number {
  * arithmetic coincidence about the life count.
  */
 export function leakEndsRun(
-  rules: VlaudeRules | null, def: Pick<EnemyDef, 'name'> & { id?: string }, id: string,
+  rules: VlaudeRules | null,
+  def: EnemyDef | undefined,
+  bossDef: EnemyDef | undefined,
 ): boolean {
-  void def
-  return rules !== null && rules.exitEndsRun && id === rules.laneEnemy
+  if (rules === null || !rules.exitEndsRun) return false
+  // BY DEF IDENTITY, NOT BY NAME OR BY A NEW FIELD ON Enemy. Every def in the
+  // game is the same object every time -- enemies.json is imported once and
+  // `ENEMIES[id]` hands back the same reference -- so `===` is exact, costs
+  // nothing, and cannot go stale the way a second copy of the id on the enemy
+  // could. A name comparison would be wrong for the right reason: the four
+  // callbacks deliberately share their originals' names.
+  return def !== undefined && bossDef !== undefined && def === bossDef
 }
 
 /**
