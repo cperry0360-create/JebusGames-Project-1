@@ -154,7 +154,7 @@ items.
 **A green run still is not evidence about anything rendered**, for a different and
 larger reason that survives all of the above: **no test in `tests/` imports Phaser.**
 About 25 mention it, and every mention reads a source file as text and matches a
-regex. So "1088 passing" says nothing about a sprite's size, a camera transform, a
+regex. So "1099 passing" says nothing about a sprite's size, a camera transform, a
 texture that failed to load or a shader — the harness is the only thing that looks at
 a frame. See CLAUDE.md, "The test suite cannot see Phaser at all".
 
@@ -209,7 +209,7 @@ scalar may need revisiting.
 
 ## THE BOARD-SIZE PROBLEM (found 2026-09-07, convention settled since)
 
-**Build pads per level: 7, 15, 15, 14, 14, 18, 22, 19** for levels 1 to 8. No
+**Build pads per level: 7, 15, 15, 14, 14, 18, 22, 19, 15** for levels 1 to 9. No
 documented convention when this was written. Boss HP only means something relative to
 how much DPS a board can hold, so **level 1's and level 2's boss numbers were never on
 the same scale**, and cross-level difficulty reasoning done before this was found is
@@ -311,9 +311,13 @@ behind four levels cleared, and a Rooster boss at **7,500 HP** soaking at **210/
 (44%)**. Two things were found by looking rather than asked for — the flame was never
 wired into the game at all, and it crosses lanes. Pad 2 is dead by construction: it is
 248.8 px from any lane against a 112 range, it is painted on the plate, and it stays.
-Levels **7 ("The Highway", 22 pads, 41%)** and **8 ("The Optimization", 19 pads, CEO
-boss, 41%)** followed on 12–13 September. See `reports/2026-09-11-level-6.md`,
-`2026-09-12-level-6-fixes.md`, `2026-09-13-level-7.md` and `2026-09-12-level-8.md`.
+Levels **7 ("The Highway", 22 pads, 41%)**, **8 ("The Optimization", 19 pads, CEO
+boss, 42% after the 13 September re-topology — it published at 41% before it)** and
+**9 ("AI Override: Part 1", 15 pads, four mini bosses rather than one, 40%)** followed
+on 12–14 September. See `reports/2026-09-11-level-6.md`,
+`2026-09-12-level-6-fixes.md`, `2026-09-13-level-7.md`, `2026-09-12-level-8.md`,
+`2026-09-13-level-8-retopology.md` and `2026-09-13-level-9.md`; `SOAK-REPORT.md` is
+the figure of record for all of them.
 
 ## Chapter 2 / Other Game (designed, nothing built)
 
@@ -335,15 +339,16 @@ written. Checks on each were green at JOB level, not merely at run level: `chang
 is the `changes` job working as designed. Do not read a skipped deploy as a failure,
 and do not trust a tip hash written in this file — check it.
 
-**Eight levels are built and playable**, not four: `level1` Courjahan Village,
+**Nine levels are built and playable**, not four: `level1` Courjahan Village,
 `level2` Head Office, `level3` Sports Complex at Dusk, `level4` The Conundrum,
 `level5` The Crossroads, `level6` Two Roads, `level7` The Highway, `level8` The
-Optimization. Each has its own map, wave table and soaked boss. `plannedLevels` is
-**10**, so the road shows eight built rows and two COMING SOON. Level 9 and 10 art is
-uploaded to `art-source/` but neither level is wired up; the geometry work for level 9
-is on a branch (below).
+Optimization, `level9` AI Override: Part 1. Each has its own map, wave table and
+soaked boss. `plannedLevels` is **10**, so the road shows nine built rows and one
+COMING SOON. **Level 9 shipped on 2026-09-14** with the merge of
+`claude/level-9-geometry-uac8ax`; level 10's art is uploaded to `art-source/` and
+level 10 is not wired up.
 
-Health: **1088 tests passing, 0 failing** (`npm test`, in this sandbox, no
+Health: **1099 tests passing, 0 failing** (`npm test`, in this sandbox, no
 `node_modules` needed). `sh tools/tsdiff.sh d9686c8` reports **213 distinct errors on
 both sides and nothing introduced** — all 213 are the known `phaser` resolve cascade,
 and CI's real `npx tsc --noEmit` is green. Working tree clean.
@@ -354,7 +359,7 @@ five remote branches other than `main`:
 | branch | state |
 |---|---|
 | `claude/level-8-soft-lock-9bmho0` | **fully contained in `main`** (merged as PR #8); safe to delete |
-| `claude/level-9-geometry-uac8ax` | **15 ahead, 0 behind — live work, not yet merged** |
+| `claude/level-9-geometry-uac8ax` | **merged to `main` 2026-09-14, fast-forward; fully contained in `main`, safe to delete** |
 | `claude/deployment-status-review-a661d6` | 7 ahead, 102 behind; still unmerged and still uninspected, from 05 September |
 | `claude/github-pages-deploy-trigger-x8b598` | 294 ahead, 102 behind; same |
 | `claude/phaser-4-migration-spike-hage91` | 144 ahead, 102 behind; salvaged onto `main`, and GitHub answered 403 twice to deleting the ref |
@@ -362,9 +367,11 @@ five remote branches other than `main`:
 `level2-volcanic-map-recreation`, `main-branch-ci-checks`, `scatter-props-tree-line`
 and `soak/overnight` no longer exist. (The old entry said "five" and then listed six.)
 
-**`claude/level-9-geometry-uac8ax` is the one that matters**, and CLAUDE.md's
-asset-sweep standing fact applies to it directly: check its `art.json` before deleting
-any level 9 or 10 asset for being unreferenced.
+`claude/level-9-geometry-uac8ax` **was** the one that mattered and it has landed, so
+the asset-sweep hazard it carried is discharged for level 9: `main` now references the
+level 9 art itself. The standing fact still applies to **level 10** — its art sits in
+`art-source/` with nothing on `main` using it, so check every open branch's `art.json`
+before deleting any of it for being unreferenced.
 
 ## Open items
 
