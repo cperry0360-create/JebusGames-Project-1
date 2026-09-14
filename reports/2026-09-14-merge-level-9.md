@@ -14,13 +14,29 @@ whoever merged it.
 | `6c309b4` | the branch head, fast-forwarded onto `main` (no merge commit) | **run 360 green — typecheck, test, changes, `deploy / build`, `deploy / deploy` all success** |
 | `83efa67` | `claude/context.md` reconciled, and this report | **run 361 green — typecheck, test, changes; `deploy` skipped, which is the `changes` gate working on a markdown-only push, not a failed deploy** |
 | `a6f3aac` | the two rows above | **run 362 green — typecheck, test, changes; `deploy` skipped** |
-| _this commit_ | run 362's row | not recorded, and it cannot be: a row for the commit that writes the row needs a commit after it. The table closes here on purpose. |
+| `0496f2d` | run 362's row, and the API note below | **run 363 green — typecheck, test, changes; `deploy` skipped** |
+| _this commit_ | run 363's row and the correction below | not recorded, and it cannot be: a row for the commit that writes the row needs a commit after it. The table closes here on purpose. |
 
-A note on reading run 362 through the API: `list_workflow_jobs` reported its
-`test` job `in_progress` for ten minutes after the run had finished, while the
-run-level endpoint had it `completed / success` at 12:40:42Z. **The per-job
-endpoint served stale data; the run-level one did not.** Worth knowing before
-anyone concludes a job has hung.
+### The Actions API lags, on both endpoints, and it looks exactly like a hung job
+
+Worth writing down because it cost this session about twenty-five minutes of
+polling and it mimics the failure it is not.
+
+Runs 362 and 363 each **finished in about 35 seconds**. Run 363's jobs were all
+complete at 12:41:51Z. But for roughly fifteen minutes after that,
+`list_workflow_jobs` kept returning its `test` and `typecheck` jobs as
+`in_progress`, frozen mid-`npm install` — and the run-level `list_workflow_runs`
+kept returning the run as `in_progress` with `updated_at` stuck at 12:41:22Z.
+
+**An earlier draft of this file claimed the run-level endpoint was the reliable
+one. That was wrong and is corrected here.** It happened to be fresh for run 362
+and stale for run 363, so one observation had been generalised into a rule off a
+single sample. Both endpoints lag, independently, and neither is the tiebreak.
+
+What actually works: keep polling, and do not read a frozen `updated_at` as
+evidence of anything. A stalled `npm install` step and a stale cache are
+indistinguishable from here — the only difference is that one of them resolves
+if you wait.
 
 ## The merge
 
