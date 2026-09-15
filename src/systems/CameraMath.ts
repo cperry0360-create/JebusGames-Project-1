@@ -107,40 +107,55 @@ export function pinchScale(ratio: number, damping: number): number {
  * sees once the camera is zoomed — clamping it directly is the bug that made
  * the old rig fight Phaser's own bounds and lose.
  *
- * When the view is wider than the world (below cover zoom, which should not
- * happen but is cheap to survive) the range collapses to the world's midpoint.
+ * THERE IS NO MARGIN PARAMETER, AND THERE MUST NEVER BE ONE AGAIN.
+ *
+ * It had one, and it was the "black screen when scrolling" bug on every level.
+ * The HUD pad-overlap pass (`e361efe`) handed the HUD's own band height in as
+ * a vertical margin so an edge build pad could be nudged out from under the
+ * band — and a margin here does not create slack inside the plate, it lets the
+ * VIEW LEAVE THE PLATE by that much. `tools/harness/run.sh edges` measured
+ * 137 world px of void past the top and bottom edges at min zoom and 45 at
+ * max, with the horizontal axis clean because `boundsMarginPx` was 0. The
+ * plate is the whole world; anything past it is the clear-colour void.
+ *
+ * The pads that margin existed for are reachable without it — see
+ * `tests/hudpads.test.ts`, which measures each pad's real screen rectangle
+ * against the HUD's real rectangles instead of treating every HUD element as
+ * full screen width, and finds a camera position for all 151 of them.
+ *
+ * When the view covers the whole world on this axis the range is a single
+ * point: there is nowhere legal to move, and that is the honest answer rather
+ * than a bug to be worked around.
  */
 export function centerRange(
   viewSize: number,
   worldSize: number,
   zoom: number,
-  /** How far past the world edge the view may reach. Small and deliberate:
-   *  a hard stop exactly on the edge makes the arch and the gate sit jammed
-   *  against the screen border, and a large one shows the void the clamp
-   *  exists to hide. */
-  marginPx = 0,
 ): { min: number; max: number } {
   const half = viewSize / (2 * Math.max(zoom, 0.0001))
-  // THE VIEW COVERS THE WHOLE WORLD ON THIS AXIS, and this branch used to pin
-  // the centre to the world's middle outright -- a zero-width range, no slack,
-  // the camera immovable.
-  //
-  // THAT PIN IS WHAT MADE A BUILD PAD UNREACHABLE. The map is full-bleed and
-  // the run opens at cover zoom, so on a 16:9 plate in a 16:9 window the view
-  // covers the world on BOTH axes and the camera cannot move at all. A pad
-  // painted near the top or bottom edge of the plate therefore renders under
-  // the HUD band and there is no camera position that takes it out -- not a
-  // hard pad to tap, an impossible one. `tools/harness/run.sh padhud` counted
-  // twelve such pads on level 6 alone at 667x375.
-  //
-  // The margin now applies here too, so "the whole world fits" still allows
-  // the player to nudge it by exactly the margin. The margin is passed as the
-  // HUD's band height on the vertical axis and stays 0 on the horizontal,
-  // where nothing is docked.
   if (half * 2 >= worldSize) {
-    return { min: worldSize / 2 - marginPx, max: worldSize / 2 + marginPx }
+    return { min: worldSize / 2, max: worldSize / 2 }
   }
-  return { min: half - marginPx, max: worldSize - half + marginPx }
+  return { min: half, max: worldSize - half }
+}
+
+/**
+ * The span of world the camera shows on one axis, for a camera centred at
+ * `center`.
+ *
+ * The quantity the player actually sees, and therefore the one a bounds check
+ * has to be written against. `centerRange` is about the CENTRE, and a check on
+ * the centre is one algebra step away from the claim that matters — which is
+ * how a margin on the centre range shipped as "the camera is clamped" while
+ * the view was 137px past the plate.
+ */
+export function viewSpan(
+  center: number,
+  viewSize: number,
+  zoom: number,
+): { min: number; max: number } {
+  const half = viewSize / (2 * Math.max(zoom, 0.0001))
+  return { min: center - half, max: center + half }
 }
 
 

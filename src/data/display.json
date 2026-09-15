@@ -15,9 +15,9 @@
     "momentumDecay": 0.0022,
     "momentumMinSpeed": 35,
     "minZoom": 0.776,
-    "boundsMarginPx": 0,
     "openingMargin": 24,
     "_openingMargin": "Breathing room around the board on the opening frame, in world pixels. The box itself is the lane padded by half a road and every pad padded by its tap radius; this is the gap between that and the edge of the screen, so the arch and the gate are inside the frame rather than on its rim.",
+    "_boundsMarginPx": "RETIRED 2026-09-15 AND MUST NOT COME BACK. It was 0, so it never did any harm itself, but its twin -- the HUD band the rig was handed as a VERTICAL margin -- was the black that live play saw past the top and bottom of every plate. A margin on the camera centre does not make slack inside the plate; it moves the wall outward. tools/harness/run.sh edges measured 137 world px of void at min zoom. The clamp is now the plate and has nothing to tune.",
     "_defaultZoom": "What a reset returns to. NOT what the run opens at: the opening frames the whole board and comes out at the floor of the band on any phone. Both are CSS pixels per world unit and are multiplied by the device ratio before the rig sees them."
   }
 }

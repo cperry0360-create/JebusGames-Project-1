@@ -251,19 +251,21 @@ export interface HudLayout {
 /**
  * The taller of the two HUD bands, in CSS pixels.
  *
- * WHAT IT IS FOR: the camera. The map is full-bleed and the HUD draws over it,
- * so a build pad painted near the top or bottom edge of a plate renders under
- * a band. Before this existed the camera was PINNED -- at cover zoom the view
- * covers the world on both axes, `centerRange` returned a zero-width range,
- * and `boundsMarginPx` was 0 -- so such a pad could not be moved out from
- * under the HUD by any camera position available to the player. Not awkward:
- * impossible. `tools/harness/run.sh padhud` counted twelve of them on level 6
- * at 667x375.
+ * WHAT IT IS NOT FOR, ANY MORE: the camera. It was handed to `CameraRig` as a
+ * vertical bounds margin so an edge build pad could be nudged out from under a
+ * band, and that is what showed the void past the top and bottom of every
+ * plate in live play — a margin on the camera centre moves the wall outward,
+ * it does not create slack inside the plate. Retired 2026-09-15; see the
+ * header of `centerRange`.
  *
- * The rig takes this as its vertical bounds margin, so the board can always be
- * nudged far enough to clear whichever band is in the way. THE TALLER OF THE
- * TWO rather than each separately, because the margin is symmetric and a pad
- * may be at either edge.
+ * WHAT IT IS FOR NOW: measuring. `tests/hudpads.test.ts` reports it beside the
+ * per-pad verdict, and the harness prints it. The reachability question it was
+ * invented for is answered without it: every pad on every level has a camera
+ * position, inside the plate, where a 44pt square of its disc is on screen and
+ * clear of every HUD rectangle — because the bands are corner plates and a
+ * centred row, not opaque strips, so a pad can slide out from under one
+ * SIDEWAYS as well as vertically. The old measurement missed that by widening
+ * each HUD element to the full screen width.
  *
  * Measured off the rectangles rather than summed from the config: the bands
  * are where the elements actually ended up, and on a narrow screen the

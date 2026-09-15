@@ -10561,10 +10561,18 @@ async function run() {
     // Drag hard in all four directions, at min and max zoom, and check the
     // view never reaches past the artwork. Flat green behind the map is what
     // the player was seeing.
+    //
+    // 2026-09-15: AND THE SAME CHECK ON ALL TEN LEVELS, at the bottom. This
+    // scenario is what caught the black that the HUD pad-overlap pass put back
+    // -- 137 world px past the top and bottom edges at min zoom -- and it was
+    // only ever run on the level the harness boots into, while the report was
+    // "on every level". The sweep is cheap and removes the argument.
     const cam = g.cameras.main
     const D = (await import('./js/data/display.json', { with: { type: 'json' } })).default
     const W = D.width, H = D.height
     let worst = { name: '', over: 0 }
+    let faults = 0
+    const fail = (m) => { faults++; note('   *** ' + m) }
     const check = (label) => {
       const v = cam.worldView
       const over = Math.max(-v.x, -v.y, v.right - W, v.bottom - H, 0)
@@ -10606,11 +10614,145 @@ async function run() {
           (over > 0.5 ? '   *** ' + over.toFixed(0) + 'px OF GREEN ***' : '   inside the map'))
       }
     }
+    // AND EVERY LEVEL, not just the one the harness boots into.
+    //
+    // Live play reported the black on ALL levels, and the four drags above run
+    // on one. The clamp does not depend on the level -- the world is
+    // `display.json`'s 1280x720 whatever plate is painted on it -- but "does
+    // not depend on" is a claim about the code and this is a measurement, and
+    // the whole reason the bug shipped is that the camera test was checking
+    // `centerRange` with arguments the rig never passed.
+    //
+    // Driven through the rig's own target rather than by dragging: the drags
+    // above already prove the input path reaches the clamp, and forty flings
+    // with a 1.4s settle each does not fit in a run. Each corner is asked for
+    // from far outside the world, so the answer is the wall's position.
+    const RS = await import('./js/systems/RunState.js')
+    const LV = (await import('./js/data/levels.json', { with: { type: 'json' } })).default
+    const ids = LV.levels.map((l) => l.id)
+    note('sweeping all ' + ids.length + ' levels at the two ends of the zoom band:')
+    const dz = window.devicePixelRatio || 1
+    for (const id of ids) {
+      for (const k of ['Title', 'WorldMap', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+      RS.setRunState({
+        heroId: 'cory', levelId: id, seed: 7,
+        openingTowers: ['withholding', 'writeoff'], abilities: ['molotov', 'glacier'],
+        reserveTowers: [], resumeFrom: null,
+      })
+      game.scene.start('Game')
+      if (!(await until(() => running('Game') && scene('Game').rig, 15000))) {
+        fail(id + ': the level did not start'); continue
+      }
+      await sleep(250)
+      const G = scene('Game'), gc = G.cameras.main
+      let over = 0, at = ''
+      // AND THE PIXELS, because `worldView` is the camera's own opinion and
+      // the question is what the player sees.
+      //
+      // NOT "COUNT THE DARK PIXELS". That was the first version of this check
+      // and it is useless: the clear colour is #10161d, luma 21, and levels 8,
+      // 9 and 10 are painted machine worlds with large areas darker than that.
+      // It reported 43% void on level 9 with the camera provably inside the
+      // plate, which is the art.
+      //
+      // The world camera is given a MAGENTA background instead. A camera's
+      // background fills its viewport before anything draws into it, so every
+      // magenta pixel left in the frame is a pixel the plate did not cover --
+      // an unambiguous answer that no amount of dark art can imitate. The Hud
+      // is a separate scene with a transparent camera, so it does not paint
+      // over the evidence.
+      let voidPct = 0, voidAt = ''
+      const ctx = game.canvas.getContext('2d')
+      gc.setBackgroundColor(0xff00ff)
+      const blackness = () => {
+        if (!ctx) return 0
+        // THE CORNERS ONLY: uncovered world is against an edge by
+        // construction, and reading three megapixels per sample is slower than
+        // the whole run.
+        const cw = game.canvas.width, ch = game.canvas.height
+        const bw = Math.max(8, Math.round(cw * 0.08)), bh = Math.max(8, Math.round(ch * 0.08))
+        let dark = 0, n = 0
+        for (const [bx, by] of [[0, 0], [cw - bw, 0], [0, ch - bh], [cw - bw, ch - bh]]) {
+          const px = ctx.getImageData(bx, by, bw, bh).data
+          for (let i = 0; i < px.length; i += 4) {
+            // EXACTLY 0xff00ff, within a rounding step. A loose "pink
+            // enough" test (r>200, g<60, b>200) read 0.62% void on level 9
+            // with the camera provably inside the plate: that board is painted
+            // in neon magenta and the probe was counting the artwork. The
+            // camera clears opaquely under the canvas renderer, so the void is
+            // the exact colour and nothing else needs to match.
+            if (px[i] >= 250 && px[i + 1] <= 6 && px[i + 2] >= 250) dark++
+            n++
+          }
+        }
+        return n ? (100 * dark) / n : 0
+      }
+      for (const zName of ['min', 'max']) {
+        const z = (zName === 'min' ? D.camera.minZoom : D.camera.maxZoom) * dz
+        G.rig.setTargetZoom(z)
+        await until(() => Math.abs(gc.zoom - z) < 0.01, 4000)
+        for (const [cx, cy] of [[-9e4, -9e4], [9e4, -9e4], [-9e4, 9e4], [9e4, 9e4]]) {
+          G.rig.lookAt(cx, cy)
+          await sleep(260)
+          const v = gc.worldView
+          const o = Math.max(-v.x, -v.y, v.right - W, v.bottom - H, 0)
+          const corner = (cx < 0 ? 'left' : 'right') + '/' + (cy < 0 ? 'top' : 'bottom')
+          if (o > over) { over = o; at = zName + ' ' + corner }
+          if (o > worst.over) worst = { name: id + ' ' + zName, over: o }
+          const b = blackness()
+          if (b > voidPct) { voidPct = b; voidAt = zName + ' ' + corner }
+          if (b > 0.005) {
+            note('      ' + zName + ' ' + corner.padEnd(12) + b.toFixed(3) +
+              '% magenta   view x ' + v.x.toFixed(2) + '..' + v.right.toFixed(2) +
+              '  y ' + v.y.toFixed(2) + '..' + v.bottom.toFixed(2) +
+              '  zoom ' + gc.zoom.toFixed(3) + '  scroll ' +
+              gc.scrollX.toFixed(2) + ',' + gc.scrollY.toFixed(2))
+          }
+        }
+      }
+      note('   ' + id.padEnd(8) + (over <= 0.5 ? 'inside the plate at every corner'
+        : '*** ' + over.toFixed(0) + 'px past the plate at ' + at + ' ***')
+        + '   corners: ' + voidPct.toFixed(2) + '% uncovered'
+        + (voidPct > 0.2 ? ' at ' + voidAt : ''))
+      if (voidPct > 0.2) fail(id + ': ' + voidPct.toFixed(2) +
+        '% of the screen corners is uncovered world, at ' + voidAt)
+      if (over > 0.5) fail(id + ' shows ' + over.toFixed(0) + 'px past the plate')
+      // AND THE PLATE'S OWN EDGES, when it did not cover the corner. The
+      // camera being inside the plate and the frame still showing the clear
+      // colour can only mean the painted image does not reach the edge of the
+      // world it is stretched to, which is an ART fault and not a camera one.
+      // Measured rather than assumed: the alpha of the outermost row and
+      // column of the plate texture.
+      if (voidPct > 0.005) {
+        const tex = game.textures.get(id === 'level1' ? 'map-level1' : 'map-' + id)
+        const img = tex ? tex.getSourceImage() : null
+        if (img && img.width) {
+          const c2 = document.createElement('canvas')
+          c2.width = img.width; c2.height = img.height
+          const k2 = c2.getContext('2d')
+          k2.drawImage(img, 0, 0)
+          const edge = (x, y, w, h) => {
+            const px = k2.getImageData(x, y, w, h).data
+            let clear = 0, n = 0
+            for (let i = 3; i < px.length; i += 4) { if (px[i] < 8) clear++; n++ }
+            return (100 * clear) / n
+          }
+          note('      plate ' + img.width + 'x' + img.height + ' clear alpha on'
+            + ' top ' + edge(0, 0, img.width, 1).toFixed(1) + '%'
+            + ' bottom ' + edge(0, img.height - 1, img.width, 1).toFixed(1) + '%'
+            + ' left ' + edge(0, 0, 1, img.height).toFixed(1) + '%'
+            + ' right ' + edge(img.width - 1, 0, 1, img.height).toFixed(1) + '%')
+        }
+      }
+      if (id === 'level1' || id === 'level8' || id === 'level9' || id === 'level10') {
+        await shot('edges-' + id + '-' + VP.w + 'x' + VP.h)
+      }
+    }
     note('worst overscroll anywhere: ' + worst.over.toFixed(1) + 'px' +
       (worst.over > 0.5 ? ' at ' + worst.name : ''))
-    note('RESULT ' + (worst.over <= 0.5 ? 'the view never leaves the artwork'
+    note('RESULT ' + (worst.over <= 0.5
+      ? 'the view never leaves the artwork, on any of ' + ids.length + ' levels'
       : '*** GREEN BLEEDS IN ***'))
-    await shot('edges-' + VP.w + 'x' + VP.h)
     return
   }
 

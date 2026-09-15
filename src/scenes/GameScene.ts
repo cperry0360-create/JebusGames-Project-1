@@ -120,7 +120,7 @@ import { outroPanelsFor } from '../systems/Cutscenes.ts'
 import { heartbeat, setRunActive } from '../systems/Watchdog.ts'
 import { enterGate, leaveGate, noteInputAccepted } from '../systems/InputGates.ts'
 import {
-  hudBandHeight, hudBlocksGesture, hudLayout, insideRect, NO_INSETS, type HudLayout, type Rect,
+  hudBlocksGesture, hudLayout, insideRect, NO_INSETS, type HudLayout, type Rect,
 } from '../systems/HudLayout.ts'
 import { TargetingMode, type ExitReason } from '../systems/TargetingMode.ts'
 import {
@@ -1322,11 +1322,10 @@ export class GameScene extends Phaser.Scene {
       defaultZoom: displayData.camera.defaultZoom * deviceScale(),
       maxZoom: displayData.camera.maxZoom * deviceScale(),
       minZoom: displayData.camera.minZoom * deviceScale(),
-      boundsMarginPx: displayData.camera.boundsMarginPx,
-      // The HUD's own height, so the board can be nudged out from under it.
-      // Physical pixels; see `hudBandPx`. Refreshed by `applyBands` on every
-      // resize, because the band depends on the viewport.
-      hudBandPx: (hudBandHeight(this.layout, viewH(this)) + LAYOUT.padClearancePx) * deviceScale(),
+      // NO BOUNDS MARGIN AND NO HUD BAND. Both used to be handed over here so
+      // the board could be nudged out from under the HUD, and both let the
+      // camera show the void past the plate instead -- the black that live
+      // play reported on every level. See the note in `CameraRig`'s limits.
       tapSlopPx: displayData.camera.tapSlopPx,
       panSpeed: displayData.camera.panSpeed,
       pinchDamping: displayData.camera.pinchDamping,
@@ -1742,10 +1741,9 @@ export class GameScene extends Phaser.Scene {
       },
       LAYOUT,
     )
-    // The band moved, so the camera's vertical slack has to move with it --
-    // a rotation can halve the ability row's height and a notch can add to it.
-    this.rig?.setHudBand(
-      (hudBandHeight(this.ownLayout, viewH(this)) + LAYOUT.padClearancePx) * deviceScale())
+    // The rig has no band to refresh: its clamp is the plate and nothing else.
+    // `viewportChanged` still has to fire, because cover zoom is derived from
+    // the camera's own size and that is what just moved.
     this.rig?.viewportChanged()
   }
 
