@@ -359,9 +359,9 @@ the comic art already in the game unlocks alongside it. Full design in
 risk unknown: holding 45fps with 200 concurrent enemies on a phone. Prove that before
 building anything on top of it.
 
-## Status as of 2026-09-14 evening
+## Status as of 2026-09-15
 
-**The last commit that changed the GAME is `afaee71`**, the Vlaude fight's re-soak,
+**The last commit that changed the GAME is `66a0ab3`**, the seven-defect UI pass,
 and that is the durable number — `main`'s tip moves with every documentation commit.
 Do not trust a tip hash written in this file; check it. Read Checks at JOB level, not
 merely at run level: a markdown-only push to `main` is green with `deploy` **skipped**,
@@ -391,9 +391,33 @@ it — no test in `tests/` imports Phaser.
 So **story mode is content-complete in rows and not in content**, and the next brief
 should say which of those two it means.
 
-Health: **1136 tests passing, 0 failing** (`npm test`, in this sandbox, no
+Health: **1154 tests passing, 0 failing** (`npm test`, in this sandbox, no
 `node_modules` needed), and CI's real `npx tsc --noEmit` is green on `main` at
-`3f1a805`. Working tree clean.
+`c1682ab` (run 388, all five jobs). Working tree clean.
+
+**Seven UI and presentation defects from live play were fixed on 2026-09-15**, direct
+to `main` as `66a0ab3` and `c1682ab`, both green on all five jobs including
+`deploy / deploy`. `reports/2026-09-14-ui-cleanup.md` is the write-up. In one line
+each: the peanut pill is a **three-slice** that grows with its content (it was
+clipping at THREE digits, not four — 800 was already 5px outside the painted field);
+`hud.numberMargin` is retired for `hud.layout.readoutFieldPad`, a fraction of the
+plate height; ten loadout strings overflowed at phone widths and the fix is
+`loadout.cardIconColumnCapShare` plus a both-axes size ladder with
+`loadout.cardTextMinScale`; **a build pad the HUD stands on is no longer DRAWN**
+(`GameScene.padShowing`), which is the same complaint the camera-slack fix answered
+and must NOT be answered that way again; the build drawer collapses on all five
+gestures that close every other panel; the tower ring's nothing-to-buy slot carries
+`price: null` instead of `0`; and the spawn/exit badges are at **alpha 0.7** and inset
+**6.0 badge widths** along their own lanes.
+
+**Five harness scenarios were fixed or added in that pass, and three of them had been
+reporting nothing.** `drawer` threw on a stale `heroRow` key (renamed `heroChip` in
+the HUD pass) before any of its checks ran; `everyloadout` had no `expect()` at all,
+discarded the scene's own `getData('overlaps')`, and walked `_`-prefixed JSON notes as
+heroes — it reported 56 false overflows, then 12, then 10 real; `skins` and `counters`
+are new. `padhud` gained a "still DRAWN" column and its "UNREACHABLE" column is now
+labelled "not freed BY PANNING ALONE", which is what it measures now the camera slack
+is gone.
 
 **`sh tools/tsdiff.sh 0496f2d` now reports one INTRODUCED error, and it is a false
 positive** — 213 on the baseline against 214 on the tree,
@@ -451,6 +475,34 @@ never converted and never registered, and `reports/2026-09-14-level-10-assets.md
 names them as deliberately unused.
 
 ## Open items
+
+**THE PAD-OVERLAP TEST QUESTION IS SETTLED, and it is worth reading before anyone
+re-opens the HUD/pad argument a fourth time.** `tests/hudpads.test.ts` was green while
+the overlap was plainly visible in play, and it was right to be: its test asserts
+**reachability** (there is some camera position where a 44pt clear circle lands on the
+pad), not disjointness, and its own header says so. The property the briefs kept asking
+for did not exist anywhere and now does —
+`no HUD element overlaps a VISIBLE build pad, on any level`. At-rest coverage is still
+a fact (33 pads across the ten levels at 844x390) and is **recorded rather than
+asserted to zero**, because the map is full-bleed by design; the fix is that a covered
+pad is not drawn. **Do not fix it with camera slack again.** That was the
+2026-09-13 answer, it worked, and the slack past the plate is the black-screen bug the
+next brief reported.
+
+**Two NEW open items, both small, both from the 2026-09-15 UI pass:**
+
+- **Level 7's spawn and exit badges are invisible on the Highway, and it is an ART
+  job.** ~9 luma of contrast on all six badges, with level 4's upper spawn at 8.5.
+  Alpha cannot fix it: alpha blends toward the plate, so contrast scales linearly and
+  1.0 would take level 7 from 9.2 to 13.1, which is still nothing. The asphalt and the
+  badge art are the same luminance. Wants a light halo or a darker outline in the
+  picture. Everything else about the markers is finished.
+- **`run.sh drawer` reports two problems that are PRE-EXISTING** (confirmed against a
+  worktree at `f4021cf`) and both want a decision rather than a fix: the drawer shows
+  6 of 7 towers, the seventh below the fold of a grid with `maxScroll 80`; and
+  re-tapping the selected tile does not cancel — though the scenario's own tile
+  enumeration reports duplicate centres for tiles 2/4 and 3/5, so establish whether
+  the harness or the game is wrong before treating it as a defect.
 
 **These are renumbered, twice now.** Seven of the original ten closed between 07 and
 13 September; what is left keeps its wording and gets a new number, so a citation of
