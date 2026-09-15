@@ -361,8 +361,8 @@ building anything on top of it.
 
 ## Status as of 2026-09-15
 
-**The last commit that changed the GAME is `c9ea4f6`**, level 9's uniform build-pad
-sizing, and that is the durable number — `main`'s tip moves with every documentation commit.
+**The last commit that changed the GAME is `d7036cc`**, the build-pad visibility fix,
+and that is the durable number — `main`'s tip moves with every documentation commit.
 Do not trust a tip hash written in this file; check it. Read Checks at JOB level, not
 merely at run level: a markdown-only push to `main` is green with `deploy` **skipped**,
 which is the `changes` job working as designed and not a failed deploy. The fight merge
@@ -391,9 +391,9 @@ it — no test in `tests/` imports Phaser.
 So **story mode is content-complete in rows and not in content**, and the next brief
 should say which of those two it means.
 
-Health: **1156 tests passing, 0 failing** (`npm test`, in this sandbox, no
+Health: **1157 tests passing, 0 failing** (`npm test`, in this sandbox, no
 `node_modules` needed), and CI's real `npx tsc --noEmit` is green on `main` at
-`c9ea4f6` (run 391, all five jobs, with `deploy / deploy` RUNNING rather than
+`d7036cc` (run 394, all five jobs, with `deploy / deploy` RUNNING rather than
 skipped). Working tree clean.
 
 **LEVEL 9'S BUILD PADS DRAW AT ONE SIZE as of 2026-09-15**, direct to `main` as
@@ -498,18 +498,51 @@ names them as deliberately unused.
 
 ## Open items
 
-**THE PAD-OVERLAP TEST QUESTION IS SETTLED, and it is worth reading before anyone
-re-opens the HUD/pad argument a fourth time.** `tests/hudpads.test.ts` was green while
-the overlap was plainly visible in play, and it was right to be: its test asserts
-**reachability** (there is some camera position where a 44pt clear circle lands on the
-pad), not disjointness, and its own header says so. The property the briefs kept asking
-for did not exist anywhere and now does —
-`no HUD element overlaps a VISIBLE build pad, on any level`. At-rest coverage is still
-a fact (33 pads across the ten levels at 844x390) and is **recorded rather than
-asserted to zero**, because the map is full-bleed by design; the fix is that a covered
-pad is not drawn. **Do not fix it with camera slack again.** That was the
-2026-09-13 answer, it worked, and the slack past the plate is the black-screen bug the
-next brief reported.
+**THE HUD-VERSUS-PADS QUESTION IS CLOSED, on the third attempt, and this is the
+paragraph to read before anyone opens a fourth.** Three passes at one problem -- the
+HUD and the build pads wanting the same screen space -- and the first two each fixed
+it by shipping a different visible bug:
+
+1. **2026-09-13:** the camera was handed the HUD's band height as a bounds MARGIN so
+   the map would inset below the HUD. A margin on the camera CENTRE does not make room
+   inside the plate, it moves the wall outward. That was the black-screen-on-scroll
+   bug. Reverted. **Never do this again**; `tests/hudpads.test.ts`'s
+   `the camera is NOT given the HUD band as slack` is the guard.
+2. **2026-09-14:** a pad the HUD was standing on stopped being DRAWN instead
+   (`padShowing` -> `hudStandsOn`, re-answered every frame off the live camera by
+   `syncPadVisibility`). It removed the artefact and created a worse one: **the pads
+   popped in and out under a pan**, because a screen-space predicate on a moving
+   camera is a moving predicate. 151 of 151 pads on the ten levels flipped somewhere
+   in the reachable camera box; five of level 1's seven were gone at once at 844x390.
+   It was also **over-firing** -- it tested the tap circle's bounding SQUARE against
+   art 1.3x narrower and 1.7x shorter, so ~31% of its culls had no HUD over the drawn
+   disc, and two of its seven rectangles (`counters`, `messageRow`) are READOUTS that
+   do not take a press, so a pad they covered was hidden AND still pressable.
+3. **2026-09-15, `d7036cc`, and this is the answer:** a build pad is a WORLD OBJECT,
+   like a tower, an enemy, the hero and the road, none of which has ever been hidden
+   for being under the HUD. `padShowing` is now `this.build.isFree(spot.index)` and
+   nothing else; `hudStandsOn` and `syncPadVisibility` are deleted; `drawSpots`, on
+   the board clock, is the only caller. **Nothing about a pad reads the screen**, so
+   the property holds by construction.
+
+**THE PRICE, stated rather than hidden:** a pad under one of the five pressable HUD
+controls is visible and not tappable there. That is bounded by the reachability test,
+which proves all 151 pads have a zoom and a camera position where a 44pt circle lands
+on them clear of the HUD. **Route (a) -- reserving a HUD band outside the map
+viewport, which is the 2026-09-13 idea done properly as a `setViewport` inset rather
+than a bounds margin -- was costed and rejected: 156 of 390 px, 40% of a landscape
+phone, and the end of the full-bleed map.** It stays available at that price; see
+`reports/2026-09-15-pad-visibility.md`.
+
+**And the test that let all this through is replaced.** `hudpads.test.ts` asserts
+reachability, which is deliberately weaker than disjointness and says so; what was
+ALSO there --`no HUD element overlaps a VISIBLE build pad` -- pinned attempt 2's
+implementation and passed the whole time the pads were popping. It is now
+`no build pad changes visibility as the camera moves`, which pans every level at every
+zoom and fails if the decision reads a screen-space term. **`tools/harness/run.sh
+padpan` is the rendered-frame half** and proves BOTH properties in one run -- every
+pad drawn throughout a pan, and not one magenta pixel of void past the plate -- because
+each of the first two passes broke what the one before it fixed.
 
 **Two NEW open items, both small, both from the 2026-09-15 UI pass:**
 
@@ -525,6 +558,15 @@ next brief reported.
   re-tapping the selected tile does not cancel — though the scenario's own tile
   enumeration reports duplicate centres for tiles 2/4 and 3/5, so establish whether
   the harness or the game is wrong before treating it as a defect.
+- **`cancel`'s reserved rectangle takes presses while it is invisible.** `hudTakesPress`
+  includes `layout.cancel` unconditionally and the layout reserves it ALWAYS, but
+  `setCancelVisible` only draws the slab and glyph while there is something to cancel.
+  So a 116x48 region in the bottom-right corner swallows taps with nothing visible
+  there, and a build pad drawn under it is visible and not tappable **with no visible
+  cause**. Found while measuring the 2026-09-15 pad-visibility pass (1.8% of the old
+  culls at 844x390) and deliberately not fixed there: it is input plumbing with its
+  own history, and every pass at this area that reached one step further than it was
+  asked to broke something.
 - **Level 9 declares 4 scenery items and builds 8**, and has been reporting it for a
   while: `run.sh level9` fails two of its 86 checks on it (`4 scenery items declared,
   8 built` and `the rebuilt board has 8 scenery items`), plus a third on `START RUN
