@@ -687,6 +687,45 @@ for key, path in (
           f" -> {{'contentWidth': {iw}, 'contentHeight': {ih}}}  ({iw / ih:.3f}:1)")
 
 
+# ------------------------------------------------------- build pads and nodes
+
+# THE PAD ART, AND WHY ITS INK MATTERS MORE THAN MOST.
+#
+# `fitContentWidth` scales by `targetWidth / contentWidth`, so contentWidth is
+# the only thing standing between "90 screen pixels across" and the number the
+# sprite is actually drawn at. Every one of these files is exported with a few
+# pixels of transparent margin -- 5 px all round on the four chips, 1 px on the
+# flagstone -- so an entry carrying the CANVAS size draws the art 2 to 3 per
+# cent small, silently, and differently for each file.
+#
+# LEVEL 9'S FOUR CHIPS ARE HERE BECAUSE THEY ARE NOW SIZED LIKE EVERY OTHER PAD.
+# They used to be drawn at a width the map carried per pad -- the painted chip's
+# own width, thirteen distinct values across fifteen pads -- and the exact ink
+# hardly mattered when the target was already a different number on every spot.
+# It is one number now (presentation.json's buildPad.quietScreenWidth over
+# display.json's camera.defaultZoom), so these four divisors are what decide
+# whether the four styles come out the same size as each other.
+#
+# EACH STYLE HAS ITS OWN ASPECT and the fit is by WIDTH, so the printed aspect
+# is what the heights will differ by. Anything near 1.0 is close to square; the
+# cabled chip is the outlier at about 1.36.
+print('\n\nBuild pads and build-node chips')
+for key, path in (
+    ('prop-pad', 'public/assets/props/pad_donotbuild.webp'),
+    ('prop-pad-flagstone', 'public/assets/props/pad_flagstone.webp'),
+    ('node-chip-cabled', 'public/assets/props/node_chip_cabled.webp'),
+    ('node-chip-fan', 'public/assets/props/node_chip_fan.webp'),
+    ('node-chip-ram', 'public/assets/props/node_chip_ram.webp'),
+    ('node-chip-square', 'public/assets/props/node_chip_square.webp'),
+):
+    w, h, px = img.read(path)
+    xs = [x for x in range(w) if any(px[(y * w + x) * 4 + 3] > ALPHA for y in range(h))]
+    ys = [y for y in range(h) if any(px[(y * w + x) * 4 + 3] > ALPHA for x in range(w))]
+    iw, ih = xs[-1] - xs[0] + 1, ys[-1] - ys[0] + 1
+    print(f'  {key:19s} canvas {w}x{h}, ink x{xs[0]}-{xs[-1]} y{ys[0]}-{ys[-1]}'
+          f" -> {{'contentWidth': {iw}, 'contentHeight': {ih}}}  ({iw / ih:.3f}:1)")
+
+
 # ------------------------------------------- where a drawn icon goes on a plate
 
 # art.json's ui.counterIcon. The peanut is the one counter icon that is DRAWN

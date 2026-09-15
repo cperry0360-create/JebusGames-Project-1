@@ -31,10 +31,12 @@ THREE THINGS ABOUT THIS MAP THAT NO EARLIER LEVEL HAD.
   one of two roads round the board.
 
   THE PADS ARE PAINTED CHIPS, not open ground, and each carries one of FOUR
-  build-node pictures instead of the one every other level uses. `padArt` pairs
-  each pad with its variant and with the painted WIDTH of the chip it stands
-  on, because the node art is about 500 px against chips averaging 81 px and
-  has to be fitted to the chip rather than drawn at its own size.
+  build-node pictures instead of the one every other level uses. `padArt` names
+  the variant and NOTHING ELSE. It used to carry the painted chip's own width
+  as well, and the engine drew the node at it -- which gave fifteen pads
+  thirteen different sizes between 63 and 150 world px while `spotAt` answered
+  the same 34 px circle on every one of them. Size is not a per-pad property:
+  every pad in the game is drawn at buildPad.quietScreenWidth / defaultZoom.
 """
 import json, math, os
 
@@ -180,8 +182,11 @@ def main():
     spots = [list(p) for p in g['pads']]
     chips = g['padChips']
     suggestion = g['suggestedNodeBalanced']
-    pad_art = [{'key': NODE_KEY[suggestion[str(i + 1)]], 'width': float(chips[i]['w'])}
-               for i in range(len(spots))]
+    # NO WIDTH. `chips` is still read, because the checks below and the
+    # `_buildSpots` note are about where a pad sits on its painted chip, but
+    # the chip's size is deliberately not carried into the map: see the module
+    # docstring.
+    pad_art = [{'key': NODE_KEY[suggestion[str(i + 1)]]} for i in range(len(spots))]
     used = {}
     for a in pad_art:
         used[a['key']] = used.get(a['key'], 0) + 1
@@ -295,10 +300,15 @@ def main():
                    'draws one pad art on every spot. The pairing is the geometry file\'s '
                    '`suggestedNodeBalanced`: the chips are ranked by aspect and dealt into '
                    'four runs in the variants\' own aspect order, so all four get used and '
-                   'the most landscape chips get the most landscape node. `width` is the '
-                   'PAINTED CHIP\'S width in world pixels, and it is what the node is drawn '
-                   'at: the art is about 500 px against chips averaging 81, so a node drawn '
-                   'at its own size would cover six chips. '
+                   'the most landscape chips get the most landscape node. A KEY AND NOTHING '
+                   'ELSE -- there is no size here and there must not be one. Every entry '
+                   'used to carry the painted chip\'s own `width`, and the engine drew the '
+                   'node at it, so these fifteen pads drew at THIRTEEN sizes between 63 and '
+                   '150 world px while the tap target stayed a 34 px circle on all of them. '
+                   'Pad size is one derivation for the whole game -- '
+                   'presentation.json\'s buildPad.quietScreenWidth over display.json\'s '
+                   'camera.defaultZoom -- and tests/buildpad.test.ts fails if any map file '
+                   'grows a per-pad size again. '
                    + ', '.join(f'{k} x{n}' for k, n in sorted(used.items())) + '.',
         'scenery': [{k: v for k, v in s.items() if not k.startswith('_')} for s in SCENERY],
         '_scenery': 'DECORATION DRAWN IN THE WORLD, and the general form of the one-off '

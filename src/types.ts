@@ -245,11 +245,20 @@ export interface MapDef {
    * `ART.prop.buildPad` on the one nearest the entrance and
    * `ART.prop.buildPadQuiet` on the rest. Level 9's board is a circuit board
    * whose pads are painted chips of four different shapes, and it carries four
-   * node variants; `width` is the PAINTED CHIP'S width in world pixels, which
-   * is what the node is drawn at. The art is about 500 px against chips
-   * averaging 81, so a node drawn at its own size would cover six of them.
+   * node variants so the node on a chip looks like that chip.
+   *
+   * WHICH PICTURE, AND NOTHING ELSE. There is deliberately no size here. A
+   * `width` per entry used to be, taken from the painted chip each pad stands
+   * on, and it drew level 9's fifteen pads at THIRTEEN different sizes between
+   * 63 and 150 world px while the tap target stayed a 34 px circle on every
+   * one of them — so the art disagreed with what could be pressed, on every
+   * pad, in one direction or the other. Every pad on every level is now drawn
+   * at `buildPad.quietScreenWidth / camera.defaultZoom`, the same derivation
+   * the flagstone has always used. A per-pad size cannot come back without
+   * bringing that back with it, and `tests/buildpad.test.ts` fails if a map
+   * file grows one.
    */
-  padArt?: { key: string; width: number }[]
+  padArt?: { key: string }[]
   /**
    * Decoration drawn in the world: a picture at a position, and nothing else.
    *

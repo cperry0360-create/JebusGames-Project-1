@@ -17890,6 +17890,157 @@ async function run() {
     }
     await shot('level9-1-board-' + VP.w + 'x' + VP.h)
 
+    /* ---- 2b: FIFTEEN PADS, ONE SIZE ---- */
+    {
+      /*
+       * THE PADS USED TO DRAW AT THIRTEEN SIZES ON THIS BOARD, and no test in
+       * tests/ could see it: nothing there imports Phaser, so nothing there
+       * knows what `displayWidth` came out at. `map_level9.json` carried the
+       * painted chip's own width per pad -- 63, 68, 70, 71, 72, 72, 73, 81,
+       * 82, 82, 85, 122, 133, 144, 150 -- and the engine drew the node at it,
+       * while `spotAt` answered the same `spotRadius` circle on all fifteen.
+       *
+       * So this measures BOTH halves off the live scene: that the fifteen are
+       * one size now, and that the size is the one every other board uses.
+       */
+      const DSP = (await import('./js/data/display.json', { with: { type: 'json' } })).default
+      const PRZ = (await import('./js/data/presentation.json', { with: { type: 'json' } })).default
+      const ARTZ = await import('./js/systems/Art.js')
+      const signKey9 = ARTZ.ART.prop.buildPad
+      const want = PRZ.buildPad.quietScreenWidth / DSP.camera.defaultZoom
+      const tap = G.level.map.spotRadius * 2
+      note('pad art: asked for ' + PRZ.buildPad.quietScreenWidth + ' screen px at the default '
+        + 'zoom of ' + DSP.camera.defaultZoom + ' = ' + want.toFixed(2) + ' world px across; '
+        + 'the tap target is a ' + G.level.map.spotRadius + ' px circle, ' + tap + ' px across')
+      /*
+       * THE PULSE HAS TO COME OUT OF THE MEASUREMENT, and dividing by anything
+       * read off one frame will not do it.
+       *
+       * Every pad breathes -- `scale` from `base` to `base * pulseScale`,
+       * yoyo, forever -- and they are deliberately PHASE-OFFSET, one stagger
+       * step of pulseMs/n apart, so no two of them are at the same point of
+       * the breath at the same instant. A single sample of `displayWidth`
+       * therefore reports fourteen different numbers on a board where every
+       * pad is fitted to the same one, and dividing by `scale` does not help:
+       * the tween writes `scale` itself, so base is not recoverable from it.
+       * Measured, that mistake reads as "13 distinct values" spanning exactly
+       * 52.78 to 54.94 -- which is 52.33 to 52.33 x 1.05, i.e. the animation
+       * working correctly.
+       *
+       * So sample over a WHOLE pulse period instead and take each pad's
+       * minimum, which is its `base` and nothing else. Two periods, to cover
+       * the stagger delay on the first cycle.
+       */
+      const AJZ = (await import('./js/data/art.json', { with: { type: 'json' } })).default
+      const lows = G.pads.map(() => Infinity)
+      const highs = G.pads.map(() => 0)
+      const lowH = G.pads.map(() => Infinity)
+      const sampleUntil = performance.now() + PRZ.buildPad.pulseMs * 2 + 400
+      let samples = 0
+      while (performance.now() < sampleUntil) {
+        for (let i = 0; i < G.pads.length; i++) {
+          const pd = G.pads[i]
+          if (pd.displayWidth < lows[i]) lows[i] = pd.displayWidth
+          if (pd.displayWidth > highs[i]) highs[i] = pd.displayWidth
+          if (pd.displayHeight < lowH[i]) lowH[i] = pd.displayHeight
+        }
+        samples++
+        await sleep(30)
+      }
+      note('  sampled every pad ' + samples + ' times over '
+        + (PRZ.buildPad.pulseMs * 2 + 400) + ' ms, which is two full '
+        + PRZ.buildPad.pulseMs + ' ms pulses: the minimum is the size it is fitted to '
+        + 'and the maximum is that times the ' + PRZ.buildPad.pulseScale + 'x breath')
+      const nominal = []
+      for (let i = 0; i < G.pads.length; i++) {
+        const pd = G.pads[i]
+        const spot = G.build.spots[i]
+        if (pd.texture.key === signKey9) {
+          note('  pad ' + i + ': the sign, canvas ' + lows[i].toFixed(1) + ' x '
+            + lowH[i].toFixed(1) + ' -- not a node, and sized by height not width')
+          continue
+        }
+        const ink = AJZ.render[pd.texture.key].contentWidth
+        const srcW = game.textures.get(pd.texture.key).source[0].width
+        nominal.push({
+          i, key: pd.texture.key, x: Math.round(spot.x), y: Math.round(spot.y),
+          w: lows[i], h: lowH[i], peak: highs[i],
+          // `displayWidth` IS THE CANVAS, not the ink: these files carry 5 px
+          // of transparent margin all round, so a chip fitted to 52.33 px of
+          // ink reports 53.4 px of sprite. `fitContentWidth` divides by
+          // contentWidth, so multiplying back by it recovers the number the
+          // pad was actually fitted to, which is what compares with
+          // quietScreenWidth / defaultZoom.
+          nominal: (lows[i] / srcW) * ink,
+        })
+      }
+      for (const r of nominal) {
+        note('  pad ' + String(r.i).padStart(2) + ' at (' + r.x + ', ' + r.y + ')  '
+          + r.key.padEnd(17) + '  canvas ' + r.w.toFixed(1) + ' x ' + r.h.toFixed(1)
+          + ' (peak ' + r.peak.toFixed(1) + ')  ink ' + r.nominal.toFixed(2)
+          + ' across  -- ' + (r.w / tap * 100).toFixed(0) + '% of the tap target')
+      }
+      const widths = nominal.map((r) => r.nominal)
+      const lo = Math.min(...widths), hi = Math.max(...widths)
+      // Rounded to a tenth of a world pixel: the minimum of a sampled tween is
+      // the true base only to within one sample of the easing curve's floor,
+      // and a tenth of a pixel is two orders below anything visible.
+      const distinct = new Set(widths.map((w) => w.toFixed(1))).size
+      note('  fifteen pads, ' + nominal.length + ' of them nodes: fitted width '
+        + lo.toFixed(2) + ' to ' + hi.toFixed(2) + ', ' + distinct + ' distinct value'
+        + (distinct === 1 ? '' : 's'))
+      expect(distinct === 1, 'level 9 draws its pads at ' + distinct + ' different sizes')
+      expect(Math.abs(lo - want) < 0.15 && Math.abs(hi - want) < 0.15,
+        'the pads are uniform at ' + lo.toFixed(2) + ' but the rest of the game draws at '
+        + want.toFixed(2))
+      // ALL FOUR STYLES SURVIVED. The variety was the art, and only the sizing
+      // went; a fix that quietly collapsed the board to one picture would pass
+      // every size check above.
+      const styles = new Set(nominal.map((r) => r.key))
+      note('  styles on the board: ' + [...styles].sort().join(' '))
+      expect(styles.size === 4, 'level 9 is drawing ' + styles.size + ' chip styles, not 4')
+      // AND THE ART FITS INSIDE WHAT CAN BE PRESSED, which is the second half
+      // of the bug: a 150 px chip in a 68 px circle could not be tapped across
+      // most of its own face.
+      const spill = nominal.filter((r) => r.w > tap || r.h > tap)
+      expect(spill.length === 0, spill.length + ' pads draw wider than the tap target: '
+        + spill.map((r) => r.i + ' (' + r.w.toFixed(0) + 'x' + r.h.toFixed(0) + ')').join(', '))
+      // AND EVERY NODE STILL LANDS ON ITS PAINTED CHIP rather than on bare
+      // circuit board. The chip boxes are the geometry the map was traced
+      // from; the smallest is 63 x 61, so a node has to fit inside that.
+      const CHIPS9 = [[710, 49, 853, 163], [588, 75, 655, 141], [265, 120, 397, 220],
+        [1058, 139, 1139, 213], [763, 200, 847, 280], [429, 201, 491, 261],
+        [284, 273, 405, 385], [965, 310, 1046, 398], [790, 320, 870, 396],
+        [179, 331, 250, 400], [472, 436, 541, 503], [951, 447, 1021, 519],
+        [706, 521, 855, 637], [317, 572, 389, 643], [912, 606, 983, 677]]
+      const off = []
+      for (const r of nominal) {
+        const b = CHIPS9[r.i]
+        // The node's own rectangle against the painted chip's, both centred on
+        // the same spot by construction.
+        if (r.x - r.w / 2 < b[0] || r.x + r.w / 2 > b[2]
+          || r.y - r.h / 2 < b[1] || r.y + r.h / 2 > b[3]) {
+          off.push(r.i + ' at (' + r.x + ', ' + r.y + '): ' + r.w.toFixed(0) + 'x'
+            + r.h.toFixed(0) + ' over a painted chip of ' + (b[2] - b[0]) + 'x' + (b[3] - b[1]))
+        }
+      }
+      note('  nodes reaching past their painted chip: ' + (off.length || 'none'))
+      for (const o of off) note('    *** ' + o)
+      expect(off.length === 0, off.length + ' nodes hang off their painted chip: ' + off.join('; '))
+
+      // The transform `level9-1-board` was taken under, so a crop of that PNG
+      // can be placed on the board rather than eyeballed. World to CSS pixels
+      // is (world - view.x) * zoom / devicePixelRatio, which is what
+      // tools/harness/shrink.py's --crop wants.
+      {
+        const v = g.cameras.main.worldView
+        note('  the board shot: world ' + v.x.toFixed(1) + ',' + v.y.toFixed(1) + ' '
+          + v.width.toFixed(1) + 'x' + v.height.toFixed(1) + ' at zoom '
+          + g.cameras.main.zoom.toFixed(4) + ', canvas ' + game.canvas.width + 'x'
+          + game.canvas.height)
+      }
+    }
+
     /* ---- 3: THE MACHINE SKIN, HERE AND NOWHERE ELSE ---- */
     {
       const skin = TS9.skinForLevel('level9')

@@ -457,67 +457,52 @@
   "_buildSpots": "15 PADS, ONE CENTRED ON EACH PAINTED GREY CHIP. Not placed by a scoring pass the way levels 3 to 8 were: on this board the buildable ground IS the fifteen chips the artist painted, and the substrate between them is scenery. tools/check_level9.py verifies every pad's 24 px core sits on chip rather than board. THREE OF THE FIFTEEN CANNOT REACH THE ROUTE AT ALL at the shortest attacking range in towers.json (pads 1, 7 and 15, at 156, 132 and 194 px from the nearest centreline), and only three of the fifteen cover two separate passes of it. This board holds LESS effective DPS than fifteen pads suggests, not more, and every mini-boss health figure is soaked against it and against no other level.",
   "padArt": [
     {
-      "key": "node-chip-cabled",
-      "width": 144.0
+      "key": "node-chip-cabled"
     },
     {
-      "key": "node-chip-square",
-      "width": 68.0
+      "key": "node-chip-square"
     },
     {
-      "key": "node-chip-cabled",
-      "width": 133.0
+      "key": "node-chip-cabled"
     },
     {
-      "key": "node-chip-cabled",
-      "width": 82.0
+      "key": "node-chip-cabled"
     },
     {
-      "key": "node-chip-ram",
-      "width": 85.0
+      "key": "node-chip-ram"
     },
     {
-      "key": "node-chip-ram",
-      "width": 63.0
+      "key": "node-chip-ram"
     },
     {
-      "key": "node-chip-ram",
-      "width": 122.0
+      "key": "node-chip-ram"
     },
     {
-      "key": "node-chip-fan",
-      "width": 82.0
+      "key": "node-chip-fan"
     },
     {
-      "key": "node-chip-ram",
-      "width": 81.0
+      "key": "node-chip-ram"
     },
     {
-      "key": "node-chip-square",
-      "width": 72.0
+      "key": "node-chip-square"
     },
     {
-      "key": "node-chip-square",
-      "width": 70.0
+      "key": "node-chip-square"
     },
     {
-      "key": "node-chip-fan",
-      "width": 71.0
+      "key": "node-chip-fan"
     },
     {
-      "key": "node-chip-cabled",
-      "width": 150.0
+      "key": "node-chip-cabled"
     },
     {
-      "key": "node-chip-square",
-      "width": 73.0
+      "key": "node-chip-square"
     },
     {
-      "key": "node-chip-fan",
-      "width": 72.0
+      "key": "node-chip-fan"
     }
   ],
-  "_padArt": "FOUR BUILD-NODE PICTURES, which no other level has -- every other board draws one pad art on every spot. The pairing is the geometry file's `suggestedNodeBalanced`: the chips are ranked by aspect and dealt into four runs in the variants' own aspect order, so all four get used and the most landscape chips get the most landscape node. `width` is the PAINTED CHIP'S width in world pixels, and it is what the node is drawn at: the art is about 500 px against chips averaging 81, so a node drawn at its own size would cover six chips. node-chip-cabled x4, node-chip-fan x3, node-chip-ram x4, node-chip-square x4.",
+  "_padArt": "FOUR BUILD-NODE PICTURES, which no other level has -- every other board draws one pad art on every spot. The pairing is the geometry file's `suggestedNodeBalanced`: the chips are ranked by aspect and dealt into four runs in the variants' own aspect order, so all four get used and the most landscape chips get the most landscape node. A KEY AND NOTHING ELSE -- there is no size here and there must not be one. Every entry used to carry the painted chip's own `width`, and the engine drew the node at it, so these fifteen pads drew at THIRTEEN sizes between 63 and 150 world px while the tap target stayed a 34 px circle on all of them. Pad size is one derivation for the whole game -- presentation.json's buildPad.quietScreenWidth over display.json's camera.defaultZoom -- and tests/buildpad.test.ts fails if any map file grows a per-pad size again. node-chip-cabled x4, node-chip-fan x3, node-chip-ram x4, node-chip-square x4.",
   "scenery": [
     {
       "key": "prop-vlaude-screen",

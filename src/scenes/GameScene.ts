@@ -2063,12 +2063,19 @@ export class GameScene extends Phaser.Scene {
     // last two art passes both had.
     const quietWorldWidth = cfg.quietScreenWidth / displayData.camera.defaultZoom
 
-    // LEVEL 9'S BOARD CARRIES ITS OWN PAD PICTURES, one per spot, and they are
-    // the first thing in the game to vary from spot to spot. Its pads are
+    // LEVEL 9'S BOARD CARRIES ITS OWN PAD PICTURES, one per spot: its pads are
     // painted chips of four different shapes and it ships four node variants
-    // to match; `padArt[i].width` is the PAINTED CHIP'S width, which is what
-    // the node is drawn at. A node drawn at its own size would be 500 world px
-    // and cover six chips.
+    // to match. The variant is the ONLY thing that varies from spot to spot.
+    //
+    // IT USED TO CARRY A SIZE TOO, and that was the bug. Each entry named the
+    // painted chip's own width, so the fifteen pads drew at thirteen sizes
+    // between 63 and 150 world px -- a 2.38x spread -- while `spotAt` went on
+    // answering a 34 px circle on every one of them. The 150 px chip's tap
+    // target was under half its visible width and the 63 px chip's was wider
+    // than the art. Now the node is fitted to `quietWorldWidth`, the same
+    // number the flagstone is fitted to on the other nine boards, so one
+    // derivation sizes every pad in the game and the art agrees with the tap
+    // target here exactly as it does everywhere else.
     //
     // The sign still goes on one spot -- the joke is the joke -- and it is the
     // one spot that does not get a node. Everything else about a pad (the tap
@@ -2091,13 +2098,20 @@ export class GameScene extends Phaser.Scene {
       if (isSign) {
         fitContentHeight(img, key, cfg.signHeight)
       } else if (hasNode) {
-        // Sized to the CHIP, in world pixels, because the chip is painted on
-        // the plate and the node has to sit on it rather than near it. No
-        // jitter and no rotation: a printed circuit board's chips are square
-        // to the board, and the scatter that stops seven identical slabs
-        // reading as one stamped object is doing nothing here -- there are
-        // four different pictures already.
-        fitContentWidth(img, key, node!.width)
+        // THE SAME WIDTH THE FLAGSTONE GETS, by the same line, because a build
+        // pad is a build pad: `quietWorldWidth` is the one number that sizes
+        // the drawn pad on every board in the game. Fitted by WIDTH, not by
+        // area -- each chip picture has its own aspect and equalising area
+        // would make no two of them the same width, which is the dimension a
+        // player reads a row of pads across.
+        //
+        // The smallest painted chip on this board is 63 x 61 world px, so the
+        // node still lands inside the chip it stands on rather than on bare
+        // circuit board. No jitter and no rotation: a printed circuit board's
+        // chips are square to the board, and the scatter that stops seven
+        // identical slabs reading as one stamped object is doing nothing here
+        // -- there are four different pictures already.
+        fitContentWidth(img, key, quietWorldWidth)
         img.setAlpha(cfg.quietAlpha)
       } else {
         // Sized by WIDTH, in screen pixels at the default zoom, because that

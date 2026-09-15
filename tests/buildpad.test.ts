@@ -146,3 +146,71 @@ test('nothing tells the player the pads glow any more', () => {
     assert.doesNotMatch(src(f), /glowing/i, `${f} still calls the pads glowing`)
   }
 })
+
+/**
+ * NO MAP FILE MAY CARRY A PER-PAD ART SIZE.
+ *
+ * This is the guard on the bug level 9 shipped with. `map_level9.json` is the
+ * only map in the game with a `padArt` block, and every entry in it used to
+ * carry the painted chip's own width — so its fifteen build spots drew at
+ * THIRTEEN different sizes between 63 and 150 world px, a 2.38x spread, while
+ * `BuildSystem.spotAt` went on answering the same `spotRadius` circle on all
+ * fifteen. The art disagreed with the tap target on every pad on the board: the
+ * 150 px chip's target was under half its visible width and the 63 px chip's
+ * was wider than its art.
+ *
+ * Size is not a per-pad property and it is not a per-LEVEL one either. Every
+ * pad in the game is drawn at `buildPad.quietScreenWidth / camera.defaultZoom`.
+ * A map may still choose WHICH picture a pad wears — that is what `padArt` is
+ * for, and level 9's four chip styles are the point of it — but it may not
+ * choose how big the picture is.
+ */
+test('no map carries a per-pad art size', () => {
+  const banned = /^(width|height|size|scale|displayWidth|displayHeight|contentWidth|contentHeight|radius)$/
+  const maps = readdirSync(url('../src/data'), { withFileTypes: true })
+    .filter((e) => e.isFile() && /^map.*\.json$/.test(e.name))
+    .map((e) => e.name)
+  assert.ok(maps.length >= 10, `only ${maps.length} map files found; the sweep is not finding them`)
+  for (const name of maps) {
+    const map = JSON.parse(src(`data/${name}`)) as {
+      padArt?: Record<string, unknown>[]
+      buildSpots?: unknown[]
+    }
+    if (map.padArt === undefined) continue
+    assert.ok(Array.isArray(map.padArt), `${name}: padArt is not an array`)
+    assert.equal(map.padArt.length, map.buildSpots?.length,
+      `${name}: ${map.padArt.length} pad pictures for ${map.buildSpots?.length} build spots`)
+    for (const [i, entry] of map.padArt.entries()) {
+      for (const field of Object.keys(entry)) {
+        assert.doesNotMatch(field, banned,
+          `${name}: padArt[${i}] carries "${field}". A map may name a pad's picture, ` +
+          'never its size — that is quietScreenWidth / defaultZoom for every pad in the game.')
+        assert.equal(field, 'key',
+          `${name}: padArt[${i}] carries an unknown field "${field}"`)
+      }
+      assert.equal(typeof entry['key'], 'string', `${name}: padArt[${i}] has no key`)
+    }
+  }
+})
+
+/**
+ * And the engine draws them all at that one number.
+ *
+ * The test above can only see the data. This reads the source: a level with its
+ * own node art goes through the SAME `quietWorldWidth` the flagstone does, so
+ * removing the per-pad widths cannot be undone by putting a different number
+ * back in the code instead.
+ */
+test('a level with its own node art is sized like every other pad', () => {
+  const game = src('scenes/GameScene.ts')
+  const create = /private createPads\([\s\S]*?\n  \}/.exec(game)![0]
+  assert.match(create,
+    /const quietWorldWidth = cfg\.quietScreenWidth \/ displayData\.camera\.defaultZoom/,
+    'the one pad width is no longer derived from quietScreenWidth and the default zoom')
+  const node = /if \(isSign\) \{[\s\S]*?\n      \} else \{/.exec(create)
+  assert.ok(node, 'the node branch of createPads is gone')
+  assert.match(node[0], /fitContentWidth\(img, key, quietWorldWidth\)/,
+    'a map-supplied node is sized by something other than the one pad width')
+  assert.doesNotMatch(create, /node!?\.width|node\?\.width/,
+    'createPads still reads a width off the map\'s pad art')
+})
