@@ -3,7 +3,12 @@
 | commit | what | CI |
 |---|---|---|
 | [`d7036cc`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/d7036cc) | `padShowing` reads world state only; `hudStandsOn` and `syncPadVisibility` deleted; the replaced test; the `padpan` harness scenario | [run 394](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34959835000) — all five jobs **success**, and `deploy / deploy` **RAN** |
-| *this commit* | This report, and `claude/context.md` | filled in below |
+| [`dc7cc8e`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/dc7cc8e) | This report, and `claude/context.md` | [run 395](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34961832007) — `changes`, `typecheck`, `test` **success**; `deploy` **skipped**, correctly: a markdown-only push does not republish |
+| *this commit* | Closing this table on runs 394 and 395 | it edits this table and nothing else |
+
+Read the job list, not the run's conclusion. `d7036cc` touched `src/`, so its run
+**deployed** and the live site carries the fix; this report does not, so its run
+skips `deploy`, which is the `changes` job working as designed.
 
 **Answers first.**
 
