@@ -3,7 +3,12 @@
 | commit | what | CI |
 |---|---|---|
 | [`c9ea4f6`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/c9ea4f6) | The per-pad widths out of `map_level9.json` and its generator, the node fitted to `quietWorldWidth`, two guard tests, the four chips in `measure_art.py`, the `level9` harness measurement | [run 391](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34957175667) — all five jobs **success**, and `deploy / deploy` **RAN** |
-| *this commit* | This report, and `claude/context.md` | it edits markdown only, so a skipped `deploy` on its run is correct |
+| [`8d28e21`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/8d28e21) | This report, and `claude/context.md` | [run 392](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34957716284) — `changes`, `typecheck`, `test` **success**; `deploy` **skipped**, correctly: a markdown-only push does not republish |
+| *this commit* | Closing this table on runs 391 and 392 | it edits this table and nothing else |
+
+Read the job list, not the run's conclusion. `c9ea4f6` touched `src/`, so its run
+**deployed**; this report does not, so its run skips `deploy` and that is the
+`changes` job working as designed.
 
 **Answers first.**
 
