@@ -2394,6 +2394,10 @@ async function run() {
       // scale is the one the player reads for the other 99% of the time.
       await sleep(340)
       rowFor('peanuts', hud.peanutsText, v)
+      // A FRAME PER VALUE, not just one at the end. The brief asks for the
+      // readout complete and uncut at 100, 1012 and 10000 specifically, and a
+      // single screenshot of the last value cannot answer for the other four.
+      await shot('counters-peanuts-' + v + '-' + VP.w + 'x' + VP.h)
     }
     // LIVES AT ITS OWN MAXIMUM. Lazy Dad doubles the starting lives, so the
     // widest it can be is what that mode grants; 999 is well past it and is
