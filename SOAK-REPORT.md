@@ -115,6 +115,14 @@ argued:
 **Levels 1 and 3 are still outside the band at 89% and 88%.** Pre-existing,
 carried forward again, and not touched by this pass.
 
+> **LEVEL 8 IS 184/480 (38.3%) SINCE 2026-09-15, not 200/480.** Its east arm
+> climbed 76 px to the fork and was sent straight back down — a 135-degree
+> hairpin that live play saw as the enemy reversing — and removing the detour
+> took 183 px of walking under a 19-pad board's guns out of the east route.
+> 38.3% is in band and nothing was retuned. The 200 above is the figure this
+> pass measured and is correct for the map as it stood; it does not carry.
+> See `reports/2026-09-15-blockers.md`.
+
 ### What the leaks say
 
 At 26,000, over 480 seeds: `vlaude` 258, `packet` 247, `dataBug` 219,

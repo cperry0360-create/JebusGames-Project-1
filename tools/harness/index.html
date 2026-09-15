@@ -16724,12 +16724,25 @@ async function run() {
         let basic = 0
         {
           // TWO CONTROLS, NEAR AND FAR, because one of them could not say what
-          // the number WAS. The near control read exactly 16 for five heroes
-          // whose basic attacks are 18, 17, 24, 19 and 12 against armour 10 --
-          // too uniform to be five different guns -- and a subtraction of a
-          // number you cannot name is not a control. The far one pins him 700
-          // px away, outside every hero's reach, so the difference between the
-          // two IS the hero's contribution and whatever is left is not.
+          // the number WAS. The near control reads exactly 16 for all five
+          // heroes, whose powered damage is 36, 34, 48, 38 and 24 against an
+          // armour that falls from ~9.7 to 4-7 during the window as Static
+          // Cling bites -- so it is not a number of swings of anything, and a
+          // subtraction of a number you cannot name is not a control.
+          //
+          // WHAT THE FAR CONTROL SETTLES, AND WHAT IT DOES NOT. Far reads 0 for
+          // every hero, so the 16 needs the hero in range: nothing else on the
+          // board is touching him. It is NOT his swing -- `holdFor` writes his
+          // position every frame, which keeps `Hero.update` in its walking
+          // branch (`dist > 0.5`), and the swing only fires in the `else if
+          // (target)` arm. So the 16 is range-gated, small, constant, and
+          // unnamed; it is recorded as an open item in
+          // reports/2026-09-15-blockers.md rather than guessed at.
+          //
+          // The conclusion does not rest on naming it. Both windows are
+          // measured under identical conditions -- same hold, same duration,
+          // same distance -- so the subtraction is exact, and the three
+          // abilities that are refused read exactly 0 after it.
           const c = parkOne()
           await holdFor(150, c.x + 700, c.y)
           const f0 = c.health

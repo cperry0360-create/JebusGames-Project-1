@@ -271,12 +271,25 @@ wave-table job, not a boss-health one, and nothing has attempted it.
 **All the win rates in this section are the 2026-09-07 instrument and none of them
 reproduce today.** The soak has been reworked several times since. The current
 published Cory-pinned figures at 480 seeds on normal are **level 1 89%, level 2 53%,
-level 3 88%, level 4 62%, level 5 45%, level 6 44%, level 7 41%, level 8 42%,
-level 9 40%**, and **level 10 40% with a caveat that makes it a different kind of
-number** — it was soaked with Vlaude walking the lane and not one of his powers
-firing, so it is a survivability check on the phase 3 walk rather than a win rate
-comparable to the nine above it. `SOAK-REPORT.md` is the living record; read it
-rather than any number in this file.
+level 3 88%, level 4 62%, level 5 45%, level 6 44%, level 7 41%, level 8 38%,
+level 9 40%, level 10 41%**. `SOAK-REPORT.md` is the living record; read it rather
+than any number in this file.
+
+**Two of those moved on 2026-09-15 and both are recorded in
+`reports/2026-09-15-blockers.md`:**
+
+- **Level 8 is 38% (184/480), and it was 42% (200/480).** Its east arm climbed 76 px
+  to the fork and `south` sent every east entrant straight back down — a 135-degree
+  hairpin that live play reported as the enemy reversing. Removing the detour took
+  183 px of walking under a 19-pad board's guns out of the east route. In band; not
+  retuned.
+- **Level 10's 41% is NOT "a different kind of number" any more**, and this paragraph
+  used to say it was. The caveat it rested on — the soak cannot express build lock,
+  generate wall or generate weapon, so it measures an easier fight — does not hold
+  for a board with every pad built on, which is what the soak's own median board IS
+  at the final wave. A locked pad still fires, a countermeasure needs a pad that is
+  neither occupied nor locked so the cast is skipped, and a wall's only damage source
+  is the hero. All three are asserted in `tests/level10.test.ts`.
 
 ## Level 4 boss: settled
 
@@ -446,17 +459,33 @@ names them as deliberately unused.
 items instead. **Renumber again if you close one, and do not cite these by number
 from another document.**
 
-**THE LEVEL 10 VLAUDE FIGHT IS BUILT. This item is closed.** All eight pieces of
+**THE LEVEL 10 VLAUDE FIGHT IS BUILT AND ITS HEALTH IS SETTLED. This item is
+closed, including the half that was left.** All eight pieces of
 `reports/2026-09-14-level-10.md`'s build order landed on 2026-09-14 and every one of
-them is verified from a rendered frame by `tools/harness/run.sh vlaude` (88
-assertions) and `run.sh titlecard` (20). Vlaude's health was re-derived to **26,000**.
-**What is left of it is the soak's half:** the runner fires three of the six powers
-and provably cannot express the other three (build lock, generate wall, generate
-weapon — no lock state in `BuildSystem`, a fixed-point hero, no tower health), so
-40.6% is measured against a board EASIER than the one the player gets. Teaching it
-those three is a change to the SIMULATOR, not to the level, and it is the only way
-the other three powers ever reach a win rate. See
-`reports/2026-09-14-level-10-the-fight.md`.
+them is verified from a rendered frame by `tools/harness/run.sh vlaude` (**90**
+assertions since 2026-09-15) and `run.sh titlecard` (20). Vlaude is **26,000** and
+stays there: 195/480 = 40.6%, mid-band, with the in-band window at the published
+method running about 25,000 to 28,000.
+
+**The soak's half is closed too, by reading the rules rather than by teaching the
+simulator.** It still fires three of the six powers and still cannot express build
+lock, generate wall or generate weapon — but against a board with every pad built on
+all three are inert or nearly so, so 40.6% is not measured against an easier fight.
+See `reports/2026-09-15-blockers.md`, and `tests/level10.test.ts`, which asserts each
+of the three.
+
+**What is genuinely left**, and it is narrower: the soak understates the fight for an
+**incomplete** board, where a countermeasure takes a spare pad from wave 11 and holds
+it until one hero chews through 1,400 hp at armour 8. Teaching it that is a change to
+`Sim.ts` and is not asked for.
+
+**And the board is measured now.** `Sim.ts` carries a read-only `FinaleBoard`: board
+DPS against the final boss's armour, damage deliverable over his walk, and a ledger
+of what he actually took. 480 seeds: median winner 723 DPS delivering 25,125 over
+Vlaude's 172-second walk, median loser 546 delivering 14,708, median run 24,265 into
+26,000 — 93% — and he dies in 195 of the 453 runs that reach him. It is the
+instrument `reports/2026-09-07-balance-verification-and-level-2.md` did by hand and
+could not leave behind.
 
 **THE ABILITY MEDALLIONS ARE NOT BROKEN. Do not re-open this.** It was item 1 here
 and it is deleted, on Cory's word that the medallions and the Nuke button work in
