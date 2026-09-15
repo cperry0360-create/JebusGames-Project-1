@@ -361,8 +361,8 @@ building anything on top of it.
 
 ## Status as of 2026-09-15
 
-**The last commit that changed the GAME is `66a0ab3`**, the seven-defect UI pass,
-and that is the durable number — `main`'s tip moves with every documentation commit.
+**The last commit that changed the GAME is `c9ea4f6`**, level 9's uniform build-pad
+sizing, and that is the durable number — `main`'s tip moves with every documentation commit.
 Do not trust a tip hash written in this file; check it. Read Checks at JOB level, not
 merely at run level: a markdown-only push to `main` is green with `deploy` **skipped**,
 which is the `changes` job working as designed and not a failed deploy. The fight merge
@@ -391,9 +391,31 @@ it — no test in `tests/` imports Phaser.
 So **story mode is content-complete in rows and not in content**, and the next brief
 should say which of those two it means.
 
-Health: **1154 tests passing, 0 failing** (`npm test`, in this sandbox, no
+Health: **1156 tests passing, 0 failing** (`npm test`, in this sandbox, no
 `node_modules` needed), and CI's real `npx tsc --noEmit` is green on `main` at
-`c1682ab` (run 388, all five jobs). Working tree clean.
+`c9ea4f6` (run 391, all five jobs, with `deploy / deploy` RUNNING rather than
+skipped). Working tree clean.
+
+**LEVEL 9'S BUILD PADS DRAW AT ONE SIZE as of 2026-09-15**, direct to `main` as
+`c9ea4f6`. `map_level9.json` was the only map in the game with a `padArt` block, and
+every entry carried the painted chip's own width, so its fifteen pads drew at
+**thirteen different sizes between 63 and 150 world px** while `spotAt` answered the
+same 34 px circle on all of them — the art disagreed with the tap target on every pad,
+in one direction or the other. The size is gone from the data (not repeated fifteen
+times) and the node is fitted to `quietWorldWidth` — `presentation.json`'s
+`buildPad.quietScreenWidth` over `display.json`'s `camera.defaultZoom`,
+**90 / 1.72 = 52.33 world px** — which is the one derivation that sizes every pad in
+the game. **`spotRadius` is NOT that derivation and never was**: it governs the tap
+target only, and a brief that conflates the two sends the next session editing the
+wrong number. **Uniform by WIDTH, not by footprint**, decided from rendered frames:
+equalising area leaves no two of the four chip styles the same width, and width is the
+dimension a row of pads is read across. **The four chip styles stay.**
+`tests/buildpad.test.ts` now fails if any map file grows a per-pad art size, so this
+cannot come back on level 10 or anywhere else. No pad moved, so **level 9 still soaks
+191/480**. `reports/2026-09-15-level-9-pad-sizes.md` is the write-up, and
+`tools/harness/run.sh level9` is the only thing that can see any of it — it measures
+all fifteen pads off the live scene, sampling over two full pulse periods, because the
+breathing tween reads as fourteen different sizes if you sample a single frame.
 
 **Seven UI and presentation defects from live play were fixed on 2026-09-15**, direct
 to `main` as `66a0ab3` and `c1682ab`, both green on all five jobs including
@@ -503,6 +525,13 @@ next brief reported.
   re-tapping the selected tile does not cancel — though the scenario's own tile
   enumeration reports duplicate centres for tiles 2/4 and 3/5, so establish whether
   the harness or the game is wrong before treating it as a defect.
+- **Level 9 declares 4 scenery items and builds 8**, and has been reporting it for a
+  while: `run.sh level9` fails two of its 86 checks on it (`4 scenery items declared,
+  8 built` and `the rebuilt board has 8 scenery items`), plus a third on `START RUN
+  would begin level10`, which is the harness's own save state having every level
+  cleared. All three were reproduced on an unmodified tree before the 2026-09-15 pad
+  work and are **not** about pads. The three arcs and the Vlaude screen appear to be
+  counted twice somewhere between the map and the scene graph. Nobody has looked.
 
 **These are renumbered, twice now.** Seven of the original ten closed between 07 and
 13 September; what is left keeps its wording and gets a new number, so a citation of
