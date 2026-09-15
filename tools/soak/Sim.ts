@@ -129,6 +129,58 @@ const WAVE_LIMIT_SECONDS = 600
 /** A run that has not ended after this many is stuck. */
 const RUN_LIMIT_SECONDS = 4000
 
+/**
+ * What the board can do to the final wave's heaviest enemy, at the moment that
+ * wave starts.
+ *
+ * TWO DPS NUMBERS AND THEY ANSWER DIFFERENT QUESTIONS.
+ *
+ * `boardDps` is every shooting tower's damage per second against that armour,
+ * summed, ignoring range -- the same quantity the level 2 report published as
+ * "board DPS vs armour 4". It is the board's ceiling and no enemy ever takes
+ * all of it, because a tower only fires while something is in its range.
+ *
+ * `walkDamage` is what one enemy walking the whole route at its own speed
+ * actually takes: for each tower, its DPS times the seconds the route spends
+ * inside its range. THAT is the number a boss health figure has to be compared
+ * against, and on a long route with a slow boss the two differ by a factor of
+ * several. Slows are not modelled in it, so it is a floor.
+ */
+export interface FinaleBoard {
+  /** 1-based wave number this was measured at the start of. */
+  wave: number
+  /** The enemy it is measured against: the final wave's largest health pool. */
+  enemy: string
+  armor: number
+  speed: number
+  health: number
+  towers: number
+  freePads: number
+  /** Every shooting tower's DPS against `armor`, summed. Ignores range. */
+  boardDps: number
+  /** Total damage deliverable to one walker over the whole route. */
+  walkDamage: number
+  /** How long that walk takes at `speed`, in seconds. */
+  walkSeconds: number
+  /** Seconds to kill `health` at `boardDps`, for comparison with `walkSeconds`.
+   *  Infinity when the board has no guns. */
+  killSeconds: number
+  /**
+   * WHAT HE ACTUALLY TOOK over the run, summed across every instance of that
+   * def, and whether any of them died.
+   *
+   * This is the measurement and everything above it is the estimate. It
+   * includes the slows that stretch his exposure, the hero chasing him, every
+   * ability the draft handed out, and the escorts that steal the targeting --
+   * none of which the arithmetic can see.
+   */
+  dealt: number
+  /** The lowest health fraction any instance reached. 0 means one died. */
+  lowestFraction: number
+  /** How many instances of him died. */
+  killed: number
+}
+
 export interface SoakFinding {
   kind: string
   detail: string
@@ -177,6 +229,21 @@ export interface SoakResult {
   atGate: number
   /** And how many ever stood inside an HR's armour aura. See `everBuffed`. */
   auraBuffed: number
+  /**
+   * THE BOARD, MEASURED AT THE TOP OF THE FINAL WAVE, against the biggest
+   * enemy that wave sends.
+   *
+   * Why it exists. `reports/2026-09-07-balance-verification-and-level-2.md`
+   * settled level 2 on one number -- "median board DPS of a winner" against
+   * the boss's armour -- and there was no instrument for it: the figures in
+   * that report were derived once, by hand, and could not be re-derived for
+   * level 10. Vlaude's health was set by win rate alone, by a runner that
+   * fires three of his six powers, and the question "can a maxed board kill
+   * 26,000 at armour 10 before he reaches the exit" had no measurement at all.
+   *
+   * Null on a run that never reached the final wave.
+   */
+  finale: FinaleBoard | null
   /**
    * The exit the LAST leak of a losing run came out of, or null for a run that
    * did not lose.
@@ -1203,6 +1270,119 @@ export function simulate(
     (night?.towerSlowAt(t.x, t.y) ?? 1)
     * (t.scorchedFor > 0 && FLAME ? scorchIntervalMultiplier(FLAME) : 1)
 
+  /** Filled in at the top of the final wave. See `FinaleBoard`. */
+  let finale: FinaleBoard | null = null
+  /** The def id `measureFinale` picked, so `hurtEnemy` can keep its ledger. */
+  let finaleId = ''
+  let finaleDealt = 0
+  let finaleLowest = 1
+  let finaleKills = 0
+
+  /**
+   * What the board can do to the final wave's heaviest enemy.
+   *
+   * MEASURED, NOT MODELLED, and read-only. Every number comes from the same
+   * `statOf` / `lift` / `damageAfterArmor` path the firing loop itself uses,
+   * so this cannot report a gun the sim does not actually have. It deliberately
+   * leaves out the hero, the abilities and every slow: those are the
+   * player's variance, and a boss health figure wants the floor the BOARD
+   * guarantees. What it leaves out is listed in the report rather than
+   * quietly.
+   */
+  const measureFinale = (wi: number): FinaleBoard | null => {
+    const spawns = (WAVES[wi] as any)?.spawns ?? []
+    let worst: any = null
+    let worstId = ''
+    for (const sp of spawns) {
+      const def = (enemiesData as any)[sp.enemy]
+      if (!def) continue
+      if (worst === null || (def.maxHealth ?? 0) > (worst.maxHealth ?? 0)) {
+        worst = def
+        worstId = sp.enemy
+      }
+    }
+    if (!worst) return null
+    finaleId = worstId
+    const armor = worst.armor ?? 0
+    const speed = worst.speed ?? 0
+    // THE ROUTE THAT ENEMY WOULD WALK. The longest one from its lane, which is
+    // the most exposure any pick of a split can give it -- so `walkDamage` is
+    // an upper bound on the board's side of a branching map and exact on a map
+    // with one road, which level 10 is.
+    const laneId = spawns.find((sp: any) => sp.enemy === worstId)?.lane ?? MAIN_LANE
+    const route: Array<{ path: Path; from: number }> = []
+    let hop = net.lane(laneId)
+    let at = 0
+    for (let guard = 0; guard < 8; guard++) {
+      route.push({ path: hop.path, from: at })
+      const conts = hop.merge
+      if (!conts || conts.length === 0) break
+      // The arm with the most road in front of it, for the reason above.
+      let best = conts[0]!
+      let bestLen = -1
+      for (const c of conts) {
+        const target = net.lane(c.into)
+        const len = target.path.totalLength - target.path.distanceAtIndex(c.atIndex)
+        if (len > bestLen) { bestLen = len; best = c }
+      }
+      const next = net.lane(best.into)
+      if (next.id === hop.id) break
+      at = next.path.distanceAtIndex(best.atIndex)
+      hop = next
+    }
+    let walkPx = 0
+    for (const r of route) walkPx += Math.max(0, r.path.totalLength - r.from)
+
+    const sources = auraSources()
+    let boardDps = 0
+    let walkDamage = 0
+    let guns = 0
+    // ONE PIXEL A STEP along the route, which on a 3,440 px road is 3,440
+    // samples per tower and is the cheapest honest way to ask "how much of
+    // this road is inside that circle". A closed form for a polyline against a
+    // disc is a second geometry implementation to keep in step with `Path`.
+    const STEP = 1
+    for (const t of towers) {
+      if (t.buildLeft > 0) continue
+      if (statOf(t, 'supportRadius') > 0) continue
+      guns++
+      const gain = sources.length === 0 ? NO_AURA : auraAt(t.x, t.y, sources)
+      const dmg = boostedDamage(statOf(t, 'damage'), gain.damage)
+      const pierce = statOf(t, 'armorPierce') + gain.pierce
+      const spec: any = specById(t.def, t.spec) ?? {}
+      const ia = !!t.def.ignoresArmor || !!spec.ignoresArmor
+      const interval = Math.max(0.05, statOf(t, 'fireInterval')) * acidScale(t)
+      const dps = damageAfterArmor(dmg, armor, ia, pierce) / interval
+      boardDps += dps
+      const range = statOf(t, 'range') * (1 + gain.range)
+      let inRangePx = 0
+      for (const r of route) {
+        for (let d = r.from; d <= r.path.totalLength; d += STEP) {
+          const p = r.path.pointAt(d)
+          if (Math.hypot(p.x - t.x, p.y - t.y) <= range) inRangePx += STEP
+        }
+      }
+      if (speed > 0) walkDamage += dps * (inRangePx / speed)
+    }
+    return {
+      wave: wi + 1,
+      enemy: worstId,
+      armor,
+      speed,
+      health: worst.maxHealth ?? 0,
+      towers: guns,
+      freePads: Math.max(0, (MAP.buildSpots?.length ?? 0) - towers.length),
+      boardDps: +boardDps.toFixed(1),
+      walkDamage: Math.round(walkDamage),
+      walkSeconds: speed > 0 ? +(walkPx / speed).toFixed(1) : 0,
+      killSeconds: boardDps > 0 ? +((worst.maxHealth ?? 0) / boardDps).toFixed(1) : Infinity,
+      // Placeholders; the run has not happened yet. Overwritten at the return.
+      dealt: 0,
+      lowestFraction: 1,
+      killed: 0,
+    }
+  }
+
   const hurtEnemy = (e: SimEnemy, damage: number, ignoresArmor: boolean, pierce = 0): void => {
     if (!e.alive) return
     // THE AURA IS IN THE ARMOUR, which is where the shipped `effectiveArmor`
@@ -1213,8 +1393,22 @@ export function simulate(
     if (!Number.isFinite(dealt)) { note('nan', `damage to ${e.id} is ${dealt}`); return }
     if (dealt < 0) note('negative', `damage to ${e.id} is ${dealt}`)
     e.health -= dealt
+    // THE BOSS'S LEDGER. Every damage path in this file goes through here, so
+    // this is the one place that can answer "how much did the board actually
+    // put into him" -- which is the question `FinaleBoard`'s arithmetic can
+    // only estimate, because it cannot know about slows, the hero, the
+    // abilities or the escorts stealing the targeting.
+    if (finaleId !== '' && e.id === finaleId) {
+      finaleDealt += dealt
+      // `e.def.maxHealth` rather than `e.maxHealth`: a SimEnemy carries its
+      // CURRENT health and reads its maximum off the def, and the wrong one
+      // here made this field NaN, which JSON writes as null.
+      finaleLowest = Math.min(finaleLowest,
+        Math.max(0, e.health) / Math.max(1, e.def.maxHealth ?? 1))
+    }
     if (e.health <= 0) {
       e.alive = false
+      if (finaleId !== '' && e.id === finaleId) finaleKills++
       kills++
       peanuts += e.def.peanutReward
       peanutsEarned += e.def.peanutReward
@@ -1855,6 +2049,10 @@ export function simulate(
 
   runLoop: for (waveIndex = 0; waveIndex < WAVES.length; waveIndex++) {
     spend()
+    // THE BOARD, MEASURED, before the final wave's first enemy walks on. See
+    // `FinaleBoard`. Read-only: nothing here touches a tower, an enemy or the
+    // rng, so a run measures exactly as it did before this existed.
+    if (waveIndex === WAVES.length - 1) finale = measureFinale(waveIndex)
     spawner.begin(WAVES[waveIndex])
     // The dusk flip's clock is the WAVE's, not the run's. See DayNight.ts.
     night?.beginWave(waveIndex)
@@ -2247,7 +2445,16 @@ export function simulate(
     seed, hero: heroId, abilities: draftedAbilities, towers: opening,
     outcome, waves: wavesReached, lives, firstLifeLostWave, peanutsEarned, kills,
     seconds: +now.toFixed(1), bannerPoints, findings, firedTowers, firedAbilities,
-    leaksByExit, leaksByEnemy, reviewed: reviewedCount, atGate: atGateCount, blastOnFriendlies, bladeCuts,
+    leaksByExit, leaksByEnemy, reviewed: reviewedCount, atGate: atGateCount,
+    // The ledger is only complete when the run is, so it is stitched on here
+    // rather than at the wave start where the rest of the block was measured.
+    finale: finale === null ? null : {
+      ...finale,
+      dealt: Math.round(finaleDealt),
+      lowestFraction: +finaleLowest.toFixed(3),
+      killed: finaleKills,
+    },
+    blastOnFriendlies, bladeCuts,
     healedTotal, flameDamage, disableSeconds,
     splitKillToExit, lostToSplit: outcome === 'lost' && lostToSplit,
     auraBuffed: auraBuffedCount,

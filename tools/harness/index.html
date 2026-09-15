@@ -16576,6 +16576,257 @@ async function run() {
       G.enemies = G.enemies.filter((e) => e !== v)
     }
 
+    /* ---- 4b: EVERY TOWER TYPE AND EVERY HERO ABILITY REACHES HIM ---- */
+    //
+    // WHY THIS EXISTS. Live play reported that Courtland's power does not hit
+    // him, and the history made a hover bug the obvious suspect: `glides` was
+    // read off `NightRules.gliding`, which is null on a level with no sky, so
+    // the flag did nothing on level 10 until it was fixed. That fix TURNED ON
+    // his ground-hazard immunity, which is level10.json's own
+    // `ignoresGroundHazards: true` -- so the question "what can actually reach
+    // him now" needed asking of every gun and every ability rather than
+    // reasoned about.
+    //
+    // Driven through the shipping entry points -- `G.place` for a tower,
+    // `G.firePower` / `G.skillBurst` / `G.beginHeldAbility` for an ability --
+    // so a filter anywhere on those paths shows up here. He is parked with
+    // `speedScale = 0` so he cannot walk out of a range mid-measurement, and
+    // healed between candidates so each one is measured on its own.
+    {
+      const TOW = (await import('./js/data/towers.json', { with: { type: 'json' } })).default
+      const HS = await import('./js/systems/HeroSkills.js')
+      const HEROES = (await import('./js/data/heroes.json', { with: { type: 'json' } })).default
+      // Pad 6 is 90 px off the road, the closest any of the twelve gets, and
+      // route distance 300 is the point that is closest to it -- inside the
+      // range of every gun in the game at any tier. Measured, not chosen: the
+      // twelve pads sit 90-107 px from the route and the shortest max-tier
+      // range in towers.json is 143.
+      const PAD = 6, AT = 300
+      const park = () => {
+        const v = spawnAt(RULESV.laneEnemy, AT)
+        v.speedScale = 0
+        return v
+      }
+      const towerIds = Object.keys(TOW).filter((k) => k[0] !== '_'
+        && TOW[k] && typeof TOW[k] === 'object' && Array.isArray(TOW[k].tiers))
+      note('every tower type against him, on pad ' + PAD + ' with him parked at route ' + AT + ':')
+      const misses = []
+      for (const id of towerIds) {
+        const spot = G.build.spots[PAD]
+        // A clean pad each time: the previous candidate is sold back.
+        for (const t of [...G.towers]) if (t.spot === PAD) G.sellTower(t)
+        G.status.peanuts = 999999
+        G.place(id, spot)
+        const t = G.towers.find((x) => x.spot === PAD)
+        if (!t) { note('   ' + id.padEnd(13) + 'would not build'); continue }
+        // TOP TIER AND ITS FIRST SPECIALIZATION, which is what "every tower
+        // type" has to mean on a board the player has maxed. `restoreTier` is
+        // the save path and skips the build clock, which is what a scenario
+        // wants: the question is the gun, not the four seconds.
+        const top = TOW[id].tiers.length + 1
+        const spec = (TOW[id].specializations ?? [])[0]
+        t.restoreTier(top, spec ? spec.id : null)
+        const v = park()
+        await sleep(200)
+        const before = v.health
+        // Long enough for the slowest gun in the game to reload twice.
+        await sleep(2600)
+        const dealt = before - v.health
+        const support = (TOW[id].supportRadius ?? 0) > 0
+        const dummy = (TOW[id].damage ?? 0) <= 0
+        note('   ' + id.padEnd(13) + 'tier ' + t.tier + (t.spec ? ':' + t.spec : '')
+          + '  dealt ' + dealt.toFixed(0)
+          + (support ? '   (support tower, shoots nothing by design)'
+            : dummy ? '   (no damage of its own by design)'
+              : dealt > 0 ? '' : '   *** NOTHING ***'))
+        if (!support && !dummy && dealt <= 0) misses.push(id)
+        v.destroy()
+        G.enemies = G.enemies.filter((e) => e !== v)
+      }
+      expect(misses.length === 0,
+        'these tower types put no damage on him: ' + misses.join(', '))
+      await shot('vlaude-6b-towers-' + VP.w + 'x' + VP.h)
+      for (const t of [...G.towers]) if (t.spot === PAD) G.sellTower(t)
+
+      // EVERY ABILITY OF EVERY HERO, EACH WITH THAT HERO ACTUALLY ON THE
+      // BOARD.
+      //
+      // THE FIRST VERSION OF THIS BLOCK REPORTED EIGHT PRODUCT BUGS AND HAD
+      // NONE. It fired `G.firePower(slot, x, y)` with the other hero's def in
+      // hand -- and `firePower` does not take a def: its first line is
+      // `abilityInSlot(this.hero.heroId, slot)`, so every non-Cory row fired
+      // CORY's slot of the same number, and the rows for slots Cory does not
+      // have fired nothing at all. Seismic, Fireball, Star Rain, Ice Beam,
+      // Bark and Zoomies all read `*** NOTHING ***`, which is exactly the
+      // report being investigated. The two that worked were the two held
+      // beams, because `beginHeldAbility` is the one entry point that DOES
+      // take a def.
+      //
+      // So the hero is swapped for real, through `RunState` and a scene
+      // restart, and each ability goes through the entry point a player's
+      // press reaches: `castHeroSlot` for an instant one, `castHeroSlot` then
+      // the board tap's `firePower` for a targeted one, and the press path for
+      // a held one. Five restarts is the cost of measuring the thing rather
+      // than something that looks like it.
+      note('every hero ability against him, with that hero on the board:')
+      const abilityMisses = []
+      const abilityRows = []
+      for (const heroId of Object.keys(HEROES).filter((k) => k[0] !== '_')) {
+        const hero = HEROES[heroId]
+        if (!Array.isArray(hero.abilities)) continue
+        for (const k of ['Title', 'WorldMap', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+        RSV.setRunState({
+          heroId, levelId: 'level10', seed: 10, abilities: ['molotov', 'glacier'],
+          openingTowers: ['withholding', 'writeoff'], reserveTowers: [], resumeFrom: null,
+        })
+        game.scene.start('Game')
+        if (!(await until(() => running('Game') && scene('Game').hero, 25000))) {
+          expect(false, heroId + ': level 10 did not restart'); continue
+        }
+        const H = scene('Game')
+        await until(() => running('Hud'), 12000)
+        await sleep(400)
+        H.status.lives = 99999
+        H.status.peanuts = 999999
+        // POWERED, because six of the twelve abilities are `poweredOnly` and
+        // `powerRefusal` refuses those in the base form. The question is
+        // whether the EFFECT reaches him, not whether the button is lit.
+        H.hero.powered = true
+        const lane = H.lanes.lane(H.vlaudeLaneId())
+        // THE HERO WALKS. He has his own movement and the first version of this
+        // block set his position once and then slept -- the diagnostic caught
+        // him 457 px away at the end of a window that began with him standing
+        // on the target, with a 163 px reach. So the control and the ability
+        // rows were not measured under the same conditions, which is the one
+        // thing a control has to be. This holds him in place for the whole
+        // window, frame by frame, so both are.
+        const holdFor = async (ms, x, y) => {
+          const until = performance.now() + ms
+          while (performance.now() < until) {
+            H.hero.x = x
+            H.hero.y = y
+            await new Promise((r) => requestAnimationFrame(r))
+          }
+        }
+        const parkOne = () => {
+          const e = new EnemyV(H, ENEMIESV[RULESV.laneEnemy], lane.path, H.gateway,
+            { lanes: H.lanes, laneId: H.vlaudeLaneId(), startAt: { laneDistance: AT, distance: AT } })
+          e.speedScale = 0
+          H.enemies.push(e)
+          return e
+        }
+        // THE CONTROL, AND WITHOUT IT THREE ROWS WERE A LIE. The hero has to
+        // stand on him so no range check can be what refuses -- and a hero
+        // standing on something swings at it. Cory's basic is 18 against
+        // armour 10, twice in a 2.4s window, so a refused ability read
+        // `dealt 16` and looked like an ability that half worked. Measured
+        // once per hero, with no cast at all, and subtracted.
+        let basic = 0
+        {
+          // TWO CONTROLS, NEAR AND FAR, because one of them could not say what
+          // the number WAS. The near control read exactly 16 for five heroes
+          // whose basic attacks are 18, 17, 24, 19 and 12 against armour 10 --
+          // too uniform to be five different guns -- and a subtraction of a
+          // number you cannot name is not a control. The far one pins him 700
+          // px away, outside every hero's reach, so the difference between the
+          // two IS the hero's contribution and whatever is left is not.
+          const c = parkOne()
+          await holdFor(150, c.x + 700, c.y)
+          const f0 = c.health
+          await holdFor(2400, c.x + 700, c.y)
+          const far = f0 - c.health
+          await holdFor(150, c.x + 8, c.y + 8)
+          const b0 = c.health
+          const a0 = c.effectiveArmor
+          await holdFor(2400, c.x + 8, c.y + 8)
+          basic = b0 - c.health
+          note('   ' + (heroId + ' [no cast, far]').padEnd(28) + 'none'.padEnd(8)
+            + '         dealt ' + far.toFixed(0)
+            + (far > 0 ? '   <- NOT the hero: he was 700 px away, out of reach'
+              : '   <- nothing reaches him with the hero out of reach'))
+          // AND WHAT IT IS, because the first version of this control read 16
+          // for all five heroes, whose basic attacks are 18, 17, 24, 19 and 12
+          // against armour 10. Five different guns cannot do the same damage,
+          // so the number was not what it said it was, and a subtraction of a
+          // number you cannot name is not a control.
+          note('   ' + (heroId + ' [no cast]').padEnd(28) + 'basic'.padEnd(8)
+            + '         dealt ' + basic.toFixed(0) + '   <- subtracted from every row below'
+            + '   [hero dmg ' + H.hero.damage + ' every ' + H.hero.attackInterval.toFixed(2)
+            + 's, powered=' + H.hero.powered + ', range ' + H.hero.attackRange.toFixed(0)
+            + ', ' + Math.round(Math.hypot(H.hero.x - c.x, H.hero.y - c.y)) + 'px away'
+            + ', armour ' + a0.toFixed(1) + '->' + c.effectiveArmor.toFixed(1)
+            + ', enemies ' + H.enemies.filter((e) => e.alive).length + ']')
+          c.destroy()
+          H.enemies = H.enemies.filter((e) => e !== c)
+        }
+        for (const [i, ab] of hero.abilities.entries()) {
+          const v = parkOne()
+          // The hero stands on him for the whole window, so no range check can
+          // be what refuses and the control above applies exactly.
+          await holdFor(150, v.x + 8, v.y + 8)
+          const slot = HS.heroSlotId(i)
+          H.cooldowns.reset(slot)
+          const before = v.health
+          try {
+            if (ab.activation === 'held') {
+              H.castHeroSlot(slot)
+              H.beginHeldAbility(slot, ab)
+              H.aimHeld(v.x, v.y)
+              if (H.held) H.held.onBoard = true
+              await holdFor(Math.max(700, (ab.holdSeconds ?? 1) * 1000 + 250), v.x + 8, v.y + 8)
+              H.releaseHeldAbility()
+            } else if (ab.activation === 'targeted') {
+              H.castHeroSlot(slot)
+              H.firePower(slot, v.x, v.y)
+              await holdFor(2400, v.x + 8, v.y + 8)
+            } else {
+              H.castHeroSlot(slot)
+              await holdFor(2400, v.x + 8, v.y + 8)
+            }
+          } catch (err) {
+            note('   ' + (heroId + ' ' + ab.name).padEnd(28) + 'threw: ' + String(err).slice(0, 70))
+          }
+          // THE ABILITY'S OWN DAMAGE, with the hero's swings taken off.
+          const dealt = Math.max(0, (before - v.health) - basic)
+          const control = ab.effect === 'control'
+          const hazard = ab.effect === 'hazard'
+          // BARK DEALS NOTHING BY DESIGN: `damage: 0` in heroes.json. It is a
+          // stun, and asserting it as a miss would be asserting the data.
+          const noDamage = (ab.damage ?? 0) <= 0 && (ab.burnPerSecond ?? 0) <= 0
+          const row = '   ' + (heroId + ' ' + ab.name).padEnd(28)
+            + String(ab.effect).padEnd(8) + (ab.poweredOnly ? ' powered' : '        ')
+            + ' dealt ' + dealt.toFixed(0)
+            + (dealt > 0 ? ''
+              : noDamage
+                ? '   its own damage is 0 in heroes.json; it is a stun'
+                : control
+                  ? '   REFUSED: blockable=false, and control EXECUTES its target on expiry'
+                  : hazard
+                    ? '   REFUSED: ground hazard, and level10.json gives a hoverer ignoresGroundHazards'
+                    : '   *** NOTHING, AND NO REASON ***')
+          note(row)
+          abilityRows.push(row)
+          if (dealt <= 0 && !control && !hazard && !noDamage) {
+            abilityMisses.push(heroId + ':' + ab.name)
+          }
+          v.destroy()
+          H.enemies = H.enemies.filter((e) => e !== v)
+        }
+        if (heroId === 'courtland') await shot('vlaude-6c-courtland-' + VP.w + 'x' + VP.h)
+      }
+      // THE TWO REFUSALS ARE ASSERTED AS REFUSALS rather than excused. Mind
+      // Control is refused because he is `blockable: false`, which is 16 of the
+      // game's 20 bosses -- and it MUST stay refused, because `tickControlled`
+      // deals `health + armour + 1` to its target when the control expires, so
+      // allowing it would be a 10-second-cooldown instant kill on 26,000 hp.
+      // A ground hazard is refused because he hovers and level10.json's own
+      // `gliding` block says a hovering thing ignores ground hazards.
+      expect(abilityMisses.length === 0,
+        'these abilities put no damage on him and have no reason to be refused: '
+        + abilityMisses.join(', '))
+      await shot('vlaude-6c-abilities-' + VP.w + 'x' + VP.h)
+    }
+
     /* ---- 5: REACHING THE EXIT ENDS THE RUN, BEFORE A LIFE IS DEDUCTED ---- */
     {
       const tail = G.lanes.lane(laneId).path

@@ -912,3 +912,67 @@ test('the soak fires three of the six, and fakes none of the other three', () =>
       `the sim reads ${forbidden}, so it is pretending to model a power it cannot`)
   }
 })
+
+test('the three powers the soak cannot express are the ones a FULL board is immune to', () => {
+  /*
+   * THE CLAIM THIS REPLACES, and it was in three places.
+   *
+   * `SOAK-REPORT.md`, `enemies.json`'s `_health` note and CLAUDE.md all said
+   * the same thing: the soak fires three of Vlaude's six powers and "provably
+   * cannot express buildLock, generateWall or generateWeapon", so 26,000 was
+   * "measured against a board easier than the one the player gets". That
+   * conclusion does not follow from the rules, and this is the check.
+   *
+   * Against a board with every pad built on — which is what the soak's own
+   * median board is at the final wave, 12 of 12 pads — all three are inert or
+   * nearly so:
+   *
+   *   buildLock      locks pads, and `lockedPadStillFires()` is true. On a full
+   *                  board there is nothing left to build, so the power takes
+   *                  away a choice the player has already spent.
+   *   generateWeapon `weaponPad` needs a pad that is neither occupied nor
+   *                  locked. A full board has none, so the cast is SKIPPED.
+   *   generateWall   the hero is the only thing in the game that can damage a
+   *                  wall — asserted below against GameScene's own source — so
+   *                  it costs the board no fire at all. It denies ground to the
+   *                  hero and to a garrison's rally, which is real and is not
+   *                  tower DPS.
+   *
+   * What the soak understates is therefore the fight for an INCOMPLETE board,
+   * where a countermeasure takes a pad for as long as it takes one hero to chew
+   * through 1,400 hp at armour 8. That is a real gap and it is stated as that
+   * one rather than as "the shipped fight is harder than the measured one".
+   */
+  const full: Lockable[] = Array.from({ length: 12 }, (_, index) => (
+    { index, occupied: true, locked: false }))
+  assert.equal(weaponPad(full), null,
+    'a countermeasure can be placed on a board with no free pad, which is the whole '
+    + 'premise of "the player gets a power the soak does not"')
+  // And buildLock still fires, still locks, and still costs a built pad nothing.
+  const locked = lockTargets(R, full)
+  assert.equal(locked.length, (R.powers.buildLock as { count: number }).count,
+    'buildLock refuses a full board; it is supposed to lock occupied pads')
+  assert.equal(lockedPadStillFires(), true)
+  for (const i of locked) {
+    assert.equal(full[i]!.occupied, true, 'buildLock changed what is on a pad')
+  }
+  // A LOCKED FULL BOARD STILL REFUSES A COUNTERMEASURE, which is the case
+  // `fromWave: 14` creates — buildLock and speedAlter together.
+  for (const i of locked) full[i]!.locked = true
+  assert.equal(weaponPad(full), null)
+
+  // THE WALL'S DAMAGE SOURCES, off the scene's own source. A regex because no
+  // test in this repository can construct a Phaser scene; see CLAUDE.md.
+  const game = readFileSync(new URL('../src/scenes/GameScene.ts', import.meta.url), 'utf8')
+  const tick = game.slice(game.indexOf('private tickVlaudeWalls('))
+  const body = tick.slice(0, tick.indexOf('\n  private wallBlocks('))
+  assert.ok(body.length > 200, 'tickVlaudeWalls was not found; this check is measuring nothing')
+  const hits = body.match(/w\.state\.health -= /g) ?? []
+  assert.equal(hits.length, 1,
+    `a wall now has ${hits.length} damage sources; if a tower can shoot one, it is a `
+    + 'damage sink and this test\'s conclusion about a full board no longer holds')
+  assert.match(body, /this\.hero\.damage/,
+    'the one thing that damages a wall is no longer the hero')
+  assert.doesNotMatch(body, /for \(const t of this\.towers\)/,
+    'towers now shoot walls')
+})

@@ -61,9 +61,31 @@ previous report except that three have moved from the first list to the second.
 | `generateWeapon` | **no** | there is no tower health, so a turret that suppresses a tower over time is a third thing this file cannot say |
 
 Teaching it those three is a change to the SIMULATOR rather than to the level,
-and it was decided against deliberately. **So 26,000 is tuned against a board
-that is EASIER than the one the player gets, and the real fight is harder than
-40.6%.** Quote the number with that sentence attached or do not quote it.
+and it was decided against deliberately.
+
+**THE CONCLUSION THIS PARAGRAPH USED TO DRAW IS WITHDRAWN, 2026-09-15.** It said
+"26,000 is tuned against a board that is EASIER than the one the player gets, and
+the real fight is harder than 40.6%", and asked to be quoted with that sentence
+attached. It does not follow from the rules, and the rules were checked rather
+than reasoned about — see `reports/2026-09-15-blockers.md`. Against a board with
+every pad built on, which is what the soak's own median board IS at the final
+wave (12 of 12, `freePads: 0` on every seed measured):
+
+| power | what it costs a FULL board | where that is written |
+|---|---|---|
+| `buildLock` | **nothing.** `lockedPadStillFires()` returns true, always. It locks pads, and a full board has nothing left to build | `systems/Vlaude.ts` |
+| `generateWeapon` | **nothing. The cast is skipped.** `weaponPad` needs a pad that is neither occupied nor locked, and returns null when there is none | `systems/Vlaude.ts`, `GameScene.castWeapon` |
+| `generateWall` | **no tower fire at all.** `tickVlaudeWalls` has exactly ONE damage source and it is the hero. A wall denies ground to the hero and to a garrison's rally, which is real and is not board DPS | `GameScene.tickVlaudeWalls` |
+
+`tests/level10.test.ts` asserts all three, including the one-damage-source count
+on the wall, so a change that makes a tower able to shoot a wall fails and brings
+somebody back here.
+
+**What the soak DOES understate is the fight for an INCOMPLETE board**, and that
+is a narrower claim than the one withdrawn: a countermeasure takes a free pad
+from wave 11 and holds it until one hero chews through 1,400 hp at armour 8, and
+it puts a tower out for 8 seconds at a time while it stands. A board with a spare
+pad is measurably worse off than the soak says. A board with none is not.
 
 The three that DO run go through the same `systems/Vlaude.ts` functions
 `GameScene` calls — `armedAt`, `tickSchedule`, `copyTargets`, `copyCount`,

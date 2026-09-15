@@ -338,13 +338,23 @@ it — every claim about it came from a rendered frame.
 measured with none of them firing and the two numbers are not comparable; at 36,000
 with the powers live the same pass reads 12.5%.
 
-**And 40.6% is still not quite a win rate comparable to levels 1 to 9.** The soak
-fires THREE of the six powers through the same `systems/Vlaude.ts` functions the scene
-calls, and provably cannot express the other three — build lock, generate wall,
-generate weapon, because `BuildSystem` has no lock state, the sim's hero is a fixed
-point and there is no tower health. So the number is measured against a board easier
-than the one the player gets. `enemies.json`'s `_health` note and `SOAK-REPORT.md`
-both say so in those words.
+**40.6% IS a win rate comparable to levels 1 to 9, and this section used to say it was
+not.** The soak fires THREE of the six powers through the same `systems/Vlaude.ts`
+functions the scene calls and cannot express the other three — build lock, generate
+wall, generate weapon. That part is still true. The conclusion drawn from it was not:
+against a board with every pad built on, which is what the soak's own median board IS
+at the final wave, **all three are inert or nearly so** — a locked pad still fires,
+a countermeasure needs a pad that is neither occupied nor locked so the cast is
+skipped, and a wall has exactly one damage source and it is the hero. Checked against
+the rules rather than reasoned about, and `tests/level10.test.ts` holds all three.
+What the soak understates is the fight for an **incomplete** board.
+
+**And he is killable, measured.** 480 seeds: the board delivers a median of 24,265
+damage into him, 93% of his 26,000, and kills him in 195 of the 453 runs that reach
+him. The median winner brings 723 board DPS against armour 10 and delivers 25,125 over
+his 172-second walk; the median loser brings 546 and delivers 14,708, and he walks out
+at 24% health. That is a boss set right at the top of what a good board can do, which
+is what a 40.6% level looks like. See `reports/2026-09-15-blockers.md`.
 
 The asset-sweep standing fact above is now **discharged for every level**: `main`
 references level 10's art itself. The two route-gate props in `art-source/level10/`
