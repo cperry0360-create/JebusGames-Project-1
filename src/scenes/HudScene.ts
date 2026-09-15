@@ -80,10 +80,65 @@ const SOCKET = presentationData.abilityBar.emptySocket as {
  */
 const READOUTS = ['peanuts', 'lives'] as const
 
+/**
+ * One counter readout, as a pill that grows with the number in it.
+ *
+ * WHY THREE PIECES. The plate is a single painted image: a rounded frame with
+ * an icon at the left and a dark field to its right, and art.json measures the
+ * field's edges as `fieldLeft` and `fieldRight`. Scaling the whole image to fit
+ * a wider number would stretch the icon and the rounded ends with it. So the
+ * image is cut at those two edges into a left cap (frame and icon), a middle
+ * (the field, and the only piece that stretches) and a right cap (the frame's
+ * other end) -- a three-slice, and the only stretched piece is a flat dark
+ * field where stretching is invisible.
+ *
+ * WHY IT GROWS BY DIGIT COUNT AND NOT BY PIXEL WIDTH. The peanut count changes
+ * on most kills, and a pill that breathes on every kill is worse than one that
+ * is slightly too wide. Quantising on the number of glyphs means it changes
+ * width when the number crosses a power of ten and at no other time.
+ */
+interface Pill {
+  key: string
+  left: Phaser.GameObjects.Image
+  mid: Phaser.GameObjects.Image
+  right: Phaser.GameObjects.Image
+  text: Phaser.GameObjects.Text
+  /** Source pixels: the whole plate, and the two caps. */
+  srcW: number
+  srcH: number
+  capL: number
+  capR: number
+  /** Drawn scale, and the pill's top-left on the glass. */
+  scale: number
+  x: number
+  y: number
+  /** Padding inside the field, each side, in CSS px. */
+  pad: number
+  /** The field at the plate's own natural width, and the widest it may grow. */
+  minField: number
+  maxField: number
+  /** The field right now. */
+  field: number
+  /**
+   * The scale the number is drawn at to fit its field.
+   *
+   * HELD RATHER THAN RECOMPUTED, because `bump` has to tween AROUND it. The
+   * bump used to `setScale(1)` and yoyo back to 1, which threw away whatever
+   * `setCounter` had computed -- so a number that had been shrunk to fit was
+   * drawn at full size from the next change onward, and `setCounter` would not
+   * put it back because it returns early when the text has not changed. That
+   * is the mechanism live play reported: 800 fits, you earn peanuts, and 1012
+   * is drawn unshrunk with its last digit over the border.
+   */
+  fit: number
+}
+
 export class HudScene extends Phaser.Scene {
   private world!: GameScene
-  private peanutsText!: Phaser.GameObjects.Text
-  private livesText!: Phaser.GameObjects.Text
+  /** The number in each pill. Read by `floatUp` and by the harness's
+   *  `counters` scenario, which measures them against their own fields. */
+  get peanutsText(): Phaser.GameObjects.Text { return this.peanutsPill.text }
+  get livesText(): Phaser.GameObjects.Text { return this.livesPill.text }
   /**
    * The hero's portrait chip: the picture, the health over it, the frame
    * round it and the rectangle that takes the tap.
@@ -124,10 +179,16 @@ export class HudScene extends Phaser.Scene {
     LAYOUT,
   )
   private countersWidth = 0
-  /** Width of each counter plate's printable field, so a number that outgrows
-   *  it shrinks instead of running off the plate. */
-  private peanutsField = 999
-  private livesField = 999
+  /**
+   * The two readouts, as three-slice pills that grow with their content.
+   *
+   * SET IN `buildCounters`, READ IN `update` AND IN `bump`. The old pair of
+   * fields here was just a printable WIDTH each, and a number wider than it was
+   * shrunk to fit -- which is the fix the brief rules out, and which was not
+   * even happening: see `setCounter`.
+   */
+  private peanutsPill!: Pill
+  private livesPill!: Pill
   private bossBar!: Phaser.GameObjects.Graphics
   private bossLabel!: Phaser.GameObjects.Text
   /** The run's difficulty, read off the run rather than off the save — see
@@ -273,12 +334,54 @@ export class HudScene extends Phaser.Scene {
   }
 
   /** A counter number, scaled down if it no longer fits its plate's field. */
-  private setCounter(t: Phaser.GameObjects.Text, value: string, field: number): void {
-    if (t.text === value) return
-    t.setScale(1)
-    t.setText(value)
-    if (t.width > field) t.setScale(Math.max(0.6, field / t.width))
+  private setCounter(pill: Pill, value: string): void {
+    if (pill.text.text === value) return
+    pill.text.setScale(1)
+    pill.text.setText(value)
+    // GROW THE PILL FIRST, then fit the number into whatever field that gave.
+    // The other order shrinks a number that did not need shrinking.
+    this.stretchPill(pill, this.fieldForGlyphs(pill, value.length))
+    const room = pill.field - pill.pad * 2
+    pill.fit = pill.text.width > room ? Math.max(0.6, room / pill.text.width) : 1
+    pill.text.setScale(pill.fit)
   }
+
+  /**
+   * How wide the field has to be to hold `n` glyphs, in CSS px.
+   *
+   * MEASURED WITH `8`s rather than with the number itself, so the answer
+   * depends only on how MANY glyphs there are. Digits are not all the same
+   * width in this face, so measuring the real string would make the pill a
+   * pixel wider for 1888 than for 1111 -- a wobble nobody asked for.
+   */
+  private fieldForGlyphs(pill: Pill, n: number): number {
+    const probe = this.add.text(0, 0, '8'.repeat(Math.max(1, n)), {
+      fontFamily: FONT_UI,
+      fontSize: `${Math.round(LAYOUT.readoutNumberSize * this.layout.counterScale)}px`,
+      fontStyle: 'bold',
+    })
+    const w = probe.width
+    probe.destroy()
+    return Math.min(pill.maxField, Math.max(pill.minField, w + pill.pad * 2))
+  }
+
+  /**
+   * Sets the pill's field width and re-places everything that hangs off it.
+   *
+   * The left cap never moves. The middle is the only piece whose width
+   * changes, and the right cap and the number follow it.
+   */
+  private stretchPill(pill: Pill, field: number): void {
+    pill.field = field
+    const capL = pill.capL * pill.scale
+    const h = pill.srcH * pill.scale
+    pill.mid.setPosition(pill.x + capL, pill.y)
+    pill.mid.setDisplaySize(field, h)
+    pill.right.setPosition(pill.x + capL + field, pill.y)
+    pill.right.setDisplaySize(pill.capR * pill.scale, h)
+    pill.text.setPosition(pill.x + capL + pill.pad, pill.y + h / 2)
+  }
+
 
   /**
    * The counter plates. Each already carries its icon and an empty dark field;
@@ -292,8 +395,41 @@ export class HudScene extends Phaser.Scene {
     const keys = ART.ui.counters
     return READOUTS.map((name) => {
       const cfg = renderFor(keys[name])
-      return (cfg.contentWidth ?? 232) * (LAYOUT.readoutHeight / (cfg.contentHeight ?? 96))
+      const srcW = cfg.contentWidth ?? 232
+      const srcH = cfg.contentHeight ?? 96
+      const scale = LAYOUT.readoutHeight / srcH
+      // THE GROWN WIDTH, NOT THE PAINTED ONE. The layout reserves the corner
+      // before anything is drawn and the number in the pill changes all run,
+      // so what has to be reserved is the WIDEST the pill can get -- the plate
+      // with its field stretched to hold `readoutDigits` glyphs. Reserving the
+      // painted width and then growing past it is what would put the pill
+      // under the wave control.
+      const fieldLeft = cfg.fieldLeft ?? 0.3
+      const fieldRight = cfg.fieldRight ?? 0.94
+      const capL = fieldLeft * srcW
+      const capR = srcW - fieldRight * srcW
+      const natural = (fieldRight - fieldLeft) * srcW * scale
+      const pad = LAYOUT.readoutFieldPad * LAYOUT.readoutHeight
+      const widest = Math.max(natural, this.glyphWidth(LAYOUT.readoutDigits) + pad * 2)
+      return (capL + capR) * scale + widest
     })
+  }
+
+  /**
+   * The width of `n` digits at the readout's own size, in CSS px.
+   *
+   * A throwaway Text object, because Phaser has no way to measure a string
+   * without one and this runs twice per layout rather than per frame.
+   */
+  private glyphWidth(n: number): number {
+    const probe = this.add.text(0, 0, '8'.repeat(Math.max(1, n)), {
+      fontFamily: FONT_UI,
+      fontSize: `${Math.round(LAYOUT.readoutNumberSize * this.layout.counterScale)}px`,
+      fontStyle: 'bold',
+    })
+    const w = probe.width
+    probe.destroy()
+    return w
   }
 
   /**
@@ -315,20 +451,41 @@ export class HudScene extends Phaser.Scene {
     // TWO, NOT THREE. The wave counter is not a readout in this corner any
     // more: the control in the opposite corner already had to name the wave it
     // was about to start, so a second copy of the number was chrome.
-    const order: Array<[string, () => Phaser.GameObjects.Text, string]> = [
-      ['peanuts', () => this.peanutsText, COLOR.amber],
-      ['lives', () => this.livesText, COLOR.danger],
+    const order: Array<[string, string]> = [
+      ['peanuts', COLOR.amber],
+      ['lives', COLOR.danger],
     ]
     const x = box.x
     let top = box.y
-    for (const [name, , colour] of order) {
+    for (const [name, colour] of order) {
       const key = keys[name]
       const cfg = renderFor(key)
-      const scale = (LAYOUT.readoutHeight / (cfg.contentHeight ?? 96)) * this.layout.counterScale
-      const plateW = (cfg.contentWidth ?? 232) * scale
+      const srcW = cfg.contentWidth ?? 232
+      const srcH = cfg.contentHeight ?? 96
+      const scale = (LAYOUT.readoutHeight / srcH) * this.layout.counterScale
+      const fieldLeft = cfg.fieldLeft ?? 0.3
+      const fieldRight = cfg.fieldRight ?? 0.94
+      const capL = fieldLeft * srcW
+      const capR = srcW - fieldRight * srcW
+      const pad = LAYOUT.readoutFieldPad * srcH * scale
 
-      const plate = this.add.image(x, top, key).setOrigin(0, 0)
-      plate.setScale(scale)
+      // THE THREE SLICES, as sub-frames of the one texture.
+      //
+      // Added once per texture and guarded: `Texture.add` on a name that is
+      // already there is a no-op that logs, and this runs again on every
+      // resize.
+      const tex = this.textures.get(key)
+      const cut = (frame: string, fx: number, fw: number): string => {
+        if (!tex.has(frame)) tex.add(frame, 0, fx, 0, fw, srcH)
+        return frame
+      }
+      const fL = cut('pill-l', 0, capL)
+      const fM = cut('pill-m', capL, srcW - capL - capR)
+      const fR = cut('pill-r', srcW - capR, capR)
+
+      const left = this.add.image(x, top, key, fL).setOrigin(0, 0).setScale(scale)
+      const mid = this.add.image(x, top, key, fM).setOrigin(0, 0)
+      const right = this.add.image(x, top, key, fR).setOrigin(0, 0)
 
       // THE ONLY PEANUT ON THE CHIP.
       //
@@ -342,13 +499,16 @@ export class HudScene extends Phaser.Scene {
       // plate's own field colour; the plate is now a frame and an empty field
       // and this is the whole icon.
       //
-      // Placed in the box art.json measures off the heart PAINTED into the
-      // lives plate, so the drawn icon and the painted one keep the same
-      // margins as each other -- which is the thing a player actually reads,
-      // two chips side by side.
+      // ON THE LEFT CAP, which is the piece that never moves and never
+      // stretches -- so growing the pill cannot drag the icon with it.
       if (name === 'peanuts' && this.textures.exists(ART.ui.peanut)) {
+        // `box` SHADOWS THE PARAMETER, deliberately and as it always did: the
+        // icon's box is the only one this block is about, and
+        // tests/interaction.test.ts pins the `fitInRect` call by its text --
+        // two dimensions, not one, because the peanut is 1.25:1 and the box is
+        // 0.96:1 and a single-number fit cannot put one in the other.
         const box = ART.ui.counterIcon
-        const plateH = plate.displayHeight
+        const plateH = srcH * scale
         const peanut = this.add.image(
           x + (box.left + box.width / 2) * plateH,
           top + (box.top + box.height / 2) * plateH,
@@ -357,30 +517,31 @@ export class HudScene extends Phaser.Scene {
         fitInRect(peanut, ART.ui.peanut, box.width * plateH, box.height * plateH)
       }
 
-      // Defaults only matter for a plate whose field was never measured; the
-      // three real ones all carry theirs.
-      // Centred in THIS PLATE rather than in the group's box: the box holds two
-      // stacked plates now, so `box.height` is both of them and half of it is
-      // the seam between them.
-      const text = this.add.text(
-        x + (cfg.fieldLeft ?? 0.3) * plateW + HUD.numberMargin * this.layout.counterScale,
-        top + (cfg.fieldCentreY ?? 0.5) * plate.displayHeight,
-        '',
-        {
-          fontFamily: FONT_UI,
-          fontSize: `${Math.round(LAYOUT.readoutNumberSize * this.layout.counterScale)}px`,
-          fontStyle: 'bold', color: colour,
-        },
-      ).setOrigin(0, 0.5)
+      const text = this.add.text(x, top, '', {
+        fontFamily: FONT_UI,
+        fontSize: `${Math.round(LAYOUT.readoutNumberSize * this.layout.counterScale)}px`,
+        fontStyle: 'bold', color: colour,
+      }).setOrigin(0, 0.5)
 
-      // The field the number is printed into, so a five-glyph wave counter
-      // cannot run off the end of its own plate.
-      const field = plateW * (1 - (cfg.fieldLeft ?? 0.3)) - HUD.numberMargin * 2
-      if (name === 'peanuts') { this.peanutsText = text; this.peanutsField = field }
-      else { this.livesText = text; this.livesField = field }
+      const natural = (srcW - capL - capR) * scale
+      const pill: Pill = {
+        key, left, mid, right, text,
+        srcW, srcH, capL, capR, scale, x, y: top, pad,
+        minField: natural,
+        // THE WIDEST IT MAY GROW, and the layout has reserved exactly this --
+        // see `counterWidths`. `readoutDigits` is what the game can reach:
+        // peanuts is the only readout that gets near it, and 99,999 is well
+        // past anything a run pays out.
+        maxField: Math.max(natural, this.glyphWidth(LAYOUT.readoutDigits) + pad * 2),
+        field: natural,
+        fit: 1,
+      }
+      this.stretchPill(pill, natural)
+      if (name === 'peanuts') this.peanutsPill = pill
+      else this.livesPill = pill
 
       // DOWN, not across. This one line is the shape change.
-      top += plate.displayHeight + LAYOUT.readoutGap * this.layout.counterScale
+      top += srcH * scale + LAYOUT.readoutGap * this.layout.counterScale
     }
   }
 
@@ -751,16 +912,16 @@ export class HudScene extends Phaser.Scene {
       this.slotsBuilt = true
     }
 
-    this.setCounter(this.peanutsText, `${s.peanuts}`, this.peanutsField)
-    this.setCounter(this.livesText, `${s.lives}`, this.livesField)
+    this.setCounter(this.peanutsPill, `${s.peanuts}`)
+    this.setCounter(this.livesPill, `${s.lives}`)
     // Money and lives are the two numbers a player watches, so a change has to
     // announce itself rather than quietly appear.
     if (this.lastPeanuts >= 0 && s.peanuts !== this.lastPeanuts) {
-      this.bump(this.peanutsText, s.peanuts > this.lastPeanuts ? '#ffffff' : COLOR.danger, COLOR.amber)
+      this.bump(this.peanutsPill, s.peanuts > this.lastPeanuts ? '#ffffff' : COLOR.danger, COLOR.amber)
       if (s.peanuts > this.lastPeanuts) this.floatUp(`+${s.peanuts - this.lastPeanuts}`, COLOR.amber)
     }
     if (this.lastLives >= 0 && s.lives < this.lastLives) {
-      this.bump(this.livesText, '#ffffff', COLOR.danger)
+      this.bump(this.livesPill, '#ffffff', COLOR.danger)
     }
     this.lastPeanuts = s.peanuts
     this.lastLives = s.lives
@@ -851,13 +1012,30 @@ export class HudScene extends Phaser.Scene {
   private activeToast?: Phaser.GameObjects.Container
 
   /** A short pop on a number that just changed, then back to its own colour. */
-  private bump(text: Phaser.GameObjects.Text, flash: string, base: string): void {
+  /**
+   * A number that just changed, flashed and swelled.
+   *
+   * AROUND `pill.fit`, NOT AROUND 1, AND THAT IS THE BUG THIS FIXES. It read
+   * `text.setScale(1)` and tweened to a flat `1.25` with `yoyo`, so it landed
+   * back on 1 -- discarding whatever scale `setCounter` had computed to make
+   * the number fit. And `setCounter` returns early when the text has not
+   * changed, so nothing put it back: from the first change onward the number
+   * was drawn at full size. That is the mechanism live play reported. 800 fits
+   * the painted field either way; 1012 does not, and was drawn unshrunk with
+   * its last digit across the border.
+   *
+   * The pill grows now, so `fit` is 1 almost always -- but "almost always" is
+   * exactly the kind of thing that stops being true, and a bump that throws
+   * away a fit is wrong whether or not anything currently needs one.
+   */
+  private bump(pill: Pill, flash: string, base: string): void {
+    const text = pill.text
     this.tweens.killTweensOf(text)
     text.setColor(flash)
-    text.setScale(1)
+    text.setScale(pill.fit)
     this.tweens.add({
-      targets: text, scale: 1.25, duration: 90, yoyo: true, ease: 'Quad.easeOut',
-      onComplete: () => text.setColor(base),
+      targets: text, scale: pill.fit * 1.25, duration: 90, yoyo: true, ease: 'Quad.easeOut',
+      onComplete: () => { text.setColor(base); text.setScale(pill.fit) },
     })
   }
 

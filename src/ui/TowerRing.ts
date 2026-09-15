@@ -82,8 +82,20 @@ export interface RingOption {
    * options identical.
    */
   sprite?: string
-  /** Shown on the badge under the button, and again on the confirm button. */
-  price: number
+  /**
+   * Shown on the badge under the button, and again on the confirm button.
+   *
+   * NULL MEANS THERE IS NO PRICE, and it is not the same thing as 0.
+   *
+   * It was `number` and the disabled upgrade slot passed 0 -- the slot that is
+   * emitted always so SELL can never inherit position 0, holding the place on
+   * a tower that is fully built out or mid-upgrade. `buttonLabel` already
+   * special-cased 0 and printed the bare verb, so the confirm button read
+   * "Upgrade"; the BADGE under the icon did not, and printed the literal "0".
+   * Live play read that as a free upgrade, which is exactly what it looks
+   * like. A price that does not exist now draws nothing.
+   */
+  price: number | null
   /**
    * Whether it can be bought right now.
    *
@@ -277,7 +289,11 @@ export class TowerRing {
       const glyph = this.makeGlyph(option, CFG.iconSize)
       const lock = option.affordable ? undefined : this.makeLock()
 
-      const price = this.scene.add.text(0, 0, String(option.price), {
+      // An empty string rather than a skipped object: the badge is positioned
+      // by index in `layOut` and by `b.price` in the refresh, so a button
+      // without one would have to be a hole in two other places. Phaser draws
+      // nothing for an empty text.
+      const price = this.scene.add.text(0, 0, option.price === null ? '' : String(option.price), {
         fontFamily: FONT_UI, fontSize: `${uiSize(CFG.priceSize)}px`, fontStyle: 'bold',
         color: option.affordable ? COLOR.amber : COLOR.danger,
         stroke: '#0d1016', strokeThickness: 3,

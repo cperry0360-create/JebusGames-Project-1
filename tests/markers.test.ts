@@ -129,7 +129,15 @@ test('the arrow sits 0.736 badge widths along the lane, and the badge never turn
 
 test('the size is authored in screen pixels and derived into world units', () => {
   assert.equal(CFG.badgeScreenWidth, 40, 'the badge is no longer 40 CSS px at default zoom')
-  assert.equal(CFG.alpha, 1, 'the layer ships faded')
+  // 0.7 SINCE 2026-09-14. This used to pin 1.0 with the message "the layer
+  // ships faded", which was the right guard while 1.0 was the deliberate
+  // un-judged value; live play has now judged it. The guard that replaces it
+  // is a BAND: the badges are navigational furniture, so they may not be at
+  // full strength and they may not be so faint that a player cannot find the
+  // mouth.
+  assert.ok(CFG.alpha >= 0.5 && CFG.alpha < 1,
+    `the badge alpha is ${CFG.alpha}; furniture sits below 1 and above 0.5`)
+  assert.equal(CFG.alpha, 0.7, 'the shipped badge alpha moved without this note moving')
   assert.ok(Math.abs(BW - 40 / DISPLAY.camera.defaultZoom) < 1e-9,
     'the world width is not derived from the screen width')
   // The four files, and their content boxes measured rather than assumed.
@@ -143,4 +151,77 @@ test('the size is authored in screen pixels and derived into world units', () =>
     assert.ok(ART.levelArt.shared.includes(key),
       `${key} is not level art, so boot downloads it`)
   }
+})
+
+test('every badge and its arrow sit fully inside the painted plate', () => {
+  /*
+   * THE FAULT THIS REPLACES, AND IT WAS VISIBLE IN PLAY. Markers sat on the
+   * first and last waypoint of each lane, which are the computed GATEWAY
+   * points -- (-60, y) and (1340, y) -- so `clampToPlate` was pulling 27 of the
+   * 32 badges onto the frame by force. A clamped badge's own rectangle is
+   * inside by construction; its ARROW is not, because the arrow sits 0.736
+   * badge widths further along the direction of travel, which at an exit points
+   * OUT. 15 of the 32 markers had a piece off the plate, worst 10.6 px.
+   *
+   * `insetBadgeWidths` walks the badge along its own lane instead. This is the
+   * property that chose the value: 5.871 badge widths is the smallest at which
+   * nothing is outside, and 6.0 ships. Measured here rather than quoted, so a
+   * re-trace, a new level or a resized badge has to come back to this number.
+   *
+   * THE ARROW IS ROTATED, so its bounding box is the rotated one. Checking the
+   * unrotated rectangle passes at 5.0 and is wrong: level 3's exit arrow leaves
+   * at -49 degrees, where the rotated box is 40% wider than the sprite.
+   */
+  const dim = (k: string): { w: number; h: number } => {
+    const r = ART.render[ART.prop[k]]
+    return { w: r.contentWidth as number, h: r.contentHeight as number }
+  }
+  const BADGE = { spawn: dim('markerSpawn'), exit: dim('markerExit') }
+  const ARROW = { spawn: dim('markerSpawnArrow'), exit: dim('markerExitArrow') }
+  const box = (x: number, y: number, w: number, h: number, a: number) => {
+    const c = Math.abs(Math.cos(a)), s2 = Math.abs(Math.sin(a))
+    const bw = w * c + h * s2, bh = w * s2 + h * c
+    return { x0: x - bw / 2, y0: y - bh / 2, x1: x + bw / 2, y1: y + bh / 2 }
+  }
+  const over = (b: { x0: number; y0: number; x1: number; y1: number }) =>
+    Math.max(-b.x0, -b.y0, b.x1 - PLATE.width, b.y1 - PLATE.height, 0)
+
+  let seen = 0
+  for (const d of LEVELS) {
+    for (const m of of(d.id)) {
+      seen++
+      const scale = BW / BADGE[m.kind].w
+      const badge = box(m.x, m.y, BW, BADGE[m.kind].h * scale, 0)
+      const at = arrowAt(m, BW, CFG)
+      const arrow = box(at.x, at.y, ARROW[m.kind].w * scale, ARROW[m.kind].h * scale, m.angle)
+      assert.equal(over(badge).toFixed(1), '0.0',
+        `${d.id} ${m.kind} (${m.lanes.join('+')}): the badge hangs `
+        + `${over(badge).toFixed(1)} px off the plate at (${m.x.toFixed(0)}, ${m.y.toFixed(0)})`)
+      assert.equal(over(arrow).toFixed(1), '0.0',
+        `${d.id} ${m.kind} (${m.lanes.join('+')}): the ARROW hangs `
+        + `${over(arrow).toFixed(1)} px off the plate at (${at.x.toFixed(0)}, ${at.y.toFixed(0)})`)
+    }
+  }
+  assert.equal(seen, 32, `${seen} markers were checked, not 32`)
+})
+
+test('the inset moves a gateway badge and leaves an interior exit alone', () => {
+  // THE SCOPE OF THE INSET, which is the one judgement in it. Its job is the
+  // computed gateway points off the edge of the plate; an exit already inside
+  // the plate is where the badge belongs, because the badge means "they get out
+  // HERE". A uniform inset walks level 9's door 140 px back up the road to
+  // (1064, 274), which points it at a piece of lane that is not the exit.
+  assert.ok((CFG.insetBadgeWidths ?? 0) > 0, 'the inset is off')
+  const door = of('level9').find((m) => m.kind === 'exit')!
+  assert.deepEqual([Math.round(door.x), Math.round(door.y)], [1177, 329],
+    'level 9\'s interior door badge has moved off the door')
+  // And a gateway one HAS moved: level 7's north lane runs from (-60, 151) and
+  // the badge is 140 px along it.
+  const gate = of('level7').find((m) => m.kind === 'spawn' && m.lanes.includes('north'))!
+  assert.ok(gate.x > 60, `level 7's north spawn badge is at x=${gate.x}, still off the plate`)
+  // THE SHARED MOUTH STILL MERGES. Level 9's two entrance lanes are traced from
+  // one point; insetting both along their own lanes could pull them apart, and
+  // at about 8 badge widths it does. At 6.0 they are still one badge.
+  assert.equal(of('level9').filter((m) => m.kind === 'spawn').length, 1,
+    'level 9 draws two spawn badges on one painted mouth again')
 })

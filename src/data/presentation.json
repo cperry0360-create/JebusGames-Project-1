@@ -30,7 +30,7 @@
   },
   "facing": {
     "deadZone": 0.34,
-    "_deadZone": "How much sideways drift counts as noise before a unit turns round. Raised from 0.15 when the map was re-traced: the old lane never really went west and its steepest leg drifted 3px over 92, or 0.03 of its length. The new road genuinely bends back on itself, and its steepest leg drifts 14.5px west while dropping 69.6 \u2014 0.20. At 0.15 that flipped an enemy round to walk down the hill backwards and then flipped it back."
+    "_deadZone": "How much sideways drift counts as noise before a unit turns round. Raised from 0.15 when the map was re-traced: the old lane never really went west and its steepest leg drifted 3px over 92, or 0.03 of its length. The new road genuinely bends back on itself, and its steepest leg drifts 14.5px west while dropping 69.6 — 0.20. At 0.15 that flipped an enemy round to walk down the hill backwards and then flipped it back."
   },
   "healthBar": {
     "heightPx": 4,
@@ -84,7 +84,6 @@
     "marginX": 12,
     "marginY": 10,
     "numberSize": 22,
-    "numberMargin": 9,
     "bossBarWidth": 300,
     "bossBarHeight": 14,
     "bossPhaseMarks": [
@@ -119,9 +118,13 @@
       "cornerButtonTapPad": 4,
       "_cornerButtonTapPad": "THE GEAR IS DRAWN AT 40 AND TAPPED AT 44, and this is the 4 that makes the difference a rule instead of a magic number in HudScene. The drawn size is a look -- a 44px disc in a 44px row fills it corner to corner and reads as a slab rather than as a button -- and 44x44 is a fact about fingers, so the invisible hit rectangle is padded out to it. tests/hudpads.test.ts checks the TAP size rather than the drawn size for exactly this reason; checking the drawn size reported the gear as a 40px violation when the thing a thumb actually lands on had always been 44.",
       "padClearancePx": 24,
-      "_padClearancePx": "ADDED TO THE HUD BAND WHEN THE CAMERA IS TOLD HOW MUCH VERTICAL SLACK IT NEEDS, and it is the BUILD PAD'S OWN HALF-HEIGHT rather than a fudge factor. Clearing a band means moving the pad's EDGE past it, not its centre, so the camera has to travel the band plus half a tap target. 24 is a shade over the 22 that half of the 44pt floor comes to, which is what a pad's tap rect is widened to at cover zoom. Measured: without it, level 8's pad 16 -- world y=682 against a 720 plate, so 38 px off the bottom edge -- came four world units short of clearing the ability row at 667x375 with a notch, which is the tightest viewport the game supports. tests/hudpads.test.ts asserts it."
+      "_padClearancePx": "ADDED TO THE HUD BAND WHEN THE CAMERA IS TOLD HOW MUCH VERTICAL SLACK IT NEEDS, and it is the BUILD PAD'S OWN HALF-HEIGHT rather than a fudge factor. Clearing a band means moving the pad's EDGE past it, not its centre, so the camera has to travel the band plus half a tap target. 24 is a shade over the 22 that half of the 44pt floor comes to, which is what a pad's tap rect is widened to at cover zoom. Measured: without it, level 8's pad 16 -- world y=682 against a 720 plate, so 38 px off the bottom edge -- came four world units short of clearing the ability row at 667x375 with a notch, which is the tightest viewport the game supports. tests/hudpads.test.ts asserts it.",
+      "readoutDigits": 5,
+      "_readoutDigits": "THE WIDEST NUMBER A READOUT MUST SHOW UNCUT, in glyphs, and it is what the top-left corner reserves room for. Live play reported the peanut count sitting inside its pill at 800 and running into the pill's right border at 1012: the painted field is 30.0 CSS px at the shipped readoutHeight and four digits measure 34.0, so the plate was sized for three. The pill is a three-slice now and its FIELD stretches -- see HudScene's `Pill` -- and this is how far. FIVE, because peanuts is the only readout that gets near it and 99,999 is well past what any run pays out; lives peaks at 40 in Lazy Dad and the wave number is not in this corner at all. Raising it widens the reserved corner, which is measured against the wave control by tests/hudlayout.test.ts.",
+      "readoutFieldPad": 0.1,
+      "_readoutFieldPad": "PADDING INSIDE THE FIELD, EACH SIDE, AS A FRACTION OF THE PLATE'S DRAWN HEIGHT. It replaces `hud.numberMargin`, which was a flat 9 CSS px and is the second half of the clipping fault: it was authored for the 44px-tall plate this corner used to carry, and when the readouts were shrunk to readoutHeight 20 nobody rescaled it -- so a 9px inset was pushing the number 9px into a field only 30px wide, leaving 21px for a number 26px across. Measured: three digits ran 5.0px past the field before this changed. A FRACTION OF THE HEIGHT, like `ui.counterIcon`'s box, so the one dimension all three plates share is what it scales with; 0.1 of 20 is 2 CSS px, which is a hair of dark field either side of the number."
     },
-    "_bossBarWidth": "Read at last. It was 560 and unread: drawBossBar took layout.messageRow.width instead, which is 563px on an 844px screen \u2014 67% of the width for one wave in thirteen. 300 is wide enough to read a health fraction off and narrow enough to stay a bar rather than a band. The message row still bounds it, so a narrow phone shrinks the bar rather than pushing it into the counters.",
+    "_bossBarWidth": "Read at last. It was 560 and unread: drawBossBar took layout.messageRow.width instead, which is 563px on an 844px screen — 67% of the width for one wave in thirteen. 300 is wide enough to read a health fraction off and narrow enough to stay a bar rather than a band. The message row still bounds it, so a narrow phone shrinks the bar rather than pushing it into the counters.",
     "_bossBarTop": "DELETED. It said 10 and nothing read it: the bar sits in the message row, which the layout places, so a second opinion about its y could only ever disagree with the layout. It is centred in that row now.",
     "heroChip": {
       "_note": "THE HERO'S PORTRAIT AND HEALTH, at the bottom beside the ability buttons. It replaces the wide bar that used to sit under the counters at the top left, which drew the hero's health in a second place -- the sprite on the map already had a bar over its head -- and put a solid plate across the top of the board for the whole run. The two readouts are one now: the bar is drawn ON the portrait rather than beside it, so the thing that says how the hero is doing is the thing with the hero's face on it.",
@@ -141,7 +144,8 @@
       "downTint": 5921370,
       "_downTint": "A hero who is down: the portrait desaturated to this and the bar replaced by the respawn countdown. The state has to be legible at a glance from the bottom of the screen, because it is the answer to 'why is nothing happening where I left him'.",
       "downAlpha": 0.55
-    }
+    },
+    "_numberMargin": "RETIRED 2026-09-14. It was 9 -- a flat 9 CSS px inset for the number inside a counter plate -- and it was authored when this corner carried 44px-tall plates, where 9px of a 106px plate is reasonable. The readouts were shrunk to 20px tall in the HUD pass and this number was not rescaled, so it became a 9px inset into a 30px field and pushed every number out through its own right edge. Replaced by `hud.layout.readoutFieldPad`, which is a fraction of the plate's height and therefore cannot come loose from it again."
   },
   "typography": {
     "minUiSize": 15,
@@ -184,8 +188,8 @@
     "quietJitterScale": 0.05,
     "quietJitterDegrees": 0,
     "quietAlpha": 0.95,
-  "lockedAlpha": 0.35,
-  "_lockedAlpha": "HOW DIM A BUILD PAD GOES WHILE IT IS LOCKED SHUT. Level 10's `buildLock` is the only thing that shuts one, and the node stays DRAWN rather than disappearing: a pad that vanished would say the ground had gone, and what has actually happened is that it is temporarily out of bounds. A tower already standing on a locked pad is untouched -- it keeps firing and keeps its upgrades -- so this is the only visible half of the power on an empty pad, alongside the padlock icon level10.json's `hud.buildLocked` names. It is here rather than in level10.json because it is how a BUILD PAD is drawn, and every other number about that is on this block.",
+    "lockedAlpha": 0.35,
+    "_lockedAlpha": "HOW DIM A BUILD PAD GOES WHILE IT IS LOCKED SHUT. Level 10's `buildLock` is the only thing that shuts one, and the node stays DRAWN rather than disappearing: a pad that vanished would say the ground had gone, and what has actually happened is that it is temporarily out of bounds. A tower already standing on a locked pad is untouched -- it keeps firing and keeps its upgrades -- so this is the only visible half of the power on an empty pad, alongside the padlock icon level10.json's `hud.buildLocked` names. It is here rather than in level10.json because it is how a BUILD PAD is drawn, and every other number about that is on this block.",
     "glowAffordableAlpha": 0.34,
     "glowIdleAlpha": 0.12,
     "glowPulseMs": 1900,
@@ -197,7 +201,7 @@
       "color": 16770728
     },
     "quietScreenWidth": 90,
-    "_quietScreenWidth": "The flagstone in SCREEN pixels across, at the default camera zoom \u2014 the unit it was asked for in, and the only one that means anything for a thing you look at. The world width falls out of it (90 / defaultZoom), so changing the zoom band does not silently resize the pad. It also lands where the art was cut for: at 90 screen px the slab is about 40 world px tall, and CLAUDE.md rule 7 wants 40 x 2.37 x 3 = 284 source pixels against the 272 delivered."
+    "_quietScreenWidth": "The flagstone in SCREEN pixels across, at the default camera zoom — the unit it was asked for in, and the only one that means anything for a thing you look at. The world width falls out of it (90 / defaultZoom), so changing the zoom band does not silently resize the pad. It also lands where the art was cut for: at 90 screen px the slab is about 40 world px tall, and CLAUDE.md rule 7 wants 40 x 2.37 x 3 = 284 source pixels against the 272 delivered."
   },
   "serverNuke": {
     "earned": {
@@ -317,7 +321,11 @@
     "heroBlurbMinWidth": 130,
     "_heroBlurbMinWidth": "The narrowest the hero blurb column may be when it sits BESIDE the portrait row rather than under it. Below about this the blurb is one or two words a line and reads as a column of fragments. The chip column beside it is measured from the widest ability label on the roster, so the description asks for what its content needs and the portrait row gets the rest.",
     "minReflowSaving": 30,
-    "_minReflowSaving": "The least vertical room a reflow must buy before the screen takes it. One heading is 29 units, so 30 means the rearrangement has to be worth at least the section label it removes. It earns its keep on this hand -- two towers and two specials of similar height -- where the two columns are as tall as the TALLER of them and the short one wastes its slack: laid across, the saving is 40 units at 904x400 and 66 at 844x390 but only 14 at 1400x708 and 14 at 667x375. Without a threshold the arithmetic says yes to those last two and rearranges half a screen for half a line of text."
+    "_minReflowSaving": "The least vertical room a reflow must buy before the screen takes it. One heading is 29 units, so 30 means the rearrangement has to be worth at least the section label it removes. It earns its keep on this hand -- two towers and two specials of similar height -- where the two columns are as tall as the TALLER of them and the short one wastes its slack: laid across, the saving is 40 units at 904x400 and 66 at 844x390 but only 14 at 1400x708 and 14 at 667x375. Without a threshold the arithmetic says yes to those last two and rearranges half a screen for half a line of text.",
+    "cardIconColumnCapShare": 0.28,
+    "_cardIconColumnCapShare": "THE MOST OF A CARD THE ICON COLUMN MAY TAKE, as a share of the card's width, and it exists because `cardIconColumnMin` wins on a narrow card and wins badly. Five specials across an 844-wide screen is a 150-unit card: the share asks for 34, the minimum insists on 62, and the icon ends up with 41% of the card and the text with a 75-unit column. `abilityLine` ends its bodies '26s cooldown' with a NON-BREAKING space -- correct, a number belongs with its unit -- so that is a single 116-unit token no wrap width can split, and it was rendering 6px through the card's right rail even after the last-resort scale hit its 0.7 floor. At 0.28 the column comes down to 42 on that card and the text gets 83, which the floor covers. IT ONLY BITES WHERE THE MINIMUM WAS THE PROBLEM: on a wide card `cardIconColumnShare` is already above the cap's value and nothing moves. Measured by tools/harness/run.sh everyloadout, which now gates on it.",
+    "cardTextMinScale": 0.66,
+    "_cardTextMinScale": "THE LAST RESORT ON A TOWER OR SPECIAL CARD, and the floor it may reach. The size ladder (`bodySizes`) steps down until the text fits the column in BOTH axes; when even 18px does not, the block is scaled. What forces it is an UNBREAKABLE token: `abilityLine` ends its bodies '26s cooldown' with a non-breaking space -- correct, a number belongs with its unit -- and that is a single 116-unit token that no wrap width can split. The narrowest text column the layouts produce is 79 units (desktop, specials beside the towers) and 83 (844x390, five across), so the worst case needs 79/116 = 0.681 and 0.66 leaves a little. MEASURED BY tools/harness/run.sh everyloadout, which walks 19 combinations at four viewports and now gates. DELIBERATELY NOT `fitWithin`'s 0.7: that floor belongs to the ability chip labels in the hero block and is a different control with a different worst case."
   },
   "scratchCard": {
     "cardHeight": 260,
@@ -361,7 +369,7 @@
   "heroFrames": {
     "_note": "The hero clips. impactFrame is 1-based to match the filenames, and the damage fires on it rather than when the swing starts.",
     "walkFps": 6,
-    "_walkFps": "Arithmetic, not taste. Cory moves at 104 world px/s and renders 78.8 world px tall. A 4-frame cycle is two steps, so at 12fps that is 3 cycles a second and 17.3px per step \u2014 0.22 body-heights, against a human stride of 0.4-0.45. His feet were taking steps half the length his speed demanded, which is what sliding is. At 6fps it is 34.7px per step, 0.44 body-heights.",
+    "_walkFps": "Arithmetic, not taste. Cory moves at 104 world px/s and renders 78.8 world px tall. A 4-frame cycle is two steps, so at 12fps that is 3 cycles a second and 17.3px per step — 0.22 body-heights, against a human stride of 0.4-0.45. His feet were taking steps half the length his speed demanded, which is what sliding is. At 6fps it is 34.7px per step, 0.44 body-heights.",
     "attackFps": 12,
     "_attackFps": "Kept at 12, and separate from the walk for a reason: impactFrame is the third frame, so one shared rate would have moved the swing's landing from 167ms to 333ms. Halving the walk to fix a slide must not double the attack telegraph.",
     "impactFrame": 3,
@@ -369,11 +377,11 @@
     "attackFrames": 4
   },
   "ring": {
-    "_note": "The one tower menu: a radial ring of icon buttons around the pad or tower, and a description panel beside it. Every number is in CSS pixels and stays that size at every camera zoom \u2014 the ring is HUD chrome positioned by projecting a world point, not a world object.",
+    "_note": "The one tower menu: a radial ring of icon buttons around the pad or tower, and a description panel beside it. Every number is in CSS pixels and stays that size at every camera zoom — the ring is HUD chrome positioned by projecting a world point, not a world object.",
     "buttonSize": 50,
     "_buttonSize": "The plate. iconSize is the floor, not this: 40px of icon needs a plate bigger than 40 to sit on, and 50 leaves a 5px border. It is not larger because a notched 568x320 leaves a 171px strip between the counters and the ability bar, and six options need 2*50 plus the price badge inside it. The exhaustive placement test pinned that number down.",
     "iconSize": 40,
-    "_iconSize": "Never below 40. Under it the 256px source is minified past 6x and the painted outlines break up \u2014 the same failure the whole cast had before rule 7 was restated in physical pixels.",
+    "_iconSize": "Never below 40. Under it the 256px source is minified past 6x and the painted outlines break up — the same failure the whole cast had before rule 7 was restated in physical pixels.",
     "buttonGap": 10,
     "priceGap": 3,
     "priceHeight": 17,
@@ -383,29 +391,29 @@
     "areaMargin": 4,
     "panelWidth": 226,
     "panelMinWidth": 150,
-    "_panelMinWidth": "The narrowest the description panel may be squeezed to. It takes the widest width that fits BESIDE the ring, down to this, so that on a small screen the panel stops sitting on top of the ring's own buttons \u2014 a covered button costs a tap every time, cancel back to the ring and then press it, and the smallest screen is the one a kid is most likely holding. Measured: at 844x390 a 200px panel hides nothing at all, and at a notched 568x320 narrowing from 226 takes the worst case from four buttons hidden to two and the number of placements that hide any from 225 of 540 down to 55. Below about 150 the stat rows start colliding with their own values.",
+    "_panelMinWidth": "The narrowest the description panel may be squeezed to. It takes the widest width that fits BESIDE the ring, down to this, so that on a small screen the panel stops sitting on top of the ring's own buttons — a covered button costs a tap every time, cancel back to the ring and then press it, and the smallest screen is the one a kid is most likely holding. Measured: at 844x390 a 200px panel hides nothing at all, and at a notched 568x320 narrowing from 226 takes the worst case from four buttons hidden to two and the number of placements that hide any from 225 of 540 down to 55. Below about 150 the stat rows start colliding with their own values.",
     "_panelWidth": "Fixed. Text wraps into it; the panel never widens to fit a long name, because a panel whose width depends on its content moves the confirm button between towers.",
     "panelMaxHeightFraction": 0.92,
     "titleSize": 16,
     "_bodyMinSize": "The floor the description shrinks to. Below this it is not small text, it is a grey smear on a phone. If the content still does not fit at this size the panel SAYS SO rather than clipping.",
     "pad": 11,
     "maxAspect": 2.2,
-    "_maxAspect": "The HUD leaves a wide, short strip \u2014 824x210 on the reference phone \u2014 and a circle big enough to keep six plates apart is 242px in both directions. The ring stretches sideways into the room that is actually there, up to this, and no further: past it the ring stops reading as a ring and starts reading as a row.",
+    "_maxAspect": "The HUD leaves a wide, short strip — 824x210 on the reference phone — and a circle big enough to keep six plates apart is 242px in both directions. The ring stretches sideways into the room that is actually there, up to this, and no further: past it the ring stops reading as a ring and starts reading as a row.",
     "_rowMinHeight": "Stat rows tighten with the description when a panel is too tall. A support tower spends more height on rows than on prose, so shrinking only the prose is not enough of a lever.",
     "_headerIconSize": "The picture at the top of the description panel, so the player can see which ring button they are reading about. Smaller than iconSize deliberately: that 40px floor is for buttons a thumb has to hit, and this one is not pressed. The 14px it gives back is the difference between the panel fitting a notched phone and reporting that it does not.",
-    "_confirmHeight": "Tall enough to actually carry a 40px icon. It was 38, which is shorter than the icon standing on it \u2014 the floor is a floor, and a plate that cannot hold it is the plate that has to grow.",
-    "_titleMinSize": "The title gives way last, because it is what a player reads first \u2014 but two lines of 16px title is 40px of a 238px budget on the smallest phone.",
+    "_confirmHeight": "Tall enough to actually carry a 40px icon. It was 38, which is shorter than the icon standing on it — the floor is a floor, and a plate that cannot hold it is the plate that has to grow.",
+    "_titleMinSize": "The title gives way last, because it is what a player reads first — but two lines of 16px title is 40px of a 238px budget on the smallest phone.",
     "arcMaxOptions": 3,
-    "_arcMaxOptions": "At or below this many options the ring is not a ring: the buttons go on a tight arc directly against the pad instead. Fitting an ellipse to two options puts them at top and bottom and then grows the radius until the plates separate, which is a 50x194 vertical column \u2014 a line, not a ring, and 124px of empty space between two buttons about the same pad. The loadout hands out two towers, so this is the NORMAL case rather than an edge one.",
+    "_arcMaxOptions": "At or below this many options the ring is not a ring: the buttons go on a tight arc directly against the pad instead. Fitting an ellipse to two options puts them at top and bottom and then grows the radius until the plates separate, which is a 50x194 vertical column — a line, not a ring, and 124px of empty space between two buttons about the same pad. The loadout hands out two towers, so this is the NORMAL case rather than an edge one.",
     "arcSpreadDeg": 118,
     "_arcSpreadDeg": "How wide the tight arc fans. Wide enough that two 50px plates separate at a radius that still hugs the anchor, narrow enough that the group reads as one thing sitting above the pad rather than as buttons scattered around it.",
     "lockBadgeSize": 20,
-    "_lockBadgeSize": "The padlock corner-badge on an option the player cannot afford yet. Small, because it is the second thing the button says: the first is WHICH option this is, and that is the option's own picture, dimmed. A padlock instead of the picture was the original choice and the reasoning held for one locked option \u2014 a padlock says 'not yet' where a greyed-out picture just looks broken. It fails at two, because then both buttons are the same padlock and the player cannot tell what they are saving for, which is the common case.",
+    "_lockBadgeSize": "The padlock corner-badge on an option the player cannot afford yet. Small, because it is the second thing the button says: the first is WHICH option this is, and that is the option's own picture, dimmed. A padlock instead of the picture was the original choice and the reasoning held for one locked option — a padlock says 'not yet' where a greyed-out picture just looks broken. It fails at two, because then both buttons are the same padlock and the player cannot tell what they are saving for, which is the common case.",
     "lockedAlpha": 0.5,
     "lockedTint": 9082022,
-    "_confirmGlyphMinWidth": "Below this the confirm button carries its word alone; at or above it the tick glyph goes in front of the word too. The word is the part that cannot be dropped \u2014 every option's confirm used to be the same tick, so SELL and UPGRADE committed through identical buttons.",
+    "_confirmGlyphMinWidth": "Below this the confirm button carries its word alone; at or above it the tick glyph goes in front of the word too. The word is the part that cannot be dropped — every option's confirm used to be the same tick, so SELL and UPGRADE committed through identical buttons.",
     "ledger": {
-      "_note": "The one card. Four rows, a fixed height, no prose. It replaces a bevelled nine-slice plate carrying a title, a paragraph, five stat rows and a cost row \u2014 plus a four-step ladder (body size, row height, title size, then drop the prose) that existed only to make the paragraph fit and made the card's height depend on how long a sentence was.",
+      "_note": "The one card. Four rows, a fixed height, no prose. It replaces a bevelled nine-slice plate carrying a title, a paragraph, five stat rows and a cost row — plus a four-step ladder (body size, row height, title size, then drop the prose) that existed only to make the paragraph fit and made the card's height depend on how long a sentence was.",
       "pad": 12,
       "gap": 9,
       "headerHeight": 30,
@@ -452,7 +460,7 @@
     }
   },
   "settings": {
-    "_note": "The settings dialog: three volume sliders and the three ways out of a run. It replaced a mute toggle with a stepped volume readout in one corner and a pause button in the other \u2014 four controls' worth of chrome on a phone screen, for settings that are opened once and left alone. Everything here is in CSS pixels and clamped to the viewport.",
+    "_note": "The settings dialog: three volume sliders and the three ways out of a run. It replaced a mute toggle with a stepped volume readout in one corner and a pause button in the other — four controls' worth of chrome on a phone screen, for settings that are opened once and left alone. Everything here is in CSS pixels and clamped to the viewport.",
     "width": 420,
     "minWidth": 300,
     "rowHeight": 46,
@@ -523,7 +531,7 @@
     }
   },
   "targeting": {
-    "_note": "What the board looks like while it is waiting for a tap. On a touch device there is no hover, so a targeting mode that only draws under the pointer draws NOTHING until the player has already committed \u2014 which is how a mode with no visible state came to be reported as a soft-lock. These numbers are the standing affordance: a breathing wash over the area a tap is legal in, drawn from the moment the mode is entered.",
+    "_note": "What the board looks like while it is waiting for a tap. On a touch device there is no hover, so a targeting mode that only draws under the pointer draws NOTHING until the player has already committed — which is how a mode with no visible state came to be reported as a soft-lock. These numbers are the standing affordance: a breathing wash over the area a tap is legal in, drawn from the moment the mode is entered.",
     "pulseMs": 900,
     "washAlpha": 0.1,
     "washAlphaPeak": 0.2,
@@ -550,7 +558,7 @@
     "_note": "The card that announces a boss. Sized from its own text: it was drawn at exactly the viewport width and 156px tall, which is 40% of a 390px phone, for a two-word name and one line of flavour.",
     "nameSize": 44,
     "taglineSize": 21,
-    "_sizes": "44 over 21 is 2.1:1. It was 56 over 17, which is 3.3:1 \u2014 at that ratio the tagline reads as a caption rather than as part of the card.",
+    "_sizes": "44 over 21 is 2.1:1. It was 56 over 17, which is 3.3:1 — at that ratio the tagline reads as a caption rather than as part of the card.",
     "padX": 34,
     "padY": 20,
     "gap": 10,
@@ -577,7 +585,7 @@
     "_gapMs": "Between one banner leaving and the next arriving, so two in a row read as two messages rather than as one flicker."
   },
   "drawer": {
-    "_note": "The opt-in control drawer, behind the save flag `controlDrawer`. A tab docked to the right edge that expands a panel of tiles. First slice: the six active units only \u2014 no passives, no consumables, no upgrade screen.",
+    "_note": "The opt-in control drawer, behind the save flag `controlDrawer`. A tab docked to the right edge that expands a panel of tiles. First slice: the six active units only — no passives, no consumables, no upgrade screen.",
     "tabWidth": 34,
     "tabHeight": 88,
     "widths": [
@@ -600,7 +608,7 @@
         "tabGap": 2
       }
     ],
-    "_widths": "ONE BREAKPOINT CARRIES THE WHOLE BUDGET, not just the width. The panel is 200px tall at 844x390 and only 130 at 568x320 \u2014 the HUD rows above and the ability strip below decide that, not this file \u2014 so a header, a tab bar and a detail strip at one set of heights leave 18px of grid on the narrow screen, which is less than half a tile and therefore no tappable tile at all. The narrow row is the same layout with every piece of chrome cut to what it actually needs. Widest first; the last must be minViewW 0 so there is always an answer.",
+    "_widths": "ONE BREAKPOINT CARRIES THE WHOLE BUDGET, not just the width. The panel is 200px tall at 844x390 and only 130 at 568x320 — the HUD rows above and the ability strip below decide that, not this file — so a header, a tab bar and a detail strip at one set of heights leave 18px of grid on the narrow screen, which is less than half a tile and therefore no tappable tile at all. The narrow row is the same layout with every piece of chrome cut to what it actually needs. Widest first; the last must be minViewW 0 so there is always an answer.",
     "pad": 8,
     "columns": 2,
     "tileHeight": 62,
@@ -611,7 +619,7 @@
     "priceSize": 13,
     "lockSize": 20,
     "lockFill": 14272936,
-    "_lockFill": "A light bone padlock over the dimmed art. It used to be drawn in COLOR.panelEdge \u2014 0x3d4a59, the old bevelled-plate blue \u2014 on a 0x4a3a2a tile, which rendered every frame and was invisible in every screenshot.",
+    "_lockFill": "A light bone padlock over the dimmed art. It used to be drawn in COLOR.panelEdge — 0x3d4a59, the old bevelled-plate blue — on a 0x4a3a2a tile, which rendered every frame and was invisible in every screenshot.",
     "lockEdge": 1182985,
     "dimAlpha": 0.38,
     "_dimAlpha": "A tile the player cannot afford. Dimmed, not hidden: what you are saving for is information.",
@@ -620,7 +628,7 @@
     "tileFillSelected": 7297594,
     "outline": 1182985,
     "outlineWidth": 3,
-    "_outline": "Thick and dark, matching the painted board. Flat colour, chunky rounded forms \u2014 no bevel, no metal, no neon edge, no gradient, no translucent hairline. The reference is the in-game side drawer, not a web panel.",
+    "_outline": "Thick and dark, matching the painted board. Flat colour, chunky rounded forms — no bevel, no metal, no neon edge, no gradient, no translucent hairline. The reference is the in-game side drawer, not a web panel.",
     "chevron": 14272424,
     "selectedEdge": 16765503,
     "dragSlop": 6,
@@ -671,8 +679,8 @@
     "detailTraitSize": 15,
     "detailLabelColor": 10128244,
     "_detail": "The strip is PINNED at the bottom and reserves its height whether or not anything is selected. Collapsing it when empty would re-flow the grid under the finger at the exact moment a tile has just been tapped, which is how mis-taps are made. Empty means blank, not absent.",
-    "_tabLabelSize": "Requested, not rendered. `uiSize` clamps every screen-space size up to typography.minUiSize, which is 15, so a tab label draws at 15 however small a number is put here. That clamp is the reason the words do not fit: \"TOWERS\" at 15px bold is 71px wide and the widest tab this drawer has is 44. The brief expected \"about 43px is enough for a short word at small caps\"; it is not, against this project\u2019s own legibility floor, so the glyph fallback the brief specified for the narrow screen is what runs on both. Lowering this number changes nothing; lowering minUiSize would trade the drawer\u2019s tabs against every other piece of small UI in the game.",
-    "_detailSizes": "ALL THREE ARE THE FLOOR, and they have to be. typography.minUiSize is 15 and `uiSize` clamps every screen-space size up to it, so \"small labels\" under the numbers is not a thing this strip can have: three captions at 15px need about 100px and the text column is 92 at 844x390 and 68 at 568x320. What the strip carries is therefore the name, the three numbers in a fixed order, and the trait where there is room for it \u2014 see reports/ for the arithmetic and the three ways out."
+    "_tabLabelSize": "Requested, not rendered. `uiSize` clamps every screen-space size up to typography.minUiSize, which is 15, so a tab label draws at 15 however small a number is put here. That clamp is the reason the words do not fit: \"TOWERS\" at 15px bold is 71px wide and the widest tab this drawer has is 44. The brief expected \"about 43px is enough for a short word at small caps\"; it is not, against this project’s own legibility floor, so the glyph fallback the brief specified for the narrow screen is what runs on both. Lowering this number changes nothing; lowering minUiSize would trade the drawer’s tabs against every other piece of small UI in the game.",
+    "_detailSizes": "ALL THREE ARE THE FLOOR, and they have to be. typography.minUiSize is 15 and `uiSize` clamps every screen-space size up to it, so \"small labels\" under the numbers is not a thing this strip can have: three captions at 15px need about 100px and the text column is 92 at 844x390 and 68 at 568x320. What the strip carries is therefore the name, the three numbers in a fixed order, and the trait where there is room for it — see reports/ for the arithmetic and the three ways out."
   },
   "_difficultyChip": "THE DIFFICULTY READOUT ON THE LEVEL SELECT SCREEN, in the bottom chrome bar beside BACK. It used to float at the top right OVER the scrolling road, and map nodes passed underneath it as the road moved -- which is the defect; the styling was the smaller half. Sizes are design units.",
   "difficultyChip": {
@@ -813,7 +821,7 @@
   },
   "safeArea": {
     "housingAtAngle90": "left",
-    "_housingAtAngle90": "Which horizontal edge the sensor housing lands on at screen.orientation.angle 90, which is landscape-primary. That is iOS landscapeLeft \u2014 home indicator on the right, device top edge on the left \u2014 so the housing is on the left, and 270 is the mirror of it. THIS IS THE ONE VALUE HERE NOT VERIFIED ON HARDWARE: it comes from the orientation conventions, not from a notched phone. Both branches are tested and both viewports are asserted; if the inset ever shows up on the wrong edge, flip this string and change nothing else."
+    "_housingAtAngle90": "Which horizontal edge the sensor housing lands on at screen.orientation.angle 90, which is landscape-primary. That is iOS landscapeLeft — home indicator on the right, device top edge on the left — so the housing is on the left, and 270 is the mirror of it. THIS IS THE ONE VALUE HERE NOT VERIFIED ON HARDWARE: it comes from the orientation conventions, not from a notched phone. Both branches are tested and both viewports are asserted; if the inset ever shows up on the wrong edge, flip this string and change nothing else."
   },
   "heroBarFade": {
     "_note": "THE FLOATING BAR OVER THE HERO'S HEAD, which is up only while he is damaged. In fast and out slow: the fade IN has to keep up with the hit that caused it, and the fade OUT is the board going quiet again and should not snatch the bar away the instant a heal or a revive lands. Tweened rather than toggled because an element that blinks on and off over a moving sprite reads as a rendering fault.",

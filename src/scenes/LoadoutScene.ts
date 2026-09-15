@@ -1613,8 +1613,24 @@ export class LoadoutScene extends Phaser.Scene {
     // every screen. On a wide viewport that left the art small in a column
     // with room to spare; on a narrow one a fixed wide column would eat the
     // text. Bounded at both ends so it can do neither.
-    const col = Math.round(Math.max(LO.cardIconColumnMin,
-      Math.min(LO.cardIconColumnMax, cw * LO.cardIconColumnShare)))
+    // AND CAPPED AS A SHARE OF THE CARD, which is the half that was missing.
+    //
+    // `cardIconColumnMin` is 62 and it WINS on a narrow card: five specials
+    // across an 844-wide screen is a 150-unit card, where the share wants 34
+    // and the minimum insists on 62 -- so the icon took 41% of the card and
+    // left a 75-unit text column. `abilityLine` ends "26s cooldown" with a
+    // NON-BREAKING space, which is right (a number belongs with its unit) and
+    // makes a single 116-unit token that no wrap width can split: measured at
+    // 844x390, the specials' last line was 6px through the card's right rail
+    // even after being scaled to the 0.7 floor.
+    //
+    // The cap bites only where the minimum was the problem. On a wide card the
+    // share is already above it and nothing moves.
+    const col = Math.round(Math.min(
+      LO.cardIconColumnMax,
+      cw * LO.cardIconColumnCapShare,
+      Math.max(LO.cardIconColumnMin, cw * LO.cardIconColumnShare),
+    ))
     return {
       pad, padR, padT, padB, col,
       tx: -cw / 2 + pad + col,
@@ -1708,9 +1724,42 @@ export class LoadoutScene extends Phaser.Scene {
       }).setOrigin(0, 0), tw)
       const total = n.height + 4 + (st ? st.height + 3 : 0) + bd.height
       built = { name: n, stats: st, body: bd, total }
-      if (total <= room) break
+      // HEIGHT *AND* WIDTH, AND THE WIDTH WAS THE MISSING HALF.
+      //
+      // The ladder chose a size so the three blocks FIT VERTICALLY and never
+      // looked at how wide any of them came out. A tower name is a single word
+      // -- SLINGSHOT, BRAMBLE -- and `wordWrap` cannot break one, so at 22px
+      // on a two-column card the name simply rendered past the rail: measured
+      // at 844x390, SLINGSHOT by 31px, MOLOTOV by 36 and the specials' body by
+      // 66. The height was fine in every one of those cases, which is why
+      // three passes of this screen "verified clean".
+      //
+      // Stepping the size down until the widest rendered line fits is the same
+      // mechanism the ladder already is, applied to the axis it was ignoring.
+      const widest = Math.max(n.width, st?.width ?? 0, bd.width)
+      if (total <= room && widest <= tw + 1) break
     }
     const b = built as NonNullable<typeof built>
+
+    // AND A GUARANTEE FOR WHEN THE LADDER RUNS OUT, which it can and does.
+    //
+    // 18px is the last rung, and an UNBREAKABLE token wider than the column
+    // does not fit there either. `abilityLine` ends its bodies "26s cooldown"
+    // with a non-breaking space -- correct, a number belongs with its unit --
+    // and that is one 116-unit token. The column is 79 on the narrowest card
+    // the desktop arrangement produces and 83 on a phone's five-across row,
+    // and neither can be widened to 116 without deleting the icon. So the last
+    // resort is a scale, and `cardTextMinScale` is the floor it may reach:
+    // 0.66, from the measurement (79/116 = 0.681 is what the worst case needs)
+    // rather than from taste.
+    //
+    // NOT `fitWithin`, whose 0.7 floor belongs to the ability chip labels and
+    // is not this decision. Two different last resorts on two different
+    // controls, each with its own number.
+    for (const t of [b.name, b.stats, b.body]) {
+      if (t === null || t.width <= tw) continue
+      t.setScale(Math.max(LO.cardTextMinScale, tw / t.width))
+    }
 
     // THE LADDER CAN RUN OUT, and when it did the card kept the smallest size
     // and simply overflowed: the tower cards' last line ran out under the

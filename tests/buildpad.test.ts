@@ -78,7 +78,16 @@ test('a pad disappears under the tower built on it', () => {
   const game = src('scenes/GameScene.ts')
   const draw = /private drawSpots\(\): void \{[\s\S]*?\n  \}/.exec(game)
   assert.ok(draw, 'drawSpots is gone')
-  assert.match(draw[0], /const free = this\.build\.isFree\(spot\.index\)\s*\n\s*img\.setVisible\(free\)/,
+  // THE VISIBILITY QUESTION MOVED OUT OF `drawSpots` AND THE PROPERTY DID NOT.
+  // It used to read `isFree` inline; there are two reasons a pad is not drawn
+  // now -- a tower standing on it, and the HUD standing on it -- so both live
+  // in `padShowing` and `drawSpots` asks that. This asserts the property
+  // through its new home rather than pinning the old line.
+  assert.match(draw[0], /img\.setVisible\(this\.padShowing\(spot\)\)/,
+    'drawSpots no longer asks whether the pad may be drawn')
+  const showing = /private padShowing\(spot: BuildSpot\): boolean \{[\s\S]*?\n  \}/.exec(game)
+  assert.ok(showing, 'padShowing is gone, so nothing hides an occupied pad')
+  assert.match(showing[0], /if \(!this\.build\.isFree\(spot\.index\)\) return false/,
     'an occupied pad is still drawn')
 })
 

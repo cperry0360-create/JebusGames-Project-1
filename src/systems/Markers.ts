@@ -27,6 +27,14 @@ export interface MarkerConfig {
   /** How close two markers of one kind may be, in badge widths, before only
    *  one is drawn. */
   mergeWithin: number
+  /**
+   * How far ALONG ITS OWN LANE a badge sits from the lane's terminal waypoint,
+   * in badge widths, toward the middle of the map. See markers.json.
+   *
+   * Optional so a config written before this existed still loads; absent is 0,
+   * which is the old behaviour exactly.
+   */
+  insetBadgeWidths?: number
 }
 
 export type MarkerKind = 'spawn' | 'exit'
@@ -47,12 +55,66 @@ export interface Marker {
   lanes: string[]
 }
 
-/** The angle from `a` to `b`, or null when they are the same point. */
-function heading(a: number[], b: number[]): number | null {
-  const dx = b[0]! - a[0]!
-  const dy = b[1]! - a[1]!
-  if (dx === 0 && dy === 0) return null
-  return Math.atan2(dy, dx)
+/**
+ * A point `dist` world pixels along a polyline from one of its ends, with the
+ * lane's direction of travel there.
+ *
+ * WHY A WALK AND NOT A CLAMP. `clampToPlate` below pulls a badge onto the
+ * plate by pushing its CENTRE to half a badge width from the frame, which is
+ * the shortest possible move and puts the badge hard against the edge -- and
+ * the arrow, which sits 0.736 badge widths further along the direction of
+ * travel, then hangs 0.236 of a badge width OFF the plate at every exit. Live
+ * play reported the badges as half off-screen and easy to miss, and that is
+ * the arithmetic of it.
+ *
+ * Walking the lane instead puts the badge on the road it belongs to rather
+ * than on the nearest point of the frame, which is also where a player looks
+ * for it: an inset measured along the lane follows the road's own curve in
+ * through the mouth.
+ *
+ * `from` is which end to walk from; travel is always in increasing index
+ * order, so a spawn walks FORWARD from waypoint 0 and an exit walks BACKWARD
+ * from the last waypoint, and both report the forward heading of the segment
+ * they land on. That keeps the arrow pointing the way the walk actually goes
+ * at the badge's new position, which is what the brief asks for and is a
+ * different answer from the terminal waypoint's heading whenever the road
+ * bends inside the inset.
+ */
+function walkAlong(
+  w: number[][], from: 'start' | 'end', dist: number,
+): { x: number; y: number; angle: number } | null {
+  const n = w.length
+  if (n < 2) return null
+  const forward = from === 'start'
+  let left = Math.max(0, dist)
+  // The index of the segment we are on, walked in the direction of the walk.
+  let i = forward ? 0 : n - 2
+  for (;;) {
+    const a = w[i]!
+    const b = w[i + 1]!
+    const seg = Math.hypot(b[0]! - a[0]!, b[1]! - a[1]!)
+    const ang = Math.atan2(b[1]! - a[1]!, b[0]! - a[0]!)
+    if (seg > 0 && left <= seg) {
+      // `t` is measured from whichever end we entered this segment at.
+      const t = forward ? left / seg : 1 - left / seg
+      return { x: a[0]! + (b[0]! - a[0]!) * t, y: a[1]! + (b[1]! - a[1]!) * t, angle: ang }
+    }
+    left -= seg
+    i += forward ? 1 : -1
+    if (i < 0 || i > n - 2) {
+      // THE LANE IS SHORTER THAN THE INSET. The far terminal is the most
+      // inset this lane has, and it is still the right answer: a lane that
+      // short has no interior to move into. Level 7's three 1,400 px
+      // highways and level 3's 672 px trunk are both far longer than any
+      // plausible inset, so this is a guard rather than a case.
+      const end = forward ? w[n - 1]! : w[0]!
+      const prev = forward ? w[n - 2]! : w[1]!
+      const ang = forward
+        ? Math.atan2(end[1]! - prev[1]!, end[0]! - prev[0]!)
+        : Math.atan2(prev[1]! - end[1]!, prev[0]! - end[0]!)
+      return { x: end[0]!, y: end[1]!, angle: ang }
+    }
+  }
 }
 
 /**
@@ -105,28 +167,58 @@ export function markersFor(
     const w = d.waypoints
     if (w.length < 2) continue
 
+    const inset = badgeWorld * (cfg.insetBadgeWidths ?? 0)
+    /**
+     * THE INSET IS FOR AN OFF-PLATE TERMINAL AND ONLY FOR ONE.
+     *
+     * A lane's first and last waypoints are usually the computed GATEWAY
+     * points -- (-60, y) and (1340, y) -- which is why the badges read as half
+     * off-screen: there is no camera position that shows a badge at x = -60,
+     * and the arrow at an exit hangs off the frame even after `clampToPlate`
+     * pulls the badge in. That is the fault the inset fixes.
+     *
+     * An exit that is already ON the plate is a different thing. Level 9's
+     * door is at (1177, 329), a hundred pixels inside the right-hand edge, and
+     * the badge means "they get out HERE" -- so walking it 140 px back up the
+     * road points it at a piece of lane that is not the exit. Measured: a
+     * uniform inset moves that badge to (1064, 274). Applying the inset only
+     * where the terminal is off the plate leaves it exactly where it was, and
+     * costs nothing anywhere else, because every other terminal in the game is
+     * a gateway.
+     *
+     * The alternative considered and not taken was "walk until the badge and
+     * arrow are inside, then stop", which needs the arrow's rendered extent in
+     * here -- and this module is deliberately ignorant of the art. To revert
+     * to a uniform inset, delete this predicate and pass `inset`
+     * unconditionally; `reports/2026-09-14-ui-cleanup.md` has the numbers for
+     * both.
+     */
+    const offPlate = (pt: number[]): boolean =>
+      pt[0]! < 0 || pt[1]! < 0 || pt[0]! > world.width || pt[1]! > world.height
+
     if (!fedInto.has(d.id) || (d.id !== main && d.entrance === true)) {
-      // THE FIRST TWO WAYPOINTS, so the arrow points the way the walk goes --
-      // INTO the map. Waypoints run off the frame deliberately (enemies arrive
-      // from off-screen), so the first one is often outside the plate; that is
-      // where the badge belongs, because that is where the walk begins.
-      const a = heading(w[0]!, w[1]!)
-      if (a !== null) out.push({ kind: 'spawn', x: w[0]![0]!, y: w[0]![1]!, angle: a, lanes: [d.id] })
+      // INSET ALONG THE LANE from waypoint 0, toward the middle of the map.
+      // Waypoints run off the frame deliberately -- enemies arrive from
+      // off-screen -- so waypoint 0 is typically outside the plate; the badge
+      // belongs at the mouth the walk comes through, which is where the inset
+      // puts it. The arrow still points the way the walk goes, measured at the
+      // badge's own position rather than at the terminal.
+      const at = walkAlong(w, 'start', offPlate(w[0]!) ? inset : 0)
+      if (at !== null) out.push({ kind: 'spawn', x: at.x, y: at.y, angle: at.angle, lanes: [d.id] })
     }
 
     const merge = d.merge
     const isExit = merge === null || merge === undefined
       || (Array.isArray(merge) && merge.length === 0)
     if (isExit) {
-      // THE LAST TWO, so the arrow again points along the direction of travel
-      // -- which at an exit means AWAY from the map. Same rule, opposite
-      // reading, and deliberately not a separate sign: an arrow that pointed
-      // back inward at an exit would say the enemies come from there.
-      const a = heading(w[w.length - 2]!, w[w.length - 1]!)
-      if (a !== null) {
-        out.push({
-          kind: 'exit', x: w[w.length - 1]![0]!, y: w[w.length - 1]![1]!, angle: a, lanes: [d.id],
-        })
+      // INSET BACKWARD along the lane from its last waypoint. The arrow still
+      // points along the direction of TRAVEL -- which at an exit means away
+      // from the map, and deliberately not a separate sign: an arrow pointing
+      // back inward at an exit would say the enemies come from there. It is
+      // the inset that keeps that outward arrow on the plate.
+      const at = walkAlong(w, 'end', offPlate(w[w.length - 1]!) ? inset : 0)
+      if (at !== null) {
+        out.push({ kind: 'exit', x: at.x, y: at.y, angle: at.angle, lanes: [d.id] })
       }
     }
   }

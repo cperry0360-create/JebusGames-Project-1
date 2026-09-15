@@ -2134,6 +2134,82 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Shows the pads still free, and lights the one under the cursor. */
+  /**
+   * Whether this pad may be DRAWN right now.
+   *
+   * TWO REASONS IT MAY NOT, and they are different questions. A pad with a
+   * tower or a countermeasure standing on it is gone, because the thing on it
+   * is what the player sees. A pad the HUD is standing on is hidden, because a
+   * disc peeking out from behind an ability medallion reads as a rendering
+   * fault -- which is exactly what live play reported, at the bottom edge, at
+   * full resolution.
+   *
+   * WHY THIS IS THE FIX AND NOT THE CAMERA. The earlier HUD pass fixed the
+   * same complaint by giving the camera slack past the plate so an edge pad
+   * could be nudged out from under a band -- and that slack was the black
+   * beyond the map that live play reported next, because a margin on the camera
+   * centre does not create room inside the plate, it moves the wall outward.
+   * That is now reverted and must not come back (see `CameraRig`'s limits), so
+   * the answer cannot be a camera one. It does not need to be: at-rest
+   * coverage is a DRAWING problem between a full-bleed world and a HUD
+   * floating over it, and the pad is the thing that knows where it is.
+   *
+   * WHAT THIS DOES NOT CHANGE: the pad is still there, still tappable through
+   * `spotAt` when the HUD is not in the way, and still reachable -- every pad
+   * on every level has a zoom and a camera position where a 44pt clear circle
+   * lands on it, which `tests/hudpads.test.ts` measures. Hiding the disc while
+   * a medallion is over it removes the artefact, not the pad.
+   */
+  private padShowing(spot: BuildSpot): boolean {
+    if (!this.build.isFree(spot.index)) return false
+    return !this.hudStandsOn(spot)
+  }
+
+  /**
+   * Whether any HUD rectangle is over this pad's tap square.
+   *
+   * `this.layout` is the HUD's own layout in CSS pixels and `worldToScreen`
+   * answers in the same units, which is the pairing this has to get right: the
+   * pad is world space and the HUD is screen space, and comparing them in
+   * different units is how the ring once landed 401 px from its pad.
+   */
+  private hudStandsOn(spot: BuildSpot): boolean {
+    const c = worldToScreen(this, spot.x, spot.y)
+    // The pad's own tap square, widened to the 44pt floor exactly as the
+    // reachability arithmetic does.
+    const half = Math.max(22, this.level.map.spotRadius * this.cameras.main.zoom / deviceScale())
+    const pad = { x: c.x - half, y: c.y - half, width: half * 2, height: half * 2 }
+    const L = this.layout
+    for (const r of [L.counters, L.startButton, L.messageRow, L.heroChip,
+      L.abilities, L.settings, L.cancel]) {
+      if (r.width <= 0 || r.height <= 0) continue
+      if (r.x < pad.x + pad.width && pad.x < r.x + r.width
+        && r.y < pad.y + pad.height && pad.y < r.y + r.height) return true
+    }
+    return false
+  }
+
+  /**
+   * Re-answers `padShowing` for every pad, and for the padlock on it.
+   *
+   * EVERY FRAME, because the camera moves every frame and `drawSpots` does
+   * not: it runs on a board change, which is the wrong clock for a question
+   * whose answer is a screen position. Twenty-two pads against seven
+   * rectangles is nothing next to the work the same frame does walking
+   * enemies, and `setVisible` on an unchanged value is free.
+   */
+  private syncPadVisibility(): void {
+    for (const spot of this.build.spots) {
+      const show = this.padShowing(spot)
+      this.pads[spot.index]?.setVisible(show)
+      // THE PADLOCK GOES WITH ITS PAD. It is a separate image 18px above the
+      // disc, so leaving it behind would put a padlock where the disc used to
+      // peek out and change nothing.
+      const art = this.padLockArt.get(spot.index)
+      if (art) art.setVisible(this.padShowing(spot))
+    }
+  }
+
   private drawSpots(): void {
     const cfg = PRESENTATION.buildPad
     const placing = this.placing
@@ -2148,9 +2224,12 @@ export class GameScene extends Phaser.Scene {
       // say the pad had gone rather than that it was shut. The padlock over it
       // is what says which; see `castBuildLock`. Only a pad with a tower or a
       // countermeasure standing on it disappears.
-      const free = this.build.isFree(spot.index)
-      img.setVisible(free)
-      if (!free) continue
+      // `padShowing`, NOT `isFree`. A pad with a tower on it is gone because
+      // the tower is standing there; a pad the HUD is standing on is hidden
+      // because a disc behind a medallion reads as a rendering fault. One
+      // question, two reasons -- see `padShowing`.
+      img.setVisible(this.padShowing(spot))
+      if (!this.build.isFree(spot.index)) continue
       // Shut ground reads as shut: the node is drawn and dimmed rather than
       // lit and tappable, and `padOpen` is the same question the tap path asks.
       img.setAlpha(this.padOpen(spot.index) ? 1 : PRESENTATION.buildPad.lockedAlpha)
@@ -2547,7 +2626,13 @@ export class GameScene extends Phaser.Scene {
 
     // Bare ground with a tile picked: that is the cancel. The other cancel is
     // tapping the same tile again, which the drawer owns.
+    //
+    // AND IT SHUTS THE PANEL, not just the pick. A tap on the board away from
+    // the drawer is one of the gestures that closes every other panel, and
+    // this branch returns before the `clearSelection()` at the end of
+    // `onClick` that would otherwise have done it.
     if (this.drawerPick) {
+      this.drawer.collapse()
       this.drawer.select(null)
       this.drawerPick = null
       this.refreshCancel()
@@ -2786,6 +2871,10 @@ export class GameScene extends Phaser.Scene {
     if (!this.padOpen(spot.index)) return
     if (this.status.peanuts < TOWERS[id]!.cost) return
     this.place(id, spot)
+    // AND THE PANEL GOES AWAY. A build is the drawer's whole purpose and it is
+    // finished; leaving it out over the board is what live play reported. This
+    // does not go through `clearSelection`, so it says so itself.
+    this.drawer.collapse()
     this.drawer.select(null)
     this.drawerPick = null
     this.pendingSpot = null
@@ -3183,7 +3272,10 @@ export class GameScene extends Phaser.Scene {
         id: 'upgrade',
         slot: 0,
         icon: 'upgrade',
-        price: 0,
+        // NULL, NOT 0. There is nothing to buy, so there is no price -- and a
+        // badge reading "0" under the upgrade icon is what live play reported
+        // as a free upgrade. See `RingOption.price`.
+        price: null,
         affordable: false,
         reason: tower.upgrading
           ? 'Already building. Wait for it to finish.'
@@ -3319,6 +3411,10 @@ export class GameScene extends Phaser.Scene {
     this.onBoardChanged()
     this.refreshMenuOptions()
     this.rangeRing.clear()
+    // Selling frees a pad, which is a reason to open the drawer and not a
+    // reason to leave it open. Same rule as a build: the panel has done its
+    // job. `sellTower` does not route through `clearSelection` either.
+    this.drawer?.collapse()
     this.drawSpots()
     play(this, 'sell')
     logEvent('tower-sold', `${tower.def.name} +${refund}`)
@@ -3423,9 +3519,23 @@ export class GameScene extends Phaser.Scene {
     this.heroSelected = false
     // Both markers fade the same way rather than being cut.
     this.markers.cancel()
-    // The drawer's pick is one of the things CANCEL cancels, and this is
-    // where CANCEL and ESC both land. Closing the drawer clears the pick on
-    // its own side; this is the other direction.
+    // THE DRAWER CLOSES HERE, WITH EVERYTHING ELSE. It used to only have its
+    // PICK cleared, so the panel itself stayed out -- and live play reported it
+    // open for the last 23 seconds of a run, holding a vertical strip of the
+    // board the whole time. Nothing in the scene ever called `collapse()`:
+    // `setOpen(true)` and `setEnabled(false)` were the only two callers, so the
+    // one way to shut it was its own tab.
+    //
+    // This is the place because it is where every other panel closes. The ring
+    // closes four lines up, the ghost two lines up, and the reasons arriving
+    // here are the gestures the brief names: 'button' is CANCEL, 'key' is ESC,
+    // 'outside' is a tap on the board away from it, and `startWave` calls this
+    // with no reason at all before it begins the wave. One place, five
+    // gestures, rather than five calls somebody has to remember.
+    //
+    // `collapse()` clears the pick on its own side -- see `setOpen` -- so the
+    // two assignments below are the other direction and stay.
+    this.drawer?.collapse()
     this.drawerPick = null
     this.pendingSpot = null
     this.drawer?.select(null)
@@ -5899,6 +6009,11 @@ export class GameScene extends Phaser.Scene {
     // The node pulse is a per-frame thing and only while something is picked,
     // so the pads are not redrawn for the other ninety-nine per cent of a run.
     if (this.drawerPick) this.drawSpots()
+
+    // WHICH PADS THE HUD IS STANDING ON, every frame. `drawSpots` runs on a
+    // board change and the camera moves on a gesture, so the two clocks are
+    // different and this one is the camera's. See `syncPadVisibility`.
+    this.syncPadVisibility()
 
     // A backgrounded tab hands back a huge delta; cap it so nothing teleports.
     const real = Math.min(delta / 1000, 0.05)

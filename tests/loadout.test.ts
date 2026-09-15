@@ -315,7 +315,20 @@ test('the screen is a stack that flows, and the buttons are placed first', () =>
   // One size for the whole card, chosen so name, stats and body all fit.
   assert.match(face, /for \(const size of LO\.bodySizes\)/,
     'the card cannot shrink its type, so long copy has nowhere to go but out')
-  assert.match(face, /if \(total <= room\) break/, 'the type ladder does not check it fits')
+  // THE LADDER CHECKS BOTH AXES NOW, and it used to check only the height.
+  // That was the loadout overflow live play kept reporting: a tower name is a
+  // single word and `wordWrap` cannot break one, so SLINGSHOT at 22px on a
+  // two-column card rendered 31px through the card's rail while its HEIGHT was
+  // perfectly fine. Measured at 844x390 by `run.sh everyloadout`.
+  assert.match(face, /if \(total <= room && widest <= tw \+ 1\) break/,
+    'the type ladder does not check the text fits in BOTH axes')
+  assert.match(face, /const widest = Math\.max\(n\.width, st\?\.width \?\? 0, bd\.width\)/,
+    'nothing measures how wide the three blocks came out')
+  // And the guarantee for when the ladder runs out, which an unbreakable token
+  // makes it do: "26s cooldown" carries a non-breaking space and is one
+  // 116-unit token in a 79-unit column.
+  assert.match(face, /Math\.max\(LO\.cardTextMinScale, tw \/ t\.width\)/,
+    'a block wider than its column has no last resort, so it simply overflows')
 })
 
 test('an overflowing stack scrolls, and takes only the content with it', () => {

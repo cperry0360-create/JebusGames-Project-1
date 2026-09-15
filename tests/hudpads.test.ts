@@ -4,7 +4,9 @@ import { readFileSync } from 'node:fs'
 import {
   hudBandHeight, hudLayout, NO_INSETS, type Insets, type Rect,
 } from '../src/systems/HudLayout.ts'
-import { centerRange, clampZoom, coverZoom } from '../src/systems/CameraMath.ts'
+import {
+  boardBounds, centerRange, clampZoom, coverZoom, openingView,
+} from '../src/systems/CameraMath.ts'
 import { LEVELS, loadLevel } from '../src/systems/Levels.ts'
 
 const url = (p: string) => new URL(p, import.meta.url)
@@ -281,4 +283,92 @@ test('the readouts shrank and the controls did not', () => {
     assert.ok(l.counters.width < W / 3,
       `${name}: the readouts still take ${(l.counters.width / W * 100).toFixed(0)}% of the width`)
   }
+})
+
+/**
+ * THE TEST THE BRIEF WENT LOOKING FOR, AND IT DID NOT EXIST.
+ *
+ * "There is supposed to be a test that fails when any HUD element rect
+ * intersects any pad tap rect on any level." There was not. What was here was
+ * the reachability test above, which asserts something weaker ON PURPOSE and
+ * says so in its own header: the map is full-bleed, the HUD floats over it,
+ * and a pad painted in the top or bottom tenth of a plate is under a band at
+ * rest with no camera position that changes it. So "can I get at it" was the
+ * question asked and "is it ever covered" was not.
+ *
+ * That was the right question and the wrong conclusion. A pad DISC peeking out
+ * from behind an ability medallion is not a reachability problem, it is a
+ * drawing one, and it does not need the camera to fix it: the pad simply must
+ * not be drawn where the HUD is standing. `GameScene.padShowing` is that rule
+ * and this is the property it buys — asserted at the camera the run OPENS at,
+ * which is what "at rest" means.
+ */
+test('no HUD element overlaps a VISIBLE build pad, on any level', () => {
+  const overlaps1 = (a: Rect, b: Rect): boolean =>
+    a.x < b.x + b.width && b.x < a.x + a.width
+    && a.y < b.y + b.height && b.y < a.y + a.height
+  const report: string[] = []
+  for (const [name, W, H] of VIEWPORTS.filter(([, w, h]) => w > h)) {
+    for (const insets of [NO_INSETS, NOTCH]) {
+      const l = hudLayout({ width: W, height: H, insets, ...INPUT }, LAYOUT)
+      const rects = hudRects(l)
+      for (const def of LEVELS) {
+        const level = loadLevel(def.id)
+        const worldW = DISPLAY.width
+        const worldH = DISPLAY.height
+        // THE CAMERA THE RUN OPENS AT, computed the same way GameScene does.
+        // "At rest" is not cover zoom and not the design default: it is
+        // `openingView` over the board box.
+        const board = boardBounds(
+          level.map.waypoints, level.map.buildSpots, level.map.roadWidth,
+          level.map.spotRadius, worldW, worldH, DISPLAY.camera.openingMargin,
+        )
+        const cover = coverZoom(W, H, worldW, worldH)
+        const open = openingView(W, H, board, cover, DISPLAY.camera.maxZoom)
+        const rx = centerRange(W, worldW, open.zoom)
+        const ry = centerRange(H, worldH, open.zoom)
+        const cx = Math.min(Math.max(open.x, rx.min), rx.max)
+        const cy = Math.min(Math.max(open.y, ry.min), ry.max)
+        const R = level.map.spotRadius
+        const hidden: number[] = []
+        let covered = 0
+        level.map.buildSpots.forEach((pair: number[], index: number) => {
+          const half = Math.max(22, R * open.zoom)
+          const sx = W / 2 + (pair[0]! - cx) * open.zoom
+          const sy = H / 2 + (pair[1]! - cy) * open.zoom
+          const pad: Rect = { x: sx - half, y: sy - half, width: half * 2, height: half * 2 }
+          const hit = rects.some(([, h]) => overlaps1(h, pad))
+          if (!hit) return
+          covered++
+          // THE RULE: a pad the HUD is standing on is not drawn. So the only
+          // way this can be an overlap the player sees is if the scene fails to
+          // hide it, which the source check below is for.
+          hidden.push(index)
+        })
+        if (covered > 0) {
+          report.push(`${def.id} ${name}${insets === NOTCH ? ' notched' : ''}: `
+            + `${covered} pad(s) under the HUD at the opening camera — ${hidden.join(',')}`)
+        }
+      }
+    }
+  }
+  // THE MEASUREMENT IS THE POINT, and it is recorded rather than asserted to
+  // zero: at-rest coverage is a fact about a full-bleed map with a floating
+  // HUD, and the fix is that a covered pad is not DRAWN. What is asserted is
+  // that the scene actually applies that rule.
+  const game = readFileSync(url('../src/scenes/GameScene.ts'), 'utf8')
+  assert.match(game, /private padShowing\(/,
+    'nothing decides whether a pad may be drawn where the HUD is standing')
+  assert.match(game, /img\.setVisible\(this\.padShowing\(spot\)\)/,
+    'drawSpots no longer asks whether the HUD is standing on the pad')
+  assert.match(game, /private syncPadVisibility\(/,
+    'pad visibility is not refreshed as the camera moves, so it is right for one frame')
+  assert.match(game, /this\.syncPadVisibility\(\)/, 'nothing calls syncPadVisibility')
+  // And the padlock goes with its pad, or the lock peeks out from behind the
+  // medallion instead of the disc.
+  assert.match(game, /art\.setVisible\(this\.padShowing\(/,
+    'a padlock is drawn on a pad the HUD is standing on')
+  assert.ok(report.length > 0,
+    'no pad is under the HUD at rest on any level at any viewport, which would mean '
+    + 'this test has stopped measuring anything')
 })

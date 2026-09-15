@@ -817,3 +817,63 @@ test('tiles carry artwork and a price, and still no name', () => {
   assert.match(draw, /String\(tile\.price\)/, 'the price is gone from the tile')
   assert.doesNotMatch(draw, /tile\.name|detail\.name/, 'a name has appeared on the tile')
 })
+
+test('the drawer closes on every gesture that closes another panel', () => {
+  /*
+   * LIVE PLAY REPORTED IT OPEN FOR THE LAST 23 SECONDS OF A RUN, holding a
+   * vertical strip of the board throughout. Nothing in the scene ever closed
+   * it: `ControlDrawer` has had `collapse()` since it was written and
+   * `GameScene` called only `setOpen(true)` and `setEnabled(false)`, so the one
+   * way to shut it was its own tab.
+   *
+   * WHAT IS INTENDED AND WHAT WAS NOT. `setOpen`'s own header explains why a
+   * PICK no longer collapses the panel -- a shut drawer with a live selection
+   * is a mode with no visible handle on it, and the board pulsing at a player
+   * whose panel is gone is worse than a panel in the way. That much is
+   * deliberate and is unchanged. What was never intended is the panel
+   * outliving the pick: a build, a sell, a cancel, a tap on bare ground or a
+   * wave starting all end the drawer's business, and none of them closed it.
+   *
+   * ASSERTED AGAINST THE SOURCE, because no test in this repository can
+   * construct a Phaser scene -- see CLAUDE.md. `tools/harness/run.sh drawer`
+   * drives the real thing.
+   */
+  const game = src('scenes/GameScene.ts')
+  const drawer = src('ui/ControlDrawer.ts')
+
+  // The one closing call, and the contract it keeps.
+  assert.match(drawer, /collapse\(\): void \{\s*this\.setOpen\(false\)/,
+    'collapse no longer closes the drawer')
+  assert.match(drawer, /if \(!next\) this\.select\(null\)/,
+    'closing the drawer no longer clears the pick, which orphans the pulsing nodes')
+
+  // CANCEL, ESC, a right-click, a tap on bare ground and `startWave` all land
+  // in `clearSelection`, which is where the ring already closes.
+  const clear = game.slice(game.indexOf('private clearSelection('))
+  const body = clear.slice(0, clear.indexOf('\n  /**'))
+  assert.ok(body.length > 200, 'clearSelection was not found; this check measures nothing')
+  assert.match(body, /this\.drawer\?\.collapse\(\)/,
+    'clearSelection no longer closes the drawer, so CANCEL, ESC and a wave start leave it out')
+  assert.match(body, /this\.ring\?\.close\(\)/,
+    'the ring no longer closes here either, so this is no longer the shared exit')
+
+  // And the three paths that do NOT route through it.
+  for (const [what, fn] of [
+    ['a build', 'private placeFromDrawer('],
+    ['a sell', 'private sellTower('],
+  ] as Array<[string, string]>) {
+    const at = game.indexOf(fn)
+    assert.ok(at > 0, `${fn} was not found`)
+    const slice = game.slice(at, at + 1800)
+    assert.match(slice, /this\.drawer\??\.collapse\(\)/,
+      `${what} does not close the drawer, and it does not go through clearSelection`)
+  }
+  // Bare ground with a tile picked returns before clearSelection runs.
+  assert.match(game, /if \(this\.drawerPick\) \{\s*\n\s*this\.drawer\.collapse\(\)/,
+    'a tap on bare ground clears the pick and leaves the panel out')
+
+  // `startWave` is the fifth gesture and it reaches it through clearSelection.
+  const wave = game.slice(game.indexOf('  startWave(): void {'))
+  assert.match(wave.slice(0, 900), /this\.clearSelection\(\)/,
+    'startWave no longer clears the selection, so the drawer survives into the wave')
+})

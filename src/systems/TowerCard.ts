@@ -117,8 +117,14 @@ export function withChanges(from: CardStat[], to: CardStat[]): CardStat[] {
  * A refund is signed, because "+45p" and "45p" mean opposite things to a
  * peanut count and the button is the last thing read before it happens.
  */
-export function buttonLabel(verb: string, price: number, refund = false): string {
-  if (price === 0) return verb
+export function buttonLabel(verb: string, price: number | null, refund = false): string {
+  // NULL IS "NO PRICE" AND 0 IS A PRICE OF ZERO, and they are treated the same
+  // here on purpose: either way there is nothing to name, and a button reading
+  // "Upgrade 0p" is the shape of the bug live play reported. `price` is
+  // `number | null` because the disabled upgrade slot has no price at all --
+  // see `RingOption.price`. A genuine zero in a data file is a different fault
+  // and `tests/costs.test.ts` is what refuses it.
+  if (price === null || price === 0) return verb
   return refund ? `${verb} +${price}p` : `${verb} ${price}p`
 }
 

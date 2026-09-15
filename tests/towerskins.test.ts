@@ -247,3 +247,53 @@ test('no level is claimed by two skins', () => {
   }
   assert.deepEqual(clashes, [], 'a level may wear at most one skin')
 })
+
+test('no tower is drawn on a shared base, so a skin cannot put a keep on wheels', () => {
+  /*
+   * LIVE PLAY REPORTED THE STONE KEEP RENDERING ON WHEELS under the machine
+   * skin, and the fix depends on which of two things the base is.
+   *
+   * IT IS NEITHER SHARED NOR CODE. `Tower`'s constructor adds exactly one
+   * sprite -- `skinnedTexture(scene, def.sprite)` -- plus a shadow generated
+   * from that same sprite and the tier pips. There is no base, plinth or
+   * pedestal object, and its own comment says so: the manifest used to point
+   * at a Kenney placeholder tile to stand in for one and the painted towers
+   * made it redundant. And a skin is a whole-key substitution:
+   * `turret-shelter` for `turret-shelter-machine`, with no base key in the
+   * map to exempt anybody from.
+   *
+   * So the wheels, wherever they are, are painted into each tower's own
+   * picture, and repainting one is an art job. `tools/harness/run.sh skins`
+   * renders all eleven skinned tower pictures, plain above and machine below,
+   * which is the frame that claim rests on.
+   *
+   * This asserts the thing that would change the answer: if a shared base
+   * sprite ever arrives, the exemption branch becomes available and somebody
+   * should come back here.
+   */
+  const tower = readFileSync(new URL('../src/entities/Tower.ts', import.meta.url), 'utf8')
+  const ctor = tower.slice(tower.indexOf('  constructor('), tower.indexOf('  /**\n   * Whether a click'))
+  assert.ok(ctor.length > 200, 'the Tower constructor was not found')
+  // One sprite, and it is the tower's own skinned art.
+  const sprites = ctor.match(/scene\.add\.sprite\(/g) ?? []
+  assert.equal(sprites.length, 1,
+    `the Tower constructor adds ${sprites.length} sprites; a second one would be a shared base`)
+  assert.match(ctor, /skinnedTexture\(scene, def\.sprite\)/,
+    'the tower no longer wears its own skinned art')
+  // NO SECOND DRAWN OBJECT. A base would be an Image under the sprite; the only
+  // other things in here are the generated shadow and the tier pips, neither of
+  // which is added with `add.image`. Checked this way rather than by grepping
+  // for the word "base", which matches `baseScale` and the comment that says
+  // there is no base -- this test's own first red result.
+  assert.doesNotMatch(ctor, /scene\.add\.image\(/,
+    'an image is drawn in the Tower constructor; if it is a shared base, the '
+    + 'exemption branch is available and this test\'s header is out of date')
+  // And the skin map names no base.
+  const skins = art.towerSkins as Record<string, { keys: Record<string, string> }>
+  for (const [name, def] of Object.entries(skins)) {
+    for (const k of Object.keys(def.keys)) {
+      assert.doesNotMatch(k, /base|plinth|pedestal/i,
+        `the ${name} skin maps ${k}, which is a shared base and changes the answer above`)
+    }
+  }
+})

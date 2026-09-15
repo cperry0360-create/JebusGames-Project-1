@@ -58,7 +58,7 @@ const scenario = q.get('s') || 'game'
 const SCENARIO_NAMES = [
   'abilitybar', 'abilityicons', 'afford', 'arch', 'archplate', 'background',
   'bars', 'beacon', 'boardinput', 'boot', 'boss', 'bossability', 'bossleak', 'buildall',
-  'cakes', 'cakestate', 'chromepan', 'combat', 'contain', 'courtland',
+  'cakes', 'cakestate', 'chromepan', 'combat', 'contain', 'counters', 'courtland',
   'crashreport', 'crashw5', 'credits', 'creditsroll', 'ctxsurvive',
   'dadsync', 'diag', 'difficulty', 'draft', 'drawer', 'edges',
   'elibar', 'elifire', 'enemyfacing', 'everyloadout', 'facing', 'fps', 'full', 'full13', 'fx',
@@ -76,7 +76,7 @@ const SCENARIO_NAMES = [
   'rollspeed',
   'scheduleguard', 'screens', 'scrim', 'settings', 'sharesheet',
   'shortviewport', 'signs', 'skilled', 'softlock', 'spec', 'spot5',
-  'sprites', 'standalone', 'startrun', 'stuckcast', 'stuckguard', 'stun',
+  'skins', 'sprites', 'standalone', 'startrun', 'stuckcast', 'stuckguard', 'stun',
   'stunlock', 'texmem', 'ticket', 'title', 'titlecard', 'towerpanel', 'towerring',
   'towertiers', 'transform', 'type', 'typegame', 'ui', 'ultimate', 'vlaude', 'voices',
   'wave1', 'webglwatch', 'worldmap'
@@ -113,7 +113,7 @@ const ASSERTS_NOTHING = new Set([
  */
 const USES_EXPECT = new Set([
   'typegame', 'rotationburst', 'level7', 'level8', 'level9', 'boardinput', 'lanemarkers', 'level8retopo',
-  'vlaude', 'titlecard',
+  'vlaude', 'titlecard', 'counters', 'everyloadout',
 ])
 
 /** How many checks this run actually EVALUATED, pass or fail. */
@@ -2276,6 +2276,287 @@ async function run() {
     note('RESULT ' + (faults === 0
       ? 'every ability slot on all five heroes drew its own art at the slot size'
       : '*** ' + faults + ' faults ***'))
+    return
+  }
+
+  if (scenario === 'counters') {
+    /*
+     * THE TOP-LEFT READOUTS, AT EVERY VALUE THE GAME CAN REACH.
+     *
+     * Live play reported the peanut number sitting inside its pill at 800 and
+     * running into the pill's right border at 1012. The pill is a single
+     * painted image scaled to `readoutHeight`, and the number is printed into
+     * a dark field whose left and right edges art.json measures as `fieldLeft`
+     * and `fieldRight` -- so "is the number inside the pill" is a comparison of
+     * two rectangles and not a matter of opinion. Both are read off the live
+     * scene here.
+     *
+     * The wave readout is checked too, because it is the same shape of fault in
+     * a different place: it is not in this corner any more, it is the label on
+     * the wave control, and `fitLabel` shrinks to a floor of 0.72 and then
+     * overflows.
+     */
+    const ARTc = (await import('./js/data/art.json', { with: { type: 'json' } })).default
+    const Pc = (await import('./js/data/presentation.json', { with: { type: 'json' } })).default
+    const RSc = await import('./js/systems/RunState.js')
+    // A REAL RUN, STARTED HERE. The default boot leaves the Hud scene object
+    // in the registry with its FIELD DEFAULTS -- `layout` is initialised to a
+    // 1280x720 stand-in at construction -- so `scene('Hud').layout` answers
+    // without `create()` having run, and `peanutsText` is undefined. The first
+    // draft of this scenario read that as a product fault.
+    for (const k of ['Title', 'WorldMap', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+    RSc.setRunState({
+      heroId: 'cory', levelId: 'level1', seed: 5, abilities: ['molotov', 'glacier'],
+      openingTowers: ['withholding', 'writeoff'], reserveTowers: [], resumeFrom: null,
+    })
+    game.scene.start('Game')
+    if (!(await until(() => running('Game') && scene('Game').hero, 25000))) {
+      expect(false, 'the run did not start'); note('RESULT no run'); return
+    }
+    await until(() => running('Hud') && scene('Hud').peanutsText !== undefined, 15000)
+    await sleep(500)
+    const hud = scene('Hud')
+    const L = hud.layout
+    expect(hud.peanutsText !== undefined, 'the HUD never built its counters')
+    note('viewport ' + VP.w + 'x' + VP.h + '  counterScale ' + L.counterScale.toFixed(3)
+      + '  readoutHeight ' + Pc.hud.layout.readoutHeight
+      + '  readoutFieldPad ' + Pc.hud.layout.readoutFieldPad
+      + '  readoutDigits ' + Pc.hud.layout.readoutDigits)
+
+    /** The plate rect and the field rect, in CSS px, for one readout. */
+    const platesOf = (name) => {
+      const key = ARTc.ui.counters[name]
+      const cfg = ARTc.render[key]
+      // The plate image is whichever drawn image wears that texture.
+      const imgs = hud.children.list.filter((o) => o.texture && o.texture.key === key)
+      if (imgs.length === 0) return null
+      // A 3-slice draws three; take the union of what is actually on screen.
+      let l = Infinity, r = -Infinity, t = Infinity, b = -Infinity
+      for (const im of imgs) {
+        const bb = im.getBounds()
+        l = Math.min(l, bb.left); r = Math.max(r, bb.right)
+        t = Math.min(t, bb.top); b = Math.max(b, bb.bottom)
+      }
+      const w = r - l
+      return {
+        pieces: imgs.length,
+        plate: { x: l, y: t, width: w, height: b - t },
+        // The painted field, from the manifest's own measurement of it. On a
+        // 3-slice the middle piece IS the field, so its own bounds are used
+        // when there is one.
+        field: imgs.length >= 3
+          ? (() => { const m = imgs.map((i) => i.getBounds()).sort((a, b2) => a.left - b2.left)[1]
+              return { x: m.left, y: m.top, width: m.width, height: m.height } })()
+          : { x: l + cfg.fieldLeft * w, y: t, width: (cfg.fieldRight - cfg.fieldLeft) * w, height: b - t },
+      }
+    }
+
+    const G = scene('Game')
+    let faults = 0
+    const rowFor = (name, textObj, value) => {
+      const p = platesOf(name)
+      if (!p) { expect(false, name + ': no plate drawn'); return }
+      const tb = textObj.getBounds()
+      const outRight = tb.right - (p.field.x + p.field.width)
+      const outLeft = p.field.x - tb.left
+      const pastPlate = tb.right - (p.plate.x + p.plate.width)
+      const ok = outRight <= 0.6 && outLeft <= 0.6
+      note('   ' + (name + ' = ' + value).padEnd(20)
+        + 'plate ' + p.plate.width.toFixed(1) + 'x' + p.plate.height.toFixed(1)
+        + ' (' + p.pieces + ' piece' + (p.pieces === 1 ? '' : 's') + ')'
+        + '  field ' + p.field.width.toFixed(1)
+        + '  text "' + textObj.text + '" ' + tb.width.toFixed(1)
+        + ' @scale ' + textObj.scaleX.toFixed(2)
+        + (ok ? '   inside'
+          : '   *** ' + outRight.toFixed(1) + 'px PAST THE FIELD'
+            + (pastPlate > 0.6 ? ', ' + pastPlate.toFixed(1) + 'px PAST THE PLATE' : '') + ' ***'))
+      if (!ok) faults++
+      expect(ok, name + ' at ' + value + ' runs ' + outRight.toFixed(1)
+        + 'px past its field; the pill is sized for fewer digits than the game can reach')
+      // AND THE FONT MUST STILL BE LEGIBLE. Shrinking the number to fit is the
+      // other way to pass this check and the brief rules it out: the floor is
+      // legibility at 375px wide.
+      const px = Number(String(textObj.style.fontSize).replace('px', '')) * textObj.scaleX
+      expect(px >= 11, name + ' at ' + value + ' is drawn at ' + px.toFixed(1)
+        + 'px, under the legibility floor')
+    }
+
+    for (const v of [100, 800, 1012, 10000, 99999]) {
+      G.status.peanuts = v
+      // `update()` reads `world.status` itself every frame -- there is no
+      // sync(status) to call -- so a couple of frames is the handshake.
+      //
+      // AND THEN 320ms FOR THE BUMP TO FINISH, which is the reason this
+      // scenario's first run was wrong about everything. A changed peanut
+      // count runs `bump`: `setScale(1)`, then a tween to 1.25 with `yoyo`,
+      // 90ms each way. Measured at 140ms the text is caught mid-tween at
+      // scale 1.23 and every row read as clipped, including 100. The settled
+      // scale is the one the player reads for the other 99% of the time.
+      await sleep(340)
+      rowFor('peanuts', hud.peanutsText, v)
+    }
+    // LIVES AT ITS OWN MAXIMUM. Lazy Dad doubles the starting lives, so the
+    // widest it can be is what that mode grants; 999 is well past it and is
+    // checked anyway, because nothing stops a level table asking for it.
+    for (const v of [20, 40, 999]) {
+      G.status.lives = v
+      await sleep(340)
+      rowFor('lives', hud.livesText, v)
+    }
+    await shot('counters-' + VP.w + 'x' + VP.h)
+
+    /* ---- THE WAVE READOUT, which is the wave control's label ---- */
+    const btn = hud.startBtn
+    const usable = L.startButton.width - 2 * Pc.hud.layout.marginX
+    for (const [phase, wave, label] of [
+      ['ready', 0, 'ready at wave 1'], ['ready', 17, 'ready at wave 18'],
+      ['wave', 17, 'mid-wave 18'],
+    ]) {
+      G.status.phase = phase
+      G.status.wave = wave
+      G.status.waveCount = 18
+      G.status.enemiesLeft = 48
+      G.status.readyCountdown = 0
+      await sleep(140)
+      const t = btn.text
+      const over = t.width - usable
+      const px = Number(String(t.style.fontSize).replace('px', '')) * t.scaleX
+      note('   ' + label.padEnd(20) + 'label "' + t.text + '" ' + t.width.toFixed(1)
+        + ' in ' + usable.toFixed(1) + '  @scale ' + t.scaleX.toFixed(2)
+        + ' = ' + px.toFixed(1) + 'px'
+        + (over > 0.6 ? '   *** ' + over.toFixed(1) + 'px PAST THE PLATE ***' : '   inside'))
+      expect(over <= 0.6, label + ': the wave control label runs '
+        + over.toFixed(1) + 'px past its plate')
+      expect(px >= 11, label + ': the wave label is drawn at ' + px.toFixed(1) + 'px')
+    }
+    note('RESULT ' + (faults === 0
+      ? 'every readout is inside its own field at every value tested'
+      : '*** ' + faults + ' readout(s) clipped ***'))
+    return
+  }
+
+  if (scenario === 'skins') {
+    /*
+     * EVERY TOWER, ORDINARY ART ABOVE AND MACHINE SKIN BELOW, IN ONE FRAME.
+     *
+     * The question is one the code can only half answer: live play reported the
+     * stone keep rendering on wheels under the machine skin, and the fix
+     * depends on whether the wheeled base is a SHARED sprite drawn under every
+     * tower or part of each tower's own picture.
+     *
+     * `Tower`'s constructor settles the code half -- it adds one sprite, a
+     * generated shadow and the tier pips, and its own comment says "every
+     * tower's art carries its own base" -- and `TowerSkins` is a whole-key
+     * substitution, `turret-shelter` for `turret-shelter-machine`, with no
+     * third key for a base. So there is nothing shared to exempt. This is the
+     * other half: the picture, so the claim rests on a frame rather than on a
+     * reading.
+     */
+    const ARTs = (await import('./js/data/art.json', { with: { type: 'json' } })).default
+    const SK = await import('./js/systems/TowerSkins.js')
+    const TW = (await import('./js/data/towers.json', { with: { type: 'json' } })).default
+    // WHICHEVER SCENE IS ACTUALLY RUNNING, and asked for rather than named.
+    // The first draft started 'Boot' and then took `scene('Boot')`, which by
+    // then had handed off -- so every `load.image` went onto a shut-down
+    // scene's loader, `complete` never carried them, and the scenario reported
+    // seven towers whose art "did not load". The art was fine.
+    const sc = game.scene.getScenes(true)[0]
+    note('drawing into the ' + sc.scene.key + ' scene')
+    sc.load.on('loaderror', (f) => note('   *** LOAD FAILED ' + f.key + ' <- ' + f.url))
+    // EVERY KEY THE SKIN MAPS, NOT ONE PER TOWER.
+    //
+    // The first draft walked `towers.json` and took `def.sprite`, which is the
+    // TIER 1 key -- seven pictures out of the fourteen the skin covers. The
+    // Slingshot alone has three (`turret-ledger`, `-t2`, `-t3`) and so does
+    // the Ima Dummy, and `wearTier` swaps to them as the tower is upgraded, so
+    // a wheeled base on a tier-3 keep would have been invisible to it. The
+    // skin's own key map is the list.
+    const ids = Object.keys(SK.skinDef('machine').keys)
+      .filter((k) => k.startsWith('turret-'))
+    note('machine skin covers ' + Object.keys(SK.skinDef('machine').keys).length + ' keys on levels '
+      + JSON.stringify(SK.skinDef('machine').levels))
+    let faults = 0
+    const missing = []
+    // Loaded by hand: the skinned art is LEVEL art and boot does not hold it.
+    for (const plain of ids) {
+      const skinned = SK.skinDef('machine').keys[plain]
+      if (!skinned) { missing.push(plain + ' has no machine key'); continue }
+      for (const key of [plain, skinned]) {
+        if (sc.textures.exists(key)) continue
+        const path = ARTs.files[key]
+        if (!path) { missing.push(key + ' is not a file'); continue }
+        // `ART.assetRoot + ART.files[key]`, WHICH IS WHAT `ArtLoader` USES.
+        // Hand-writing 'assets/' worked for the plain keys only because those
+        // were already in the texture cache from boot -- every skinned one
+        // 404'd and the scenario reported seven towers whose art "did not
+        // load". The art is fine; the path was mine.
+        sc.load.image(key, ARTs.assetRoot + path)
+      }
+    }
+    // A RACE, NOT A BARE `once('complete')`. A loader with nothing queued never
+    // fires `complete`, and the first version of this scenario hung there for
+    // the whole run: one note printed and then a timeout. The skinned art is
+    // level art that boot does not hold, so the queue is usually non-empty --
+    // "usually" being exactly the kind of thing that stops being true.
+    await new Promise((r) => {
+      const done = () => r(undefined)
+      sc.load.once('complete', done)
+      sc.load.start()
+      setTimeout(done, 12000)
+    })
+
+    const g = sc.add.graphics().setDepth(0)
+    g.fillStyle(0x10161d, 1)
+    g.fillRect(0, 0, 1280, 720)
+    const cellW = Math.floor(1280 / ids.length)
+    const rows = []
+    for (const [i, plain] of ids.entries()) {
+      const skinned = SK.skinDef('machine').keys[plain]
+      const cx = cellW * i + cellW / 2
+      const named = Object.values(TW).find((t) => t && t.sprite === plain)
+      const title = (named ? named.name : plain.replace('turret-', ''))
+        + (/-t2$/.test(plain) ? ' T2' : /-t3$/.test(plain) ? ' T3' : '')
+      const label = sc.add.text(cx, 8, title.toUpperCase(), {
+        fontFamily: 'sans-serif', fontSize: '15px', color: '#ffffff', align: 'center',
+        wordWrap: { width: cellW - 6 },
+      }).setOrigin(0.5, 0).setDepth(9)
+      rows.push(label)
+      for (const [j, key] of [plain, skinned].entries()) {
+        if (!sc.textures.exists(key)) { faults++; note('   *** ' + key + ' did not load ***'); continue }
+        const img = sc.add.image(cx, 120 + j * 300, key).setDepth(8)
+        const r = ARTs.render[key] || {}
+        const h = 200
+        const sx = h / (r.contentHeight || img.height)
+        img.setScale(sx)
+        rows.push(img)
+        // WHAT THE BOTTOM OF THE PICTURE IS. A wheeled base is dark rubber and
+        // a stone plinth is not, so the mean luma of the lowest fifth of the
+        // sprite's own ink is a number that tells the two apart -- reported
+        // beside the frame rather than instead of it.
+        const src2 = sc.textures.get(key).getSourceImage()
+        const cv = document.createElement('canvas')
+        cv.width = src2.width; cv.height = src2.height
+        const ctx = cv.getContext('2d')
+        ctx.drawImage(src2, 0, 0)
+        const band = ctx.getImageData(0, Math.floor(src2.height * 0.8), src2.width,
+          Math.max(1, Math.floor(src2.height * 0.2))).data
+        let lum = 0, n = 0
+        for (let q = 0; q < band.length; q += 4) {
+          if (band[q + 3] < 32) continue
+          lum += band[q] * 0.299 + band[q + 1] * 0.587 + band[q + 2] * 0.114
+          n++
+        }
+        note('   ' + (title + (j === 0 ? ' (plain)' : ' (machine)')).padEnd(26)
+          + key.padEnd(30) + ' source ' + src2.width + 'x' + src2.height
+          + '  bottom fifth mean luma ' + (n ? (lum / n).toFixed(1) : 'empty')
+          + '  ink px ' + n)
+      }
+    }
+    if (missing.length) { faults += missing.length; for (const m of missing) note('   *** ' + m) }
+    await shot('skins-' + VP.w + 'x' + VP.h)
+    note('RESULT ' + (faults === 0
+      ? ids.length + ' towers, plain above and machine below, in one frame'
+      : '*** ' + faults + ' fault(s) ***'))
     return
   }
 
@@ -12904,9 +13185,25 @@ async function run() {
 
     const L = () => g.drawer.layout || null
     const hud = g.layout
-    const rects = { counters: hud.counters, startButton: hud.startButton,
-      settings: hud.settings, abilities: hud.abilities, cancel: hud.cancel,
-      heroRow: hud.heroRow, messageRow: hud.messageRow }
+    // `heroChip`, NOT `heroRow`. THIS SCENARIO HAS BEEN THROWING HERE.
+    //
+    // The HUD's hero rectangle was renamed `heroRow` -> `heroChip` and this
+    // line was not, so `hits(tab, undefined)` threw on the first loop iteration
+    // -- "Cannot read properties of undefined (reading 'x')" -- and every check
+    // below it, which is the whole of the drawer's behaviour, has never run.
+    // The throw was caught by the director and reported as a scenario failure
+    // rather than as a clean pass, so it was not silent; it was just never
+    // fixed.
+    //
+    // Built from the layout's own keys with an assertion, so the next rename
+    // names itself instead of throwing.
+    const want = ['counters', 'startButton', 'settings', 'abilities', 'cancel',
+      'heroChip', 'messageRow']
+    const rects = {}
+    for (const k of want) {
+      if (!hud[k]) { push('the HUD layout has no `' + k + '`; this list is stale'); continue }
+      rects[k] = hud[k]
+    }
     const hits = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width
       && a.y < b.y + b.height && b.y < a.y + a.height
     const onScreen = (r) => r.x >= -0.5 && r.y >= -0.5
@@ -13323,6 +13620,81 @@ async function run() {
     if (!g.ring || !g.ring.active) push('the build ring did not come back with the flag off')
     g.ring && g.ring.close()
 
+    /* --- AND IT CLOSES, on every gesture that closes another panel ------ */
+    //
+    // Live play reported it open for the final 23 seconds of a run, holding a
+    // vertical strip of the board throughout. Nothing in the scene ever called
+    // `collapse()`: `setOpen(true)` and `setEnabled(false)` were the only two
+    // callers, so the one way to shut it was its own tab. Each gesture below is
+    // driven for real and the panel's own `open` flag is read after it.
+    SAVE.setControlDrawer(true)
+    g.applyControlScheme()
+    await sleep(200)
+    g.status.peanuts = 4000
+    const openIt = async () => {
+      g.drawer.setOpen(true)
+      g.drawer.refresh()
+      await sleep(180)
+      return g.drawer.open === true
+    }
+    const shut = (what) => {
+      const closed = g.drawer.open === false
+      note('   after ' + what.padEnd(26) + ' drawer open = ' + g.drawer.open
+        + (closed ? '' : '   *** STILL OPEN ***'))
+      if (!closed) push('the drawer stayed open after ' + what)
+      return closed
+    }
+    note('closing gestures:')
+
+    // 1. A BUILD. Pick a tile, then tap a free node.
+    if (await openIt()) {
+      const tiles = g.drawer.layout.tiles || []
+      const first = (g.drawerTiles() || [])[0]
+      if (first && tiles.length) {
+        g.drawer.select(first.id)
+        await sleep(120)
+        const free = g.build.freeSpots()[0]
+        if (free) {
+          await lookAt(free.x, free.y)
+          const pt = toScreen(free.x, free.y)
+          await click(pt[0], pt[1])
+          await sleep(250)
+        }
+      }
+      shut('a build')
+    }
+
+    // 2. A SELL. Select the tower just built and sell it through the scene.
+    if (g.towers.length > 0 && await openIt()) {
+      g.sellTower(g.towers[g.towers.length - 1])
+      await sleep(200)
+      shut('a sell')
+    }
+
+    // 3. CANCEL / ESC, which is `clearSelection` with a reason.
+    if (await openIt()) {
+      g.clearSelection('button')
+      await sleep(200)
+      shut('CANCEL')
+    }
+
+    // 4. A TAP ON THE BOARD AWAY FROM IT. Bare ground, no pick.
+    if (await openIt()) {
+      const mid = toScreen(320, 300)
+      await click(mid[0], mid[1])
+      await sleep(250)
+      shut('a tap on bare ground')
+    }
+
+    // 5. A WAVE STARTING.
+    if (await openIt()) {
+      g.status.phase = 'ready'
+      g.startWave()
+      await sleep(250)
+      shut('the wave starting')
+    }
+    await shot('drawer-closed-' + VP.w + 'x' + VP.h)
+
     note('RESULT ' + (problems.length === 0
       ? 'the whole flow works at ' + VP.w + 'x' + VP.h + ' dpr ' + dpr
       : '*** ' + problems.length + ' problem(s) ***'))
@@ -13731,6 +14103,42 @@ async function run() {
       if (!t2.upgrading) push('the upgrade did not go through')
     }
 
+    // AND THE PRICE OF NOTHING IS NOT "0".
+    //
+    // THIS IS THE EXACT STATE LIVE PLAY REPORTED: a tower MID-UPGRADE, whose
+    // panel offered two options, one at 201 peanuts and one at 0. The 201 is
+    // SELL's refund -- a Beacon invested through tier 2 is 336 and 336 x the
+    // 0.6 refund is 201, which identifies the tower -- and the 0 was the
+    // upgrade slot, which is emitted ALWAYS so SELL can never inherit ring
+    // position 0 and which passed `price: 0` while there was nothing to buy.
+    // `buttonLabel` already printed the bare verb for 0, so the confirm button
+    // read "Upgrade"; the BADGE under the icon printed the literal "0".
+    if (t2.upgrading) {
+      g.ring && g.ring.close()
+      await sleep(150)
+      g.openTowerRing(t2)
+      await sleep(320)
+      const badges = (g.ring.buttons || []).map((b) => ({
+        id: b.option.id, price: b.option.price, text: String(b.price.text ?? ''),
+        reason: b.option.reason ?? '',
+      }))
+      for (const b of badges) {
+        note('   slot ' + b.id.padEnd(8) + ' price ' + JSON.stringify(b.price)
+          + ' badge ' + JSON.stringify(b.text)
+          + (b.reason ? '  "' + b.reason + '"' : ''))
+        if (b.text === '0') push('the ' + b.id + ' badge reads "0", which is a free upgrade')
+        if (b.price === 0) push('the ' + b.id + ' option is priced at 0 rather than null')
+      }
+      const up = badges.find((b) => b.id === 'upgrade')
+      if (!up) push('there is no upgrade slot on a tower that is mid-upgrade')
+      else if (up.price !== null) {
+        push('the upgrade slot on a mid-upgrade tower has a price of ' + JSON.stringify(up.price))
+      }
+      await shot('towerring-nothing-to-buy-' + VP.w + 'x' + VP.h)
+      g.ring && g.ring.close()
+      await sleep(120)
+    }
+
     // AND THE SELL BUTTON WEARS THE CURRENCY THE GAME USES.
     // THE SELL BUTTON WEARS THE CURRENCY THE GAME ACTUALLY USES.
     //
@@ -14085,12 +14493,23 @@ async function run() {
     // slots of its row so it is measured in the narrowest card it can get.
     for (const k of ['Title', 'Splash', 'Credits', 'Boot', 'Game', 'Hud']) game.scene.stop(k)
     const RS = await import('./js/systems/RunState.js')
-    const towers = Object.keys((await import('./js/data/towers.json', { with: { type: 'json' } })).default)
+    // NOT `Object.keys`, WHICH WALKS THE NOTES AS CONTENT. Every data file in
+    // this repository carries `_note`-style keys beside its real rows, and
+    // heroes.json has three -- `_artFacing`, `_note`, `_stats`. This scenario
+    // was rendering the loadout for each of them as a hero id, which
+    // `resolveHeroId` falls back on, so three of the eight "heroes" in its
+    // count were the same fallback card measured three times and its
+    // OVERFLOWS total was inflated by six rows.
+    const real = (o) => Object.keys(o).filter((k) => !k.startsWith('_'))
+    const towers = real((await import('./js/data/towers.json', { with: { type: 'json' } })).default)
     const abil = (await import('./js/data/abilities.json', { with: { type: 'json' } })).default
-    const heroes = Object.keys((await import('./js/data/heroes.json', { with: { type: 'json' } })).default)
-    const specials = Object.keys(abil)
+    const heroes = real((await import('./js/data/heroes.json', { with: { type: 'json' } })).default)
+    const specials = real(abil)
 
+    const LOc = (await import('./js/data/presentation.json', { with: { type: 'json' } }))
+      .default.loadout
     let combos = 0
+    let insetGap = 0
     let worstButtonBottom = 0
     const bad = []
     const table = []
@@ -14130,7 +14549,20 @@ async function run() {
         const plate = c.parts.find((o) => o.type === 'Rectangle' && o.getBounds)
         if (!plate) continue
         const pb = plate.getBounds()
-        const inset = sc.frameInsetFor(pb.width + 10, pb.height + 10)
+        // THE SAME INSET THE CARD IS PAINTED AND LAID OUT WITH, and asking for
+        // it any other way is a harness bug that looks exactly like a product
+        // one. This read `frameInsetFor(w, pb.height + 10)`: the card's REAL
+        // height and the DEFAULT chrome -- while `cardGeometry` and `cardRow`
+        // both pin the frame to `LO.cardProbeHeight` with `cardChrome(cw)`, on
+        // purpose, so the rail the player sees cannot follow a height the
+        // stack decides (see the note on `cardGeometry`). Two different insets,
+        // one of them not drawn anywhere, and the difference was reported as
+        // twelve strings leaving their containers.
+        const cw = pb.width + 10
+        const inset = sc.frameInsetFor(cw, LOc.cardProbeHeight, sc.cardChrome(cw))
+        const naive = sc.frameInsetFor(cw, pb.height + 10)
+        insetGap = Math.max(insetGap, Math.abs(naive.right - inset.right),
+          Math.abs(naive.top - inset.top))
         const safe = {
           x: pb.x - 5 + inset.left, right: pb.right + 5 - inset.right,
           y: pb.y - 5 + inset.top, bottom: pb.bottom + 5 - inset.bottom,
@@ -14146,13 +14578,40 @@ async function run() {
           if (bb.right > safe.right + 1) over.push('RIGHT by ' + Math.round(bb.right - safe.right))
           if (bb.bottom > safe.bottom + 1) over.push('BOTTOM by ' + Math.round(bb.bottom - safe.bottom))
           if (bb.y < safe.y - 1) over.push('TOP by ' + Math.round(safe.y - bb.y))
-          for (const ic of icons) {
-            const ib = ic.getBounds()
-            if (bb.x < ib.right - 1 && bb.right > ib.x + 1 && bb.y < ib.bottom - 1 && bb.bottom > ib.y + 1) {
-              over.push('OVER THE ICON')
+          // THE ONE DELIBERATE OVERLAP ON THIS SCREEN, and the flag for it was
+          // WRITTEN AND NEVER READ. `LoadoutScene` marks the price tag with
+          // `setData('overlaps', true)` and its comment says "read by the
+          // harness's containment check" -- it was not, so every cost text on
+          // every card was reported as a fault. 56 of the 56 "overflows" this
+          // scenario found were that tag and the fake heroes above.
+          //
+          // A price tag lying across the bottom of the picture it is the price
+          // of is the decision; the honest place to record it is beside the
+          // decision, which is where it is, and the honest thing to do here is
+          // read it.
+          if (o.getData && o.getData('overlaps') === true) {
+            // It may still not leave the CARD. Only the icon overlap is
+            // forgiven.
+          } else {
+            for (const ic of icons) {
+              const ib = ic.getBounds()
+              if (bb.x < ib.right - 1 && bb.right > ib.x + 1
+                && bb.y < ib.bottom - 1 && bb.bottom > ib.y + 1) {
+                over.push('OVER THE ICON')
+              }
             }
           }
-          if (over.length) bad.push([hero, tp[0], sp[0]].join('/') + '  ' + label + '  ' + over.join(', '))
+          if (over.length) {
+            bad.push([hero, tp[0], sp[0]].join('/') + '  ' + label + '  ' + over.join(', ')
+              + '  [scale ' + o.scaleX.toFixed(3) + ' size ' + o.style.fontSize
+              + ' w ' + Math.round(o.width) + ' bounds ' + Math.round(bb.width)
+              + ' lines ' + (o.getWrappedText ? o.getWrappedText().length : 1)
+              + ' maxLines ' + (o.style.maxLines ?? 0)
+              + ' tw ' + Math.round(sc.cardGeometry(cw, pb.height + 10).tw)
+              + ' wrapW ' + Math.round(o.style.wordWrapWidth ?? 0)
+              + ' lines=' + JSON.stringify((o.getWrappedText ? o.getWrappedText() : []).slice(0, 6))
+              + ']')
+          }
           const lines = o.getWrappedText ? o.getWrappedText().length : 1
           const size = parseInt(o.style.fontSize, 10) || 0
           table.push({ what: [hero, tp[0], sp[0]].join('/'), text: String(o.text), lines,
@@ -14196,8 +14655,22 @@ async function run() {
     for (const k of keys.sort((a, b) => shrunk[a] - shrunk[b]).slice(0, 8)) {
       note('   ' + shrunk[k] + 'px  ' + JSON.stringify(k))
     }
+    note('the naive inset (real height, default chrome) differs from the painted one by up to '
+      + insetGap.toFixed(1) + 'px -- measuring against it is what reported twelve false overflows')
     note('OVERFLOWS: ' + (bad.length ? bad.length : 'none'))
     for (const b of bad.slice(0, 16)) note('   ' + b)
+    // AND IT GATES NOW. This scenario reported 56 overflows and exited 0: it
+    // had no `expect`, no fault counter and no RESULT line, so nothing could
+    // tell a clean run from a red one -- which is the exact hole
+    // `ASSERTS_NOTHING` exists to close, in a scenario that was not on that
+    // list either.
+    expect(bad.length === 0, bad.length + ' string(s) leave their container on the '
+      + 'loadout screen: ' + bad.slice(0, 4).join(' | '))
+    expect(worstButtonBottom <= 720, 'the button row reaches '
+      + Math.round(worstButtonBottom) + ' of 720')
+    note('RESULT ' + (bad.length === 0
+      ? combos + ' loadout combinations, nothing outside its container'
+      : '*** ' + bad.length + ' overflow(s) ***'))
     return
   }
 
@@ -14295,21 +14768,26 @@ async function run() {
     // zero-content Text reports a box while drawing nothing, and one of them
     // was pinning the measured extent to a number that did not move however
     // narrow the cards got.
-    let minX = 9999, maxX = -9999, maxY = -9999
+    let minX = 9999, maxX = -9999, maxY = -9999, lowest = ''
     for (const c of sc.cards) {
       for (const o of c.parts) {
         if (!o.getBounds || o.type === 'Container') continue
         const b = o.getBounds()
         if (b.width < 1 || b.height < 1) continue
         minX = Math.min(minX, b.x); maxX = Math.max(maxX, b.right)
-        maxY = Math.max(maxY, b.bottom)
+        if (b.bottom > maxY) {
+          maxY = b.bottom
+          lowest = o.type + (o.texture ? ':' + o.texture.key : '')
+            + ' ' + Math.round(b.width) + 'x' + Math.round(b.height)
+            + ' at ' + Math.round(b.x) + ',' + Math.round(b.y)
+        }
       }
     }
     note('card extent x ' + Math.round(minX) + '..' + Math.round(maxX) +
       ' (safe band ' + Math.round(sc.safeBand.left) + '..' + Math.round(sc.safeBand.right) + ')')
     note('  breaches the safe band: ' +
       ((minX < sc.safeBand.left - 1 || maxX > sc.safeBand.right + 1) ? 'YES' : 'no'))
-    note('  lowest card edge y ' + Math.round(maxY) + ' of 720')
+    note('  lowest card edge y ' + Math.round(maxY) + ' of 720  <- ' + lowest)
 
     // Wrapped text: how many lines, and did anything split a value from its unit.
     for (const t of texts) {
@@ -15770,6 +16248,7 @@ async function run() {
     note('viewport ' + VP.w + 'x' + VP.h + '  dpr=' + RES.deviceScale()
       + '  insets ' + JSON.stringify(SA.safeAreaInsets()))
     let worst = 0
+    let drawnWorst = 0
     for (const lv of LV.LEVELS) {
       const G = await startLevel(lv.id)
       if (!G) { note(lv.id + ': did not build'); continue }
@@ -15791,12 +16270,30 @@ async function run() {
       })
       const hits = []
       for (const h of rects) for (const p of pads) if (iou(h.r, p.r)) hits.push(h.id + '/pad' + p.i)
+      // AND WHETHER ANY OF THEM IS STILL BEING DRAWN, which is the thing live
+      // play reported: a pad disc peeking out from behind an ability medallion.
+      // `padShowing` is supposed to have hidden every one of them; this reads
+      // the sprites' own `visible` rather than trusting the rule.
+      const drawnUnder = []
+      for (const p of pads) {
+        if (!rects.some((h) => iou(h.r, p.r))) continue
+        const img = G.pads[p.i]
+        if (img && img.visible) drawnUnder.push(p.i)
+      }
+      if (drawnUnder.length) {
+        note('   *** ' + lv.id + ': pads ' + drawnUnder.join(',')
+          + ' are under the HUD AND STILL DRAWN ***')
+      }
       const onScreen = pads.filter((p) => p.r.x + p.r.width > 0 && p.r.x < VP.w
         && p.r.y + p.r.height > 0 && p.r.y < VP.h).length
-      // AND CAN EACH ONE BE BROUGHT OUT FROM UNDER THE HUD? The at-rest count
-      // above is the symptom; this is the thing that decides whether a pad is
-      // merely awkward or actually unbuildable. Driven through the rig, so it
-      // is the camera the player has rather than arithmetic about it.
+      // AND CAN EACH ONE BE PANNED OUT FROM UNDER THE HUD, AT THE OPENING
+      // ZOOM? Read the label: this pans to five fixed aims and does NOT zoom,
+      // so it is a weaker question than "is this pad reachable" and answers a
+      // bigger number. `tests/hudpads.test.ts` sweeps the whole zoom band and
+      // finds a clear 44pt circle on all 151 pads on all ten levels; this
+      // finds 1-5 per level it cannot free by panning alone. Both are true.
+      // The column used to be headed UNREACHABLE, which made the weaker
+      // measurement look like the stronger one.
       const stuck = []
       for (const p of pads) {
         const spot = G.build.spots.find((sp) => sp.index === p.i)
@@ -15817,12 +16314,19 @@ async function run() {
       if (G.rig) G.rig.lookAt((G.level.map.width ?? 1280) / 2, (G.level.map.height ?? 720) / 2)
       note(lv.id.padEnd(8) + ' zoom ' + cam.zoom.toFixed(3)
         + '  pads ' + pads.length + ' (' + onScreen + ' on screen)'
-        + '  at rest ' + hits.length
-        + '  UNREACHABLE ' + stuck.length + (stuck.length ? ': ' + stuck.join(',') : ''))
+        + '  under the HUD at rest ' + hits.length
+        + ', of which still DRAWN ' + drawnUnder.length
+        + '  visible ' + G.pads.filter((q) => q && q.visible).length
+        + '  not freed BY PANNING ALONE ' + stuck.length
+        + (stuck.length ? ': ' + stuck.join(',') : ''))
       worst = Math.max(worst, stuck.length)
+      drawnWorst = Math.max(drawnWorst, drawnUnder.length)
       if (hits.length) await shot('padhud-' + lv.id + '-' + VP.w + 'x' + VP.h)
     }
-    note('RESULT worst level has ' + worst + ' pad(s) that cannot be freed from the HUD at ' + VP.w + 'x' + VP.h)
+    note('RESULT ' + (drawnWorst > 0
+      ? '*** ' + drawnWorst + ' pad(s) drawn under the HUD ***'
+      : 'no pad is drawn under the HUD at ' + VP.w + 'x' + VP.h
+        + '; worst level has ' + worst + ' that panning alone cannot free'))
     return
   }
 
@@ -15910,6 +16414,43 @@ async function run() {
       }
       note(lv.id.padEnd(8) + want.filter((m) => m.kind === 'spawn').length + 'S '
         + want.filter((m) => m.kind === 'exit').length + 'E   ' + parts.join('  '))
+      // HOW HARD THE BADGE IS TO FIND, AS A NUMBER.
+      //
+      // `alpha` came down from 1.0 to 0.7 because live play reported the
+      // badges as the loudest thing on the board, and the brief asked for the
+      // value to be checked against the busiest plate. "Reads as furniture"
+      // and "cannot be found" are both opinions until somebody measures the
+      // contrast, so this samples the badge's own pixels against the plate
+      // just outside it and reports the luma gap per level.
+      for (const b of badges) {
+        const bb = b.getBounds()
+        const RESb = await import('./js/systems/Resolution.js')
+        const tl = RESb.worldToScreen(G, bb.left, bb.top, G.cameras.main)
+        const br = RESb.worldToScreen(G, bb.right, bb.bottom, G.cameras.main)
+        const dpr = RESb.deviceScale()
+        const x0 = Math.round(tl.x * dpr), y0 = Math.round(tl.y * dpr)
+        const w0 = Math.max(2, Math.round((br.x - tl.x) * dpr))
+        const h0 = Math.max(2, Math.round((br.y - tl.y) * dpr))
+        const ctx = game.canvas.getContext('2d')
+        if (!ctx || x0 < 0 || y0 < 0) continue
+        const mean = (px) => {
+          let l = 0, n = 0
+          for (let i = 0; i < px.length; i += 4) {
+            if (px[i + 3] < 24) continue
+            l += px[i] * 0.299 + px[i + 1] * 0.587 + px[i + 2] * 0.114
+            n++
+          }
+          return n ? l / n : -1
+        }
+        const on = mean(ctx.getImageData(x0, y0, w0, h0).data)
+        // A ring of plate one badge-width out, on the side away from the frame.
+        const ox = Math.min(Math.max(0, x0 + (x0 < game.canvas.width / 2 ? w0 : -w0)),
+          game.canvas.width - w0)
+        const off = mean(ctx.getImageData(ox, y0, w0, h0).data)
+        note('   ' + b.texture.key.padEnd(14) + ' badge luma ' + on.toFixed(1)
+          + ' vs plate beside it ' + off.toFixed(1)
+          + '  contrast ' + Math.abs(on - off).toFixed(1))
+      }
       await shot('markers-' + lv.id + '-' + VP.w + 'x' + VP.h)
     }
     note('derived ' + totalDerived + ' markers across ' + LVm.LEVELS.length + ' levels')
