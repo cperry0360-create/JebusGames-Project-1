@@ -69,7 +69,7 @@ const SCENARIO_NAMES = [
   'loopthrow', 'looptrack', 'lost', 'mapedge', 'maproute', 'markers',
   'meteor', 'mix', 'modal', 'moes', 'music', 'muzzle', 'nightfall',
   'nodefirst', 'noderings', 'notch', 'nuke', 'nukeseq', 'nullframe',
-  'opening', 'padart', 'padhud',
+  'opening', 'padart', 'padhud', 'padpan',
   'pausedismiss', 'pauseresume', 'phone', 'pixels', 'plate', 'playrun',
   'politician', 'powerart', 'proximity', 'realboot', 'regressions',
   'results', 'retreat', 'roadfit', 'rotationburst', 'revive', 'ring', 'rockets',
@@ -113,7 +113,7 @@ const ASSERTS_NOTHING = new Set([
  */
 const USES_EXPECT = new Set([
   'typegame', 'rotationburst', 'level7', 'level8', 'level9', 'boardinput', 'lanemarkers', 'level8retopo',
-  'vlaude', 'titlecard', 'counters', 'everyloadout',
+  'vlaude', 'titlecard', 'counters', 'everyloadout', 'padpan',
 ])
 
 /** How many checks this run actually EVALUATED, pass or fail. */
@@ -10712,6 +10712,200 @@ async function run() {
     return
   }
 
+  if (scenario === 'padpan') {
+    /*
+     * DO BUILD PADS SURVIVE A PAN? And does the black past the plate stay gone?
+     *
+     * BOTH, IN ONE RUN, ON PURPOSE. This is the third pass at one problem --
+     * the HUD and the build pads wanting the same screen space -- and the
+     * first two each fixed it by breaking what the one before it fixed:
+     *
+     *   1. The camera was given the HUD's band height as a bounds MARGIN so
+     *      the map would inset below the HUD. A margin on the camera CENTRE
+     *      moves the wall outward rather than making room inside the plate,
+     *      and that was the black-screen-on-scroll bug.
+     *   2. That was reverted, and a pad the HUD was standing on stopped being
+     *      DRAWN instead. That rule is screen space against a live camera, so
+     *      pads cross under it as the camera moves -- they pop in and out.
+     *
+     * So proving one property without the other is how this gets to a fourth
+     * pass. Every camera position below is judged on BOTH: every pad still
+     * drawn, and not one magenta pixel of void.
+     *
+     * THE VOID PROBE IS MAGENTA, NOT DARKNESS, and the reason is in `edges`:
+     * the clear colour is luma 21 and levels 8, 9 and 10 are painted machine
+     * worlds with large areas darker than that, so counting dark pixels
+     * reported 43% void with the camera provably inside the plate. A camera
+     * fills its viewport with its background before anything draws, so a
+     * magenta pixel left in the frame is a pixel the plate did not cover.
+     */
+    const RSP = await import('./js/systems/RunState.js')
+    const DP = (await import('./js/data/display.json', { with: { type: 'json' } })).default
+    const LVP = (await import('./js/data/levels.json', { with: { type: 'json' } })).default
+    const WW = DP.width, WH = DP.height
+    const dz = window.devicePixelRatio || 1
+    const ids = LVP.levels.map((l) => l.id)
+    note('panning all ' + ids.length + ' levels at ' + VP.w + 'x' + VP.h
+      + ', three zooms, nine camera targets, sampling every frame of the ease')
+
+    const ctxp = game.canvas.getContext('2d')
+    const voidPct = (cam) => {
+      if (!ctxp) return 0
+      const cw = game.canvas.width, ch = game.canvas.height
+      const bw = Math.max(8, Math.round(cw * 0.08)), bh = Math.max(8, Math.round(ch * 0.08))
+      let hit = 0, n = 0
+      for (const [bx, by] of [[0, 0], [cw - bw, 0], [0, ch - bh], [cw - bw, ch - bh]]) {
+        const px = ctxp.getImageData(bx, by, bw, bh).data
+        for (let i = 0; i < px.length; i += 4) {
+          if (px[i] >= 250 && px[i + 1] <= 6 && px[i + 2] >= 250) hit++
+          n++
+        }
+      }
+      return n ? (100 * hit) / n : 0
+    }
+
+    let totalFlips = 0, totalPads = 0, worstVoid = 0, worstVoidAt = '', worstOver = 0, worstOverAt = ''
+    let totalSamples = 0
+    const flipLines = []
+    for (const id of ids) {
+      for (const k of ['Title', 'WorldMap', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+      RSP.setRunState({
+        heroId: 'cory', levelId: id, seed: 7,
+        openingTowers: ['withholding', 'writeoff'], abilities: ['molotov', 'glacier'],
+        reserveTowers: [], resumeFrom: null,
+      })
+      game.scene.start('Game')
+      if (!(await until(() => running('Game') && scene('Game').rig && scene('Game').pads, 20000))) {
+        expect(false, id + ': the level did not start'); continue
+      }
+      await until(() => running('Hud'), 10000)
+      await sleep(500)
+      const G = scene('Game'), gc = G.cameras.main
+      gc.setBackgroundColor(0xff00ff)
+      const n = G.pads.length
+      totalPads += n
+      // Per pad: did it ever read drawn, and did it ever read not drawn?
+      const everOn = new Array(n).fill(false)
+      const everOff = new Array(n).fill(false)
+      let levelVoid = 0, levelOver = 0
+      const sample = () => {
+        totalSamples++
+        for (let i = 0; i < n; i++) {
+          // `visible` ALONE IS NOT THE QUESTION. A pad with a tower on it is
+          // legitimately gone and always has been; what must never change is
+          // the drawn state of a pad that is still FREE. `build.isFree` is the
+          // world-space half of the rule, so the flip being hunted is a free
+          // pad that is not drawn.
+          if (!G.build.isFree(i)) continue
+          if (G.pads[i].visible) everOn[i] = true; else everOff[i] = true
+        }
+        const v = gc.worldView
+        const o = Math.max(-v.x, -v.y, v.right - WW, v.bottom - WH, 0)
+        if (o > levelOver) levelOver = o
+      }
+      for (const zName of ['min', 'default', 'max']) {
+        const z = (zName === 'min' ? DP.camera.minZoom
+          : zName === 'max' ? DP.camera.maxZoom : DP.camera.defaultZoom) * dz
+        G.rig.setTargetZoom(z)
+        await until(() => Math.abs(gc.zoom - z) < 0.01, 5000)
+        // The nine corners, edges and centre of the reachable box, asked for
+        // from far outside the world so the clamp decides where the camera
+        // stops. The samples are taken DURING the ease, which is the pan.
+        for (const [tx, ty] of [[-9e4, -9e4], [WW / 2, -9e4], [9e4, -9e4],
+          [-9e4, WH / 2], [WW / 2, WH / 2], [9e4, WH / 2],
+          [-9e4, 9e4], [WW / 2, 9e4], [9e4, 9e4]]) {
+          G.rig.lookAt(tx, ty)
+          for (let f = 0; f < 12; f++) { sample(); await sleep(30) }
+          await sleep(120)
+          sample()
+          const b = voidPct(gc)
+          if (b > levelVoid) levelVoid = b
+        }
+      }
+      let flips = 0
+      const which = []
+      for (let i = 0; i < n; i++) {
+        if (everOn[i] && everOff[i]) { flips++; which.push(i) }
+      }
+      totalFlips += flips
+      if (levelVoid > worstVoid) { worstVoid = levelVoid; worstVoidAt = id }
+      if (levelOver > worstOver) { worstOver = levelOver; worstOverAt = id }
+      note('  ' + id.padEnd(8) + String(n).padStart(2) + ' pads:  '
+        + (flips === 0 ? 'none flipped' : '*** ' + flips + ' FLIPPED: ' + which.join(','))
+        + '   void ' + levelVoid.toFixed(3) + '%   view past the plate '
+        + levelOver.toFixed(1) + 'px')
+      if (flips) flipLines.push(id + ': pads ' + which.join(','))
+      if (id === 'level1') await shot('padpan-level1-' + VP.w + 'x' + VP.h)
+    }
+    note('TOTAL: ' + totalSamples + ' samples, ' + totalPads + ' pads over ' + ids.length
+      + ' levels; ' + totalFlips + ' flipped')
+    expect(totalSamples > 3000, 'only ' + totalSamples + ' samples; the pan stopped panning')
+    expect(totalFlips === 0, totalFlips + ' pads change visibility as the camera moves: '
+      + flipLines.join('; '))
+    // THE BLACK BAND, in the same run and at the same camera positions.
+    expect(worstVoid < 0.005, 'the void past the plate is back: ' + worstVoid.toFixed(3)
+      + '% magenta on ' + worstVoidAt)
+    expect(worstOver < 1, 'the camera reaches ' + worstOver.toFixed(1)
+      + 'px past the plate on ' + worstOverAt)
+    note('worst void ' + worstVoid.toFixed(3) + '% (' + (worstVoidAt || 'none')
+      + '), worst view past the plate ' + worstOver.toFixed(1) + 'px ('
+      + (worstOverAt || 'none') + ')')
+
+    /* ---- AND IT STILL CLAMPS BACK AFTER AN OVERSCROLL ---- */
+    {
+      const G = scene('Game'), gc = G.cameras.main
+      for (const [dir, dx, dy] of [['left', 1600, 0], ['right', -1600, 0],
+        ['up', 0, 1600], ['down', 0, -1600]]) {
+        const cx = VP.w / 2, cy = VP.h / 2
+        mouse('mousedown', cx, cy)
+        for (let i = 1; i <= 12; i++) { mouse('mousemove', cx + (dx * i) / 12, cy + (dy * i) / 12); await sleep(12) }
+        mouse('mouseup', cx + dx, cy + dy)
+        await sleep(1400)
+        const v = gc.worldView
+        const o = Math.max(-v.x, -v.y, v.right - WW, v.bottom - WH, 0)
+        const b = voidPct(gc)
+        note('  fling ' + dir.padEnd(6) + ' -> view x ' + Math.round(v.x) + '..' + Math.round(v.right)
+          + ' y ' + Math.round(v.y) + '..' + Math.round(v.bottom)
+          + '  past the plate ' + o.toFixed(1) + 'px  void ' + b.toFixed(3) + '%')
+        expect(o < 1, 'a fling ' + dir + ' left the view ' + o.toFixed(1) + 'px past the plate')
+        expect(b < 0.005, 'a fling ' + dir + ' showed ' + b.toFixed(3) + '% void')
+      }
+      gc.setBackgroundColor(0x10161d)
+    }
+
+    /* ---- AND A PAD IS STILL BUILDABLE AT ITS DRAWN POSITION ---- */
+    {
+      const G = scene('Game')
+      G.rig.setTargetZoom(DP.camera.defaultZoom * dz)
+      await until(() => Math.abs(G.cameras.main.zoom - DP.camera.defaultZoom * dz) < 0.01, 4000)
+      const free = G.build.spots.filter((s) => G.build.isFree(s.index))
+      let built = 0, tried = 0
+      for (const spot of free.slice(0, 3)) {
+        tried++
+        await lookAt(spot.x, spot.y)
+        await sleep(200)
+        const img = G.pads[spot.index]
+        expect(img && img.visible, 'pad ' + spot.index + ' is not drawn at the camera on it')
+        // THE DRAWN POSITION, read off the sprite rather than off the map, so
+        // this is a tap where the player sees the pad.
+        const [px, py] = toScreen(img.x, img.y)
+        await click(px, py)
+        await sleep(200)
+        if (!G.ring) { note('  pad ' + spot.index + ': the ring did not open at (' + px.toFixed(0) + ', ' + py.toFixed(0) + ')'); G.ring?.close(); continue }
+        const opts = G.ring.hitBoxes.filter((h) => !h.id.startsWith('ring:'))
+        note('  pad ' + spot.index + ' at its drawn position (' + px.toFixed(0) + ', '
+          + py.toFixed(0) + '): the ring opened with ' + opts.length + ' option(s)')
+        built++
+        G.ring.close()
+        await sleep(120)
+      }
+      expect(built === tried, 'only ' + built + ' of ' + tried
+        + ' pads opened their ring when tapped where they are drawn')
+    }
+    await shot('padpan-buildable-' + VP.w + 'x' + VP.h)
+    return
+  }
+
   if (scenario === 'padart') {
     // The painted flagstone, at both viewport sizes and both ends of the zoom
     // band: does it read as a build site, or does it vanish into the grass?
@@ -16274,10 +16468,16 @@ async function run() {
       })
       const hits = []
       for (const h of rects) for (const p of pads) if (iou(h.r, p.r)) hits.push(h.id + '/pad' + p.i)
-      // AND WHETHER ANY OF THEM IS STILL BEING DRAWN, which is the thing live
-      // play reported: a pad disc peeking out from behind an ability medallion.
-      // `padShowing` is supposed to have hidden every one of them; this reads
-      // the sprites' own `visible` rather than trusting the rule.
+      // AND HOW MANY OF THEM ARE DRAWN. THIS IS NOT A FAULT AND USED TO BE
+      // COUNTED AS ONE.
+      //
+      // The rule it was checking -- a pad the HUD is standing on is not drawn
+      // -- is gone, because it was screen space against a live camera and pads
+      // popped in and out under a pan. A build pad is a world object like a
+      // tower, an enemy or the hero, all of which have always passed under the
+      // HUD. So the expected answer here is "all of them", and the number is
+      // recorded rather than starred. See `run.sh padpan`, which is the
+      // scenario that asserts the property this one only measures.
       const drawnUnder = []
       for (const p of pads) {
         if (!rects.some((h) => iou(h.r, p.r))) continue
@@ -16285,8 +16485,8 @@ async function run() {
         if (img && img.visible) drawnUnder.push(p.i)
       }
       if (drawnUnder.length) {
-        note('   *** ' + lv.id + ': pads ' + drawnUnder.join(',')
-          + ' are under the HUD AND STILL DRAWN ***')
+        note('      ' + lv.id + ': pads ' + drawnUnder.join(',')
+          + ' are under the HUD and drawn (expected: a pad is never hidden by the HUD)')
       }
       const onScreen = pads.filter((p) => p.r.x + p.r.width > 0 && p.r.x < VP.w
         && p.r.y + p.r.height > 0 && p.r.y < VP.h).length
@@ -16327,10 +16527,17 @@ async function run() {
       drawnWorst = Math.max(drawnWorst, drawnUnder.length)
       if (hits.length) await shot('padhud-' + lv.id + '-' + VP.w + 'x' + VP.h)
     }
-    note('RESULT ' + (drawnWorst > 0
-      ? '*** ' + drawnWorst + ' pad(s) drawn under the HUD ***'
-      : 'no pad is drawn under the HUD at ' + VP.w + 'x' + VP.h
-        + '; worst level has ' + worst + ' that panning alone cannot free'))
+    // A PAD UNDER THE HUD AND DRAWN IS THE EXPECTED ANSWER NOW, so the result
+    // line reports the two counts instead of starring one of them. What used
+    // to be starred here -- `drawnWorst > 0` -- was the rule that hid a pad
+    // the HUD was standing on, and that rule is gone: it read the screen
+    // against a live camera, so the pads it hid came back as the camera moved.
+    // `run.sh padpan` is the scenario that asserts the property; this one
+    // measures the at-rest coverage the property is a consequence of.
+    note('RESULT at ' + VP.w + 'x' + VP.h + ': the HUD stands on up to '
+      + drawnWorst + ' pad(s) on a level and all of them are drawn, which is '
+      + 'correct; worst level has ' + worst + ' that panning alone cannot free '
+      + '(zooming can -- see tests/hudpads.test.ts)')
     return
   }
 

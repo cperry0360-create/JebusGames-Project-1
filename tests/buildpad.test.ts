@@ -78,17 +78,22 @@ test('a pad disappears under the tower built on it', () => {
   const game = src('scenes/GameScene.ts')
   const draw = /private drawSpots\(\): void \{[\s\S]*?\n  \}/.exec(game)
   assert.ok(draw, 'drawSpots is gone')
-  // THE VISIBILITY QUESTION MOVED OUT OF `drawSpots` AND THE PROPERTY DID NOT.
-  // It used to read `isFree` inline; there are two reasons a pad is not drawn
-  // now -- a tower standing on it, and the HUD standing on it -- so both live
-  // in `padShowing` and `drawSpots` asks that. This asserts the property
-  // through its new home rather than pinning the old line.
+  // THE VISIBILITY QUESTION LIVES IN `padShowing` AND `drawSpots` ASKS IT.
+  // This asserts the property through its home rather than pinning a line: the
+  // body has been two branches and is now one, and the thing that must hold
+  // across both is that an OCCUPIED pad is not drawn.
   assert.match(draw[0], /img\.setVisible\(this\.padShowing\(spot\)\)/,
     'drawSpots no longer asks whether the pad may be drawn')
   const showing = /private padShowing\(spot: BuildSpot\): boolean \{[\s\S]*?\n  \}/.exec(game)
   assert.ok(showing, 'padShowing is gone, so nothing hides an occupied pad')
-  assert.match(showing[0], /if \(!this\.build\.isFree\(spot\.index\)\) return false/,
+  assert.match(showing[0], /this\.build\.isFree\(spot\.index\)/,
     'an occupied pad is still drawn')
+  // AND NOTHING ELSE. A second reason to hide a pad is how the popping bug got
+  // in: `hudStandsOn` made the answer a function of the camera. The camera
+  // half is guarded properly in tests/hudpads.test.ts; this keeps the body
+  // honest about being one question.
+  assert.doesNotMatch(showing[0], /\|\||&&/,
+    'padShowing has grown a second condition; if it reads the screen, pads pop under a pan')
 })
 
 test('the pad pulses, and hover and press still read', () => {

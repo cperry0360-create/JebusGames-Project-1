@@ -286,24 +286,27 @@ test('the readouts shrank and the controls did not', () => {
 })
 
 /**
- * THE TEST THE BRIEF WENT LOOKING FOR, AND IT DID NOT EXIST.
+ * THE TEST THE BRIEF WENT LOOKING FOR, AND IT DID NOT EXIST — AND THE ONE IT
+ * BOUGHT WAS WORSE THAN NOTHING.
  *
- * "There is supposed to be a test that fails when any HUD element rect
- * intersects any pad tap rect on any level." There was not. What was here was
- * the reachability test above, which asserts something weaker ON PURPOSE and
- * says so in its own header: the map is full-bleed, the HUD floats over it,
- * and a pad painted in the top or bottom tenth of a plate is under a band at
- * rest with no camera position that changes it. So "can I get at it" was the
- * question asked and "is it ever covered" was not.
+ * What this used to assert: that `GameScene.padShowing` exists, that
+ * `drawSpots` calls it, and that `syncPadVisibility` re-answers it every frame.
+ * It passed. It was still passing while build pads popped in and out of
+ * existence under a pan, because it pinned an IMPLEMENTATION — "the scene hides
+ * a pad the HUD is standing on" — and never asked what that rule does when the
+ * camera moves. A rule evaluated in screen space against a live camera changes
+ * its answer every frame BY CONSTRUCTION.
  *
- * That was the right question and the wrong conclusion. A pad DISC peeking out
- * from behind an ability medallion is not a reachability problem, it is a
- * drawing one, and it does not need the camera to fix it: the pad simply must
- * not be drawn where the HUD is standing. `GameScene.padShowing` is that rule
- * and this is the property it buys — asserted at the camera the run OPENS at,
- * which is what "at rest" means.
+ * Measured on the tree that shipped it: 151 of 151 pads across the ten levels
+ * flip between drawn and not drawn somewhere in the reachable camera box, at
+ * every landscape viewport. On level 1 at 844x390, five of seven pads are
+ * hidden at once at zoom 0.98.
+ *
+ * So the at-rest coverage measurement stays — it is a true fact about a
+ * full-bleed map with a floating HUD, and it is worth having a number for —
+ * and the assertion is now the property the game actually needs.
  */
-test('no HUD element overlaps a VISIBLE build pad, on any level', () => {
+test('the HUD does stand on pads at rest, and that number is recorded', () => {
   const overlaps1 = (a: Rect, b: Rect): boolean =>
     a.x < b.x + b.width && b.x < a.x + a.width
     && a.y < b.y + b.height && b.y < a.y + a.height
@@ -330,45 +333,136 @@ test('no HUD element overlaps a VISIBLE build pad, on any level', () => {
         const cx = Math.min(Math.max(open.x, rx.min), rx.max)
         const cy = Math.min(Math.max(open.y, ry.min), ry.max)
         const R = level.map.spotRadius
-        const hidden: number[] = []
         let covered = 0
-        level.map.buildSpots.forEach((pair: number[], index: number) => {
+        level.map.buildSpots.forEach((pair: number[]) => {
           const half = Math.max(22, R * open.zoom)
           const sx = W / 2 + (pair[0]! - cx) * open.zoom
           const sy = H / 2 + (pair[1]! - cy) * open.zoom
           const pad: Rect = { x: sx - half, y: sy - half, width: half * 2, height: half * 2 }
-          const hit = rects.some(([, h]) => overlaps1(h, pad))
-          if (!hit) return
-          covered++
-          // THE RULE: a pad the HUD is standing on is not drawn. So the only
-          // way this can be an overlap the player sees is if the scene fails to
-          // hide it, which the source check below is for.
-          hidden.push(index)
+          if (rects.some(([, h]) => overlaps1(h, pad))) covered++
         })
         if (covered > 0) {
-          report.push(`${def.id} ${name}${insets === NOTCH ? ' notched' : ''}: `
-            + `${covered} pad(s) under the HUD at the opening camera — ${hidden.join(',')}`)
+          report.push(`${def.id} ${name}${insets === NOTCH ? ' notched' : ''}: ${covered}`)
         }
       }
     }
   }
-  // THE MEASUREMENT IS THE POINT, and it is recorded rather than asserted to
-  // zero: at-rest coverage is a fact about a full-bleed map with a floating
-  // HUD, and the fix is that a covered pad is not DRAWN. What is asserted is
-  // that the scene actually applies that rule.
-  const game = readFileSync(url('../src/scenes/GameScene.ts'), 'utf8')
-  assert.match(game, /private padShowing\(/,
-    'nothing decides whether a pad may be drawn where the HUD is standing')
-  assert.match(game, /img\.setVisible\(this\.padShowing\(spot\)\)/,
-    'drawSpots no longer asks whether the HUD is standing on the pad')
-  assert.match(game, /private syncPadVisibility\(/,
-    'pad visibility is not refreshed as the camera moves, so it is right for one frame')
-  assert.match(game, /this\.syncPadVisibility\(\)/, 'nothing calls syncPadVisibility')
-  // And the padlock goes with its pad, or the lock peeks out from behind the
-  // medallion instead of the disc.
-  assert.match(game, /art\.setVisible\(this\.padShowing\(/,
-    'a padlock is drawn on a pad the HUD is standing on')
+  // RECORDED, NOT ASSERTED TO ZERO. The map is full-bleed by design and the HUD
+  // floats over it, so some pad is under some rectangle at some camera position
+  // on every level. That is not the bug. Hiding the pad when it happens was.
   assert.ok(report.length > 0,
     'no pad is under the HUD at rest on any level at any viewport, which would mean '
     + 'this test has stopped measuring anything')
+})
+
+/**
+ * NO BUILD PAD CHANGES VISIBILITY AS A RESULT OF THE CAMERA MOVING.
+ *
+ * THE PROPERTY THAT WAS MISSING, and the third attempt at one problem. The
+ * first two each fixed it by shipping a different visible bug:
+ *
+ *   1. `reports/2026-09-13-hud-cleanup-and-level-8.md` gave the camera the HUD
+ *      band as a bounds margin so the map would inset below the HUD. A margin
+ *      on the camera CENTRE does not create slack inside the plate, it moves
+ *      the wall outward — that was the black-screen-on-scroll bug. Reverted,
+ *      and `the camera is NOT given the HUD band as slack` above keeps it out.
+ *   2. `reports/2026-09-14-ui-cleanup.md` hid a pad the HUD was standing on.
+ *      That rule is evaluated in SCREEN space against a LIVE camera, so pads
+ *      cross under it as the camera moves. That is what this test is for.
+ *
+ * PART 1 IS THE PAN AND IT IS THE EVIDENCE. It walks the reachable camera box
+ * on every level at every zoom in the band and counts the pads a screen-space
+ * HUD rule would flip. It has to keep finding some, or part 2 is guarding
+ * nothing — a HUD that stopped reaching the board would make this test vacuous
+ * without anyone noticing.
+ *
+ * PART 2 IS THE ASSERTION, and it is on the source rather than on arithmetic
+ * for a reason: no arithmetic here can see what GameScene actually does, since
+ * nothing in tests/ imports Phaser. What CAN be checked is that the decision
+ * reads no term the camera moves. A rule that is a function of world state
+ * alone satisfies the property by construction, and there is no tuning of a
+ * screen-space rule that does.
+ */
+test('no build pad changes visibility as the camera moves', () => {
+  const over = (a: Rect, b: Rect): boolean =>
+    a.x < b.x + b.width && b.x < a.x + a.width
+    && a.y < b.y + b.height && b.y < a.y + a.height
+
+  // ---- PART 1: pan every level, and count what a screen-space rule flips ----
+  const flipped: string[] = []
+  let sampled = 0
+  for (const [name, W, H] of VIEWPORTS.filter(([, w, h]) => w > h)) {
+    const l = hudLayout({ width: W, height: H, insets: NO_INSETS, ...INPUT }, LAYOUT)
+    const rects = hudRects(l).map(([, r]) => r).filter((r) => r.width > 0 && r.height > 0)
+    const worldW = DISPLAY.width
+    const worldH = DISPLAY.height
+    const cover = coverZoom(W, H, worldW, worldH)
+    const zLo = clampZoom(DISPLAY.camera.minZoom, cover, DISPLAY.camera.maxZoom,
+      DISPLAY.camera.minZoom)
+    const zHi = clampZoom(DISPLAY.camera.maxZoom, cover, DISPLAY.camera.maxZoom,
+      DISPLAY.camera.minZoom)
+    for (const def of LEVELS) {
+      const level = loadLevel(def.id)
+      const R = level.map.spotRadius
+      const spots = level.map.buildSpots.map(
+        (pair: number[], index: number) => ({ index, x: pair[0]!, y: pair[1]! }))
+      // The same guard the reachability test carries: `[x, y]` pairs, not
+      // objects, and reading `.y` off a raw pair gives undefined and passes.
+      assert.ok(spots.length > 0 && Number.isFinite(spots[0]!.y),
+        `${def.id}'s build spots did not read as coordinates`)
+      const hiddenSomewhere = new Set<number>()
+      const shownSomewhere = new Set<number>()
+      const ZS = 6
+      const CS = 14
+      for (let k = 0; k <= ZS; k++) {
+        const z = zLo + ((zHi - zLo) * k) / ZS
+        const half = Math.max(22, R * z)
+        const rx = centerRange(W, worldW, z)
+        const ry = centerRange(H, worldH, z)
+        for (let i = 0; i <= CS; i++) {
+          const cy = ry.min + ((ry.max - ry.min) * i) / CS
+          for (let j = 0; j <= CS; j++) {
+            const cx = rx.min + ((rx.max - rx.min) * j) / CS
+            for (const spot of spots) {
+              sampled++
+              const sx = W / 2 + (spot.x - cx) * z
+              const sy = H / 2 + (spot.y - cy) * z
+              const pad: Rect = {
+                x: sx - half, y: sy - half, width: half * 2, height: half * 2,
+              }
+              if (rects.some((r) => over(r, pad))) hiddenSomewhere.add(spot.index)
+              else shownSomewhere.add(spot.index)
+            }
+          }
+        }
+      }
+      for (const spot of spots) {
+        if (hiddenSomewhere.has(spot.index) && shownSomewhere.has(spot.index)) {
+          flipped.push(`${name} ${def.id} pad ${spot.index}`)
+        }
+      }
+    }
+  }
+  assert.ok(sampled > 100000, `only ${sampled} pad/camera samples; the pan has stopped panning`)
+  assert.ok(flipped.length > 0,
+    'a screen-space HUD rule would flip NO pad anywhere in the camera box, so the '
+    + 'assertion below is guarding nothing. Either the HUD no longer reaches the '
+    + 'board or this sample stopped moving the camera.')
+
+  // ---- PART 2: the scene must not decide a pad's drawn state from the screen ----
+  const game = readFileSync(url('../src/scenes/GameScene.ts'), 'utf8')
+  const rule = /private padShowing\(spot: BuildSpot\): boolean \{[\s\S]*?\n  \}/.exec(game)
+  assert.ok(rule, 'padShowing is gone, so nothing decides whether a pad is drawn')
+  const SCREEN = /worldToScreen|cameras\.main|this\.layout|hudStandsOn|deviceScale/
+  assert.doesNotMatch(rule[0], SCREEN,
+    `padShowing reads a screen-space term, so its answer moves with the camera. `
+    + `${flipped.length} pads flip under a pan when it does — for example `
+    + `${flipped.slice(0, 3).join(', ')}.`)
+  // And no back door: nothing else may drive a pad's visibility per frame.
+  assert.doesNotMatch(game, /private hudStandsOn\(/,
+    'the HUD-over-pad screen test is back')
+  assert.doesNotMatch(game, /private syncPadVisibility\(/,
+    'a per-frame pad visibility pass is back, which is the camera clock again')
+  assert.doesNotMatch(game, /syncPadVisibility\(\)/,
+    'something still re-answers pad visibility on the camera clock')
 })
