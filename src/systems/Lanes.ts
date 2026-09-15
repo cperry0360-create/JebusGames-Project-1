@@ -79,8 +79,14 @@ export interface Transfer {
   weight: number
 }
 
-/** `merge` in whichever shape the map wrote it, as the list the code wants. */
-function continuationList(m: LaneDef['merge']): MergeContinuation[] | null {
+/** `merge` in whichever shape the map wrote it, as the list the code wants.
+ *
+ *  EXPORTED for `tests/laneroutes.test.ts`, which walks a whole route across
+ *  its merges and needs the same normalisation the game uses rather than a
+ *  second copy of it that could drift. That test exists because level 8's east
+ *  entrants reversed at a merge and nothing in the repository looked at a
+ *  route across one. */
+export function continuationList(m: LaneDef['merge']): MergeContinuation[] | null {
   if (!m) return null
   const list = Array.isArray(m) ? m : [m]
   return list.length ? list : null

@@ -181,26 +181,56 @@ test('the map is the geometry file, not a copy of it', () => {
   assert.deepEqual(M.waypoints.slice(1), GEOMETRY.shared)
   const east = M.lanes.find((l) => l.id === 'east')!
   const south = M.lanes.find((l) => l.id === 'south')!
-  assert.equal(east.waypoints.length, GEOMETRY.branches.east.length + 1)
   assert.equal(south.waypoints.length, GEOMETRY.branches.south.length + 1)
-  // THE EAST ARM IS THE TRACER'S OWN POLYLINE, REVERSED -- not a re-trace and
-  // not a hand-edit. It used to run fork -> opening as an exit; it runs
-  // opening -> fork as an entrance, and every coordinate in it is still the
-  // one tools/trace_level8.py wrote.
-  assert.deepEqual(east.waypoints.slice(1), [...GEOMETRY.branches.east].reverse(),
-    'the east entrance is not the traced east branch walked backwards')
+  // THE EAST ARM IS THE TRACER'S OWN POLYLINE, REVERSED AND THEN TRUNCATED --
+  // not a re-trace and not a hand-edit. It used to run fork -> opening as an
+  // exit; it runs opening -> fork as an entrance, and every coordinate in it
+  // is still the one tools/trace_level8.py wrote.
+  //
+  // THE TRUNCATION IS THE FIX FOR THE REVERSAL live play reported. The last
+  // three traced points climbed 76 px to the fork, which was the right last
+  // move for a road LEAVING through it and a detour for one arriving: `south`
+  // then sent the walker back down through (1029, 399), 3 px from a point it
+  // had passed two steps earlier, a 135 degree hairpin. The arm is cut at the
+  // last point from which it can continue onto `south` without turning back,
+  // and `tools/build_level8_map.py` derives the cut rather than being told it.
+  const revEast = [...GEOMETRY.branches.east].reverse()
+  assert.ok(east.waypoints.length < revEast.length + 1,
+    'the east entrance still runs all the way to the fork, which is the reversal')
+  assert.deepEqual(east.waypoints.slice(1), revEast.slice(0, east.waypoints.length - 1),
+    'the east entrance is not a PREFIX of the traced east branch walked backwards')
+  assert.equal(east.waypoints.length, 15,
+    'the east arm is not 15 points; the join moved without this test being re-derived')
+  assert.deepEqual(east.waypoints[east.waypoints.length - 1], [1028, 432],
+    'the east arm no longer ends at the point that joins south without reversing')
   assert.deepEqual(south.waypoints.slice(0, -1), GEOMETRY.branches.south)
   // The three gateways are off the plate, which is what makes an enemy walk on
   // and off rather than appear and vanish. TWO of them are now entrances.
   assert.ok(M.waypoints[0]![0] < 0, 'the west gateway is on the plate')
   assert.ok(east.waypoints[0]![0] > 1280, 'the east gateway is on the plate')
   assert.ok(south.waypoints[south.waypoints.length - 1]![1] > 720, 'the south gateway is on the plate')
-  // BOTH MOUTHS END ON THE FORK and the exit starts there, which is what
-  // `atIndex: 0` means on both merges.
+  // THE WEST MOUTH ENDS ON THE FORK and the exit starts there, which is what
+  // `atIndex: 0` means on its merge. It arrives heading into the junction and
+  // `south` leaves at 45 degrees to that, so it is the road bending.
   assert.equal((M.mainMerge as { atIndex: number }).atIndex, 0)
-  assert.equal((east.merge as { atIndex: number }).atIndex, 0)
   assert.deepEqual(M.waypoints[M.waypoints.length - 1], south.waypoints[0])
-  assert.deepEqual(east.waypoints[east.waypoints.length - 1], south.waypoints[0])
+  // THE EAST MOUTH DOES NOT, and must not. It joins `south` where the two
+  // traced centrelines actually come together, which is index 2 -- 88.5 px
+  // along, upstream of the Performance Review beam at 142.68, so every east
+  // entrant still crosses it.
+  assert.equal((east.merge as { atIndex: number }).atIndex, 2,
+    'the east arm merges somewhere other than where it reaches south')
+  const joinGap = Math.hypot(
+    east.waypoints[east.waypoints.length - 1]![0] - south.waypoints[2]![0],
+    east.waypoints[east.waypoints.length - 1]![1] - south.waypoints[2]![1])
+  // HALF A ROAD WIDTH, AND IT IS A REAL HOP: the handover sets `laneDistance`
+  // to the join, so the enemy's position moves 25 px in one frame. Both ends
+  // are on painted road (the road is 51 px across) and 25 px is the smallest
+  // gap any non-reversing join of these two traced polylines can have --
+  // `join_to` searched every pair and rejected 532 that walked backward.
+  // Pinned so a re-trace that widens it has to come back here.
+  assert.ok(joinGap <= M.roadWidth / 2 + 0.5,
+    `the east arm hands over ${joinGap.toFixed(1)} px from south, over half a road width`)
 })
 
 test('the two routes are the lengths the level is designed around', () => {
@@ -211,7 +241,11 @@ test('the two routes are the lengths the level is designed around', () => {
   assert.equal(west.length, 1, 'the west mouth does not reach exactly one exit')
   assert.equal(east.length, 1, 'the east mouth does not reach exactly one exit')
   assert.ok(Math.abs(west[0]! - 3646.5) < 1, `the west route walks ${west[0]!.toFixed(1)}`)
-  assert.ok(Math.abs(east[0]! - 2741.0) < 1, `the east route walks ${east[0]!.toFixed(1)}`)
+  // 2,558.3, NOT THE 2,741.0 THIS USED TO SAY. The east arm no longer climbs to
+  // the fork and back: three traced points came off it and the 88.5 px of
+  // `south` behind the new join is no longer walked. 182.7 px shorter, and all
+  // of it was the reversal.
+  assert.ok(Math.abs(east[0]! - 2558.3) < 1, `the east route walks ${east[0]!.toFixed(1)}`)
   assert.ok(west[0]! > east[0]!, 'the west mouth is no longer the long way in')
   // THE EAST ARM IS STILL THE UNDER-DEFENDED ONE, and it matters more now than
   // it did: it is a way IN, so a thin arm is a short unguarded run at the

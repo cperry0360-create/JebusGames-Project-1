@@ -295,26 +295,14 @@
         [
           1028,
           432
-        ],
-        [
-          1028,
-          402
-        ],
-        [
-          1072,
-          358
-        ],
-        [
-          1072,
-          356
         ]
       ],
       "entrance": true,
       "merge": {
         "into": "south",
-        "atIndex": 0
+        "atIndex": 2
       },
-      "_waypoints": "THE EAST ENTRANCE: one computed gateway at x=1340.0, then the same 17 traced points the east EXIT used, walked the other way -- from the opening in the wall inward to the fork. Not a new trace and not a hand-edit: the tracer's own polyline, reversed. Its last waypoint IS the fork, which is what `atIndex: 0` on its merge means.",
+      "_waypoints": "THE EAST ENTRANCE: one computed gateway at x=1340.0, then the east EXIT's 17 traced points walked the other way -- TRUNCATED to the first 14 of them, ending at [1028, 432]. Not a new trace and not a hand-edit: the tracer's own polyline, reversed and cut. IT USED TO RUN ALL THE WAY TO THE FORK and merge at `atIndex: 0`, and live play reported east entrants visibly reversing there -- the arm climbed 76 px to the fork and `south` sent them straight back down through (1029, 399), 3 px from a point they had passed two steps earlier, a 135 degree hairpin. Climbing to the fork was the correct last move when this arm was the EXIT; it is a detour now that it is an entrance. `join_to` derives the cut: the last 3 points are dropped and the merge lands on the target's own nearest waypoint, 2, 25.0 px away -- 0.49 of a road width, so the handover is well inside the painted road. It joins 88.5 px along `south`, upstream of the Performance Review beam at 142.68, which the generator asserts.",
       "_entrance": "DECLARED, because nothing merges into this lane and `validateLanes` would otherwise read a lane that reaches an exit with no feed as a route with no gate. Level 6's `lower` carries it for the same reason."
     },
     {
@@ -612,7 +600,7 @@
       "_waypoints": "THE ONLY EXIT: 71 traced points from the fork to the bottom opening, plus one computed gateway at y=779.0 -- computed in Y because this road leaves through a horizontal edge and extending it to an X would put the gateway sideways. Waypoint 0 IS the fork, and BOTH entrances hand their walkers over to it there."
     }
   ],
-  "_lanes": "TWO ENTRANCES, ONE EXIT, AND THE BEAM IS ON THE ROAD THEY SHARE. This level shipped the other way round -- one entrance on the west and two exits, east and south -- and the Performance Review sat on the south arm, which is to say on ONE of two ways out. Measured over 40 seeds, 10.6 of 239 enemies a run ever set foot on that arm and 6.1 were buffed: the gate touched one enemy in forty. Reversing the east arm into an entrance and making the bottom mouth the only exit puts every walker from both mouths on the same last 2,315 px, with the beam standing on it. See reports/2026-09-13-level-8-retopology.md.",
+  "_lanes": "TWO ENTRANCES, ONE EXIT, AND THE BEAM IS ON THE ROAD THEY SHARE. This level shipped the other way round -- one entrance on the west and two exits, east and south -- and the Performance Review sat on the south arm, which is to say on ONE of two ways out. Measured over 40 seeds, 10.6 of 239 enemies a run ever set foot on that arm and 6.1 were buffed: the gate touched one enemy in forty. Reversing the east arm into an entrance and making the bottom mouth the only exit puts every walker from both mouths on the same last stretch of road, with the beam standing on it. See reports/2026-09-13-level-8-retopology.md. THE WEST ARM SHARES ALL 2304 PX OF IT; the east arm joins 88 px along and so shares 2216 px, which is the length in front of the beam either way. See `_waypoints` on the east lane for why it no longer runs to the fork.",
   "buildSpots": [
     [
       202,

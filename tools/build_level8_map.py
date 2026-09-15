@@ -85,6 +85,109 @@ def straight_down(pts, to_y):
     return [round(pts[0][0], 2), round(to_y, 2)]
 
 
+# The widest turn a road is allowed to make, in degrees, and how close it may
+# come to a stretch it has already walked, as a fraction of a road width.
+#
+# NOT ARBITRARY: both are calibrated against every route on every one of the
+# ten levels. The worst turn anywhere else is 90 degrees -- level 6's flank and
+# level 8's own south arm, both the computed stub at a frame edge -- and the
+# closest any other route comes back to itself is 0.79 road widths, level 5's
+# north arm. Level 8's east entrance, joining `south` at the fork, turned 135
+# degrees and came back within 0.06 of a road width of a point it had passed 76
+# px earlier. It is the only outlier on the board and it is an outlier by a
+# factor of twelve.
+TURN_MAX_DEG = 100.0
+REVISIT_MIN_ROADS = 0.7
+
+
+def _turn_deg(a, b, c):
+    """The turn made at `b`, walking a -> b -> c. 0 is straight on."""
+    u = (b[0] - a[0], b[1] - a[1])
+    v = (c[0] - b[0], c[1] - b[1])
+    nu, nv = math.hypot(*u), math.hypot(*v)
+    if nu < 1e-9 or nv < 1e-9:
+        return 0.0
+    cos = max(-1.0, min(1.0, (u[0] * v[0] + u[1] * v[1]) / (nu * nv)))
+    return math.degrees(math.acos(cos))
+
+
+def _walks_backward(pts, road_width):
+    """Whether this polyline turns back on itself anywhere.
+
+    Two questions, because neither alone sees the fault. The TURN catches a
+    hairpin between two consecutive segments; the REVISIT catches a route that
+    goes round and comes back alongside itself, which a sequence of gentle
+    turns can do without any one of them looking wrong.
+
+    Duplicate points are dropped first. That is not tidying: `atIndex: 0` on a
+    merge makes the join point appear twice, the second segment has zero
+    length, and a turn measured across it is 0 degrees whatever the road does.
+    Level 8's 135-degree hairpin was invisible to every check for exactly that
+    reason.
+    """
+    q = [pts[0]]
+    for r in pts[1:]:
+        if math.dist(r, q[-1]) > 1e-6:
+            q.append(r)
+    for i in range(1, len(q) - 1):
+        if _turn_deg(q[i - 1], q[i], q[i + 1]) > TURN_MAX_DEG:
+            return 'turns %.0f degrees at %s' % (_turn_deg(q[i - 1], q[i], q[i + 1]), q[i])
+    cum = [0.0]
+    for i in range(1, len(q)):
+        cum.append(cum[-1] + math.dist(q[i - 1], q[i]))
+    floor = REVISIT_MIN_ROADS * road_width
+    for i in range(len(q)):
+        for j in range(i + 1, len(q)):
+            if cum[j] - cum[i] < road_width:
+                continue
+            d = math.dist(q[i], q[j])
+            if d < floor:
+                return 'comes back within %.1f px of %s after %.0f px of walking' % (
+                    d, q[i], cum[j] - cum[i])
+    return None
+
+
+def join_to(arm, target, road_width):
+    """Where an arm should hand its walkers over to `target`, and at what index.
+
+    THE FAULT THIS REPLACES. The east arm is the east EXIT's traced polyline
+    walked the other way, so it ends at the fork, and it merged into `south` at
+    index 0 because that is where the exit used to start. Climbing to the fork
+    was the right last move for a road LEAVING through it; for a road arriving
+    it is a detour, and `south` then sent the walker straight back down through
+    (1029, 399) -- 3 px from a point it had passed two steps earlier. It
+    visibly reversed. Reported from live play.
+
+    So the join is DERIVED rather than assumed: the arm is truncated at the
+    last traced point from which it can continue onto the target without
+    turning back, and the index is the target's own nearest waypoint to it.
+    Candidates are scored on the GAP between the two -- the arm and the target
+    are separately traced centrelines and do not share a pixel away from the
+    fork -- and the smallest honest gap wins, keeping the most traced road on a
+    tie.
+
+    Returns (truncated arm, atIndex, gap, rejected) with `rejected` carrying
+    the candidates that reversed, for the generated note.
+    """
+    best = None
+    rejected = []
+    for i in range(1, len(arm)):
+        for j in range(len(target)):
+            route = arm[:i + 1] + target[j:]
+            why = _walks_backward(route, road_width)
+            gap = math.dist(arm[i], target[j])
+            if why is not None:
+                rejected.append((i, j, gap, why))
+                continue
+            key = (round(gap, 3), -i)
+            if best is None or key < best[0]:
+                best = (key, i, j, gap)
+    if best is None:
+        raise SystemExit('no join from this arm onto the target avoids walking backward')
+    _, i, j, gap = best
+    return arm[:i + 1], j, gap, rejected
+
+
 def polyline_length(pts):
     return sum(math.dist(pts[i], pts[i + 1]) for i in range(len(pts) - 1))
 
@@ -121,16 +224,46 @@ def main():
     south_gate = straight_down(south[::-1], EXIT_Y)
 
     west_lane = [west_gate] + shared
-    east_lane = [east_gate] + east[::-1]
     south_lane = south + [south_gate]
 
-    # BOTH ENTRANCES END ON THE FORK and the exit starts there, which is what
-    # makes `atIndex: 0` honest on both merges -- and, more to the point, is
-    # what puts the Performance Review on road that EVERY enemy walks. The gate
-    # is a distance along `south`; with the arms feeding into it rather than
-    # diverging from it, reaching the exit means crossing it.
-    assert west_lane[-1] == east_lane[-1] == south_lane[0], (
-        west_lane[-1], east_lane[-1], south_lane[0])
+    # THE WEST ARM STILL ENDS ON THE FORK, and `atIndex: 0` is still right for
+    # it: it arrives heading east-into-the-junction and `south` leaves heading
+    # south-west, a 45 degree turn, which is the road bending and not doubling
+    # back. `join_to` is asked anyway rather than trusted, so the two arms are
+    # decided by the same rule.
+    west_arm, west_at, west_gap, _ = join_to([west_gate] + shared, south_lane, g['roadWidth'])
+
+    # THE EAST ARM IS TRUNCATED, which is this pass's whole change. See
+    # `join_to`: it ended at the fork because it is the east EXIT's polyline
+    # reversed, and joining `south` there sent every east entrant straight back
+    # down the way it had come.
+    east_arm, east_at, east_gap, east_rejected = join_to(
+        [east_gate] + east[::-1], south_lane, g['roadWidth'])
+    east_dropped = len(east) + 1 - len(east_arm)
+
+    west_lane = west_arm
+    east_lane = east_arm
+    assert west_lane[-1] == south_lane[0], (west_lane[-1], south_lane[0])
+    assert west_at == 0, west_at
+
+    # AND NEITHER ROUTE MAY WALK BACKWARD. Asserted on the joined-up route
+    # rather than on the lanes, because the fault was AT the handover and every
+    # within-lane check was clean. `tests/level8.test.ts` holds the same
+    # property on the shipped file, for every route on every level.
+    for name, route in (('west', west_lane + south_lane[west_at:]),
+                        ('east', east_lane + south_lane[east_at:])):
+        why = _walks_backward(route, g['roadWidth'])
+        assert why is None, '%s route %s' % (name, why)
+
+    # THE GATE HAS TO STAY ON BOTH ROUTES. It is a distance along `south`, and
+    # an arm that now joins part-way along skips whatever is behind it -- so
+    # the join distance is checked against the beam rather than assumed to be
+    # in front of it. 88.5 px against a beam at 142.68 today.
+    east_join_distance = polyline_length(south_lane[:east_at + 1])
+    BEAM = 142.68
+    assert east_join_distance < BEAM, (
+        'the east arm now joins south %.2f px along, past the Performance Review beam at '
+        '%.2f -- every east entrant would skip the gate' % (east_join_distance, BEAM))
 
     out = {
         'plate': 'level8',
@@ -174,7 +307,7 @@ def main():
                       'traced segment measured over 40 px rather than on the first stub -- '
                       'the same extension levels 2, 3, 4 and 6 use, and the only '
                       'non-traced coordinate on this lane.',
-        'mainMerge': {'into': 'south', 'atIndex': 0},
+        'mainMerge': {'into': 'south', 'atIndex': west_at},
         '_mainMerge': 'A MERGE NOW, NOT A SPLIT, and that one change is the level\'s '
                       'whole re-topology. The west arm used to END at the fork and hand '
                       'each walker ONE of two exits, chosen from its own `routePick`; it '
@@ -187,13 +320,26 @@ def main():
                 'id': 'east',
                 'waypoints': east_lane,
                 'entrance': True,
-                'merge': {'into': 'south', 'atIndex': 0},
+                'merge': {'into': 'south', 'atIndex': east_at},
                 '_waypoints': f'THE EAST ENTRANCE: one computed gateway at x={EXIT_X}, then '
-                              f'the same {len(east)} traced points the east EXIT used, '
-                              'walked the other way -- from the opening in the wall inward '
-                              'to the fork. Not a new trace and not a hand-edit: the '
-                              'tracer\'s own polyline, reversed. Its last waypoint IS the '
-                              'fork, which is what `atIndex: 0` on its merge means.',
+                              f'the east EXIT\'s {len(east)} traced points walked the other '
+                              f'way -- TRUNCATED to the first {len(east_arm) - 1} of them, '
+                              f'ending at {east_arm[-1]}. Not a new trace and not a '
+                              'hand-edit: the tracer\'s own polyline, reversed and cut. '
+                              'IT USED TO RUN ALL THE WAY TO THE FORK and merge at '
+                              '`atIndex: 0`, and live play reported east entrants visibly '
+                              'reversing there -- the arm climbed 76 px to the fork and '
+                              '`south` sent them straight back down through (1029, 399), 3 '
+                              'px from a point they had passed two steps earlier, a 135 '
+                              'degree hairpin. Climbing to the fork was the correct last '
+                              'move when this arm was the EXIT; it is a detour now that it '
+                              f'is an entrance. `join_to` derives the cut: the last {east_dropped} '
+                              'points are dropped and the merge lands on the target\'s own '
+                              f'nearest waypoint, {east_at}, {east_gap:.1f} px away -- 0.49 of a '
+                              'road width, so the handover is well inside the painted road. '
+                              f'It joins {east_join_distance:.1f} px along `south`, upstream of the '
+                              'Performance Review beam at 142.68, which the generator '
+                              'asserts.',
                 '_entrance': 'DECLARED, because nothing merges into this lane and '
                              '`validateLanes` would otherwise read a lane that reaches an '
                              'exit with no feed as a route with no gate. Level 6\'s '
@@ -217,8 +363,13 @@ def main():
                   'seeds, 10.6 of 239 enemies a run ever set foot on that arm and 6.1 were '
                   'buffed: the gate touched one enemy in forty. Reversing the east arm '
                   'into an entrance and making the bottom mouth the only exit puts every '
-                  'walker from both mouths on the same last 2,315 px, with the beam '
-                  'standing on it. See reports/2026-09-13-level-8-retopology.md.',
+                  'walker from both mouths on the same last stretch of road, with the beam '
+                  'standing on it. See reports/2026-09-13-level-8-retopology.md. THE WEST '
+                  'ARM SHARES ALL ' + f'{polyline_length(south_lane):.0f}' + ' PX OF IT; the '
+                  'east arm joins ' + f'{east_join_distance:.0f}' + ' px along and so shares '
+                  + f'{polyline_length(south_lane) - east_join_distance:.0f}' + ' px, which is '
+                  'the length in front of the beam either way. See `_waypoints` on the east '
+                  'lane for why it no longer runs to the fork.',
         'buildSpots': [list(p) for p in g['buildSpots']],
         '_buildSpots': f"{len(g['buildSpots'])} PADS, AND THE 'MORE THAN ANY OTHER LEVEL' "
                        'THIS NOTE USED TO CLAIM IS NO LONGER TRUE: level 7 carries 22. '
@@ -257,8 +408,19 @@ def main():
           f'(traced {polyline_length(east):.2f})')
     print(f'  south  {len(south_lane):3d} points, {polyline_length(south_lane):8.2f} px '
           f'(traced {polyline_length(south):.2f})')
-    print(f'  route in from the west  {polyline_length(west_lane) + polyline_length(south_lane):8.2f} px')
-    print(f'  route in from the east  {polyline_length(east_lane) + polyline_length(south_lane):8.2f} px')
+    # THE ROUTE AS WALKED, which is the arm plus the HANDOVER STEP plus
+    # whatever of `south` is in front of the join. Adding the two lane lengths
+    # was right while both arms merged at index 0 and is not right now: it
+    # credited the east route with the 88 px of `south` behind its join and
+    # ignored the 25 px hop onto it, and so reported 2,647 px for a road that
+    # is 2,583.
+    def route_px(arm, at):
+        return polyline_length(arm + south_lane[at:])
+    print(f'  route in from the west  {route_px(west_lane, west_at):8.2f} px')
+    print(f'  route in from the east  {route_px(east_lane, east_at):8.2f} px'
+          f'   (joins south {east_join_distance:.2f} px along, {east_gap:.1f} px hop, '
+          f'{east_dropped} traced points dropped)')
+    print(f'  rejected joins that walked backward: {len(east_rejected)}')
     print(f'  gateways: west {west_gate}, east {east_gate}, south {south_gate}')
     print(f'  {len(out["buildSpots"])} build spots, road width {out["roadWidth"]}')
 

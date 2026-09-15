@@ -15984,6 +15984,94 @@ async function run() {
     await shot('l8retopo-2-both-mouths-' + VP.w + 'x' + VP.h)
     w.die(); e2.die()
 
+    /* ---- NEITHER MOUTH EVER WALKS BACKWARD ---- */
+    //
+    // THE BUG LIVE PLAY REPORTED. The east arm is the east EXIT's traced
+    // polyline reversed, so it ended at the fork, and it merged into `south`
+    // at index 0 -- where the exit used to begin. `south`'s first move from the
+    // fork is back DOWN through (1029, 399), 3 px from a point the east arm
+    // had passed two steps earlier after climbing 76 px to get there. A 135
+    // degree hairpin, and the enemy visibly reversed on the screen.
+    //
+    // WALKED, NOT COMPUTED. `tests/laneroutes.test.ts` holds the same property
+    // on the waypoint tables for every route on every level, and it is the
+    // stronger check of the two -- but it is arithmetic on a JSON file, and the
+    // report was about something a person saw. This reads the enemy's own x, y
+    // off the live scene every frame, at eight times speed, and asks whether it
+    // ever moved back toward somewhere it had been.
+    const walkWithoutReversing = async (laneId) => {
+      const lane = G.lanes.lane(laneId)
+      const e = new Enemy8(G, EN8.intern, lane.path, G.gateway,
+        { lanes: G.lanes, laneId, startAt: { laneDistance: 4, distance: 0 } })
+      // EIGHT TIMES SPEED, so a 3,646 px route is three seconds rather than
+      // twenty-five. `speedScale` is the level's own multiplier and multiplies
+      // into the walk rather than replacing it, so the PATH is untouched --
+      // which is the thing under test.
+      e.speedScale = 8
+      G.enemies.push(e)
+      const road = G.level.map.roadWidth
+      const trail = []
+      let worstTurn = 0, worstAt = '', closest = Infinity, closestAt = ''
+      let shotTaken = false
+      for (let i = 0; i < 1200; i++) {
+        await new Promise((r) => requestAnimationFrame(r))
+        if (!e.alive) break
+        const p = [e.x, e.y]
+        const last = trail[trail.length - 1]
+        // One sample per road width of travel: consecutive frames are a
+        // pixel apart and a turn measured across two of them is noise.
+        if (last && Math.hypot(p[0] - last[0], p[1] - last[1]) < road / 4) continue
+        trail.push(p)
+        const n = trail.length
+        if (n >= 3) {
+          const a = trail[n - 3], b = trail[n - 2], c = trail[n - 1]
+          const ux = b[0] - a[0], uy = b[1] - a[1], vx = c[0] - b[0], vy = c[1] - b[1]
+          const nu = Math.hypot(ux, uy), nv = Math.hypot(vx, vy)
+          if (nu > 1e-6 && nv > 1e-6) {
+            const t = Math.acos(Math.max(-1, Math.min(1, (ux * vx + uy * vy) / (nu * nv))))
+              * 180 / Math.PI
+            if (t > worstTurn) { worstTurn = t; worstAt = Math.round(b[0]) + ',' + Math.round(b[1]) }
+            // A picture of the worst turn, once, so the numbers are not the
+            // only evidence.
+            if (t > 90 && !shotTaken) {
+              shotTaken = true
+              await lookAt(b[0], b[1])
+              await shot('l8reverse-' + laneId + '-' + VP.w + 'x' + VP.h)
+            }
+          }
+        }
+        // AND THE REVISIT: how close it came to somewhere it had left more
+        // than a road width of walking ago. This is the one that catches a
+        // loop that no single turn gives away.
+        for (let j = 0; j < n - 1; j++) {
+          let travelled = 0
+          for (let k = j + 1; k < n; k++) {
+            travelled += Math.hypot(trail[k][0] - trail[k - 1][0], trail[k][1] - trail[k - 1][1])
+          }
+          if (travelled < road) continue
+          const d = Math.hypot(p[0] - trail[j][0], p[1] - trail[j][1])
+          if (d < closest) {
+            closest = d
+            closestAt = Math.round(trail[j][0]) + ',' + Math.round(trail[j][1])
+          }
+        }
+      }
+      note('  ' + laneId.padEnd(5) + ' walked ' + trail.length + ' samples, worst turn '
+        + worstTurn.toFixed(0) + ' deg at ' + worstAt + ', came back within '
+        + (closest === Infinity ? 'n/a' : closest.toFixed(1) + ' px of ' + closestAt
+          + ' (' + (closest / road).toFixed(2) + ' x road)'))
+      expect(worstTurn <= 100, laneId + ' turned ' + worstTurn.toFixed(0)
+        + ' degrees at ' + worstAt + ' -- it walked back on itself')
+      expect(closest === Infinity || closest >= 0.7 * road, laneId
+        + ' came back within ' + closest.toFixed(1) + ' px of ' + closestAt
+        + ', under 0.7 of a ' + road + ' px road')
+      if (e.alive) e.die()
+      return trail
+    }
+    note('walking one intern in from each mouth, at 8x, reading its own position:')
+    await walkWithoutReversing('east')
+    await walkWithoutReversing('west')
+
     /* ---- EVERY ENEMY FROM BOTH MOUTHS CROSSES THE BEAM ---- */
     // Driven rather than walked: an enemy is put a few pixels short of the
     // gate's distance on the shared arm and stepped over it, from BOTH picks.
