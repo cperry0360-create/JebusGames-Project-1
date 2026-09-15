@@ -8,6 +8,10 @@ code; the seventh is an art job and nothing was changed for it.
 |---|---|---|
 | [`66a0ab3`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/66a0ab3) | the six fixes, their tests, and the five harness scenarios that see them | [run 387](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34924028663) — `changes`, `typecheck`, `test`, `deploy / build`, `deploy / deploy` all **success** |
 | [`c1682ab`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/c1682ab) | a frame per peanut value in the `counters` scenario | [run 388](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34926262299) — all five jobs **success** |
+| [`195ad71`](https://github.com/cperry0360-create/JebusGames-Project-1/commit/195ad71) | this report, and `claude/context.md` reconciled | [run 389](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/34926593896) — `changes`, `typecheck`, `test` **success**; `deploy` **skipped**, correctly: a markdown-only push does not republish |
+
+The table closes there. A CI row for the commit that writes the CI row needs a
+further commit, forever, so the last one is stated rather than regressed.
 
 `main`'s tree on origin contains all of it. Verified by reading the remote ref
 rather than the local one: `git ls-tree origin/main` lists `tests/costs.test.ts`
