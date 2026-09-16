@@ -2,7 +2,19 @@
 
 | commit | what | CI |
 |---|---|---|
-| *pending* | the four changes, their tests, and the harness instruments | *pending* |
+| `b105805` | the four changes, their tests, and the two harness instruments | *pending* |
+| `f315335` | merge `main`: the cutscene reorganisation and the guaranteed Ima Dummy Tower | *pending* |
+| *this commit* | the re-soak against `main`'s NEW integers, and this table | *pending* |
+
+**`main` moved under this branch while it was being verified**, and it moved
+the thing the brief asked to hold still. `b0150d5` guarantees the Ima Dummy
+Tower in every opening hand, which took the ten levels from
+428/255/422/299/218/210/198/184/192/195 to
+405/218/422/328/343/83/133/146/119/117 — see
+`reports/2026-09-16-dummy-tower-guaranteed.md`. The brief's ten integers are a
+fact about `f3d597d`, which is what this branch was cut from and what the first
+soak below was measured against; the second soak is against the merged tree and
+`main`'s current numbers. **Both are ten out of ten identical.**
 
 **Answers first.**
 
@@ -16,13 +28,19 @@
    pushes its own left edge left — taking `heroChip.x` with it, because the chip
    is reserved against that edge. Measured on a rendered frame: the box moves
    **28 px left** at 844x390 and the hero used to stay put.
-2. **The dead medallions do NOT share that cause, measured.** One tick after the
-   drop, all five slots are rebuilt, every hit rectangle is registered and
-   `interactive=true`, and the drift between each icon's centre and its own hit
-   rectangle's centre is **0 px** on all five. The chip's fault is objects the
-   reflow left behind; the medallions are *rebuilt* by the reflow. Whatever
-   kills them is somewhere the HUD's own display list cannot see. Not fixed
-   here, as asked.
+2. **The dead medallions do NOT share that cause — and they are now REPRODUCED
+   rather than only reasoned about.** `run.sh abilitybar` taps every slot
+   through the real input system and reports whether the press reached a
+   handler. Before the drop: four slots, all `REACHED`. After it: `molotov`,
+   `glacier` and `serverNuke` all `REACHED`, `heroSlot1` **DEAD**, `heroSlot2`
+   **DEAD**. That is the bug, on a frame, at 844x390.
+   It shares nothing with the chip's cause, and the two candidates a reader
+   would reach for first are both ruled out by the same run: **0 rebuilds over
+   a second after the drop**, so it is not the every-frame rebuild churn that
+   froze this row once before; and all five hit rectangles are registered,
+   `interactive=true`, on screen and **0 px** of drift from their own icons.
+   The geometry is healthy and the tap still does not arrive. Not fixed here,
+   as asked.
 3. **The narrower row recovers 0 pads from being hidden, because nothing is
    hidden any more** — the drawing rule the brief describes was removed on
    2026-09-15 and `padShowing` is now `this.build.isFree(spot.index)` alone.
@@ -239,8 +257,47 @@ heroSlot2   kind=heroSlot pitch=60 boxH=52  icon 48x48 at 544,354  hit at 544,35
 and enabled, and the drift between each icon's centre and its own hit
 rectangle's is 0 px on all five — including the two hero medallions. The chip's
 fault is objects the reflow left BEHIND; the medallions are objects the reflow
-REBUILDS. They cannot share a cause, and whatever kills them is not visible
-from the HUD's own display list one tick after the drop. Left open, as asked.
+REBUILDS. They cannot share a cause.
+
+### And the bug itself, reproduced
+
+`main` already carries the right instrument and nobody had pointed it at this:
+`run.sh abilitybar` overrides `armAbility` and `castHeroSlot`, taps each slot
+at its own hit rectangle's centre through the real input system, and reports
+whether the press reached a handler.
+
+| slot | before the drop | after the drop |
+|---|---|---|
+| `molotov` | REACHED | REACHED |
+| `glacier` | REACHED | REACHED |
+| `serverNuke` | — | REACHED |
+| `heroSlot1` | REACHED | **DEAD** |
+| `heroSlot2` | REACHED | **DEAD** |
+
+and `rebuilds over 1s after the drop: 0`.
+
+**AND IT IS PRE-EXISTING, run as a control.** The identical scenario on a
+worktree at `b0150d5` — unmodified `main`, its own 72 px pitches, built and run
+alone — reports the same five lines: `molotov`, `glacier` and `serverNuke`
+REACHED, both hero slots DEAD, 0 rebuilds. So narrowing the ability row neither
+caused this nor fixed it, which is the question that had to be answered before
+shipping a pass that moves those two medallions 28 px.
+
+**That last line kills the obvious suspect.** This row has frozen once before,
+and the cause was `slotSignature` disagreeing with itself so the bar was
+destroyed and rebuilt every single frame — a hit rectangle that does not
+survive a frame can never complete a tap. It is not that: the hand is stable
+and the bar is rebuilt zero times a second.
+
+So: the two medallions are drawn where they should be, their hit rectangles are
+where the icons are, the rectangles are registered and enabled, the bar is not
+churning — **and a tap on them still does not arrive**. Whatever eats the press
+is not on the HUD's own display list, and the next session should start by
+asking what else is hit-tested at the right-hand end of the ability row after
+the row has grown 56 px wider. `run.sh abilitybar 220 844x390` is the
+reproduction, and it takes about four minutes.
+
+Left open, as asked.
 
 ---
 
@@ -490,22 +547,45 @@ a green run is bad at seeing.
 
 ### The suite, the typecheck, and the soak
 
-- **`npm test`: 1171 passing, 0 failing** (1169 before; two tests added).
+- **`npm test`: 1171 passing, 0 failing** before the merge (1169 before; two
+  tests added), and **1189 passing, 0 failing** after it.
   Seven existing tests were UPDATED rather than left to pass vacuously —
   `content`, `heropowers`, `assetpaths`, `sceneevents`, `hudpads`, `drawer`,
   and the two recorded drawer numbers.
-- **`sh tools/tsdiff.sh f3d597d`: no introduced errors** (214 on the baseline,
-  213 on this tree). Its blind spot applies as always: without `node_modules`
-  every Phaser member is `any`, so an access rule on one cannot fire here.
-- **Soak, all ten levels, 480 seeds, normal**, `tools/soak/level.ts`:
+- **`sh tools/tsdiff.sh`: no introduced errors, against both baselines** —
+  214 → 213 against `f3d597d` before the merge, and 215 → 214 against
+  `b0150d5` after it. Its blind spot applies as always: without `node_modules`
+  every Phaser member is `any`, so an access rule on one cannot fire here and
+  CI is the first thing that can tell you.
+- **Soak, all ten levels, 480 seeds, normal**, `tools/soak/level.ts`, run
+  **TWICE** because `main`'s own numbers moved underneath this branch:
+
+  Against `f3d597d`, which this branch was cut from and which is where the
+  brief's ten integers come from:
 
 | level | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
 |---|---|---|---|---|---|---|---|---|---|---|
 | expected | 428 | 255 | 422 | 299 | 218 | 210 | 198 | 184 | 192 | 195 |
 | measured | **428** | **255** | **422** | **299** | **218** | **210** | **198** | **184** | **192** | **195** |
 
-  **Ten out of ten identical.** Nothing in this pass touches simulation, and
-  the soak agrees.
+  And again on the MERGED tree, against the integers `main` carries today after
+  `b0150d5` guaranteed the Ima Dummy Tower in every opening hand:
+
+| level | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `main` today | 405 | 218 | 422 | 328 | 343 | 83 | 133 | 146 | 119 | 117 |
+| measured | **405** | **218** | **422** | **328** | **343** | **83** | **133** | **146** | **119** | **117** |
+
+  **Ten out of ten identical, twice, against two different baselines.** Nothing
+  in this pass touches simulation, and the soak agrees — including through the
+  one change that could plausibly have leaked, `showNumber` leaving
+  `damageEnemy` and `Enemy.hurt` and moving `pierce` up a position at fifteen
+  call sites.
+
+  **The 9,600 runs behind the second table say nothing about whether the game
+  got easier or harder**; that is `main`'s change and
+  `reports/2026-09-16-dummy-tower-guaranteed.md`'s argument, and this pass
+  neither endorses nor touches it.
 
 ### How to reproduce any of it
 
@@ -530,9 +610,10 @@ like a product failure.
 
 ### What was NOT checked
 
-- **The dead-medallions bug is not reproduced**, only measured from the HUD's
-  side. The recording says the cause is not a stale rectangle; it does not say
-  what the cause is.
+- **The dead-medallions bug is reproduced but NOT diagnosed.** Three causes are
+  ruled out — the chip's stale-position fault, the every-frame rebuild churn,
+  and drifted or disabled hit rectangles — and the run does not say what the
+  cause IS.
 - **`GL=1` was not used**, so nothing here says anything about the WebGL path.
   The default runs fall back to Canvas2D, which is correct for layout and
   wrong for questions about the drawing context — and there are none here.
@@ -581,11 +662,16 @@ instruments that did not exist before — `combat`'s board census and
 **Still open, carried forward:**
 
 1. **The two hero ability medallions go dead after the Server Nuke drops.**
-   Not fixed here, as instructed. This report establishes what it is NOT: not
-   the chip's cause, and not a stale or drifted hit rectangle — all five slots
-   read rebuilt, registered, enabled and 0 px drift one tick after the drop.
-   The next session should look outside the HUD's display list. `run.sh
-   herochip` is where the recording lives.
+   Not fixed here, as instructed — but **reproduced**, with `run.sh abilitybar`,
+   which taps each slot through the real input system: after the drop
+   `heroSlot1` and `heroSlot2` both report DEAD while the three drafted cards
+   report REACHED. **Identical on unmodified `main` at `b0150d5`**, so it is
+   pre-existing and the narrower row neither caused nor fixed it. Three causes
+   are ruled out: the chip's stale-position fault, the every-frame rebuild
+   churn that froze this row once before (0 rebuilds a second), and drifted or
+   disabled hit rectangles (registered, enabled, 0 px drift). The next session
+   should ask what ELSE is hit-tested at the right-hand end of the row once it
+   has grown.
 2. **`status.kills` is never incremented.** Dead state, read by two harness
    scenarios, worth either wiring or deleting.
 3. **568x320 with a notch has a 49 px drawer grid against a 62 px tile.**

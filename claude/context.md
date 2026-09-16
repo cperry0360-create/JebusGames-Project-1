@@ -825,15 +825,23 @@ the paragraph above settled it.
   difficulties — 29% and 23% on the same tree. Level 9 ships at 0.10, well clear
   of it, but a later pass that walks the share upward will hit it.
 
-- **The two hero ability medallions go dead after the Server Nuke drops.** Reported
-  from live play 2026-09-17 and deliberately NOT fixed in that pass, which fixed the
-  hero-chip bug beside it. What is now ESTABLISHED, from a rendered frame in
-  `run.sh herochip`: it does **not** share the chip's cause. One tick after the drop
-  all five slots are rebuilt, every hit rectangle is registered and `interactive=true`,
-  and the drift between each icon's centre and its own hit rectangle's is **0 px** on
-  all five, medallions included. The chip's fault was objects the reflow left BEHIND;
-  the medallions are objects the reflow REBUILDS. So look outside the HUD's display
-  list. `reports/2026-09-17-hud-cleanup.md` carries the recording.
+- **The two hero ability medallions go dead after the Server Nuke drops, and it is
+  REPRODUCIBLE IN ONE COMMAND.** `sh tools/harness/run.sh abilitybar 200 844x390`,
+  which is already in the repository and which nobody had pointed at this: it taps
+  each slot at its hit rectangle's centre through the real input system and prints
+  REACHED or DEAD. Before the drop, four slots, all REACHED. After it, the three
+  drafted cards REACHED and `heroSlot1` and `heroSlot2` both **DEAD**.
+  **Pre-existing**: identical on a worktree at `b0150d5` with none of the 2026-09-17
+  HUD pass in it, so narrowing the ability row neither caused nor fixed it.
+  **THREE CAUSES ARE DOWN.** (1) Not the hero chip's fault beside it — that was
+  objects the reflow left behind, and these are objects the reflow REBUILDS.
+  (2) Not the every-frame rebuild churn that froze this row in an earlier pass: the
+  same run reports **0 rebuilds over a second** after the drop. (3) Not geometry —
+  `run.sh herochip` records all five hit rectangles registered, `interactive=true`,
+  on screen, and **0 px** of drift from their own icons.
+  So the press is being eaten by something that is not on the HUD's display list.
+  Start by asking what ELSE is hit-tested at the right-hand end of the ability row
+  once the row has grown. `reports/2026-09-17-hud-cleanup.md` has both recordings.
 - **`status.kills` is never incremented.** Declared on the status object, zeroed by
   `startRun`, and written nowhere else, so it reads 0 through a wave that visibly
   clears. Two harness scenarios print it (`lost`, and `combat` until 2026-09-17 when
