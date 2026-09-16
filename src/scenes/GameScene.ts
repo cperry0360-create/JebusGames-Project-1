@@ -76,7 +76,7 @@ import { Cooldowns } from '../systems/Cooldowns.ts'
 import { unlockedTowerCount } from '../systems/Draft.ts'
 import { runState, setRunState } from '../systems/RunState.ts'
 import { castAbility } from '../systems/AbilityRunner.ts'
-import { PRESENTATION, deathPuff, floatingDamage, hitPause } from '../systems/Presentation.ts'
+import { PRESENTATION, deathPuff, floatingLabel, hitPause } from '../systems/Presentation.ts'
 import { cueLeadInMs, play, playRotating, resetVoices } from '../systems/Audio.ts'
 import { Enemy } from '../entities/Enemy.ts'
 import type { Blocker } from '../entities/Enemy.ts'
@@ -4236,8 +4236,7 @@ export class GameScene extends Phaser.Scene {
     burstAt(this, p.fx, x, y, p.radius * 2, OVERLAY_DEPTH, { flattenY: flat })
     this.cameras.main.shake(s.haymakerMs * 0.8, s.haymakerIntensity * 0.8)
     for (const e of this.enemiesNear(x, y, p.radius)) {
-      this.damageEnemy(e, p.damage, p.ignoresArmor, 0, false)
-      floatingDamage(this, e.x, e.centreY, p.damage, true)
+      this.damageEnemy(e, p.damage, p.ignoresArmor)
       if (p.stunSeconds > 0) {
         e.applyStun(p.stunSeconds, RULES.combat.stunLockoutMultiple, RULES.combat.stunDiminish)
       }
@@ -4295,8 +4294,7 @@ export class GameScene extends Phaser.Scene {
         // A small blast per strike, so a scatter over a crowd spreads its
         // damage instead of all of it landing on one unlucky enemy.
         for (const e of this.enemiesNear(pt.x, pt.y, PRESENTATION.heroFx.strikeLength)) {
-          this.damageEnemy(e, p.damage, p.ignoresArmor, 0, false)
-          floatingDamage(this, e.x, e.centreY, p.damage, false)
+          this.damageEnemy(e, p.damage, p.ignoresArmor)
         }
       }
       if (i === 0) land()
@@ -4334,8 +4332,7 @@ export class GameScene extends Phaser.Scene {
       PRESENTATION.heroFx.beamHeight, OVERLAY_DEPTH)
     areaRing(this, x, y, p.radius, colour, OVERLAY_DEPTH + 1)
     for (const e of this.enemiesNear(x, y, p.radius)) {
-      this.damageEnemy(e, p.damage, p.ignoresArmor, 0, false)
-      floatingDamage(this, e.x, e.centreY, p.damage, true)
+      this.damageEnemy(e, p.damage, p.ignoresArmor)
       if (p.slowSeconds > 0) {
         e.applySlow(p.slowFactor, p.slowSeconds, RULES.combat.slowDiminish)
       }
@@ -4362,8 +4359,7 @@ export class GameScene extends Phaser.Scene {
     // tail lands on Bailey and the arrowhead on the point she was sent to.
     alongLine(this, p.fx, from, to, p.radius * 2, OVERLAY_DEPTH)
     for (const e of this.enemies.filter((q) => q.alive && withinDash({ x: q.x, y: q.y }, from, to, p.radius))) {
-      this.damageEnemy(e, p.damage, p.ignoresArmor, 0, false)
-      floatingDamage(this, e.x, e.centreY, p.damage, true)
+      this.damageEnemy(e, p.damage, p.ignoresArmor)
       e.knockBack(p.knockbackPixels)
     }
     this.hero.setRally(x, y)
@@ -4707,8 +4703,7 @@ export class GameScene extends Phaser.Scene {
       for (const e of this.enemies) {
         if (!e.alive || e.controlled) continue
         if (distanceToSegment({ x: e.x, y: e.y }, from, to) > h.def.beamWidth / 2) continue
-        this.damageEnemy(e, h.def.damage, h.def.ignoresArmor, 0, false)
-        floatingDamage(this, e.x, e.centreY, h.def.damage, false)
+        this.damageEnemy(e, h.def.damage, h.def.ignoresArmor)
       }
     }
     if (h.left <= 0) this.endHeldAbility('spent')
@@ -4810,7 +4805,7 @@ export class GameScene extends Phaser.Scene {
       if (out.expired) {
         // Whatever is left of it, so the hit lands and the death is real
         // rather than a sprite being removed.
-        this.damageEnemy(e, e.health + e.effectiveArmor + 1, true, 0, false)
+        this.damageEnemy(e, e.health + e.effectiveArmor + 1, true)
         continue
       }
       if (!out.swing) continue
@@ -4823,8 +4818,7 @@ export class GameScene extends Phaser.Scene {
       const victim = this.enemiesNear(e.x, e.y, control.range)
         .find((q) => q !== e && !q.controlled)
       if (!victim) continue
-      this.damageEnemy(victim, control.damage, control.ignoresArmor, 0, false)
-      floatingDamage(this, victim.x, victim.centreY, control.damage, false)
+      this.damageEnemy(victim, control.damage, control.ignoresArmor)
     }
   }
 
@@ -4897,8 +4891,7 @@ export class GameScene extends Phaser.Scene {
           // same object out of the same file.
           const g = e.def.glides ? this.gliding : null
           if (!g?.ignoresGroundHazards) {
-            this.damageEnemy(e, h.state.def.damage, h.state.def.ignoresArmor, 0, false)
-            floatingDamage(this, e.x, e.centreY, h.state.def.damage, false)
+            this.damageEnemy(e, h.state.def.damage, h.state.def.ignoresArmor)
           }
           if (!g?.ignoresGroundSlow) {
             e.applySlow(h.state.def.slowFactor, h.state.def.slowSeconds, RULES.combat.slowDiminish)
@@ -4967,10 +4960,10 @@ export class GameScene extends Phaser.Scene {
       if (!e.alive) continue
       // The sun, which is a flat rate per second and only ever burns a vampire.
       const sun = n.sunFor(e.def) * dt
-      if (sun > 0) this.damageEnemy(e, sun, true, 0, false)
+      if (sun > 0) this.damageEnemy(e, sun, true)
       // ...and its own blood. Both bypass armour: neither is a hit.
       const bled = n.bleedTick(e, dt)
-      if (bled > 0) this.damageEnemy(e, bled, true, 0, false)
+      if (bled > 0) this.damageEnemy(e, bled, true)
     }
   }
 
@@ -5412,10 +5405,8 @@ export class GameScene extends Phaser.Scene {
    */
   private skillPunch(k: HeroAbilityDef, target: Enemy): void {
     const s = PRESENTATION.shake
-    this.damageEnemy(target, k.damage, k.ignoresArmor, 0, false)
+    this.damageEnemy(target, k.damage, k.ignoresArmor)
     target.knockBack(k.knockbackPixels)
-    floatingDamage(this, target.x, target.centreY, k.damage, true, undefined,
-      EFFECT_MS.haymakerNumberScale)
     this.cameras.main.shake(s.haymakerMs, s.haymakerIntensity)
     // THE BURST IS AT HIM, NOT AT WHAT HE HIT. Haymaker is a punch he throws
     // rather than something that lands over there, and the art is drawn as one
@@ -5436,8 +5427,7 @@ export class GameScene extends Phaser.Scene {
   private skillDouble(k: HeroAbilityDef, target: Enemy): void {
     const land = (): void => {
       if (!target.alive) return
-      this.damageEnemy(target, k.damage, k.ignoresArmor, 0, false)
-      floatingDamage(this, target.x, target.centreY, k.damage, false)
+      this.damageEnemy(target, k.damage, k.ignoresArmor)
       playEffect(this, ART.fx.spark, target.x, target.centreY, {
         size: EFFECT_MS.haymakerSparkSize * 0.7, depth: target.y + 8,
         durationMs: EFFECT_MS.hitSparkMs,
@@ -5458,8 +5448,7 @@ export class GameScene extends Phaser.Scene {
    * this one is checked against `alive` on every tick.
    */
   private skillBurn(k: HeroAbilityDef, target: Enemy): void {
-    this.damageEnemy(target, k.damage, k.ignoresArmor, 0, false)
-    floatingDamage(this, target.x, target.centreY, k.damage, false)
+    this.damageEnemy(target, k.damage, k.ignoresArmor)
     // The flame that says so, at the moment of the hit. The lasting half is
     // `setBurning`: the enemy carries the state and `syncStatusMarkers` draws
     // a marker over it for as long as it holds, so the fire follows it about
@@ -5474,11 +5463,14 @@ export class GameScene extends Phaser.Scene {
       callback: () => {
         left -= 1
         if (!target.alive || left < 0) { tick.remove(); return }
-        this.damageEnemy(target, k.burnPerSecond, k.ignoresArmor, 0, false)
-        // The burn is most of Ember's damage and it was silent: a blast puff
-        // with no number reads as decoration rather than as the ability still
-        // working.
-        floatingDamage(this, target.x, target.centreY, k.burnPerSecond, false)
+        this.damageEnemy(target, k.burnPerSecond, k.ignoresArmor)
+        // THE BURN IS MOST OF EMBER'S DAMAGE AND ITS NUMBER IS GONE, so this
+        // blast is now the whole of what a tick says -- which is why it stays
+        // where the hit spark went. It is not the same class of thing: a spark
+        // fired on every tower shot and said only that a hit had happened,
+        // while this fires once a second on a target that is visibly alight
+        // and says the burn is STILL RUNNING. The flame marker over the enemy
+        // says it is burning; this says it is being burned right now.
         playEffect(this, ART.fx.blast, target.x, target.centreY, {
           size: 34, depth: target.y + 8, durationMs: EFFECT_MS.hitSparkMs,
         })
@@ -5501,10 +5493,9 @@ export class GameScene extends Phaser.Scene {
     // and this is how every other call site in this file reads. See CLAUDE.md
     // on tsdiff -- AbilityRunner has carried the identical artifact for months.
     for (const e of this.enemiesNear(this.hero.x, this.hero.y, k.radius)) {
-      this.damageEnemy(e, k.damage, k.ignoresArmor, 0, false)
+      this.damageEnemy(e, k.damage, k.ignoresArmor)
       // It was the only slot 1 that dealt damage and printed no number, so a
       // Shockwave into a crowd read as a flash with nothing behind it.
-      floatingDamage(this, e.x, e.centreY, k.damage, false)
       e.applyStun(k.stunSeconds, RULES.combat.stunLockoutMultiple, RULES.combat.stunDiminish)
     }
   }
@@ -5528,8 +5519,10 @@ export class GameScene extends Phaser.Scene {
     for (const e of this.enemiesNear(this.hero.x, this.hero.y, k.radius)) {
       e.applySlow(k.slowFactor, k.slowSeconds, RULES.combat.slowDiminish)
       // Named rather than numbered: there is no damage to print, and a "0"
-      // floating off an enemy reads as the skill failing.
-      floatingDamage(this, e.x, e.centreY, 0, false, 'SLOW')
+      // floating off an enemy reads as the skill failing. It is the ONE
+      // surviving caller of the float -- see `floatingLabel`, which no longer
+      // takes an amount at all, so this cannot quietly become a number again.
+      floatingLabel(this, e.x, e.centreY, 'SLOW')
     }
   }
 
@@ -6488,7 +6481,12 @@ export class GameScene extends Phaser.Scene {
       if (take <= 0) continue
       this.setPeanuts(this.status.peanuts - take)
       logEvent('taxed', `${e.def.name} -${take} -> ${this.status.peanuts}`)
-      floatingDamage(this, e.x, e.centreY, take, true, `-${take} PEANUTS`)
+      // NO FLOAT ON THE BOARD FOR THIS ONE, and it loses nothing. The amount
+      // is named three times over by things that outlast a 620ms tween: the
+      // peanut pill bumps red and redraws to the new total, the alert below
+      // prints the number as a toast under the player's own thumb, and the
+      // sound and shake say it happened. A figure over the Politician's head
+      // was the fourth copy and the only one that could be missed.
       play(this, 'taxed', 0.7)
       this.cameras.main.shake(140, 0.004)
       this.status.alert = `${e.def.name} taxed you ${take} peanuts. Spend it or lose it.`
@@ -7226,7 +7224,12 @@ export class GameScene extends Phaser.Scene {
     const power = tower.damage * tower.rampMultiplier
     this.shots.push(
       new Projectile(this, m.x, m.y, shot, target, tower.def.projectileSpeed, (hit) => {
-        this.impactSpark(hit.x, hit.target.centreY)
+        // NO SPARK ON AN ORDINARY TOWER HIT. Removed 2026-09-17 with the
+        // damage numbers and for the same reading: a tower fires about twice a
+        // second and the spark said only that it had connected, which the
+        // projectile arriving and the target's health bar dropping both say
+        // already. A splash still draws its blast below, because that one says
+        // HOW FAR the hit reached.
         if (tower.splashRadius > 0) {
           this.blast(hit.x, hit.y, tower.splashRadius)
           for (const e of withinRadius(this.enemies, hit.x, hit.y, tower.splashRadius)) {
@@ -7287,11 +7290,25 @@ export class GameScene extends Phaser.Scene {
       .filter((e) => e !== from && e.alive)
       .slice(0, extra)
     for (const e of near) {
-      this.impactSpark(e.x, e.centreY)
       this.hitWith(tower, e, power * falloff)
     }
   }
 
+  /**
+   * ONE CALLER LEFT, AND IT IS NOT A HIT MARKER.
+   *
+   * This fired on every tower projectile impact, on every chain-tower falloff
+   * hit, and on the hero's melee against a Vlaude wall or a countermeasure.
+   * All four went on 2026-09-17: a spark that says only A HIT HAPPENED is what
+   * the health bar over the target already says, and at four towers into a
+   * wave they were flicker rather than feedback.
+   *
+   * `countermeasureShot` keeps it because there it is not a hit marker: the
+   * bolt is DRAWN rather than simulated -- a line that fades in 180ms from a
+   * turret to somewhere on the board -- and the spark is the end of it. It
+   * says WHICH TOWER was shot, which is the one thing a player has to read off
+   * one of Vlaude's six powers firing.
+   */
   private impactSpark(x: number, y: number): void {
     playEffect(this, ART.fx.spark, x, y, {
       size: EFFECT_MS.hitSparkSize, depth: y + 2, durationMs: EFFECT_MS.hitSparkMs,
@@ -7321,16 +7338,24 @@ export class GameScene extends Phaser.Scene {
     this.damageEnemy(enemy, damage, ignoresArmor)
   }
 
+  /**
+   * `showNumber` WAS THE FIFTH PARAMETER AND IT IS GONE, 2026-09-17.
+   *
+   * It existed because a cast that charged several enemies wanted to print ONE
+   * big figure rather than one per target, so the per-enemy number had to be
+   * suppressed. There are no figures now, so every caller passing `0, false`
+   * was threading a flag through the damage path to switch off something that
+   * does not exist. Taking the parameter out is what stops it surviving as a
+   * dead argument nobody can date.
+   */
   private damageEnemy(
     enemy: Enemy,
     damage: number,
     ignoresArmor: boolean,
     pierce = 0,
-    /** Off for a hit that draws its own, bigger number. */
-    showNumber = true,
   ): void {
     if (!enemy.alive) return
-    if (enemy.hurt(damage, ignoresArmor, showNumber, pierce)) {
+    if (enemy.hurt(damage, ignoresArmor, pierce)) {
       play(this, 'death')
       // A boss who retreats is logged as retreating. The line is read back off
       // a soak run and off a crash report, and "death: The Glitch Lich King"
@@ -7697,7 +7722,12 @@ export class GameScene extends Phaser.Scene {
       x: layout.abilities.x,
       y: layout.abilities.y,
       scale: layout.abilityScale,
-      iconH: 64,
+      // FROM THE DATA, not a 64 written here. This was the third copy of
+      // `hud.layout.iconHeight` and the only one nothing tested, so when the
+      // ability row was pulled in on 2026-09-17 it would have been the one
+      // left behind -- the drop announcement's icon would have flown to a slot
+      // twelve pixels taller than the one it was landing in.
+      iconH: LAYOUT.iconHeight,
     })
     const mine = placed.find((r) => r.id === id) ?? placed[placed.length - 1]
     if (!mine) {
@@ -7734,10 +7764,12 @@ export class GameScene extends Phaser.Scene {
 
     const healed = this.night?.healFor(enemy, dealt) ?? 0
     if (healed <= 0) return
+    // THE HEAL PIP IS GONE WITH THE REST OF THE NUMBERS. What it was for --
+    // seeing the heal rather than noticing a bar that stopped falling -- is
+    // done by the bar itself: `heal` redraws it, so the bar visibly goes back
+    // UP, which is a thing nothing else on the board does and is therefore
+    // more legible than one more figure among the ones that were removed.
     enemy.heal(healed)
-    // A small red pip, so the player can SEE it happening rather than having
-    // to notice a bar that stopped falling.
-    floatingDamage(this, enemy.x, enemy.centreY, Math.round(healed), true)
   }
 
   private damageHero(damage: number): void {
@@ -7843,7 +7875,13 @@ export class GameScene extends Phaser.Scene {
     logEvent('escape', `${enemy.def.name} -${enemy.def.livesCost} lives`)
     this.status.lives -= enemy.def.livesCost
 
-    floatingDamage(this, enemy.x, enemy.centreY, enemy.def.livesCost, true)
+    // NO `-1` FLOATING OFF THE EXIT. It went with the damage numbers on
+    // 2026-09-17, and this is the one removal where something else was already
+    // saying it louder: the lives pill in the corner bumps white-on-red the
+    // frame it changes, the shake below is a leak's own shake, and the sound
+    // three lines down is chosen by whether that was the last life. A figure
+    // at the far end of the lane, where the player is not looking, was the
+    // weakest of the four.
     enemy.destroy()
 
     // The last one gets its own sound, so the player hears the difference
@@ -8406,8 +8444,6 @@ export class GameScene extends Phaser.Scene {
             w.strikeTimer = this.hero.attackInterval
             const hit = Math.max(1, this.hero.damage - (this.hero.def.ignoresArmor ? 0 : w.armor))
             w.state.health -= hit
-            floatingDamage(this, w.x, w.y - 20, hit, false)
-            this.impactSpark(w.x, w.y - 12)
           }
         }
         if (w.left <= 0 || w.state.health <= 0) w.state.broken = true
@@ -8511,8 +8547,6 @@ export class GameScene extends Phaser.Scene {
           c.strikeTimer = this.hero.attackInterval
           const hit = Math.max(1, this.hero.damage - (this.hero.def.ignoresArmor ? 0 : armor))
           c.health -= hit
-          floatingDamage(this, c.x, c.y - 30, hit, false)
-          this.impactSpark(c.x, c.y - 20)
         }
       }
       if (c.health <= 0) {
@@ -8590,7 +8624,12 @@ export class GameScene extends Phaser.Scene {
     const cfg = this.vlaude?.powers.generateWeapon ?? {}
     const pool = (cfg.towerHealth as number) ?? 0
     const left = (this.towerPools.get(tower) ?? pool) - damage
-    floatingDamage(this, tower.x, tower.y - 30, damage, false)
+    // NO NUMBER OVER THE TOWER. The pool is deliberately invisible -- see this
+    // method's header and level10.json's `_towerHealth` -- so a figure over
+    // the tower was printing a quantity the game refuses to show a bar for.
+    // What the player has to read is that the lights went out, which is
+    // `landDisable` below, and the bolt that did it, which is the spark in
+    // `countermeasureShot`.
     if (left > 0) {
       this.towerPools.set(tower, left)
       return

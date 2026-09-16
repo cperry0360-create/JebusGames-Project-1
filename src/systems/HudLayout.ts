@@ -154,8 +154,20 @@ export interface LayoutConfig {
    *  control: nothing taps it, so its only floor is legibility and it is much
    *  shorter than the 44px plate it was cut from. */
   readoutHeight: number
-  /** Between the two stacked readouts. */
+  /** Between two stacked readouts. */
   readoutGap: number
+  /**
+   * How many readouts are stacked in that corner. THREE since the wave counter
+   * moved there on 2026-09-17; it was a `2` written into the arithmetic below.
+   *
+   * A count in the code and a list of readouts in HudScene are two
+   * descriptions of the same thing, and the corner's reserved height came off
+   * the one that could not see the other. Adding a plate to the list therefore
+   * laid it out in space nothing had reserved, which is the identical shape to
+   * the Server Nuke's fifth ability icon -- see `AbilityBar.ts`. This is the
+   * one description; `tests/readouts.test.ts` holds the list's length to it.
+   */
+  readoutCount: number
 }
 
 export interface HudLayout {
@@ -301,8 +313,8 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
   }
   const topRight = settings.x - cfg.marginX
 
-  // THE READOUTS, STACKED IN THE CORNER. Two of them -- peanuts and lives --
-  // one above the other, each `readoutHeight` tall.
+  // THE READOUTS, STACKED IN THE CORNER. `readoutCount` of them -- peanuts,
+  // lives and the wave -- one above the other, each `readoutHeight` tall.
   //
   // They were three 44px plates in a row spanning most of the width, and the
   // row is what sat on the build pads: `padhud` measured the counters or the
@@ -316,7 +328,8 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
   const topRoom = topRight - left - cfg.startMinWidth - cfg.marginX
   const countersW = Math.min(input.countersWidth, Math.max(0, topRoom))
   const counterScale = input.countersWidth > 0 ? countersW / input.countersWidth : 1
-  const countersH = cfg.readoutHeight * 2 + cfg.readoutGap
+  const countersH = cfg.readoutHeight * cfg.readoutCount
+    + cfg.readoutGap * Math.max(0, cfg.readoutCount - 1)
   const counters: Rect = {
     x: left, y: top,
     width: countersW,
@@ -444,6 +457,47 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
   return {
     counters, startButton, messageRow, heroChip, abilities, settings, cancel,
     panelArea, counterScale, abilityScale,
+  }
+}
+
+/**
+ * WHERE THE HERO CHIP'S CONTENTS GO, from the chip's own rectangle.
+ *
+ * THE BUG THIS EXISTS TO CLOSE. The chip is a plate, a portrait, a health bar,
+ * a countdown label and a tap rectangle. `drawHeroChip` redrew the plate and
+ * the bar from `this.layout.heroChip` on every frame, so those two tracked the
+ * layout; the portrait, the label and the tap rectangle were positioned ONCE,
+ * in `buildHeroChip`, from the rectangle that was current at scene creation.
+ *
+ * For most of a run nothing moves and the two agree. Then the Server Nuke
+ * drops. The drop ADDS a medallion to the ability row -- `slotDefs` appends
+ * the rare ability to the drafted group -- so `relayoutAbilities` runs, the row
+ * is re-measured a drafted pitch wider, and because the row is CENTRED its left
+ * edge moves left by half of that. `heroChip.x` is `abilities.x - chipBlock`,
+ * so the chip's box moves left with it. The plate and the bar followed. The
+ * portrait, the label and the tap target did not, and the hero was drawn
+ * outside his own box -- by half a drafted pitch, which is more than the box's
+ * half-width, so he cleared it entirely.
+ *
+ * It was NOT a container whose contents were left behind: there is no
+ * container. It was five objects in absolute coordinates where two were
+ * re-read every frame and three were baked at build time.
+ *
+ * So the arithmetic lives here, once, and both `buildHeroChip` and
+ * `drawHeroChip` place from it. `tests/hudlayout.test.ts` proves the centre
+ * stays inside the box across a row that changes width, and proves the box
+ * really moves -- otherwise the test could not fail.
+ */
+export function heroChipContent(box: Rect, edgeWidth: number): {
+  cx: number
+  cy: number
+  /** The square the portrait is fitted into: the chip less its frame. */
+  fit: number
+} {
+  return {
+    cx: box.x + box.width / 2,
+    cy: box.y + box.height / 2,
+    fit: box.width - edgeWidth * 4,
   }
 }
 

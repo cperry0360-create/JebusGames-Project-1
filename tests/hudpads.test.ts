@@ -257,13 +257,33 @@ test('nothing tappable in the HUD is under the 44pt floor', () => {
 
 test('the readouts shrank and the controls did not', () => {
   // The shape of the change, pinned so a later pass cannot quietly put the
-  // full-width row back. The stack must also be no taller than the row it
-  // replaced: the second row is placed under it and the build drawer's panel
-  // under that, so a taller group costs the drawer its grid.
+  // full-width row back.
   assert.ok(LAYOUT.readoutHeight < LAYOUT.plateHeight,
     'a readout is no smaller than the 44px plate it was cut from')
-  assert.equal(LAYOUT.readoutHeight * 2 + LAYOUT.readoutGap, LAYOUT.plateHeight,
-    'the stacked pair is not the same height as the row it replaced, so the top band moved')
+
+  // THE STACK IS A THIRD PLATE TALLER SINCE 2026-09-17 and the rule it used to
+  // be held to -- exactly `plateHeight`, so the top band never moved -- could
+  // not survive the wave counter joining it. What that rule was PROTECTING can
+  // and does: the second row sits under this corner and the build drawer's
+  // panel under that, so a taller group costs the drawer its grid. So the
+  // assertion is now against the thing at risk rather than against the
+  // arithmetic that used to keep it safe, and `tests/drawer.test.ts` records
+  // the grid heights that prove it was paid for -- `rowHeight` 22 -> 16 and
+  // `rowGap` 6 -> 4 give back the twelve pixels the third plate costs.
+  const stack = LAYOUT.readoutHeight * LAYOUT.readoutCount
+    + LAYOUT.readoutGap * (LAYOUT.readoutCount - 1)
+  assert.equal(LAYOUT.readoutCount, 3, 'the top-left corner is not three readouts')
+  assert.ok(stack - LAYOUT.plateHeight <= 12,
+    `the readout stack is ${stack}px against the ${LAYOUT.plateHeight} of the row it replaced; ` +
+    'more than twelve over cannot be paid back out of the second row')
+  // AND IT HAS TO BE PAID BACK. The second row is the only thing between this
+  // corner and the drawer's panel, so what the third plate took is what that
+  // row has to give up. 4 + 16 = 20 against the 6 + 22 = 28 it was.
+  assert.ok(LAYOUT.rowGap + LAYOUT.rowHeight <= 20,
+    `the second row costs ${LAYOUT.rowGap + LAYOUT.rowHeight}px, so the third readout ` +
+    'was never paid for and the build drawer is carrying it')
+  assert.ok(LAYOUT.rowHeight >= P.hud.bossBarHeight,
+    `the second row is ${LAYOUT.rowHeight}px and the boss bar in it is ${P.hud.bossBarHeight}`)
   assert.equal(LAYOUT.plateHeight, 44, 'the wave control is under the tap floor')
   assert.ok(LAYOUT.startWidth < 168, 'the wave control did not get smaller')
   assert.ok(LAYOUT.startMinWidth >= 44, 'the wave control can shrink under the tap floor')

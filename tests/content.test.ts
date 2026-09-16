@@ -926,7 +926,18 @@ test('presentation numbers are present and sane', () => {
     'the shadow texture should be wider than it is tall')
   assert.ok(pres.enemyBob.amplitudeY > 0 && pres.enemyBob.durationMs > 0)
   assert.ok(pres.towerRecoilPixels > 0 && pres.towerRecoilMs > 0)
-  assert.ok(pres.damageNumbers.critFontSize > pres.damageNumbers.fontSize)
+  // THE FLOATING DAMAGE NUMBERS ARE GONE, 2026-09-17, and this used to assert
+  // that a crit's figure was larger than an ordinary hit's. Both are retired;
+  // what is left is `floatingLabel`, a rising WORD with one caller (Bark's
+  // SLOW). It is asserted here as a SHAPE rather than a size, because the way
+  // this comes back is as a `critFontSize` beside the rest.
+  assert.equal(pres.damageNumbers, undefined,
+    'the damage numbers are back in the data; they were removed, not tuned')
+  assert.equal(typeof pres._damageNumbers, 'string',
+    'the retirement note for damageNumbers is gone, so the next pass will re-add it')
+  assert.ok(pres.floatingLabel.fontSize >= 15 && pres.floatingLabel.durationMs > 0)
+  assert.equal(pres.floatingLabel.critFontSize, undefined,
+    'floatingLabel has a crit size, so it is carrying a quantity again')
   assert.ok(pres.shake.lastStandIntensity > pres.shake.leakIntensity,
     'Last Stand should shake harder than a leak')
 })

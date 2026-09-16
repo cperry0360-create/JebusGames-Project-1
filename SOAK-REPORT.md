@@ -132,6 +132,36 @@ retune a level to chase column C.**
 in band at 192/480. Both halves of that derivation are gone — a two-tower
 opening and the old builder — and the level reads 208 under B and 146 under C.
 
+## 2026-09-17 — The HUD cleanup moved nothing
+
+**All ten levels, 480 seeds, normal, identical integers.** The four HUD changes
+of 2026-09-17 — the floating damage numbers and ordinary hit sparks removed, the
+hero chip's contents made to track their box, the bottom row narrowed, the wave
+counter moved to the top-left stack — touch presentation, layout and a damage
+helper's ARITY, and none of them touch simulation. Re-soaked to prove it:
+
+**Run TWICE, against two baselines**, because `main` shipped the guaranteed Ima
+Dummy Tower while this branch was being verified and every level's integer moved
+with it. Against `f3d597d`, which the branch was cut from:
+
+| level | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `f3d597d` | 428 | 255 | 422 | 299 | 218 | 210 | 198 | 184 | 192 | 195 |
+| measured | **428** | **255** | **422** | **299** | **218** | **210** | **198** | **184** | **192** | **195** |
+
+and again on the merged tree, against what `main` carries today:
+
+| level | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `b0150d5` | 405 | 218 | 422 | 328 | 343 | 83 | 133 | 146 | 119 | 117 |
+| measured | **405** | **218** | **422** | **328** | **343** | **83** | **133** | **146** | **119** | **117** |
+
+The one change that COULD have leaked is `damageEnemy`'s fifth parameter and
+`Enemy.hurt`'s third — `showNumber` — being removed, which moved `pierce` up a
+position at fifteen call sites. Twenty identical integers is what says it did
+not.
+
+`reports/2026-09-17-hud-cleanup.md`.
 ---
 
 ## 2026-09-16 — Every run opens with the Ima Dummy Tower, and the band empties

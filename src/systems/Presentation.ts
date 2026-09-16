@@ -126,26 +126,33 @@ export function makeShadow(scene: Phaser.Scene, spriteKey: string, scale = 1): P
   return img
 }
 
-/** Rising damage number. Crits (or anything flagged big) read larger and amber. */
-export function floatingDamage(
-  scene: Phaser.Scene,
-  x: number,
-  y: number,
-  amount: number,
-  big = false,
-  /** Overrides the number, for things that are not damage. */
-  label?: string,
-  /** Bigger than a normal hit, for a hit that is. */
-  scale = 1,
-): void {
-  const d = PRESENTATION.damageNumbers
+/**
+ * A rising WORD over a unit. Not a number, and it cannot be one.
+ *
+ * THE FLOATING DAMAGE NUMBERS ARE GONE, 2026-09-17, and this is what is left
+ * of `floatingDamage`. Live play read them as glitches: a tower firing twice a
+ * second put a 15px figure on the board for 620ms per shot, and with four
+ * towers and a wave on the lane the board flickered with text that appeared
+ * and vanished too fast to be legible. Nothing could be read off them that the
+ * health bar over the enemy's own head does not say more steadily.
+ *
+ * WHAT SURVIVES IS THE LINE THE BRIEF DREW: an effect that says WHAT SOMETHING
+ * DID stays; an effect that only says A NUMBER HAPPENED goes. Bark deals zero
+ * damage by design and its whole output is a slow, so the word SLOW over each
+ * enemy it caught is the only thing that distinguishes a slow that landed from
+ * one that missed -- and it is a word, so no quantity is being reported and
+ * there is nothing to shrink or fade. It is the ONE caller, deliberately: the
+ * moment this takes a number again it is `floatingDamage` under a new name.
+ */
+export function floatingLabel(scene: Phaser.Scene, x: number, y: number, label: string): void {
+  const d = PRESENTATION.floatingLabel
   const text = scene.add
-    .text(x, y - 18, label ?? String(Math.max(1, Math.round(amount))), {
+    .text(x, y - 18, label, {
       fontFamily: 'KenneyFuture, monospace',
-      fontSize: `${big ? d.critFontSize : d.fontSize}px`,
-      color: big ? '#ffd45e' : '#ffffff',
+      fontSize: `${d.fontSize}px`,
+      color: '#cfe6ff',
       stroke: '#1a1208',
-      strokeThickness: big ? 5 : 4,
+      strokeThickness: 4,
     })
     .setOrigin(0.5)
     .setDepth(y + 800)
@@ -158,18 +165,11 @@ export function floatingDamage(
   // separate change from making the canvas sharp.
   text.x = Phaser.Math.Clamp(text.x, half, scene.cameras.main.width / deviceScale() - half)
 
-  // A number that lands bigger than it settles. Only the ones asked for it get
-  // it: an ordinary tower hit does not need a flourish, and Haymaker does.
-  if (scale !== 1) {
-    text.setScale(scale * 1.35)
-    scene.tweens.add({ targets: text, scale, duration: 150, ease: 'Back.easeOut' })
-  }
-
   scene.tweens.add({
     targets: text,
-    y: y - 18 - d.risePixels * (scale > 1 ? 1.6 : 1),
+    y: y - 18 - d.risePixels,
     alpha: 0,
-    duration: d.durationMs * (scale > 1 ? 1.5 : 1),
+    duration: d.durationMs,
     ease: 'Quad.easeOut',
     onComplete: () => text.destroy(),
   })

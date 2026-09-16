@@ -838,6 +838,16 @@ padpan` is the rendered-frame half** and proves BOTH properties in one run -- ev
 pad drawn throughout a pan, and not one magenta pixel of void past the plate -- because
 each of the first two passes broke what the one before it fixed.
 
+**AND THE 2026-09-17 PASS NARROWED THE ROW RATHER THAN TOUCHING PAD VISIBILITY**,
+which is the fourth pass at the same screen space and deliberately did not reopen
+any of the three above. The bottom row came in from 476 CSS px to 384 at 844x390
+(56% of the width to 45%) by shrinking pitches, and `padhud` now prints a per-element
+split alongside its total: pad/HUD overlaps at rest over all ten levels went **33 to
+31** (`abilities` 18->16, `messageRow` 10->9, `heroChip` 3->4, `startButton` 2, and
+`counters` **0 on both**), and pads panning alone cannot free went **24 to 17**. No
+pad is hidden and none was un-hidden: `padShowing` is still `isFree` alone, exactly as
+the paragraph above settled it.
+
 **Two NEW open items, both small, both from the 2026-09-15 UI pass:**
 
 - **Level 7's spawn and exit badges are invisible on the Highway, and it is an ART
@@ -882,6 +892,31 @@ each of the first two passes broke what the one before it fixed.
   difficulties — 29% and 23% on the same tree. Level 9 ships at 0.10, well clear
   of it, but a later pass that walks the share upward will hit it.
 
+- **The two hero ability medallions go dead after the Server Nuke drops, and it is
+  REPRODUCIBLE IN ONE COMMAND.** `sh tools/harness/run.sh abilitybar 200 844x390`,
+  which is already in the repository and which nobody had pointed at this: it taps
+  each slot at its hit rectangle's centre through the real input system and prints
+  REACHED or DEAD. Before the drop, four slots, all REACHED. After it, the three
+  drafted cards REACHED and `heroSlot1` and `heroSlot2` both **DEAD**.
+  **Pre-existing**: identical on a worktree at `b0150d5` with none of the 2026-09-17
+  HUD pass in it, so narrowing the ability row neither caused nor fixed it.
+  **THREE CAUSES ARE DOWN.** (1) Not the hero chip's fault beside it — that was
+  objects the reflow left behind, and these are objects the reflow REBUILDS.
+  (2) Not the every-frame rebuild churn that froze this row in an earlier pass: the
+  same run reports **0 rebuilds over a second** after the drop. (3) Not geometry —
+  `run.sh herochip` records all five hit rectangles registered, `interactive=true`,
+  on screen, and **0 px** of drift from their own icons.
+  So the press is being eaten by something that is not on the HUD's display list.
+  Start by asking what ELSE is hit-tested at the right-hand end of the ability row
+  once the row has grown. `reports/2026-09-17-hud-cleanup.md` has both recordings.
+- **`status.kills` is never incremented.** Declared on the status object, zeroed by
+  `startRun`, and written nowhere else, so it reads 0 through a wave that visibly
+  clears. Two harness scenarios print it (`lost`, and `combat` until 2026-09-17 when
+  the census stopped trusting it). Either wire it or delete it.
+- **568x320 WITH A NOTCH has a 49px drawer grid against a 62px tile.** It was 55
+  before the 2026-09-17 HUD pass, which cost it six. `drawer.test.ts` checks the FLAT
+  narrow case only, where the grid is 72 and the rule holds. Nobody has decided
+  whether the notched SE-class case is in scope at all.
 - **Level 9 reads the HAT-GTT comic twice.** `cutscene_L9_01.webp`, the opening, IS
   the HAT-GTT page, and the same comic at higher resolution is wired after wave 3 —
   rendered and compared side by side, they are the same three beats. Both are wired

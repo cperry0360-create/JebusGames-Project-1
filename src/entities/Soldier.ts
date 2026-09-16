@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import { ySort } from '../systems/DepthSort.ts'
 import { onBoard } from '../systems/Liveness.ts'
-import { makeShadow, PRESENTATION, deathPuff, floatingDamage } from '../systems/Presentation.ts'
+import { makeShadow, PRESENTATION, deathPuff } from '../systems/Presentation.ts'
 import { applyGroundRender } from '../systems/Art.ts'
 import { facesLeft } from '../systems/Facing.ts'
 import type { Enemy } from './Enemy.ts'
@@ -78,7 +78,9 @@ export class Soldier extends Phaser.GameObjects.Container {
   hurt(amount: number): void {
     if (!this.alive) return
     this.health -= amount
-    floatingDamage(this.scene, this.x, this.y, amount)
+    // NO FLOATING NUMBER, 2026-09-17. `drawBar` below is the readout, and a
+    // soldier standing in a lane takes a hit often enough that the figure was
+    // a permanent flicker over the one blocker the player is watching.
     if (this.health <= 0) this.fall()
     else this.drawBar()
   }
