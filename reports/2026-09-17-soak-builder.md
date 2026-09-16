@@ -14,6 +14,12 @@ checked the tree containing all five.** Green on `changes`, `typecheck`, `test`,
 `deploy / build` and `deploy / deploy` — five jobs. Read the job list, not the
 run's conclusion.
 
+[Run 434](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/35112846284)
+on the docs commit above it is green on `changes`, `typecheck` and `test` with
+**`deploy` SKIPPED** — the `changes` gate working as designed on a commit that
+touches only `reports/`, which is a documentation commit behaving correctly and
+not a failed deploy.
+
 **`main`'s tree was read back afterwards** and carries `tools/soak/builder.json`
 with `{padShare: 0.2, min: 1}`, the cap and first-gun rules in
 `tools/soak/Sim.ts`, `tests/soakbuilder.test.ts`, this report, and the warning at
