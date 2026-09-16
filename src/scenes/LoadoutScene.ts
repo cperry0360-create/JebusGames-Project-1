@@ -173,9 +173,11 @@ export class LoadoutScene extends Phaser.Scene {
     // Server Nuke is a mid-run drop, never a starting hand.
     const pool = Object.keys(ABILITIES).filter((id) => ABILITIES[id].draftable)
     const abilities = draftAbilities(pool, DRAFT.abilitiesDrawn, rng)
-    // The shared pool plus whatever this level adds. The Ima Dummy Tower is
-    // level 1's only, so levels 2 and 3 draw exactly what they were tuned
-    // against and the weight is a fact about the level rather than the tower.
+    // The shared pool plus whatever this level adds. No level adds anything
+    // today: the Ima Dummy Tower used to be level 1's alone via
+    // `extraTowerWeights`, which made it unreachable on the other nine, and it
+    // is in the shared pool and in `guaranteedTowers` now. The combining still
+    // happens here so a future level-scoped tower is one line of data.
     const weights = towerWeightsFor(runState().levelId, DRAFT.towerWeights)
     const towerPool = Object.entries(TOWERS)
       .filter(([id]) => weights[id] !== undefined)
@@ -475,12 +477,17 @@ export class LoadoutScene extends Phaser.Scene {
     // replace: 325 against 319, 343/345, 343/345 and 377/371. Laid across, the
     // same four read 279/319, 331/345, 279/345 and 357/371.
     const colW = columnWidth(this.contentWidth, LO.columnGap)
-    const stackedCardW = this.cardWidthFor(2)
-    // Two cards ACROSS a half-band, which is what a column holds.
-    const columnCardW = this.cardWidthFor(2, colW)
+    // EACH ROW DIVIDES ITS BAND BY ITS OWN CARD COUNT, and the two counts are
+    // no longer the same number. The towers deal `towersAtStart` cards plus a
+    // slot per guaranteed tower -- three today -- and the specials deal two,
+    // so the single `cardWidthFor(2)` that used to serve both rows measured
+    // the tower cards a third too wide.
+    const stackedTowerW = this.cardWidthFor(run.openingTowers.length)
+    const stackedAbilityW = this.cardWidthFor(run.abilities.length)
+    const columnTowerW = this.cardWidthFor(run.openingTowers.length, colW)
     const dealtStackedFloor =
-      this.dealtFloor(run, stackedCardW, small, false) + headingH * 2 + LO.sectionGap
-    const dealtColumnsFloor = this.dealtFloor(run, columnCardW, small, true) + headingH
+      this.dealtFloor(run, this.contentWidth, small, false) + headingH * 2 + LO.sectionGap
+    const dealtColumnsFloor = this.dealtFloor(run, colW, small, true) + headingH
     const wide = needsRoom && useTwoColumns({
       stackedFloor: dealtStackedFloor,
       columnsFloor: dealtColumnsFloor,
@@ -488,7 +495,14 @@ export class LoadoutScene extends Phaser.Scene {
       // guarded the band and the band is not what shrinks: laid across, a
       // 391-unit column holds two 184-unit cards, and it is those the player
       // reads a tower's stats off.
-      column: columnCardW,
+      //
+      // THE NARROWEST CARD IN THE BLOCK IS THE ONE THAT DECIDES, which is the
+      // TOWER card now that the towers deal one more than the specials do.
+      // Three cards across a 391-unit column is 115 units each, well under
+      // `minDealtCard`, so the reflow declines on every phone it used to take
+      // and the dealt rows stay stacked. That is the guard working, not a
+      // regression: the alternative is a tower's stats line wrapping to five.
+      column: columnTowerW,
       minColumn: LO.minDealtCard,
       minSaving: LO.minReflowSaving,
     })
@@ -496,16 +510,24 @@ export class LoadoutScene extends Phaser.Scene {
     // centred; two are halves either side of the middle.
     const leftBand = { cx: W / 2 - (colW + LO.columnGap) / 2, width: colW }
     const rightBand = { cx: W / 2 + (colW + LO.columnGap) / 2, width: colW }
-    const cardW = wide ? columnCardW : stackedCardW
+    // The band each row lays its own cards across, and the width one of those
+    // cards ends up with. Two numbers, because two rows with different card
+    // counts in the same band are two different card widths.
+    const dealtBand = wide ? colW : this.contentWidth
+    const towerCardW = wide ? columnTowerW : stackedTowerW
+    const abilityCardW = wide ? this.cardWidthFor(run.abilities.length, colW) : stackedAbilityW
+    // Published for the harness, which reports one number for the block: the
+    // narrower of the two is the one a legibility complaint will be about.
+    const cardW = Math.min(towerCardW, abilityCardW)
 
     const heroWant = this.heroPlan(run.heroId, available, heroLayout).height
     // Solved against a ceiling of nothing, which is what makes it the block's
     // true floor rather than a number somebody picked.
     const heroFloor = this.heroPlan(run.heroId, 0, heroLayout).height
-    const towerWant = this.towerNeeds(run.openingTowers, cardW)
-    const towerFloor = this.towerNeeds(run.openingTowers, cardW, small)
-    const specialWant = this.abilityNeeds(run.abilities, cardW)
-    const specialFloor = this.abilityNeeds(run.abilities, cardW, small)
+    const towerWant = this.towerNeeds(run.openingTowers, towerCardW)
+    const towerFloor = this.towerNeeds(run.openingTowers, towerCardW, small)
+    const specialWant = this.abilityNeeds(run.abilities, abilityCardW)
+    const specialFloor = this.abilityNeeds(run.abilities, abilityCardW, small)
 
     // TWO COLUMNS ARE ONE SECTION IN THE STACK. The towers and the specials
     // share a heading row and a band, so the stack sees one band as tall as
@@ -513,8 +535,8 @@ export class LoadoutScene extends Phaser.Scene {
     // what the reflow buys vertically: the second heading and the gap under
     // it, at no cost to a card's width.
     const dealtWant = wide
-      ? this.dealtFloor(run, cardW, LO.bodySizes[0]!, true) : towerWant
-    const dealtFloor = wide ? this.dealtFloor(run, cardW, small, true) : towerFloor
+      ? this.dealtFloor(run, dealtBand, LO.bodySizes[0]!, true) : towerWant
+    const dealtFloor = wide ? this.dealtFloor(run, dealtBand, small, true) : towerFloor
 
     const sections: StackSection[] = [
       { natural: headingH, gapAfter: 0 },
@@ -796,14 +818,16 @@ export class LoadoutScene extends Phaser.Scene {
    */
   private dealtFloor(
     run: { openingTowers: string[]; abilities: string[] },
-    cardW: number, small: number, sideBySide: boolean,
+    bandW: number, small: number, sideBySide: boolean,
   ): number {
-    const towers = this.towerNeeds(run.openingTowers, cardW, small)
-    const specials = this.abilityNeeds(run.abilities, cardW, small)
+    const towers = this.towerNeeds(run.openingTowers, this.cardWidthFor(run.openingTowers.length, bandW), small)
+    const specials = this.abilityNeeds(run.abilities, this.cardWidthFor(run.abilities.length, bandW), small)
     if (!sideBySide) return towers + specials
     // Each column lays ITS OWN cards across its half-band, so a column is one
-    // card deep and the pair is as tall as the taller of the two. `cardW` is
-    // already the half-band card -- see the caller.
+    // card deep and the pair is as tall as the taller of the two. `bandW` is
+    // the half-band; each row divides it by ITS OWN card count, which is what
+    // the guaranteed opener made necessary -- the towers deal three cards and
+    // the specials two, so one shared card width was two wrong answers.
     return Math.max(towers, specials)
   }
 
@@ -835,7 +859,7 @@ export class LoadoutScene extends Phaser.Scene {
     small: number,
   ): number {
     return this.heroPlan(run.heroId, 0, 'under').height
-      + this.dealtFloor(run, this.cardWidthFor(2), small, false)
+      + this.dealtFloor(run, this.contentWidth, small, false)
       + this.headingHeight() * 3 + LO.sectionGap * 2
   }
 

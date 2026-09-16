@@ -111,7 +111,9 @@ import {
 import { rollOutcome } from '../../src/systems/Scratch.ts'
 import { bannerPointsFor } from '../../src/systems/Banner.ts'
 import { openingPurse } from '../../src/systems/Economy.ts'
-import { draftAbilities, draftOpeningTowers, reserveTowers } from '../../src/systems/Draft.ts'
+import {
+  draftAbilities, draftOpeningTowers, guaranteedOpeners, reserveTowers,
+} from '../../src/systems/Draft.ts'
 import { makeRng, type Rng } from './Rng.ts'
 
 const TOWERS = towersData as any
@@ -554,9 +556,10 @@ export function simulate(
   const hero = HEROES[heroId]
   const pool = Object.keys(ABILITIES).filter((id) => ABILITIES[id].draftable)
   const abilities = draftAbilities(pool, DRAFT.abilitiesDrawn, rng)
-  // The shared pool plus whatever this level adds. The Ima Dummy Tower is
-  // level 1's only, so levels 2 and 3 draw exactly what they were tuned
-  // against and the weight is a fact about the level rather than the tower.
+  // The shared pool plus whatever this level adds -- nothing, on every level
+  // today. The Ima Dummy Tower used to be level 1's alone via
+  // `extraTowerWeights`; it is in the shared pool and guaranteed now, so every
+  // soaked board on every level has a garrison in the opening hand.
   const weights = towerWeightsFor(levelId, DRAFT.towerWeights)
   const towerPool = Object.entries(TOWERS)
     .filter(([id]) => weights[id] !== undefined)
@@ -573,9 +576,22 @@ export function simulate(
     // only one level can draw -- and then every third seed on levels 2 and 3
     // was handing the player an Ima Dummy Tower they could never have had. It
     // moved level 2 from 7/60 to 6/60 before it was noticed.
+    //
+    // AND THE GUARANTEE SURVIVES THE UNIFORM HAND. What this path drops is the
+    // WEIGHTS, so that the rarely-drafted towers get soaked at all; a
+    // guaranteed opener is not a weight, it is a slot, and a soak in which a
+    // third of the seeds open without the tower every real run opens with
+    // would be measuring a game nobody plays. The list comes from
+    // `guaranteedOpeners` and draft.json rather than from an id written here.
+    //
+    // THE WHOLE POOL IS STILL SHUFFLED, and the filtering happens after, so
+    // this consumes exactly the rng it always did. Shuffling the six drawable
+    // ids instead would reseed every run in the soak for no reason.
     const ids = rng.shuffled(towerPool.map((t) => t.id))
-    opening = ids.slice(0, DRAFT.towersAtStart)
-    reserve = ids.slice(DRAFT.towersAtStart)
+    const forced = guaranteedOpeners(towerPool, DRAFT).map((w) => w.id)
+    const rest = ids.filter((id) => !forced.includes(id))
+    opening = [...rest.slice(0, DRAFT.towersAtStart), ...forced]
+    reserve = rest.slice(DRAFT.towersAtStart)
   }
   const draftedAbilities = seed % 3 === 0
     ? rng.shuffled(pool).slice(0, DRAFT.abilitiesDrawn)

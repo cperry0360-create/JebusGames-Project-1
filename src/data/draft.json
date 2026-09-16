@@ -19,7 +19,11 @@
     "rounding": 4,
     "escalation": 2,
     "extension": 4,
-    "shelter": 3
+    "shelter": 3,
+    "imaDummy": 4
   },
+  "guaranteedTowers": [
+    "imaDummy"
+  ],
   "rerollsPerRun": 1
 }
