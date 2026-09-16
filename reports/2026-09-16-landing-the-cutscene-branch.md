@@ -19,11 +19,28 @@ The work is on `main` now.
 | --- | --- | --- |
 | `de21b11` | Merge the cutscene reorganisation into main's line | run 416 — green (changes, typecheck, test) |
 | `37158fd` | Merge main: the guaranteed dummy tower and the re-soak | run 421 — green (changes, typecheck, test) |
-| `f463197` | Merge main: the closed CI tables for runs 415 and 417 | reports only; covered by the run below |
-| `<this report>` | This report, the context note and the CLAUDE.md standing fact | run recorded below |
+| `f463197` | Merge main: the closed CI tables for runs 415 and 417 | reports only; covered by run 423 |
+| `02f6fff` | This report, the context note and the CLAUDE.md standing fact | run 423 on `main` — green on **all five** jobs |
 
-`main` was fast-forwarded onto the last of these, so `main` and
+**Run 423 ran the deploy rather than skipping it**, because the push touches
+`src/` and `public/`: `changes`, `typecheck`, `test`, `deploy / build` and
+`deploy / deploy` all green, `actions/deploy-pages@v4` completing at 12:14:33Z.
+The live site carries the comics. Read the job list, not the conclusion — a
+green run with `deploy` skipped would have meant something different.
+
+`main` was fast-forwarded onto `02f6fff`, so `main` and
 `claude/cutscene-reorganization-wiring-m5f94i` are the same commit.
+
+**A second thing about CI worth knowing, because it cost this session an hour
+of waiting for nothing.** The Actions REST API lagged badly on run 423: it
+reported `test` stuck on `npm install` and then `deploy / build` stuck on
+`npm run build`, for something like fifty minutes after both had finished. The
+job *logs* told the truth immediately — `get_job_logs` on the "hung" test job
+returned `tests 1187 / pass 1187 / fail 0` and a completed post-job cleanup,
+timestamped 12:13:19Z, while the job list still called it `in_progress`. The
+whole run was over at 12:14:33Z. **When a job looks hung, read its log before
+believing the status**, and do not re-run or cancel on the strength of a
+`status` field alone.
 
 ## Why `--ff-only` could not work
 
@@ -243,7 +260,8 @@ construction agree, which is the useful state to be in.
 ## Where this leaves the repository
 
 **In flight: nothing from this session.** `main` and
-`claude/cutscene-reorganization-wiring-m5f94i` point at the same commit.
+`claude/cutscene-reorganization-wiring-m5f94i` point at the same commit,
+`02f6fff`, green on all five jobs with the Pages deploy published.
 
 **`claude/cutscene-reorganization-wiring-t8o0vm` is now fully contained in
 `main`** and can be deleted whenever someone wants to tidy the branch list. It
