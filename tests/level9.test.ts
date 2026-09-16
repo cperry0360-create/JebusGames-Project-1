@@ -1,4 +1,4 @@
-// LEVEL 9'S THREE LANES, and the one segment of them that is not painted road.
+// LEVEL 9'S THREE LANES, AND THAT EVERY METRE OF THEM IS PAINTED ROAD.
 //
 // The plate paints a road round the bottom right that left the tail and came
 // back to the trace beside the door, and until the flank lane existed nothing
@@ -6,13 +6,16 @@
 // orphan on any of the ten boards. tests/orphanroads.test.ts is the general
 // check; this is the receipt for the lane that answered it.
 //
-// THE SPUR IS A STUB, NOT A LOOP, and that is the fact this file exists to
-// pin. Its north end IS the door junction. Its south end is a rounded cap on
-// open substrate, 112 px from the tail with 63 px of bare board between the
-// two kerbs, so the flank cannot be all paint and ONE segment of it is
-// authored. Level 6 took the same decision for the same reason and
-// tests/level6map.test.ts pins its 82 px join to the pixel; this pins level
-// 9's, and pins that there is exactly one of them.
+// THE SPUR USED TO BE A STUB AND IS NOW A LOOP. Its north end was always the
+// door junction; its south end was a rounded cap on open substrate, 112 px
+// from the tail with 63 px of bare board between the kerbs, so the flank was
+// built with ONE AUTHORED JOIN across it -- the shape `map_level6.json` uses
+// over 82 px. A walker on it crossed bare board beside a capacitor and 12.6%
+// of the flank lane had no trace under it.
+//
+// tools/paint_level9_flank.py painted that corridor into the plate and the
+// geometry was re-derived from it, so the assertion below is inverted from
+// what it was: level 9 now walks off the painted trace in NO place at all.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -80,8 +83,8 @@ test('the tail splits and the flank comes back onto the hook short of the door',
   // first crossing of an x, and a second gate on this route is the thing
   // map_level9.json's `exit._note` warns about.
   const afterRejoin = length(hook.waypoints.slice(merges.atIndex))
-  assert.ok(afterRejoin > 60 && afterRejoin < 80,
-    `the flank rejoins ${afterRejoin.toFixed(0)} px short of the door, not the expected 74`)
+  assert.ok(afterRejoin > 50 && afterRejoin < 80,
+    `the flank rejoins ${afterRejoin.toFixed(0)} px short of the door, not the expected 68`)
 })
 
 test('the flank is a SHORTCUT, and a small one', () => {
@@ -93,10 +96,10 @@ test('the flank is a SHORTCUT, and a small one', () => {
   // PINNED WITH BOTH NUMBERS because "shortcut or detour" is the question the
   // share is tuned against, and 6% is a different level from 60%: the south
   // arm saves 55% over the north and IS the cheap road, and this is not that.
-  assert.ok(Math.abs(mine - 494.1) < 1, `the flank is ${mine.toFixed(1)} px, not 494.1`)
-  assert.ok(Math.abs(replaced - 528.1) < 1, `it replaces ${replaced.toFixed(1)} px, not 528.1`)
+  assert.ok(Math.abs(mine - 479.0) < 1, `the flank is ${mine.toFixed(1)} px, not 479.0`)
+  assert.ok(Math.abs(replaced - 535.5) < 1, `it replaces ${replaced.toFixed(1)} px, not 535.5`)
   const saved = (replaced - mine) / replaced
-  assert.ok(saved > 0.05 && saved < 0.08, `the flank saves ${(saved * 100).toFixed(1)}%`)
+  assert.ok(saved > 0.08 && saved < 0.13, `the flank saves ${(saved * 100).toFixed(1)}%`)
 
   const net = new LaneNetwork(M)
   // A route that takes it is shorter than one that does not, from either mouth.
@@ -107,12 +110,15 @@ test('the flank is a SHORTCUT, and a small one', () => {
   }
 })
 
-test('exactly one segment of level 9 leaves the painted road, and it is the join', () => {
+test('no lane on level 9 leaves the painted road at all', () => {
   // WHAT THE PLAYER SEES, measured against the thresholded plate rather than
   // reasoned about. Every lane is walked at one world pixel and each step is
   // asked whether there is trace under it; the runs that are not are collected.
-  // There must be exactly one, it must be the join, and it must be the length
-  // the geometry file says.
+  //
+  // THIS ASSERTED EXACTLY ONE RUN UNTIL THE PLATE WAS REPAINTED, and named it:
+  // the 60 px authored join between the trunk and the spur's cap, threaded
+  // between chip 13's right edge at x=855 and the capacitor at x=903. That
+  // corridor is painted now, so the answer is none.
   const painted = new Set<number>()
   MASK.rows.forEach((row, y) => {
     if (!row) return
@@ -162,21 +168,18 @@ test('exactly one segment of level 9 leaves the painted road, and it is the join
       }
     }
   }
+  // Runs under 8 px are the classifier's own edge: the mask is thresholded
+  // cyan and a centreline clipping a kerb for three pixels at a corner is
+  // antialiasing, not a walker on bare board. The one this replaced was 60.
   const real = offRoad.filter((r) => r.len > 8)
-  assert.equal(real.length, 1,
-    `level 9 walks off the paint in ${real.length} places: ` +
+  assert.deepEqual(real, [],
+    `level 9 walks off the paint in ${real.length} place(s): ` +
     real.map((r) => `${r.lane} (${r.from.map(Math.round)}) to (${r.to.map(Math.round)}), ` +
       `${r.len.toFixed(0)} px`).join('; '))
-  assert.equal(real[0]!.lane, 'flank')
-  assert.ok(Math.abs(real[0]!.len - GEO.flank.joinBare) < 12,
-    `the bare crossing measures ${real[0]!.len.toFixed(1)} px against the geometry file's ` +
-    `${GEO.flank.joinBare}`)
-  // AND IT THREADS THE GAP. The corridor is chip 13's right edge at x=855 on
-  // one side and the painted capacitor at x=903 on the other; a join that
-  // crossed either would draw enemies over a component.
-  for (const p of [real[0]!.from, real[0]!.to]) {
-    assert.ok(p[0]! > 855 && p[0]! < 903, `the join passes through x=${p[0]!.toFixed(0)}`)
-  }
+  // AND THE GEOMETRY AGREES, measured independently in Python off the source
+  // plate at full resolution rather than off this half-scale mask.
+  assert.equal(GEO.flank.joinBare, 0,
+    `the tracer measures ${GEO.flank.joinBare} px of the flank off the paint`)
 })
 
 test('the flank gets no badge: one mouth, one door, unchanged', () => {
@@ -234,9 +237,10 @@ test('every wave declares its share of the flank, and the share routes', () => {
     assert.ok(w.flankShare! > 0 && w.flankShare! < 1,
       `wave ${i + 1}'s share is ${w.flankShare}`)
   }
-  // A QUARTER, everywhere, as the starting recommendation. Pinned so a tuning
-  // pass is a deliberate edit rather than a drift.
-  assert.deepEqual([...new Set(W.waves.map((w) => w.flankShare))], [0.25])
+  // A TENTH, everywhere. It started at a quarter, which read 113/480; this is
+  // the retuned value and it is pinned so a later pass is a deliberate edit
+  // rather than a drift.
+  assert.deepEqual([...new Set(W.waves.map((w) => w.flankShare))], [0.1])
 
   // AND THE NUMBER ACTUALLY SENDS THEM THERE. `pickForBranch` is what the
   // scene and the soak both turn the share into, so this drives the real

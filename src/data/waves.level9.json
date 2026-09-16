@@ -1,13 +1,13 @@
 {
   "_note": "LEVEL 9: AI OVERRIDE PART 1. Sixteen waves, and the shape of the level is FOUR MINI-BOSS FIGHTS at waves 4, 8, 12 and 16 with the four regulars filling the gaps between them. Every enemy id here is a row in enemies.json; every `lane` is a lane id in map_level9.json.",
   "_lanes": "TWO SPAWN LANES, `north` and `south`, and they are the two arms of the trace the plate paints. Both come out of the same painted mouth on the west edge and both merge into `tail` at the bottom of the board, so a group's lane is which way round the loop it goes rather than where it appears. THEY ARE NOT EQUAL: north walks 2586 px and south walks 1672, a 55% difference that is in the painting rather than arranged. So a group sent south reaches the door in about two thirds of the time and passes far fewer guns on the way, and the table uses that -- the pressure waves go south and the ones the player is meant to have time for go north. A group with no lane spawns on north, which is the map's main.",
-  "_flank": "THE THIRD LANE, AND A BALANCING RECOMMENDATION. `flankShare` on each wave is the share of that wave's enemies that leave the tail at (858, 469) and take the painted road round the bottom right, rejoining 74 px short of the door. A QUARTER ON EVERY WAVE is a starting point and nothing more, and the measurement says it is a steep one: level 9 soaks 113/480 at 0.25 against 191/480 with no flank at all, and 152/480 at 0.10. THE RECOMMENDATION IS 0.10. The flank is 494 px against the 528 px of trunk it replaces, a 6.4% SHORTCUT, so it is a lateral road rather than a cheap one -- nothing like the south arm, which saves 55% over the north and genuinely is the cheap road. What it really changes is WHICH GUNS FIRE: five chips can cover it (8, 9, 12, 13 and 15) and pad 15 could not reach the trunk at all, so a share of every wave now walks past a chip that was dead ground, and the peanuts that cover it are peanuts not spent on the trunk. TUNE THE GAUNTLET WAVES SEPARATELY if this needs moving -- 4, 8, 12 and 16 are one heavy each, and the share is rolled per enemy, so a mini boss takes the flank a quarter of the time and that is a coin flip on the shape of the fight rather than a tuned decision. Removing the key from a wave falls back to the map's own 3:1 split weights. See reports/2026-09-16-level-9-flank-route.md and SOAK-REPORT.md.",
+  "_flank": "THE THIRD LANE, AND WHAT IT COSTS. `flankShare` on each wave is the share of that wave's enemies that leave the trunk at (863, 474) and take the painted road round the bottom right, rejoining 68 px short of the door. A TENTH ON EVERY WAVE, and the number is measured rather than picked: the flank is a 10.6% SHORTCUT -- 479 px against the 536 px of hook it replaces -- and it spreads a thin board over a second road, so level 9 read 113/480 at a quarter against 191/480 with no flank at all. A tenth reads 161/480, and PERPLEXED coming down from 8100 to 7650 carries the rest: 192/480, which is 40.0%. THE CLIFF AT 0.20 IS THE SOAK'S, NOT THE GAME'S -- `Sim.ts`'s MINOR_LANE_SHARE is a fifth, and a lane under it stays out of the scripted player's pad ranking, so 0.19 and 0.20 are two different boards rather than two difficulties. What the flank really changes is WHICH GUNS FIRE: five chips can cover it (8, 9, 12, 13 and 15) and pad 15 could not reach the trunk at all. The share is rolled PER ENEMY at spawn, so a mini boss takes the flank a tenth of the time. Removing the key from a wave falls back to the map's own 3:1 split weights. See reports/2026-09-17-level-9-retune.md and SOAK-REPORT.md.",
   "_gauntlet": "THE FOUR ARRIVE ONE AT A TIME AND NEVER TOGETHER. Each mini-boss wave names its `boss`, which is what the HUD reads for the banner, and carries a small escort rather than a second heavy -- four things each the size of a final boss on the board at once is noise rather than escalation. THE ESCORT IS CHOSEN AGAINST THE FIGHT: HAT-GTT repairs itself, so its escort is light and the answer is concentrated damage; CANCER switches one gun off for six seconds at a time, so its escort is heavy and the answer is a spread board; NO-PILOT is fast and unblockable, so its escort is slow and the answer is rate; PERPLEXED flickers the whole board, so its escort is everything at once.",
   "_economy": "REWARDS ARE ON THE ENEMY ROWS, not here. The four regulars pay 27, 39, 48 and 135 -- about 0.15 peanuts per point of their own health, which is a gate rather than a taste: tests/content.test.ts holds a whole table to at least 0.13, and this one came out at 0.108 the first time it was written. It now runs at 0.166, against level 8's 0.175 and level 6's 0.299. THE MINI BOSSES PAY 900-950 EACH, which is most of a tower, and that is the economic design of the level: clearing a gauntlet fight buys the board change the NEXT one asks for, and the next one asks for a different answer every time.",
   "waves": [
     {
       "name": "Handshake",
-      "flankShare": 0.25,
+      "flankShare": 0.10,
       "spawns": [
         {
           "enemy": "packet",
@@ -20,7 +20,7 @@
     },
     {
       "name": "Dropped Frames",
-      "flankShare": 0.25,
+      "flankShare": 0.10,
       "spawns": [
         {
           "enemy": "packet",
@@ -40,7 +40,7 @@
     },
     {
       "name": "Bad Records",
-      "flankShare": 0.25,
+      "flankShare": 0.10,
       "spawns": [
         {
           "enemy": "corrupt",
@@ -61,7 +61,7 @@
     {
       "name": "HAT-GTT",
       "boss": "hatGtt",
-      "flankShare": 0.25,
+      "flankShare": 0.10,
       "spawns": [
         {
           "enemy": "hatGtt",
@@ -88,7 +88,7 @@
     },
     {
       "name": "Reproducible",
-      "flankShare": 0.25,
+      "flankShare": 0.10,
       "spawns": [
         {
           "enemy": "dataBug",
@@ -108,7 +108,7 @@
     },
     {
       "name": "Rack Mounted",
-      "flankShare": 0.25,
+      "flankShare": 0.10,
       "spawns": [
         {
           "enemy": "serverWalker",
@@ -135,7 +135,7 @@
     },
     {
       "name": "Swarm",
-      "flankShare": 0.25,
+      "flankShare": 0.10,
       "spawns": [
         {
           "enemy": "dataBug",
@@ -163,7 +163,7 @@
     {
       "name": "CANCER",
       "boss": "cancer",
-      "flankShare": 0.25,
+      "flankShare": 0.10,
       "spawns": [
         {
           "enemy": "cancer",
@@ -197,7 +197,7 @@
     },
     {
       "name": "Throughput",
-      "flankShare": 0.25,
+      "flankShare": 0.10,
       "spawns": [
         {
           "enemy": "packet",
@@ -231,7 +231,7 @@
     },
     {
       "name": "Cold Storage",
-      "flankShare": 0.25,
+      "flankShare": 0.10,
       "spawns": [
         {
           "enemy": "serverWalker",
@@ -258,7 +258,7 @@
     },
     {
       "name": "Race Condition",
-      "flankShare": 0.25,
+      "flankShare": 0.10,
       "spawns": [
         {
           "enemy": "packet",
@@ -293,7 +293,7 @@
     {
       "name": "NO-PILOT",
       "boss": "noPilot",
-      "flankShare": 0.25,
+      "flankShare": 0.10,
       "spawns": [
         {
           "enemy": "noPilot",
@@ -328,7 +328,7 @@
     },
     {
       "name": "Hot Path",
-      "flankShare": 0.25,
+      "flankShare": 0.10,
       "spawns": [
         {
           "enemy": "dataBug",
@@ -362,7 +362,7 @@
     },
     {
       "name": "Full Rack",
-      "flankShare": 0.25,
+      "flankShare": 0.10,
       "spawns": [
         {
           "enemy": "serverWalker",
@@ -396,7 +396,7 @@
     },
     {
       "name": "Cascading Failure",
-      "flankShare": 0.25,
+      "flankShare": 0.10,
       "spawns": [
         {
           "enemy": "packet",
@@ -431,7 +431,7 @@
     {
       "name": "PERPLEXED",
       "boss": "perplexed",
-      "flankShare": 0.25,
+      "flankShare": 0.10,
       "spawns": [
         {
           "enemy": "perplexed",
