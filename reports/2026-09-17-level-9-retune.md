@@ -2,10 +2,25 @@
 
 | commit | what | CI |
 |---|---|---|
-| `da3b959` | `png.write` Paeth-filters rows once an image is over four megapixels | *pending* |
-| `f706d04` | The corridor painted into the plate, and the whole level 9 pipeline re-derived from it | *pending* |
-| `e505a4d` | `flankShare` 0.10 and PERPLEXED 7650, with `tools/soak/tune9.ts` | *pending* |
-| *this commit* | This report, `SOAK-REPORT.md` and `claude/context.md` | *pending* |
+| `da3b959` | `png.write` Paeth-filters rows once an image is over four megapixels | [run 403](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/35083832912) green |
+| `f706d04` | The corridor painted into the plate, and the whole level 9 pipeline re-derived from it | run 403 green |
+| `e505a4d` | `flankShare` 0.10 and PERPLEXED 7650, with `tools/soak/tune9.ts` | run 403 green |
+| `a0cece1` | This report, `SOAK-REPORT.md` and `claude/context.md` | run 403 green |
+| *this commit* | Closing this table on run 403 | it edits this table and nothing else |
+
+All four were pushed together, so only the head got a run of its own; **run 403
+checked the tree containing all four.** Green on `changes`, `typecheck`, `test`,
+`deploy / build` and `deploy / deploy` — **five jobs, and the deploy RAN rather
+than skipping**, because the push touched `src/` and `public/`. So the live site
+carries the repainted plate and the retune. Read the job list, not the
+conclusion.
+
+**`main`'s tree was read back afterwards** and carries `tools/paint_level9_flank.py`
+(11,709 bytes) and `tools/soak/tune9.ts`, alongside the rewritten
+`tools/trace_level9.py` (54,917), `tools/check_level9.py` (38,500),
+`tools/build_level9_map.py` (29,992), `tools/level9_geometry.json` (11,847) and
+`tools/orphan_roads.py` (15,580), plus the repainted
+`art-source/level9/map_level9.png` and `public/assets/maps/map_level9.webp`.
 
 **Answers first.**
 
