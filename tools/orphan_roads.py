@@ -309,12 +309,73 @@ def measure(name, plate, mapfile, road, verbose):
     }, pct
 
 
+def offpaint(name, plate, mapfile, road):
+    """How much of each LANE has no painted road under it.
+
+    THE OTHER DIRECTION. Everything above asks how much painted road no lane
+    walks; this asks how much of a lane is not on painted road, which is the
+    question a player answers by looking at an enemy. Both are needed and
+    neither implies the other: a lane can sit entirely on paint while half the
+    paint goes unwalked, and a lane can cross bare board on a board with no
+    orphan road at all.
+
+    Sampled at one world pixel along each lane, skipping anything off the plate
+    -- most lanes start at a computed gateway point outside the frame, and a
+    walker there has not emerged yet.
+    """
+    m = json.load(open(os.path.join(ROOT, 'src/data', mapfile)))
+    w, h, px = img.read(os.path.join(ROOT, 'public/assets/maps', plate))
+    sx, sy = w / CANVAS_W, h / CANVAS_H
+
+    def painted(x, y):
+        i = (min(h - 1, int(y * sy)) * w + min(w - 1, int(x * sx))) * 4
+        return road(px[i], px[i + 1], px[i + 2])
+
+    lanes = [(m.get('mainId', 'main'), m['waypoints'])]
+    lanes += [(l['id'], l['waypoints']) for l in m.get('lanes', [])]
+    out = []
+    for lid, wp in lanes:
+        on = off = 0
+        worst, run = 0, 0
+        for a, b in zip(wp, wp[1:]):
+            steps = max(1, int(math.dist(a, b)))
+            for k in range(steps + 1):
+                t = k / steps
+                x = a[0] + (b[0] - a[0]) * t
+                y = a[1] + (b[1] - a[1]) * t
+                if x < 0 or y < 0 or x > CANVAS_W or y > CANVAS_H:
+                    continue
+                if painted(x, y):
+                    on += 1
+                    run = 0
+                else:
+                    off += 1
+                    run += 1
+                    worst = max(worst, run)
+        total = on + off
+        pct = 100.0 * off / total if total else 0.0
+        out.append((lid, total, off, pct, worst))
+        print(f'  {name:>8} {lid:>7}  {total:5d} px on plate  {off:4d} off the paint  '
+              f'{pct:5.2f}%   longest unpainted run {worst:3d} px')
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--write', action='store_true', help='rewrite the test fixture')
     ap.add_argument('--only', help='one level id')
+    ap.add_argument('--lanes', action='store_true',
+                    help='report how much of each LANE is off the paint, and nothing else')
     ap.add_argument('--quiet', action='store_true')
     args = ap.parse_args()
+
+    if args.lanes:
+        print('how much of each lane has no painted road under it\n')
+        for name, plate, mapfile, road in LEVELS:
+            if args.only and name != args.only:
+                continue
+            offpaint(name, plate, mapfile, road)
+        return
 
     print(f'orphan radius {ORPHAN_RADIUS:.0f} world px, mask every {SCALE} px\n')
     out, worst = {}, []

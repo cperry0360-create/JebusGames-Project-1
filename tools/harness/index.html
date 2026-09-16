@@ -18338,12 +18338,12 @@ async function run() {
         + 'bottom-right region the orphan trace occupies')
       await shot('level9-4b-flank-' + VP.w + 'x' + VP.h)
 
-      // AND THE ONE COMPROMISE, ON PURPOSE AND IN CLOSE-UP. The spur is a stub:
-      // its south end is a cap on open substrate, so the flank's first 112 px
-      // is an authored join and about 60 px of that has no trace under it.
-      // Level 6 authors an 82 px version of the same thing. It is the only
-      // place on this board where a walker is off the paint, and a screenshot
-      // of it is the honest way to let somebody judge whether it reads.
+      // AND THE CORRIDOR THAT USED TO BE BARE BOARD, in close-up. The flank's
+      // first 112 px was an authored join across open substrate beside a
+      // capacitor, and about 60 px of it had no trace under it. It is painted
+      // now. This is the frame that says whether the new paint reads as road:
+      // same width, same kerb, same glow, same inner streaks, because the
+      // profile it was painted from was measured off this plate's own spur.
       {
         const e = new Enemy9(G, ENEMIES9.packet, flank.path, G.gateway,
           { lanes: G.lanes, laneId: 'flank', startAt: { laneDistance: 56, distance: 56 } })
@@ -18358,9 +18358,9 @@ async function run() {
         cam.setZoom(2.2)
         cam.centerOn(887, 519)
         await sleep(260)
-        note('  the authored join, close up: a walker at ('
+        note('  the painted corridor, close up: a walker at ('
           + Math.round(e.x) + ', ' + Math.round(e.y) + ')')
-        await shot('level9-4c-join-' + VP.w + 'x' + VP.h)
+        await shot('level9-4c-corridor-' + VP.w + 'x' + VP.h)
         clearInterval(hold)
         cam.setZoom(wasZ); cam.setScroll(wasX, wasY)
         if (e.alive) e.hurt(e.maxHealth * 10, true, false)
@@ -18407,10 +18407,11 @@ async function run() {
       // eye. Every lane is walked at 4 world px, the plate is sampled under the
       // centreline, and the runs with no cyan trace under them are collected.
       //
-      // ONE is expected: the authored join from the tail at (858, 469) to the
-      // painted cap of the spur at (914, 568), which is the same shape level 6
-      // authors an 82 px version of. Any other run is an enemy walking on bare
-      // board.
+      // NONE is expected, and this block used to expect exactly one. The spur
+      // was a stub, so the flank crossed 60 px of bare board on an authored
+      // join -- the shape level 6 uses over 82 px. tools/paint_level9_flank.py
+      // painted that corridor into the plate and the geometry was re-derived
+      // from it, so every metre of every lane on this board is on trace.
       {
         const key = ART9.map[G.level.map.plate]
         const tex = game.textures.get(key)
@@ -18451,13 +18452,9 @@ async function run() {
             note('  off the paint: ' + b.lane + ' (' + b.from + ') -> (' + b.to + '), '
               + b.len + ' px')
           }
-          expect(bare.length === 1,
-            'level 9 walks off the painted trace in ' + bare.length + ' places, not the one '
-            + 'authored join')
-          expect(bare.length === 1 && bare[0].lane === 'flank',
-            'the off-paint stretch is on ' + (bare[0] && bare[0].lane) + ', not the flank')
-          expect(bare.length === 1 && bare[0].len <= 80,
-            'the authored join measures ' + (bare[0] && bare[0].len) + ' px of bare board')
+          expect(bare.length === 0,
+            'level 9 walks off the painted trace in ' + bare.length + ' place(s): '
+            + bare.map((b) => b.lane + ' ' + b.len + 'px').join(', '))
         }
       }
 
