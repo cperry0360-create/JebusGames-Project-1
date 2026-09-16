@@ -5,7 +5,8 @@
 | `3985d7a` | Five new difficulty knobs, wired through `Difficulty.ts` into the game and the soak | not run alone; see below |
 | `0e9b0a1` | Merge of `main`'s level 9 retune and flank repaint | not run alone |
 | `2a115d2` | Merge of `main`'s CI-row commit — the tree containing all of the above | [run 407](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/35084921618) **green** |
-| *this commit* | This report, `SOAK-REPORT.md`, `claude/context.md`, and the stale `0.6` in `difficulty.json`'s note corrected to the shipped `0.7` | it edits one data comment and three documents |
+| `40e4126` | This report, `SOAK-REPORT.md`, `claude/context.md`, and the stale `0.6` in `difficulty.json`'s note corrected to the shipped `0.7` | [run 408](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/35085257819) — `changes`, `typecheck`, `test` and `deploy / build` **green**; `deploy / deploy` still publishing when this was written |
+| *this commit* | Closing this table on runs 407 and 408 | it edits this table and nothing else |
 
 **Run 407 on `2a115d2`: all five jobs success** — `changes`, `typecheck`, `test`,
 `deploy / build` and `deploy / deploy`, with **the deploy RUNNING rather than
@@ -362,9 +363,12 @@ shape as the regen bug that `Sim.ts` already carries a long comment about.
 
 ## Where this leaves the repository
 
-* **`main` carries the change** at `2a115d2`, after two merges of work that
-  landed during the session. Run 407 was in flight when this was written; the
-  table at the top is closed by the commit that follows this one.
+* **`main` carries the change** at `40e4126`, after two merges of work that
+  landed during the session. **Run 407 on `2a115d2` — the tree containing every
+  line of code — is green on all five jobs with the deploy RUNNING**, so the live
+  site has the mode. Run 408 covers the documentation commit plus one comment
+  string in `difficulty.json`; its four checking jobs are green and only the
+  Pages publish step was still running when this was written.
 * **Levels 1, 2, 3 and 4 sit above the 85–95% band on Lazy Dad Mode** (98.3,
   96.5, 99.8, 99.0) and no global multiplier brings them in. This is not a
   defect to fix; it is what a 51-point spread of `normal` win rates looks like
