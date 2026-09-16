@@ -25,10 +25,11 @@ flank. Read the job list, not the conclusion.
 2. **Five chips can cover it — 8, 9, 12, 13 and 15 — and pad 15 could cover
    nothing at all before.** 194.6 px from the trunk at a 132 px range, 73.9 px
    from the flank. Pads 1 and 7 still reach nothing.
-3. **The orphan-road test flags TWO other levels over 3%: only level 6**, at
-   7.05%, and that one is deliberate and already pinned by another test. Level 1
-   is next at 1.25% and it is a footpath to the tavern door. So: one other level
-   above the line, and it is a known decision rather than a finding.
+3. **The orphan-road test flags exactly ONE other level over 3%, and it is
+   level 6** at 7.05% — deliberate, and already pinned to the pixel by
+   `tests/level6map.test.ts`. Level 1 is next at 1.25% and it is a footpath to
+   the tavern door. So: one other level above the line, and it is a known
+   decision rather than a finding.
 4. **The finding in the brief is confirmed to the pixel, and its premise is
    not.** 13.82% orphaned, one region of 16,097 world px at x 894-1125,
    y 381-590. But the segment **does not leave the route and rejoin it**. It is
