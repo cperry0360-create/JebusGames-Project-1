@@ -62,7 +62,7 @@ const SCENARIO_NAMES = [
   'crashreport', 'crashw5', 'credits', 'creditsroll', 'ctxsurvive',
   'dadsync', 'diag', 'difficulty', 'draft', 'drawer', 'edges',
   'elibar', 'elifire', 'enemyfacing', 'everyloadout', 'facing', 'fps', 'full', 'full13', 'fx',
-  'game', 'gateway', 'gestures', 'glacier', 'gnomes', 'goblin', 'heroanim',
+  'game', 'gateway', 'gestures', 'glacier', 'gnomes', 'goblin', 'guaranteed', 'heroanim',
   'heroblock', 'herochip', 'herofx', 'herohp', 'lane', 'leak', 'ledger',
   'labelprobe', 'lanemarkers', 'lazydad', 'lettering', 'level6', 'level7', 'level8', 'level8retopo', 'level9', 'levelart', 'levels',
   'listenerguard', 'loadout', 'locked',
@@ -113,7 +113,7 @@ const ASSERTS_NOTHING = new Set([
  */
 const USES_EXPECT = new Set([
   'typegame', 'rotationburst', 'level7', 'level8', 'level9', 'boardinput', 'lanemarkers', 'level8retopo',
-  'vlaude', 'titlecard', 'counters', 'everyloadout', 'padpan', 'midwave',
+  'vlaude', 'titlecard', 'counters', 'everyloadout', 'padpan', 'midwave', 'guaranteed',
 ])
 
 /** How many checks this run actually EVALUATED, pass or fail. */
@@ -15179,6 +15179,237 @@ async function run() {
     await shot('startrun-02-playing-' + VP.w + 'x' + VP.h)
     note('RESULT ' + (started && bb.bottom < 720 ? 'a run can be started at the worst case'
       : '*** COULD NOT START A RUN ***'))
+    return
+  }
+
+  if (scenario === 'guaranteed') {
+    /*
+     * THE GUARANTEED OPENER, ON A RENDERED FRAME.
+     *
+     * The Ima Dummy Tower is the only tower in the game that does not shoot,
+     * and until now it was reachable on level 1 alone -- it had no entry in
+     * draft.json's shared pool and lived in level 1's `extraTowerWeights`, so
+     * on nine levels of ten no number of rerolls could produce it. It is a
+     * guaranteed THIRD opening slot now, in data, and `tests/draft.test.ts`
+     * holds the arithmetic on every level id.
+     *
+     * WHAT A TEST CANNOT SEE, and why this exists: no test in `tests/` imports
+     * Phaser, so nothing there knows whether the loadout screen draws a third
+     * card, whether it still lays out at phone width with one, or whether the
+     * tower builds and stands its lads up on a board that is not level 1's.
+     * All three are checked here, on a frame.
+     *
+     * THE HAND IS DEALT RATHER THAN SET. Every other loadout scenario in this
+     * file hands `setRunState` a fixed pair, which is right for a layout check
+     * and useless for this one -- a forced hand proves nothing about the
+     * draft. `LoadoutScene.create` deals only when the hand is EMPTY, so the
+     * run state is cleared and the scene draws its own.
+     */
+    const RSg = await import('./js/systems/RunState.js')
+    const DRAFTg = (await import('./js/data/draft.json', { with: { type: 'json' } })).default
+    const TOWERSg = (await import('./js/data/towers.json', { with: { type: 'json' } })).default
+    const GUARANTEED = DRAFTg.guaranteedTowers ?? []
+    const WANT = DRAFTg.towersAtStart + GUARANTEED.length
+    note('draft.json: towersAtStart ' + DRAFTg.towersAtStart + ', guaranteed [' +
+      GUARANTEED.join(', ') + '] -> ' + WANT + ' opening towers')
+    expect(GUARANTEED.length > 0, 'draft.json guarantees no towers at all')
+
+    // The names on the cards, read off the scene's own text objects rather
+    // than off the run state: what the player sees is the claim being made.
+    const cardNames = (sc) => {
+      const out = []
+      const walkAll = (list) => { for (const o of list) { out.push(o); if (o.list) walkAll(o.list) } }
+      walkAll(sc.children.list)
+      const wanted = new Set(Object.values(TOWERSg).map((t) => t.name.toUpperCase()))
+      return out.filter((o) => o.type === 'Text' && wanted.has(String(o.text ?? '').toUpperCase()))
+        .map((o) => String(o.text))
+    }
+
+    const dealOn = async (levelId) => {
+      for (const k of ['Title', 'Splash', 'Credits', 'Boot', 'Game', 'Hud', 'Loadout']) game.scene.stop(k)
+      // EMPTY, so the scene deals. See above.
+      RSg.setRunState({
+        heroId: 'cory', levelId, seed: 20260916,
+        openingTowers: [], reserveTowers: [], abilities: [],
+      })
+      game.scene.start('Loadout')
+      await until(() => running('Loadout'), 12000)
+      await sleep(700)
+      return scene('Loadout')
+    }
+
+    for (const levelId of ['level1', 'level10']) {
+      const sc = await dealOn(levelId)
+      const hand = RSg.runState().openingTowers
+      const names = cardNames(sc)
+      note(levelId + ': dealt [' + hand.join(', ') + ']')
+      note('  cards on the screen: [' + names.join(', ') + ']')
+      expect(hand.length === WANT, levelId + ' dealt ' + hand.length + ' towers, wanted ' + WANT)
+      expect(names.length === WANT,
+        levelId + ' drew ' + names.length + ' tower cards, wanted ' + WANT)
+      for (const id of GUARANTEED) {
+        expect(hand.includes(id), levelId + ' opened without ' + id)
+        expect(hand.filter((h) => h === id).length === 1, levelId + ' dealt ' + id + ' twice')
+        // UPPERCASED ON BOTH SIDES: the card paints the name in caps, and
+        // comparing the painted text against towers.json's mixed-case string
+        // reported a card that is plainly in the screenshot as missing.
+        expect(names.some((n) => n.toUpperCase() === TOWERSg[id].name.toUpperCase()),
+          levelId + ' never drew a card for ' + TOWERSg[id].name)
+        // And it must not come back as a mid-run unlock.
+        expect(!RSg.runState().reserveTowers.includes(id),
+          levelId + ' put ' + id + ' in the reserve as well')
+      }
+      // The stack has to have room for the third card, which is the part that
+      // only a laid-out scene can answer.
+      const plan = sc.stackPlan || {}
+      note('  stack: ' + (plan.wide ? 'two columns' : 'stacked') +
+        '  card ' + Math.round(plan.cardW ?? 0) +
+        '  towers granted ' + Math.round(plan.granted?.towers ?? 0) +
+        ' against a want of ' + Math.round(plan.towerWant ?? 0) +
+        '  overflow ' + Math.round(plan.overflow ?? 0))
+      await shot('guaranteed-' + levelId + '-' + VP.w + 'x' + VP.h)
+
+      /*
+       * THE CONTROL: THE SAME HAND WITHOUT THE THIRD CARD.
+       *
+       * The loadout screen ALREADY scrolls at phone width -- `screens` reports
+       * overflow 63 at 844x390 and 196 at 667x375 on `main`, with the forced
+       * two-tower hand it has always used. So "it overflows" is not a finding
+       * about the third card, and quoting the three-card number on its own
+       * would report a pre-existing scroll as a regression. What the third
+       * card COSTS is the difference between these two, measured on the same
+       * hand, the same hero and the same viewport.
+       */
+      RSg.setRunState({ openingTowers: hand.filter((id) => !GUARANTEED.includes(id)) })
+      game.scene.stop('Loadout')
+      game.scene.start('Loadout')
+      await until(() => running('Loadout'), 12000)
+      await sleep(500)
+      const twoCard = scene('Loadout').stackPlan || {}
+      note('  control (the same hand, dummy removed): card ' + Math.round(twoCard.cardW ?? 0) +
+        '  towers granted ' + Math.round(twoCard.granted?.towers ?? 0) +
+        ' against a want of ' + Math.round(twoCard.towerWant ?? 0) +
+        '  overflow ' + Math.round(twoCard.overflow ?? 0))
+      note('  THE THIRD CARD COSTS ' +
+        Math.round((plan.overflow ?? 0) - (twoCard.overflow ?? 0)) + ' units of overflow')
+
+      /*
+       * AND WHAT OVERFLOWS MUST SCROLL, which is the difference between a
+       * screen with more on it and a screen that is cut off.
+       *
+       * Established by MOVING IT rather than by reading the flag: the standing
+       * note in CLAUDE.md is that three of four faults the input harness first
+       * found were the harness, so the content has to be shown to move before
+       * anything is claimed about where it ends up. A wheel event is the one
+       * gesture `installScroll` binds that needs no pointer arithmetic.
+       */
+      // THE THREE-CARD HAND BACK. The control above left the two-card hand in
+      // the run state, and measuring the scroll against that measures the
+      // screen this change is not about -- it reported 0 overflow at 844x390
+      // and 4 at 1400x900, which are the CONTROL's numbers, and passed.
+      RSg.setRunState({ openingTowers: hand })
+      game.scene.stop('Loadout')
+      game.scene.start('Loadout')
+      await until(() => running('Loadout'), 12000)
+      await sleep(500)
+      const sc2 = scene('Loadout')
+      expect(Math.round(sc2.stackPlan?.overflow ?? 0) === Math.round(plan.overflow ?? 0),
+        'the scroll check is not looking at the three-card screen: overflow ' +
+        Math.round(sc2.stackPlan?.overflow ?? 0) + ' against ' + Math.round(plan.overflow ?? 0))
+      if ((sc2.stackPlan?.overflow ?? 0) > 0) {
+        const y0 = sc2.stack.y
+        for (let i = 0; i < 12; i++) { sc2.input.emit('wheel', null, null, 0, 1, 0); await sleep(40) }
+        await sleep(300)
+        note('  scroll: stack y ' + Math.round(y0) + ' -> ' + Math.round(sc2.stack.y) +
+          '  of a possible -' + Math.round(sc2.stackPlan.overflow))
+        expect(sc2.stack.y < y0 - 1,
+          'the content overflows by ' + Math.round(sc2.stackPlan.overflow) +
+          ' units and will not scroll, so it is cut off rather than below the fold')
+        await shot('guaranteed-' + levelId + '-scrolled-' + VP.w + 'x' + VP.h)
+      } else {
+        note('  scroll: nothing overflows at this viewport')
+      }
+    }
+
+    /* --- A REROLL STILL DEALS IT ---------------------------------------- */
+    //
+    // The reroll redeals through the same `deal`, so if the guarantee lived in
+    // the caller rather than in `draftOpeningTowers` this is the path that
+    // would lose it. Pressed for real, through the button.
+    {
+      const sc = await dealOn('level10')
+      const before = RSg.runState().openingTowers.slice()
+      const all = []
+      const walkAll = (list) => { for (const o of list) { all.push(o); if (o.list) walkAll(o.list) } }
+      walkAll(sc.children.list)
+      const label = all.find((o) => o.type === 'Text' && /REROLL/i.test(String(o.text ?? '')))
+      if (!expect(!!label, 'the loadout screen has no REROLL button to press')) return
+      const bb = label.getBounds()
+      const cam = sc.cameras.main
+      const dscale = window.devicePixelRatio || 1
+      await click((cam.x + (bb.centerX - cam.worldView.x) * cam.zoom) / dscale,
+        (cam.y + (bb.centerY - cam.worldView.y) * cam.zoom) / dscale)
+      await sleep(1200)
+      const after = RSg.runState().openingTowers
+      const names = cardNames(scene('Loadout'))
+      note('reroll: [' + before.join(', ') + '] -> [' + after.join(', ') + ']')
+      note('  cards on the screen: [' + names.join(', ') + ']')
+      expect(after.length === WANT, 'the reroll dealt ' + after.length + ' towers')
+      for (const id of GUARANTEED) {
+        expect(after.includes(id), 'the reroll lost ' + id)
+        expect(names.some((n) => n.toUpperCase() === TOWERSg[id].name.toUpperCase()),
+          'the reroll drew no card for ' + TOWERSg[id].name)
+      }
+      await shot('guaranteed-reroll-' + VP.w + 'x' + VP.h)
+    }
+
+    /* --- IT BUILDS AND ITS LADS DEPLOY, ON A LEVEL THAT IS NOT LEVEL 1 --- */
+    //
+    // Level 3, which could not draw this tower at all before today.
+    {
+      const id = GUARANTEED[0]
+      for (const k of ['Title', 'Splash', 'Credits', 'Boot', 'Loadout']) game.scene.stop(k)
+      RSg.setRunState({
+        heroId: 'cory', levelId: 'level3', abilities: ['molotov', 'glacier'],
+        openingTowers: ['withholding', 'rounding', id], reserveTowers: [], resumeFrom: null,
+      })
+      const g3 = await startRun()
+      if (!expect(!!g3, 'level 3 never started')) return
+      note('level3: unlocked [' + g3.status.unlockedTowers.join(', ') + ']')
+      expect(g3.status.unlockedTowers.includes(id),
+        'the run dropped ' + id + ' on the way in from the loadout screen')
+      g3.status.peanuts = 999999
+      // A pad whose range reaches the road, so the default rally has a lane
+      // point to stand on.
+      const spot = g3.build.freeSpots()[0]
+      await lookAt(spot.x, spot.y)
+      g3.place(id, spot)
+      await sleep(1400)
+      const garrison = (g3.garrisons || []).find((q) => q.tower.id === id)
+      expect(!!garrison, 'the tower built but raised no garrison')
+      const lads = garrison ? garrison.soldiers : []
+      note('garrison: ' + lads.length + ' lad(s), rally ' +
+        (garrison && garrison.rally
+          ? Math.round(garrison.rally.x) + ',' + Math.round(garrison.rally.y) : 'none'))
+      for (const s of lads) {
+        note('  lad at ' + Math.round(s.x) + ',' + Math.round(s.y) +
+          '  hp ' + Math.round(s.health) + '/' + Math.round(s.maxHealth) +
+          '  visible ' + (s.visible !== false))
+      }
+      expect(lads.length >= 2, 'the garrison stood up ' + lads.length + ' lads, wanted 2')
+      expect(lads.every((s) => s.visible !== false && s.health > 0),
+        'a lad is invisible or arrived dead')
+      // They stand on the ROAD, not on the pad, which is the whole point of
+      // the tower -- a garrison beside the lane blocks nothing.
+      if (garrison && garrison.rally) {
+        expect(lads.every((s) => Math.hypot(s.x - garrison.rally.x, s.y - garrison.rally.y) < 200),
+          'a lad was posted nowhere near the rally point')
+      }
+      await shot('guaranteed-level3-garrison-' + VP.w + 'x' + VP.h)
+    }
+
+    note('RESULT ' + (ASSERT_FAILS ? '*** ' + ASSERT_FAILS + ' fault(s) ***'
+      : 'no faults; ' + ASSERTIONS + ' checks'))
     return
   }
 

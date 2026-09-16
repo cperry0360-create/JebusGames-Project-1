@@ -356,6 +356,34 @@ his 172-second walk; the median loser brings 546 and delivers 14,708, and he wal
 at 24% health. That is a boss set right at the top of what a good board can do, which
 is what a 40.6% level looks like. See `reports/2026-09-15-blockers.md`.
 
+**BUT 40.6% IS NO LONGER LEVEL 10'S RATE, and nor is any other number in the
+paragraph above.** On 2026-09-16 the Ima Dummy Tower became a guaranteed third
+opening tower on every level -- it had been draftable on level 1 alone -- and the
+re-soak moved every level. Level 10 reads **117/480, 24.4%**. The 26,000 and the
+24,265 above were derived against a board that opened with two towers and has
+three now, so **do not quote them as current**; the reasoning about which of the
+six powers the soak can express is unaffected.
+
+**AND NO LEVEL IS INSIDE THE 35-45% BAND ANY MORE**, where five were. Nothing was
+retuned: the brief asked for the damage report and a stop.
+
+    before  428 255 422 299 218 210 198 184 192 195
+    after   405 218 422 328 343  83 133 146 119 117
+
+Read that with two facts or it will be read wrong. **First, most of the swing is
+the SOAK'S BUILDER, not the game.** `Sim.ts` picks what to build with
+`rng.pick(affordable)`, uniformly at random from the unlocked types, so a
+guaranteed opener that deals ZERO damage takes about one pad in three from wave 1
+on every level; a person builds a garrison where blocking pays. A control run
+separates the halves: the tower in the shared pool WITHOUT the guarantee is worth
++43 runs over 4800 and leaves the same five levels in band, and the guarantee is
+worth -330. So -330 is a ceiling on what a player feels rather than a measurement
+of it. **Second, level 9's retune is newer than its own report:** `e505a4d` put it
+back in band at 192/480 against a two-tower opening, and this reads 119.
+
+`reports/2026-09-16-dummy-tower-guaranteed.md` has the three-column table, and
+`SOAK-REPORT.md` carries before and after side by side.
+
 The asset-sweep standing fact above is now **discharged for every level**: `main`
 references level 10's art itself. The two route-gate props in `art-source/level10/`
 are deliberately unconverted and deliberately unused — route switching was cut from

@@ -1267,7 +1267,11 @@ export class GameScene extends Phaser.Scene {
     this.status.bossHealth = 0
     this.status.bossMax = 0
     this.nukeUsed = false
-    this.status.unlockedTowers = run.openingTowers.slice(0, DRAFT.towersAtStart)
+    // THE WHOLE OPENING HAND, not `towersAtStart` of it. The draft deals
+    // `towersAtStart` drawn cards plus a slot per guaranteed tower, so slicing
+    // to `towersAtStart` here would have dealt the Ima Dummy Tower on the
+    // loadout screen and then thrown it away on the way into the run.
+    this.status.unlockedTowers = [...run.openingTowers]
 
     // A run picked up where it was left. Everything above set a fresh run up;
     // this puts the saved one back over the top of it, and it happens here —
@@ -5874,12 +5878,21 @@ export class GameScene extends Phaser.Scene {
     if (why !== 'read' && this.scene.isActive('Cutscene')) this.scene.stop('Cutscene')
   }
 
-  /** A 3rd tower after wave 4 and a 4th after wave 8, drawn from the reserve. */
+  /**
+   * One more tower after wave 4 and another after wave 8, drawn from the
+   * reserve.
+   *
+   * The index into the reserve is measured off the OPENING HAND's own length
+   * rather than off `towersAtStart`, because the hand is the drawn cards plus
+   * a slot per guaranteed tower. Off `towersAtStart` the first unlock would
+   * have re-granted a tower the run already had and the last entry of the
+   * reserve would never have been reached.
+   */
   private grantTowerUnlocks(): void {
     const run = runState()
     const target = unlockedTowerCount(DRAFT, this.status.wave)
     while (this.status.unlockedTowers.length < target) {
-      const next = run.reserveTowers[this.status.unlockedTowers.length - DRAFT.towersAtStart]
+      const next = run.reserveTowers[this.status.unlockedTowers.length - run.openingTowers.length]
       if (!next) break
       this.status.unlockedTowers.push(next)
       this.refreshMenuOptions()

@@ -1306,13 +1306,17 @@ export interface AbilityDef {
 
 export interface DraftDef {
   towersAtStart: number
-  /** How many tower types the build menu ever offers, not a placement cap. */
+  /** How many DRAWN tower types the build menu ever offers, not a placement
+   *  cap and not a total — `guaranteedTowers` sit on top of it. */
   unlockedTypeCap: number
   unlockAfterWave: number[]
   abilitiesDrawn: number
   damageArchetypes: string[]
   answerArchetypes: string[]
   towerWeights: Record<string, number>
+  /** Towers every run opens with, in a slot of their own on top of
+   *  `towersAtStart`. See `systems/Draft.ts`. */
+  guaranteedTowers?: string[]
   /** Whole-hand redeals allowed on the loadout screen, before the run starts. */
   rerollsPerRun: number
 }
