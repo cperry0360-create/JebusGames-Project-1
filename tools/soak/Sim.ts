@@ -69,6 +69,7 @@ import heroesData from '../../src/data/heroes.json' with { type: 'json' }
 import rulesData from '../../src/data/rules.json' with { type: 'json' }
 import presentationData from '../../src/data/presentation.json' with { type: 'json' }
 import draftData from '../../src/data/draft.json' with { type: 'json' }
+import builderData from './builder.json' with { type: 'json' }
 
 import { DEFAULT_LEVEL_ID, levelRules, loadLevel, towerWeightsFor } from '../../src/systems/Levels.ts'
 import { NightRules } from '../../src/systems/NightRules.ts'
@@ -133,6 +134,13 @@ const ABILITIES = abilitiesData as any
 const HEROES = heroesData as any
 const RULES = rulesData as any
 const DRAFT = draftData as any
+/**
+ * THE SIMULATED PLAYER'S ROLE RULES. See builder.json, which carries the whole
+ * argument; this is the only file that reads it and nothing under src/ does.
+ */
+const BUILDER = builderData as unknown as {
+  zeroDamage: { padShare: number; min: number }
+}
 
 /** A tick, in game seconds. Small enough that a fast enemy cannot step over a
  *  tower's range in one frame. */
@@ -320,6 +328,30 @@ export interface SoakResult {
   /** True where the LAST leak of a losing run was a child of a death split --
    *  a run that level 7's finale ended. False on every other level. */
   lostToSplit: boolean
+  /**
+   * WHAT THE BUILDER DID, so its rules can be asserted rather than trusted.
+   *
+   * The zero-damage cap is an invariant of the simulated player and nothing
+   * else in this struct can see whether it held: a win rate cannot tell you
+   * that a third of the board was spent on towers that do not shoot, which is
+   * precisely how the artefact in reports/2026-09-16-dummy-tower-guaranteed.md
+   * went unnoticed until it moved every level at once.
+   *
+   * `tests/soakbuilder.test.ts` fails if `zeroDamageBuilt` ever exceeds
+   * `zeroDamageCap`.
+   */
+  builder: {
+    /** Build pads on this board, which is what the cap derives from. */
+    pads: number
+    /** `max(min, floor(pads * padShare))` — see tools/soak/builder.json. */
+    zeroDamageCap: number
+    /** Zero-damage towers standing at the end of the run. Towers are never
+     *  removed in this simulator, so the final count is the peak. */
+    zeroDamageBuilt: number
+    /** The first tower the run put down, or null if it built none. The
+     *  first-gun rule is a statement about exactly this. */
+    firstBuilt: string | null
+  }
 }
 
 interface SimEnemy {
@@ -1812,6 +1844,40 @@ export function simulate(
     return out
   })()
 
+  /**
+   * WHETHER A TOWER CONTRIBUTES DAMAGE FROM ITS PAD.
+   *
+   * `damage` in towers.json rather than a new field, exactly as the brief
+   * asked: a tower whose damage is retuned to zero should fall under the cap
+   * below without anybody remembering to flag it. Today that is the Beacon
+   * and the Ima Dummy Tower. The garrison's lads and the Beacon's aura are
+   * real contributions -- what this asks is whether the PAD shoots.
+   */
+  const dealsDamage = (id: string): boolean => (TOWERS[id].damage ?? 0) > 0
+
+  /**
+   * HOW MANY ZERO-DAMAGE TOWERS THIS BOARD MAY CARRY, derived from its pads.
+   *
+   * See builder.json for the whole argument. Short version: the pick below was
+   * uniform over everything affordable and had no concept of what a tower is
+   * FOR, so once the Ima Dummy Tower became a guaranteed opener the simulated
+   * player spent about one pad in three on a tower that deals no damage, on
+   * every board, from wave 1. Seven of ten levels "got harder" and the band
+   * emptied. That was the instrument, not the game.
+   *
+   * A SHARE OF THE PADS rather than a fixed number, because the ten boards run
+   * from 7 pads to 22 and the same cap on both would mean two different rules.
+   */
+  const zeroDamageCap = Math.max(
+    BUILDER.zeroDamage.min,
+    Math.floor(build.spots.length * BUILDER.zeroDamage.padShare),
+  )
+  /** Counted off the board rather than tracked in a counter, so it cannot
+   *  drift across the many calls `spend` makes in one run. */
+  const zeroDamageOnBoard = (): number =>
+    towers.reduce((n, t) => n + (dealsDamage(t.id) ? 0 : 1), 0)
+  let firstBuilt: string | null = null
+
   const spend = (): void => {
     if (mode === 'nobuild') return
     for (const spot of byReach) {
@@ -1826,7 +1892,42 @@ export function simulate(
         // range is not the thing that has to reach the road.
         .filter((id) => TOWERS[id].supportRadius > 0 || TOWERS[id].range >= reach)
       if (affordable.length === 0) break
-      const id = rng.pick(affordable)
+
+      /*
+       * THE TWO ROLE RULES, AND THERE ARE DELIBERATELY ONLY TWO.
+       *
+       * Past them the choice is the same uniform `rng.pick` it always was, and
+       * that is the point rather than a shortcut: a builder that placed towers
+       * WELL would flatter whatever tuning it happened to suit and stop being
+       * a neutral instrument. These two only remove behaviour no player would
+       * exhibit -- a board with no gun on it at all, and a third of the pads
+       * spent on towers that do not shoot.
+       *
+       * `supportonly` IS EXEMPT and has to be. Its whole pool is the Beacon,
+       * so a zero-damage cap would turn it into `nobuild` and silently delete
+       * the mode whose job is to show where a board cannot kill anything.
+       */
+      let choices = affordable
+      if (mode !== 'supportonly') {
+        const capped = zeroDamageOnBoard() >= zeroDamageCap
+        const noGunYet = !towers.some((t) => dealsDamage(t.id))
+        if (capped || noGunYet) {
+          choices = affordable.filter(dealsDamage)
+          if (choices.length === 0) {
+            // CAPPED WITH NO GUN AFFORDABLE HERE: SKIP THE PAD AND KEEP THE
+            // PEANUTS. Building another blocker is the behaviour being fixed,
+            // and a player who cannot afford the tower they want waits. The
+            // pad is skipped rather than the loop broken because reach is
+            // per-pad -- a later pad may accept a cheaper long-range gun.
+            if (capped) continue
+            // Not capped, no gun yet, and nothing that shoots is affordable:
+            // the restriction lifts. An empty board is worse than a Beacon.
+            choices = affordable
+          }
+        }
+      }
+      const id = rng.pick(choices)
+      if (firstBuilt === null) firstBuilt = id
       peanuts -= TOWERS[id].cost
       build.occupy(spot.index)
       const t: SimTower = {
@@ -2564,6 +2665,12 @@ export function simulate(
     lostToEnemy: outcome === 'lost' ? lostToEnemy : null,
     lostToEntrance: outcome === 'lost' ? lostToEntrance : null,
     leaksByEntrance,
+    builder: {
+      pads: build.spots.length,
+      zeroDamageCap,
+      zeroDamageBuilt: zeroDamageOnBoard(),
+      firstBuilt,
+    },
   }
 }
 

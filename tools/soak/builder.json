@@ -1,0 +1,18 @@
+{
+  "_note": "HOW THE SIMULATED PLAYER CHOOSES WHAT TO BUILD. This is the MEASURING INSTRUMENT, not the game -- nothing under src/ reads it and nothing here reaches a player. It lives in tools/soak/ rather than src/data/ deliberately: a knob that changes what the soak MEASURES is not a balance number, and a future session finding it under src/data/ would reasonably read it as a game rule and tune against it.",
+
+  "_whyThisExists": "tools/soak/Sim.ts chose with `rng.pick(affordable)` -- a uniform pick over every tower it could afford, with no concept of what a tower is FOR. That was survivable while the pool was almost all damage. It stopped being survivable when the Ima Dummy Tower became a guaranteed opener on every level: the simulated player then put a zero-damage blocking tower on roughly one pad in three from wave 1 on every board, seven of ten levels 'got harder' and no level was left in the 35-45% band. reports/2026-09-16-dummy-tower-guaranteed.md proves the cause with a control run -- the tower merely being in the pool is worth +43 runs over 4800 and leaves five levels in band; the GUARANTEE is worth -330. That was a measurement artefact, and `shelter` (the Beacon: +30% and zero damage) has had the same flaw at weight 3 for as long as it has existed, just smaller.",
+
+  "_zeroDamage": "THE CAP ON TOWERS THAT DEAL NO DAMAGE THEMSELVES, which today is the Beacon and the Ima Dummy Tower -- read off `damage` in towers.json rather than from a new field, because a tower whose damage is retuned to zero should fall under this without anybody remembering to flag it. A garrison's lads and a Beacon's aura are real contributions; what the cap is about is that the PAD contributes no tower DPS, and a third of the board spent that way is not a board any person would build.\n\nDERIVED FROM PAD COUNT, NOT FIXED. `max(min, floor(pads * padShare))`. The ten boards carry 7, 15, 15, 14, 14, 18, 22, 19, 15 and 12 pads, so padShare 0.2 gives caps of 1, 3, 3, 2, 2, 3, 4, 3, 3 and 2 -- one or two on a small board, never more than a fifth of a big one. A fixed number would mean the same cap on level 1's seven pads and level 7's twenty-two, which are not the same board.\n\n`min` is what stops a hypothetical tiny board banning the role outright: a blocker at a chokepoint is a legitimate opening and the cap must never read zero.",
+
+  "zeroDamage": {
+    "padShare": 0.2,
+    "min": 1
+  },
+
+  "_firstGun": "AND THE BOARD GETS A GUN BEFORE IT GETS ANYTHING ELSE. While no tower on the board deals damage, the pick is restricted to towers that do -- so a run cannot open with a Beacon buffing nothing, which the uniform pick did freely. If no damage tower is affordable for the pad in hand, the restriction lifts rather than stalling the build: something is better than an empty board.",
+
+  "_notAStrategyAI": "THE RANDOM PICK IS THE POINT AND IT SURVIVES. Past the two rules above, the choice is the same uniform `rng.pick` it always was. A builder that placed towers WELL would flatter whatever tuning it happened to suit and stop being a neutral instrument; these two rules only remove behaviour no player would exhibit. Do not add a third without a measurement that says the second was not enough.",
+
+  "_exemptModes": "`supportonly` IS EXEMPT, and has to be. It is the deliberately-broken player -- its whole pool is the Beacon, so a zero-damage cap would turn it into `nobuild` and silently delete a mode whose job is to show where a board cannot kill anything. `nobuild` never reaches this code."
+}
