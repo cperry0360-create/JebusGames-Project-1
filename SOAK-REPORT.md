@@ -83,6 +83,57 @@ flank junction moved 5 px.
 
 ---
 
+## 2026-09-16 — Lazy Dad Mode made genuinely easy, and normal held byte for byte
+
+`src/data/difficulty.json` carries seven knobs instead of two. The five new ones
+— kill income, wave interval, hero respawn, ability cooldown and a **uniform
+enemy health scalar including bosses** — are **1.0 on `normal` and on
+`try-hard`**, and `Difficulty.ts` returns its input by an early return when a
+multiplier is exactly 1, so the no-op is exact rather than a rounding that lands
+on the same integer today.
+
+**Lazy Dad Mode, 480 seeds, `tools/soak/level.ts 480 level<n> lazy-dad`:**
+
+| level | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| lazy-dad | 98.3% | 96.5% | 99.8% | 99.0% | 89.8% | 94.6% | 94.0% | 95.8% | 94.0% | 86.7% |
+| normal | 89.2% | 53.1% | 87.9% | 62.3% | 45.4% | 43.8% | 41.3% | 38.3% | 40.0% | 40.6% |
+
+Shipped multipliers: lives 3.0, purse 1.5, kill income 1.1, wave interval 1.5,
+hero respawn 0.7, ability cooldown 0.85, enemy health 0.7.
+
+**`normal` re-soaked at 480 on all ten and unchanged, every integer:** 428, 255,
+422, 299, 218, 210, 198, 184, 192, 195. **`try-hard` likewise:** 426, 255, 403,
+298, 174, 198, 139, 35, 151, 192.
+
+**WHY A HEALTH SCALAR EXISTS AT ALL**, against this file's own long-standing
+objection. Two levels fail on a boss DPS check, and on those the two old knobs
+do nothing — measured on the same 480 seeds:
+
+| | level 2 | level 10 |
+|---|---|---|
+| normal | 255/480 — 53.1% | 195/480 — 40.6% |
+| lives **×4**, purse **×3**, nothing else | 264/480 — 55.0% | 201/480 — 41.9% |
+| enemy health **×0.8 alone** | 388/480 — 80.8% | 325/480 — 67.7% |
+
+Quadrupled lives and a tripled purse move level 2 by 1.9 points. A fifth off
+every enemy's health moves it by 27.7. There is still **no armour, enemy damage
+or enemy speed scalar** — that is what the original objection is actually about
+and it stands.
+
+**Levels 1, 2, 3 and 4 sit ABOVE the 85-95% target band on Lazy Dad Mode and no
+global multiplier brings them in.** Levels 1 and 3 are 89.2% and 87.9% on
+`normal`, so an easier mode is at least that by construction.
+
+**The simulator cannot see `waveIntervalMultiplier`** — it has no ready phase —
+so every Lazy Dad figure above is measured without the knob that most helps a
+young player. `tools/harness/run.sh lazydad` is what measures all five, off a
+live run.
+
+See `reports/2026-09-16-lazy-dad-mode.md`.
+
+---
+
 ## 2026-09-16 — Level 9 grows a third lane, and it costs sixteen points
 
 ### The headline

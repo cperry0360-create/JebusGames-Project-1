@@ -206,14 +206,40 @@ debug unlock if it goes in). Unanswered: does a failed run wipe progress?
 
 ## Difficulty modes
 
-**Lazy Dad Mode** (casual), **Yeah, I Game** (normal), **Try Hard** (hardcore). They
-change starting lives and starting peanuts and nothing else. `normal` is a literal
-no-op, proven twice: a test against `rules.json` and a 120-seed soak reproducing every
-published win rate seed for seed.
+**Lazy Dad Mode** (casual), **Yeah, I Game** (normal), **Try Hard** (hardcore).
 
-**Known limit:** neither lever touches a level whose failure mode is a boss DPS check.
-Level 2 was exactly that. If later levels share that shape, a casual-only enemy-HP
-scalar may need revisiting.
+**SEVEN KNOBS SINCE 2026-09-16, NOT TWO.** Starting lives and starting peanuts, plus
+kill income, wave interval, hero respawn, ability cooldown and a **uniform enemy
+health scalar that includes bosses**. All five of the new ones are **1.0 on `normal`
+AND on `try-hard`** -- try-hard's published behaviour is lives and purse only and it
+was never re-soaked for anything else. `Difficulty.ts` returns its input by an early
+return when a multiplier is exactly 1, so the no-op is exact rather than a rounding
+that lands on the same integer today.
+
+`normal` is a literal no-op, now proven three ways: a test against `rules.json`, a
+**480-seed re-soak of all ten levels reproducing every published integer**, and the
+`lazydad` harness scenario reading the six numbers off a live run.
+
+**Lazy Dad at 480 seeds:** 98.3, 96.5, 99.8, 99.0, 89.8, 94.6, 94.0, 95.8, 94.0,
+86.7 per cent for levels 1 to 10. Multipliers: lives 3.0, purse 1.5, kill income 1.1,
+wave interval 1.5, hero respawn 0.7, ability cooldown 0.85, enemy health 0.7.
+
+**THE KNOWN LIMIT IS RESOLVED, AND IT WAS BIGGER THAN IT LOOKED.** This section used
+to say neither lever touches a level whose failure mode is a boss DPS check. Measured
+on 480 seeds: **lives x4 and purse x3 with nothing else moves level 2 by 1.9 points
+and level 10 by 1.3.** Enemy health x0.8 alone moves the same two by 27.7 and 27.1.
+The health scalar is the only lever that touches that shape at all.
+
+**STILL NO ARMOUR, ENEMY DAMAGE OR ENEMY SPEED SCALAR, and there must not be.** Those
+three are what the original objection is actually about -- they change which TOWERS
+are viable rather than how hard a level is. `tests/difficulty.test.ts` asserts it
+against the data keys.
+
+**Levels 1, 2, 3 and 4 sit ABOVE the 85-95% target band on Lazy Dad Mode** and no
+global multiplier brings them in: levels 1 and 3 are 89.2% and 87.9% on `normal`, so
+an easier mode is at least that by construction. Not a defect; do not retune for it.
+
+See `reports/2026-09-16-lazy-dad-mode.md`.
 
 ## THE BOARD-SIZE PROBLEM (found 2026-09-07, convention settled since)
 
@@ -517,6 +543,27 @@ never converted and never registered, and `reports/2026-09-14-level-10-assets.md
 names them as deliberately unused.
 
 ## Open items
+
+**`tools/harness/run.sh difficulty` IS RED ON `main` AND WAS BEFORE 2026-09-16.** Two
+faults, both the same stale expectation: the scenario's section 3 looks for the
+difficulty readout on the HUD, and the HUD **deliberately stopped showing it** --
+`difficulty.test.ts` asserts `HudScene.ts` contains no `difficultyName` and says why.
+The second fault (`a mid-run change to the save reached the run`) is a false positive
+falling out of the first: no readout is found, so the `!readout` branch fires.
+Confirmed pre-existing by stashing and re-running on `65c160b`. **The fix is a paired
+edit** -- section 3 should assert the HUD does NOT name the mode and drive the
+capture-once rule through `G.status.difficultyId` -- because `difficulty.test.ts`
+asserts the scenario's current text in three places.
+
+**THE SOAK'S LIFESTEAL HAS NEVER FIRED.** `Sim.ts` calls
+`night.healFor(e as never, dealt)`; `NightRules.Vampire` wants a `maxHealth` field
+that `SimEnemy` does not have, so `lifestealHeal` computes
+`Math.min(damage * fraction, undefined - health)` -> `NaN`, and `healed > 0` rejects
+it in silence. Level 5's vampires have drunk nothing in every published soak. **Same
+failure shape as the regen bug `Sim.ts` already carries a long comment about.** NOT
+fixed on 2026-09-16 because fixing it moves level 5's published win rate, which is a
+retune rather than a difficulty change.
+
 
 **THE HUD-VERSUS-PADS QUESTION IS CLOSED, on the third attempt, and this is the
 paragraph to read before anyone opens a fourth.** Three passes at one problem -- the
