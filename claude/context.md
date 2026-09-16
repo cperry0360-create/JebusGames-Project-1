@@ -504,6 +504,72 @@ and `prop_route_gate_closed.png`. Route switching was cut from the design. They 
 never converted and never registered, and `reports/2026-09-14-level-10-assets.md`
 names them as deliberately unused.
 
+## Cutscenes — reorganised, sliced and wired 2026-09-16
+
+**EVERY COMIC IN THIS REPOSITORY IS A THREE-PANEL STRIP IN ONE IMAGE.** Measured
+across all twelve unwired files and the shipped ones, not eyeballed:
+`tools/comics/slice.py` scores each column for vertical uniformity and finds two
+gutters in every one. The brief named three files to slice; all nine that are wired
+to something were cut, because the brief's own reason — a third of a 1672-wide page
+is 130 CSS px on a phone and the speech is unreadable — applies harder to the
+2172-wide pages, where a third is 119 px.
+
+**And the cut columns are MEASURED, never divided.** `comic_eliminated_positions`
+looks like three 724-wide squares and its panels are 741, 706 and 698. Dividing by
+three would have put a cut 17 px inside panel 1's art.
+
+**Where everything lives now.** `art-source/cutscenes/level1..level10/`, plus
+`unplaced/` and `retired/`, all `git mv` so history follows. **Nothing comic-related
+is in the repository root** and a test fails if a `comic*` or `cutscene*` file
+reappears there. The STRIP is what is kept, not the 27 cut PNGs — a strip plus its
+recorded cut columns reproduces the panels exactly, and the slices would have been
+100 MB of git for nothing. `python3 tools/comics/publish.py 90` is the whole pipeline
+and `tools/comics/last-run.json` is the record.
+
+**Level 1 and 2 were redrawn.** The panels that shipped drew the dad BEARDED AND IN
+ARMOUR at Courjahan's Tavern; the current design is clean-shaven in modern clothes.
+The six old panels are in `art-source/cutscenes/retired/`, out of the deploy and not
+deleted. Both levels got LIGHTER: 0.37 MB against 0.92 and 0.86.
+
+**Level 3 now has an opening** (Vlaude on the television) and there are **six
+mid-wave comics**: level 3 after wave 12, level 4 after wave 6, level 9 after waves
+3, 7, 11 and 15. **All six spawn waves were re-read off the wave tables and all six
+matched**, and `tests/midwave.test.ts` re-derives them so a table edit that moves an
+enemy out from under its comic fails the build.
+
+**A CUTSCENE CAN NOW PLAY BETWEEN TWO WAVES.** `cutscenes.json` gains a third map,
+`midWave`, keyed by level then by the wave it plays AFTER. GameScene pauses itself
+and the HUD and launches the comic as an overlay; a paused Phaser scene runs no
+update, no timer and no tween, so the clock genuinely stops — measured byte-identical
+across 14.0 real seconds, which is longer than the 10.7 s the ready countdown takes
+to auto-start the next wave. Authoring one is a data edit: a row in
+`tools/comics/plan.json`, run `publish.py`, a key in `cutscenes.json`. Nothing in
+`src/` changes.
+
+**THE PICTURE FOUND A BUG THE NUMBERS PASSED.** The first harness run reported 40 of
+43 checks green — comic active, run paused, gate claimed, clock frozen, textures
+released — and the screenshot was a picture of the BOARD with WAVE CLEARED across it.
+Phaser renders scenes in list order and `Cutscene` is declared before `Game` and
+`Hud`; a paused scene still renders, so the board drew over the panel.
+`CutsceneScene.create` calls `bringToTop()` when it is an overlay now.
+
+**The soak is unmoved, all ten levels, 480 seeds, byte-identical before and after.**
+Two of the numbers a brief is likely to quote are STALE and were already stale on
+`main`: **level 8 is 184/480 since 2026-09-15**, not 200, and **level 9 is 113/480
+since the flank landed**, not 191. `SOAK-REPORT.md` says so; a report that quoted
+428/255/422/299/218/210/198/200/191 would be wrong twice.
+
+**Two deviations from the brief, both because the repository already had a rule:**
+comic panels are NOT registered in `art.json` (naming one there fails
+`tests/manifest.test.ts` twice over — `art.json`'s own `_level10` note says why), and
+the three unplaced comics stayed as PNG in `art-source/` rather than being converted
+(about 1.5 MB of deploy nobody fetches, and two of the three are alternates of comics
+that already ship). The blunt no-exemptions existence check the brief wanted is in
+`tests/cutscenes.test.ts` instead, over `levels`, `outros`, `midWave`, `_unplaced`
+and `_retired`.
+
+See `reports/2026-09-16-cutscene-reorganisation.md`.
+
 ## Open items
 
 **THE HUD-VERSUS-PADS QUESTION IS CLOSED, on the third attempt, and this is the
@@ -594,6 +660,24 @@ each of the first two passes broke what the one before it fixed.
   (x=855) and the capacitor (x=903), re-encode and re-run `tools/trace_level9.py`;
   the waypoints are derived from the paint and would follow. The picture to judge it
   on is `sh tools/harness/run.sh level9` → `level9-4c-join-*.png`.
+
+- **Level 9 reads the HAT-GTT comic twice.** `cutscene_L9_01.webp`, the opening, IS
+  the HAT-GTT page, and the same comic at higher resolution is wired after wave 3 —
+  rendered and compared side by side, they are the same three beats. Both are wired
+  because the 2026-09-16 brief named both explicitly and the choice is a content call.
+  **The fix is one line: delete the `level9` key under `levels` in `cutscenes.json`**,
+  which leaves it playing on the boundary before the enemy it introduces walks on.
+- **Four comics still ship as uncut three-across strips**, and they are the only ones
+  left: level 9's opening and outro, and level 10's three outro panels (nine
+  sub-panels shown as three). Held unchanged on 2026-09-16 because the brief said so
+  and because level 10's fight is verified frame by frame against them. Cutting them
+  is one row in `tools/comics/plan.json` and one list in `cutscenes.json`; the sources
+  are in `art-source/cutscenes/level10/` and `.../unplaced/`.
+- **`unplaced/level10_intro_strip.png` has no home.** It is the family being pulled
+  into the machine and it reads as level 10's OPENING; level 10 has only a title card.
+  A genuine orphan rather than an alternate — the other two unplaced comics are
+  alternates of the level 9 outro and the level 10 outro respectively. Publishing it
+  is one row in `plan.json` and one key under `levels`.
 
 **These are renumbered, twice now.** Seven of the original ten closed between 07 and
 13 September; what is left keeps its wording and gets a new number, so a citation of
