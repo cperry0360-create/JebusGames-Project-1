@@ -4,6 +4,136 @@ Newest first.
 
 ---
 
+## 2026-09-17 — The soak's player learns that towers have roles
+
+### ⚠ EVERY FIGURE IN EVERY SECTION BELOW THIS ONE WAS PRODUCED BY A DIFFERENT PLAYER
+
+**They are not comparable to anything measured from this commit on.** The
+simulated player chose what to build with `rng.pick(affordable)` — a uniform
+pick over everything it could afford, with no concept of what a tower is for.
+It now has two role rules. **The GAME did not change: no file under `src/` is
+touched.** The instrument did.
+
+So a number from an earlier section and a number from this one differ by an
+unknown mixture of the game and the builder, and there is no way to separate
+them retrospectively. **Re-measure rather than compare.** That applies to every
+per-level rate below, to `claude/context.md`, to the ten numbers in `CLAUDE.md`,
+and to every boss health derived from a win rate — **Vlaude's 26,000 and level
+9's PERPLEXED at 7650 included**.
+
+See `reports/2026-09-17-soak-builder.md`.
+
+### Why the builder had to change
+
+It was survivable while the pool was almost all damage. It stopped being
+survivable when the Ima Dummy Tower became a guaranteed opener (one section
+down): the player then put a zero-damage blocking tower on roughly one pad in
+three, on every board, from wave 1. **`shelter` — the Beacon, +30% and zero
+damage — has had the same flaw at weight 3 for as long as it has existed**,
+smaller and never separated from the tuning it distorted.
+
+Mean zero-damage towers standing at the end of a run, 120 seeds a level:
+
+| | L1 | L2 | L3 | L4 | L5 | L6 | L7 | L8 | L9 | L10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| pads on the board | 7 | 15 | 15 | 14 | 14 | 18 | 22 | 19 | 15 | 12 |
+| old builder | 1.71 | 4.17 | 3.78 | 3.10 | 3.77 | **5.87** | **5.78** | 4.91 | 4.01 | 3.49 |
+| **new builder** | 0.76 | 2.66 | 2.56 | 1.34 | 1.79 | 2.94 | 3.57 | 2.23 | 2.42 | 1.78 |
+| **the cap** | 1 | 3 | 3 | 2 | 2 | 3 | 4 | 3 | 3 | 2 |
+
+Level 6 spent a third of an eighteen-pad board on towers that do not shoot. It
+now spends a sixth.
+
+### The rules, and the cap
+
+Two rules and deliberately only two; past them the pick is the same uniform
+`rng.pick` it always was, because a builder that placed towers *well* would
+flatter whatever tuning it suited and stop being a neutral instrument.
+
+1. **`cap = max(min, floor(pads × padShare))`**, padShare 0.2 and min 1 —
+   **derived from pad count, not fixed**, because the boards run from 7 pads to
+   22 and one number on both would be two different rules. Capped with no gun
+   affordable for the pad in hand, the pad is skipped and the peanuts kept.
+2. **The board gets a gun before anything else.** While nothing on it deals
+   damage the pick is restricted to towers that do.
+
+Zero-damage is read off `damage` in `towers.json`, not a new field, so a tower
+retuned to zero falls under the cap on its own. `supportonly` is **exempt** and
+has to be — its whole pool is the Beacon, so a cap there would turn the
+deliberately-broken player into `nobuild`. The knobs live in
+**`tools/soak/builder.json`, not `src/data/`**: a number that changes what the
+soak measures is not a balance number, and one found under `src/data/` would
+reasonably be read as a game rule and tuned against.
+
+### Three columns, 480 seeds, same seeds throughout, `normal`
+
+`A` is the state of `main` before this change (guarantee on, old builder) and
+reproduces its published figures integer for integer. `B` sets
+`guaranteedTowers: []` and is the honest test of the new builder against the
+**pre-guarantee** baseline. `C` is what the game now is.
+
+| level | pre-guarantee baseline | A guar-on / old | **B guar-off / new** | **C guar-on / new** |
+|---|---|---|---|---|
+| 1 | 428 (89.2%) | 405 (84.4%) | **440 (91.7%)** | **434 (90.4%)** |
+| 2 | 255 (53.1%) | 218 (45.4%) | **266 (55.4%)** | **218 (45.4%)** |
+| 3 | 422 (87.9%) | 422 (87.9%) | **436 (90.8%)** | **431 (89.8%)** |
+| 4 | 299 (62.3%) | 328 (68.3%) | **327 (68.1%)** | **314 (65.4%)** |
+| 5 | 218 (45.4%) | 343 (71.5%) | **262 (54.6%)** | **274 (57.1%)** |
+| 6 | 210 (43.8%) | 83 (17.3%) | **204 (42.5%)** | **99 (20.6%)** |
+| 7 | 198 (41.2%) | 133 (27.7%) | **204 (42.5%)** | **135 (28.1%)** |
+| 8 | 184 (38.3%) | 146 (30.4%) | **207 (43.1%)** | **154 (32.1%)** |
+| 9 | 192 (40.0%) | 119 (24.8%) | **208 (43.3%)** | **146 (30.4%)** |
+| 10 | 195 (40.6%) | 117 (24.4%) | **214 (44.6%)** | **132 (27.5%)** |
+| **all** | 2601 (54.2%) | 2314 (48.2%) | **2768 (57.7%)** | **2337 (48.7%)** |
+
+**B passes the honest test.** Aggregate +3.5 points, mean +16.7 runs a level,
+nine of ten up, largest move +44 (level 5), only one level down (−6, level 6) —
+and **the same five levels in band as the baseline: 6, 7, 8, 9 and 10.** That
+is what removing a uniform, pre-existing waste looks like; a builder that had
+started flattering something would move one level a long way and leave the rest.
+Level 5's +44 is the expected one: it is the board a blocker helps most. **Level
+10 at 44.6% is 0.4 points from leaving the band**, which is worth knowing before
+anything else moves.
+
+**Under C, no level is in the band.** L6 −14.4, L7 −6.9, L8 −2.9, L9 −4.6 and
+L10 −7.5 below it; L2 is 0.4 above the top edge and the rest are well above. The
+cap recovered **+23 runs, +0.5 points** of the −287 the guarantee cost.
+
+**Level 5's −69 from A to C is the mirror of its +44 in B**: the old builder
+read a badly inflated 71.5% there and 57.1% is a truer number for the same board.
+
+### The cap was not enough, and the reason is measured
+
+It halves the zero-damage **pads** and closed only a quarter of the
+**board-DPS** gap. Median board DPS at the top of the final wave, 120 seeds:
+level 6 reads 356 (A), 382 (C), 447 (B); level 10 reads 519, 542, 625.
+
+0.53 of a pad separates C from B on level 6 and 17% of board DPS separates them,
+so the peanuts were counted instead. **The upgrade loop tiers EVERY tower the
+board owns, zero-damage ones included.** Median share of tower peanuts sunk into
+towers that will never fire:
+
+| | L6 | L7 | L10 |
+|---|---|---|---|
+| **C guarantee on** | **29.5%** | **28.2%** | **21.2%** |
+| B guarantee off | 17.7% | 16.5% | 15.9% |
+
+The board caps the pads at a fifth and still sends three peanuts in ten through
+a tower that cannot shoot. **The remaining artefact is a peanut sink in the
+upgrade loop, not a pad-share problem** — reported rather than fixed, and
+`SoakResult.builder.zeroDamageSpend` / `.towerSpend` now measure it.
+
+**So an unknown but substantial part of the C−B gap is still instrument. Do not
+retune a level to chase column C.**
+
+### Stale, flagged
+
+**Level 9's PERPLEXED went 8100 → 7650** four commits ago to put the level back
+in band at 192/480. Both halves of that derivation are gone — a two-tower
+opening and the old builder — and the level reads 208 under B and 146 under C.
+
+---
+
 ## 2026-09-16 — Every run opens with the Ima Dummy Tower, and the band empties
 
 ### The headline

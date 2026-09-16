@@ -639,6 +639,73 @@ See `reports/2026-09-16-landing-the-cutscene-branch.md`.
 
 ## Open items
 
+**THE SOAK'S PLAYER BUILT BADLY AND NOW DOES NOT (2026-09-17). EVERY PUBLISHED WIN
+RATE BEFORE THIS IS NOT COMPARABLE TO ANYTHING AFTER IT.** `tools/soak/Sim.ts` chose
+with `rng.pick(affordable)` -- uniform over everything it could afford, with no concept
+of what a tower is FOR. Survivable while the pool was almost all damage; not survivable
+once the Ima Dummy Tower was a guaranteed opener, at which point it spent about one pad
+in three on a zero-damage blocker on every board from wave 1. `shelter` (the Beacon,
++30%, zero damage) had the same flaw at weight 3 for as long as it has existed.
+
+**THE GAME DID NOT CHANGE. No file under `src/` was touched** --
+`git diff --stat origin/main -- src/ public/ vendor/ tools/harness/` is empty, which is
+stronger than "no behaviour changed". Verified from a rendered frame too:
+`run.sh afford 200 844x390` opens the build ring on level 1, prices both options and
+paints a live confirm.
+
+**Two rules, and deliberately only two.** A cap on zero-damage towers,
+`max(min, floor(pads * padShare))` with padShare 0.2 and min 1 -- **derived from pad
+count, not fixed**, because the boards run 7 to 22 pads: caps are 1, 3, 3, 2, 2, 3, 4,
+3, 3, 2. And the board gets a gun before anything else. Past those the pick is the same
+uniform `rng.pick`, because a builder that placed towers WELL would flatter whatever
+tuning it suited and stop being a neutral instrument; a test fails if the opening
+collapses to one tower. `supportonly` is **exempt** or it becomes `nobuild`. Knobs live
+in **`tools/soak/builder.json`, NOT `src/data/`** -- a number that changes what the soak
+measures is not a balance number, and one found under `src/data/` would be read as a
+game rule and tuned against.
+
+**Four rows, 480 seeds, `normal`, same seeds throughout:**
+
+| level | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| pre-guarantee, old builder | 428 | 255 | 422 | 299 | 218 | 210 | 198 | 184 | 192 | 195 |
+| guarantee on, old builder | 405 | 218 | 422 | 328 | 343 | 83 | 133 | 146 | 119 | 117 |
+| guarantee off, NEW builder | 440 | 266 | 436 | 327 | 262 | 204 | 204 | 207 | 208 | 214 |
+| **guarantee ON, NEW builder** | **434** | **218** | **431** | **314** | **274** | **99** | **135** | **154** | **146** | **132** |
+
+Row 3 is the honest test and it passes: +3.5 points aggregate, nine of ten up, largest
+move +44 (level 5, the board a blocker helps most), and **the same five levels in band
+as row 1** (6, 7, 8, 9, 10). Level 10 at 44.6% is 0.4 points from leaving it.
+
+Row 4 is the game and **NO LEVEL IS IN THE 35-45% BAND**: 6, 7, 8, 9 and 10 are 14.4,
+6.9, 2.9, 4.6 and 7.5 points below; level 2 is 0.4 above the top edge.
+
+**DO NOT RETUNE OFF ROW 4 YET, and this is measured rather than cautious.** The cap
+halves the zero-damage PADS (level 6: 5.87 of 18 -> 2.94) and closed only a quarter of
+the board-DPS gap (level 6 median: 356 old, 382 new, 447 with the guarantee off). The
+reason is that **the soak's upgrade loop tiers EVERY tower the board owns**, zero-damage
+ones included, so the board still sends **29.5% of its tower peanuts on level 6** into
+towers that cannot shoot, against 17.7% with the guarantee off.
+`SoakResult.builder.zeroDamageSpend` / `.towerSpend` measure it. **A third role rule is
+the obvious answer**; the brief said to prove the second was not enough first, and that
+proof exists now. Settle it, re-measure row 4, then look at levels.
+
+**Stale and flagged: level 9's PERPLEXED, 8100 -> 7650** (`e505a4d`), derived against a
+two-tower opening AND the old builder. Both halves are gone; the level reads 208 under
+row 3 and 146 under row 4. Also stale for the same reason: Vlaude's 26,000 and the
+24,265 median in `reports/2026-09-15-blockers.md`.
+
+**NEW OPEN ITEM: `buildall` is red on `main` at phone width and it is not a game bug.**
+6 of 7 pads at 844x390, failing pad 3 with `ringOnTap=false`; **7 of 7 at 1400x900**;
+and the identical failure reproduces in a worktree of `origin/main`, same pad, same
+coordinates. Pad 3 sits at screen `381,318` and the ability bar occupies `261,316` to
+`583,380` -- so this is exactly the price the HUD-versus-pads section below states, and
+**`buildall`'s "it has to be all of them" assertion predates `d7036cc` and contradicts
+that decision.** Either the assertion learns about the HUD rectangles or the scenario
+runs where the question is meaningful. Not touched.
+
+See `reports/2026-09-17-soak-builder.md`.
+
 **THE IMA DUMMY TOWER IS GUARANTEED IN EVERY OPENING HAND (2026-09-16), AND IT TOOK
 EVERY LEVEL OUT OF THE BAND.** It was draftable on level 1 alone -- no entry in
 `draft.json`'s shared `towerWeights`, one entry in level 1's `extraTowerWeights` -- so

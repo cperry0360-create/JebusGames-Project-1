@@ -383,33 +383,47 @@ his 172-second walk; the median loser brings 546 and delivers 14,708, and he wal
 at 24% health. That is a boss set right at the top of what a good board can do, which
 is what a 40.6% level looks like. See `reports/2026-09-15-blockers.md`.
 
-**BUT 40.6% IS NO LONGER LEVEL 10'S RATE, and nor is any other number in the
-paragraph above.** On 2026-09-16 the Ima Dummy Tower became a guaranteed third
-opening tower on every level -- it had been draftable on level 1 alone -- and the
-re-soak moved every level. Level 10 reads **117/480, 24.4%**. The 26,000 and the
-24,265 above were derived against a board that opened with two towers and has
-three now, so **do not quote them as current**; the reasoning about which of the
-six powers the soak can express is unaffected.
+**EVERY WIN RATE IN THE PARAGRAPHS ABOVE WAS MEASURED BY A BUILDER THAT NO LONGER
+EXISTS, AND SO WAS EVERY OTHER ONE IN THIS REPOSITORY.** Two things happened in two
+days, in this order, and both matter before any number here is quoted.
 
-**AND NO LEVEL IS INSIDE THE 35-45% BAND ANY MORE**, where five were. Nothing was
-retuned: the brief asked for the damage report and a stop.
+**2026-09-16: the Ima Dummy Tower became a guaranteed third opening tower on every
+level**, having been draftable on level 1 alone.
 
-    before  428 255 422 299 218 210 198 184 192 195
-    after   405 218 422 328 343  83 133 146 119 117
+**2026-09-17: the soak's simulated player learned that towers have roles.** It chose
+with `rng.pick(affordable)` -- uniform over everything affordable, with no concept of
+what a tower is FOR -- so once a zero-damage blocker was guaranteed it spent about one
+pad in three on it, on every board, from wave 1. It now caps zero-damage towers at
+`max(1, floor(pads * 0.2))` and builds a gun before anything else.
+**THE GAME DID NOT CHANGE: no file under `src/` was touched.** The instrument did, so a
+figure from before that commit and one from after it differ by an unknown mixture of the
+game and the builder. **Re-measure rather than compare.** That includes Vlaude's 26,000
+and the 24,265 median in `reports/2026-09-15-blockers.md`, and level 9's PERPLEXED at
+7650.
 
-Read that with two facts or it will be read wrong. **First, most of the swing is
-the SOAK'S BUILDER, not the game.** `Sim.ts` picks what to build with
-`rng.pick(affordable)`, uniformly at random from the unlocked types, so a
-guaranteed opener that deals ZERO damage takes about one pad in three from wave 1
-on every level; a person builds a garrison where blocking pays. A control run
-separates the halves: the tower in the shared pool WITHOUT the guarantee is worth
-+43 runs over 4800 and leaves the same five levels in band, and the guarantee is
-worth -330. So -330 is a ceiling on what a player feels rather than a measurement
-of it. **Second, level 9's retune is newer than its own report:** `e505a4d` put it
-back in band at 192/480 against a two-tower opening, and this reads 119.
+**Where the ten levels stand now, 480 seeds, `normal`:**
 
-`reports/2026-09-16-dummy-tower-guaranteed.md` has the three-column table, and
-`SOAK-REPORT.md` carries before and after side by side.
+    pre-guarantee, old builder   428 255 422 299 218 210 198 184 192 195
+    guarantee on,  old builder   405 218 422 328 343  83 133 146 119 117
+    guarantee off, NEW builder   440 266 436 327 262 204 204 207 208 214
+    guarantee ON,  NEW builder   434 218 431 314 274  99 135 154 146 132   <- today
+
+The third row is the honest test of the new builder and it passes: +3.5 points
+aggregate, nine of ten levels up, and **the same five levels in band as the old
+baseline** (6, 7, 8, 9, 10). The fourth row is the game, and **no level is inside the
+35-45% band** -- 6, 7, 8, 9 and 10 sit 14.4, 6.9, 2.9, 4.6 and 7.5 points below it and
+level 2 is 0.4 above the top edge.
+
+**NOTHING HAS BEEN RETUNED, and there is a measured reason not to yet.** The cap halves
+the zero-damage PADS and closed only a quarter of the board-DPS gap, because the soak's
+upgrade loop tiers every tower it owns -- so the board still sends **three peanuts in
+ten** through towers that cannot shoot (29.5% on level 6 against 17.7% with the
+guarantee off). **An unknown but substantial part of the last row is still instrument.**
+Settle that first, re-measure, then look at levels.
+
+`reports/2026-09-17-soak-builder.md` has all four rows, the cap's derivation and the
+peanut measurement; `reports/2026-09-16-dummy-tower-guaranteed.md` has the guarantee;
+`SOAK-REPORT.md` opens with the same warning.
 
 The asset-sweep standing fact above is now **discharged for every level**: `main`
 references level 10's art itself. The two route-gate props in `art-source/level10/`
