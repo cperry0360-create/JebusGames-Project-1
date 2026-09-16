@@ -608,6 +608,35 @@ and `_retired`.
 
 See `reports/2026-09-16-cutscene-reorganisation.md`.
 
+**IT IS ON `main`, and it took three merges rather than the fast-forward the brief
+asked for.** `claude/cutscene-reorganization-wiring-t8o0vm` forked at `fe6ec82` and
+`main` was eleven commits past that when the merge started and seventeen by the time
+it finished — it moved twice more, mid-CI, under the guaranteed-dummy-tower session.
+Four conflicts across the three merges, all of them two sides adding something in the
+same place rather than disagreeing:
+
+- `tools/harness/index.html`, the scenario blocks: `lazydad` (main) and `midwave`
+  (branch) were inserted at the same point and **share the trailing `return`/`}` that
+  sits below the conflict**, so taking both halves verbatim leaves the first block
+  unclosed. Both kept, `lazydad` given its own tail.
+- `tools/harness/index.html`, `USES_EXPECT`: union of `midwave` and `guaranteed`. A
+  scenario missing from that set is not a no-op — it is judged by `RESULT *** n ***`
+  instead of by the assertion counter.
+- `src/scenes/GameScene.ts`: the branch's three comic methods went in directly above
+  `grantTowerUnlocks` while main rewrote **that method's doc comment in place**. Kept
+  the methods, took MAIN's comment; `grantTowerUnlocks` is byte-identical to main's.
+
+**The soak is unmoved, measured rather than reasoned about:** 405 218 422 328 343 83
+133 146 119 117 over 480 seeds, matching `cd095ca`'s published `guaranteed` column on
+every level. `tools/soak/` is byte-identical to main's and `Sim.ts` imports nothing
+from `src/scenes/`, so it could not have moved — but it was run anyway, because that
+is the difference between knowing and expecting.
+
+**And the first error the merge printed was a lie about the repository, not about the
+branch.** The container's clone is shallow; see the new standing fact in `CLAUDE.md`.
+
+See `reports/2026-09-16-landing-the-cutscene-branch.md`.
+
 ## Open items
 
 **THE IMA DUMMY TOWER IS GUARANTEED IN EVERY OPENING HAND (2026-09-16), AND IT TOOK

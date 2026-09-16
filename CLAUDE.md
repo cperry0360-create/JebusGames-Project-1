@@ -192,6 +192,33 @@ Both halves matter. The first says it did not happen on the device. The second
 says the engine would have handled it if it had. Context restoration is
 therefore not a reason to change engines — Phaser 3 has had it since 3.85.0.
 
+### The agent container's clone is SHALLOW, and git lies about ancestry until you fix it
+
+**"fatal: refusing to merge unrelated histories" in a fresh session almost
+certainly means depth, not divergence.** The clone arrives shallow, with grafted
+roots; `git merge-base` walks back, hits a graft and stops, so two branches that
+share an ancestor below it look like two separate projects. On 2026-09-16 a
+merge reported no common ancestor between `main` and `origin/main`, and claimed
+they "have 97 and 60 different commits each". They were 84 apart in one
+direction and zero in the other.
+
+The tell is the root commits. `git rev-list --max-parents=0` named `6c309b4`,
+which is also the tip of `claude/level-9-geometry-uac8ax` — a root commit that
+is simultaneously a live branch head is not a root commit.
+
+```bash
+git rev-parse --is-shallow-repository   # check this BEFORE believing any ancestry claim
+git fetch --unshallow origin            # the fix
+```
+
+**Do not reach for `--allow-unrelated-histories`, and do not re-clone or reset
+`main` to the remote.** The first fabricates a merge across a graft; the other
+two throw away work to cure a display problem. Unshallow first, then re-read
+what git says — the real answer was "not possible to fast-forward", which is an
+ordinary thing that needs an ordinary merge.
+
+See `reports/2026-09-16-landing-the-cutscene-branch.md`.
+
 ### An unreferenced-asset sweep is only safe once every branch that needs those assets has landed
 
 **Art can be committed before the code that uses it.** A sweep run in that
