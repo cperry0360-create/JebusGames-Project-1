@@ -356,6 +356,20 @@ his 172-second walk; the median loser brings 546 and delivers 14,708, and he wal
 at 24% health. That is a boss set right at the top of what a good board can do, which
 is what a 40.6% level looks like. See `reports/2026-09-15-blockers.md`.
 
+**BUT 40.6% IS NO LONGER LEVEL 10'S RATE, and nor is any other number in the
+paragraph above.** On 2026-09-16 the Ima Dummy Tower became a guaranteed third
+opening tower on every level — it had been draftable on level 1 alone — and the
+re-soak moved every level. Level 10 reads **117/480, 24.4%**. The 26,000 and the
+24,265 above were derived against a board that opened with two towers and has
+three now, so **do not quote them as current**; the reasoning about which powers
+the soak can express is unaffected. **Nothing was retuned.** Five levels are
+below the 35-45% band and four are above it, none is inside it, and most of the
+swing is the soak's uniformly-random builder spending one pad in three on a tower
+that deals no damage — an upper bound on what a player feels, not a measurement of
+it. `reports/2026-09-16-dummy-tower-guaranteed.md` has the three-column table
+that separates the pool entry from the guarantee, and `SOAK-REPORT.md` carries
+the before and after side by side.
+
 The asset-sweep standing fact above is now **discharged for every level**: `main`
 references level 10's art itself. The two route-gate props in `art-source/level10/`
 are deliberately unconverted and deliberately unused — route switching was cut from

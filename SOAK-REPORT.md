@@ -4,6 +4,117 @@ Newest first.
 
 ---
 
+## 2026-09-16 — Every run opens with the Ima Dummy Tower, and seven levels get harder
+
+### The headline
+
+**The brief's premise was that every level would get easier. Seven of ten got
+harder.** The aggregate goes 2522/4800 → 2252/4800, 52.5% → 46.9%, and **no level
+is inside the 35–45% band any more** where four were before.
+
+The Ima Dummy Tower used to be draftable on level 1 alone. It is in the shared
+pool and in `draft.json`'s `guaranteedTowers` now, so every run on every level
+opens with it in a third slot on top of the two drawn cards. See
+`reports/2026-09-16-dummy-tower-guaranteed.md`.
+
+**And it is the GUARANTEE rather than the pool entry that does it**, which is why
+there are three columns below. Putting the tower in the shared pool — draftable
+everywhere, guaranteed nowhere — is worth **+66 runs over 4800**, nearly nothing.
+Guaranteeing it in the opening hand is worth **−336**.
+
+### The before and after, 480 seeds, `tools/soak/level.ts <n> <level>`
+
+`pool` is `imaDummy` in the shared `towerWeights` with `guaranteedTowers: []`.
+`guaranteed` is what shipped. Difficulty normal, seeds 1..480 throughout.
+
+| level | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| before | 428 | 255 | 422 | 299 | 218 | 210 | 198 | 184 | 113 | 195 |
+| pool only | 428 | 253 | 429 | 335 | 268 | 177 | 205 | 189 | 114 | 190 |
+| **guaranteed** | **405** | **218** | **422** | **328** | **343** | **83** | **133** | **146** | **57** | **117** |
+| % before | 89 | 53 | 88 | 62 | 45 | 44 | 41 | 38 | 24 | 41 |
+| **% after** | **84** | **45** | **88** | **68** | **72** | **17** | **28** | **30** | **12** | **24** |
+
+The `before` row reproduces every figure published in this file — level 8's 184
+and level 9's 113 included — which is what makes the rows comparable. (The
+brief's baseline list gave 200 and 191 for those two; both predate the level 9
+flank lane, one section below.)
+
+### Which levels left the 35–45% band, and by how much
+
+| | before | after |
+|---|---|---|
+| **inside the band** | 6 (43.8%), 7 (41.2%), 8 (38.3%), 10 (40.6%) | **none** |
+| at the top edge | 5, +0.4 | **2, +0.4** |
+| above | 1 +44.2, 2 +8.1, 3 +42.9, 4 +17.3 | 1 **+39.4**, 3 **+42.9**, 4 **+23.3**, 5 **+26.5** |
+| below | 9, −11.5 | 6 **−17.7**, 7 **−7.3**, 8 **−4.6**, 9 **−23.1**, 10 **−10.6** |
+
+Level 5 climbed 26.1 points out of the band and level 2 came 7.7 points down into
+touching distance of it. **Nothing was retuned** — this section is the damage
+report, and which lever fixes an out-of-band level is a separate decision.
+
+### Level 2: it went the other way, and the Devil is untouched
+
+`255/480 (53.1%) → 218/480 (45.4%)`, 0.4 points above the top edge and the
+closest any level now comes to the band. It was **above** the band before, not
+below.
+
+| | losses | on the Devil, wave 13 | on a Direct Report |
+|---|---|---|---|
+| before | 225 | 213 (95%) | 11 (5%) |
+| after | 262 | 245 (94%) | 17 (6%) |
+
+The extra tower did not make the Devil harder. It made the board that has to
+reach him thinner.
+
+**The "21%" figure for level 2 is a stale 120-seed number** from the 2026-09-13
+sections below, and it keeps being quoted. The published 480-seed figure has been
+53% for weeks.
+
+### Why the soak reacts this hard, and why it is an upper bound
+
+`Sim.ts`'s scripted player chooses what to build with
+`const id = rng.pick(affordable)` — **uniformly at random** from the unlocked
+types it can afford whose range reaches the road. A guaranteed third opener that
+deals **zero** tower damage therefore takes about **one pad in three from wave 1
+on every level**, where before it took none outside level 1.
+
+That is a property of the soak's player rather than of a human's choice: a person
+builds a garrison where blocking pays. So **−336 is a ceiling on what a player
+will feel**, and the two levels that rose in spite of it are the more
+interesting signal:
+
+- **Level 5, +125 (45.4% → 71.5%).** The vampire level. Blockers hold the lane and
+  its counterplay loop is chip damage holding lifesteal off; both halves of the
+  change help it (+50 from the pool entry, +75 more from the guarantee).
+- **Level 4, +29**, almost all of it the pool entry.
+
+The heaviest falls are the DPS-starved boards — **6 (−127)**, **10 (−78)**,
+**7 (−65)**, **9 (−56)** — which is the same story read the other way.
+
+### Two things this did not measure
+
+- **The soak's unlock schedule is not the game's**, and neither was touched.
+  `Sim.ts` unlocks with `min(reserve.length, floor((waveIndex + 1) / 3))`, which
+  on a 13-to-16-wave level reaches the whole reserve, while the game stops at
+  `unlockedTypeCap`. Pre-existing, and it means the soak says nothing about
+  whether the 5th type now arriving at wave 8 is worth what it costs.
+- **`openingPurse` can now be smaller.** It floors at
+  `min(drawnCosts) × margin`, and the dummy's 130 joins the set — so a Longshot
+  and Grinder hand floors at 130 × margin where it floored at 150 × margin. Still
+  a correct floor, and a real tightening on expensive hands. It is inside
+  the −336.
+
+Also true of level 9 and worth recording because a wave-table note asserted the
+opposite: its `_lane` note argued that No-Pilot's blades measure zero because
+"the garrison tower is drafted on level 1 alone, so no soaked board on this level
+has a soldier standing anywhere". **That is false from this commit on** — every
+soaked board on every level now has a garrison in the opening hand. The note's
+conclusion (bosses come down the long arm) stands on the runway argument, which
+is independent.
+
+---
+
 ## 2026-09-16 — Level 9 grows a third lane, and it costs sixteen points
 
 ### The headline

@@ -506,6 +506,65 @@ names them as deliberately unused.
 
 ## Open items
 
+**THE IMA DUMMY TOWER IS GUARANTEED IN EVERY OPENING HAND (2026-09-16), AND IT MOVED
+EVERY WIN RATE IN THE GAME.** It was draftable on level 1 alone -- no entry in
+`draft.json`'s shared `towerWeights`, one entry in level 1's `extraTowerWeights` -- so
+on nine levels of ten it was not in the pool and no reroll could produce it. It is now
+a **third opening slot** driven by `draft.json`'s `guaranteedTowers`, honoured inside
+`draftOpeningTowers`, with no id named in any system module.
+
+**The re-soak, 480 seeds, and the brief's premise was wrong: seven of ten levels got
+HARDER.**
+
+| level | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| before | 428 | 255 | 422 | 299 | 218 | 210 | 198 | 184 | 113 | 195 |
+| after | 405 | 218 | 422 | 328 | 343 | 83 | 133 | 146 | 57 | 117 |
+
+**No level is inside the 35-45% band any more**, where four were before. Level 2 came
+7.7 points DOWN to 45.4% and is the closest to band; level 5 climbed 26 points out;
+levels 6, 7, 8, 9 and 10 fell below. **Nothing was retuned** -- the brief asked for the
+damage report and a stop, and several of those levels have boss numbers derived against
+their own board.
+
+**BEFORE ANYBODY RETUNES: most of the swing is the SOAK'S BUILDER, not the game.**
+`Sim.ts` picks what to build with `rng.pick(affordable)` -- uniformly at random from
+the unlocked types -- so a guaranteed opener that deals **zero** damage takes about one
+pad in three from wave 1 on every level. A person builds a garrison where blocking
+pays. A control soak separates the two halves: putting the tower in the shared pool
+*without* guaranteeing it is worth **+66 runs over 4800** (nearly nothing); the
+guarantee is worth **-336**. So -336 is a ceiling on what a player feels, not a
+measurement of it. Full three-column table in
+`reports/2026-09-16-dummy-tower-guaranteed.md`.
+
+**The answer-archetype trap, because it is the kind of thing that ships silently.**
+`imaDummy` is archetype `control`, which is one of `answerArchetypes`, so a repair rule
+that counted the guaranteed card would find an answer on every hand ever dealt and
+never fire again -- 1127 of 3000 seeds would keep a drawn pair with neither AOE nor
+control, and hands with no AOE at all would go 1197 -> 1872 of 3000. The rule judges
+the **drawn pair alone**, and the shipped no-AOE rate is 1197, exactly what the old
+six-tower draft produced. A hand CAN still come out with no AOE; it always could,
+because the guarantee has always been "AOE or control" and the Bramble is control.
+
+**`unlockedTypeCap` now caps the DRAWN types.** Counted against it, three openers plus
+the wave-4 unlock would hit the cap of 4 and the wave-8 unlock would never arrive.
+Runs end with 5 types of 7 rather than 4.
+
+**Open, and a decision rather than a bug: the loadout screen scrolls further.** The
+third card costs 72-93 units of overflow at every viewport, so a DESKTOP loadout now
+scrolls by 76 where it scrolled by 4. The screen already scrolled on phones (170 units
+at 667x375 on `main`), what does not fit is verified to scroll to the whole of itself,
+and every other arrangement the screen knows about measures taller -- the two-column
+reflow is correctly refused because three cards across a half-band is 85 units each.
+Fixing it properly is a design call on that screen. `tools/harness/run.sh guaranteed`
+is the rendered-frame check: 27 assertions, three viewports.
+
+**Also fixed on the way, because the card is now in front of every player:** the Ima
+Dummy card read `0 damage - Short reach - Infinity/sec` (`1 / fireInterval` with
+`fireInterval: 0`) and `Picks off one target at a time.` -- the opposite of what the
+tower does. It reads `2 lads - 90 hp - Short reach` / `Blocks the road. Cannot attack.`
+now, derived from `soldierCount`.
+
 **THE HUD-VERSUS-PADS QUESTION IS CLOSED, on the third attempt, and this is the
 paragraph to read before anyone opens a fourth.** Three passes at one problem -- the
 HUD and the build pads wanting the same screen space -- and the first two each fixed
