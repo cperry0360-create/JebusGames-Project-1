@@ -695,14 +695,16 @@ two-tower opening AND the old builder. Both halves are gone; the level reads 208
 row 3 and 146 under row 4. Also stale for the same reason: Vlaude's 26,000 and the
 24,265 median in `reports/2026-09-15-blockers.md`.
 
-**NEW OPEN ITEM: `buildall` is red on `main` at phone width and it is not a game bug.**
-6 of 7 pads at 844x390, failing pad 3 with `ringOnTap=false`; **7 of 7 at 1400x900**;
-and the identical failure reproduces in a worktree of `origin/main`, same pad, same
-coordinates. Pad 3 sits at screen `381,318` and the ability bar occupies `261,316` to
-`583,380` -- so this is exactly the price the HUD-versus-pads section below states, and
-**`buildall`'s "it has to be all of them" assertion predates `d7036cc` and contradicts
-that decision.** Either the assertion learns about the HUD rectangles or the scenario
-runs where the question is meaningful. Not touched.
+**NOT AN OPEN ITEM, BUT REMEMBER THE SHAPE OF IT: `buildall` went red at phone width
+and it was a HUD RECTANGLE, not the build system.** On `c3ff5aa` it reported 6 of 7
+pads at 844x390, failing pad 3 with `ringOnTap=false`, while reporting 7 of 7 at
+1400x900 -- and the identical failure reproduced in a worktree of `origin/main`, same
+pad, same coordinates, so it was never this session's. Pad 3 sits at screen `381,318`
+and the ability bar then occupied `261,316` to `583,380`: the pad was under it, which is
+exactly the price the HUD-versus-pads section below states. **The 2026-09-17 HUD pass
+then narrowed the bar to `298,328,248x52` and the scenario reads 7 of 7 at both
+viewports again.** Next time `buildall` goes red, suspect a HUD rectangle before the
+build system.
 
 See `reports/2026-09-17-soak-builder.md`.
 

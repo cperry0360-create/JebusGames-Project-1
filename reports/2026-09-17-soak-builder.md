@@ -263,25 +263,34 @@ C−B gap is still instrument.** Do not retune a level to chase it.
   **Build 80p** confirm. `RESULT the open panel re-prices in both directions`.
   The frame is `afford-2-rich-844x390.png`.
 
-### One pre-existing red result, diagnosed and not mine
+### One pre-existing red result, diagnosed — and closed by `main` on the way past
 
-`sh tools/harness/run.sh buildall 200 844x390` reports **6 of 7 pads built**,
-failing on pad 3 with `ringOnTap=false`. It reported 7 of 7 on 2026-09-14
-(`reports/2026-09-14-merge-level-10.md`).
+**On `c3ff5aa`**, `sh tools/harness/run.sh buildall 200 844x390` reported **6 of 7
+pads built**, failing on pad 3 with `ringOnTap=false`. It had reported 7 of 7 on
+2026-09-14 (`reports/2026-09-14-merge-level-10.md`).
 
-**It is not this change**, and that was established rather than assumed: the
-identical run in a worktree of `origin/main` reports the identical failure, same
-pad, same coordinates. And at **1400x900 it reports 7 of 7**.
+**It was not this change**, and that was established rather than assumed: the
+identical run in a worktree of `origin/main` reported the identical failure, same
+pad, same coordinates — and at **1400x900 it reported 7 of 7**.
 
-**The diagnosis is the documented price of `d7036cc`.** Pad 3 lands at screen
-`381,318` at 844x390, and the HUD's ability bar occupies `261,316` to `583,380`
-— the pad is under it. `claude/context.md`'s HUD-versus-pads section states that
-price explicitly: "a pad under one of the five pressable HUD controls is visible
+**The diagnosis was the ability bar.** Pad 3 lands at screen `381,318` at
+844x390, and the HUD's ability bar then occupied `261,316` to `583,380` — the pad
+was under it. That is the price `claude/context.md`'s HUD-versus-pads section
+states explicitly: "a pad under one of the five pressable HUD controls is visible
 and not tappable there", bounded by a reachability test proving every pad has a
 zoom and camera position where a 44pt circle lands on it clear of the HUD.
-**`buildall`'s assertion — "it has to be all of them" — was written before that
-decision and is now stale**, which is a decision about the scenario rather than
-a bug in the game. Flagged, not touched.
+
+**And the diagnosis is confirmed by the fix arriving from somewhere else.**
+`main` moved to `11884fb` while this was being measured, carrying the 2026-09-17
+HUD pass, which narrowed the ability bar to `298,328,248x52` — twelve pixels
+lower and seventy-four narrower. On the merged tree `buildall` reports
+**7 of 7 at 844x390 and 7 of 7 at 1400x900**. Pad 3 at `381,318` is now clear of
+a bar that starts at y 328.
+
+So there is **no open item here**: the red result was real, was `main`'s, was the
+stated price of `d7036cc`, and stopped being reachable when the bar shrank. Worth
+recording because the next session to see `buildall` go red should suspect a HUD
+rectangle before it suspects the build system.
 
 ## Verification
 
@@ -298,8 +307,10 @@ a bug in the game. Flagged, not touched.
   touched, which is the blind spot that script cannot see.
 - **`sh tools/harness/build.sh`** — 132 modules staged.
 - **`sh tools/harness/run.sh afford 200 844x390`** — green, frame read.
-- **`sh tools/harness/run.sh buildall`** — 6 of 7 at 844x390 on this tree **and
-  on `origin/main`**, 7 of 7 at 1400x900. See above.
+- **`sh tools/harness/run.sh buildall`** — **7 of 7 at 844x390 and 7 of 7 at
+  1400x900** on the merged tree. It was 6 of 7 at 844x390 before merging `main`,
+  identically on `origin/main`; see above for why, and for why that is not an
+  open item.
 - **The reporting-only commit moved nothing**: levels 1 and 6 re-soaked at 480
   seeds after it and returned 434 and 99, the figures already in column C.
 - `ASSERTS_NOTHING` is unchanged at five — muzzle, rockets, retreat,
@@ -361,8 +372,8 @@ session.
 Dad knobs are unmeasured against a guaranteed blocker *and* now against a new
 builder. Only `normal` was soaked here.
 
-**New open item: `buildall` at phone width.** Its "every pad must take a tower"
-assertion predates `d7036cc` and contradicts that decision's stated price. It is
-red on `main` today for that reason and for no other. Either the assertion
-learns about the HUD rectangles or the scenario runs at a viewport where the
-question is meaningful.
+**Closed on the way past, not carried forward: `buildall` at phone width.** It
+was red on `c3ff5aa` because pad 3 sat under the ability bar, and the
+2026-09-17 HUD pass narrowed the bar out of the way. 7 of 7 at both viewports
+on the merged tree. Recorded because the shape is worth remembering: when that
+scenario goes red, suspect a HUD rectangle before the build system.
