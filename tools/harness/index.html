@@ -8473,8 +8473,77 @@ async function run() {
     }
     await shot('chip-5-selected-' + VP.w + 'x' + VP.h)
 
+    // ---- THE SERVER NUKE, WHICH IS WHAT MOVES THE BOX OUT FROM UNDER HIM ----
+    //
+    // Live play: when the Nuke drops, the chip's black box shifts LEFT and the
+    // hero stays where he was, so he is drawn outside his own box. The drop
+    // ADDS a medallion to the ability row; the row is centred, so growing it
+    // moves its left edge left, and the chip is reserved against that edge.
+    //
+    // The plate and the health bar were redrawn from the live rectangle every
+    // frame and the portrait, the countdown label and the tap rectangle were
+    // placed ONCE at scene creation. This measures all four against the same
+    // rectangle after the reflow, because the plate agreeing with itself is
+    // exactly what made the fault invisible to everything except a frame.
+    const boxBefore = { x: L().x, y: L().y }
+    const pcBefore = { x: hud.chipPortrait.x, y: hud.chipPortrait.y }
+    g.status.rareAbility = 'serverNuke'
+    // The bar rebuilds on an update tick, and the software rasteriser runs at
+    // a few frames a second at device resolution.
+    await sleep(4000)
+    const box2 = L()
+    const shifted = Math.round(boxBefore.x - box2.x)
+    note('--- after the Server Nuke drop ---')
+    note('  slot key string: ' + (hud.slotKeys || '(none)') + '  slots ' + hud.slots.length)
+    note('  the chip box moved ' + shifted + 'px left, to ' +
+      Math.round(box2.x) + ',' + Math.round(box2.y))
+    if (shifted <= 0) fail('the drop did not move the chip at all, so this check is vacuous')
+    // THE PORTRAIT, THE LABEL AND THE TAP RECTANGLE, against the LIVE box.
+    const cx = box2.x + box2.width / 2
+    const cy = box2.y + box2.height / 2
+    const parts = [['portrait', hud.chipPortrait], ['label', hud.chipLabel], ['hit', hud.chipHit]]
+    for (const [what, obj] of parts) {
+      const off = Math.round(Math.hypot(obj.x - cx, obj.y - cy))
+      note('  ' + what.padEnd(9) + ' centre ' + Math.round(obj.x) + ',' + Math.round(obj.y) +
+        '  box centre ' + Math.round(cx) + ',' + Math.round(cy) + '  off by ' + off + 'px')
+      if (obj.x < box2.x || obj.x > box2.x + box2.width
+        || obj.y < box2.y || obj.y > box2.y + box2.height) {
+        fail('the chip ' + what + ' is OUTSIDE the chip rect after the ability row grew')
+      }
+      if (off > 1) fail('the chip ' + what + ' is ' + off + 'px off the box centre')
+    }
+    note('  the portrait moved with it: ' + Math.round(pcBefore.x - hud.chipPortrait.x) +
+      'px left, against the box\'s ' + shifted)
+    // AND THE PICTURE. The numbers cannot see the hero drawn over the plate's
+    // edge; a frame can.
+    await shot('chip-6-after-nuke-' + VP.w + 'x' + VP.h)
+
+    // ---- AND THE TWO HERO MEDALLIONS, MEASURED RATHER THAN FIXED ----
+    //
+    // A separate open bug says they go dead after the drop. This is NOT a fix
+    // and does not claim to reproduce it: it records what the row looks like
+    // from the HUD's side one tick after the reflow -- whether each slot was
+    // rebuilt, whether its hit rectangle is registered and enabled, and
+    // whether the icon and the hit rectangle still agree about where the slot
+    // is. If those all read healthy, the cause is somewhere this cannot see.
+    note('--- hero medallions after the drop (recorded, not asserted) ---')
+    for (const sl of hud.slots) {
+      const r = sl.region
+      const ib = sl.icon.getBounds()
+      const hb = sl.hit.getBounds()
+      note('  ' + String(r.id).padEnd(12) + ' kind=' + r.kind +
+        ' pitch=' + Math.round(r.pitch) + ' boxH=' + Math.round(r.boxH) +
+        '  icon ' + Math.round(ib.width) + 'x' + Math.round(ib.height) +
+        ' at ' + Math.round(ib.centerX) + ',' + Math.round(ib.centerY) +
+        '  hit at ' + Math.round(hb.centerX) + ',' + Math.round(hb.centerY) +
+        '  visible=' + sl.hit.visible +
+        ' interactive=' + !!(sl.hit.input && sl.hit.input.enabled) +
+        '  drift ' + Math.round(Math.hypot(ib.centerX - hb.centerX, ib.centerY - hb.centerY)) + 'px')
+    }
+
     note('RESULT ' + (faults === 0
-      ? 'the chip draws all three states, keeps its distance, and moves the hero in two taps'
+      ? 'the chip draws all three states, keeps its distance, moves the hero in two taps, '
+        + 'and stays whole when the Server Nuke reflows the row'
       : '*** ' + faults + ' faults ***'))
     return
   }
@@ -15785,15 +15854,103 @@ async function run() {
   }
 
   if (scenario === 'combat') {
+    /*
+     * FOUR TOWERS THROUGH A WHOLE WAVE, plus a CENSUS OF THE BOARD while it
+     * runs.
+     *
+     * The census is the half added on 2026-09-17, when the floating damage
+     * numbers and the ordinary hit sparks were removed. Both are transient --
+     * a number lives 620ms and a spark 200ms -- so a single screenshot proves
+     * nothing either way: it can miss them by landing between two, and it
+     * cannot tell a wave with no numbers from a wave with no shooting. So the
+     * display list is SAMPLED, many times, across the whole wave, and the
+     * counts are what the check is made of. The screenshots stay, because the
+     * numbers cannot see a sprite drawn behind another one.
+     *
+     * It counts what must be GONE and what must SURVIVE in the same sweep, for
+     * the same reason: a board with neither is a board where nothing happened.
+     */
+    const ARTC = (await import('./js/data/art.json', { with: { type: 'json' } })).default
+    const SPARK = ARTC.fx.spark
+    let faults = 0
+    const fail = (m) => { faults++; note('   *** ' + m) }
+
     for (let i = 0; i < 4; i++) await build(i, i % 2)
     await shot('c-01-towers')
+
+    // The census, sampled on a timer for as long as the wave lasts.
+    const seen = { samples: 0, worldText: 0, worldWords: 0, sparks: 0, barsSeen: 0,
+      framesWithEnemies: 0, hurt: 0 }
+    const worstText = []
+    const sample = () => {
+      seen.samples++
+      if (g.enemies.length > 0) seen.framesWithEnemies++
+      for (const o of g.children.list) {
+        // WORLD-SPACE TEXT IS WHAT A DAMAGE NUMBER WAS. The HUD's text lives
+        // in the other scene entirely, so anything of this shape on the
+        // board's own display list is a float.
+        if (o.type === 'Text' && o.visible && o.scrollFactorX === 1) {
+          // NUMBERS AND WORDS ARE COUNTED SEPARATELY, because the rule the
+          // removal was made under distinguishes them: an effect that says
+          // WHAT SOMETHING DID stays, an effect that only says A NUMBER
+          // HAPPENED goes. Bark's SLOW is a world-space Text on this very
+          // list and is the one that is meant to be there, so a check that
+          // faulted on "any text" would be asserting the opposite of the rule.
+          if (/^[-+]?[0-9]/.test(String(o.text).trim())) {
+            seen.worldText++
+            if (worstText.length < 8) worstText.push(String(o.text).slice(0, 24))
+          } else {
+            seen.worldWords++
+          }
+        }
+        if (o.texture && o.texture.key === SPARK && o.visible) seen.sparks++
+      }
+      // AND WHAT HAS TO SURVIVE: a health bar over every enemy that is hurt.
+      for (const e of g.enemies) if (e.alive && e.bar && e.bar.visible) seen.barsSeen++
+      // THE LIVENESS PROBE, AND IT IS THE POINT OF THE WHOLE CENSUS. Three
+      // zeros above are only evidence if the sampler was watching AT THE
+      // MOMENTS A NUMBER WOULD HAVE BEEN DRAWN -- which is while damage is
+      // landing. An enemy below its own maximum is damage that has landed.
+      if (g.enemies.some((e) => e.alive && e.health < e.maxHealth)) seen.hurt++
+    }
+    const census = setInterval(sample, 120)
+
     await key('Space')
     await sleep(3000); await shot('c-02-wave-early')
     await sleep(4000); await shot('c-03-wave-mid')
     note('mid: enemies=' + g.enemies.length + ' peanuts=' + g.status.peanuts + ' lives=' + g.status.lives)
     await until(() => g.status.phase !== 'wave', 90000)
+    clearInterval(census)
     await shot('c-04-wave-cleared')
     note('cleared: phase=' + g.status.phase + ' peanuts=' + g.status.peanuts + ' msg=' + g.status.message)
+
+    note('--- board census over the wave ---')
+    note('  ' + seen.samples + ' samples, ' + seen.framesWithEnemies + ' of them with enemies on the board')
+    // `status.kills` AND `status.peanutsEarned` ARE NOT USED HERE, and that is
+    // deliberate: both read 0 through a wave that visibly cleared. `kills` is
+    // declared, zeroed on `startRun` and INCREMENTED NOWHERE -- it is dead
+    // state, and the `lost` scenario prints it too. Noted rather than fixed;
+    // it is nothing to do with this pass. What is used instead is a fact the
+    // board cannot fake: enemies below their own maximum health.
+    note('  samples where something on the board was hurt: ' + seen.hurt
+      + '   lives ' + g.status.lives + '   final phase ' + g.status.phase)
+    note('  world-space NUMBERS seen: ' + seen.worldText
+      + (worstText.length ? '  e.g. ' + JSON.stringify(worstText) : ''))
+    note('  world-space WORDS seen (legal -- Bark\'s SLOW is one): ' + seen.worldWords)
+    note('  hit sparks (' + SPARK + ') seen: ' + seen.sparks)
+    note('  enemy health bars seen: ' + seen.barsSeen)
+    // THE SAMPLER HAS TO BE ABLE TO SEE SOMETHING, or all three zeros above
+    // mean "nothing was looked at". The board is proved live by the kills and
+    // by the bars, and only then are the two zeros worth anything.
+    if (seen.framesWithEnemies < 5) fail('the census never caught the board with enemies on it')
+    if (seen.hurt < 5) fail('the census never caught damage landing, so its zeroes prove nothing')
+    if (g.status.phase !== 'ready') fail('the wave did not clear, so this is not a whole wave')
+    if (seen.barsSeen < 1) fail('no enemy health bar was ever up; the census cannot see them')
+    if (seen.worldText > 0) fail(seen.worldText + ' floating numbers on the board during the wave')
+    if (seen.sparks > 0) fail(seen.sparks + ' hit sparks on the board during an ordinary wave')
+    note('RESULT ' + (faults === 0
+      ? 'a whole wave with health bars and no floating numbers and no hit sparks'
+      : '*** ' + faults + ' faults ***'))
     return
   }
 
@@ -16630,6 +16787,10 @@ async function run() {
       + '  insets ' + JSON.stringify(SA.safeAreaInsets()))
     let worst = 0
     let drawnWorst = 0
+    // Summed over every level, which is the figure a HUD pass is judged on:
+    // one level's count is a fact about that level's pad placement.
+    let totalHits = 0
+    const totalByElement = {}
     for (const lv of LV.LEVELS) {
       const G = await startLevel(lv.id)
       if (!G) { note(lv.id + ': did not build'); continue }
@@ -16650,7 +16811,18 @@ async function run() {
         return { i: s.index, r: { x: c.x - half, y: c.y - half, width: half * 2, height: half * 2 } }
       })
       const hits = []
-      for (const h of rects) for (const p of pads) if (iou(h.r, p.r)) hits.push(h.id + '/pad' + p.i)
+      // PER ELEMENT AS WELL AS IN TOTAL. A total alone says whether the HUD
+      // covers more or less of the board; it does not say WHICH element, and
+      // the two move in opposite directions whenever a pass trades one for
+      // another. The 2026-09-17 pass narrowed the bottom row by 92px and made
+      // the top-left corner 12px taller, and the total moved by two -- which
+      // reads as "the change did almost nothing" until the column is split.
+      const byElement = {}
+      for (const h of rects) for (const p of pads) {
+        if (!iou(h.r, p.r)) continue
+        hits.push(h.id + '/pad' + p.i)
+        byElement[h.id] = (byElement[h.id] || 0) + 1
+      }
       // AND HOW MANY OF THEM ARE DRAWN. THIS IS NOT A FAULT AND USED TO BE
       // COUNTED AS ONE.
       //
@@ -16706,6 +16878,14 @@ async function run() {
         + '  visible ' + G.pads.filter((q) => q && q.visible).length
         + '  not freed BY PANNING ALONE ' + stuck.length
         + (stuck.length ? ': ' + stuck.join(',') : ''))
+      if (hits.length) {
+        note('         by element: ' + Object.entries(byElement)
+          .sort((a, b) => b[1] - a[1]).map(([k, n]) => k + ' ' + n).join('  '))
+      }
+      for (const [k, n] of Object.entries(byElement)) {
+        totalByElement[k] = (totalByElement[k] || 0) + n
+      }
+      totalHits += hits.length
       worst = Math.max(worst, stuck.length)
       drawnWorst = Math.max(drawnWorst, drawnUnder.length)
       if (hits.length) await shot('padhud-' + lv.id + '-' + VP.w + 'x' + VP.h)
@@ -16717,9 +16897,13 @@ async function run() {
     // against a live camera, so the pads it hid came back as the camera moved.
     // `run.sh padpan` is the scenario that asserts the property; this one
     // measures the at-rest coverage the property is a consequence of.
+    note('TOTAL pad/HUD overlaps at rest across all levels: ' + totalHits
+      + '  -- ' + Object.entries(totalByElement).sort((a, b) => b[1] - a[1])
+        .map(([k, n]) => k + ' ' + n).join('  '))
     note('RESULT at ' + VP.w + 'x' + VP.h + ': the HUD stands on up to '
       + drawnWorst + ' pad(s) on a level and all of them are drawn, which is '
-      + 'correct; worst level has ' + worst + ' that panning alone cannot free '
+      + 'correct; ' + totalHits + ' pad/HUD overlaps at rest over all levels; '
+      + 'worst level has ' + worst + ' that panning alone cannot free '
       + '(zooming can -- see tests/hudpads.test.ts)')
     return
   }
@@ -18546,7 +18730,7 @@ async function run() {
         await shot('level9-4c-corridor-' + VP.w + 'x' + VP.h)
         clearInterval(hold)
         cam.setZoom(wasZ); cam.setScroll(wasX, wasY)
-        if (e.alive) e.hurt(e.maxHealth * 10, true, false)
+        if (e.alive) e.hurt(e.maxHealth * 10, true)
         await sleep(200)
       }
 
@@ -18580,7 +18764,7 @@ async function run() {
       }
       // `alive` is a getter, so the six are cleared the way anything else on
       // this board is: by taking their health off them.
-      for (const e of onFlank) if (e.alive) e.hurt(e.maxHealth * 10, true, false)
+      for (const e of onFlank) if (e.alive) e.hurt(e.maxHealth * 10, true)
       await sleep(200)
 
       // ---- NOTHING WALKS OFF THE PAINT, asked of the PLATE ITSELF ----

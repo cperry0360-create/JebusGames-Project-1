@@ -339,19 +339,18 @@ test('the HUD draws no counter whose art the manifest cannot resolve', () => {
   // and the counter is simply absent — which is what a HUD missing its lives
   // pill looks like.
   //
-  // TWO NAMES NOW, NOT THREE. The top-left group is peanuts and lives stacked;
-  // the wave number is read off the control in the opposite corner, which had
-  // to name the wave it was about to start anyway. `wave` is still a key in
-  // art.json and is deliberately NOT checked here: nothing draws it, and a
-  // check that guards an unread name is a check that will one day fail for a
-  // reason nobody can act on.
+  // THREE NAMES AGAIN SINCE 2026-09-17. The top-left group is peanuts, lives
+  // AND the wave, stacked; the wave plate came back out of art.json, where it
+  // had been kept unread through the whole period the number was drawn on the
+  // control in the opposite corner instead. Which is why this is a one-line
+  // change: the art was never deleted.
   const art = JSON.parse(src('data/art.json'))
   const counters = art.ui.counters as Record<string, string>
   const hud = code('scenes/HudScene.ts')
   const list = /const READOUTS = \[([^\]]*)\]/.exec(hud)
   assert.ok(list, 'HudScene no longer declares which readouts it builds')
   const names = [...list[1]!.matchAll(/'([a-z]+)'/g)].map((m) => m[1]!)
-  assert.deepEqual(names, ['peanuts', 'lives'],
+  assert.deepEqual(names, ['peanuts', 'lives', 'wave'],
     'HudScene builds a different set of readouts than this check guards')
   for (const name of names) {
     const key = counters[name]

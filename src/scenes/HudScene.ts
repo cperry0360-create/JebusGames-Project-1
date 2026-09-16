@@ -11,7 +11,7 @@ import { iconPlate } from '../ui/Plate.ts'
 import { SettingsPanel } from '../ui/SettingsPanel.ts'
 import { Dialog } from '../ui/Dialog.ts'
 import { play, resumeAudio } from '../systems/Audio.ts'
-import { hudLayout, NO_INSETS, type HudLayout, type Rect } from '../systems/HudLayout.ts'
+import { heroChipContent, hudLayout, NO_INSETS, type HudLayout, type Rect } from '../systems/HudLayout.ts'
 import { safeAreaInsets } from '../systems/SafeArea.ts'
 import { hudInteractive } from '../systems/Layers.ts'
 import {
@@ -47,9 +47,18 @@ const HUD = presentationData.hud
  *  keeps clear of it are working from one set of numbers. */
 const LAYOUT = HUD.layout
 const RULES = rulesData as unknown as RulesDef
-/** Icons are drawn 64px tall, as the art was made for. They carry their own
- *  frames, so nothing is drawn behind them. */
-const ICON_H = 64
+/**
+ * THE ABILITY ROW'S ICON BOX, in CSS px, FROM THE DATA.
+ *
+ * It was `const ICON_H = 64` here, `iconHeight: 64` in presentation.json and a
+ * bare `iconH: 64` in GameScene's `abilitySlotFor` -- three copies of one
+ * tunable, two of them in TypeScript, which hard rule 1 exists to stop. They
+ * agreed until 2026-09-17, when the row was pulled in and only the JSON knew.
+ * The layout sizes `abilities.height` from `iconHeight`, so the copy here is
+ * the one that decides what is DRAWN inside the rectangle the layout reserved:
+ * they cannot be allowed to be different numbers.
+ */
+const ICON_H = LAYOUT.iconHeight
 
 /**
  * How far a press may travel and still count as a tap, in CSS pixels.
@@ -70,15 +79,25 @@ const SOCKET = presentationData.abilityBar.emptySocket as {
 /** UI lives in its own scene so the world can Y-sort freely without the HUD
  *  ever landing in the middle of the sort order. */
 /**
- * The two stacked readouts in the top-left corner, in drawing order.
+ * The three stacked readouts in the top-left corner, in drawing order.
  *
- * `art.json`'s `ui.counters` still carries a third plate, `wave`, and it is
- * deliberately not in this list: the wave number is read off the control in
- * the opposite corner, which had to name the wave it was about to start
- * anyway. The plate stays in the manifest because nothing else is using that
- * art and deleting it is a separate decision from not drawing it.
+ * THE WAVE PLATE IS BACK, 2026-09-17, and it is the third one. It had been
+ * taken out of this corner on the reasoning that the control in the opposite
+ * corner had to name the wave it was about to start anyway, so a second copy
+ * was chrome. That was true of the copy and wrong about which one to keep: the
+ * one in the corner is a READOUT and shrinks to whatever stays legible, while
+ * the one in the control is inside a 44px plate that may not shrink, reading
+ * `10/13 · 18` in the top-right corner for the whole of every wave.
+ *
+ * So the wave number is a small plate here with peanuts and lives, where a
+ * player already looks for the run's state, and the control opposite says what
+ * is LEFT of the wave rather than which wave it is. Two readouts, one fact
+ * each, neither of them duplicating the other.
+ *
+ * `art.json`'s `ui.counters.wave` was kept through the whole period it was not
+ * drawn, which is why this is a one-line change rather than an art request.
  */
-const READOUTS = ['peanuts', 'lives'] as const
+const READOUTS = ['peanuts', 'lives', 'wave'] as const
 
 /**
  * One counter readout, as a pill that grows with the number in it.
@@ -139,6 +158,7 @@ export class HudScene extends Phaser.Scene {
    *  `counters` scenario, which measures them against their own fields. */
   get peanutsText(): Phaser.GameObjects.Text { return this.peanutsPill.text }
   get livesText(): Phaser.GameObjects.Text { return this.livesPill.text }
+  get waveText(): Phaser.GameObjects.Text { return this.wavePill.text }
   /**
    * The hero's portrait chip: the picture, the health over it, the frame
    * round it and the rectangle that takes the tap.
@@ -164,6 +184,13 @@ export class HudScene extends Phaser.Scene {
    * exclamation mark on the ability bar. See `buildHeroChip`.
    */
   private chipKey = ''
+  /**
+   * The SQUARE the portrait was last fitted into, beside the key it was fitted
+   * for. Cleared with `chipKey` and for the same reason: a cached comparison
+   * has to name every input the cached work depends on, and this one had only
+   * the texture. -1 is not a size, so the first draw always fits.
+   */
+  private chipFit = -1
   /** Every element's rectangle. Disjoint by construction, checked by a test. */
   /**
    * Where every HUD element sits, MEASURED.
@@ -189,6 +216,9 @@ export class HudScene extends Phaser.Scene {
    */
   private peanutsPill!: Pill
   private livesPill!: Pill
+  /** The third stacked readout, since 2026-09-17. It reads `n/total` and is
+   *  the only one of the three that never changes width mid-run. */
+  private wavePill!: Pill
   private bossBar!: Phaser.GameObjects.Graphics
   private bossLabel!: Phaser.GameObjects.Text
   /** The run's difficulty, read off the run rather than off the save — see
@@ -448,12 +478,17 @@ export class HudScene extends Phaser.Scene {
 
   private buildCounters(box: Rect): void {
     const keys = ART.ui.counters
-    // TWO, NOT THREE. The wave counter is not a readout in this corner any
-    // more: the control in the opposite corner already had to name the wave it
-    // was about to start, so a second copy of the number was chrome.
+    // THREE, AND `READOUTS` IS THE LIST. The colours are paired with the names
+    // here rather than in that list because the list is what `readouts.test.ts`
+    // counts against `hud.layout.readoutCount`, and a list of tuples is not a
+    // list of readouts. The wave takes the dim ink rather than a third alarm
+    // colour: peanuts is amber because it is spendable and lives is red
+    // because losing them ends the run, and the wave number is neither -- it
+    // is the one readout a player checks rather than watches.
     const order: Array<[string, string]> = [
       ['peanuts', COLOR.amber],
       ['lives', COLOR.danger],
+      ['wave', COLOR.ink],
     ]
     const x = box.x
     let top = box.y
@@ -538,7 +573,8 @@ export class HudScene extends Phaser.Scene {
       }
       this.stretchPill(pill, natural)
       if (name === 'peanuts') this.peanutsPill = pill
-      else this.livesPill = pill
+      else if (name === 'lives') this.livesPill = pill
+      else this.wavePill = pill
 
       // DOWN, not across. This one line is the shape change.
       top += srcH * scale + LAYOUT.readoutGap * this.layout.counterScale
@@ -914,6 +950,11 @@ export class HudScene extends Phaser.Scene {
 
     this.setCounter(this.peanutsPill, `${s.peanuts}`)
     this.setCounter(this.livesPill, `${s.lives}`)
+    // `n/total`, which is what the control in the other corner used to say
+    // mid-wave. Clamped the same way that one clamped it: the last wave's
+    // spawner leaves `wave` one past the end for a frame and `14/13` is a
+    // rendering fault as far as a player is concerned.
+    this.setCounter(this.wavePill, `${Math.min(s.wave + 1, s.waveCount)}/${s.waveCount}`)
     // Money and lives are the two numbers a player watches, so a change has to
     // announce itself rather than quietly appear.
     if (this.lastPeanuts >= 0 && s.peanuts !== this.lastPeanuts) {
@@ -1070,12 +1111,15 @@ export class HudScene extends Phaser.Scene {
     // NO WAVE NAME. It read `The Gathering · 6 left`, and the name was a
     // flavour string in waves.json that told the player nothing they could act
     // on while it took the width that the count needed.
-    // MID-WAVE IT IS THE WAVE COUNTER. The stacked readouts in the other corner
-    // carried `n/total` until this pass; the control had to name the wave
-    // anyway, so the second copy went and this one gained the total.
+    //
+    // AND SINCE 2026-09-17, NO WAVE NUMBER EITHER. It read `10/13 · 18` --
+    // large, top right, for the whole of every wave -- and `10/13` is now a
+    // small plate in the top-left stack with the peanuts and the lives. What
+    // is left here is the only half that CHANGES while a wave runs and the
+    // only half a player acts on: how many are still coming. The two corners
+    // say one fact each and neither repeats the other.
     else if (s.phase === 'wave') {
-      this.startBtn.setLabel(
-        `${Math.min(s.wave + 1, s.waveCount)}/${s.waveCount} · ${s.enemiesLeft}`)
+      this.startBtn.setLabel(`${s.enemiesLeft} LEFT`)
     }
     else this.startBtn.setLabel(s.phase === 'won' ? 'CLEARED' : 'OVERRUN')
   }
@@ -1087,6 +1131,12 @@ export class HudScene extends Phaser.Scene {
    * switched off rather than as merely dim.
    */
   private drawSlots(s: GameScene['status']): void {
+    // The same two the row was BUILT from, so the icon is re-fitted to the
+    // same box it was first placed in. Read here rather than per slot: a
+    // lookup inside a loop over every slot, every frame, for two values that
+    // cannot change between iterations.
+    const bar = presentationData.abilityBar as BarMetrics
+    const k = this.layout.abilityScale
     for (const slot of this.slots) {
       const r = slot.region
 
@@ -1196,7 +1246,15 @@ export class HudScene extends Phaser.Scene {
       // one that was wanted. Those differ whenever a fallback is in play, and
       // fitting by a key the sprite is not showing is how a stand-in ends up
       // sized for the art it replaced rather than for its own canvas.
-      fitInBox(slot.icon, slot.icon.texture.key, r.boxH)
+      // SIZED BY `iconBox`, NOT BY THE SLOT'S FULL BOX. `boxH` is the row's
+      // height and `pitch` is the column's width -- together they are the
+      // rectangle a THUMB lands on, and an icon drawn to fill it leaves no gap
+      // between one picture and the next. `draftedIcon` and `heroIcon` are the
+      // picture; they existed the whole time and this line did not read them,
+      // so the two keys could not tune anything. It went unseen while the box
+      // was 64 in a 72 pitch, because 8px of accidental slack looks like a
+      // gap. At a 56 pitch it would have been none.
+      fitInBox(slot.icon, slot.icon.texture.key, iconBox(r, bar, k))
       // The greyscale copy is already the "off" state; dimming it as well
       // makes an unavailable button darker than a cooling one, which inverts
       // the reading -- the thing you cannot use at all looked further away
@@ -1276,11 +1334,16 @@ export class HudScene extends Phaser.Scene {
    */
   private buildHeroChip(box: Rect): void {
     const C = HUD.heroChip
+    const at = heroChipContent(box, C.edgeWidth)
     this.chipPlate = this.add.graphics()
     // Placed at the box's centre; the texture and the fit are done in
     // `drawHeroChip`, which is also what swaps it when the hero transforms.
-    this.chipPortrait = this.add.image(box.x + box.width / 2, box.y + box.height / 2,
-      ART.generated.iconMissing)
+    //
+    // AND THE POSITION HERE IS ONLY A STARTING POINT. Every frame re-places
+    // all three of these from the LIVE box -- see `drawHeroChip`. They used to
+    // be placed here and nowhere else, which is the whole of the Server Nuke
+    // bug: the plate moved with the layout and the hero did not.
+    this.chipPortrait = this.add.image(at.cx, at.cy, ART.generated.iconMissing)
     // A NEW SPRITE HAS NO HISTORY, AND THE CACHE HAS TO BE TOLD.
     //
     // `chipKey` is what stops `drawHeroChip` re-fitting the portrait every
@@ -1297,8 +1360,9 @@ export class HudScene extends Phaser.Scene {
     // alongside the sprite is how that rule reaches a cached comparison —
     // `''` is not a texture key, so the first draw always sets and fits.
     this.chipKey = ''
+    this.chipFit = -1
     this.chipBar = this.add.graphics()
-    this.chipLabel = this.add.text(box.x + box.width / 2, box.y + box.height / 2, '', {
+    this.chipLabel = this.add.text(at.cx, at.cy, '', {
       fontFamily: FONT_UI, fontSize: '19px', color: COLOR.ink, fontStyle: 'bold',
       stroke: '#0d1016', strokeThickness: 5,
     }).setOrigin(0.5)
@@ -1312,7 +1376,7 @@ export class HudScene extends Phaser.Scene {
     // Without it, every drag that happened to start on the chip would post the
     // hero somewhere — and the next tap on the map would move him there.
     this.chipHit = this.add.rectangle(
-      box.x + box.width / 2, box.y + box.height / 2, box.width, box.height, 0xffffff, 0.001,
+      at.cx, at.cy, box.width, box.height, 0xffffff, 0.001,
     ).setInteractive({ useHandCursor: true })
     let downAt = { x: 0, y: 0 }
     let travelled = 0
@@ -1355,19 +1419,64 @@ export class HudScene extends Phaser.Scene {
     const box = this.layout.heroChip
     const hero = this.world.heroDef()
 
+    // THE SPRITE TRACKS ITS BOX. Everything below this line already read
+    // `box` -- the plate and the bar are redrawn from it every frame -- and
+    // the portrait, the countdown label and the tap rectangle did not: they
+    // were placed once in `buildHeroChip` and left there.
+    //
+    // `relayoutAbilities` moves this box mid-run. The Server Nuke is the one
+    // thing that does it: the drop ADDS a medallion, the row is re-measured
+    // wider, and a CENTRED row that grows pushes its own left edge left --
+    // taking `heroChip.x` with it, since the chip is reserved against it. The
+    // plate moved half a drafted pitch left and the hero stayed, which is
+    // further than the box is wide from its centre, so he was drawn outside
+    // it. See `heroChipContent` for the whole reading.
+    //
+    // Cheap enough to do unconditionally: three `setPosition` calls on objects
+    // that are already being redrawn. The FIT is the one thing guarded, by the
+    // box's width rather than by a frame counter -- `fitInBox` is the
+    // expensive half and the width only changes when the layout does.
+    const at = heroChipContent(box, C.edgeWidth)
+    this.chipPortrait.setPosition(at.cx, at.cy)
+    this.chipLabel.setPosition(at.cx, at.cy)
+    this.chipHit.setPosition(at.cx, at.cy)
+    // THE TAP RECTANGLE'S SIZE, ONLY WHEN IT CHANGES, AND RE-ARMED WITH IT.
+    //
+    // `setSize` moves the rectangle that is DRAWN; the rectangle that is
+    // HIT-TESTED was built by `setInteractive` from the size the object had at
+    // the time, and resizing does not reach it. So the two are re-armed
+    // together, which is the same rule as the fit above: a cached thing is
+    // refreshed against everything it depends on.
+    //
+    // Nothing resizes the chip today -- `hud.layout.heroChip` is a constant 60
+    // and only the chip's POSITION moves -- so this is guarded rather than
+    // unconditional, because `setInteractive` on every frame is real work.
+    // It is here at all so the pass that makes the chip's size a function of
+    // the viewport does not have to find this out from a dead tap target.
+    if (this.chipHit.width !== box.width || this.chipHit.height !== box.height) {
+      this.chipHit.setSize(box.width, box.height)
+      this.chipHit.setInteractive({ useHandCursor: true })
+    }
+
     // THE SAME KEY THE LOADOUT CARD DRAWS, in the form he is currently in.
     // `portraitSprite` is the base picture; the powered form is the same key
     // the sprite on the board swaps to, so the chip and the board cannot show
     // different heroes.
     const want = s.heroPowered && hero.poweredSprite ? hero.poweredSprite : hero.portraitSprite
     const key = this.textures.exists(want) ? want : ART.generated.iconMissing
-    if (key !== this.chipKey) {
+    // THE FIT IS CACHED ON THE KEY *AND* THE BOX. On the key alone it survived
+    // a layout that changed the chip's size, which is the same class of fault
+    // as the position: a cached comparison that does not name everything the
+    // cached work depends on. Nothing in the game resizes the chip today; the
+    // pass that does would find the portrait fitted for the old square.
+    if (key !== this.chipKey || at.fit !== this.chipFit) {
       this.chipKey = key
+      this.chipFit = at.fit
       this.chipPortrait.setTexture(key)
       // Fitted inside the chip less its frame, by the art's own content box —
       // so a hero whose canvas has more empty space than another's is still
       // drawn the same size as them.
-      fitInBox(this.chipPortrait, key, box.width - C.edgeWidth * 4)
+      fitInBox(this.chipPortrait, key, at.fit)
     }
 
     // A hero who is down is a different picture of the same hero: dimmed and

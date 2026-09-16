@@ -537,21 +537,53 @@ test('every hero button lands something the player can see', () => {
    * blast: its whole output was a 3px cream ring at 0.8 alpha, over a painted
    * map, gone in 420ms. Shockwave dealt damage and printed no number, and
    * Ember's burn, which is most of its damage, ticked silently.
+   *
+   * THE DAMAGE NUMBERS ARE GONE, 2026-09-17, so three of these five can no
+   * longer be answered with a figure and this test would otherwise have gone
+   * vacuous — `floatingDamage` no longer exists, and a `doesNotMatch` on a
+   * name nothing can call is not a check. The RULE is unchanged and is what is
+   * asserted: every hero button lands something the player can SEE. What each
+   * one lands is now named per skill, because the answers genuinely differ.
    */
   const game = code('scenes/GameScene.ts')
   const between = (from: string, to: string): string =>
     game.slice(game.indexOf(from), game.indexOf(to))
 
+  // Nothing may reach for the retired helper, under either name.
+  assert.doesNotMatch(game, /floatingDamage\(/, 'the damage numbers are back')
+
+  // BARK: no damage at all, so the word is the whole of it, and it is a WORD.
   const howl = between('private skillHowl(', 'private tickReadyCountdown(')
   assert.match(howl, /burstAt\(this, k\.fx/, 'Bark draws no effect art')
-  assert.match(howl, /'SLOW'/, 'nothing marks the enemies Bark caught')
+  assert.match(howl, /floatingLabel\(this, e\.x, e\.centreY, 'SLOW'\)/,
+    'nothing marks the enemies Bark caught')
 
+  // SHOCKWAVE: the ground shatter at the hero, sized to the stun's radius,
+  // plus the shake. It printed a number as well; the art and the shake are
+  // what is left and they are both about the radius rather than the amount.
   const burst = between('private skillBurst(', 'private skillHowl(')
-  assert.match(burst, /floatingDamage\(/, 'Shockwave deals damage and prints no number')
+  assert.match(burst, /burstAt\(this, k\.fx/, 'Shockwave draws no effect art')
+  assert.match(burst, /cameras\.main\.shake\(/, 'Shockwave lands without a shake')
 
+  // EMBER: the flame burst on the hit, the marker for as long as it burns, and
+  // a blast on EVERY TICK. The tick blast is why the burn is not silent now
+  // that its per-tick figure has gone.
   const burn = between('private skillBurn(', 'private skillBurst(')
-  assert.ok((burn.match(/floatingDamage\(/g) ?? []).length >= 2,
-    'Ember prints the first hit and then burns silently')
+  assert.match(burn, /burstAt\(this, k\.fx/, 'Ember draws no effect art on the hit')
+  assert.match(burn, /setBurning\(/, 'nothing marks a burning enemy')
+  assert.ok((burn.match(/playEffect\(this, ART\.fx\.blast/g) ?? []).length >= 1,
+    'Ember burns silently: the tick has no effect of its own')
+
+  // HAYMAKER AND QUICK CUT: the two that kept their spark, and the reason the
+  // sweep that took every other one had to stop here. Haymaker's burst art is
+  // drawn AT THE HERO, so the spark is its only mark on the target; Quick Cut
+  // has no burst at all, so the spark is its only art of any kind.
+  const punch = between('private skillPunch(', 'private skillDouble(')
+  assert.match(punch, /playEffect\(this, ART\.fx\.spark/, 'Haymaker marks nothing it hit')
+  assert.match(punch, /hitPause\(this, EFFECT_MS\.haymakerHitPauseMs/, 'Haymaker lost its held frame')
+  assert.match(punch, /cameras\.main\.shake\(/, 'Haymaker lost its shake')
+  const double = between('private skillDouble(', 'private skillBurn(')
+  assert.match(double, /playEffect\(this, ART\.fx\.spark/, 'Quick Cut lands nothing visible at all')
 
   // And all five run through one switch with one case each, so a new hero
   // cannot arrive with an effect nothing dispatches.

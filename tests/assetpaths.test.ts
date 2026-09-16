@@ -157,9 +157,16 @@ test('a missing texture is drawn at the size of the thing it replaced', () => {
    * fallback is in play.
    */
   const hud = read('src/scenes/HudScene.ts')
-  assert.match(hud, /fitInBox\(slot\.icon, slot\.icon\.texture\.key, r\.boxH\)/,
+  // THE KEY IS WHAT THIS TEST IS ABOUT, NOT THE SIZE. The size argument became
+  // `iconBox(r, bar, k)` on 2026-09-17 -- the ability row was pulled in, and
+  // `r.boxH` is the row's height rather than the picture's, so an icon fitted
+  // to it filled its whole column and touched the next one. The fault this
+  // guards is a sprite fitted for a texture it is not wearing, which is the
+  // FIRST argument; it is matched precisely and the size is matched loosely so
+  // the next sizing change does not have to come back here.
+  assert.match(hud, /fitInBox\(slot\.icon, slot\.icon\.texture\.key, iconBox\(/,
     'the ability icon is not fitted to the texture it is actually showing')
-  const swap = /const base = this\.world\.abilityIcon[\s\S]{0,700}?r\.boxH\)/.exec(hud)
+  const swap = /const base = this\.world\.abilityIcon[\s\S]{0,1600}?iconBox\(r, bar, k\)\)/.exec(hud)
   assert.ok(swap, 'the icon swap has moved; this test is checking nothing')
   // The fit must NOT be inside the "does the texture exist" branch any more.
   assert.ok(!/if \(this\.textures\.exists\(wantKey\)[\s\S]{0,200}fitInBox/.test(swap[0]),

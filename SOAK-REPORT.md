@@ -4,6 +4,27 @@ Newest first.
 
 ---
 
+## 2026-09-17 — The HUD cleanup moved nothing
+
+**All ten levels, 480 seeds, normal, identical integers.** The four HUD changes
+of 2026-09-17 — the floating damage numbers and ordinary hit sparks removed, the
+hero chip's contents made to track their box, the bottom row narrowed, the wave
+counter moved to the top-left stack — touch presentation, layout and a damage
+helper's ARITY, and none of them touch simulation. Re-soaked to prove it:
+
+| level | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| before | 428 | 255 | 422 | 299 | 218 | 210 | 198 | 184 | 192 | 195 |
+| after | **428** | **255** | **422** | **299** | **218** | **210** | **198** | **184** | **192** | **195** |
+
+The one change that COULD have leaked is `damageEnemy`'s fifth parameter and
+`Enemy.hurt`'s third — `showNumber` — being removed, which moved `pierce` up a
+position at fifteen call sites. Ten identical integers is what says it did not.
+
+`reports/2026-09-17-hud-cleanup.md`.
+
+---
+
 ## 2026-09-17 — Level 9 back into band, on one boss's health
 
 ### The headline

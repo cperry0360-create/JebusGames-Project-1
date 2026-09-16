@@ -34,6 +34,38 @@ const LAYOUT = P.hud.layout
  * arithmetic and the wiring; the harness looks at the frame.
  */
 
+test('the corner reserves room for exactly the readouts the HUD builds', () => {
+  /*
+   * TWO DESCRIPTIONS OF ONE THING, HELD TOGETHER.
+   *
+   * `hudLayout` reserves `readoutHeight * readoutCount + readoutGap * (n - 1)`
+   * for the top-left corner; `HudScene.READOUTS` is the list it then draws
+   * there. The count used to be a `2` inside the layout arithmetic, so adding
+   * a plate to the list laid it out in space nothing had reserved -- which is
+   * the same shape as the Server Nuke's fifth ability icon, and is the class
+   * of fault `AbilityBar.ts` was written to end.
+   *
+   * The wave counter joining the stack on 2026-09-17 is what made this real.
+   */
+  const hud = src('scenes/HudScene.ts')
+  const list = /const READOUTS = \[([^\]]*)\]/.exec(hud)
+  assert.ok(list, 'HudScene no longer declares which readouts it builds')
+  const names = [...list[1]!.matchAll(/'([a-z]+)'/g)].map((m) => m[1]!)
+  assert.equal(names.length, LAYOUT.readoutCount,
+    `HudScene draws ${names.length} readouts (${names.join(', ')}) and the layout ` +
+    `reserves room for ${LAYOUT.readoutCount}`)
+  // AND THE PLATE IT BUILDS EACH ONE FROM HAS TO EXIST. A name with no art
+  // draws nothing at all, which looks like a missing readout rather than a
+  // missing file.
+  for (const name of names) {
+    assert.ok(ART.ui.counters[name], `art.json names no counter plate for "${name}"`)
+  }
+  // The layout reads it rather than counting to two in TypeScript.
+  const layout = src('systems/HudLayout.ts')
+  assert.match(layout, /cfg\.readoutHeight \* cfg\.readoutCount/,
+    'the corner\'s height is computed from something other than readoutCount')
+})
+
 test('the readout config is the shape the pill needs', () => {
   assert.equal(typeof LAYOUT.readoutDigits, 'number', 'no readoutDigits')
   assert.ok(LAYOUT.readoutDigits >= 5,

@@ -611,6 +611,16 @@ padpan` is the rendered-frame half** and proves BOTH properties in one run -- ev
 pad drawn throughout a pan, and not one magenta pixel of void past the plate -- because
 each of the first two passes broke what the one before it fixed.
 
+**AND THE 2026-09-17 PASS NARROWED THE ROW RATHER THAN TOUCHING PAD VISIBILITY**,
+which is the fourth pass at the same screen space and deliberately did not reopen
+any of the three above. The bottom row came in from 476 CSS px to 384 at 844x390
+(56% of the width to 45%) by shrinking pitches, and `padhud` now prints a per-element
+split alongside its total: pad/HUD overlaps at rest over all ten levels went **33 to
+31** (`abilities` 18->16, `messageRow` 10->9, `heroChip` 3->4, `startButton` 2, and
+`counters` **0 on both**), and pads panning alone cannot free went **24 to 17**. No
+pad is hidden and none was un-hidden: `padShowing` is still `isFree` alone, exactly as
+the paragraph above settled it.
+
 **Two NEW open items, both small, both from the 2026-09-15 UI pass:**
 
 - **Level 7's spawn and exit badges are invisible on the Highway, and it is an ART
@@ -654,6 +664,24 @@ each of the first two passes broke what the one before it fixed.
   `flankShare` 0.19 and 0.20 are two different BOARDS rather than two
   difficulties — 29% and 23% on the same tree. Level 9 ships at 0.10, well clear
   of it, but a later pass that walks the share upward will hit it.
+
+- **The two hero ability medallions go dead after the Server Nuke drops.** Reported
+  from live play 2026-09-17 and deliberately NOT fixed in that pass, which fixed the
+  hero-chip bug beside it. What is now ESTABLISHED, from a rendered frame in
+  `run.sh herochip`: it does **not** share the chip's cause. One tick after the drop
+  all five slots are rebuilt, every hit rectangle is registered and `interactive=true`,
+  and the drift between each icon's centre and its own hit rectangle's is **0 px** on
+  all five, medallions included. The chip's fault was objects the reflow left BEHIND;
+  the medallions are objects the reflow REBUILDS. So look outside the HUD's display
+  list. `reports/2026-09-17-hud-cleanup.md` carries the recording.
+- **`status.kills` is never incremented.** Declared on the status object, zeroed by
+  `startRun`, and written nowhere else, so it reads 0 through a wave that visibly
+  clears. Two harness scenarios print it (`lost`, and `combat` until 2026-09-17 when
+  the census stopped trusting it). Either wire it or delete it.
+- **568x320 WITH A NOTCH has a 49px drawer grid against a 62px tile.** It was 55
+  before the 2026-09-17 HUD pass, which cost it six. `drawer.test.ts` checks the FLAT
+  narrow case only, where the grid is 72 and the rule holds. Nobody has decided
+  whether the notched SE-class case is in scope at all.
 
 **These are renumbered, twice now.** Seven of the original ten closed between 07 and
 13 September; what is left keeps its wording and gets a new number, so a citation of

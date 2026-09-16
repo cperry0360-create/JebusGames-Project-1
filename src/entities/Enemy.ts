@@ -4,7 +4,7 @@ import { Path } from '../systems/Path.ts'
 import { Disabler } from '../systems/TowerDisable.ts'
 import { ySort } from '../systems/DepthSort.ts'
 import { canStun, damageAfterArmor, diminishedSeconds, slowedSpeed, slowStacksAfter, stunLockoutFor, type DiminishDef } from '../systems/Combat.ts'
-import { makeShadow, PRESENTATION, floatingDamage, deathPuff } from '../systems/Presentation.ts'
+import { makeShadow, PRESENTATION, deathPuff } from '../systems/Presentation.ts'
 import { emergeState, vanishAlpha, type EmergeConfig, type GateDistances } from '../systems/Gateway.ts'
 import { MAIN_LANE, followMerges, type LaneNetwork } from '../systems/Lanes.ts'
 import { applyGroundRender } from '../systems/Art.ts'
@@ -1045,15 +1045,23 @@ export class Enemy extends Phaser.GameObjects.Container {
     return this.y - (this.art.displayHeight * this.art.originY) / 2
   }
 
-  /** Returns true if this hit killed it. */
-  hurt(damage: number, ignoresArmor: boolean, showNumber = true, pierce = 0): boolean {
-    // The LAST of the three guards on the damage path, and the one that used
-    // to ask only about `status`. A leaked enemy reached it destroyed but not
-    // dead and `floatingDamage(this.scene, …)` threw on a nulled scene.
+  /**
+   * Returns true if this hit killed it.
+   *
+   * `showNumber` WAS THE THIRD PARAMETER and went with the floating damage
+   * numbers on 2026-09-17. THE GUARD BELOW STAYS AND IS NOT ABOUT THE NUMBER:
+   * it is the last of the three on the damage path, and the fault it caught --
+   * a leaked enemy reaching here destroyed but not dead -- was found through
+   * `floatingDamage(this.scene, …)` throwing on a nulled scene rather than
+   * caused by it. `drawBar` touches the same dead scene. See `Liveness.ts`.
+   */
+  hurt(damage: number, ignoresArmor: boolean, pierce = 0): boolean {
     if (!this.alive) return false
     const dealt = damageAfterArmor(damage, this.effectiveArmor, ignoresArmor, pierce)
     this.health -= dealt
-    if (showNumber) floatingDamage(this.scene, this.x, this.centreY, dealt, dealt >= 60)
+    // NO NUMBER. The bar redrawn on the next line is what says a hit landed
+    // and how much of the enemy is left, in one place, for as long as it is
+    // alive -- where the figure said it once, for 620ms, while moving.
     this.drawBar()
     if (this.health <= 0) {
       this.die()

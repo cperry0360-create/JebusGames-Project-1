@@ -314,6 +314,11 @@ test('how far each viewport has to scroll, measured', () => {
    *   844x390   inner 202 -> grid 118  content 198   maxScroll 80
    *   568x320   inner 133 -> grid 73   content 198   maxScroll 125
    *
+   * and after the sixth entry below, which is the shipping pair:
+   *
+   *   844x390   grid 118  maxScroll 80    (unchanged)
+   *   568x320   grid 72   maxScroll 126   (one pixel of grid, one of scroll)
+   *
    * Fifth, and it moved NOTHING, which is the point of recording it. The HUD's
    * top-left group became two stacked readouts instead of three pills in a
    * row. The stack is sized so it is exactly as tall as the row it replaced --
@@ -321,6 +326,20 @@ test('how far each viewport has to scroll, measured', () => {
    * it always did and the panel keeps every pixel it had. The first attempt
    * used 26px plates, came out at 56, and cost this grid twelve pixels on
    * every screen; these two recorded numbers are what caught it.
+   *
+   * Sixth, 2026-09-17, and it moved ONE PIXEL on the narrow screen. The wave
+   * counter came out of the control in the top-right corner and joined that
+   * stack as a THIRD readout, which is twelve pixels of corner that have to
+   * come from somewhere -- the plates went 20 -> 16, `rowHeight` 22 -> 16 (the
+   * boss bar in it is 14) and `rowGap` 6 -> 4. 844x390 lands back on 118
+   * exactly; 568x320 lands on 72 against the 73 it had, because `panelArea`
+   * clamps its height and the arithmetic does not come out even there.
+   *
+   * ONE PIXEL IS NOT THE POINT AND THE TILE IS. 72 still clears the 62px tile,
+   * which is the line the fifth entry above says actually matters and which
+   * the narrow screen had only just crossed. Recording the 72 rather than
+   * loosening the assertion is deliberate: a number nobody can name is how
+   * twelve pixels went missing the first time.
    *
    * THE NARROW CASE IS THE ONE TO LOOK AT, and it has finally crossed the
    * line that mattered. A 62px tile now FITS in the 73px grid, so 568x320
@@ -332,9 +351,9 @@ test('how far each viewport has to scroll, measured', () => {
   const narrow = drawerLayout(568, area(568, 320), 6, 0, CFG)
   const desk = drawerLayout(1280, area(1280, 720), 6, 0, CFG)
   assert.equal(Math.round(wide.grid.height), 118, '844x390 grid height moved')
-  assert.equal(Math.round(narrow.grid.height), 73, '568x320 grid height moved')
+  assert.equal(Math.round(narrow.grid.height), 72, '568x320 grid height moved')
   assert.equal(Math.round(wide.maxScroll), 80, '844x390 no longer scrolls by 80')
-  assert.equal(Math.round(narrow.maxScroll), 125, '568x320 no longer scrolls by 125')
+  assert.equal(Math.round(narrow.maxScroll), 126, '568x320 no longer scrolls by 126')
   // THE MARGIN, pinned. A grid under half a tile makes every tile untappable.
   // The narrow screen now clears a WHOLE tile, which it never did before.
   assert.ok(narrow.grid.height >= CFG.tileHeight,

@@ -320,9 +320,11 @@ function chain(def: AbilityDef, x: number, y: number, ctx: AbilityContext): void
     bolts.lineBetween(fromX, fromY, next.x, next.y)
     hit.add(next)
     ctx.damage(next, def.damage, def.ignoresArmor)
-    playEffect(ctx.scene, ART.fx.spark, next.x, next.y, {
-      size: EFFECT_MS.chainSparkSize, depth: next.y + 6, durationMs: EFFECT_MS.hitSparkMs,
-    })
+    // NO SPARK PER JUMP. Removed 2026-09-17: the bolt drawn between the two
+    // enemies IS the ability's effect and it says exactly what the spark did
+    // -- which target the chain reached -- while staying on the glass for the
+    // whole 260ms fade rather than flashing once per jump. The spark was a
+    // second, shorter copy of the same statement laid over the first.
     fromX = next.x
     fromY = next.y
   }

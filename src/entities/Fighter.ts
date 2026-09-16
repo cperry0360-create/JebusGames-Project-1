@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import { ySort } from '../systems/DepthSort.ts'
 import { onBoard } from '../systems/Liveness.ts'
-import { makeShadow, PRESENTATION, deathPuff, floatingDamage } from '../systems/Presentation.ts'
+import { makeShadow, PRESENTATION, deathPuff } from '../systems/Presentation.ts'
 import { applyGroundRender } from '../systems/Art.ts'
 import { facesLeft } from '../systems/Facing.ts'
 import { pickNearest } from '../systems/Targeting.ts'
@@ -71,7 +71,9 @@ export class Fighter extends Phaser.GameObjects.Container {
 
   hurt(amount: number): void {
     this.health -= amount
-    floatingDamage(this.scene, this.x, this.y, amount)
+    // NO FLOATING NUMBER, 2026-09-17. A summoned fighter carries its own bar
+    // and that is what says how long it has left -- the figure over its head
+    // was one more of the flickering artefacts the whole pass removed.
     if (this.health <= 0) this.expire()
   }
 

@@ -1,7 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { collisions, hudBlocksGesture, hudLayout, hudTakesPress, overlaps, NO_INSETS, type Insets } from '../src/systems/HudLayout.ts'
+import { collisions, heroChipContent, hudBlocksGesture, hudLayout, hudTakesPress, insideRect, overlaps, NO_INSETS, type Insets } from '../src/systems/HudLayout.ts'
+import { barWidth, slotDefs, type BarMetrics, type SlotDef } from '../src/systems/AbilityBar.ts'
 import presentation from '../src/data/presentation.json' with { type: 'json' }
 
 const url = (p: string) => new URL(p, import.meta.url)
@@ -107,6 +108,106 @@ test('the hero chip is at the bottom, beside the hand, and off the tavern sign',
           `(sign at ${Math.round(r.x)},${Math.round(r.y)})`)
       }
     }
+  }
+})
+
+test('the hero sprite stays in its box when the ability row changes width', () => {
+  /*
+   * THE SERVER NUKE BUG, 2026-09-17, as arithmetic.
+   *
+   * The drop ADDS a medallion: `slotDefs` appends the rare ability to the end
+   * of the drafted group, so the row is one `draftedPitch` wider from the
+   * frame it lands. The row is CENTRED between the corner buttons, so growing
+   * it moves its own left edge LEFT by half a pitch -- and `heroChip.x` is
+   * `abilities.x` less the chip's block, so the chip's box goes with it.
+   *
+   * `drawHeroChip` redrew the plate and the bar from the live box every frame.
+   * The portrait, the countdown label and the tap rectangle were placed ONCE
+   * in `buildHeroChip`. So the black box shifted left and the hero did not,
+   * and half a drafted pitch is further than the box's own half-width -- he
+   * left it completely.
+   *
+   * This asserts the two halves that make that a bug rather than a rounding
+   * error: the box REALLY MOVES (or nothing here could fail), and a centre
+   * taken from the live box is inside it while a centre taken from the old one
+   * is not.
+   */
+  const BAR = presentation.abilityBar as unknown as BarMetrics
+  const E = (presentation.hud as Record<string, any>).heroChip.edgeWidth as number
+  const hero: SlotDef[] = [
+    { id: 'slot1', kind: 'heroSlot', icon: '', hero: true },
+    { id: 'slot2', kind: 'heroSlot', icon: '', hero: true },
+  ]
+  const look = (id: string) => ({ icon: id })
+  const before = barWidth(slotDefs(['molotov', 'glacier'], null, look, hero), BAR)
+  const after = barWidth(slotDefs(['molotov', 'glacier'], 'servernuke', look, hero), BAR)
+  assert.equal(after - before, BAR.draftedPitch,
+    'the Server Nuke no longer adds a drafted medallion, so this test is about nothing')
+
+  let sawTheHeroLeaveTheBox = 0
+  for (const [name, width, height] of VIEWPORTS) {
+    const four = hudLayout(
+      { width, height, insets: NO_INSETS, countersWidth: 48, abilitiesWidth: before }, CFG)
+    const five = hudLayout(
+      { width, height, insets: NO_INSETS, countersWidth: 48, abilitiesWidth: after }, CFG)
+
+    // ALWAYS TRUE, EVERYWHERE: a centre taken from the live box is inside it.
+    // This is the fix, and it does not depend on how far anything moved.
+    const live = heroChipContent(five.heroChip, E)
+    assert.ok(insideRect(five.heroChip, live.cx, live.cy),
+      `${name}: the hero's centre is outside his chip after the row grew`)
+    assert.equal(live.cx, five.heroChip.x + five.heroChip.width / 2,
+      `${name}: the sprite is not centred in the chip`)
+    assert.equal(live.cy, five.heroChip.y + five.heroChip.height / 2,
+      `${name}: the sprite is not centred in the chip`)
+
+    // AND HOW FAR A STALE SPRITE WOULD BE OUT. `moved` is the whole of the
+    // fault: it is how far the box travels while a sprite placed once at build
+    // time does not.
+    //
+    // IT IS MEASURED AGAINST THE PORTRAIT'S OWN SQUARE, not against the box.
+    // Before the row was tightened on the same day as this fix, a drafted
+    // pitch was 72 and the chip slid 36 -- past the 30 of its own half-width,
+    // so the hero left the black box outright, which is what live play
+    // reported. The pitch is 56 now and the slide is 28: still most of the way
+    // out, still obviously wrong on a frame, and no longer past the box's
+    // edge. So the box is the wrong ruler for the shipped numbers and the
+    // portrait is the right one -- `fit` is the square the art is drawn in, so
+    // a slide past half of it puts the picture's own centre outside the
+    // picture. Asserting against the box would have gone quietly inert here,
+    // which is the failure mode CLAUDE.md warns about: a check that cannot
+    // fail looks exactly like one that passes.
+    const moved = Math.abs(four.heroChip.x - five.heroChip.x)
+    const stale = heroChipContent(four.heroChip, E)
+    if (moved > live.fit / 2) {
+      sawTheHeroLeaveTheBox++
+      assert.notEqual(stale.cx, live.cx,
+        `${name}: the box moved ${moved.toFixed(1)}px and the two centres agree anyway`)
+    }
+  }
+  // The measurement has to be able to move, or this test cannot fail. On at
+  // least one shipped viewport the drop really does drag the box out from
+  // under the hero by more than the portrait's own half-width; if that stops
+  // being true the reflow is gone and everything above is guarding nothing.
+  assert.ok(sawTheHeroLeaveTheBox > 0,
+    'the Server Nuke no longer moves the chip past the portrait\'s half-width at any viewport')
+
+  // AND THE SCENE HAS TO ASK EVERY FRAME. The arithmetic above is correct
+  // whether or not anything calls it; what made this a bug was WHERE it was
+  // called from, so that is asserted directly.
+  const hud = src('scenes/HudScene.ts')
+  // To the end of the file: `drawHeroChip` is the last method in it. Sliced
+  // from a named start rather than searched whole, so a `setPosition` in some
+  // other method cannot answer for this one -- and the start is asserted,
+  // because `indexOf` returns -1 on a rename and `slice(-1)` is a string.
+  const from = hud.indexOf('private drawHeroChip(')
+  assert.ok(from > 0, 'drawHeroChip has been renamed; this check is now vacuous')
+  const draw = hud.slice(from)
+  assert.match(draw, /const at = heroChipContent\(box, C\.edgeWidth\)/,
+    'drawHeroChip does not re-derive the chip contents from the live box')
+  for (const obj of ['chipPortrait', 'chipLabel', 'chipHit']) {
+    assert.match(draw, new RegExp(`this\\.${obj}\\.setPosition\\(at\\.cx, at\\.cy\\)`),
+      `${obj} is not re-placed every frame, so it will be left behind by a reflow`)
   }
 })
 
