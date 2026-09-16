@@ -2,9 +2,23 @@
 
 | commit | what | CI |
 |---|---|---|
-| `26fc837` | `tools/soak/builder.json`, the zero-damage cap and the first-gun rule in `Sim.ts`, `tests/soakbuilder.test.ts` | *pending* |
-| `98d9cc5` | The peanut-sink measurement — reporting only, moved no win rate | *pending* |
-| `PENDING` | This report, `SOAK-REPORT.md`, `CLAUDE.md`, `claude/context.md` | *pending* |
+| `26fc837` | `tools/soak/builder.json`, the zero-damage cap and the first-gun rule in `Sim.ts`, `tests/soakbuilder.test.ts` | [run 432](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/35112317667) green |
+| `98d9cc5` | The peanut-sink measurement — reporting only, moved no win rate | run 432 green |
+| `f6a0560` | This report, `SOAK-REPORT.md`, `CLAUDE.md`, `claude/context.md` | run 432 green |
+| `f6c27c3` | Merge `main`: the HUD cleanup and its re-soak | run 432 green |
+| `68958bf` | `buildall` corrected to 7 of 7 across the report and `context.md` | run 432 green |
+| *this commit* | Closing this table on run 432 | it edits this table and nothing else |
+
+All five were pushed together, so only the head got a run of its own; **run 432
+checked the tree containing all five.** Green on `changes`, `typecheck`, `test`,
+`deploy / build` and `deploy / deploy` — five jobs. Read the job list, not the
+run's conclusion.
+
+**`main`'s tree was read back afterwards** and carries `tools/soak/builder.json`
+with `{padShare: 0.2, min: 1}`, the cap and first-gun rules in
+`tools/soak/Sim.ts`, `tests/soakbuilder.test.ts`, this report, and the warning at
+the top of `SOAK-REPORT.md`. **`git diff origin/main HEAD -- src/` is empty**, so
+the game on `main` is the game that was there before this session.
 
 **Answers first.**
 
