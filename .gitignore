@@ -45,3 +45,5 @@ tools/.imgcache/
 tools/towebp/profile/
 tools/towebp/browser.log
 tools/towebp/report.json
+tools/comics/tmp/
+tools/comics/profile/

@@ -1,23 +1,27 @@
 {
-  "_note": "WHICH COMIC PLAYS BEFORE WHICH LEVEL, and nothing more. Keys are level ids from levels.json and a level with no entry here simply has no cutscene \u2014 that is the default, not an omission, and tests/cutscenes.test.ts holds level 3 to it. Values are ordered panel paths relative to art.json's assetRoot, so they read the same way art.json's `files` do. An id that is not a level fails cutsceneProblems() and a test, rather than being discovered at runtime by a player.",
-  "_panels": "Every panel is 1672x941, which is 16:9. They are drawn to fit rather than to fill: on a phone in portrait a panel fills the width and centres vertically with the game's own dark chrome above and below it. Cropping a comic is not an option \u2014 a speech bubble in the corner of a panel is the panel.",
+  "_note": "WHICH COMIC PLAYS WHEN. Three maps, and they answer three different questions: `levels` is what plays BEFORE a level starts, `outros` is what plays when one is WON, and `midWave` is what plays BETWEEN two waves of a run. Keys are level ids from levels.json and a level with no entry simply has no comic there -- that is the default, not an omission. Values are ordered panel paths relative to art.json's assetRoot, so they read the same way art.json's `files` do. An id that is not a level, an empty list, a path outside cutscenes/ or a repeated panel all fail cutsceneProblems() and a test, rather than being discovered at runtime by a player.",
+  "_panels": "EVERY COMIC IN THIS REPOSITORY IS A THREE-PANEL STRIP IN ONE IMAGE, and every panel published here is one third of one. That was measured on 2026-09-16 across all twelve unwired files and the shipped ones: `tools/comics/slice.py` finds the gutters by vertical uniformity and `tools/comics/publish.py` cuts and encodes them, with the cut columns recorded in tools/comics/last-run.json. A strip shown as ONE panel puts each third at about 120 CSS pixels on a phone and the speech is unreadable, which is why the pages are cut rather than fitted.\nPANELS ARE NOT ALL ONE SHAPE ANY MORE. This note used to say every panel is 1672x941. The level 1 and 2 pages cut into roughly 552x941 thirds, the level 3, 4 and 9 pages into roughly square ones -- 741x724 through 1441x1280 -- and CutsceneLayout reads the SOURCE size off the texture and contain-fits it, so a square panel letterboxes rather than cropping. Cropping a comic is not an option: a speech bubble in the corner of a panel is the panel.",
   "levels": {
     "level1": [
-      "cutscenes/cutscene_L1_01.webp",
-      "cutscenes/cutscene_L1_02.webp",
-      "cutscenes/cutscene_L1_03.webp"
+      "cutscenes/level1_intro_01.webp",
+      "cutscenes/level1_intro_02.webp",
+      "cutscenes/level1_intro_03.webp"
     ],
     "level2": [
-      "cutscenes/cutscene_L2_01.webp",
-      "cutscenes/cutscene_L2_02.webp",
-      "cutscenes/cutscene_L2_03.webp"
+      "cutscenes/level2_intro_01.webp",
+      "cutscenes/level2_intro_02.webp",
+      "cutscenes/level2_intro_03.webp"
+    ],
+    "level3": [
+      "cutscenes/level3_intro_01.webp",
+      "cutscenes/level3_intro_02.webp",
+      "cutscenes/level3_intro_03.webp"
     ],
     "level9": [
       "cutscenes/cutscene_L9_01.webp"
     ]
   },
-  "_level9": "LEVEL 9 PLAYS ONE PANEL, NOT THREE, and it is HAT-GTT's introduction -- the Generative Trained Transformer joke, which is that it transformed and it is a hat. One panel because there is one, and because the level's own comic page is already three sub-panels across like the shipped L1 and L2 pages. THE CLOSING COMIC IS NOT HERE AND CANNOT BE. `comic_l9_end_gate_A.png` is the scene that ends at the level 10 gate, and this file is PRE-LEVEL ONLY: its keys are the level a comic plays BEFORE, which `cutsceneProblems` and tests/cutscenes.test.ts both hold it to. That panel is level 10's opening, so it lands the day level 10 gets a row in levels.json -- one line here -- and it is deliberately not converted into public/ until then, because an 0.58 MB panel nothing can play is the ORPHAN category the deploy budget in tests/content.test.ts exists to notice. Level 9's own ending is the board splitting open, which is level9.json's `rupture` and plays in the scene. See reports/2026-09-13-level-9.md.",
-  "_level10": "LEVEL 10 ENDS THE STORY, AND ITS THREE PANELS ARE AN OUTRO RATHER THAN AN OPENING -- they are what plays when Vlaude goes down, so they belong under `outros` and not under `levels`, the same distinction level 9's end-gate panel is filed by. A LOSS DOES NOT PLAY THEM: only the win branch of GameScene.endRun reaches an outro. THE TITLE CARD IS NOT HERE. `cutscenes/titlecard_level10.webp` plays full-screen BEFORE the level as part of the pre-level sequence rather than as a comic panel -- presentation.json's `titleCard` says how long it holds and level10.json says nothing about it, because it is a presentation beat and not a rule. This note used to say all four were unregistered and waiting for a row in levels.json; that row exists now. `cutscenes/cutscene_L10_01.webp`, `_02`, `_03` and `cutscenes/titlecard_level10.webp` are on disk, 1672x941 and RGB like every other panel, 2.04 MB between them. THEY CANNOT BE LISTED YET: both maps here are keyed by a level id, `cutsceneProblems` fails any key that is not a row in levels.json, and level 10 has no row. Adding them is FOUR LINES on the day it does -- a `level10` entry under `levels` with the three panels in order, and a decision about where the title card plays, which is a level 10 question rather than an art one. They are also deliberately absent from art.json: a comic panel has never been in that manifest and naming one there fails tests/manifest.test.ts twice over (measured -- see reports/2026-09-14-level-10-assets.md). THE SAME STATE `comic_l9_end_gate_A.png` WAS IN, one paragraph up, and it resolved the same way.",
+  "_levels": "THE OPENINGS. Level 1 is the dad losing his job, which is why he is home; level 2 is the job at Vlaude Industries; level 3 is Vlaude on the television eliminating everybody's positions, which is the villain's introduction.\nLEVEL 1 AND 2 WERE REDRAWN AND THE OLD PANELS ARE RETIRED. `cutscene_L1_01/02/03.webp` and `cutscene_L2_01/02/03.webp` drew the dad BEARDED AND IN ARMOUR at Courjahan's Tavern; the current design is clean-shaven in modern clothes, which is what every other comic in the game uses. They are in art-source/cutscenes/retired/ rather than deleted -- see the note there.\nLEVEL 9 PLAYS HAT-GTT'S INTRODUCTION and it is the ONE panel left in this file that is a whole uncut strip. IT IS ALSO THE SAME COMIC AS level 9's `midWave` entry for wave 3, at lower resolution and unsliced: `art-source/cutscenes/level9/wave03_strip.png` is the same three beats -- Hat-GTT? / Generative Trained Transformer / POOF -- and a run of level 9 therefore reads it twice, about ninety seconds apart. THAT IS DELIBERATE ONLY IN THE SENSE THAT THE BRIEF ASKED FOR BOTH, and it is one line to resolve: delete this `level9` key and the intro goes away, leaving the comic where it introduces the enemy that walks on next. Nobody has made that call yet, so both are wired and this note is the record.",
   "outros": {
     "level9": [
       "cutscenes/cutscene_L9_end_gate.webp"
@@ -28,5 +32,73 @@
       "cutscenes/cutscene_L10_03.webp"
     ]
   },
-  "_outros": "WHAT PLAYS WHEN A LEVEL IS WON, which `levels` above cannot say: its keys are the level a comic plays BEFORE, and every reader of it -- CutsceneScene's `init`, `shouldPlay`, the loadout hand-over -- means exactly that. LEVEL 9 ENDS BY OPENING THE WAY TO LEVEL 10. The board splits at the door (level9.json's `rupture`, played in the scene), the results screen gives the cakes, and the button off it goes through this panel on the way to the world map. It is not level 9's opening and it cannot be level 10's until level 10 has a row in levels.json, so it is neither, and this is the map for neither. SAME RULES AS `levels`, enforced by the same `cutsceneProblems`: a key that is a real level, a non-empty list, panels under cutscenes/, no repeats. A LOSS DOES NOT PLAY IT -- only the win branch of GameScene.endRun reaches it, because the fiction is that beating the gauntlet is what opens the door."
+  "_outros": "WHAT PLAYS WHEN A LEVEL IS WON, which `levels` cannot say: its keys are the level a comic plays BEFORE, and every reader of it -- CutsceneScene's `init`, `shouldPlay`, the loadout hand-over -- means exactly that. LEVEL 9 ENDS BY OPENING THE WAY TO LEVEL 10: the board splits at the door (level9.json's `rupture`, played in the scene), the results screen gives the cakes, and the button off it goes through this panel on the way to the world map. LEVEL 10 ENDS THE STORY and its three panels are what plays when Vlaude goes down. A LOSS PLAYS NEITHER -- only the win branch of GameScene.endRun reaches an outro.\nTHESE FOUR ARE UNCUT STRIPS AND ARE THE LAST ONES LEFT. Each is three sub-panels across inside one 1672x941 image, which is the readability problem the rest of this file was cut to fix -- measured, not assumed: `cutscene_L9_end_gate.webp` has gutters at x=572..585 and x=1092..1104 and the L10 panels the same. They were deliberately left alone by the 2026-09-16 pass because the brief held level 10 unchanged and its fight is verified frame by frame against them. The sources are in art-source/cutscenes/level10/ and art-source/cutscenes/unplaced/, so cutting them later is one line in tools/comics/plan.json and one list here.\nTHE TITLE CARD IS NOT HERE. `cutscenes/titlecard_level10.webp` plays full-screen BEFORE the level as part of the pre-level sequence rather than as a comic panel; presentation.json's `titleCard` says how long it holds.",
+  "midWave": {
+    "level3": {
+      "12": [
+        "cutscenes/level3_wave12_01.webp",
+        "cutscenes/level3_wave12_02.webp",
+        "cutscenes/level3_wave12_03.webp"
+      ]
+    },
+    "level4": {
+      "6": [
+        "cutscenes/level4_wave06_01.webp",
+        "cutscenes/level4_wave06_02.webp",
+        "cutscenes/level4_wave06_03.webp"
+      ]
+    },
+    "level9": {
+      "3": [
+        "cutscenes/level9_wave03_01.webp",
+        "cutscenes/level9_wave03_02.webp",
+        "cutscenes/level9_wave03_03.webp"
+      ],
+      "7": [
+        "cutscenes/level9_wave07_01.webp",
+        "cutscenes/level9_wave07_02.webp",
+        "cutscenes/level9_wave07_03.webp"
+      ],
+      "11": [
+        "cutscenes/level9_wave11_01.webp",
+        "cutscenes/level9_wave11_02.webp",
+        "cutscenes/level9_wave11_03.webp"
+      ],
+      "15": [
+        "cutscenes/level9_wave15_01.webp",
+        "cutscenes/level9_wave15_02.webp",
+        "cutscenes/level9_wave15_03.webp"
+      ]
+    }
+  },
+  "_midWave": "A COMIC BETWEEN TWO WAVES. Keyed by level id, then by the wave NUMBER it plays after -- one-based, the number the HUD shows -- then the ordered panels. `12` means it plays once wave 12 is cleared and before wave 13 spawns, so it lands immediately before the character it introduces walks on.\nEVERY NUMBER HERE WAS READ OFF THE WAVE TABLE, not assumed, and re-checked on 2026-09-16: unicornBoss first spawns on level 3 wave 13, glitchLich on level 4 wave 7, and level 9's four mini-bosses on waves 4, 8, 12 and 16. All six matched. `cutsceneProblems` now fails a wave number that is not a wave of that level, and fails the LAST wave as well -- a comic scheduled after the final wave could never play, because the run ends on that boundary instead.\nTHE CLOCK STOPS FOR IT. GameScene pauses itself and the HUD and launches the comic as an overlay, so enemies do not move, towers do not fire, cooldowns do not tick and no timer advances -- a paused Phaser scene runs no update and no clock at all. It fires only at a wave boundary with an empty board, which is the only state `checkWaveOver` reaches it from.\nLEVEL 2'S DEVIL AND LEVEL 10'S VLAUDE DELIBERATELY GET NOTHING. Both are a final boss rather than a mini-boss, both levels already have an opening or an ending, and level 2 is the 53% level where another interruption before the fight that kills everyone is the last thing it needs. Level 10 is also the one level where a mid-wave comic would collide with something: its form swap is on wave 7 and its float on wave 13, both armed by `armVlaudeSchedule` from `startWave`, and both would be telegraphed behind a comic. It has no `midWave` entry and the test in tests/level10.test.ts holds it to that.\nADDING ONE IS A DATA EDIT. Cut the strip with tools/comics/publish.py after adding it to tools/comics/plan.json, then add the wave key and the panel list here. Nothing in src/ changes.",
+  "_unplaced": {
+    "level10_intro": {
+      "source": "art-source/cutscenes/unplaced/level10_intro_strip.png",
+      "was": "comic_pulled_into_the_machine.png",
+      "shows": "Vlaude revoking the family's administrator privileges and pulling all four of them into the machine. It reads as level 10's OPENING and level 10 has no opening comic today, only the title card."
+    },
+    "level9_outro_alternate": {
+      "source": "art-source/cutscenes/unplaced/level9_outro_alternate_strip.png",
+      "was": "comic_l9_end_gate_A.png",
+      "shows": "An ALTERNATE of the shipped level 9 outro, not an orphan. Same three beats as `cutscenes/cutscene_L9_end_gate.webp` -- \"We're coming for you next!\", \"Any chance I can have my job back?\", the LEVEL 10 FINAL PROTOCOL gate -- at 2172x724 instead of 1672x941. A reject unless the outro is ever re-cut, in which case this is the better source."
+    },
+    "level10_outro_condensed": {
+      "source": "art-source/cutscenes/unplaced/level10_outro_condensed_strip.png",
+      "was": "comic_l10_ending_condensed.png",
+      "shows": "An ALTERNATE of the shipped level 10 outro, not an orphan. The nine sub-panels of `cutscene_L10_01/02/03.webp` condensed into three -- \"Without me... who will finish the game?\" / \"But I can ask Vlaude.\" / the explosion. A reject unless the ending is ever shortened."
+    }
+  },
+  "_unplacedNote": "COMICS THAT EXIST AND PLAY NOWHERE, NAMED SO A SWEEP CANNOT EAT THEM. `eda11dc` swept fourteen tower WebPs out of public/ for being unreferenced while the branch that needed them was still open, and the merge did not put them back; CLAUDE.md's standing fact is the write-up. This section is the reference that stops the same thing happening here, and tests/cutscenes.test.ts checks every `source` is on disk.\nTHEY ARE PNG IN art-source/ RATHER THAN WebP IN public/ ON PURPOSE. Converting them would put about 1.5 MB into the deploy that no player ever fetches, which is the ORPHAN category the budget in tests/content.test.ts exists to notice -- and two of the three are alternates of comics that already ship. Publishing one is one line in tools/comics/plan.json plus a list above, on the day something plays it.",
+  "_retired": {
+    "note": "THE PREVIOUS DAD DESIGN. art-source/cutscenes/retired/ holds `level1_intro_01..03.webp` and `level2_intro_01..03.webp`, which shipped as `cutscene_L1_*` and `cutscene_L2_*` until 2026-09-16. They draw the dad BEARDED AND IN ARMOUR at Courjahan's Tavern. The current design is clean-shaven in modern clothes. Kept rather than deleted: they are the only record of what the game looked like before the redraw.",
+    "files": [
+      "art-source/cutscenes/retired/level1_intro_01.webp",
+      "art-source/cutscenes/retired/level1_intro_02.webp",
+      "art-source/cutscenes/retired/level1_intro_03.webp",
+      "art-source/cutscenes/retired/level2_intro_01.webp",
+      "art-source/cutscenes/retired/level2_intro_02.webp",
+      "art-source/cutscenes/retired/level2_intro_03.webp"
+    ]
+  }
 }

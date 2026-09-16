@@ -3,18 +3,25 @@ import { COLOR, faceFor, uiSize } from '../ui/Theme.ts'
 import { fitUiCamera, viewH, viewW } from '../systems/Resolution.ts'
 import { onSceneResize, sceneIsLive } from '../systems/SceneEvents.ts'
 import { logEvent } from '../systems/Diagnostics.ts'
+import { noteInputAccepted } from '../systems/InputGates.ts'
 import { panelKey, panelUrl, panelsFor } from '../systems/Cutscenes.ts'
 import { cutsceneLayout, type CutsceneLayout } from '../systems/CutsceneLayout.ts'
 import { safeAreaInsets } from '../systems/SafeArea.ts'
 import { PRESENTATION } from '../systems/Presentation.ts'
 
 /**
- * The comic that plays before a level.
+ * The comic. Before a level, after one, or between two of its waves.
  *
  * Handed a level id and where to go afterwards; it draws that level's panels
  * one at a time, advances on a tap anywhere, and hands over. Everything about
  * WHICH panels and WHEN a comic plays at all is in systems/Cutscenes.ts -- this
  * counts taps and draws pictures.
+ *
+ * TWO ENDINGS, ONE EXIT. A comic that plays BEFORE or AFTER a level hands over:
+ * it starts the next scene and goes away. A MID-WAVE comic is an overlay over a
+ * run that is merely paused, so its ending RESUMES rather than starts -- see
+ * `CutsceneRequest.resume`. Both go through `handOver`, which is the only place
+ * either can happen.
  *
  * TAP ANYWHERE, NOT A BUTTON. A comic is read by tapping the page, and hunting
  * for a small "next" target on a phone is worse than the panel it advances.
@@ -75,11 +82,30 @@ export interface CutsceneRequest {
    * level.
    */
   holdMs?: number
+  /**
+   * The scenes to RESUME when the comic is over, instead of starting `then`.
+   *
+   * A mid-wave comic is an overlay over a run that is still there: GameScene
+   * pauses itself and the HUD, launches this scene on top, and expects the
+   * board back exactly as it was. Starting `Game` would rebuild it from
+   * nothing and throw the run away.
+   *
+   * Non-empty is the whole switch. `handOver` resumes each key in order and
+   * stops this scene rather than starting anything, so the two endings -- a
+   * hand-over and an overlay -- still go through the one exit.
+   */
+  resume?: string[]
 }
 
-/** The panel source size. Every panel in the game is 1672x941; read off the
- *  texture at draw time rather than assumed, and this is only the fallback for
- *  the frame before one has loaded. */
+/**
+ * The panel source size, as a FALLBACK for the frame before a texture lands.
+ *
+ * It is not what the panels are any more. This said "every panel in the game is
+ * 1672x941" and four of them still are -- the uncut strips under `outros` and
+ * level 9's opening -- while the twenty-seven sliced panels run from 550x941 to
+ * 1441x1280. `layout()` reads the real size off the texture, which it always
+ * did, and that is what makes a square panel letterbox instead of stretching.
+ */
 const PANEL_W = 1672
 const PANEL_H = 941
 
@@ -90,7 +116,19 @@ export class CutsceneScene extends Phaser.Scene {
   private next = 'Game'
   private nextData: Record<string, unknown> | undefined
   private holdMs = 0
+  private resumeScenes: string[] = []
   private panels: string[] = []
+  /**
+   * The panel textures this scene put in the texture manager.
+   *
+   * REMOVED ON SHUTDOWN, and the absence of that was a leak with a number on
+   * it. A panel is decoded to raw RGBA -- 553x941 is 2.08 MB, and level 9 now
+   * plays fifteen of them in a run -- and the texture manager is global, so
+   * every one survived the scene that loaded it for the rest of the session.
+   * Nothing else in the game reads these keys, so the scene that loaded them
+   * is the only thing that can know when they are done with.
+   */
+  private loadedKeys: string[] = []
   private index = 0
   private image?: Phaser.GameObjects.Image
   private skipParts: Phaser.GameObjects.GameObject[] = []
@@ -112,18 +150,63 @@ export class CutsceneScene extends Phaser.Scene {
     this.panels = req?.panels ?? panelsFor(this.levelId)
     this.nextData = req?.thenData
     this.holdMs = req?.holdMs ?? 0
+    this.resumeScenes = req?.resume ?? []
     this.index = 0
     this.finished = false
+    this.loadedKeys = []
   }
 
   preload(): void {
     // Only the FIRST panel is waited on. The rest are fetched while the reader
     // is looking at the one in front of them -- see `preloadAhead`.
     const first = this.panels[0]
-    if (first) this.load.image(panelKey(first), panelUrl(first))
+    if (first) this.claim(first)
+  }
+
+  /** Queues a panel and remembers its key, so shutdown can give it back. */
+  private claim(path: string): void {
+    const key = panelKey(path)
+    if (!this.loadedKeys.includes(key)) this.loadedKeys.push(key)
+    this.load.image(key, panelUrl(path))
+  }
+
+  /**
+   * Hands every panel texture back.
+   *
+   * On SHUTDOWN rather than in `handOver`, because a comic can also end by the
+   * scene being stopped from outside -- a run abandoned to the title, a restart
+   * -- and those paths do not go through the exit. `SHUTDOWN` is the one event
+   * every ending raises.
+   */
+  private releaseTextures(): void {
+    for (const key of this.loadedKeys) {
+      if (this.textures.exists(key)) this.textures.remove(key)
+    }
+    if (this.loadedKeys.length > 0) {
+      logEvent('cutscene', `released ${this.loadedKeys.length} panel textures`)
+    }
+    this.loadedKeys = []
   }
 
   create(): void {
+    // ON TOP, AND THIS IS THE LINE WHOSE ABSENCE WAS THE SECOND BUG.
+    //
+    // Phaser renders scenes in LIST order and `Cutscene` is declared before
+    // `Game` and `Hud` in config.ts -- which is right for a comic that HANDS
+    // OVER, because the game is not running yet. A mid-wave comic is launched
+    // over a run that is merely paused, and a paused scene still RENDERS: the
+    // board and the whole HUD drew straight over the top of the panel.
+    //
+    // The numbers said it was fine. `scene.isActive('Cutscene')` was true, the
+    // run was paused, the gate was claimed, the clock was frozen and 43 checks
+    // passed; the screenshot was a picture of the board with WAVE CLEARED
+    // across it. CLAUDE.md's rule about reading the picture as well as the
+    // numbers, in one frame.
+    //
+    // Asked for by the scene that needs it rather than by whoever launched it,
+    // and harmless on the hand-over path: nothing else is running there.
+    if (this.resumeScenes.length > 0) this.scene.bringToTop()
+
     // FIRST, before anything is measured or placed. See the note above: this
     // is the line whose absence was the bug.
     fitUiCamera(this)
@@ -164,6 +247,7 @@ export class CutsceneScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-ENTER', () => this.advance())
     this.input.keyboard?.on('keydown-ESC', () => this.skip())
 
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.releaseTextures())
     this.preloadAhead()
     // A CARD ADVANCES ITSELF. A tap still works -- nobody is held here -- but
     // the beat is timed rather than waited for. `holdMs` is 0 for every comic,
@@ -184,8 +268,11 @@ export class CutsceneScene extends Phaser.Scene {
     const upcoming = this.panels[this.index + 1]
     if (!upcoming) return
     const key = panelKey(upcoming)
-    if (this.textures.exists(key)) return
-    this.load.image(key, panelUrl(upcoming))
+    if (this.textures.exists(key)) {
+      if (!this.loadedKeys.includes(key)) this.loadedKeys.push(key)
+      return
+    }
+    this.claim(upcoming)
     this.load.start()
   }
 
@@ -198,7 +285,7 @@ export class CutsceneScene extends Phaser.Scene {
     // A panel that has not landed yet leaves the frame empty for a moment
     // rather than throwing; the loader's completion redraws it.
     if (!this.textures.exists(key)) {
-      this.load.image(key, panelUrl(path))
+      this.claim(path)
       this.load.once(Phaser.Loader.Events.COMPLETE, () => {
         if (sceneIsLive(this)) this.drawPanel()
       })
@@ -288,6 +375,10 @@ export class CutsceneScene extends Phaser.Scene {
 
   /** One tap: the next panel, or out of the comic if that was the last. */
   private advance(): void {
+    // A TAP THAT LANDED. The stuck guard reads this to tell a player reading a
+    // comic from a run nothing is driving, and a mid-wave comic holds a PAUSED
+    // GameScene -- which is exactly the shape it is built to notice.
+    noteInputAccepted()
     if (this.finished) return
     if (this.index + 1 >= this.panels.length) {
       this.handOver('read to the end')
@@ -302,6 +393,7 @@ export class CutsceneScene extends Phaser.Scene {
   /** Straight to the level, from one tap, at any point in the comic. That
    *  cheapness is the whole reason the comic can afford to replay every run. */
   private skip(): void {
+    noteInputAccepted()
     if (this.finished) return
     this.handOver('skipped')
   }
@@ -312,6 +404,17 @@ export class CutsceneScene extends Phaser.Scene {
   private handOver(why: string): void {
     if (this.finished) return
     this.finished = true
+    // AN OVERLAY GIVES THE RUN BACK; A HAND-OVER REPLACES IT. Both go through
+    // here, so the two endings cannot drift apart -- and `stop` is last, since
+    // it tears this scene down and fires the SHUTDOWN that frees the textures.
+    if (this.resumeScenes.length > 0) {
+      logEvent('cutscene', `${this.levelId} ${why} -> resume ${this.resumeScenes.join(',')}`)
+      for (const key of this.resumeScenes) {
+        if (this.scene.isPaused(key)) this.scene.resume(key)
+      }
+      this.scene.stop()
+      return
+    }
     logEvent('cutscene', `${this.levelId} ${why} -> ${this.next}`)
     this.scene.start(this.next, this.nextData)
   }

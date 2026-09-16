@@ -169,6 +169,31 @@ test('no player-facing card text quotes an engine unit', () => {
     assert.ok(!/\b(tick|ms|msec)\b/i.test(line), `"${line}" quotes an engine unit`)
     // A bare number followed by "range" is the same problem wearing a label.
     assert.ok(!/\d\s* ?range\b/i.test(line), `"${line}" quotes a range in engine units`)
+    // AND NO CARD MAY PRINT A DIVISION BY ZERO. The Ima Dummy Tower is
+    // `fireInterval: 0`, so `1 / fireInterval` put "Infinity/sec" on a real
+    // card. It was drafted on level 1 alone, which is why nobody saw it for
+    // weeks; it is in every opening hand now.
+    assert.ok(!/Infinity|NaN|undefined/.test(line), `"${line}" printed a broken number`)
+  }
+})
+
+test('a tower that deploys men describes itself as one', () => {
+  // NOTHING GUARDED THIS and the general branch was actively wrong about it:
+  // `towerStats` quoted "0 damage ... Infinity/sec" and `towerLine`'s fallback
+  // said "Picks off one target at a time", which is the exact opposite of what
+  // the tower does. Derived from `soldierCount`, so a second deployer gets the
+  // same treatment without anybody writing copy for it.
+  const t = read('towers') as any
+  const deployers = Object.entries(t).filter(([, d]: any) => (d.soldierCount ?? 0) > 0)
+  assert.ok(deployers.length > 0, 'no deployer exists to check')
+  for (const [id, def] of deployers as any[]) {
+    const stats = towerStats(def), line = towerLine(def)
+    assert.ok(stats.includes(String(def.soldierCount)), `${id} does not say how many lads`)
+    assert.match(stats, /lad/, `${id}'s stat line does not mention its lads`)
+    assert.ok(!/damage/.test(stats), `${id} quotes a damage figure it does not have: "${stats}"`)
+    assert.ok(!stats.includes('/sec'), `${id} quotes a fire rate it does not have: "${stats}"`)
+    assert.ok(!/picks off/i.test(line), `${id} claims to shoot: "${line}"`)
+    assert.match(line, /cannot attack/i, `${id} does not say it cannot attack: "${line}"`)
   }
 })
 
@@ -266,8 +291,24 @@ test('the screen is a stack that flows, and the buttons are placed first', () =>
     'the dealt row has no measured floor')
   assert.match(render, /natural: specialWant, min: Math\.min\(specialWant, specialFloor\)/,
     'the specials row has no measured floor in the stacked arrangement')
-  assert.match(render, /const dealtWant = wide\s*\n?\s*\? this\.dealtFloor\(run, cardW, LO\.bodySizes\[0\]!, true\) : towerWant/,
+  // `dealtBand`, not a card width: the two dealt rows no longer hold the same
+  // number of cards -- the towers deal `towersAtStart` plus a slot per
+  // guaranteed tower and the specials deal `abilitiesDrawn` -- so the shared
+  // argument is the BAND each row divides by its own card count.
+  assert.match(render, /const dealtWant = wide\s*\n?\s*\? this\.dealtFloor\(run, dealtBand, LO\.bodySizes\[0\]!, true\) : towerWant/,
     'the dealt band is not measured by the same function that decided the reflow')
+  assert.match(render, /const dealtFloor = wide \? this\.dealtFloor\(run, dealtBand, small, true\) : towerFloor/,
+    'the dealt floor and the dealt want are measured against different bands')
+  // AND EACH ROW IS MEASURED AT ITS OWN CARD WIDTH. One `cardWidthFor(2)`
+  // served both rows while both dealt two cards; with three tower cards it
+  // measured them a third too wide, which is a stats line wrapping into a
+  // card that was never given the height for it.
+  assert.match(render, /const towerWant = this\.towerNeeds\(run\.openingTowers, towerCardW\)/,
+    'the tower row is not measured at the width its own card count gives it')
+  assert.match(render, /const specialWant = this\.abilityNeeds\(run\.abilities, abilityCardW\)/,
+    'the specials row is not measured at the width its own card count gives it')
+  assert.ok(!render.includes('this.cardWidthFor(2'),
+    'a card width is hardcoded to two cards a row again')
   // The floors come from the SMALLEST size on the type ladder, so a floor is
   // what the content genuinely needs rather than a number somebody picked.
   assert.match(render, /const small = LO\.bodySizes\[LO\.bodySizes\.length - 1\]!/,

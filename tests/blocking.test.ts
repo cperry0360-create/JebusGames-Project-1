@@ -45,11 +45,17 @@ test('it has a range that is a leash rather than a weapon', () => {
   // fires has one at all.
   assert.ok(D.range > 0)
   assert.equal(D.archetype, 'control')
-  // Level 1 only, for now.
+  // EVERY LEVEL NOW, and no level names it. It was level 1's alone via
+  // `extraTowerWeights`, which is how the one tower that does not shoot came
+  // to be unreachable on nine levels of ten; it is in draft.json's shared pool
+  // and in `guaranteedTowers`, and a level carrying a weight for it as well
+  // would double-count -- `towerWeightsFor` spreads the level's extras over
+  // the shared pool, so the level's number would silently win.
   const byId = Object.fromEntries((levels as any).levels.map((l: any) => [l.id, l]))
-  assert.deepEqual(byId.level1.extraTowerWeights, { imaDummy: 4 })
-  assert.equal(byId.level2.extraTowerWeights, undefined)
-  assert.equal(byId.level3.extraTowerWeights, undefined)
+  for (const l of (levels as any).levels) {
+    assert.equal(byId[l.id].extraTowerWeights?.imaDummy, undefined,
+      `${l.id} still carries an imaDummy weight of its own`)
+  }
 })
 
 test('two soldiers at every tier, and the upgrades improve them instead', () => {

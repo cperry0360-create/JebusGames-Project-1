@@ -56,6 +56,17 @@ export function stuckHost(game: Phaser.Game) {
       // paused scene, and a paused scene is the whole subject here.
       const gamePaused = paused('Game')
       const live = g !== null && (game.scene.isActive('Game') || gamePaused)
+      // A COMIC OVER A PAUSED RUN IS NOT A STUCK RUN. This file's own rules
+      // already say so -- "a menu, a cutscene, a finished run: a still board is
+      // correct" -- and a mid-wave comic is the first thing in the game that
+      // makes the two states overlap: GameScene pauses itself, so the board is
+      // still and the gate reads `paused` for as long as the player takes to
+      // read three panels. The comic is claimed through InputGates as well, so
+      // it would be reported and left alone rather than seized; this is the
+      // half that stops it being reported at all.
+      const comic = (() => {
+        try { return game.scene.isActive('Cutscene') } catch { return false }
+      })()
       const targeting = g?.status?.mode === 'targeting'
 
       // WHAT SHOULD BE MOVING. Enemy positions rounded to a pixel, plus the
@@ -79,7 +90,8 @@ export function stuckHost(game: Phaser.Game) {
         now: Date.now(),
         // A finished run is not a stuck one: the win and loss screens are
         // deliberately still.
-        runActive: live && g?.status?.phase !== 'won' && g?.status?.phase !== 'lost',
+        runActive: live && !comic
+          && g?.status?.phase !== 'won' && g?.status?.phase !== 'lost',
         gate: gamePaused ? 'paused' : targeting ? 'targeting' : null,
         owner,
         motion,

@@ -1,0 +1,39 @@
+<!doctype html><meta charset="utf-8"><title>comics</title><body><script type="module">
+// Encodes each sliced panel to WebP and measures what the encode cost.
+//
+// Chromium is the encoder because this environment has no cwebp, no
+// ImageMagick and no PIL -- the same reason tools/reencode and tools/img use
+// it. The libwebp inside the browser is the library a command-line tool calls.
+const q = new URLSearchParams(location.search)
+const quality = Number(q.get('q') || 90) / 100
+const jobs = await (await fetch('/jobs')).json()
+const log = (m) => fetch('/log', { method: 'POST', body: m })
+const out = []
+for (const job of jobs) {
+  const img = new Image()
+  img.src = '/' + job.png
+  await img.decode()
+  const w = img.naturalWidth, h = img.naturalHeight
+  const cv = new OffscreenCanvas(w, h)
+  const ctx = cv.getContext('2d', { willReadFrequently: true })
+  ctx.drawImage(img, 0, 0)
+  const ref = ctx.getImageData(0, 0, w, h).data
+  const blob = await cv.convertToBlob({ type: 'image/webp', quality })
+  // PSNR against the source pixels, so "no visible loss" is a number rather
+  // than an opinion.
+  const bmp = await createImageBitmap(blob)
+  const c2 = new OffscreenCanvas(w, h)
+  const x2 = c2.getContext('2d', { willReadFrequently: true })
+  x2.drawImage(bmp, 0, 0)
+  const d = x2.getImageData(0, 0, w, h).data
+  let sq = 0, n = 0
+  for (let i = 0; i < d.length; i += 4) {
+    for (let c = 0; c < 3; c++) { const e = d[i + c] - ref[i + c]; sq += e * e; n++ }
+  }
+  const psnr = sq === 0 ? Infinity : 10 * Math.log10(255 * 255 / (sq / n))
+  await fetch('/save?path=' + encodeURIComponent(job.webp), { method: 'POST', body: blob })
+  out.push({ webp: job.webp, w, h, bytes: blob.size, psnr })
+  await log(`${job.webp.padEnd(46)} ${w}x${h}  ${(blob.size / 1e6).toFixed(3)} MB  PSNR ${psnr.toFixed(1)} dB`)
+}
+await fetch('/done', { method: 'POST', body: JSON.stringify(out, null, 1) })
+</script></body>

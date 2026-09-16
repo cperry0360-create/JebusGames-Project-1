@@ -1676,9 +1676,17 @@ test('the deploy stays small enough to open on a phone', () => {
   // beats the level, so it is on that level's bill exactly as its opening comic
   // is. Counting only `levels` under-read level 9 by 0.58 MB, which is most of
   // the headroom this cap had.
+  // AND THE MID-WAVE COMICS, which are the third map and the newest bill. They
+  // are fetched DURING a run rather than before it -- CutsceneScene loads the
+  // panel in front of the reader and one ahead -- so they are not part of the
+  // wait to open a level. They are still bytes a player of that level
+  // downloads, and this cap is per level rather than per wait, so they count.
   const cutscenesFor = (id: string): number =>
     [...((cutscenes.levels as Record<string, string[]>)[id] ?? []),
-      ...((cutscenes.outros as Record<string, string[]> | undefined)?.[id] ?? [])]
+      ...((cutscenes.outros as Record<string, string[]> | undefined)?.[id] ?? []),
+      ...Object.values(
+        (cutscenes.midWave as Record<string, Record<string, string[]>> | undefined)?.[id] ?? {},
+      ).flat()]
       .reduce((a: number, p: string) => a + sizeOf(p), 0)
   const perLevel = LEVELS.map((l) => ({
     id: l.id,
@@ -1714,7 +1722,26 @@ test('the deploy stays small enough to open on a phone', () => {
   // KB of level 9 before a single enemy is converted. That is the point at
   // which somebody has to choose between the re-export and a thinner shared
   // list, and this cap is where it will come up.
-  assert.ok(worst.mb < 18,
+  //
+  // 18 -> 20 ON 2026-09-16, AND THE PREDICTION ABOVE IS WHY. Level 9 went
+  // 17.06 -> 19.00 MB when its four mini-boss introductions were wired as
+  // mid-wave comics: 1.94 MB across twelve panels, measured, at the same q90
+  // the rest of the comics are encoded at. Level 3 went 8.0 -> 8.9 and level 4
+  // 7.4 -> 8.8; levels 1 and 2 got LIGHTER, because the redrawn openings are
+  // 0.37 MB each against the 0.92 and 0.86 the retired ones cost.
+  //
+  // WHY THE RAISE RATHER THAN A THINNER ENCODE. The panels are already under
+  // -provisioned for a retina phone by hard rule 7's own arithmetic: a panel
+  // draws at about 346 CSS px tall on a 844x390 phone, which is 1038 physical
+  // pixels at devicePixelRatio 3, and the level 9 sources are 724 tall. Going
+  // below q90 on line art with speech bubbles is the readability the slicing
+  // pass existed to buy, given back.
+  //
+  // AND MOST OF LEVEL 9'S 19 MB IS STILL NOT THE COMICS. 3.75 MB of it is the
+  // machine tower skin, whose re-encode has been measured and rejected three
+  // times (PSNR 28.5-36.4 dB); the honest fix is a re-export, and those sources
+  // are not in this repository.
+  assert.ok(worst.mb < 20,
     `${worst.id} fetches ${worst.mb.toFixed(1)}MB when a player opens it`)
 
   // MUSIC streams, so its only cost is bandwidth.
@@ -1749,7 +1776,15 @@ test('the deploy stays small enough to open on a phone', () => {
   // plate is 1.59 MB and its cast 1.95, so on the day it gets a row it lands
   // near level 9's 17.06 before its comics are counted. That bill comes due
   // with the level, not with its art.
+  //
+  // 58 -> 61 ON 2026-09-16. The comic pass added 4.93 MB of sliced panels to
+  // public/ and took 1.78 MB of retired ones out of it, for a net +3.15. Every
+  // one of the new files is wired to something that plays it, which is the
+  // opposite of the orphan case this number is a tripwire for -- and the three
+  // comics that are NOT wired to anything were deliberately left as PNG in
+  // art-source/ rather than converted, so they cost this cap nothing. See
+  // cutscenes.json's `_unplacedNote`.
   const total = files.reduce((a, f) => a + f.mb, 0)
-  assert.ok(total < 58,
+  assert.ok(total < 61,
     `assets total ${total.toFixed(1)}MB, which is more than this project should be`)
 })

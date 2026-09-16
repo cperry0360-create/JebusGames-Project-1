@@ -96,10 +96,27 @@ export function abilityLine(def: AbilityDef): string {
  * described to completely different depths.
  */
 export function towerStats(def: TowerDef): string {
-  const rate = (1 / def.fireInterval).toFixed(1)
   if (def.supportRadius > 0) {
     return `${say('areaAdjective', def.supportRadius)} · +${Math.round(def.supportDamageBonus * 100)}% damage`
   }
+  /*
+   * A DEPLOYER QUOTES ITS LADS, because it has no numbers of its own.
+   *
+   * The Ima Dummy Tower is `damage: 0`, `fireInterval: 0`, and the general
+   * line read "0 damage · Short reach · Infinity/sec" -- 1/0, printed on a
+   * card, in front of the player. It was reachable on level 1 alone, so for
+   * weeks it was a defect almost nobody could see; the tower is guaranteed in
+   * every opening hand now and this is the FIRST card on the screen for every
+   * run on every level, so it is the first thing that had to be true.
+   *
+   * The reach is still quoted: it is the leash the rally point is checked
+   * against, so it is the one number about the TOWER that a player can act on.
+   */
+  if ((def.soldierCount ?? 0) > 0) {
+    return `${bound(def.soldierCount!, def.soldierCount === 1 ? 'lad' : 'lads')}`
+      + ` · ${bound(def.soldierHealth ?? 0, 'hp')} · ${say('range', def.range)}`
+  }
+  const rate = (1 / def.fireInterval).toFixed(1)
   return `${bound(def.damage, 'damage')} · ${say('range', def.range)} · ${tight(rate, '/sec')}`
 }
 
@@ -116,6 +133,10 @@ export function towerLine(def: TowerDef): string {
   // was 51 characters and did not fit a tower card at any readable size on a
   // 568x320 phone — it overflowed by 25px even at 18px type.
   if (def.supportRadius > 0) return 'Buffs nearby towers. Cannot attack.'
+  // A deployer shoots nothing, so every trait below is false of it and the
+  // fallback picked the worst possible one: "Picks off one target at a time."
+  // What it does is stand men in the road, and that is the line.
+  if ((def.soldierCount ?? 0) > 0) return 'Blocks the road. Cannot attack.'
   // "hits everything in a wide area" -> "hits a wide area": the three words
   // it loses say nothing the word "area" does not, and they were the
   // difference between fitting a card and overflowing it by 19px.

@@ -117,7 +117,8 @@ import { waveOutcome } from '../systems/Wave.ts'
 import { clearRun, saveRun, type SavedRun } from '../systems/RunSave.ts'
 import { TRANSFORM_BELOW } from '../systems/Transform.ts'
 import { logEvent, provideState } from '../systems/Diagnostics.ts'
-import { outroPanelsFor } from '../systems/Cutscenes.ts'
+import { midWavePanelsFor, outroPanelsFor } from '../systems/Cutscenes.ts'
+import { midWaveBoundaryOpen, simDelta } from '../systems/MidWave.ts'
 import { heartbeat, setRunActive } from '../systems/Watchdog.ts'
 import { enterGate, leaveGate, noteInputAccepted } from '../systems/InputGates.ts'
 import {
@@ -788,6 +789,29 @@ export class GameScene extends Phaser.Scene {
    * ever firing its onComplete — and left this true for every later run in the
    * same page session. Cleared in create() now, and backstopped by castUntil.
    */
+  /**
+   * The wave a mid-wave comic is currently playing over, or -1.
+   *
+   * THE FLAG IS NOT WHAT STOPS THE CLOCK -- `this.scene.pause()` is, and a
+   * paused Phaser scene runs no update, no timer and no tween at all. This is
+   * how the rest of the scene KNOWS, so teardown can stop the comic, so a
+   * second boundary cannot open a second one, and so `dt` is zero on any frame
+   * that slips through between the pause being asked for and taking effect.
+   */
+  private comicWave = -1
+
+  /**
+   * A comic that is DUE and cannot open yet, or -1.
+   *
+   * "It only fires at a wave boundary with no enemies alive; if enemies are
+   * still on the board, it waits." A wave can end with something still walking
+   * -- `checkWaveOver` waits only for what the wave SENT, so a boss's summoned
+   * children that do not hold the wave are alive across the boundary -- and
+   * dropping the comic in that case would be silent. It is held here instead
+   * and `update` opens it on the first frame the board is clear.
+   */
+  private comicDue = -1
+
   private casting = false
   /** When the current wind-up must be over by. A cast that outlives this has
    *  lost its tween, and the flag is cleared rather than trusted. */
@@ -1243,7 +1267,11 @@ export class GameScene extends Phaser.Scene {
     this.status.bossHealth = 0
     this.status.bossMax = 0
     this.nukeUsed = false
-    this.status.unlockedTowers = run.openingTowers.slice(0, DRAFT.towersAtStart)
+    // THE WHOLE OPENING HAND, not `towersAtStart` of it. The draft deals
+    // `towersAtStart` drawn cards plus a slot per guaranteed tower, so slicing
+    // to `towersAtStart` here would have dealt the Ima Dummy Tower on the
+    // loadout screen and then thrown it away on the way into the run.
+    this.status.unlockedTowers = [...run.openingTowers]
 
     // A run picked up where it was left. Everything above set a fresh run up;
     // this puts the saved one back over the top of it, and it happens here —
@@ -1476,8 +1504,19 @@ export class GameScene extends Phaser.Scene {
     // is in the background, and a watchdog that cried freeze at each of those
     // would bury the one report that matters.
     this.events.on(Phaser.Scenes.Events.PAUSE, () => setRunActive(false))
-    this.events.on(Phaser.Scenes.Events.RESUME, () => setRunActive(true))
+    this.events.on(Phaser.Scenes.Events.RESUME, () => {
+      setRunActive(true)
+      // THE COMIC'S EXIT COMES THROUGH HERE, and so does every other way this
+      // scene is handed back -- the stuck guard's recovery, the rotate gate
+      // lowering, the tab coming forward. One listener rather than a callback
+      // into the comic, so none of those can leave the flag set.
+      this.endMidWaveComic('read')
+    })
     this.events.once('shutdown', () => {
+      // FIRST. A run abandoned mid-panel has a comic scene on top of it that
+      // nothing else will stop, and a gate claimed by a scene that no longer
+      // exists is the shape of lock InputGates was written to prevent.
+      this.endMidWaveComic('shutdown')
       setRunActive(false)
       provideState(null)
       // BEFORE freeLevelArt, which is about to remove this skin's textures.
@@ -5727,6 +5766,16 @@ export class GameScene extends Phaser.Scene {
     // state worth restoring: nothing is on the field, nothing is in flight,
     // and the next wave has not started.
     this.saveProgress()
+    // THE COMIC BETWEEN TWO WAVES, and this is the only place it can start.
+    //
+    // `status.wave` has already been incremented, so the wave just cleared is
+    // `status.wave` and the one about to arm is `status.wave + 1`. Everything
+    // the requirement asks for is true by where this sits rather than by a
+    // check: the board is empty (`checkWaveOver` returned early otherwise),
+    // the run is not over (`runEnds` returned above), and the next wave has
+    // not begun -- `armReadyCountdown` has armed a countdown that a paused
+    // scene does not tick.
+    this.queueMidWaveComic(this.status.wave)
     if (cleared) {
       this.announce('WAVE CLEARED', COLOR.good)
     } else {
@@ -5738,12 +5787,105 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** A 3rd tower after wave 4 and a 4th after wave 8, drawn from the reserve. */
+  /**
+   * Opens the comic scheduled after `wave`, if there is one.
+   *
+   * THE CLOCK GENUINELY STOPS. `scene.pause()` takes this scene out of the
+   * update list entirely -- no `update`, no `time` events, no tweens -- so
+   * enemies do not move, towers do not fire, cooldowns do not tick and the
+   * ready countdown does not advance. The HUD is paused with it, so its START
+   * WAVE button cannot be pressed through the comic.
+   *
+   * `enterGate` is the other half and it is not decoration. The stuck guard
+   * recovers an UNOWNED pause after six seconds, which is less than it takes
+   * to read three panels; a claimed gate is left alone, exactly as the settings
+   * panel's is. CutsceneScene bumps `noteInputAccepted` on every tap for the
+   * same reason.
+   *
+   * THE RUN IS GIVEN BACK RATHER THAN RESTARTED. The comic is launched with
+   * `resume: ['Game', 'Hud']`, so its one exit resumes both and stops itself.
+   */
+  private queueMidWaveComic(wave: number): void {
+    if (midWavePanelsFor(this.level.id, wave).length === 0) return
+    this.comicDue = wave
+    this.openDueComic()
+  }
+
+  /**
+   * Opens the queued comic the moment the board allows it.
+   *
+   * Called from the wave boundary and then from `update` on every frame until
+   * it takes, which is how "if enemies are still on the board, it waits" is
+   * true rather than nearly true.
+   */
+  private openDueComic(): void {
+    const wave = this.comicDue
+    if (wave < 0) return
+    const panels = midWavePanelsFor(this.level.id, wave)
+    if (panels.length === 0) { this.comicDue = -1; return }
+    // Asked rather than assumed. Every clause is already true at the boundary
+    // this is first called from; saying so is what makes the waiting case
+    // work and what the requirement is written against.
+    if (!midWaveBoundaryOpen({
+      enemiesAlive: this.enemies.length,
+      phase: this.status.phase,
+      comicOpen: this.comicWave >= 0,
+    })) return
+    this.comicDue = -1
+    this.comicWave = wave
+    this.clearSelection()
+    enterGate('comic', { level: this.level.id, wave, panels: panels.length })
+    logEvent('cutscene', `${this.level.id} wave ${wave} comic: ${panels.length} panels`)
+    // Paused BEFORE the comic is launched, so there is no frame in which both
+    // are live and the board is drawing behind a half-built overlay.
+    this.scene.pause()
+    if (this.scene.isActive('Hud')) this.scene.pause('Hud')
+    this.scene.launch('Cutscene', {
+      levelId: this.level.id,
+      then: 'Game',
+      panels,
+      resume: ['Game', 'Hud'],
+    })
+  }
+
+  /**
+   * The comic is over, or the run went out from under it.
+   *
+   * Called from the RESUME event -- which the comic's own exit raises, and so
+   * does the stuck guard and the rotate gate, so every way the scene comes back
+   * lands here -- and from teardown, where the comic has to be stopped rather
+   * than waited for.
+   */
+  private endMidWaveComic(why: string): void {
+    // A comic that was due and never opened goes with it: the run it was
+    // waiting for is over.
+    if (why !== 'read') this.comicDue = -1
+    if (this.comicWave < 0) return
+    logEvent('cutscene', `${this.level.id} wave ${this.comicWave} comic ended (${why})`)
+    this.comicWave = -1
+    leaveGate('comic', { why })
+    // LEAVING, RESTARTING OR LOSING DURING ONE. The comic is a separate scene
+    // and nothing else would stop it, so a run abandoned mid-panel would leave
+    // a comic on the glass over the title screen. Its own SHUTDOWN frees the
+    // panel textures.
+    if (why !== 'read' && this.scene.isActive('Cutscene')) this.scene.stop('Cutscene')
+  }
+
+  /**
+   * One more tower after wave 4 and another after wave 8, drawn from the
+   * reserve.
+   *
+   * The index into the reserve is measured off the OPENING HAND's own length
+   * rather than off `towersAtStart`, because the hand is the drawn cards plus
+   * a slot per guaranteed tower. Off `towersAtStart` the first unlock would
+   * have re-granted a tower the run already had and the last entry of the
+   * reserve would never have been reached.
+   */
   private grantTowerUnlocks(): void {
     const run = runState()
     const target = unlockedTowerCount(DRAFT, this.status.wave)
     while (this.status.unlockedTowers.length < target) {
-      const next = run.reserveTowers[this.status.unlockedTowers.length - DRAFT.towersAtStart]
+      const next = run.reserveTowers[this.status.unlockedTowers.length - run.openingTowers.length]
       if (!next) break
       this.status.unlockedTowers.push(next)
       this.refreshMenuOptions()
@@ -5755,6 +5897,10 @@ export class GameScene extends Phaser.Scene {
    *  dialog to check what draws over it. */
   endRun(phase: 'won' | 'lost'): void {
     if (this.status.phase === 'won' || this.status.phase === 'lost') return
+    // A run cannot end UNDER a comic -- the board is empty at the boundary a
+    // comic opens on -- but it can end on the frame after one is dismissed, and
+    // the results dialog must not open behind a panel either way.
+    this.endMidWaveComic('run ended')
     this.status.phase = phase
     this.clearSelection()
     this.markerLayer.clear()
@@ -6080,7 +6226,17 @@ export class GameScene extends Phaser.Scene {
     // this one number, so holding the world still on impact is one flag rather
     // than a freeze threaded through every system — and the camera below is
     // deliberately outside it, so the shake still plays over the held frame.
-    const dt = this.hitPaused ? 0 : real * RULES.pacing.gameSpeed
+    //
+    // AND THE MID-WAVE COMIC, which is belt as well as braces. `scene.pause()`
+    // is what actually stops the clock and it stops this method being called
+    // at all; this covers the frame already in flight when the pause is asked
+    // for, and it is the rule a test can read without a canvas. See
+    // systems/MidWave.ts.
+    const dt = simDelta(real, {
+      hitPaused: this.hitPaused,
+      comicOpen: this.comicWave >= 0,
+      gameSpeed: RULES.pacing.gameSpeed,
+    })
 
     // The camera is gated here, every frame, from one question — rather than
     // by each overlay remembering to switch it off. Dialog remembered;
@@ -6117,6 +6273,11 @@ export class GameScene extends Phaser.Scene {
     this.bobVlaude(real)
 
     if (this.status.phase === 'won' || this.status.phase === 'lost') return
+
+    // A COMIC THAT IS WAITING FOR THE BOARD TO CLEAR. `comicDue` is -1 on
+    // every frame of every run that has no comic pending, so this is one
+    // comparison; when it is not, it opens the moment the last walker is gone.
+    if (this.comicDue >= 0) this.openDueComic()
 
     this.tickReadyCountdown(real)
     this.cooldowns.tick(dt)
