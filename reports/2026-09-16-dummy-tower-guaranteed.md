@@ -14,6 +14,12 @@ checked the tree containing all four.** Green on `changes`, `typecheck`, `test`,
 than skipping**, because the push touched `src/`. So the live site carries the
 guarantee. Read the job list, not the run's conclusion.
 
+[Run 417](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/35091887587)
+on the docs commit above it is green on `changes`, `typecheck` and `test` with
+**`deploy` SKIPPED**, which is the `changes` gate working as designed on a commit
+that touches only `reports/` — a documentation commit behaving correctly, not a
+failed deploy.
+
 **`main`'s tree was read back afterwards** and carries `guaranteedTowers:
 ["imaDummy"]` in `src/data/draft.json`, `guaranteedOpeners` and
 `openingTowerCount` in `src/systems/Draft.ts`, the `guaranteed` scenario in
