@@ -827,8 +827,13 @@ test('wave 1 has no clock, and does not start without the player', () => {
   const game = src('scenes/GameScene.ts')
   // ONE PLACE DECIDES IT. Everything else -- no auto-start, no bonus, and the
   // banner reading as a prompt -- falls out of the zero.
+  // THE ZERO IS LITERAL AND THE OTHER ARM IS NOT. `readySeconds` goes through
+  // the run's difficulty now -- 1x on normal and try-hard, half again on Lazy
+  // Dad Mode -- but wave 1's clock is a hard 0 on every difficulty, because a
+  // multiplied zero is still a zero and a level the player has never seen
+  // should not be hurried on any setting.
   assert.match(game,
-    /this\.status\.readyCountdown = this\.status\.wave === 0 \? 0 : RULES\.pacing\.readySeconds/,
+    /this\.status\.readyCountdown = this\.status\.wave === 0\s*\n?\s*\? 0\s*\n?\s*: waveInterval\(RULES\.pacing\.readySeconds, this\.status\.difficultyId\)/,
     'wave 1 is not given a zero clock')
 
   // And the zero cannot auto-start: the tick returns before it could fire.

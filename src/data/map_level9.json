@@ -309,16 +309,8 @@
           475.0
         ],
         [
-          832.0,
-          475.0
-        ],
-        [
-          848.0,
-          473.3
-        ],
-        [
-          858.0,
-          468.7
+          863.0,
+          474.0
         ]
       ],
       "merge": [
@@ -333,134 +325,158 @@
           "weight": 1
         }
       ],
-      "_waypoints": "THE REJOIN TO THE FLANK JUNCTION. Waypoint 0 IS the rejoin, to 0.00 px, which is what `atIndex: 0` on both arms means. Its LAST waypoint is the flank junction at (858.0, 468.7), where the lane SPLITS -- level 5's crossroads shape, and the arm a walker takes is settled from the number it was given at spawn, so nothing switches lane mid-route. 485 px."
+      "_waypoints": "THE REJOIN TO THE FLANK JUNCTION. Waypoint 0 IS the rejoin, to 0.00 px, which is what `atIndex: 0` on both arms means. Its LAST waypoint is the flank junction at (863, 474), where the lane SPLITS -- level 5's crossroads shape, and the arm a walker takes is settled from the number it was given at spawn, so nothing switches lane mid-route. 489 px."
     },
     {
       "id": "flank",
       "waypoints": [
         [
-          858.0,
-          468.7
+          863.0,
+          474.0
         ],
         [
-          914.5,
-          568.0
+          875.3,
+          499.0
         ],
         [
-          1002.0,
+          900.5,
+          543.0
+        ],
+        [
+          912.0,
+          557.0
+        ],
+        [
+          922.0,
+          564.4
+        ],
+        [
+          935.0,
           567.0
         ],
         [
-          1028.0,
-          562.8
+          1006.0,
+          567.0
         ],
         [
-          1044.0,
-          551.9
+          1022.0,
+          565.2
         ],
         [
-          1087.4,
-          508.0
+          1033.0,
+          560.9
+        ],
+        [
+          1043.0,
+          553.0
+        ],
+        [
+          1083.7,
+          511.0
+        ],
+        [
+          1090.9,
+          502.0
         ],
         [
           1096.3,
-          493.0
+          491.0
         ],
         [
-          1100.7,
-          472.0
+          1101.0,
+          462.0
         ],
         [
-          1103.0,
-          326.0
+          1101.4,
+          351.0
+        ],
+        [
+          1109.0,
+          330.0
         ]
       ],
       "merge": {
         "into": "hook",
-        "atIndex": 15
+        "atIndex": 14
       },
-      "_waypoints": "THE FLANK, round the bottom right. Waypoint 0 is the flank junction on the tail; waypoint 1 is the painted cap of the spur, and everything after it is the traced spur walked backwards to the door junction, where it merges into `hook` at waypoint 15 -- 109 px short of the door, so it inherits the door's own gate and fade rather than needing its own. 494 px against the 528 px of `hook` it stands in for: A SHORTCUT, by 34 px, which is 7% and nothing like the 61% the south arm saves over the north. It is a lateral road, not a cheap one."
+      "_waypoints": "THE FLANK, round the bottom right. Waypoint 0 is the flank junction on the tail, and every waypoint after it is a geodesic down the middle of PAINTED TRACE to the door junction, where it merges into `hook` at waypoint 14 -- 115 px short of the door, so it inherits the door's own gate and fade rather than needing its own. 479 px against the 536 px of `hook` it stands in for: A SHORTCUT, by 57 px, which is 7% and nothing like the 61% the south arm saves over the north. It is a lateral road, not a cheap one."
     },
     {
       "id": "hook",
       "waypoints": [
         [
-          858.0,
-          468.7
+          863.0,
+          474.0
         ],
         [
-          897.8,
-          429.0
+          874.5,
+          454.0
         ],
         [
-          905.2,
-          419.0
+          902.6,
+          423.0
         ],
         [
-          909.1,
-          409.0
+          910.2,
+          405.0
         ],
         [
           913.0,
           379.0
         ],
         [
-          913.0,
-          243.0
+          913.9,
+          231.0
         ],
         [
-          914.5,
-          227.0
+          915.8,
+          221.0
         ],
         [
-          916.9,
-          218.0
+          919.6,
+          213.0
         ],
         [
-          922.5,
-          209.0
+          938.0,
+          194.6
         ],
         [
-          934.0,
-          197.5
+          949.0,
+          191.1
         ],
         [
-          944.0,
-          191.9
+          971.0,
+          191.2
         ],
         [
-          975.0,
-          191.7
+          981.0,
+          193.3
         ],
         [
-          983.0,
-          194.2
+          989.0,
+          197.9
         ],
         [
-          991.0,
-          199.5
+          1081.8,
+          292.0
         ],
         [
-          1085.4,
-          296.0
-        ],
-        [
-          1103.0,
-          326.0
+          1109.0,
+          330.0
         ],
         [
           1177.0,
           329.0
         ]
       ],
-      "_waypoints": "THE FLANK JUNCTION TO THE DOOR, up the right-hand hook and over the top. The ONLY terminal on this map -- it is the lane with no merge, so it is the one that can leak and the one that gets the door badge. Its LAST waypoint is the door itself and is not extended off-plate, because the door is not a frame edge -- see `_exit`. 602 px."
+      "_waypoints": "THE FLANK JUNCTION TO THE DOOR, up the right-hand hook and over the top. The ONLY terminal on this map -- it is the lane with no merge, so it is the one that can leak and the one that gets the door badge. Its LAST waypoint is the door itself and is not extended off-plate, because the door is not a frame edge -- see `_exit`. 604 px."
     }
   ],
   "_lanes": "TWO ENTRANCES, ONE EXIT, AND ONE SPLIT. The plate paints a trace that splits just inside the mouth and rejoins at the bottom of the board, which is a diamond -- and `validateLanes` USED TO report a diamond as \"merges in a circle\", because its cycle check shared one visited set across sibling branches instead of keeping one per path. The runtime underneath was always fine; the validator was not, and the flank below is the diamond that finally made it worth fixing -- it is one per path now. The two arms are still modelled as TWO ENTRANCE LANES that share the painted mouth and merge into the tail, which is levels 3 and 4's shape, needs nothing from the engine, and puts exactly the same walkers on exactly the same paint. `south` declares `entrance` because nothing merges into it; see the note on LaneDef. Both are fed by the wave table by name. See reports/2026-09-13-level-9-geometry.md for the validator bug and its one-line fix, which is now applied. THE THIRD LANE IS THE FLANK, and it is a SPLIT rather than a second entrance: `tail` ends at the flank junction and names two continuations, so a walker picks its arm there from the number it was given at spawn. NEITHER `flank` NOR `hook` GETS A BADGE at its start -- both are fed into, and `markersFor` only draws a spawn badge on a lane nothing merges into. The badge set is unchanged: one mouth on the west edge and one door.",
   "exit": {
     "gateX": 1145.0,
     "vanishX": 1177.0,
-    "_note": "AN INTERIOR EXIT, and the first in the game. The leak needed nothing new -- `Enemy.leaked` is `laneDistance >= stopDistance` and has never looked at the frame -- but without these two the enemy would wink out at full opacity in the middle of the board, because the default stopDistance is the end of a lane that used to run off the edge. The fade runs over the last 32 px into the doorway. `Gateway.distanceAtX` takes the FIRST crossing of an x, so gateX has to be above every earlier x on the route: the tail reaches x=1085 at the top of the right-hand hook and the door is at x=1177, so 1145.0 sits between them with 60 px of margin. tools/build_level9_map.py asserts that rather than trusting it."
+    "_note": "AN INTERIOR EXIT, and the first in the game. The leak needed nothing new -- `Enemy.leaked` is `laneDistance >= stopDistance` and has never looked at the frame -- but without these two the enemy would wink out at full opacity in the middle of the board, because the default stopDistance is the end of a lane that used to run off the edge. The fade runs over the last 32 px into the doorway. `Gateway.distanceAtX` takes the FIRST crossing of an x, so gateX has to be above every earlier x on the route: the tail reaches x=1082 at the top of the right-hand hook and the door is at x=1177, so 1145.0 sits between them with 63 px of margin. tools/build_level9_map.py asserts that rather than trusting it."
   },
   "buildSpots": [
     [

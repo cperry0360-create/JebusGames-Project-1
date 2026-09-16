@@ -205,7 +205,6 @@ def main():
     south, m = snap(c['south'], fork, 'start', width, 'south'); snaps.append(('south start', m))
     south, m = snap(south, rejoin, 'end', width, 'south'); snaps.append(('south end', m))
     tail, m = snap(c['tail'], rejoin, 'start', width, 'tail'); snaps.append(('tail start', m))
-    tail, m = snap(tail, junction, 'end', width, 'tail'); snaps.append(('tail end', m))
     door, m = snap(c['door'], junction, 'start', width, 'door'); snaps.append(('door start', m))
     door, m = snap(door, door_terminal, 'end', width, 'door'); snaps.append(('door end', m))
 
@@ -213,69 +212,49 @@ def main():
     trunk_head = [entry] + stem            # gateway, the mouth, then the stem to the fork
     north_lane = trunk_head + north[1:]    # the fork is shared, so it is not repeated
     south_lane = trunk_head + south[1:]
-    whole_tail = tail + door[1:]           # rejoin -> door, before the flank cuts it
 
     assert north_lane[len(trunk_head) - 1] == south_lane[len(trunk_head) - 1] == \
         [float(fork[0]), float(fork[1])]
-    assert north_lane[-1] == south_lane[-1] == whole_tail[0] == [float(rejoin[0]), float(rejoin[1])]
-    assert whole_tail[-1] == [float(door_terminal[0]), float(door_terminal[1])]
+    assert north_lane[-1] == south_lane[-1] == tail[0] == [float(rejoin[0]), float(rejoin[1])]
 
     # ---------------------------------------------------------------- the flank
     #
-    # THE THIRD LANE, and the one road on this board that is painted and was
-    # walked by nothing. `tools/orphan_roads.py` puts it at 10.3% of level 9's
-    # painted trace with no lane within 60 px of it -- the largest orphan on any
-    # of the ten boards -- and the geometry file's `flank` block is where it
-    # comes from.
+    # THE THIRD LANE, and every metre of it is now traced. The plate paints a
+    # road round the bottom right that no lane walked -- 10.3% of level 9's
+    # painted trace by `tools/orphan_roads.py`, the largest orphan on any of
+    # the ten boards.
     #
-    # THE SPUR IS A STUB, NOT A LOOP. Its north end IS the door junction; its
-    # south end is a rounded cap on open substrate, 111.9 px from the tail
-    # centreline with 62.5 px of that over bare board. So the flank cannot be
-    # all paint, and this is the SECOND authored coordinate in this file after
-    # the gateway: one straight join from the tail to the cap.
-    #
-    # LEVEL 6 DID EXACTLY THIS AND IT IS THE HOUSE ANSWER. `map_level6.json`
-    # authors an 82.0 px join from (591, 393) to (592, 475) to reach a band the
-    # plate leaves separate, `tests/level6map.test.ts` pins it to the pixel, and
-    # its header records that Cory chose that over re-painting the plate. This
-    # join is 111.9 px of the same thing, and it threads the one clear corridor
-    # the substrate offers -- between chip 13's right edge at x=855 and the
-    # capacitor at x=903, touching neither.
-    #
-    # The cut point is DERIVED: the nearest point on the shipped tail polyline
-    # to the traced cap. Nothing about the flank's own shape is authored -- it
-    # is the traced spur, reversed.
-    dead_end = g['deadEnd']['terminal']
-    tail_run, hook_lane, join = split_at_nearest(whole_tail, dead_end)
-    moved = math.dist(join, g['flank']['join'])
-    # AN EIGHTH OF A ROAD WIDTH, for the same reason `snap` allows a quarter.
-    # The geometry file's join is the nearest point on the RAW geodesic and this
-    # one is the nearest point on the SIMPLIFIED polyline the map ships;
-    # `simplify` is allowed 1.2 px of deviation and the nearest-point then
-    # slides along the segment, so a few pixels apart is the tolerance working.
-    # Anything larger means the two are answering different questions.
-    assert moved <= width / 8, (
-        f'the join re-derived here is {moved:.2f} px from the geometry file\'s '
-        f'{g["flank"]["join"]}, more than an eighth of the {width} px trace; re-run '
-        'tools/trace_level9.py rather than shipping two answers')
+    # IT USED TO NEED AN AUTHORED JOIN AND DOES NOT ANY MORE. The spur was a
+    # STUB: its north end was the door junction and its south end a rounded cap
+    # on open substrate, 112 px from the trunk with 63 px of bare board between
+    # the kerbs, and this file bridged that with one straight segment the way
+    # `map_level6.json` bridges 82 px. `tools/paint_level9_flank.py` painted
+    # that corridor into the plate, `tools/trace_level9.py` re-derived the
+    # geometry from it, and the flank is now a geodesic down the middle of
+    # painted trace exactly like `north` and `south`. The gateway point off the
+    # west edge is once again the ONLY coordinate in this file that is not
+    # traced.
+    flank_junction = g['nodes']['flankJoin']
+    tail, m = snap(tail, flank_junction, 'end', width, 'tail'); snaps.append(('tail end', m))
+    hook, m = snap(c['hook'], flank_junction, 'start', width, 'hook'); snaps.append(('hook start', m))
+    hook, m = snap(hook, junction, 'end', width, 'hook'); snaps.append(('hook end', m))
+    flank, m = snap(c['flank'], flank_junction, 'start', width, 'flank')
+    snaps.append(('flank start', m))
+    flank, m = snap(flank, junction, 'end', width, 'flank'); snaps.append(('flank end', m))
 
-    spur, m = snap(c['spur'], junction, 'start', width, 'spur'); snaps.append(('spur start', m))
-    # NO SLICE HERE. Elsewhere in this file a lane is joined with `[1:]` because
-    # the two halves share their junction point -- `north[1:]` drops the fork the
-    # stem already ended on. The flank shares NOTHING with the join: the join is
-    # a point on the tail and `reversed(spur)[0]` is the painted cap, which is
-    # the flank's first real corner. Slicing it off cut the corner at the cap and
-    # took 23 px off the lane.
-    flank_lane = [join] + [list(p) for p in reversed(spur)]
+    hook_lane = hook + door[1:]
+    flank_lane = [list(p) for p in flank]
+    tail_run = [list(p) for p in tail]
+    assert tail_run[-1] == flank_lane[0] == hook_lane[0] == \
+        [float(flank_junction[0]), float(flank_junction[1])]
     assert flank_lane[-1] == [float(junction[0]), float(junction[1])]
-    # Where the flank comes back onto the trunk: the door junction's index in
-    # `hook`, found rather than counted.
     rejoin_index = next(i for i, p in enumerate(hook_lane)
                         if math.dist(p, junction) < 1e-6)
+    assert hook_lane[-1] == [float(door_terminal[0]), float(door_terminal[1])]
 
     # GATE_X HAS TO BE CROSSED ONCE, and once only, or the fade fires in the
     # middle of the board. Checked against the lane that actually reaches it,
-    # which is `hook` now that the tail is cut.
+    # which is `hook`.
     before_door = max(p[0] for p in hook_lane[:-2])
     assert before_door < GATE_X < door_terminal[0], (
         f'the hook reaches x={before_door:.1f} before the door approach and the door is at '
@@ -286,8 +265,6 @@ def main():
                       ('north', north_lane), ('south', south_lane)):
         assert max(p[0] for p in pts) < GATE_X, (
             f'lane {name} reaches x={max(p[0] for p in pts):.1f}, past GATE_X={GATE_X}')
-    assert abs(polyline_length(tail_run) + polyline_length(hook_lane)
-               - polyline_length(whole_tail)) < 0.01, 'the cut changed the tail\'s length'
 
     spots = [list(p) for p in g['pads']]
     chips = g['padChips']
@@ -372,7 +349,7 @@ def main():
                 '_waypoints': 'THE REJOIN TO THE FLANK JUNCTION. Waypoint 0 IS the rejoin, '
                               'to 0.00 px, which is what `atIndex: 0` on both arms means. '
                               'Its LAST waypoint is the flank junction at '
-                              f'({join[0]}, {join[1]}), where the lane SPLITS -- level 5\'s '
+                              f'({flank_junction[0]}, {flank_junction[1]}), where the lane SPLITS -- level 5\'s '
                               'crossroads shape, and the arm a walker takes is settled from '
                               'the number it was given at spawn, so nothing switches lane '
                               f'mid-route. {polyline_length(tail_run):.0f} px.',
@@ -382,9 +359,9 @@ def main():
                 'waypoints': flank_lane,
                 'merge': {'into': 'hook', 'atIndex': rejoin_index},
                 '_waypoints': 'THE FLANK, round the bottom right. Waypoint 0 is the flank '
-                              'junction on the tail; waypoint 1 is the painted cap of the '
-                              'spur, and everything after it is the traced spur walked '
-                              'backwards to the door junction, where it merges into `hook` '
+                              'junction on the tail, and every waypoint after it is a '
+                              'geodesic down the middle of PAINTED TRACE to the door '
+                              'junction, where it merges into `hook` '
                               f'at waypoint {rejoin_index} -- {polyline_length(hook_lane) - polyline_length(hook_lane[:rejoin_index]):.0f} '
                               'px short of the door, so it inherits the door\'s own gate '
                               'and fade rather than needing its own. '
@@ -506,8 +483,8 @@ def main():
     print(f'  route via north, flank {polyline_length(north_lane) + viaflank:8.2f} px')
     print(f'  route via south, trunk {polyline_length(south_lane) + trunk:8.2f} px')
     print(f'  route via south, flank {polyline_length(south_lane) + viaflank:8.2f} px')
-    print(f'  flank join {join}, {g["flank"]["joinGap"]} px gap, '
-          f'{g["flank"]["joinBare"]} px of it bare substrate')
+    print(f'  flank junction {flank_junction}, rejoin {junction}, '
+          f'{g["flank"]["joinBare"]} px of the flank off the paint')
     print(f'  gateway {entry}, door {hook_lane[-1]}, gateX {GATE_X} '
           f'(highest earlier x {before_door:.1f})')
     print('  node snaps: ' + ', '.join(f'{n} {d:.1f}px' for n, d in snaps))

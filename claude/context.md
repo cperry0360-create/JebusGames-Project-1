@@ -206,14 +206,40 @@ debug unlock if it goes in). Unanswered: does a failed run wipe progress?
 
 ## Difficulty modes
 
-**Lazy Dad Mode** (casual), **Yeah, I Game** (normal), **Try Hard** (hardcore). They
-change starting lives and starting peanuts and nothing else. `normal` is a literal
-no-op, proven twice: a test against `rules.json` and a 120-seed soak reproducing every
-published win rate seed for seed.
+**Lazy Dad Mode** (casual), **Yeah, I Game** (normal), **Try Hard** (hardcore).
 
-**Known limit:** neither lever touches a level whose failure mode is a boss DPS check.
-Level 2 was exactly that. If later levels share that shape, a casual-only enemy-HP
-scalar may need revisiting.
+**SEVEN KNOBS SINCE 2026-09-16, NOT TWO.** Starting lives and starting peanuts, plus
+kill income, wave interval, hero respawn, ability cooldown and a **uniform enemy
+health scalar that includes bosses**. All five of the new ones are **1.0 on `normal`
+AND on `try-hard`** -- try-hard's published behaviour is lives and purse only and it
+was never re-soaked for anything else. `Difficulty.ts` returns its input by an early
+return when a multiplier is exactly 1, so the no-op is exact rather than a rounding
+that lands on the same integer today.
+
+`normal` is a literal no-op, now proven three ways: a test against `rules.json`, a
+**480-seed re-soak of all ten levels reproducing every published integer**, and the
+`lazydad` harness scenario reading the six numbers off a live run.
+
+**Lazy Dad at 480 seeds:** 98.3, 96.5, 99.8, 99.0, 89.8, 94.6, 94.0, 95.8, 94.0,
+86.7 per cent for levels 1 to 10. Multipliers: lives 3.0, purse 1.5, kill income 1.1,
+wave interval 1.5, hero respawn 0.7, ability cooldown 0.85, enemy health 0.7.
+
+**THE KNOWN LIMIT IS RESOLVED, AND IT WAS BIGGER THAN IT LOOKED.** This section used
+to say neither lever touches a level whose failure mode is a boss DPS check. Measured
+on 480 seeds: **lives x4 and purse x3 with nothing else moves level 2 by 1.9 points
+and level 10 by 1.3.** Enemy health x0.8 alone moves the same two by 27.7 and 27.1.
+The health scalar is the only lever that touches that shape at all.
+
+**STILL NO ARMOUR, ENEMY DAMAGE OR ENEMY SPEED SCALAR, and there must not be.** Those
+three are what the original objection is actually about -- they change which TOWERS
+are viable rather than how hard a level is. `tests/difficulty.test.ts` asserts it
+against the data keys.
+
+**Levels 1, 2, 3 and 4 sit ABOVE the 85-95% target band on Lazy Dad Mode** and no
+global multiplier brings them in: levels 1 and 3 are 89.2% and 87.9% on `normal`, so
+an easier mode is at least that by construction. Not a defect; do not retune for it.
+
+See `reports/2026-09-16-lazy-dad-mode.md`.
 
 ## THE BOARD-SIZE PROBLEM (found 2026-09-07, convention settled since)
 
@@ -275,13 +301,25 @@ level 3 88%, level 4 62%, level 5 45%, level 6 44%, level 7 41%, level 8 38%,
 level 9 24%, level 10 41%**. `SOAK-REPORT.md` is the living record; read it rather
 than any number in this file.
 
-**LEVEL 9 MOVED ON 2026-09-16 AND IS THE ONE LEVEL OUT OF BAND.** It was 191/480
-(40%) and is 113/480 (23.5%) since the flank lane landed: a third road round the
-bottom right that the plate had always painted and nothing walked. The share of
-each wave that takes it is `flankShare` in `waves.level9.json`, a quarter on every
-wave, and **0.10 reads 152/480 = 32%** if the level should go back toward where it
-was tuned. Nothing else moved — the other nine are identical integers on the same
-480 seeds. See `reports/2026-09-16-level-9-flank-route.md`.
+**LEVEL 9 MOVED TWICE AND IS BACK IN BAND.** The flank lane landed on 2026-09-16 —
+a third road round the bottom right that the plate had always painted and nothing
+walked — and took the level from 191/480 (40%) to 113/480 (23.5%). It was retuned
+on 2026-09-17 and reads **192/480 (40.0%)**, the middle of the band, on two levers:
+`flankShare` 0.25 -> **0.10** in `waves.level9.json` (161/480 on its own) and
+PERPLEXED's health 8100 -> **7650** in `enemies.json` (the rest). Wave composition
+was not touched and no armour moved. The other nine levels are identical integers
+on the same 480 seeds through both passes. See
+`reports/2026-09-16-level-9-flank-route.md` and
+`reports/2026-09-17-level-9-retune.md`.
+
+**AND THE FLANK IS PAINTED ROAD NOW.** `tools/paint_level9_flank.py` painted the
+corridor between the trunk and the spur's old cap into
+`art-source/level9/map_level9.png`, the plate was re-encoded at q95, and the whole
+level 9 pipeline was re-derived from it — so the flank's waypoints come off the
+paint like every other metre of the level and `tools/build_level9_map.py` is back
+to ONE authored coordinate, the gateway point every level has. The flank is 0.20%
+off-paint against 12.63% before, the best of the five lanes.
+`python3 tools/orphan_roads.py --lanes` is the measurement.
 
 **Two of those moved on 2026-09-15 and both are recorded in
 `reports/2026-09-15-blockers.md`:**
@@ -564,6 +602,26 @@ Dummy card read `0 damage - Short reach - Infinity/sec` (`1 / fireInterval` with
 `fireInterval: 0`) and `Picks off one target at a time.` -- the opposite of what the
 tower does. It reads `2 lads - 90 hp - Short reach` / `Blocks the road. Cannot attack.`
 now, derived from `soldierCount`.
+**`tools/harness/run.sh difficulty` IS RED ON `main` AND WAS BEFORE 2026-09-16.** Two
+faults, both the same stale expectation: the scenario's section 3 looks for the
+difficulty readout on the HUD, and the HUD **deliberately stopped showing it** --
+`difficulty.test.ts` asserts `HudScene.ts` contains no `difficultyName` and says why.
+The second fault (`a mid-run change to the save reached the run`) is a false positive
+falling out of the first: no readout is found, so the `!readout` branch fires.
+Confirmed pre-existing by stashing and re-running on `65c160b`. **The fix is a paired
+edit** -- section 3 should assert the HUD does NOT name the mode and drive the
+capture-once rule through `G.status.difficultyId` -- because `difficulty.test.ts`
+asserts the scenario's current text in three places.
+
+**THE SOAK'S LIFESTEAL HAS NEVER FIRED.** `Sim.ts` calls
+`night.healFor(e as never, dealt)`; `NightRules.Vampire` wants a `maxHealth` field
+that `SimEnemy` does not have, so `lifestealHeal` computes
+`Math.min(damage * fraction, undefined - health)` -> `NaN`, and `healed > 0` rejects
+it in silence. Level 5's vampires have drunk nothing in every published soak. **Same
+failure shape as the regen bug `Sim.ts` already carries a long comment about.** NOT
+fixed on 2026-09-16 because fixing it moves level 5's published win rate, which is a
+retune rather than a difficulty change.
+
 
 **THE HUD-VERSUS-PADS QUESTION IS CLOSED, on the third attempt, and this is the
 paragraph to read before anyone opens a fourth.** Three passes at one problem -- the
@@ -644,15 +702,16 @@ each of the first two passes broke what the one before it fixed.
   of 86: so they are not about lanes either. The three arcs and the Vlaude screen
   appear to be counted twice somewhere between the map and the scene graph. Nobody
   has looked.
-- **Level 9's flank crosses 60 px of unpainted board**, because the painted spur is
-  a stub rather than a loop: its south end is a cap on open substrate 112 px from
-  the tail. The map authors one straight join, which is what `map_level6.json`
-  already does over 82 px and what `tests/level6map.test.ts` records Cory choosing
-  over repainting a plate. **If the answer here should be different**, paint ~63 px
-  of trace into `art-source/level9/map_level9.png` between chip 13's right edge
-  (x=855) and the capacitor (x=903), re-encode and re-run `tools/trace_level9.py`;
-  the waypoints are derived from the paint and would follow. The picture to judge it
-  on is `sh tools/harness/run.sh level9` → `level9-4c-join-*.png`.
+- **`tools/png.py` writes Paeth-filtered PNGs at 8.6 MB where the art tool managed
+  7.7 MB** on level 9's plate. It emitted no filtering at all until 2026-09-17,
+  which made the same re-encode 14.9 MB. Adaptive per-row filter selection would
+  close most of the remaining gap and costs four passes of pure Python; not worth
+  it until something else needs to re-encode a plate.
+- **The soak's `MINOR_LANE_SHARE` cliff at 0.20.** A lane carrying under a fifth
+  of a level's bodies stays out of the scripted player's pad ranking, so
+  `flankShare` 0.19 and 0.20 are two different BOARDS rather than two
+  difficulties — 29% and 23% on the same tree. Level 9 ships at 0.10, well clear
+  of it, but a later pass that walks the share upward will hit it.
 
 **These are renumbered, twice now.** Seven of the original ten closed between 07 and
 13 September; what is left keeps its wording and gets a new number, so a citation of

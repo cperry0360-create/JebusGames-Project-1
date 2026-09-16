@@ -18,8 +18,9 @@ import draftData from '../data/draft.json'
 
 import { loadLevel, levelRules, nextLevelId, type Level } from '../systems/Levels.ts'
 import {
-  DEFAULT_DIFFICULTY_ID, difficultyName, resolveDifficultyId,
-  startingLives, startingPeanuts,
+  abilityCooldown, DEFAULT_DIFFICULTY_ID, difficultyName, enemyHealth,
+  heroRespawnSeconds, peanutIncome, resolveDifficultyId, startingLives,
+  startingPeanuts, waveInterval,
 } from '../systems/Difficulty.ts'
 import { bladeDamage, bladesFrom } from '../systems/Blades.ts'
 import type { BladesDef } from '../systems/Blades.ts'
@@ -632,6 +633,21 @@ export class GameScene extends Phaser.Scene {
   private hero!: Hero
 
   /**
+   * THIS RUN'S ENEMY HEALTH, AND THE ONE HOOK `Enemy` READS OFF THE SCENE.
+   *
+   * Public because `Enemy` is the caller and it is not this class. It is a
+   * FUNCTION rather than a multiplier so the rounding and the floor stay in
+   * `Difficulty.ts` with the rest of them -- an entity doing its own
+   * arithmetic on a difficulty number is how the game and the soak start
+   * disagreeing.
+   *
+   * The identity until `create` replaces it, which matters for a scene that
+   * is constructed once and started many times: an enemy that somehow existed
+   * before the difficulty was read gets the number its def says.
+   */
+  enemyHealthFor: (base: number) => number = (base) => base
+
+  /**
    * The level being played: its map, its wave table, its plate.
    *
    * Set on the first line of `create` from the run state, so every method
@@ -1165,6 +1181,24 @@ export class GameScene extends Phaser.Scene {
     // setting is fixed for the length of a level by the simple fact that
     // nothing asks again.
     this.status.difficultyId = resolveDifficultyId(savedDifficulty())
+    // WHAT EVERY ENEMY THIS RUN SPAWNS IS WORTH IN HEALTH, published on the
+    // scene because `Enemy` fixes its `maxHealth` in its constructor and there
+    // are seven places that call it -- the wave spawner, four summon paths and
+    // two of Vlaude's powers. Passing it through seven option bags is seven
+    // chances to add an eighth site and forget. It is read off the scene
+    // instead, once, in the constructor: one place decides, no call site can
+    // miss it, and it dies with the run rather than living in a module.
+    //
+    // 1 on normal and on try-hard, exactly -- `enemyHealth` returns its input
+    // untouched at a multiplier of 1, so nothing here can move a published
+    // number.
+    this.enemyHealthFor = (base: number): number => enemyHealth(base, this.status.difficultyId)
+    // AND THE HERO'S CLOCK. Set here rather than passed to the constructor
+    // because the hero is built before the difficulty is read -- he is on the
+    // board for the loadout's sake -- and `reviveSeconds` is not consulted
+    // until something knocks him down.
+    this.hero.reviveSecondsFor = (base: number): number =>
+      heroRespawnSeconds(base, this.status.difficultyId)
 
     // A floor rather than a constant: the opening instruction is to build a
     // tower, so the purse has to cover the cheapest one this run actually
@@ -1228,13 +1262,19 @@ export class GameScene extends Phaser.Scene {
 
     this.armReadyCountdown()
 
-    for (const id of this.status.abilities) this.cooldowns.register(id, ABILITIES[id].cooldown)
-    this.cooldowns.register(RULES.serverNuke.abilityId, ABILITIES[RULES.serverNuke.abilityId].cooldown)
+    // EVERY COOLDOWN GOES THROUGH THE DIFFICULTY, drafted, dropped and the
+    // hero's own. 1x on normal and try-hard; Lazy Dad Mode gets them back
+    // sooner, because pressing a button is the part of this game a young
+    // player can already do and waiting 40 seconds to do it again is not.
+    const cd = (seconds: number): number => abilityCooldown(seconds, this.status.difficultyId)
+    for (const id of this.status.abilities) this.cooldowns.register(id, cd(ABILITIES[id].cooldown))
+    this.cooldowns.register(RULES.serverNuke.abilityId,
+      cd(ABILITIES[RULES.serverNuke.abilityId].cooldown))
     // ONE PER ABILITY THIS HERO HAS, walked rather than named. It registered
     // exactly two, `SLOT1` and `SLOT2`, which is the assumption Courtland's
     // third ability breaks: an unregistered slot is never ready and the button
     // is dead. The hero's own numbers, not constants in here.
-    heroDef.abilities.forEach((a, i) => this.cooldowns.register(heroSlotId(i), a.cooldown))
+    heroDef.abilities.forEach((a, i) => this.cooldowns.register(heroSlotId(i), cd(a.cooldown)))
 
     // THE WAY OUT OF EVERY MODE THE BOARD CAN BE IN.
     //
@@ -5602,7 +5642,18 @@ export class GameScene extends Phaser.Scene {
    * currency of a countdown. It needs longer than any number.
    */
   private armReadyCountdown(): void {
-    this.status.readyCountdown = this.status.wave === 0 ? 0 : RULES.pacing.readySeconds
+    // THROUGH THE DIFFICULTY, and wave 1 still gets no clock at all. Lazy Dad
+    // Mode stretches the gap by half again: the thing that beats a young
+    // player is almost never a wave that was too strong, it is a wave that
+    // arrived while they were still deciding where to put a tower.
+    //
+    // The early-start bonus rides along on purpose. It is whatever is left on
+    // the clock when the banner is pressed, so a longer clock is a bigger
+    // prize for a player who is confident enough to skip it -- and nothing at
+    // all for the player this mode is for, who will let it run out.
+    this.status.readyCountdown = this.status.wave === 0
+      ? 0
+      : waveInterval(RULES.pacing.readySeconds, this.status.difficultyId)
   }
 
   startWave(): void {
@@ -7137,14 +7188,20 @@ export class GameScene extends Phaser.Scene {
       // a soak run and off a crash report, and "death: The Glitch Lich King"
       // at wave 7 followed by the same name at wave 13 is the one reading that
       // would make the log look wrong when the game was right.
+      // THE KILL BOUNTY, THROUGH THE DIFFICULTY, and logged as what was
+      // actually paid rather than as what the def says. A log that printed the
+      // unscaled number would make a Lazy Dad run look like an economy bug.
+      // The wave-clear bounty is deliberately NOT scaled: it is paid for
+      // surviving rather than for shooting.
+      const paid = peanutIncome(enemy.def.peanutReward, this.status.difficultyId)
       if (enemy.def.retreatsWhenDefeated) {
-        logEvent('retreat', `${enemy.def.name} withdraws +${enemy.def.peanutReward}`)
+        logEvent('retreat', `${enemy.def.name} withdraws +${paid}`)
         this.status.alert = `${enemy.def.name} withdraws. That is not the last of him.`
       } else {
-        logEvent('death', `${enemy.def.name} +${enemy.def.peanutReward}`)
+        logEvent('death', `${enemy.def.name} +${paid}`)
       }
       this.status.kills++
-      this.earn(enemy.def.peanutReward)
+      this.earn(paid)
       this.rollRareDrop(enemy)
       this.splitOnDeath(enemy)
       // AFTER the split, so a thing that breaks apart AND explodes puts its
@@ -7541,7 +7598,7 @@ export class GameScene extends Phaser.Scene {
     if (result === 'transform') this.announceTransform()
     if (result === 'down') {
       this.status.alert =
-        `${this.hero.def.name} is down. Back on the spot in ${realSeconds(this.hero.def.reviveSeconds)}s.`
+        `${this.hero.def.name} is down. Back on the spot in ${realSeconds(this.hero.reviveSeconds)}s.`
       this.cameras.main.shake(240, 0.006)
     }
   }

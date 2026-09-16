@@ -25,12 +25,16 @@ checker that assumed them would have to be wrong too:
   clipped by the frame. Both are located here and the second is required to be
   OFF the trace, so that a future re-trace that quietly joined them would fail.
 
-  THE TRACE FORKS AND REJOINS. The brief says one path, no forks. The band
-  encloses exactly one region, which is exactly one cycle, and the run stops if
-  that count changes in either direction.
+  THE TRACE FORKS AND REJOINS, TWICE. The brief says one path, no forks. The
+  band encloses exactly TWO regions -- the diamond the two arms make inside the
+  mouth, and the loop the hook and the flank make round the bottom right -- and
+  the run stops if that count changes in either direction.
 
-  THERE IS A DEAD-END SPUR, an interior fifth terminal. It is required to be
-  there and to be a dead end.
+  THE SECOND LOOP USED TO BE A DEAD-END SPUR. This file required that cap to be
+  there and to be a dead end. tools/paint_level9_flank.py painted the corridor
+  between it and the trunk, so what is required now is the opposite: both ends
+  of the flank are JUNCTIONS, with trace most of the way round them, and the
+  old cap at (914, 568) is required NOT to be a dead end any more.
 
   THE EXIT IS AN INTERIOR DOOR, which the brief does say. The terminal is
   re-derived from the paint rather than read from the file.
@@ -358,7 +362,8 @@ def write_overlay(w, h, px, lines, pads, path):
                     out[i], out[i + 1], out[i + 2] = rgb
 
     colours = {'stem': (255, 255, 255), 'north': (255, 230, 40), 'south': (255, 90, 200),
-               'tail': (120, 255, 120), 'door': (255, 80, 80), 'spur': (150, 150, 150)}
+               'tail': (120, 255, 120), 'door': (255, 80, 80),
+               'hook': (255, 160, 0), 'flank': (150, 150, 255)}
     for name, line in lines.items():
         for x, y in line:
             dot(x, y, colours.get(name, (255, 0, 255)), 1)
@@ -415,10 +420,10 @@ def main():
     inner = [p for p in enclosed(w, h, band) if len(p) > 2000]
     print(f'  {len(inner)} enclosed region(s) over 2000 px: '
           + (', '.join(f'{len(p)} px' for p in inner) or 'none'))
-    if len(inner) != 1:
-        problems.append(f'the trace encloses {len(inner)} region(s) over 2000 px, not the one '
-                        f'the geometry file is built around; the fork and the rejoin have '
-                        f'moved and every length below is measuring a different shape')
+    if len(inner) != 2:
+        problems.append(f'the trace encloses {len(inner)} region(s) over 2000 px, not the two '
+                        f'the geometry file is built around; the junctions have moved and '
+                        f'every length below is measuring a different shape')
 
     # ---------------------------------------------------------- the openings
     print('\n--- where the trace meets the frame ---')
@@ -514,30 +519,74 @@ def main():
             print('  - ' + pr)
         raise SystemExit(1)
 
-    # -------------------------------------------------------- the dead end
-    print('\n--- the dead-end spur ---')
-    spur = [tuple(p) for p in g['centreline']['spur']]
-    cap = tuple(g['deadEnd']['terminal'])
-    X, Y = cap
-    print(f'  the geometry file puts the cap at {cap}')
-    if not band[Y * w + X]:
-        problems.append(f'the dead-end cap {cap} is not on painted trace')
-    else:
-        # A cap has paint on one side of it and nothing on the other. Measured
-        # as the share of a ring around it that is trace: a cap reads about a
-        # third, a point mid-run reads about two thirds.
+    # ------------------------------------------------------ the flank loop
+    #
+    # THE TEST IS INVERTED FROM WHAT IT USED TO BE. This block required the
+    # spur's south end to be a CAP -- paint on one side and nothing on the
+    # other, measured as the share of a 34 px ring around it that is trace,
+    # about a third for a cap against about two thirds mid-run. The corridor is
+    # painted now, so the same measurement is made at the same place and the
+    # answer has to have flipped: the old cap is mid-run, and both ends of the
+    # flank are junctions.
+    print('\n--- the flank loop ---')
+    OLD_CAP = (914, 568)
+    F = tuple(g['nodes']['flankJoin'])
+
+    def snapish(pt):
+        """The nearest painted pixel to `pt`, so a geodesic can start there."""
+        X, Y = int(round(pt[0])), int(round(pt[1]))
+        if 0 <= X < w and 0 <= Y < h and band[Y * w + X]:
+            return (X, Y)
+        for rad in range(1, 40):
+            for dy in range(-rad, rad + 1):
+                for dx in range(-rad, rad + 1):
+                    nx, ny = X + dx, Y + dy
+                    if 0 <= nx < w and 0 <= ny < h and band[ny * w + nx]:
+                        return (nx, ny)
+        raise SystemExit(f'nothing painted within 40 px of {pt}')
+
+    def ring_share(pt, r=34):
+        X, Y = pt
         ring, on = 0, 0
         for a in range(0, 360, 2):
             t = math.radians(a)
-            px_, py_ = int(round(X + 34 * math.cos(t))), int(round(Y + 34 * math.sin(t)))
+            px_, py_ = int(round(X + r * math.cos(t))), int(round(Y + r * math.sin(t)))
             if 0 <= px_ < w and 0 <= py_ < h:
                 ring += 1
                 on += band[py_ * w + px_]
-        print(f'  {on / ring:.0%} of a 34 px ring round it is trace '
-              f'(a cap reads well under half, a point mid-run about two thirds)')
-        if on / ring > 0.45:
-            problems.append(f'the point at {cap} has trace {on / ring:.0%} of the way round '
-                            f'it; that is not a dead end')
+        return on / ring if ring else 0.0
+
+    # THE RING SHARE IS THE WRONG INSTRUMENT FOR THIS ONE. A cap reads about a
+    # third and a point mid-run about two thirds, and the old cap is now a
+    # CORNER -- the flank turns there -- which reads 45%, sitting exactly on any
+    # threshold you would pick. So the claim is tested directly instead: is
+    # there painted trace BETWEEN the trunk and that point? A geodesic inside
+    # the band answers it with three orders of magnitude of daylight. Before the
+    # corridor was painted the only way from the flank junction to the cap was
+    # the long way round the board, about 1,600 px against 112 as the crow
+    # flies; with it painted the walk IS the crow's flight.
+    share = ring_share(OLD_CAP)
+    walk = polyline_length(geodesic(w, h, band, deep, maxdeep, snapish(F), snapish(OLD_CAP)))
+    crow = math.dist(F, OLD_CAP)
+    print(f'  the spur\'s old cap at {OLD_CAP}: {share:.0%} of a 34 px ring round it is trace, '
+          f'and the band walks {walk:.0f} px from the flank junction to it against '
+          f'{crow:.0f} px as the crow flies')
+    if walk > crow * 1.6:
+        problems.append(f'the band walks {walk:.0f} px from the flank junction {F} to the old '
+                        f'cap {OLD_CAP}, against {crow:.0f} px direct; the corridor between '
+                        f'them is not painted')
+
+    for label, key in (('the flank junction', 'flankJoin'), ('the door junction', 'doorJunction')):
+        pt = tuple(g['nodes'][key])
+        X, Y = pt
+        if not (0 <= X < w and 0 <= Y < h and band[Y * w + X]):
+            problems.append(f'{label} {pt} is not on painted trace')
+            continue
+        sh = ring_share(pt)
+        print(f'  {label} {pt}: {sh:.0%} of a 34 px ring round it is trace')
+        if sh <= 0.45:
+            problems.append(f'{label} {pt} has trace {sh:.0%} of the way round it; '
+                            f'that is not a junction')
 
     # ----------------------------------------------- the lines, re-traced
     print('\n--- the centrelines, re-traced off the plate ---')
@@ -581,11 +630,18 @@ def main():
         via = snap(midpoint(arm))
         walks[arm] = (geodesic(w, h, band, deep, maxdeep, snap(A), via)
                       + geodesic(w, h, band, deep, maxdeep, via, snap(B))[1:])
-    walks['tail'] = geodesic(w, h, band, deep, maxdeep, snap(B), snap(C))
+    walks['tail'] = geodesic(w, h, band, deep, maxdeep, snap(B), snap(F))
+    # THE HOOK AND THE FLANK RUN BETWEEN THE SAME TWO NODES, so each is walked
+    # THROUGH ITS OWN MIDPOINT -- the north and south arms' trick, and needed
+    # for the same reason: a plain geodesic from F to C would take whichever is
+    # shorter and re-trace the flank twice.
+    for arm in ('hook', 'flank'):
+        via = snap(midpoint(arm))
+        walks[arm] = (geodesic(w, h, band, deep, maxdeep, snap(F), via)
+                      + geodesic(w, h, band, deep, maxdeep, via, snap(C))[1:])
     walks['door'] = geodesic(w, h, band, deep, maxdeep, snap(C), snap(declared))
-    walks['spur'] = geodesic(w, h, band, deep, maxdeep, snap(C), snap(cap))
 
-    for name in ('stem', 'north', 'south', 'tail', 'door', 'spur'):
+    for name in ('stem', 'north', 'south', 'tail', 'hook', 'flank', 'door'):
         traced = polyline_length(walks[name])
         want = g['lengths'][name]
         off = abs(traced - want) / want if want else 0
@@ -605,7 +661,7 @@ def main():
 
     # -------------------------------------------- where the shipped line runs
     print('\n--- where the shipped line actually runs ---')
-    for name in ('stem', 'north', 'south', 'tail', 'door', 'spur'):
+    for name in ('stem', 'north', 'south', 'tail', 'hook', 'flank', 'door'):
         line = [tuple(p) for p in g['centreline'][name]]
         off, shallow, worst = 0, 0, (1e9, None)
         for x, y in line:
@@ -641,11 +697,11 @@ def main():
     # -------------------------------------------------------------- the width
     print('\n--- trace width ---')
     per = {}
-    for name in ('stem', 'north', 'south', 'tail'):
+    for name in ('stem', 'north', 'south', 'tail', 'hook'):
         per[name] = median(widths(w, h, band, walks[name]))
         print(f'  {name:6s} median {per[name]:5.1f}')
     allw = sorted(sum((widths(w, h, band, walks[n])
-                       for n in ('stem', 'north', 'south', 'tail')), []))
+                       for n in ('stem', 'north', 'south', 'tail', 'hook')), []))
     derived = median(allw)
     want = g['traceWidth']
     off = abs(derived - want) / want
@@ -704,7 +760,7 @@ def main():
         boxes.append((min(xs), min(ys), max(xs), max(ys)))
 
     route = [[tuple(p) for p in g['centreline'][n]]
-             for n in ('stem', 'north', 'south', 'tail', 'door')]
+             for n in ('stem', 'north', 'south', 'tail', 'hook', 'door')]
     print(f'\n  {"pad":>3} {"x":>7} {"y":>6} {"on a chip?":>26} {"to route":>9} '
           f'{"nearest pad":>12}')
     for n, (cx, cy) in enumerate(pads, 1):

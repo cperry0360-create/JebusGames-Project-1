@@ -62,6 +62,31 @@ export class Hero extends Phaser.GameObjects.Container {
   down = false
   /** Seconds until he walks back on, or 0 whenever he is up. */
   reviveIn = 0
+  /**
+   * WHAT THE RUN'S DIFFICULTY DOES TO HIS TIME OFF THE BOARD.
+   *
+   * The identity until GameScene replaces it, which is why every test, every
+   * harness scenario and every mode but Lazy Dad gets `def.reviveSeconds`
+   * unchanged. Set on the scene rather than passed to the constructor because
+   * the hero is built before the run has read its difficulty, and this is not
+   * consulted until something knocks him down.
+   *
+   * A function rather than a multiplier, for the reason `enemyHealthFor` is
+   * one: the arithmetic stays in Difficulty.ts, where the soak reads it too.
+   */
+  reviveSecondsFor: (base: number) => number = (base) => base
+
+  /**
+   * How long he is off the board, AFTER the difficulty.
+   *
+   * Everything that shows the number or counts it down reads this rather than
+   * `def.reviveSeconds` -- including the scene's "back on the spot in Ns"
+   * toast, which would otherwise promise a Lazy Dad player twice the wait they
+   * actually have.
+   */
+  get reviveSeconds(): number {
+    return this.reviveSecondsFor(this.def.reviveSeconds)
+  }
   /** Seconds left of the window where breaking off a fight costs extra
    *  damage. The scene draws a marker while this is running. */
   retreatVulnerableFor = 0
@@ -725,7 +750,7 @@ export class Hero extends Phaser.GameObjects.Container {
    */
   private goDown(): void {
     this.down = true
-    this.reviveIn = this.def.reviveSeconds
+    this.reviveIn = this.reviveSeconds
     this.invulnerableFor = 0
     this.blocking = 0
     // THE SWING DIES WITH HIM.
