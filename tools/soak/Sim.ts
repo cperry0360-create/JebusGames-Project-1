@@ -351,6 +351,22 @@ export interface SoakResult {
     /** The first tower the run put down, or null if it built none. The
      *  first-gun rule is a statement about exactly this. */
     firstBuilt: string | null
+    /**
+     * PEANUTS SUNK INTO TOWERS THAT DO NOT SHOOT, against the total sunk into
+     * towers at all. `SimTower.value` counts cost plus every tier and
+     * specialisation bought, so this is the whole spend and not just the
+     * build price.
+     *
+     * IT EXISTS BECAUSE THE PAD CAP ALONE DID NOT EXPLAIN THE NUMBERS. The cap
+     * roughly halves the zero-damage PADS -- level 6 goes from 5.87 of 18 to
+     * 2.94 -- and yet only a quarter of the board-DPS gap closed. The
+     * upgrade loop below `spend` walks EVERY tower and tiers it, a zero-damage
+     * tower included, so peanuts keep leaving the board through a tower that
+     * will never fire. This is the number that says how many. See
+     * reports/2026-09-17-soak-builder.md; it is reported, not fixed.
+     */
+    zeroDamageSpend: number
+    towerSpend: number
   }
 }
 
@@ -2670,6 +2686,8 @@ export function simulate(
       zeroDamageCap,
       zeroDamageBuilt: zeroDamageOnBoard(),
       firstBuilt,
+      zeroDamageSpend: towers.reduce((n, t) => n + (dealsDamage(t.id) ? 0 : t.value), 0),
+      towerSpend: towers.reduce((n, t) => n + t.value, 0),
     },
   }
 }
