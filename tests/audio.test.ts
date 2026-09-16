@@ -175,7 +175,12 @@ test('a paused run is not reported as a frozen one', () => {
   const game = src('scenes/GameScene.ts')
   assert.match(game, /Events\.PAUSE, \(\) => setRunActive\(false\)/,
     'pausing the scene leaves the watchdog armed')
-  assert.match(game, /Events\.RESUME, \(\) => setRunActive\(true\)/,
+  // A BLOCK RATHER THAN A ONE-LINER SINCE 2026-09-16: the mid-wave comic ends
+  // through the same RESUME event, because every way this scene is handed back
+  // -- the comic's exit, the stuck guard's recovery, the rotate gate lowering,
+  // the tab coming forward -- raises it, and a callback into the comic would
+  // only cover the first. The property held here is unchanged.
+  assert.match(game, /Events\.RESUME, \(\) => \{[\s\S]{0,600}setRunActive\(true\)/,
     'resuming the scene leaves the watchdog disarmed')
 })
 

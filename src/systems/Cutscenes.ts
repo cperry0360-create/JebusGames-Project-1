@@ -1,4 +1,4 @@
-// Which comic plays before which level.
+// Which comic plays before a level, after one, and between two of its waves.
 //
 // Phaser-free on purpose, like the other systems modules: which panels a level
 // has, and whether the data names a level that exists, are both decidable
@@ -16,14 +16,25 @@
 // THE SCENE IS THIN AND THIS IS WHERE THE RULES ARE. CutsceneScene draws panels
 // and counts taps; everything about WHEN a cutscene plays, what order the
 // panels come in and when the seen flag is written lives here.
+//
+// THREE MAPS, NOT ONE WITH FLAGS ON IT. `levels` is what plays BEFORE a level,
+// `outros` is what plays when one is WON, and `midWave` is what plays BETWEEN
+// two of its waves. Every reader of `levels` -- CutsceneScene's `init`,
+// `shouldPlay`, the loadout hand-over -- means exactly the first of those, and
+// the second and third are not things a list can also say. The cost of a third
+// map is one lookup; the cost of overloading the first is every one of those
+// readers having to ask which kind it got.
 
 import cutsceneData from '../data/cutscenes.json' with { type: 'json' }
 import artData from '../data/art.json' with { type: 'json' }
-import { LEVELS } from './Levels.ts'
+import { LEVELS, loadLevel } from './Levels.ts'
 
 const DATA = cutsceneData as unknown as {
   levels: Record<string, string[]>
   outros?: Record<string, string[]>
+  midWave?: Record<string, Record<string, string[]>>
+  _unplaced?: Record<string, { source: string; was: string; shows: string }>
+  _retired?: { files: string[] }
 }
 const ASSET_ROOT = (artData as unknown as { assetRoot: string }).assetRoot
 
@@ -48,6 +59,51 @@ export function panelsFor(levelId: string): string[] {
  */
 export function outroPanelsFor(levelId: string): string[] {
   return DATA.outros?.[levelId] ?? []
+}
+
+/**
+ * The comic that plays between wave `wave` and the one after it, in order.
+ *
+ * `wave` is ONE-BASED -- the number the HUD shows -- so `midWavePanelsFor
+ * ('level4', 6)` is the comic that plays once wave 6 is cleared and before
+ * wave 7 spawns. Empty for every other boundary, which is almost all of them.
+ *
+ * A THIRD MAP RATHER THAN A SHAPE ON THE FIRST TWO, for the reason `outros`
+ * is a second one: these answer different questions and a list cannot. A
+ * level's opening, its ending and its interruptions are three independent
+ * facts, and every reader of `levels` means "before this level starts".
+ */
+export function midWavePanelsFor(levelId: string, wave: number): string[] {
+  return DATA.midWave?.[levelId]?.[String(wave)] ?? []
+}
+
+/** Every wave of `levelId` that has a comic after it, ascending. */
+export function midWaveWaves(levelId: string): number[] {
+  return Object.keys(DATA.midWave?.[levelId] ?? {})
+    .map(Number).filter((n) => Number.isInteger(n)).sort((a, b) => a - b)
+}
+
+/** Every level that interrupts itself with a comic at all. */
+export function levelsWithMidWaveCutscenes(): string[] {
+  return Object.keys(DATA.midWave ?? {})
+}
+
+/**
+ * The comics that exist and play nowhere, by name.
+ *
+ * NAMED SO AN UNREFERENCED-ASSET SWEEP CANNOT EAT THEM. `eda11dc` took
+ * fourteen tower WebPs out of public/ for being unreferenced while the branch
+ * that needed them was open, and the merge silently did not put them back --
+ * CLAUDE.md carries the write-up as a standing fact. A file named here is
+ * referenced, and a test checks each one is still on disk.
+ */
+export function unplacedComics(): Array<{ id: string; source: string; was: string; shows: string }> {
+  return Object.entries(DATA._unplaced ?? {}).map(([id, v]) => ({ id, ...v }))
+}
+
+/** The retired panels, kept out of the deploy but not deleted. */
+export function retiredPanels(): string[] {
+  return DATA._retired?.files ?? []
 }
 
 /** Every level that has a cutscene at all. */
@@ -107,6 +163,12 @@ export function cutsceneProblems(): string[] {
   const entries = [
     ...Object.entries(DATA.levels).map((e) => [...e, 'cutscene'] as const),
     ...Object.entries(DATA.outros ?? {}).map((e) => [...e, 'outro'] as const),
+    // AND THE MID-WAVE SCHEDULE, flattened to the same shape. Every way a
+    // wave-keyed list can be wrong is a way `levels` can be wrong, plus one
+    // more -- the wave number itself -- which is checked separately below.
+    ...Object.entries(DATA.midWave ?? {}).flatMap(([id, byWave]) =>
+      Object.entries(byWave ?? {}).map(([w, panels]) =>
+        [id, panels, `wave ${w} cutscene`] as const)),
   ]
   for (const [id, panels, kind] of entries) {
     if (!known.has(id)) {
@@ -126,6 +188,37 @@ export function cutsceneProblems(): string[] {
     }
     if (new Set(panels).size !== panels.length) {
       problems.push(`${id}'s ${kind} shows the same panel twice`)
+    }
+  }
+
+  // THE WAVE NUMBER, which is the one thing only this map can get wrong.
+  //
+  // A comic keyed to a wave the level does not have never plays and never says
+  // so -- the exact silence every other rule here exists to break. And the LAST
+  // wave is the same failure wearing a valid number: clearing it ends the run,
+  // so `checkWaveOver` takes the run-ends branch and the boundary this comic
+  // was scheduled on is never reached.
+  for (const [id, byWave] of Object.entries(DATA.midWave ?? {})) {
+    if (!known.has(id)) continue
+    let waves = 0
+    try {
+      waves = loadLevel(id).waveTable.waves.length
+    } catch {
+      // A level whose map or wave table will not load is another test's
+      // problem; it is not evidence about this file.
+      continue
+    }
+    for (const key of Object.keys(byWave ?? {})) {
+      const n = Number(key)
+      if (!Number.isInteger(n) || n < 1) {
+        problems.push(`${id} schedules a cutscene after wave "${key}", which is not a wave number`)
+      } else if (n > waves) {
+        problems.push(`${id} schedules a cutscene after wave ${n}, and it only has ${waves} waves`)
+      } else if (n === waves) {
+        problems.push(
+          `${id} schedules a cutscene after wave ${n}, its LAST wave -- clearing it ends the run, `
+          + 'so that boundary never comes')
+      }
     }
   }
   return problems

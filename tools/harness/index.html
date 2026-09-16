@@ -67,7 +67,7 @@ const SCENARIO_NAMES = [
   'labelprobe', 'lanemarkers', 'lazydad', 'lettering', 'level6', 'level7', 'level8', 'level8retopo', 'level9', 'levelart', 'levels',
   'listenerguard', 'loadout', 'locked',
   'loopthrow', 'looptrack', 'lost', 'mapedge', 'maproute', 'markers',
-  'meteor', 'mix', 'modal', 'moes', 'music', 'muzzle', 'nightfall',
+  'meteor', 'midwave', 'mix', 'modal', 'moes', 'music', 'muzzle', 'nightfall',
   'nodefirst', 'noderings', 'notch', 'nuke', 'nukeseq', 'nullframe',
   'opening', 'padart', 'padhud', 'padpan',
   'pausedismiss', 'pauseresume', 'phone', 'pixels', 'plate', 'playrun',
@@ -113,7 +113,7 @@ const ASSERTS_NOTHING = new Set([
  */
 const USES_EXPECT = new Set([
   'typegame', 'rotationburst', 'level7', 'level8', 'level9', 'boardinput', 'lanemarkers', 'level8retopo',
-  'vlaude', 'titlecard', 'counters', 'everyloadout', 'padpan',
+  'vlaude', 'titlecard', 'counters', 'everyloadout', 'padpan', 'midwave',
 ])
 
 /** How many checks this run actually EVALUATED, pass or fail. */
@@ -3726,6 +3726,319 @@ async function run() {
     note('RESULT ' + (faults === 0
       ? 'normal is unchanged and Lazy Dad Mode moves all five knobs, at ' + VP.w + 'x' + VP.h
       : '*** ' + faults + ' faults ***'))
+    return
+  }
+
+  if (scenario === 'midwave') {
+    /*
+     * THE COMIC THAT PLAYS BETWEEN TWO WAVES, IN A RENDERED FRAME.
+     *
+     * tests/midwave.test.ts proves the RULE -- `simDelta` returns zero and the
+     * boundary check refuses a board with anything on it -- and it cannot
+     * prove any of this, because no test in this repository can see Phaser.
+     * `scene.pause()` is what actually stops the clock, and this is the only
+     * thing that can watch it happen.
+     *
+     * Six questions, in the order they would go wrong:
+     *   1. does it fire on the right boundary at all
+     *   2. does the clock genuinely stop -- read either side, over a stretch
+     *      LONGER than the 15g ready countdown, so "the next wave never came"
+     *      is a measurement
+     *   3. does the run come back exactly as it was
+     *   4. are the panel textures handed back
+     *   5. can level 9 play all of its comics without getting stuck
+     *   6. does level 10 stay out of it
+     * and then teardown, because a run abandoned mid-panel is the case that
+     * leaves a comic on the glass over the title screen.
+     */
+    const RSm = await import('./js/systems/RunState.js')
+    const IGm = await import('./js/systems/InputGates.js')
+    const CSm = await import('./js/systems/Cutscenes.js')
+    const RULESm = (await import('./js/data/rules.json', { with: { type: 'json' } })).default
+
+    /** Starts a run on `id` and waits for the board. */
+    const runLevel = async (id, seed) => {
+      for (const k of ['Title', 'WorldMap', 'Loadout', 'Cutscene', 'Game', 'Hud']) game.scene.stop(k)
+      await sleep(250)
+      RSm.setRunState({
+        heroId: 'cory', levelId: id, seed, abilities: ['molotov', 'glacier'],
+        openingTowers: ['withholding', 'writeoff'], reserveTowers: [], resumeFrom: null,
+      })
+      game.scene.start('Game')
+      const ok = await until(() => running('Game') && scene('Game').hero, 25000)
+      await until(() => running('Hud'), 12000)
+      await sleep(500)
+      return ok ? scene('Game') : null
+    }
+
+    /**
+     * Runs wave `n` (one-based) to its end and returns at the boundary.
+     *
+     * A REAL WAVE, not a forced flag. `startWave` is the shipping entry point
+     * and `checkWaveOver` is reached the only way it ever is -- by the wave's
+     * own spawner finishing and the board emptying. What the harness does that
+     * a player would not is kill faster, which is the one thing that has to be
+     * short for this to be runnable at all.
+     */
+    const playWave = async (g, n, budgetMs = 120000) => {
+      g.status.wave = n - 1
+      g.status.lives = 99
+      g.startWave()
+      const until_ = Date.now() + budgetMs
+      while (Date.now() < until_) {
+        for (const e of g.enemies) {
+          try { g.damageEnemy(e, 1e9, true, 0, false) } catch { /* already gone */ }
+        }
+        if (g.status.phase !== 'wave') break
+        await sleep(60)
+      }
+      return g.status.phase
+    }
+
+    /** Everything the simulation owns, as one string. */
+    const clockOf = (g) => [
+      'sceneClock=' + Math.round(g.time.now),
+      'countdown=' + g.status.readyCountdown.toFixed(4),
+      'wave=' + g.status.wave,
+      'phase=' + g.status.phase,
+      'peanuts=' + g.status.peanuts,
+      'enemies=' + g.enemies.map((e) => Math.round(e.x) + ',' + Math.round(e.y)).join('|'),
+      'cooldowns=' + (g.cooldowns && g.cooldowns.remaining
+        ? [...g.cooldowns.remaining.entries()].map(([k, v]) => k + ':' + v.toFixed(4)).join(',')
+        : 'n/a'),
+      'heroHp=' + Math.round(g.status.heroHealth),
+    ].join('  ')
+
+    /* ---- 0: THE TWO REDRAWN OPENINGS ---- */
+    //
+    // THE DAD. The panels level 1 and 2 shipped with drew him BEARDED AND IN
+    // ARMOUR at Courjahan's Tavern; the current design is clean-shaven in
+    // modern clothes. Six panels were retired for it, and the only way to
+    // check the right ones are on screen is to look at them.
+    note('=== the redrawn level 1 and level 2 openings ===')
+    for (const id of ['level1', 'level2']) {
+      for (const k of ['Title', 'WorldMap', 'Loadout', 'Cutscene', 'Game', 'Hud']) game.scene.stop(k)
+      await sleep(200)
+      game.scene.start('Cutscene', { levelId: id, then: 'Game' })
+      const up = await until(() => running('Cutscene') && scene('Cutscene').image, 12000)
+      await sleep(900)
+      if (!expect(up, id + "'s opening did not build")) continue
+      const c0 = scene('Cutscene')
+      const want = CSm.panelsFor(id)
+      const tex = c0.image.texture.key
+      const srcImg = game.textures.get(tex).getSourceImage()
+      const at = c0.placement
+      note('  ' + id + ': ' + want.length + ' panels, first is ' + tex
+        + ' source ' + srcImg.width + 'x' + srcImg.height
+        + ' drawn ' + Math.round(at.panel.width) + 'x' + Math.round(at.panel.height)
+        + ' at ' + Math.round(at.panel.x) + ',' + Math.round(at.panel.y)
+        + '  band=' + at.bandEdge)
+      expect(want.length === 3, id + ' opens with ' + want.length + ' panels, not 3')
+      expect(tex.includes(id + '_intro'),
+        id + ' opens with ' + tex + ', which is not the redrawn page')
+      // CONTAIN, NEVER COVER, whatever shape the panel is. A cut panel is not
+      // 16:9 any more, so this is the check that a square one letterboxes.
+      const aspect = srcImg.width / srcImg.height
+      expect(Math.abs(at.panel.width / at.panel.height - aspect) < 0.01,
+        id + ' distorts its panel: source ' + aspect.toFixed(3)
+        + ' drawn ' + (at.panel.width / at.panel.height).toFixed(3))
+      expect(at.panel.x >= -0.5 && at.panel.y >= -0.5
+        && at.panel.x + at.panel.width <= VP.w + 0.5
+        && at.panel.y + at.panel.height <= VP.h + 0.5,
+      id + "'s panel runs off the screen")
+      // AND THE SOURCE IS BIGGER THAN THE DRAW, which is hard rule 7 applied
+      // to a comic: no zoom, so the multiplier is the device ratio alone.
+      const need = at.panel.height * RES.deviceScale()
+      note('    source ' + srcImg.height + 'px tall against ' + Math.round(need)
+        + ' physical (' + Math.round(at.panel.height) + ' CSS x dpr '
+        + RES.deviceScale() + ')  = ' + (srcImg.height / need).toFixed(2) + 'x')
+      await shot('midwave-0-' + id + '-opening-' + VP.w + 'x' + VP.h)
+    }
+
+    /* ---- 1: LEVEL 4, WAVE 6 -> THE GLITCH KING'S INTRODUCTION ---- */
+    note('=== level 4: the comic after wave 6, before glitchLich on wave 7 ===')
+    let g = await runLevel('level4', 7)
+    if (!g) { expect(false, 'level 4 did not start'); note('RESULT no run'); return }
+    expect(CSm.midWavePanelsFor('level4', 6).length === 3,
+      'level 4 wave 6 schedules ' + CSm.midWavePanelsFor('level4', 6).length + ' panels, not 3')
+
+    // Wave 5 first, so the boundary BEFORE the comic's one is seen to pass
+    // without a comic. A feature that fired on every boundary would look
+    // identical to this one if only the scheduled boundary were checked.
+    const five = await playWave(g, 5)
+    await sleep(400)
+    expect(five === 'ready', 'wave 5 did not finish (phase ' + five + ')')
+    expect(!running('Cutscene'), 'a comic fired on wave 5, which schedules none')
+    expect(!game.scene.isPaused('Game'), 'the run was paused after an unscheduled boundary')
+    note('after wave 5: comic=' + running('Cutscene') + ' paused=' + game.scene.isPaused('Game'))
+
+    const six = await playWave(g, 6)
+    const opened = await until(() => running('Cutscene'), 8000)
+    await sleep(700)
+    expect(six === 'ready', 'wave 6 did not finish (phase ' + six + ')')
+    expect(opened, 'no comic opened after wave 6')
+    expect(game.scene.isPaused('Game'), 'the run is still running under the comic')
+    expect(game.scene.isPaused('Hud'), 'the HUD is still live under the comic')
+    expect(IGm.openGates().includes('comic'),
+      'the comic pause is unowned; gates = ' + JSON.stringify(IGm.openGates()))
+    note('gates: ' + IGm.gateSummary())
+    const cs = scene('Cutscene')
+    note('comic: ' + (cs.panels || []).length + ' panels, board has '
+      + g.enemies.length + ' enemies, wave reads ' + (g.status.wave + 1))
+    expect(g.enemies.length === 0, 'the comic opened over a board with enemies on it')
+    // AND IT IS ACTUALLY ON TOP. Phaser renders in scene-list order and
+    // `Cutscene` is declared BEFORE `Game` and `Hud`, so without
+    // `bringToTop` the paused board and the whole HUD draw over the panel --
+    // which is what the first run of this scenario photographed while every
+    // number above it passed.
+    const order = game.scene.scenes.map((sc) => sc.scene.key)
+    note('scene order: ' + order.join(' > '))
+    expect(order.indexOf('Cutscene') > order.indexOf('Game')
+      && order.indexOf('Cutscene') > order.indexOf('Hud'),
+    'the comic renders UNDER the paused board: ' + order.join(' > '))
+    await shot('midwave-1-level4-panel1-' + VP.w + 'x' + VP.h)
+
+    /* ---- 2: THE CLOCK, READ EITHER SIDE ---- */
+    const before = clockOf(g)
+    const wallBefore = performance.now()
+    note('clock before: ' + before)
+    // LONGER THAN THE READY COUNTDOWN. `readySeconds` is 15 game seconds,
+    // which is 10.7 real ones, so a run whose clock was merely SLOWED rather
+    // than stopped would have auto-started the next wave inside this wait.
+    await sleep(14000)
+    const after = clockOf(g)
+    const wallAfter = performance.now()
+    note('clock after:  ' + after)
+    note('real seconds elapsed: ' + ((wallAfter - wallBefore) / 1000).toFixed(1)
+      + '  (ready countdown is ' + RULESm.pacing.readySeconds + 'g = '
+      + (RULESm.pacing.readySeconds / RULESm.pacing.gameSpeed).toFixed(1) + 's real)')
+    expect(after === before, 'THE CLOCK MOVED under the comic:\n      ' + before + '\n      ' + after)
+    expect(g.status.phase === 'ready', 'the next wave started behind the comic')
+    expect(wallAfter - wallBefore > 12000, 'the wait was too short to prove anything')
+
+    /* ---- 3: THE RUN COMES BACK ---- */
+    // Through the screen, the way a player advances a panel.
+    for (let i = 0; i < 3; i++) {
+      await click(VP.w / 2, VP.h / 2)
+      await sleep(500)
+      if (i === 0) await shot('midwave-2-level4-panel2-' + VP.w + 'x' + VP.h)
+      if (!running('Cutscene')) break
+    }
+    const back = await until(() => !game.scene.isPaused('Game'), 8000)
+    await sleep(600)
+    expect(back, 'the run was never handed back')
+    expect(!running('Cutscene'), 'the comic is still up after the last panel')
+    expect(!game.scene.isPaused('Hud'), 'the HUD was left paused')
+    expect(!IGm.openGates().includes('comic'), 'the comic gate was never given back')
+    expect(g.status.wave === 6, 'the run came back on wave ' + (g.status.wave + 1) + ', not 7')
+    expect(g.status.lives === 99, 'the run was rebuilt rather than resumed')
+    const moved = await until(() => g.status.readyCountdown < Number(
+      before.match(/countdown=([\d.]+)/)[1]) - 0.5, 6000)
+    expect(moved, 'the clock did not restart when the comic closed')
+    note('after the comic: countdown=' + g.status.readyCountdown.toFixed(2)
+      + ' wave=' + (g.status.wave + 1) + ' lives=' + g.status.lives)
+    await shot('midwave-3-level4-resumed-' + VP.w + 'x' + VP.h)
+
+    /* ---- 4: THE TEXTURES ---- */
+    const held = Object.keys(game.textures.list).filter((k) => k.startsWith('cutscene:'))
+    expect(held.length === 0,
+      'the comic left ' + held.length + ' panel textures resident: ' + held.join(' '))
+    note('panel textures still resident: ' + (held.join(' ') || 'none'))
+
+    /* ---- 5: LEVEL 9 PLAYS ALL OF ITS COMICS ---- */
+    note('=== level 9: four mid-wave comics in one run ===')
+    g = await runLevel('level9', 11)
+    if (!g) { expect(false, 'level 9 did not start'); note('RESULT level 9 did not start'); return }
+    const want9 = CSm.midWaveWaves('level9')
+    note('level 9 schedules comics after waves ' + want9.join(', '))
+    let played = 0
+    for (const w of want9) {
+      const phase = await playWave(g, w, 180000)
+      const up = await until(() => running('Cutscene'), 8000)
+      await sleep(600)
+      if (!expect(up, 'level 9 wave ' + w + ' did not open its comic (phase ' + phase + ')')) continue
+      played++
+      const panels = (scene('Cutscene').panels || []).length
+      note('  wave ' + w + ': ' + panels + ' panels, paused=' + game.scene.isPaused('Game'))
+      if (played === 1) await shot('midwave-4-level9-wave' + w + '-' + VP.w + 'x' + VP.h)
+      // Out through SKIP, which is the control the requirement names.
+      scene('Cutscene').skip()
+      const gone = await until(() => !game.scene.isPaused('Game'), 8000)
+      await sleep(400)
+      expect(gone, 'level 9 wave ' + w + ' never handed the run back -- THE LEVEL IS STUCK')
+      expect(!running('Cutscene'), 'level 9 wave ' + w + ' left the comic up after SKIP')
+    }
+    expect(played === want9.length,
+      'level 9 played ' + played + ' of its ' + want9.length + ' comics')
+    // AND THE RUN IS STILL PLAYABLE AFTERWARDS, which is the whole "without
+    // getting stuck" claim: the last comic is after wave 15 and wave 16 is the
+    // boss, so this drives the boundary the level ends on.
+    const last = await playWave(g, 16, 240000)
+    note('level 9 after its last comic: phase=' + last + ' wave=' + (g.status.wave + 1)
+      + ' of ' + g.status.waveCount)
+    expect(last === 'won' || last === 'ready' || last === 'lost',
+      'level 9 hung on its final wave (phase ' + last + ')')
+    const held9 = Object.keys(game.textures.list).filter((k) => k.startsWith('cutscene:'))
+    expect(held9.length === 0, 'level 9 left ' + held9.length + ' panel textures resident')
+
+    /* ---- 6: LEVEL 10 IS UNTOUCHED ---- */
+    note('=== level 10: no comic, and none on the two scripted boundaries ===')
+    expect(CSm.midWaveWaves('level10').length === 0,
+      'level 10 has a mid-wave comic, which would land on a Vlaude telegraph')
+    g = await runLevel('level10', 3)
+    if (g) {
+      // WAVE 6 AND WAVE 12 ARE THE ONES THAT MATTER. The form swap is armed
+      // for wave 7 and the float for wave 13, so those two boundaries are
+      // where a comic would sit on top of a telegraph.
+      for (const w of [6, 12]) {
+        const phase = await playWave(g, w, 180000)
+        await sleep(600)
+        expect(!running('Cutscene'),
+          'a comic fired on level 10 after wave ' + w + ', over a Vlaude phase change')
+        note('  level 10 after wave ' + w + ': phase=' + phase
+          + ' vlaudePhase=' + g.vlaudePhase + ' floating=' + g.vlaudeFloating
+          + ' comic=' + running('Cutscene'))
+      }
+      await shot('midwave-5-level10-' + VP.w + 'x' + VP.h)
+    } else expect(false, 'level 10 did not start')
+
+    /* ---- 7: LEAVING MID-PANEL ---- */
+    note('=== abandoning a run with a comic on the glass ===')
+    g = await runLevel('level4', 7)
+    if (g) {
+      await playWave(g, 6)
+      const up = await until(() => running('Cutscene'), 8000)
+      await sleep(500)
+      expect(up, 'the comic did not open for the teardown check')
+      // THROUGH GameScene'S OWN toTitle, which is the real MAIN MENU path.
+      //
+      // WRITTEN AS `game.scene.start('Title')` FIRST, AND THAT IS WORTH THE
+      // PARAGRAPH. The scene MANAGER's `start` does not stop the scene that
+      // was running, so GameScene stayed PAUSED underneath a live Title with
+      // the comic on top of it -- and this check duly reported a comic on the
+      // glass, an unreleased gate and two resident textures. Every one of
+      // those was the harness: a paused GameScene under a running Title is a
+      // state the game has no way to produce, because every exit from a run
+      // goes through the SCENE's own `scene.start`, which stops it and raises
+      // the shutdown that tears the comic down. Establish that the thing being
+      // measured can move, and then measure it.
+      g.toTitle()
+      await until(() => running('Title'), 10000)
+      await sleep(900)
+      expect(!running('Cutscene'),
+        'the comic is still on the glass over the title screen')
+      expect(!IGm.openGates().includes('comic'),
+        'the comic gate outlived the run; gates = ' + JSON.stringify(IGm.openGates()))
+      const heldT = Object.keys(game.textures.list).filter((k) => k.startsWith('cutscene:'))
+      expect(heldT.length === 0, 'leaving mid-panel left ' + heldT.length + ' textures resident')
+      note('after leaving: comic=' + running('Cutscene') + ' gates=' + IGm.gateSummary()
+        + ' panel textures=' + (heldT.join(' ') || 'none'))
+      await shot('midwave-6-left-mid-panel-' + VP.w + 'x' + VP.h)
+    } else expect(false, 'the teardown run did not start')
+
+    note('RESULT ' + (ASSERT_FAILS === 0
+      ? ASSERTIONS + ' checks, all passed at ' + VP.w + 'x' + VP.h
+      : '*** ' + ASSERT_FAILS + ' of ' + ASSERTIONS + ' checks failed ***'))
     return
   }
 

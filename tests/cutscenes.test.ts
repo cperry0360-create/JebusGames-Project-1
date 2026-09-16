@@ -1,6 +1,6 @@
 import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 
 /** A localStorage stand-in, installed before Save.ts is imported. */
 const store = new Map<string, string>()
@@ -12,8 +12,9 @@ const store = new Map<string, string>()
 }
 
 const {
-  cutsceneProblems, levelsWithCutscenes,
-  panelKey, panelUrl, panelsFor, shouldPlay,
+  cutsceneProblems, levelsWithCutscenes, levelsWithMidWaveCutscenes,
+  midWavePanelsFor, midWaveWaves, panelKey, panelUrl, panelsFor,
+  retiredPanels, shouldPlay, unplacedComics,
 } = await import('../src/systems/Cutscenes.ts')
 const { DEFAULT_SAVE, loadSave, writeSave } = await import('../src/systems/Save.ts')
 
@@ -44,23 +45,27 @@ beforeEach(() => { store.clear() })
 
 test('cutscenes.json names levels that exist, and only those', () => {
   assert.deepEqual(cutsceneProblems(), [])
-  // LEVEL 9 IS THE THIRD, and it plays ONE panel rather than three: HAT-GTT's
-  // introduction, which is the whole comic that exists for it. The closing
-  // comic is deliberately NOT here -- this file is pre-level only, and that
-  // panel is the scene ending at the level 10 gate, so it is level 10's
-  // opening and lands the day level 10 gets a row. See cutscenes.json's
-  // `_level9`.
-  assert.deepEqual(levelsWithCutscenes().sort(), ['level1', 'level2', 'level9'])
+  // FOUR OPENINGS. Level 3 joined them on 2026-09-16 -- Vlaude on the
+  // television eliminating everybody's positions, which is the villain's
+  // introduction -- and this list used to be the assertion that it had none.
+  assert.deepEqual(levelsWithCutscenes().sort(),
+    ['level1', 'level2', 'level3', 'level9'])
   assert.equal(panelsFor('level1').length, 3)
   assert.equal(panelsFor('level2').length, 3)
+  assert.equal(panelsFor('level3').length, 3)
+  // LEVEL 9 PLAYS ONE PANEL, and it is the last uncut strip left under
+  // `levels`: HAT-GTT's introduction, three sub-panels across inside one
+  // image. See cutscenes.json's `_levels` for why it is also wired as level
+  // 9's wave 3 comic, and what the one-line fix is.
   assert.equal(panelsFor('level9').length, 1)
 })
 
 test('a level with no entry simply has no cutscene', () => {
-  // Level 3 is the case, and it is the DEFAULT rather than an omission: a
-  // level says it has a comic by having one.
-  assert.deepEqual(panelsFor('level3'), [])
-  assert.equal(shouldPlay('level3'), false)
+  // LEVEL 5 IS THE CASE NOW. It was level 3 until level 3 got an opening on
+  // 2026-09-16; the property being held is unchanged and is the DEFAULT rather
+  // than an omission: a level says it has a comic by having one.
+  assert.deepEqual(panelsFor('level5'), [])
+  assert.equal(shouldPlay('level5'), false)
   assert.deepEqual(panelsFor('level-that-does-not-exist'), [])
   assert.equal(shouldPlay('level-that-does-not-exist'), false)
 
@@ -68,18 +73,66 @@ test('a level with no entry simply has no cutscene', () => {
   // starts normally every time, and nothing anywhere can turn that into a
   // comic.
   writeSave({ ...DEFAULT_SAVE, runsCleared: 9 })
-  for (let run = 0; run < 5; run++) assert.equal(shouldPlay('level3'), false)
+  for (let run = 0; run < 5; run++) assert.equal(shouldPlay('level5'), false)
 })
 
-test('every panel file named actually exists, at the size the layout assumes', () => {
+test('every panel file named anywhere in cutscenes.json is on disk', () => {
+  /*
+   * THE BLUNT QUESTION, WITH NO EXEMPTION LIST, asked of all five maps.
+   *
+   * Comic panels are deliberately NOT in art.json -- naming one there fails
+   * tests/manifest.test.ts twice over, and art.json's own `_level10` note says
+   * why -- so `tests/assets.test.ts` never sees them and this is the only
+   * place a panel with no file is caught. It covers the two things that can
+   * go wrong in opposite directions: a name with no file (a 404 at the moment
+   * the player taps BEGIN) and a file nothing names (the eda11dc sweep).
+   */
+  const named: Array<[string, string]> = []
   for (const [id, panels] of Object.entries(CUTSCENES.levels) as [string, string[]][]) {
-    for (const p of panels) {
-      const url = new URL(`../public/assets/${p}`, import.meta.url)
-      assert.doesNotThrow(() => readFileSync(url), `${id} names ${p}, which is not in public/`)
+    for (const p of panels) named.push([`${id} opening`, p])
+  }
+  for (const [id, panels] of Object.entries(CUTSCENES.outros ?? {}) as [string, string[]][]) {
+    for (const p of panels) named.push([`${id} outro`, p])
+  }
+  for (const [id, byWave] of Object.entries(CUTSCENES.midWave ?? {}) as
+    [string, Record<string, string[]>][]) {
+    for (const [w, panels] of Object.entries(byWave)) {
+      for (const p of panels) named.push([`${id} after wave ${w}`, p])
     }
   }
+  for (const [where, p] of named) {
+    const url = new URL(`../public/assets/${p}`, import.meta.url)
+    assert.doesNotThrow(() => readFileSync(url), `${where} names ${p}, which is not in public/`)
+  }
+
+  // AND THE FILES THAT ARE NOT IN THE DEPLOY. The unplaced comics and the
+  // retired ones live in art-source/ -- out of the build, in git -- and both
+  // lists exist so an unreferenced-asset sweep can see that something wants
+  // them. A list that pointed at nothing would be worse than no list.
+  for (const c of unplacedComics()) {
+    assert.doesNotThrow(() => readFileSync(new URL(`../${c.source}`, import.meta.url)),
+      `_unplaced names ${c.source} (was ${c.was}), which is not on disk`)
+    assert.ok(c.shows.length > 20, `${c.id} has no description, so nobody can place it`)
+  }
+  assert.equal(unplacedComics().length, 3)
+  for (const p of retiredPanels()) {
+    assert.doesNotThrow(() => readFileSync(new URL(`../${p}`, import.meta.url)),
+      `_retired names ${p}, which is not on disk`)
+    assert.match(p, /^art-source\/cutscenes\/retired\//, 'a retired panel is back in the deploy')
+  }
+  assert.equal(retiredPanels().length, 6)
+
+  // AND NOTHING COMIC-RELATED IS LOOSE IN THE REPOSITORY ROOT. Six files were,
+  // next to README.md, until 2026-09-16.
+  const root = readdirSync(new URL('../', import.meta.url))
+  assert.deepEqual(root.filter((n) => /^comic|^cutscene/i.test(n)), [],
+    'a comic is loose in the repository root again')
+
   // 1672x941 is 16:9 to within a pixel, which is what the contain-fit assumes
-  // when it says a portrait phone gets full width and vertical chrome.
+  // when it says a portrait phone gets full width and vertical chrome. The
+  // sliced panels are NOT that shape and are not meant to be -- the layout
+  // reads each panel's source size off its texture -- so this holds only for
+  // the four uncut strips still wired.
   assert.ok(Math.abs(1672 / 941 - 16 / 9) < 0.002)
 })
 
@@ -163,7 +216,7 @@ test('skipping still advances into the level, and so does reading to the end', (
   // `this.nextData` is what carries the NEXT hop's request -- level 10 goes
   // card -> comic -> game and its win goes comic -> credits -> wherever the
   // button was headed -- so the exit starts the next scene WITH it.
-  assert.match(scene, /private handOver\([\s\S]{0,400}this\.scene\.start\(this\.next, this\.nextData\)/,
+  assert.match(scene, /private handOver\([\s\S]{0,1400}this\.scene\.start\(this\.next, this\.nextData\)/,
     'handOver does not start the next scene')
   // And tap-to-advance is still wired.
   assert.match(scene, /advance\(/, 'nothing advances the comic any more')

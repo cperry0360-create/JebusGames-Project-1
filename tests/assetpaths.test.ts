@@ -25,7 +25,30 @@ const json = (p: string) => JSON.parse(read(p))
  * grows exemptions.
  */
 
-const ROOTS = ['public/', 'public/assets/']
+/**
+ * Where a path in `src/` can legitimately resolve.
+ *
+ * `art-source/` IS A THIRD ROOT RATHER THAN AN EXEMPTION, and the difference
+ * matters because this file's own note says a check with an exemption list is
+ * a check that grows exemptions. It is in the repository and out of the
+ * deploy, which is exactly what it is for -- and cutscenes.json now names
+ * files there on purpose: the three unplaced comics and the six retired
+ * panels, listed so an unreferenced-asset sweep can see that something wants
+ * them. `eda11dc` is why that list exists; CLAUDE.md carries the write-up.
+ *
+ * The check is unchanged in strength. A path named here still has to be on
+ * disk -- a dangling `art-source/` name fails exactly as a dangling
+ * `public/` one does. What it no longer does is demand that a source file be
+ * shipped to every player.
+ *
+ * AND THE OTHER HALF IS SOMEWHERE ELSE, deliberately: whether a path is a LOAD
+ * path -- one the game prepends `assetRoot` to and fetches -- is a question
+ * about which map it sits in, and tests/cutscenes.test.ts asks it there. Every
+ * panel under `levels`, `outros` and `midWave` must start with `cutscenes/`
+ * and be in public/; `_unplaced` and `_retired` are references rather than
+ * load paths and nothing ever fetches them.
+ */
+const ROOTS = ['public/', 'public/assets/', '']
 
 /** Every file under src/, including the JSON data. */
 function srcFiles(dir = 'src'): string[] {
