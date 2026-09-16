@@ -4,7 +4,18 @@
 
 | commit | what | CI |
 |---|---|---|
-| _(filled in below once the run lands)_ | | |
+| `160705d` | reorganise, slice, encode, wire, the mid-wave cutscene, the tests | see below |
+| `ebdfd7b` | the harness numbers at every viewport, and the soak either side | see below |
+
+Rebased onto `fe6ec82`, so the branch is a **fast-forward of `main`** with no merge
+commit. Both commits were re-tested after the rebase: **1179 passing, 0 failing**, and
+`sh tools/tsdiff.sh fe6ec82` reports the one Phaser-cascade error described under
+"Verification" and nothing else.
+
+**CI status: not observed from here.** This sandbox cannot reach github.io or read
+Checks. What can be said is what was run locally, and it is all above. Read the run at
+JOB level rather than at run level when it lands — a push that touches `src/` and
+`public/` runs `deploy / build` and `deploy / deploy`, and this one touches both.
 
 ---
 
@@ -273,11 +284,14 @@ content box to size anything by, which is the other half of why panels are not i
 - **Whole deploy 58 -> 61 MB.** +4.93 of new panels, −1.78 of retired ones moved out
   of `public/`, net +3.15.
 
-**A thinner encode was considered and rejected.** The panels are already
-under-provisioned for a retina phone by hard rule 7's own arithmetic: a panel draws at
-about 346 CSS px tall at 844x390, which is 1038 physical pixels at devicePixelRatio 3,
-and the level 9 sources are 724 tall. Going below q90 on line art with speech bubbles
-gives back the readability the slicing bought.
+**A thinner encode was considered and rejected**, and the arithmetic was taken off a
+live frame rather than assumed. Hard rule 7 with no zoom in it is
+`source height >= drawn height x devicePixelRatio`. At 667x375 the harness reports
+level 1's opening panel drawn at **204x347 CSS px**, so a devicePixelRatio-3 phone
+wants **1041 physical pixels** and the source is **941** — **0.90x, already under**.
+Going below q90 on line art with speech bubbles gives back the readability the slicing
+bought, on art that has none to spare. The honest fix is a re-export at a larger size,
+and those sources are not in this repository.
 
 ---
 
@@ -434,6 +448,24 @@ report that quoted the brief's numbers back would have been wrong twice.
 Everything in this section came out of `tools/harness/`. Nothing in `tests/` can see
 any of it.
 
+**`sh tools/harness/run.sh midwave <wait> <vp>`** is the new scenario — 54 checks, and
+it is on `USES_EXPECT`, so "nothing was checked" and "everything was fine" are not the
+same report.
+
+| viewport | midwave | screens `4-CUTSCENE` |
+|---|---|---|
+| 375x667 (portrait) | — | gated, correctly |
+| 667x375 | **54 / 54 passed** | 0 faults |
+| 390x844 (portrait) | — | gated, correctly |
+| 844x390 | **44 / 44 passed** | 0 faults |
+| 844x390 with `INSETS=0,47,21,47` | — | 0 faults |
+| 1400x900 desktop | — | 0 faults |
+
+**The only fault `screens` reports at any viewport is pre-existing and by design**:
+`SMALL Title [title:version-stamp (hidden dev door, not a tap target)]`. The name is
+set in `TitleScene.ts`, which this change does not touch (`git diff` against the
+baseline is zero lines there). 1400x900 is clean.
+
 | claim | frame |
 |---|---|
 | level 1 opens with the new dad | `screens-4-cutscene-844x390.png` — clean-shaven, modern clothes, one sliced panel, "Boys! Emergency business meeting!" |
@@ -444,7 +476,8 @@ any of it.
 | a mid-wave comic fires on the right boundary | `midwave` — wave 5 passes with no comic, wave 6 opens one |
 | the clock stops and resumes cleanly | the reading above, and `midwave-3-level4-resumed-*` |
 | level 9 plays six comics without getting stuck | `midwave` — opening + four mid-wave + outro; the run reaches `won` on wave 16 |
-| level 10 is unchanged and no comic fires on a phase boundary | `midwave` — waves 6 and 12 driven, `comic=false` on both |
+| level 10 is unchanged and no comic fires on a phase boundary | `midwave` — waves 6 and 12 driven; `vlaudePhase=code floating=false` then `vlaudePhase=damaged floating=true`, `comic=false` on both |
+| leaving mid-panel cleans up | `midwave-6-left-mid-panel-*` — `comic=false gates=none panel textures=none` |
 
 ### From the disk
 
