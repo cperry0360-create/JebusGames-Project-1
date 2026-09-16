@@ -4,6 +4,85 @@ Newest first.
 
 ---
 
+## 2026-09-17 — Level 9 back into band, on one boss's health
+
+### The headline
+
+**Level 9 soaks at 192/480 on normal — 40.0% — against 113/480 when the flank
+went live.** The middle of the 35-45% band. Levels 1-8 and 10 are **identical
+integers on the same 480 seeds**, all nine of them.
+
+**The flank is NOT reverted.** It is painted road now for its whole length —
+0.20% of the lane is off-paint against 12.63% before — and it still carries a
+share of every wave. See `reports/2026-09-17-level-9-retune.md`.
+
+### Two levers, and the second did most of it
+
+| step | level 9 | rate |
+|---|---|---|
+| the flank at `flankShare` 0.25 | 113/480 | 23.5% |
+| `flankShare` 0.10 | 161/480 | 33.5% |
+| PERPLEXED 8100 -> 7650 | **192/480** | **40.0%** |
+
+**The share is the smaller lever and always was**: at 0.05 the level already
+read 33%, because the road EXISTING costs most of it. Level 9's board is thin —
+three of its fifteen pads cannot reach the trunk at all — and a second road
+spreads it.
+
+### The mini-boss sensitivity table
+
+120 seeds each, one row at a time, `tools/soak/tune9.ts`. Scaling all four
+together is useless for tuning: **x0.99 reads 34% and x0.90 reads 55%**.
+
+| | | | | | |
+|---|---|---|---|---|---|
+| **hatGtt** health | 500 | 575 | **650** | 725 | 800 |
+| win rate | 39% | 39% | **34%** | 34% | 35% |
+| **cancer** health | 2500 | 2800 | **3100** | 3400 | 3700 |
+| win rate | 38% | 36% | **34%** | 38% | 33% |
+| **noPilot** health | 2800 | 3100 | **3400** | 3700 | 4000 |
+| win rate | 36% | 35% | **34%** | 33% | 32% |
+| **perplexed** health | 6800 | 7400 | **8100** | 8700 | 9300 |
+| win rate | 52% | 49% | **34%** | 26% | 18% |
+
+HAT-GTT and CANCER are flat and CANCER is not even monotone — both are inside
+the +/-4.5 point noise of 120 seeds. NO-PILOT is mild and moves wave 12 only.
+**PERPLEXED is the lever**: steep, monotone, and it moves wave 16's loss count
+(7, 10, 28, 38, 47) while every other wave's stays identical.
+
+**Armour was not touched on any of the four**, which is `difficulty.json`'s own
+reasoning: armour changes which towers are viable rather than how hard the
+level is.
+
+### Choosing 7650 at 480 rather than at 120
+
+| PERPLEXED | 7500 | 7600 | **7650** | 7700 | 7800 | 7850 | 7900 | 8100 |
+|---|---|---|---|---|---|---|---|---|
+| 480 seeds | 206 | 200 | **192** | 187 | 183 | 177 | 170 | 161 |
+| rate | 42.9% | 41.7% | **40.0%** | 39.0% | 38.1% | 36.9% | 35.4% | 33.5% |
+
+7650 reads 40% over 120 AND 40.0% over 480. **7800 reads 42% over 120 and 38.1%
+over 480**, which is the trap `tune10.ts`'s header warns about and the reason
+nothing here is published off a 120-seed pass.
+
+### The full board
+
+| level | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | **9** | 10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| before | 428 | 255 | 422 | 299 | 218 | 210 | 198 | 184 | **113** | 195 |
+| after | 428 | 255 | 422 | 299 | 218 | 210 | 198 | 184 | **192** | 195 |
+| % | 89 | 53 | 88 | 62 | 45 | 44 | 41 | 38 | **40** | 41 |
+
+**Wave composition was not touched** — the only edit to `waves.level9.json` is
+the sixteen `flankShare` values.
+
+**The repaint itself is worth about two points** of the move: PERPLEXED at 8100
+with share 0.10 read 152/480 before the plate changed and 161/480 after, because
+the corridor is a slightly straighter line than the authored join was and the
+flank junction moved 5 px.
+
+---
+
 ## 2026-09-16 — Level 9 grows a third lane, and it costs sixteen points
 
 ### The headline

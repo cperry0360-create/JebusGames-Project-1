@@ -275,13 +275,25 @@ level 3 88%, level 4 62%, level 5 45%, level 6 44%, level 7 41%, level 8 38%,
 level 9 24%, level 10 41%**. `SOAK-REPORT.md` is the living record; read it rather
 than any number in this file.
 
-**LEVEL 9 MOVED ON 2026-09-16 AND IS THE ONE LEVEL OUT OF BAND.** It was 191/480
-(40%) and is 113/480 (23.5%) since the flank lane landed: a third road round the
-bottom right that the plate had always painted and nothing walked. The share of
-each wave that takes it is `flankShare` in `waves.level9.json`, a quarter on every
-wave, and **0.10 reads 152/480 = 32%** if the level should go back toward where it
-was tuned. Nothing else moved — the other nine are identical integers on the same
-480 seeds. See `reports/2026-09-16-level-9-flank-route.md`.
+**LEVEL 9 MOVED TWICE AND IS BACK IN BAND.** The flank lane landed on 2026-09-16 —
+a third road round the bottom right that the plate had always painted and nothing
+walked — and took the level from 191/480 (40%) to 113/480 (23.5%). It was retuned
+on 2026-09-17 and reads **192/480 (40.0%)**, the middle of the band, on two levers:
+`flankShare` 0.25 -> **0.10** in `waves.level9.json` (161/480 on its own) and
+PERPLEXED's health 8100 -> **7650** in `enemies.json` (the rest). Wave composition
+was not touched and no armour moved. The other nine levels are identical integers
+on the same 480 seeds through both passes. See
+`reports/2026-09-16-level-9-flank-route.md` and
+`reports/2026-09-17-level-9-retune.md`.
+
+**AND THE FLANK IS PAINTED ROAD NOW.** `tools/paint_level9_flank.py` painted the
+corridor between the trunk and the spur's old cap into
+`art-source/level9/map_level9.png`, the plate was re-encoded at q95, and the whole
+level 9 pipeline was re-derived from it — so the flank's waypoints come off the
+paint like every other metre of the level and `tools/build_level9_map.py` is back
+to ONE authored coordinate, the gateway point every level has. The flank is 0.20%
+off-paint against 12.63% before, the best of the five lanes.
+`python3 tools/orphan_roads.py --lanes` is the measurement.
 
 **Two of those moved on 2026-09-15 and both are recorded in
 `reports/2026-09-15-blockers.md`:**
@@ -585,15 +597,16 @@ each of the first two passes broke what the one before it fixed.
   of 86: so they are not about lanes either. The three arcs and the Vlaude screen
   appear to be counted twice somewhere between the map and the scene graph. Nobody
   has looked.
-- **Level 9's flank crosses 60 px of unpainted board**, because the painted spur is
-  a stub rather than a loop: its south end is a cap on open substrate 112 px from
-  the tail. The map authors one straight join, which is what `map_level6.json`
-  already does over 82 px and what `tests/level6map.test.ts` records Cory choosing
-  over repainting a plate. **If the answer here should be different**, paint ~63 px
-  of trace into `art-source/level9/map_level9.png` between chip 13's right edge
-  (x=855) and the capacitor (x=903), re-encode and re-run `tools/trace_level9.py`;
-  the waypoints are derived from the paint and would follow. The picture to judge it
-  on is `sh tools/harness/run.sh level9` → `level9-4c-join-*.png`.
+- **`tools/png.py` writes Paeth-filtered PNGs at 8.6 MB where the art tool managed
+  7.7 MB** on level 9's plate. It emitted no filtering at all until 2026-09-17,
+  which made the same re-encode 14.9 MB. Adaptive per-row filter selection would
+  close most of the remaining gap and costs four passes of pure Python; not worth
+  it until something else needs to re-encode a plate.
+- **The soak's `MINOR_LANE_SHARE` cliff at 0.20.** A lane carrying under a fifth
+  of a level's bodies stays out of the scripted player's pad ranking, so
+  `flankShare` 0.19 and 0.20 are two different BOARDS rather than two
+  difficulties — 29% and 23% on the same tree. Level 9 ships at 0.10, well clear
+  of it, but a later pass that walks the share upward will hit it.
 
 **These are renumbered, twice now.** Seven of the original ten closed between 07 and
 13 September; what is left keeps its wording and gets a new number, so a citation of
