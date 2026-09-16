@@ -21,12 +21,16 @@ The work is on `main` now.
 | `37158fd` | Merge main: the guaranteed dummy tower and the re-soak | run 421 — green (changes, typecheck, test) |
 | `f463197` | Merge main: the closed CI tables for runs 415 and 417 | reports only; covered by run 423 |
 | `02f6fff` | This report, the context note and the CLAUDE.md standing fact | run 423 on `main` — green on **all five** jobs |
+| `c3ff5aa` | Close the CI table on run 423 | run 425 on `main` — green on changes, typecheck and test, deploy correctly **skipped** |
+| `<this row>` | Record run 425 and close the table | `reports/` only, so the same three jobs and no deploy |
 
 **Run 423 ran the deploy rather than skipping it**, because the push touches
 `src/` and `public/`: `changes`, `typecheck`, `test`, `deploy / build` and
 `deploy / deploy` all green, `actions/deploy-pages@v4` completing at 12:14:33Z.
 The live site carries the comics. Read the job list, not the conclusion — a
-green run with `deploy` skipped would have meant something different.
+green run with `deploy` skipped would have meant something different, and runs
+425 onward are exactly that: three jobs and no deploy, because they touch only
+`reports/`.
 
 `main` was fast-forwarded onto `02f6fff`, so `main` and
 `claude/cutscene-reorganization-wiring-m5f94i` are the same commit.
