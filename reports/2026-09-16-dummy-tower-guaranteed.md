@@ -2,10 +2,23 @@
 
 | commit | what | CI |
 |---|---|---|
-| `9a9702c` | `guaranteedTowers` in draft.json, `draftOpeningTowers`, the cap arithmetic, the two GameScene call sites, the loadout screen's per-row card widths, the deployer's card text, the soak's uniform-hand path, 7 new tests, the `guaranteed` harness scenario | superseded by the merge below |
-| `05cb66e` | The first re-soak and its report — **measured against `fe6ec82` and replaced**; see the merge | superseded |
-| `cb9fadf` | Merge `main`: level 9's retune, the flank repaint and Lazy Dad Mode | *pending* |
-| `PENDING` | The re-soak on the merged tree, this report, `SOAK-REPORT.md`, `CLAUDE.md`, `claude/context.md` | *pending* |
+| `9a9702c` | `guaranteedTowers` in draft.json, `draftOpeningTowers`, the cap arithmetic, the two GameScene call sites, the loadout screen's per-row card widths, the deployer's card text, the soak's uniform-hand path, 7 new tests, the `guaranteed` harness scenario | [run 415](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/35091621374) green |
+| `05cb66e` | The first re-soak and its report — **measured against `fe6ec82` and replaced**; see the merge | run 415 green |
+| `cb9fadf` | Merge `main`: level 9's retune, the flank repaint and Lazy Dad Mode | run 415 green |
+| `cd095ca` | The re-soak on the merged tree, this report, `SOAK-REPORT.md`, `CLAUDE.md`, `claude/context.md` | run 415 green |
+| *this commit* | Closing this table on run 415 | it edits this table and nothing else |
+
+All four were pushed together, so only the head got a run of its own; **run 415
+checked the tree containing all four.** Green on `changes`, `typecheck`, `test`,
+`deploy / build` and `deploy / deploy` — **five jobs, and the deploy RAN rather
+than skipping**, because the push touched `src/`. So the live site carries the
+guarantee. Read the job list, not the run's conclusion.
+
+**`main`'s tree was read back afterwards** and carries `guaranteedTowers:
+["imaDummy"]` in `src/data/draft.json`, `guaranteedOpeners` and
+`openingTowerCount` in `src/systems/Draft.ts`, the `guaranteed` scenario in
+`tools/harness/index.html`, and this report — with **zero** occurrences of
+`"imaDummy": 4` left in `src/data/levels.json`.
 
 **`main` moved while this was being measured** — `fe6ec82` → `f3d597d`, which
 retuned level 9's boss, repainted its flank and added five Lazy Dad knobs, and
