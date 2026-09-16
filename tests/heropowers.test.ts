@@ -170,7 +170,11 @@ test('the transformation hands the power straight back', () => {
   // being broken rather than as a wait.
   assert.match(game, /this\.hero\.on\('powered', \(\) => \{[\s\S]{0,300}?this\.cooldowns\.reset\(heroSlotId\(i\)\)/,
     'the cooldown is not reset when the hero powers up')
-  assert.match(game, /heroDef\.abilities\.forEach\(\(a, i\) => this\.cooldowns\.register\(heroSlotId\(i\), a\.cooldown\)\)/,
+  // THROUGH `cd`, which is the run's difficulty applied to a cooldown. It is
+  // the identity on normal and on try-hard; Lazy Dad Mode hands the buttons
+  // back sooner. The assertion keeps the `forEach` -- what it is guarding is
+  // that EVERY gated ability is registered rather than a named pair.
+  assert.match(game, /heroDef\.abilities\.forEach\(\(a, i\) => this\.cooldowns\.register\(heroSlotId\(i\), cd\(a\.cooldown\)\)\)/,
     'the ability cooldowns are not registered from the hero\'s own list')
 })
 

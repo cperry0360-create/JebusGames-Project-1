@@ -17,6 +17,14 @@ const RULES = rulesData
 
 export type EnemyState = 'walking' | 'fighting' | 'dead'
 
+/**
+ * What a scene offers an enemy about how much health this RUN's difficulty
+ * leaves it with. GameScene implements it; anything else gets the identity.
+ */
+export interface EnemyHealthScaling {
+  enemyHealthFor: (base: number) => number
+}
+
 /** Anything that can stand in an enemy's way and be hit for it. */
 export interface Blocker {
   x: number
@@ -344,7 +352,20 @@ export class Enemy extends Phaser.GameObjects.Container {
     // rather than a throw because the honest failure of a 0-health boss is
     // that it dies instantly and visibly, which is a far better bug report
     // than a crash on the first frame of a wave.
-    this.maxHealth = def.maxHealth ?? 0
+    // THROUGH THE RUN'S DIFFICULTY, read off the scene rather than passed in.
+    //
+    // `maxHealth` is fixed here, in the constructor, and there are seven
+    // places in GameScene that call this one -- the wave spawner, four summon
+    // paths and two of Vlaude's powers. An option bag would be seven chances
+    // for an eighth site to forget, and a module-level scale would outlive the
+    // run that set it. The scene publishes one function, this reads it, and a
+    // scene that has not set it (a test, a harness scenario) gets the def's
+    // own number because the default is the identity.
+    //
+    // It is a FUNCTION and not a multiplier on purpose: the rounding and the
+    // floor live in Difficulty.ts, where the soak reads the same ones.
+    const scaled = (scene as Partial<EnemyHealthScaling>).enemyHealthFor
+    this.maxHealth = scaled ? scaled(def.maxHealth ?? 0) : (def.maxHealth ?? 0)
     this.health = this.maxHealth
 
     this.shadow = makeShadow(scene, def.sprite)

@@ -32,9 +32,11 @@ export const MAX_CAKES: number = DATA.max
  * How many cakes a finished run earned.
  *
  * A FRACTION OF THE RUN'S OWN STARTING LIVES, never an absolute count.
- * Difficulty scales starting lives — 40 on Lazy Dad Mode against 10 on Try
+ * Difficulty scales starting lives — 60 on Lazy Dad Mode against 10 on Try
  * Hard — so a threshold of "10 lives left" would pay three cakes for an
  * untouched Try Hard run and two for exactly the same performance on normal.
+ * The two numbers in that sentence are difficulty.json's multipliers times
+ * rules.json's 20; they are an illustration, and the code reads neither.
  *
  * A loss pays nothing: the first tier is "cleared the level at all", so there
  * is no tier a defeat can reach.

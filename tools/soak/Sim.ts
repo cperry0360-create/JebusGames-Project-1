@@ -36,6 +36,16 @@
 // spending whatever it can afford in between. `readySeconds` and
 // `earlyStartPeanutsPerSecond` appear nowhere in this file.
 //
+// AND THEREFORE NEITHER DOES `waveIntervalMultiplier`. Lazy Dad Mode stretches
+// the countdown between waves by half again, which is the single thing that
+// helps a young player most -- more time to decide where a tower goes -- and
+// this file cannot see it, because its builder spends at the wave boundary and
+// the next wave begins on the next line. So every Lazy Dad win rate below is
+// measured WITHOUT that knob. It is the one difficulty lever the simulator is
+// structurally blind to, it makes the reported figure a floor in the same
+// direction the early-start bonus already does, and it is said here rather
+// than left for somebody to find by grepping for the key.
+//
 // That has two consequences, and they pull in opposite directions:
 //
 //   * WAVE 1 IS ALREADY RIGHT. The game now waits for the player before wave 1
@@ -75,7 +85,8 @@ import {
   newRegenState, tickRegen, type RegenState,
 } from '../../src/systems/Regen.ts'
 import {
-  DEFAULT_DIFFICULTY_ID, startingLives, startingPeanuts,
+  abilityCooldown, DEFAULT_DIFFICULTY_ID, enemyHealth, heroRespawnSeconds,
+  peanutIncome, startingLives, startingPeanuts,
 } from '../../src/systems/Difficulty.ts'
 import { DEFAULT_HERO_ID, HERO_IDS, resolveHeroId } from '../../src/systems/Heroes.ts'
 import { heroSlotId, isAreaSkill } from '../../src/systems/HeroSkills.ts'
@@ -506,6 +517,25 @@ export function simulate(
   const MAP = level.map as any
   const WAVES = level.waveTable.waves
 
+  /**
+   * THE ONE PLACE AN ENEMY'S CEILING IS READ, and the reason it is a function.
+   *
+   * A SimEnemy carries `health` and has no `maxHealth` of its own -- it reads
+   * its ceiling off the shared def, which is the difference from the scene's
+   * Enemy that every rule in this file has to remember. That was already the
+   * rule; the difficulty scalar makes it load-bearing. Scaling only the health
+   * an enemy SPAWNS with would leave every `health / maxHealth` ratio in the
+   * file comparing a scaled numerator to an unscaled denominator, and a Lazy
+   * Dad enemy would walk on at what the rules read as 60% health -- firing
+   * every threshold summon and every rage on the frame it appeared.
+   *
+   * So the def is never read directly any more. `enemyHealth` is the identity
+   * function on `normal` and on `try-hard`, by an early return rather than by
+   * a rounding, so this changes nothing at all on either.
+   */
+  const maxHp = (def: { maxHealth?: number } | undefined): number =>
+    enemyHealth(def?.maxHealth ?? 0, difficultyId)
+
   const rng = makeRng(seed)
   // See `spawn`: a separate stream, so adding a per-enemy draw cannot move a
   // number on a level that never reads it.
@@ -619,13 +649,19 @@ export function simulate(
   const build = new BuildSystem(MAP.buildSpots, MAP.spotRadius)
   const spawner = new WaveSpawner()
   const cooldowns = new Cooldowns()
-  for (const id of draftedAbilities) cooldowns.register(id, ABILITIES[id].cooldown)
+  // THROUGH THE DIFFICULTY, like every other number a run starts with. 1x on
+  // normal and try-hard; Lazy Dad Mode gets the buttons back sooner, which is
+  // the lever a child actually notices, because pressing one is the part of
+  // this game they can already do.
+  for (const id of draftedAbilities) {
+    cooldowns.register(id, abilityCooldown(ABILITIES[id].cooldown, difficultyId))
+  }
   // SLOT 1 IS WHATEVER IS FIRST, not a named field. Only the first ability is
   // modelled here: the rest are gated on the powered form, cast by tapping the
   // map, and a soak that guessed where the player would tap would be measuring
   // its own guess. See `_modelled` in the report.
   const SLOT1 = heroSlotId(0)
-  cooldowns.register(SLOT1, hero.abilities[0]!.cooldown)
+  cooldowns.register(SLOT1, abilityCooldown(hero.abilities[0]!.cooldown, difficultyId))
 
   // The same two calls the scene makes, in the same order: the difficulty
   // scales the base and the opening-purse floor is applied to the result, so
@@ -776,7 +812,7 @@ export function simulate(
     const on = net.lane(laneId)
     const p = on.path.pointAt(laneAt)
     enemies.push({
-      id, def, health: def.maxHealth, distance: at,
+      id, def, health: maxHp(def), distance: at,
       // WHICH ARM OF A SPLIT this one takes, drawn from the run's own seed so
       // the crossroads is reproducible.
       //
@@ -858,10 +894,10 @@ export function simulate(
         if (!to || !ENEMIES[to]) continue
         const def = ENEMIES[to]
         const was = e.health
-        const wasMax = e.def.maxHealth
+        const wasMax = maxHp(e.def)
         e.id = to
         e.def = def
-        e.health = convertedHealth(was, wasMax, def.maxHealth)
+        e.health = convertedHealth(was, wasMax, maxHp(def))
         e.bleed = NO_BLEED
       }
     }
@@ -971,7 +1007,7 @@ export function simulate(
         if (out.down) {
           heroState.down = true
           heroState.powered = false
-          heroState.reviveIn = hero.reviveSeconds
+          heroState.reviveIn = heroRespawnSeconds(hero.reviveSeconds, difficultyId)
         }
         bladeCuts += cut
       }
@@ -1005,7 +1041,7 @@ export function simulate(
       // is NaN, `NaN >= belowHealth` is false, so the guard passed, the heal
       // computed as NaN and `healed > 0` rejected it. The soak reported a
       // clean 38% for a boss whose whole mechanic never ran once.
-      const max = e.def.maxHealth ?? 0
+      const max = maxHp(e.def)
       const r = tickRegen(e.regen, dt, e.alive, e.health, max, def)
       e.regen = r.state
       if (r.healed > 0) {
@@ -1086,7 +1122,8 @@ export function simulate(
       const picked = field.filter((e) => targets.some((t) => t.id === e.id)).slice(0, want)
       const delay = ((VLAUDE.powers.duplicateEnemy ?? {}).durationMs as number ?? 0) / 1000
       for (const src of picked) {
-        const share = (src.def.maxHealth ?? 0) > 0 ? src.health / src.def.maxHealth : 1
+        const srcMax = maxHp(src.def)
+        const share = srcMax > 0 ? src.health / srcMax : 1
         // DEFERRED BY THE FX'S OWN DURATION, exactly as the scene defers it:
         // the picture plays over the original and the copy is inserted when it
         // finishes, so the two are the same beat in both.
@@ -1132,7 +1169,7 @@ export function simulate(
       const copy = enemies[enemies.length - 1]
       if (copy) {
         copy.copyDepth = 1
-        copy.health = Math.max(1, Math.round((copy.def.maxHealth ?? 1) * m.share))
+        copy.health = Math.max(1, Math.round(Math.max(1, maxHp(copy.def)) * m.share))
       }
     }
     for (let i = vMaking.length - 1; i >= 0; i--) {
@@ -1262,7 +1299,7 @@ export function simulate(
    */
   const drink = (e: SimEnemy, dealt: number): void => {
     const healed = night?.healFor(e as never, dealt) ?? 0
-    if (healed > 0) e.health = Math.min(e.def.maxHealth, e.health + healed)
+    if (healed > 0) e.health = Math.min(maxHp(e.def), e.health + healed)
   }
 
   /** What a tower's reload is multiplied by where it stands. 1 with no acid. */
@@ -1369,13 +1406,13 @@ export function simulate(
       enemy: worstId,
       armor,
       speed,
-      health: worst.maxHealth ?? 0,
+      health: maxHp(worst),
       towers: guns,
       freePads: Math.max(0, (MAP.buildSpots?.length ?? 0) - towers.length),
       boardDps: +boardDps.toFixed(1),
       walkDamage: Math.round(walkDamage),
       walkSeconds: speed > 0 ? +(walkPx / speed).toFixed(1) : 0,
-      killSeconds: boardDps > 0 ? +((worst.maxHealth ?? 0) / boardDps).toFixed(1) : Infinity,
+      killSeconds: boardDps > 0 ? +(maxHp(worst) / boardDps).toFixed(1) : Infinity,
       // Placeholders; the run has not happened yet. Overwritten at the return.
       dealt: 0,
       lowestFraction: 1,
@@ -1404,14 +1441,18 @@ export function simulate(
       // CURRENT health and reads its maximum off the def, and the wrong one
       // here made this field NaN, which JSON writes as null.
       finaleLowest = Math.min(finaleLowest,
-        Math.max(0, e.health) / Math.max(1, e.def.maxHealth ?? 1))
+        Math.max(0, e.health) / Math.max(1, maxHp(e.def)))
     }
     if (e.health <= 0) {
       e.alive = false
       if (finaleId !== '' && e.id === finaleId) finaleKills++
       kills++
-      peanuts += e.def.peanutReward
-      peanutsEarned += e.def.peanutReward
+      // THE KILL BOUNTY, THROUGH THE DIFFICULTY. The wave-clear bounty below
+      // is deliberately left alone: it is paid for surviving rather than for
+      // shooting. 1x on normal and try-hard.
+      const paid = peanutIncome(e.def.peanutReward, difficultyId)
+      peanuts += paid
+      peanutsEarned += paid
       // What is left when something breaks apart: the Vampire Lord's four
       // Gliders, at the place and on the lane it died on, carrying its route
       // pick. `summonedBy` keeps them out of the wave-over count, exactly as
@@ -1500,7 +1541,7 @@ export function simulate(
     for (let i = 0; i < list.length; i++) {
       if (e.firedThresholds.has(i)) continue
       const t = list[i]!
-      if (e.health / (e.def.maxHealth ?? 1) > t.belowHealth) continue
+      if (e.health / Math.max(1, maxHp(e.def)) > t.belowHealth) continue
       e.firedThresholds.add(i)
       if (t.humiliation && night) night.addHumiliation(t.humiliation)
       const sp = t.summon
@@ -2286,7 +2327,7 @@ export function simulate(
               if (out.down) {
                 heroState.down = true
                 heroState.powered = false
-                heroState.reviveIn = hero.reviveSeconds
+                heroState.reviveIn = heroRespawnSeconds(hero.reviveSeconds, difficultyId)
               }
             }
           }

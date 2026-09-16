@@ -64,7 +64,7 @@ const SCENARIO_NAMES = [
   'elibar', 'elifire', 'enemyfacing', 'everyloadout', 'facing', 'fps', 'full', 'full13', 'fx',
   'game', 'gateway', 'gestures', 'glacier', 'gnomes', 'goblin', 'heroanim',
   'heroblock', 'herochip', 'herofx', 'herohp', 'lane', 'leak', 'ledger',
-  'labelprobe', 'lanemarkers', 'lettering', 'level6', 'level7', 'level8', 'level8retopo', 'level9', 'levelart', 'levels',
+  'labelprobe', 'lanemarkers', 'lazydad', 'lettering', 'level6', 'level7', 'level8', 'level8retopo', 'level9', 'levelart', 'levels',
   'listenerguard', 'loadout', 'locked',
   'loopthrow', 'looptrack', 'lost', 'mapedge', 'maproute', 'markers',
   'meteor', 'mix', 'modal', 'moes', 'music', 'muzzle', 'nightfall',
@@ -3542,6 +3542,189 @@ async function run() {
     note('RESULT ' + (faults === 0
       ? 'the difficulty is chosen on level select, carried by the run and shown in both places, at '
         + VP.w + 'x' + VP.h
+      : '*** ' + faults + ' faults ***'))
+    return
+  }
+
+  if (scenario === 'lazydad') {
+    // WHAT LAZY DAD MODE ACTUALLY DOES TO A RUN, MEASURED ON A LIVE ONE.
+    //
+    // The soak can answer "does a child get through", and it is the only thing
+    // that can. It cannot answer any of THESE, because four of the five knobs
+    // are read in GameScene and the fifth -- the gap between waves -- does not
+    // exist in the simulator at all. So this scenario starts the same level
+    // twice, once on each mode, and reads the six numbers off the running
+    // scene rather than off the data they came from.
+    //
+    // NORMAL IS HALF THE TEST. Every published win rate is a statement about
+    // it, so "lazy-dad is easier" is only worth having next to "normal is
+    // exactly what it was": each number below is asserted against rules.json
+    // and heroes.json on normal, and against the multiplier on lazy-dad.
+    const SAVE = await import('./js/systems/Save.js')
+    const DIFF = await import('./js/systems/Difficulty.js')
+    const RULES = (await import('./js/data/rules.json', { with: { type: 'json' } })).default
+    const HEROES = (await import('./js/data/heroes.json', { with: { type: 'json' } })).default
+    let faults = 0
+    const fail = (m) => { faults++; note('   *** ' + m) }
+    const near = (a, b) => Math.abs(a - b) <= 0.02
+    note('viewport ' + VP.w + 'x' + VP.h)
+
+    for (const k of ['WorldMap', 'Title', 'Draft', 'Splash', 'Credits', 'Boot']) game.scene.stop(k)
+
+    // One level, one hero, one run state; only the difficulty changes between
+    // the two passes. Anything else moving would make the comparison a
+    // comparison of two different games.
+    const measure = async (id) => {
+      SAVE.setDifficulty(id)
+      game.scene.stop('Game'); game.scene.stop('Hud')
+      await sleep(300)
+      game.scene.start('Game')
+      if (!(await until(() => running('Game') && scene('Game').hero, 15000))) {
+        fail('the level did not start on ' + id)
+        return null
+      }
+      await sleep(700)
+      const G = scene('Game')
+      const m = { id, difficultyId: G.status.difficultyId }
+      m.lives = G.status.startingLives
+      m.peanuts = G.status.peanuts
+
+      // THE GAP BETWEEN WAVES, off the scene's own arming method rather than
+      // off the constant. Wave 1 deliberately has no clock on any difficulty,
+      // so the wave is moved on before asking -- which is also the only state
+      // in which the number is the one a player waits through.
+      G.status.wave = 1
+      G.armReadyCountdown()
+      m.readyCountdown = G.status.readyCountdown
+
+      // THE HERO'S TIME OFF THE BOARD, driven rather than read.
+      //
+      // IT TAKES MORE THAN ONE HIT AND THAT IS NOT A BUG IN THE HERO. The
+      // transformation clamps an incoming hit at the half-health floor and
+      // hands out `invulnerableSeconds` of grace at the swap, so a single
+      // enormous hit leaves him standing at exactly half with nothing able to
+      // touch him -- which is what this scenario measured the first time and
+      // reported as "the revive clock started at 0". He is hit until he is
+      // down, with the grace allowed to run out in between.
+      m.heroMax = G.hero.def.maxHealth
+      for (let i = 0; i < 12 && !G.hero.down; i++) {
+        G.hero.hurt(G.hero.def.maxHealth * 4)
+        await sleep(300)
+      }
+      m.heroDown = G.hero.down === true
+      m.reviveIn = G.hero.reviveIn
+      m.reviveSeconds = G.hero.reviveSeconds
+      m.defRevive = G.hero.def.reviveSeconds
+
+      // AN ABILITY'S COOLDOWN, the hero's own slot 1 -- the one a young player
+      // presses. `start` puts the registered length on the clock, so reading
+      // it back is reading what was registered.
+      // `heroSlotId(0)` IS 'heroSlot1'. The ids are 1-based and the index is
+      // 0-based, which is exactly the off-by-one this scenario walked into:
+      // `secondsLeft` of an id nobody registered is 0, so an unregistered slot
+      // and an instant cooldown are the same reading. The id is taken from the
+      // game's own function rather than typed out.
+      const SKILLS = await import('./js/systems/HeroSkills.js')
+      const slot = SKILLS.heroSlotId(0)
+      G.cooldowns.start(slot)
+      m.cooldown = G.cooldowns.secondsLeft(slot)
+      m.defCooldown = G.hero.def.abilities[0].cooldown
+
+      // AND WHAT AN ENEMY IS WORTH, off a real one that the wave spawner put
+      // on the board, not off `enemyHealthFor`. The point is that the seven
+      // construction sites go through the scale, and a call to the function
+      // would prove only that the function exists.
+      G.status.wave = 0
+      G.status.phase = 'ready'
+      G.startWave()
+      await until(() => G.enemies.length > 0, 12000)
+      const e = G.enemies[0]
+      m.enemy = e ? (e.def.name ?? '(unnamed)') : '(none)'
+      m.enemyMax = e ? e.maxHealth : 0
+      m.enemyDefMax = e ? (e.def.maxHealth ?? 0) : 0
+      m.enemyFull = e ? e.health === e.maxHealth : false
+      await sleep(500)
+      await shot('lazydad-' + id + '-' + VP.w + 'x' + VP.h)
+      note(id + ': ' + JSON.stringify(m))
+      return m
+    }
+
+    const normal = await measure('normal')
+    const lazy = await measure('lazy-dad')
+    if (!normal || !lazy) { note('RESULT *** a run did not start ***'); return }
+
+    /* ------------------------------------ normal is exactly what it always was */
+
+    if (normal.lives !== RULES.startingLives) {
+      fail('a normal run starts with ' + normal.lives + ' lives, not ' + RULES.startingLives)
+    }
+    if (normal.readyCountdown !== RULES.pacing.readySeconds) {
+      fail('a normal run waits ' + normal.readyCountdown + 's between waves, not '
+        + RULES.pacing.readySeconds)
+    }
+    if (!near(normal.reviveSeconds, normal.defRevive)) {
+      fail('a normal hero is off the board for ' + normal.reviveSeconds + 's, not '
+        + normal.defRevive)
+    }
+    if (!near(normal.cooldown, normal.defCooldown)) {
+      fail('a normal ability recharges in ' + normal.cooldown + 's, not ' + normal.defCooldown)
+    }
+    if (normal.enemyMax !== normal.enemyDefMax) {
+      fail('a normal enemy has ' + normal.enemyMax + ' health, not its def\'s '
+        + normal.enemyDefMax)
+    }
+
+    /* ------------------------------------------- and lazy-dad is genuinely easy */
+
+    const D = DIFF.difficultyDef('lazy-dad')
+    if (lazy.difficultyId !== 'lazy-dad') fail('the run did not take Lazy Dad Mode')
+    if (lazy.lives !== Math.round(RULES.startingLives * D.livesMultiplier)) {
+      fail('Lazy Dad starts with ' + lazy.lives + ' lives, not '
+        + Math.round(RULES.startingLives * D.livesMultiplier))
+    }
+    if (!(lazy.lives > normal.lives)) fail('Lazy Dad does not start with more lives')
+    if (!(lazy.peanuts > normal.peanuts)) fail('Lazy Dad does not start with a fatter purse')
+    if (!(lazy.readyCountdown > normal.readyCountdown)) {
+      fail('waves do not arrive further apart on Lazy Dad: ' + lazy.readyCountdown
+        + 's against ' + normal.readyCountdown + 's')
+    }
+    if (!(lazy.reviveSeconds < normal.reviveSeconds)) {
+      fail('the hero does not come back sooner on Lazy Dad: ' + lazy.reviveSeconds
+        + 's against ' + normal.reviveSeconds + 's')
+    }
+    if (!(lazy.reviveIn > 0 && lazy.reviveIn <= lazy.reviveSeconds + 0.5)) {
+      fail('the hero\'s revive clock started at ' + lazy.reviveIn + ', not at '
+        + lazy.reviveSeconds)
+    }
+    if (!(lazy.cooldown < normal.cooldown)) {
+      fail('abilities do not recharge sooner on Lazy Dad: ' + lazy.cooldown
+        + 's against ' + normal.cooldown + 's')
+    }
+    if (lazy.enemy !== normal.enemy) {
+      fail('the two passes met different enemies (' + normal.enemy + ' and ' + lazy.enemy
+        + '), so nothing below is a comparison')
+    }
+    if (!(lazy.enemyMax < normal.enemyMax)) {
+      fail('the same enemy is not softer on Lazy Dad: ' + lazy.enemyMax + ' against '
+        + normal.enemyMax)
+    }
+    if (lazy.enemyMax !== DIFF.enemyHealth(lazy.enemyDefMax, 'lazy-dad')) {
+      fail('the enemy on the board is not what Difficulty.enemyHealth says it should be')
+    }
+    // AND IT IS AT FULL HEALTH. Scaling the health an enemy spawns with and
+    // not its ceiling is the bug this whole shape exists to avoid: it would
+    // walk on at what every rule in the game reads as 80% health, firing its
+    // threshold summons on the frame it appeared.
+    if (!lazy.enemyFull) fail('a Lazy Dad enemy does not spawn at full health')
+
+    note('lives ' + normal.lives + ' -> ' + lazy.lives
+      + ' | purse ' + normal.peanuts + ' -> ' + lazy.peanuts
+      + ' | wave gap ' + normal.readyCountdown + 's -> ' + lazy.readyCountdown + 's'
+      + ' | revive ' + normal.reviveSeconds + 's -> ' + lazy.reviveSeconds + 's'
+      + ' | cooldown ' + normal.cooldown + 's -> ' + lazy.cooldown + 's'
+      + ' | ' + normal.enemy + ' ' + normal.enemyMax + 'hp -> ' + lazy.enemyMax + 'hp')
+    note('RESULT ' + (faults === 0
+      ? 'normal is unchanged and Lazy Dad Mode moves all five knobs, at ' + VP.w + 'x' + VP.h
       : '*** ' + faults + ' faults ***'))
     return
   }

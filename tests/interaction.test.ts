@@ -369,8 +369,14 @@ test('a downed hero comes back, and says where and when', () => {
   // The tester asked whether the hero revives. He did not, and there was
   // nothing on screen to say so either way.
   const hero = src('entities/Hero.ts')
-  assert.match(hero, /this\.reviveIn = this\.def\.reviveSeconds/,
+  // `this.reviveSeconds` AND NOT `this.def.reviveSeconds`: the getter is the
+  // def's number with the run's difficulty on it, and the scene's "back on the
+  // spot in Ns" toast reads the same getter. A Lazy Dad player who was
+  // promised the def's number would be told twice the wait they have.
+  assert.match(hero, /this\.reviveIn = this\.reviveSeconds/,
     'going down does not start a revive timer')
+  assert.match(hero, /get reviveSeconds\(\): number \{\s*\n\s*return this\.reviveSecondsFor\(this\.def\.reviveSeconds\)/,
+    'the revive clock does not go through the run\'s difficulty')
   assert.match(hero, /private revive\(\)/, 'nothing brings him back')
   // WHERE HE FELL, not at the entrance. The entrance rule discarded a walk
   // the player had already paid for — and it came with a second, unannounced
