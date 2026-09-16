@@ -2,7 +2,20 @@
 
 | commit | what | CI |
 |---|---|---|
-| *pending* | The flank lane, the orphan-road check, and the reports | *pending* |
+| `25e5688` | The flank lane: tracer, builder, map, wave table, `pickForBranch`, the `validateLanes` diamond fix, the soak's split traffic, the harness section | [run 398](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/35043316735) green |
+| `0b5b331` | `tools/orphan_roads.py`, the mask fixture and `tests/orphanroads.test.ts` | run 398 green |
+| `6fdba0c` | This report, `SOAK-REPORT.md` and `claude/context.md` | run 398 green |
+| *this commit* | Closing this table on run 398 | it edits this table and nothing else |
+
+All three were pushed together, so only the head got a run of its own; **run 398
+checked the tree containing all three.** Green on `changes`, `typecheck`, `test`,
+`deploy / build` and `deploy / deploy` — **five jobs, and the deploy RAN rather
+than skipping**, because the push touched `src/`. So the live site carries the
+flank. Read the job list, not the conclusion.
+
+`main`'s tree was read back afterwards and carries `tests/level9.test.ts`,
+`tests/orphanroads.test.ts` and `tests/fixtures/`, alongside the modified
+`src/data/map_level9.json`, `src/systems/Lanes.ts` and `tools/`.
 
 **Answers first.**
 
