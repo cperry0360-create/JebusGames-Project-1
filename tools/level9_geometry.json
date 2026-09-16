@@ -33,13 +33,6 @@
   ],
   "_note": "AN INTERIOR EXIT: a door in the machine housing, not a frame edge. x=1177 is 92.0% of the width and the mouth spans y 300-359 = 41.7%-49.9% of the height."
  },
- "deadEnd": {
-  "terminal": [
-   910,
-   568
-  ],
-  "_note": "A FIFTH TERMINAL, interior, where the trace stops on open substrate. Nothing walks it as the board stands. If level 9 wants a second entrance this is the only place the paint offers one."
- },
  "nodes": {
   "fork": [
    96,
@@ -50,9 +43,27 @@
    525
   ],
   "doorJunction": [
-   1103,
-   326
+   1109,
+   330
+  ],
+  "flankJoin": [
+   863,
+   474
   ]
+ },
+ "flank": {
+  "junction": [
+   863,
+   474
+  ],
+  "rejoin": [
+   1109,
+   330
+  ],
+  "joinBare": 0.0,
+  "length": 468.01,
+  "replaces": 523.97,
+  "_note": "THE SPUR IS A LOOP NOW AND EVERY PIXEL OF IT IS PAINTED. It used to be a STUB: its north end was the door junction and its south end a rounded cap on open substrate, so `map_level9.json` bridged 112 px with an authored join and a walker crossed 63 px of bare board beside a capacitor. tools/paint_level9_flank.py painted that corridor into the plate, so `flank` is a geodesic down the middle of painted trace from one junction to the other, derived exactly like `north` and `south`. `joinBare` is how much of the flank has no trace under it and it reads ZERO; it is kept rather than deleted because a number that was 63 and is now 0 is the point. `length` runs junction -> rejoin and `replaces` is the hook between the same two nodes."
  },
  "centreline": {
   "stem": [
@@ -331,136 +342,163 @@
     475.0
    ],
    [
-    832.0,
-    475.0
+    858.5,
+    474.9
+   ]
+  ],
+  "hook": [
+   [
+    865.8,
+    469.5
    ],
    [
-    848.0,
-    473.3
+    874.5,
+    454.0
    ],
    [
-    858.0,
-    468.7
+    902.6,
+    423.0
    ],
    [
-    897.8,
-    429.0
-   ],
-   [
-    905.2,
-    419.0
-   ],
-   [
-    909.1,
-    409.0
+    910.2,
+    405.0
    ],
    [
     913.0,
     379.0
    ],
    [
-    913.0,
-    243.0
+    913.9,
+    231.0
    ],
    [
-    914.5,
-    227.0
+    915.8,
+    221.0
    ],
    [
-    916.9,
-    218.0
+    919.6,
+    213.0
    ],
    [
-    922.5,
-    209.0
+    938.0,
+    194.6
    ],
    [
-    934.0,
-    197.5
+    949.0,
+    191.1
    ],
    [
-    944.0,
-    191.9
+    971.0,
+    191.2
    ],
    [
-    975.0,
-    191.7
+    981.0,
+    193.3
    ],
    [
-    983.0,
-    194.2
+    989.0,
+    197.9
    ],
    [
-    991.0,
-    199.5
+    1081.8,
+    292.0
    ],
    [
-    1085.4,
-    296.0
+    1104.5,
+    325.5
+   ]
+  ],
+  "flank": [
+   [
+    866.9,
+    478.5
    ],
    [
-    1099.9,
-    321.5
+    875.3,
+    499.0
+   ],
+   [
+    900.5,
+    543.0
+   ],
+   [
+    912.0,
+    557.0
+   ],
+   [
+    922.0,
+    564.4
+   ],
+   [
+    935.0,
+    567.0
+   ],
+   [
+    1006.0,
+    567.0
+   ],
+   [
+    1022.0,
+    565.2
+   ],
+   [
+    1033.0,
+    560.9
+   ],
+   [
+    1043.0,
+    553.0
+   ],
+   [
+    1083.7,
+    511.0
+   ],
+   [
+    1090.9,
+    502.0
+   ],
+   [
+    1096.3,
+    491.0
+   ],
+   [
+    1101.0,
+    462.0
+   ],
+   [
+    1101.4,
+    351.0
+   ],
+   [
+    1105.5,
+    334.5
    ]
   ],
   "door": [
    [
-    1107.5,
-    328.4
+    1113.5,
+    329.3
    ],
    [
     1172.5,
     329.0
-   ]
-  ],
-  "spur": [
-   [
-    1103.0,
-    330.5
-   ],
-   [
-    1100.7,
-    472.0
-   ],
-   [
-    1096.3,
-    493.0
-   ],
-   [
-    1087.4,
-    508.0
-   ],
-   [
-    1044.0,
-    551.9
-   ],
-   [
-    1028.0,
-    562.8
-   ],
-   [
-    1002.0,
-    567.0
-   ],
-   [
-    914.5,
-    568.0
    ]
   ]
  },
  "lengths": {
   "north": 1336.35,
   "south": 417.68,
+  "hook": 524.94,
+  "flank": 468.62,
   "stem": 87.01,
-  "tail": 1002.5,
-  "door": 65.03,
-  "spur": 375.83
+  "tail": 478.47,
+  "door": 59.01
  },
  "routes": {
-  "north": 2490.89,
-  "south": 1572.23
+  "north": 2485.77,
+  "south": 1567.11
  },
- "traceLength": 3284.41,
+ "traceLength": 3372.08,
  "traceWidth": 47.5,
  "towerRange": 132,
  "_towerRange": "the shortest attacking range in src/data/towers.json. Levels 6 to 8 were measured at 112, which is no longer any tower's range; the coverage counts below are given at both.",
@@ -837,25 +875,37 @@
   102.8,
   104.0,
   73.5,
-  194.3
+  188.9
  ],
- "padStandoffToSpur": [
-  392.1,
-  530.4,
-  706.3,
-  154.6,
-  311.4,
-  565.8,
-  618.1,
-  96.5,
-  226.4,
-  728.7,
-  419.7,
+ "padStandoffToFlank": [
+  382.2,
+  444.4,
+  618.4,
+  158.7,
+  246.4,
+  476.3,
+  543.4,
+  95.9,
+  126.0,
+  662.1,
+  360.5,
   84.0,
-  134.5,
-  562.9,
+  122.0,
+  529.8,
   74.5
  ],
+ "padsCoveringFlank": [
+  8,
+  9,
+  12,
+  13,
+  15
+ ],
+ "padsUnreachableEvenWithFlank": [
+  1,
+  7
+ ],
+ "_padsCoveringFlank": "WHICH CHIPS CAN SHOOT AT THE FLANK, at the shortest attacking range in towers.json (132). `padStandoff` and `padsUnreachable` are measured against the TRUNK only and are deliberately left that way, so every earlier figure quoted off this file still means what it meant; these three are the flank read on its own.",
  "padsUnreachable": [
   1,
   7,

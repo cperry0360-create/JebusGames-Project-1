@@ -4,6 +4,165 @@ Newest first.
 
 ---
 
+## 2026-09-17 — Level 9 back into band, on one boss's health
+
+### The headline
+
+**Level 9 soaks at 192/480 on normal — 40.0% — against 113/480 when the flank
+went live.** The middle of the 35-45% band. Levels 1-8 and 10 are **identical
+integers on the same 480 seeds**, all nine of them.
+
+**The flank is NOT reverted.** It is painted road now for its whole length —
+0.20% of the lane is off-paint against 12.63% before — and it still carries a
+share of every wave. See `reports/2026-09-17-level-9-retune.md`.
+
+### Two levers, and the second did most of it
+
+| step | level 9 | rate |
+|---|---|---|
+| the flank at `flankShare` 0.25 | 113/480 | 23.5% |
+| `flankShare` 0.10 | 161/480 | 33.5% |
+| PERPLEXED 8100 -> 7650 | **192/480** | **40.0%** |
+
+**The share is the smaller lever and always was**: at 0.05 the level already
+read 33%, because the road EXISTING costs most of it. Level 9's board is thin —
+three of its fifteen pads cannot reach the trunk at all — and a second road
+spreads it.
+
+### The mini-boss sensitivity table
+
+120 seeds each, one row at a time, `tools/soak/tune9.ts`. Scaling all four
+together is useless for tuning: **x0.99 reads 34% and x0.90 reads 55%**.
+
+| | | | | | |
+|---|---|---|---|---|---|
+| **hatGtt** health | 500 | 575 | **650** | 725 | 800 |
+| win rate | 39% | 39% | **34%** | 34% | 35% |
+| **cancer** health | 2500 | 2800 | **3100** | 3400 | 3700 |
+| win rate | 38% | 36% | **34%** | 38% | 33% |
+| **noPilot** health | 2800 | 3100 | **3400** | 3700 | 4000 |
+| win rate | 36% | 35% | **34%** | 33% | 32% |
+| **perplexed** health | 6800 | 7400 | **8100** | 8700 | 9300 |
+| win rate | 52% | 49% | **34%** | 26% | 18% |
+
+HAT-GTT and CANCER are flat and CANCER is not even monotone — both are inside
+the +/-4.5 point noise of 120 seeds. NO-PILOT is mild and moves wave 12 only.
+**PERPLEXED is the lever**: steep, monotone, and it moves wave 16's loss count
+(7, 10, 28, 38, 47) while every other wave's stays identical.
+
+**Armour was not touched on any of the four**, which is `difficulty.json`'s own
+reasoning: armour changes which towers are viable rather than how hard the
+level is.
+
+### Choosing 7650 at 480 rather than at 120
+
+| PERPLEXED | 7500 | 7600 | **7650** | 7700 | 7800 | 7850 | 7900 | 8100 |
+|---|---|---|---|---|---|---|---|---|
+| 480 seeds | 206 | 200 | **192** | 187 | 183 | 177 | 170 | 161 |
+| rate | 42.9% | 41.7% | **40.0%** | 39.0% | 38.1% | 36.9% | 35.4% | 33.5% |
+
+7650 reads 40% over 120 AND 40.0% over 480. **7800 reads 42% over 120 and 38.1%
+over 480**, which is the trap `tune10.ts`'s header warns about and the reason
+nothing here is published off a 120-seed pass.
+
+### The full board
+
+| level | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | **9** | 10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| before | 428 | 255 | 422 | 299 | 218 | 210 | 198 | 184 | **113** | 195 |
+| after | 428 | 255 | 422 | 299 | 218 | 210 | 198 | 184 | **192** | 195 |
+| % | 89 | 53 | 88 | 62 | 45 | 44 | 41 | 38 | **40** | 41 |
+
+**Wave composition was not touched** — the only edit to `waves.level9.json` is
+the sixteen `flankShare` values.
+
+**The repaint itself is worth about two points** of the move: PERPLEXED at 8100
+with share 0.10 read 152/480 before the plate changed and 161/480 after, because
+the corridor is a slightly straighter line than the authored join was and the
+flank junction moved 5 px.
+
+---
+
+## 2026-09-16 — Level 9 grows a third lane, and it costs sixteen points
+
+### The headline
+
+**Level 9 soaks at 113/480 on normal — 23.5% — against 191/480 before the flank.**
+Every other level is **identical on the same 480 seeds**, all nine of them, integer
+for integer. The flank is the only thing that moved and level 9 is the only level
+that moved.
+
+**23.5% is BELOW the 35-45% band and is published as a measurement, not as a
+setting anybody is happy with.** The share that produced it is
+`flankShare: 0.25` on all sixteen waves of `waves.level9.json`, which is the value
+the brief asked to start at. It is one edit away from any other value, which is
+why it lives in the wave table.
+
+### The before and after, 480 seeds, `tools/soak/level.ts <n> <level>`
+
+| level | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | **9** | 10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| before | 428 | 255 | 422 | 299 | 218 | 210 | 198 | 184 | **191** | 195 |
+| after | 428 | 255 | 422 | 299 | 218 | 210 | 198 | 184 | **113** | 195 |
+| % after | 89 | 53 | 88 | 62 | 45 | 44 | 41 | 38 | **24** | 41 |
+
+The baseline column reproduces every published figure in this file, level 9's
+**191/480 included**, which is what makes the two columns comparable.
+
+### The share, swept
+
+120 seeds to find the shape, 480 to publish. Same seeds throughout.
+
+| share | 0.05 | 0.10 | 0.15 | 0.19 | **0.20** | 0.25 | 0.35 |
+|---|---|---|---|---|---|---|---|
+| 120 seeds | 33% | 32% | 31% | 29% | 23% | 23% | 21% |
+| 480 seeds | — | **32% (152/480)** | 31% (149/480) | — | — | **23.5% (113/480)** | — |
+
+**THE CLIFF AT 0.20 IS THE SOAK'S OWN THRESHOLD, NOT THE GAME'S.**
+`Sim.ts`'s `MINOR_LANE_SHARE` is 0.2: a lane carrying less than a fifth of the
+level's bodies is kept out of the scripted player's pad-ranking, so a share of
+0.19 leaves the board it always built and a share of 0.20 makes it cover the
+flank first. A human player has no such step. Read the two sides of the cliff as
+two different boards rather than the level changing between 0.19 and 0.20.
+
+### Why it is harder at all
+
+Level 9's own map note has said for weeks that the board "holds LESS effective
+DPS than fifteen pads suggests": three of its fifteen pads could not reach the
+route at the shortest tower range, and only three cover two passes of it. The
+flank spreads that thin board over a second road. Five chips can cover the flank
+— 8, 9, 12, 13 and 15 — and **pad 15 could cover nothing at all before**, but
+covering the flank is peanuts not spent on the trunk.
+
+The flank is also a **shortcut**: 494.1 px against the 528.1 px of trunk it
+replaces, 6.4% shorter. Small — the south arm saves 54.6% over the north and IS
+the cheap road — but it is shorter rather than longer, so it does not pay for
+itself in walking time either.
+
+### THE BALANCING RECOMMENDATION
+
+**Drop the share to 0.10 and level 9 reads 152/480 = 32%**, three points under
+the band instead of twelve. That is the number to take if level 9 is meant to
+stay where it was tuned. Bringing it the rest of the way needs a mini-boss health
+pass, which is a separate job and was not attempted here.
+
+### One thing in the simulator changed, and it had to
+
+`laneTraffic` in `Sim.ts` walked `transferFrom`, which is documented as returning
+**the first arm at a split**. On a plain merge that is the only arm; on a split it
+handed the first arm 100% of the level's bodies and every other arm **zero**. So
+level 9's flank measured 0% traffic with a quarter of every wave on it. It now
+follows every arm by its share, taking the share from the wave's own `flankShare`
+where the map names an optional branch and from the map's split weights
+otherwise.
+
+**It moves no level but 9.** Level 5 is the only other splitting map and its
+crossroads arms already carry direct spawns well over the threshold, so the
+correction changes nothing there — checked, not assumed: level 5 is 218/480 in
+both columns above.
+
+---
+
 ## 2026-09-14 — Vlaude's powers fire, and his health comes down by ten thousand
 
 ### The headline

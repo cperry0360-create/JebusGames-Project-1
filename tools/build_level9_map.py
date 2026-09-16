@@ -55,6 +55,14 @@ GATEWAY_BASELINE = 40.0
 # door, and the builder asserts the margin rather than trusting it.
 GATE_X = 1145.0
 
+# THE MAP'S OWN SPLIT WEIGHTS AT THE FLANK JUNCTION, and they are a FALLBACK.
+# Every wave in waves.level9.json declares its own `flankShare`, which is where
+# the tuning lives -- per wave, as a share, so a pressure wave and a gauntlet
+# wave can send different amounts round the back. These two are what a wave
+# that declares nothing gets, and they are the same quarter the table starts on
+# so the fallback is not a different level.
+TRUNK_WEIGHT, FLANK_WEIGHT = 3, 1
+
 # What the four node variants are called in art.json, keyed by the name the
 # geometry file's own suggestion uses.
 NODE_KEY = {
@@ -114,6 +122,46 @@ def polyline_length(pts):
     return sum(math.dist(pts[i], pts[i + 1]) for i in range(len(pts) - 1))
 
 
+def split_at_nearest(poly, target):
+    """`poly` cut in two at its own nearest point to `target`.
+
+    Returns (before, after, cut), where `cut` is the point itself and is the
+    LAST waypoint of `before` and the FIRST of `after`, so the two halves share
+    it exactly -- the same property `atIndex: 0` needs at a merge.
+
+    The cut is re-derived HERE rather than copied from the geometry file's
+    `flank.join`, and the caller asserts the two agree. The geometry's join was
+    found against the raw geodesic and this one is found against the SIMPLIFIED,
+    node-snapped polyline the map actually ships; a point that is on the first
+    is a fraction of a pixel off the second, and a lane waypoint that is not on
+    its own lane is the kind of thing that measures fine and draws wrong.
+    """
+    best = (float('inf'), 0, None)
+    for i in range(len(poly) - 1):
+        (ax, ay), (bx, by) = poly[i], poly[i + 1]
+        dx, dy = bx - ax, by - ay
+        L = dx * dx + dy * dy
+        t = 0.0 if L == 0 else max(0.0, min(1.0, ((target[0] - ax) * dx + (target[1] - ay) * dy) / L))
+        q = (ax + t * dx, ay + t * dy)
+        d = math.dist(target, q)
+        if d < best[0]:
+            best = (d, i, q)
+    _, i, q = best
+    cut = [round(q[0], 2), round(q[1], 2)]
+    before = [list(p) for p in poly[:i + 1]]
+    after = [list(p) for p in poly[i + 1:]]
+    # A cut landing on a vertex must not leave a zero-length step either side.
+    if math.dist(before[-1], cut) > 1e-6:
+        before = before + [cut]
+    else:
+        before[-1] = cut
+    if after and math.dist(after[0], cut) > 1e-6:
+        after = [cut] + after
+    else:
+        after = [cut] + after[1:]
+    return before, after, cut
+
+
 def snap(seg, node, which, width, label):
     """Replace a segment's end with the geometry file's own node coordinate.
 
@@ -157,7 +205,6 @@ def main():
     south, m = snap(c['south'], fork, 'start', width, 'south'); snaps.append(('south start', m))
     south, m = snap(south, rejoin, 'end', width, 'south'); snaps.append(('south end', m))
     tail, m = snap(c['tail'], rejoin, 'start', width, 'tail'); snaps.append(('tail start', m))
-    tail, m = snap(tail, junction, 'end', width, 'tail'); snaps.append(('tail end', m))
     door, m = snap(c['door'], junction, 'start', width, 'door'); snaps.append(('door start', m))
     door, m = snap(door, door_terminal, 'end', width, 'door'); snaps.append(('door end', m))
 
@@ -165,19 +212,59 @@ def main():
     trunk_head = [entry] + stem            # gateway, the mouth, then the stem to the fork
     north_lane = trunk_head + north[1:]    # the fork is shared, so it is not repeated
     south_lane = trunk_head + south[1:]
-    tail_lane = tail + door[1:]
 
     assert north_lane[len(trunk_head) - 1] == south_lane[len(trunk_head) - 1] == \
         [float(fork[0]), float(fork[1])]
-    assert north_lane[-1] == south_lane[-1] == tail_lane[0] == [float(rejoin[0]), float(rejoin[1])]
-    assert tail_lane[-1] == [float(door_terminal[0]), float(door_terminal[1])]
+    assert north_lane[-1] == south_lane[-1] == tail[0] == [float(rejoin[0]), float(rejoin[1])]
+
+    # ---------------------------------------------------------------- the flank
+    #
+    # THE THIRD LANE, and every metre of it is now traced. The plate paints a
+    # road round the bottom right that no lane walked -- 10.3% of level 9's
+    # painted trace by `tools/orphan_roads.py`, the largest orphan on any of
+    # the ten boards.
+    #
+    # IT USED TO NEED AN AUTHORED JOIN AND DOES NOT ANY MORE. The spur was a
+    # STUB: its north end was the door junction and its south end a rounded cap
+    # on open substrate, 112 px from the trunk with 63 px of bare board between
+    # the kerbs, and this file bridged that with one straight segment the way
+    # `map_level6.json` bridges 82 px. `tools/paint_level9_flank.py` painted
+    # that corridor into the plate, `tools/trace_level9.py` re-derived the
+    # geometry from it, and the flank is now a geodesic down the middle of
+    # painted trace exactly like `north` and `south`. The gateway point off the
+    # west edge is once again the ONLY coordinate in this file that is not
+    # traced.
+    flank_junction = g['nodes']['flankJoin']
+    tail, m = snap(tail, flank_junction, 'end', width, 'tail'); snaps.append(('tail end', m))
+    hook, m = snap(c['hook'], flank_junction, 'start', width, 'hook'); snaps.append(('hook start', m))
+    hook, m = snap(hook, junction, 'end', width, 'hook'); snaps.append(('hook end', m))
+    flank, m = snap(c['flank'], flank_junction, 'start', width, 'flank')
+    snaps.append(('flank start', m))
+    flank, m = snap(flank, junction, 'end', width, 'flank'); snaps.append(('flank end', m))
+
+    hook_lane = hook + door[1:]
+    flank_lane = [list(p) for p in flank]
+    tail_run = [list(p) for p in tail]
+    assert tail_run[-1] == flank_lane[0] == hook_lane[0] == \
+        [float(flank_junction[0]), float(flank_junction[1])]
+    assert flank_lane[-1] == [float(junction[0]), float(junction[1])]
+    rejoin_index = next(i for i, p in enumerate(hook_lane)
+                        if math.dist(p, junction) < 1e-6)
+    assert hook_lane[-1] == [float(door_terminal[0]), float(door_terminal[1])]
 
     # GATE_X HAS TO BE CROSSED ONCE, and once only, or the fade fires in the
-    # middle of the board. Checked against the lane that actually reaches it.
-    before_door = max(p[0] for p in tail_lane[:-2])
+    # middle of the board. Checked against the lane that actually reaches it,
+    # which is `hook`.
+    before_door = max(p[0] for p in hook_lane[:-2])
     assert before_door < GATE_X < door_terminal[0], (
-        f'the tail reaches x={before_door:.1f} before the door approach and the door is at '
+        f'the hook reaches x={before_door:.1f} before the door approach and the door is at '
         f'x={door_terminal[0]}; GATE_X={GATE_X} is not between them')
+    # And no other lane may reach it, or `Gateway.laneGates` would hand that
+    # lane a gate distance part way along itself instead of its own end.
+    for name, pts in (('tail', tail_run), ('flank', flank_lane),
+                      ('north', north_lane), ('south', south_lane)):
+        assert max(p[0] for p in pts) < GATE_X, (
+            f'lane {name} reaches x={max(p[0] for p in pts):.1f}, past GATE_X={GATE_X}')
 
     spots = [list(p) for p in g['pads']]
     chips = g['padChips']
@@ -232,6 +319,13 @@ def main():
                       f'rejoin at ({rejoin[0]}, {rejoin[1]}). '
                       f'{polyline_length(north_lane):.0f} px.',
         'mainMerge': {'into': 'tail', 'atIndex': 0},
+        'flankId': 'flank',
+        '_flankId': 'THE OPTIONAL BRANCH, named here so a wave table can put a SHARE of a '
+                    'wave down it without naming a lane itself. `mainId` says which lane the '
+                    'map\'s own `waypoints` are; this says which lane is the one a wave may '
+                    'divert traffic onto, and a wave\'s `flankShare` is read against it. A '
+                    'map without this key ignores `flankShare` entirely, which is every '
+                    'other level.',
         'lanes': [
             {
                 'id': 'south',
@@ -247,26 +341,69 @@ def main():
             },
             {
                 'id': 'tail',
-                'waypoints': tail_lane,
-                '_waypoints': 'THE REJOIN TO THE DOOR. Waypoint 0 IS the rejoin, to 0.00 '
-                              'px, which is what `atIndex: 0` on both arms means. Its LAST '
-                              'waypoint is the door itself and is not extended off-plate, '
-                              'because the door is not a frame edge -- see `_exit`.',
+                'waypoints': tail_run,
+                'merge': [
+                    {'into': 'hook', 'atIndex': 0, 'weight': TRUNK_WEIGHT},
+                    {'into': 'flank', 'atIndex': 0, 'weight': FLANK_WEIGHT},
+                ],
+                '_waypoints': 'THE REJOIN TO THE FLANK JUNCTION. Waypoint 0 IS the rejoin, '
+                              'to 0.00 px, which is what `atIndex: 0` on both arms means. '
+                              'Its LAST waypoint is the flank junction at '
+                              f'({flank_junction[0]}, {flank_junction[1]}), where the lane SPLITS -- level 5\'s '
+                              'crossroads shape, and the arm a walker takes is settled from '
+                              'the number it was given at spawn, so nothing switches lane '
+                              f'mid-route. {polyline_length(tail_run):.0f} px.',
+            },
+            {
+                'id': 'flank',
+                'waypoints': flank_lane,
+                'merge': {'into': 'hook', 'atIndex': rejoin_index},
+                '_waypoints': 'THE FLANK, round the bottom right. Waypoint 0 is the flank '
+                              'junction on the tail, and every waypoint after it is a '
+                              'geodesic down the middle of PAINTED TRACE to the door '
+                              'junction, where it merges into `hook` '
+                              f'at waypoint {rejoin_index} -- {polyline_length(hook_lane) - polyline_length(hook_lane[:rejoin_index]):.0f} '
+                              'px short of the door, so it inherits the door\'s own gate '
+                              'and fade rather than needing its own. '
+                              f'{polyline_length(flank_lane):.0f} px against the '
+                              f'{polyline_length(hook_lane[:rejoin_index + 1]):.0f} px of '
+                              '`hook` it stands in for: A SHORTCUT, by '
+                              f'{polyline_length(hook_lane[:rejoin_index + 1]) - polyline_length(flank_lane):.0f} '
+                              'px, which is 7% and nothing like the 61% the south arm saves '
+                              'over the north. It is a lateral road, not a cheap one.',
+            },
+            {
+                'id': 'hook',
+                'waypoints': hook_lane,
+                '_waypoints': 'THE FLANK JUNCTION TO THE DOOR, up the right-hand hook and '
+                              'over the top. The ONLY terminal on this map -- it is the lane '
+                              'with no merge, so it is the one that can leak and the one '
+                              'that gets the door badge. Its LAST waypoint is the door '
+                              'itself and is not extended off-plate, because the door is '
+                              f'not a frame edge -- see `_exit`. {polyline_length(hook_lane):.0f} px.',
             },
         ],
-        '_lanes': 'TWO ENTRANCES, ONE EXIT, AND NO FORK IN THE DATA. The plate paints a '
+        '_lanes': 'TWO ENTRANCES, ONE EXIT, AND ONE SPLIT. The plate paints a '
                   'trace that splits just inside the mouth and rejoins at the bottom of '
-                  'the board, which is a diamond -- and `validateLanes` reports a diamond '
-                  'as "merges in a circle", because its cycle check shares one visited set '
-                  'across sibling branches instead of keeping one per path. The runtime '
-                  'underneath is fine; the validator is not. So the two arms are modelled '
+                  'the board, which is a diamond -- and `validateLanes` USED TO report a '
+                  'diamond as "merges in a circle", because its cycle check shared one '
+                  'visited set across sibling branches instead of keeping one per path. The '
+                  'runtime underneath was always fine; the validator was not, and the flank '
+                  'below is the diamond that finally made it worth fixing -- it is one per '
+                  'path now. The two arms are still modelled '
                   'as TWO ENTRANCE LANES that share the painted mouth and merge into the '
                   'tail, which is levels 3 and 4\'s shape, needs nothing from the engine, '
                   'and puts exactly the same walkers on exactly the same paint. `south` '
                   'declares `entrance` because nothing merges into it; see the note on '
                   'LaneDef. Both are fed by the wave table by name. See '
                   'reports/2026-09-13-level-9-geometry.md for the validator bug and its '
-                  'one-line fix.',
+                  'one-line fix, which is now applied. THE THIRD LANE IS THE FLANK, and it is a SPLIT rather '
+                  'than a second entrance: `tail` ends at the flank junction and names two '
+                  'continuations, so a walker picks its arm there from the number it was '
+                  'given at spawn. NEITHER `flank` NOR `hook` GETS A BADGE at its start -- '
+                  'both are fed into, and `markersFor` only draws a spawn badge on a lane '
+                  'nothing merges into. The badge set is unchanged: one mouth on the west '
+                  'edge and one door.',
         'exit': {
             'gateX': GATE_X,
             'vanishX': float(door_terminal[0]),
@@ -289,12 +426,17 @@ def main():
                        'the buildable ground IS the fifteen chips the artist painted, and '
                        'the substrate between them is scenery. tools/check_level9.py '
                        "verifies every pad's 24 px core sits on chip rather than board. "
-                       'THREE OF THE FIFTEEN CANNOT REACH THE ROUTE AT ALL at the shortest '
-                       'attacking range in towers.json (pads 1, 7 and 15, at 156, 132 and '
-                       '194 px from the nearest centreline), and only three of the fifteen '
-                       'cover two separate passes of it. This board holds LESS effective '
-                       'DPS than fifteen pads suggests, not more, and every mini-boss '
-                       'health figure is soaked against it and against no other level.',
+                       'THREE OF THE FIFTEEN COULD NOT REACH THE TRUNK AT ALL at the '
+                       'shortest attacking range in towers.json (pads 1, 7 and 15, at 156, '
+                       '132 and 194 px from the nearest centreline), and only three of the '
+                       'fifteen cover two separate passes of it. THE FLANK TAKES THAT DOWN '
+                       'TO TWO: pads '
+                       + ', '.join(str(n) for n in g['padsCoveringFlank'])
+                       + ' can shoot at it, and pad 15 -- 194 px from the trunk and useless '
+                       'on every board before this change -- is 74 px from the flank. Pads 1 '
+                       'and 7 still reach nothing. This board holds LESS effective DPS than '
+                       'fifteen pads suggests, not more, and every mini-boss health figure '
+                       'is soaked against it and against no other level.',
         'padArt': pad_art,
         '_padArt': 'FOUR BUILD-NODE PICTURES, which no other level has -- every other board '
                    'draws one pad art on every spot. The pairing is the geometry file\'s '
@@ -330,10 +472,20 @@ def main():
     print(f'wrote {os.path.relpath(OUT, ROOT)}')
     print(f'  north {len(north_lane):3d} points, {polyline_length(north_lane):8.2f} px')
     print(f'  south {len(south_lane):3d} points, {polyline_length(south_lane):8.2f} px')
-    print(f'  tail  {len(tail_lane):3d} points, {polyline_length(tail_lane):8.2f} px')
-    print(f'  route via north {polyline_length(north_lane) + polyline_length(tail_lane):8.2f} px')
-    print(f'  route via south {polyline_length(south_lane) + polyline_length(tail_lane):8.2f} px')
-    print(f'  gateway {entry}, door {tail_lane[-1]}, gateX {GATE_X} '
+    print(f'  tail  {len(tail_run):3d} points, {polyline_length(tail_run):8.2f} px')
+    print(f'  flank {len(flank_lane):3d} points, {polyline_length(flank_lane):8.2f} px')
+    print(f'  hook  {len(hook_lane):3d} points, {polyline_length(hook_lane):8.2f} px'
+          f'   (flank rejoins at waypoint {rejoin_index})')
+    trunk = polyline_length(tail_run) + polyline_length(hook_lane)
+    viaflank = (polyline_length(tail_run) + polyline_length(flank_lane)
+                + polyline_length(hook_lane) - polyline_length(hook_lane[:rejoin_index + 1]))
+    print(f'  route via north, trunk {polyline_length(north_lane) + trunk:8.2f} px')
+    print(f'  route via north, flank {polyline_length(north_lane) + viaflank:8.2f} px')
+    print(f'  route via south, trunk {polyline_length(south_lane) + trunk:8.2f} px')
+    print(f'  route via south, flank {polyline_length(south_lane) + viaflank:8.2f} px')
+    print(f'  flank junction {flank_junction}, rejoin {junction}, '
+          f'{g["flank"]["joinBare"]} px of the flank off the paint')
+    print(f'  gateway {entry}, door {hook_lane[-1]}, gateX {GATE_X} '
           f'(highest earlier x {before_door:.1f})')
     print('  node snaps: ' + ', '.join(f'{n} {d:.1f}px' for n, d in snaps))
     print(f'  {len(spots)} build spots, {len(SCENERY)} scenery items, road width {width}')

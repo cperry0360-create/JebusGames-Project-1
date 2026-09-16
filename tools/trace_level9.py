@@ -404,6 +404,48 @@ def point_to_polyline(p, poly):
     return best
 
 
+def closest_on_polyline(p, poly):
+    """The nearest point ON `poly` to `p`, and how far away it is.
+
+    `point_to_polyline` above answers only the distance. The flank join needs
+    the POINT as well, and deriving it here rather than picking the nearest
+    vertex by eye is the difference between a traced coordinate and a typed
+    one: the join may fall part way along a segment, and on this trace it very
+    nearly does.
+    """
+    best, at = float('inf'), None
+    for i in range(len(poly) - 1):
+        ax, ay = poly[i]
+        bx, by = poly[i + 1]
+        dx, dy = bx - ax, by - ay
+        L = dx * dx + dy * dy
+        t = 0.0 if L == 0 else max(0.0, min(1.0, ((p[0] - ax) * dx + (p[1] - ay) * dy) / L))
+        q = (ax + t * dx, ay + t * dy)
+        d = math.hypot(p[0] - q[0], p[1] - q[1])
+        if d < best:
+            best, at = d, q
+    return at, best
+
+
+def unpainted_run(w, h, band, a, b):
+    """How much of the straight line a->b crosses substrate rather than trace.
+
+    Sampled at one pixel: the count of samples outside the painted band, times
+    the sample spacing. This is the number the join has to be honest about --
+    the centreline gap counts both roads' half-widths, and what a player sees
+    is only the part with no paint under it.
+    """
+    n = max(1, int(math.dist(a, b)))
+    off = 0
+    for k in range(n + 1):
+        t = k / n
+        x = int(round(a[0] + (b[0] - a[0]) * t))
+        y = int(round(a[1] + (b[1] - a[1]) * t))
+        if not (0 <= x < w and 0 <= y < h and band[y * w + x]):
+            off += 1
+    return off * math.dist(a, b) / n
+
+
 # ------------------------------------------------------------------ openings
 
 def edge_runs(w, h, mask, min_len=4):
@@ -603,9 +645,20 @@ def main():
     if args.audit:
         for p in sorted(enclosed, key=len, reverse=True)[:8]:
             print(f'      {len(p):7d} px  bbox {bbox(w, p)}')
-    if len(big) != 1:
-        raise SystemExit(f'expected one enclosed region (the cycle); found {len(big)}')
-    face = big[0]
+    # TWO ENCLOSED REGIONS, NOT ONE, since the flank corridor was painted in.
+    # The western face is the diamond the two arms make just inside the mouth;
+    # the eastern one is the loop the hook and the flank make round the bottom
+    # right. Ordered by centroid x, and the gap between them is most of the
+    # board, so the ordering is not a close call -- it is printed and asserted.
+    if len(big) != 2:
+        raise SystemExit(f'expected two enclosed regions (the two cycles); found {len(big)}')
+    big.sort(key=lambda p: sum(i % w for i in p) / len(p))
+    face, faceE = big
+    cxW = sum(i % w for i in face) / len(face)
+    cxE = sum(i % w for i in faceE) / len(faceE)
+    print(f'  the west face (the two arms) is centred at x={cxW:.0f}, '
+          f'the east face (the hook and the flank) at x={cxE:.0f}')
+    assert cxE - cxW > 200, 'the two enclosed faces are not the two this level has'
 
     # ------------------------------------------------------------- the openings
     print('\n--- where the trace meets the frame ---')
@@ -635,14 +688,22 @@ def main():
     # taken off a screenshot is four chances to be 20 px out, so each one is
     # defined by a property of the paint:
     #
-    #   ring    the band within one trace width of the enclosed face -- the
-    #           cycle, and nothing else.
-    #   A       the ring pixel nearest the entrance stub: where the trace forks.
-    #   B       the ring pixel nearest the rest of the board: where it rejoins.
+    #   ring    the band within one trace width of an enclosed face -- that
+    #           cycle, and nothing else. There are two faces and two rings.
+    #   A       the west ring pixel nearest the entrance stub: where it forks.
+    #   B       the west ring pixel nearest the rest of the board: the rejoin.
+    #   F       the east ring pixel nearest the board to its west: where the
+    #           flank leaves the trunk.
+    #   C       the east ring pixel nearest the door stub: where it comes back.
     #   X       the middle of the last full-width column: the door mouth.
-    #   S       the band pixel geodesically farthest from the entrance: the cap
-    #           of the dead-end spur.
-    #   C       the last pixel the walks B->X and B->S have in common.
+    #
+    # F AND C USED TO BE DERIVED A DIFFERENT WAY and the difference is the
+    # whole of this change. The spur was a STUB: `S` was the band pixel
+    # geodesically farthest from the entrance -- the cap of it -- and `C` was
+    # the last pixel the walks to the door and to that cap had in common. There
+    # is no cap now. The corridor between the trunk and it is painted, the spur
+    # is a loop rather than a stub, and its two junctions fall out of the same
+    # ring-and-rest method A and B already used. One method, twice.
     #
     # THE WIDTH IS MEASURED BEFORE ANYTHING ELSE, because the ring below is
     # defined in trace widths and the obvious place to measure one -- the
@@ -655,10 +716,11 @@ def main():
                      (xmax - 4, (column_runs(w, h, band, xmax - 4)[0][0]
                                  + column_runs(w, h, band, xmax - 4)[0][1]) // 2))
     width_guess = median(widths(w, h, band, rough))
-    ring = ring_of(w, h, band, face, int(round(width_guess * 1.7)))
+    reach = int(round(width_guess * 1.7))
+    ring = ring_of(w, h, band, face, reach)
     rest = [p for p in components(w, h, bytearray(
         1 if band[i] and not ring[i] else 0 for i in range(w * h))) if len(p) > 400]
-    print(f'\n--- the cycle ---\n  the ring round the enclosed region is {sum(ring)} px; '
+    print(f'\n--- the west cycle ---\n  the ring round it is {sum(ring)} px; '
           f'{len(rest)} run(s) of band hang off it')
     stub = next(p for p in rest if any(i % w == 0 for i in p))
     others = [p for p in rest if p is not stub]
@@ -675,22 +737,28 @@ def main():
     xdoor, ytop, ybot = door_mouth(w, h, band, xmax, width_guess)
     X = (xdoor, (ytop + ybot) // 2)
 
-    Dent = geodesic_field(w, h, band, [entrance[1] * w + entrance[0]])
-    S = max(range(w * h), key=lambda i: Dent[i] if band[i] and Dent[i] != float('inf') else -1)
-    S = to_middle(w, h, band, deep, (S % w, S // w), 20)
-
-    to_door = geodesic(w, h, band, deep, maxdeep, B, X)
-    to_spur = geodesic(w, h, band, deep, maxdeep, B, S)
-    shared = 0
-    while (shared < min(len(to_door), len(to_spur))
-           and math.dist(to_door[shared], to_spur[shared]) < 3):
-        shared += 1
-    C = to_middle(w, h, band, deep,
-                  tuple(int(round(v)) for v in to_door[shared - 1]), 20)
-    print(f'  A fork      {A}\n  B rejoin    {B}\n  C door junction {C}\n'
-          f'  X door      {X}   (mouth x={xdoor} = {xdoor / w:.1%}, y {ytop}-{ybot} = '
-          f'{ytop / h:.1%}-{ybot / h:.1%}; the last stray pixel is at x={xmax})\n'
-          f'  S spur cap  {S}   ({Dent[S[1] * w + S[0]]:.0f} px of trace from the entrance)')
+    # THE EAST CYCLE, the same way. Cutting its ring out of the band leaves
+    # exactly two runs: everything west of the flank junction, which is the one
+    # holding the entrance, and the door stub east of the door junction. So the
+    # two nodes are the ring pixels nearest each of them, and neither is typed.
+    ringE = ring_of(w, h, band, faceE, reach)
+    restE = [p for p in components(w, h, bytearray(
+        1 if band[i] and not ringE[i] else 0 for i in range(w * h))) if len(p) > 400]
+    print(f'--- the east cycle ---\n  the ring round it is {sum(ringE)} px; '
+          f'{len(restE)} run(s) of band hang off it')
+    if len(restE) != 2:
+        raise SystemExit(f'expected the trunk and the door stub off the east cycle; '
+                         f'found {len(restE)}')
+    ent_i = entrance[1] * w + entrance[0]
+    west_side = next((p for p in restE if ent_i in set(p)), None)
+    if west_side is None:
+        raise SystemExit('neither run off the east cycle reaches the entrance')
+    door_side = next(p for p in restE if p is not west_side)
+    ringEpts = [i for i in range(w * h) if ringE[i]]
+    F0 = nearest(w, h, ringEpts, west_side)
+    C0 = nearest(w, h, ringEpts, door_side)
+    F0 = to_middle(w, h, band, deep, (F0 % w, F0 // w), 20)
+    C0 = to_middle(w, h, band, deep, (C0 % w, C0 // w), 20)
 
     # ------------------------------------------------------------- the lines
     #
@@ -711,54 +779,166 @@ def main():
     # the same answer with the number derived instead of guessed, and the
     # radius it lands on is printed so a later reader can see how far it had
     # to go.
-    arms, rcut = [], None
-    for r in range(int(width_guess * 0.7), int(width_guess * 3)):
-        cut = disc(*A, r) | disc(*B, r)
-        found = [p for p in components(w, h, bytearray(
-            1 if ring[i] and i not in cut else 0 for i in range(w * h))) if len(p) > 2000]
-        if len(found) == 2:
-            arms, rcut, cut_at = found, r, cut
-            break
-    if len(arms) != 2:
-        raise SystemExit('no cut radius separates the cycle into two arms')
-    print(f'  the cycle parts into two arms once the cut discs reach r={rcut}')
-    cut = cut_at
+    def split_ring(rng, P, Q, label, floor=2000):
+        arms, rcut, cut_at = [], None, None
+        for r in range(int(width_guess * 0.7), int(width_guess * 3)):
+            cut = disc(*P, r) | disc(*Q, r)
+            found = [p for p in components(w, h, bytearray(
+                1 if rng[i] and i not in cut else 0 for i in range(w * h))) if len(p) > floor]
+            if len(found) == 2:
+                arms, rcut, cut_at = found, r, cut
+                break
+        if len(arms) != 2:
+            raise SystemExit(f'no cut radius separates the {label} cycle into two arms')
+        print(f'  the {label} cycle parts into two arms once the cut discs reach r={rcut}')
+        return arms, cut_at
+
+    arms, cut = split_ring(ring, A, B, 'west')
     arms.sort(key=lambda p: sum(i // w for i in p) / len(p))
-    names = ('north', 'south')
     lines = {}
-    for name, pts in zip(names, arms):
+    for name, pts in zip(('north', 'south'), arms):
         m = as_mask(w, h, pts)
         for i in cut:
             if band[i]:
                 m[i] = 1
         lines[name] = geodesic(w, h, m, deep, maxdeep, A, B)
+
+    # THE EAST CYCLE'S TWO ARMS ARE THE HOOK AND THE FLANK, and they are told
+    # apart by HOW FAR UP THE BOARD THEY GO rather than by length. The hook
+    # climbs to the top of the right-hand side and the flank stays along the
+    # bottom, so the two answers are hundreds of pixels apart; their lengths are
+    # within 20% of each other and would be a coin toss. The gap is asserted.
+    #
+    # THE SPLIT IS RUN TWICE, and the first run is only to find the arms. `F0`
+    # and `C0` come off the ring, and a ring is band within 1.7 trace widths of
+    # the face, so it OVERSHOOTS a junction by however much of that reach is
+    # left when it gets there -- measured here, 41 px west of the flank
+    # junction and 44 px east of the door one. That is close enough to cut the
+    # cycle in the right two places and far too coarse to ship as a node.
+    earms, _ecut = split_ring(ringE, F0, C0, 'east')
+    earms.sort(key=lambda p: min(i // w for i in p))
+    hook_pts, flank_pts = earms
+    top_hook = min(i // w for i in hook_pts)
+    top_flank = min(i // w for i in flank_pts)
+    print(f'  the hook reaches y={top_hook} and the flank y={top_flank}')
+    assert top_flank - top_hook > 100, (
+        f'the two east arms reach y={top_hook} and y={top_flank}; they are not '
+        'the hook and the flank')
+
+    # SO THE NODES COME OFF THE WALKS INSTEAD, which is the method the old
+    # tracer used for the door junction and is exact: two geodesics that start
+    # together and end on opposite arms share the trunk and part AT the
+    # junction.
+    #
+    # BOTH TARGETS HAVE TO BE DEEP IN AN ARM, and the door is not one of them.
+    # Walking to the door was the obvious choice and it is wrong here: the
+    # flank is 537 px against the hook's 600, so the shortest path from the
+    # rejoin to the door goes ROUND THE FLANK, both walks take the same arm and
+    # they part at the far end of it. Measured, that put both nodes on the
+    # bottom of the flank, 200 px and 280 px from where they belong.
+    #
+    # `H` is the top of the hook and `M` the bottom of the flank -- as deep into
+    # their own arms as the paint goes, and nowhere near either node.
+    H = min(hook_pts, key=lambda i: i // w)
+    H = to_middle(w, h, band, deep, (H % w, H // w), 20)
+    M = max(flank_pts, key=lambda i: i // w)
+    M = to_middle(w, h, band, deep, (M % w, M // w), 20)
+
+    def part_at(src, one, two):
+        a = geodesic(w, h, band, deep, maxdeep, src, one)
+        b = geodesic(w, h, band, deep, maxdeep, src, two)
+        k = 0
+        while k < min(len(a), len(b)) and math.dist(a[k], b[k]) < 3:
+            k += 1
+        return to_middle(w, h, band, deep, tuple(int(round(v)) for v in a[k - 1]), 20)
+
+    F = part_at(B, H, M)
+    C = part_at(X, H, M)
+    print(f'  A fork           {A}\n  B rejoin         {B}\n'
+          f'  F flank junction {F}   (the ring said {F0}, '
+          f'{math.dist(F, F0):.0f} px out)\n'
+          f'  C door junction  {C}   (the ring said {C0}, '
+          f'{math.dist(C, C0):.0f} px out)\n'
+          f'  H hook top       {H}\n  M flank bottom   {M}\n'
+          f'  X door           {X}   (mouth x={xdoor} = {xdoor / w:.1%}, y {ytop}-{ybot} = '
+          f'{ytop / h:.1%}-{ybot / h:.1%}; the last stray pixel is at x={xmax})')
+
+    earms, ecut = split_ring(ringE, F, C, 'east (again, on the derived nodes)')
+    earms.sort(key=lambda p: min(i // w for i in p))
+    hook_pts, flank_pts = earms
+    for name, pts in (('hook', hook_pts), ('flank', flank_pts)):
+        m = as_mask(w, h, pts)
+        for i in ecut:
+            if band[i]:
+                m[i] = 1
+        lines[name] = geodesic(w, h, m, deep, maxdeep, F, C)
+
     lines['stem'] = geodesic(w, h, band, deep, maxdeep, entrance, A)
-    lines['tail'] = geodesic(w, h, band, deep, maxdeep, B, C)
+    lines['tail'] = geodesic(w, h, band, deep, maxdeep, B, F)
     lines['door'] = geodesic(w, h, band, deep, maxdeep, C, X)
-    lines['spur'] = geodesic(w, h, band, deep, maxdeep, C, S)
 
     print('\n--- the centrelines ---')
-    for name in ('stem', 'north', 'south', 'tail', 'door', 'spur'):
+    for name in ('stem', 'north', 'south', 'tail', 'hook', 'flank', 'door'):
         print(f'  {name:6s} {polyline_length(lines[name]):8.1f} px')
     routes = {
         'north': polyline_length(lines['stem']) + polyline_length(lines['north'])
-        + polyline_length(lines['tail']) + polyline_length(lines['door']),
+        + polyline_length(lines['tail']) + polyline_length(lines['hook'])
+        + polyline_length(lines['door']),
         'south': polyline_length(lines['stem']) + polyline_length(lines['south'])
-        + polyline_length(lines['tail']) + polyline_length(lines['door']),
+        + polyline_length(lines['tail']) + polyline_length(lines['hook'])
+        + polyline_length(lines['door']),
     }
     total = sum(polyline_length(l) for l in lines.values())
     print(f'  route via the north arm {routes["north"]:.1f}, via the south arm '
           f'{routes["south"]:.1f}')
     print(f'  every painted stretch added up: {total:.1f}')
 
+    # ---------------------------------------------------------------- the flank
+    #
+    # THE SPUR USED TO BE A STUB AND IS NOW A LOOP. Its north end was always
+    # the door junction; its south end was a rounded cap on open substrate,
+    # 112 px from the trunk with 63 px of bare board between the two kerbs, and
+    # `map_level9.json` bridged that with an AUTHORED JOIN -- one straight
+    # segment, the same thing `map_level6.json` does over 82 px. A walker on it
+    # crossed bare board beside a capacitor and 15.2% of the flank lane was off
+    # the paint.
+    #
+    # tools/paint_level9_flank.py painted that corridor, so there is nothing to
+    # author: `flank` above is a geodesic down the middle of painted trace from
+    # end to end, exactly like `north` and `south`. `joinBare` is kept and reads
+    # zero, because a number that used to be 63 and is now 0 is worth printing
+    # rather than deleting.
+    simp_tail = [tuple(p) for p in simplify(lines['tail'], 1.2)]
+    simp_flank = [tuple(p) for p in simplify(lines['flank'], 1.2)]
+    simp_hook = [tuple(p) for p in simplify(lines['hook'], 1.2)]
+    flank_line = simp_flank
+    flank_len = polyline_length(simp_flank)
+    replaced = polyline_length(simp_hook)
+    bare = sum(unpainted_run(w, h, band, simp_flank[i], simp_flank[i + 1])
+               for i in range(len(simp_flank) - 1))
+    print(f'\n--- the flank ---\n  junction {F} on the trunk, rejoin {C} at the door '
+          f'junction\n  {bare:.1f} px of the flank has no trace under it\n'
+          f'  flank {flank_len:.1f} px against the hook\'s {replaced:.1f}: '
+          f'{"a SHORTCUT" if flank_len < replaced else "a DETOUR"} by '
+          f'{abs(flank_len - replaced):.1f} px ({abs(flank_len - replaced) / replaced:.1%})')
+
     # --------------------------------------------------------------- the width
     print('\n--- trace width ---')
+    # THE HOOK IS IN THIS SAMPLE, and it has to be. The width is the median over
+    # the trunk, and the trunk used to be stem + both arms + `tail`, where
+    # `tail` ran all the way from the rejoin to the door junction. Cutting it at
+    # the flank junction split that stretch into `tail` and `hook`; measuring
+    # only `tail` would sample a third of the paint the figure has always meant
+    # and read 46.0 instead of 47.5 -- a derived number moving because a name
+    # moved. The flank is left out for the same reason it is left out of
+    # `padStandoff`: it is new paint, and the trunk's width should not shift
+    # because it exists.
+    sample = ('stem', 'north', 'south', 'tail', 'hook')
     per = {}
-    for name in ('stem', 'north', 'south', 'tail'):
+    for name in sample:
         per[name] = median(widths(w, h, band, lines[name]))
         print(f'  {name:6s} median {per[name]:5.1f}')
-    allw = sorted(sum((widths(w, h, band, lines[n]) for n in
-                       ('stem', 'north', 'south', 'tail')), []))
+    allw = sorted(sum((widths(w, h, band, lines[n]) for n in sample), []))
     trace_width = round(median(allw), 1)
     by_area = sum(band) / trace_width
     print(f'  over the whole route: {trace_width}')
@@ -779,13 +959,16 @@ def main():
         chipinfo.append({'box': [x0, y0, x1, y1], 'w': x1 - x0 + 1, 'h': y1 - y0 + 1,
                          'area': len(pts)})
 
-    # THE ROUTE IS WHAT A TOWER SHOOTS AT, and the spur is not on it. Every
-    # standoff and every coverage figure below is measured against the walked
-    # route only; the distance to the dead-end spur is carried separately so
-    # that a build session which decides to spawn on it can see what changes.
-    route_lines = [lines[n] for n in ('stem', 'north', 'south', 'tail', 'door')]
-    route_pts = (lines['stem'] + lines['north'] + lines['tail'] + lines['door'])
-    south_pts = (lines['stem'] + lines['south'] + lines['tail'] + lines['door'])
+    # THE ROUTE IS WHAT A TOWER SHOOTS AT, and the TRUNK is what `padStandoff`
+    # has always meant on this level: stem, both arms, the tail, the hook and
+    # the door. The flank is walked now rather than decorative, but it is kept
+    # out of this figure deliberately -- every coverage number quoted off this
+    # file since the level was traced is a trunk number, and changing what the
+    # word means would silently move all of them. `padStandoffToFlank` and
+    # `padsCoveringFlank` below are the flank read on its own.
+    route_lines = [lines[n] for n in ('stem', 'north', 'south', 'tail', 'hook', 'door')]
+    route_pts = (lines['stem'] + lines['north'] + lines['tail'] + lines['hook'] + lines['door'])
+    south_pts = (lines['stem'] + lines['south'] + lines['tail'] + lines['hook'] + lines['door'])
 
     def passes(p, reach):
         """How many separate stretches of the route this pad can shoot at.
@@ -818,12 +1001,13 @@ def main():
     reach = shortest_tower_range()
     print(f'\n  the shortest attacking range in src/data/towers.json is {reach}; '
           f'levels 6-8 were measured at {LEGACY_TOWER_RANGE}')
-    print(f'\n  {"pad":>3} {"x":>7} {"y":>6} {"chip":>9} {"to route":>9} {"to spur":>8} '
+    print(f'\n  {"pad":>3} {"x":>7} {"y":>6} {"chip":>9} {"to trunk":>9} {"to flank":>8} '
           f'{f"passes@{reach}":>10} {f"passes@{LEGACY_TOWER_RANGE}":>11}')
-    stand, spurd, twopass, legacy_twopass, unreachable = [], [], 0, 0, []
+    stand, twopass, legacy_twopass, unreachable = [], 0, 0, []
+    flankd, covers_flank = [], []
     for n, (cx, cy) in enumerate(pads, 1):
         d = min(point_to_polyline((cx, cy), l) for l in route_lines)
-        sp = point_to_polyline((cx, cy), lines['spur'])
+        fl = point_to_polyline((cx, cy), flank_line)
         k = passes((cx, cy), reach)
         kl = passes((cx, cy), LEGACY_TOWER_RANGE)
         twopass += 1 if k >= 2 else 0
@@ -831,10 +1015,12 @@ def main():
         if k == 0:
             unreachable.append(n)
         stand.append(round(d, 1))
-        spurd.append(round(sp, 1))
+        flankd.append(round(fl, 1))
+        if fl <= reach:
+            covers_flank.append(n)
         ci = chipinfo[n - 1]
         print(f'  {n:3d} {cx:7.1f} {cy:6.1f} {ci["w"]:4d}x{ci["h"]:<4d} {d:9.1f} '
-              f'{sp:8.1f} {k:10d} {kl:11d}')
+              f'{fl:8.1f} {k:10d} {kl:11d}')
     ws = sorted(c['w'] for c in chipinfo)
     hs = sorted(c['h'] for c in chipinfo)
     closest = min(math.dist(pads[i], pads[j])
@@ -848,6 +1034,14 @@ def main():
           + (', '.join(str(n) for n in unreachable) if unreachable else 'none'))
     print(f'  PADS THAT COVER TWO SEPARATE PASSES OF THE ROUTE: {twopass} of {len(pads)} '
           f'at range {reach}, {legacy_twopass} of {len(pads)} at {LEGACY_TOWER_RANGE}')
+    still_out = [n for n in unreachable if flankd[n - 1] > reach]
+    print(f'  PADS THAT CAN COVER THE FLANK at range {reach}: '
+          + (', '.join(f'{n} ({flankd[n - 1]:.0f} px)' for n in covers_flank)
+             if covers_flank else 'NONE -- a route no tower can reach')
+          + f'\n  of the {len(unreachable)} that cannot reach the trunk, '
+          + (', '.join(str(n) for n in sorted(set(unreachable) & set(covers_flank)))
+             or 'none') + ' can reach the flank; '
+          + (', '.join(str(n) for n in still_out) or 'none') + ' still reach nothing')
 
     # --------------------------------------------------------- the node art
     #
@@ -939,15 +1133,29 @@ def main():
                       f'x={X[0]} is {X[0] / CANVAS_W:.1%} of the width and the mouth spans '
                       f'y {ytop}-{ybot} = {ytop / h:.1%}-{ybot / h:.1%} of the height.'),
         },
-        'deadEnd': {
-            'terminal': list(S),
-            '_note': ('A FIFTH TERMINAL, interior, where the trace stops on open substrate. '
-                      'Nothing walks it as the board stands. If level 9 wants a second '
-                      'entrance this is the only place the paint offers one.'),
+        'nodes': {'fork': list(A), 'rejoin': list(B), 'doorJunction': list(C),
+                  'flankJoin': list(F)},
+        'flank': {
+            'junction': list(F),
+            'rejoin': list(C),
+            'joinBare': round(bare, 1),
+            'length': round(flank_len, 2),
+            'replaces': round(replaced, 2),
+            '_note': ('THE SPUR IS A LOOP NOW AND EVERY PIXEL OF IT IS PAINTED. It used to '
+                      'be a STUB: its north end was the door junction and its south end a '
+                      'rounded cap on open substrate, so `map_level9.json` bridged 112 px '
+                      'with an authored join and a walker crossed 63 px of bare board '
+                      'beside a capacitor. tools/paint_level9_flank.py painted that '
+                      'corridor into the plate, so `flank` is a geodesic down the middle of '
+                      'painted trace from one junction to the other, derived exactly like '
+                      '`north` and `south`. `joinBare` is how much of the flank has no '
+                      'trace under it and it reads ZERO; it is kept rather than deleted '
+                      'because a number that was 63 and is now 0 is the point. `length` '
+                      'runs junction -> rejoin and `replaces` is the hook between the same '
+                      'two nodes.'),
         },
-        'nodes': {'fork': list(A), 'rejoin': list(B), 'doorJunction': list(C)},
         'centreline': {n: [[round(x, 1), round(y, 1)] for x, y in simplify(lines[n], 1.2)]
-                       for n in ('stem', 'north', 'south', 'tail', 'door', 'spur')},
+                       for n in ('stem', 'north', 'south', 'tail', 'hook', 'flank', 'door')},
         'lengths': {n: round(polyline_length(lines[n]), 2) for n in lines},
         'routes': {k: round(v, 2) for k, v in routes.items()},
         'traceLength': round(total, 2),
@@ -970,7 +1178,15 @@ def main():
                      'each one must be fitted to the chip it sits on rather than drawn at its '
                      'own size.'),
         'padStandoff': stand,
-        'padStandoffToSpur': spurd,
+        'padStandoffToFlank': flankd,
+        'padsCoveringFlank': covers_flank,
+        'padsUnreachableEvenWithFlank': still_out,
+        '_padsCoveringFlank': ('WHICH CHIPS CAN SHOOT AT THE FLANK, at the shortest attacking '
+                               f'range in towers.json ({reach}). `padStandoff` and '
+                               '`padsUnreachable` are measured against the TRUNK only and are '
+                               'deliberately left that way, so every earlier figure quoted off '
+                               'this file still means what it meant; these three are the flank '
+                               'read on its own.'),
         'padsUnreachable': unreachable,
         'padsCoveringTwoPasses': twopass,
         'padsCoveringTwoPassesAtLegacyRange': legacy_twopass,

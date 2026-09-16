@@ -272,8 +272,28 @@ wave-table job, not a boss-health one, and nothing has attempted it.
 reproduce today.** The soak has been reworked several times since. The current
 published Cory-pinned figures at 480 seeds on normal are **level 1 89%, level 2 53%,
 level 3 88%, level 4 62%, level 5 45%, level 6 44%, level 7 41%, level 8 38%,
-level 9 40%, level 10 41%**. `SOAK-REPORT.md` is the living record; read it rather
+level 9 24%, level 10 41%**. `SOAK-REPORT.md` is the living record; read it rather
 than any number in this file.
+
+**LEVEL 9 MOVED TWICE AND IS BACK IN BAND.** The flank lane landed on 2026-09-16 —
+a third road round the bottom right that the plate had always painted and nothing
+walked — and took the level from 191/480 (40%) to 113/480 (23.5%). It was retuned
+on 2026-09-17 and reads **192/480 (40.0%)**, the middle of the band, on two levers:
+`flankShare` 0.25 -> **0.10** in `waves.level9.json` (161/480 on its own) and
+PERPLEXED's health 8100 -> **7650** in `enemies.json` (the rest). Wave composition
+was not touched and no armour moved. The other nine levels are identical integers
+on the same 480 seeds through both passes. See
+`reports/2026-09-16-level-9-flank-route.md` and
+`reports/2026-09-17-level-9-retune.md`.
+
+**AND THE FLANK IS PAINTED ROAD NOW.** `tools/paint_level9_flank.py` painted the
+corridor between the trunk and the spur's old cap into
+`art-source/level9/map_level9.png`, the plate was re-encoded at q95, and the whole
+level 9 pipeline was re-derived from it — so the flank's waypoints come off the
+paint like every other metre of the level and `tools/build_level9_map.py` is back
+to ONE authored coordinate, the gateway point every level has. The flank is 0.20%
+off-paint against 12.63% before, the best of the five lanes.
+`python3 tools/orphan_roads.py --lanes` is the measurement.
 
 **Two of those moved on 2026-09-15 and both are recorded in
 `reports/2026-09-15-blockers.md`:**
@@ -568,12 +588,25 @@ each of the first two passes broke what the one before it fixed.
   own history, and every pass at this area that reached one step further than it was
   asked to broke something.
 - **Level 9 declares 4 scenery items and builds 8**, and has been reporting it for a
-  while: `run.sh level9` fails two of its 86 checks on it (`4 scenery items declared,
+  while: `run.sh level9` fails two of its 98 checks on it (`4 scenery items declared,
   8 built` and `the rebuilt board has 8 scenery items`), plus a third on `START RUN
   would begin level10`, which is the harness's own save state having every level
   cleared. All three were reproduced on an unmodified tree before the 2026-09-15 pad
-  work and are **not** about pads. The three arcs and the Vlaude screen appear to be
-  counted twice somewhere between the map and the scene graph. Nobody has looked.
+  work and are **not** about pads. **Reproduced again on 2026-09-16**, on a worktree
+  at `5418c5c` with none of the flank change in it, where the same scenario reads 3
+  of 86: so they are not about lanes either. The three arcs and the Vlaude screen
+  appear to be counted twice somewhere between the map and the scene graph. Nobody
+  has looked.
+- **`tools/png.py` writes Paeth-filtered PNGs at 8.6 MB where the art tool managed
+  7.7 MB** on level 9's plate. It emitted no filtering at all until 2026-09-17,
+  which made the same re-encode 14.9 MB. Adaptive per-row filter selection would
+  close most of the remaining gap and costs four passes of pure Python; not worth
+  it until something else needs to re-encode a plate.
+- **The soak's `MINOR_LANE_SHARE` cliff at 0.20.** A lane carrying under a fifth
+  of a level's bodies stays out of the scripted player's pad ranking, so
+  `flankShare` 0.19 and 0.20 are two different BOARDS rather than two
+  difficulties — 29% and 23% on the same tree. Level 9 ships at 0.10, well clear
+  of it, but a later pass that walks the share upward will hit it.
 
 **These are renumbered, twice now.** Seven of the original ten closed between 07 and
 13 September; what is left keeps its wording and gets a new number, so a citation of

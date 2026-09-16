@@ -95,7 +95,7 @@ import {
 } from '../../src/systems/Transform.ts'
 import { Path } from '../../src/systems/Path.ts'
 import {
-  LaneNetwork, MAIN_LANE, advance, chooseContinuation, pickAt, pickForTerminal,
+  LaneNetwork, MAIN_LANE, advance, chooseContinuation, pickAt, pickForBranch, pickForTerminal,
   type Walker,
 } from '../../src/systems/Lanes.ts'
 import {
@@ -1636,14 +1636,45 @@ export function simulate(
       for (const sp of wv.spawns) {
         const startId = net.lane(sp.lane ?? MAIN_LANE).id
         total += sp.count
-        // Every lane on this group's route, the ones it merges into included.
-        let at = startId
-        for (let hop = 0; hop <= net.lanes.length; hop++) {
-          out[at] = (out[at] ?? 0) + sp.count
-          const next = net.transferFrom(at)
-          if (!next) break
-          at = next.lane.id
+        // Every lane on this group's route, the ones it merges into included --
+        // AND AT A SPLIT, EVERY ARM, BY ITS SHARE.
+        //
+        // This walked `transferFrom`, which is documented as returning THE
+        // FIRST ARM at a split and being the wrong function to move anything
+        // with. On a plain merge that is the only arm and the walk is right; on
+        // a split it hands the first arm 100% of the level's bodies and every
+        // other arm ZERO. Level 9's flank read 0% traffic with a quarter of
+        // every wave walking down it, which put it under `MINOR_LANE_SHARE`,
+        // which kept the three pads that cover it out of `rankAgainst` -- so
+        // the scripted player covered a road nobody walked on level 6 and
+        // refused to cover one everybody walked on level 9, off the same
+        // number read two ways.
+        //
+        // THE SHARE COMES FROM THE WAVE where the map names an optional branch,
+        // because that is where it is tuned; a map with split weights and no
+        // `flankShare` still uses the weights, which is level 5.
+        const wShare = (wv as { flankShare?: number }).flankShare
+        const wFlank = MAP.flankId as string | undefined
+        const spread = (id: string, bodies: number, depth: number): void => {
+          out[id] = (out[id] ?? 0) + bodies
+          if (depth > net.lanes.length) return
+          const next = net.continuations(id)
+          if (!next.length) return
+          const weights = next.map((o) => Math.max(0, o.weight))
+          const sum = weights.reduce((a, b) => a + b, 0)
+          const flankAt = wFlank === undefined || wShare === undefined
+            ? -1 : next.findIndex((o) => o.lane.id === wFlank)
+          const rest = flankAt < 0 ? 0 : sum - weights[flankAt]!
+          for (const [i, o] of next.entries()) {
+            const share = flankAt < 0
+              ? (sum > 0 ? weights[i]! / sum : 1 / next.length)
+              : i === flankAt
+                ? wShare!
+                : (rest > 0 ? (1 - wShare!) * (weights[i]! / rest) : 0)
+            if (share > 0) spread(o.lane.id, bodies * share, depth + 1)
+          }
         }
+        spread(startId, sp.count, 0)
       }
     }
     for (const k of Object.keys(out)) out[k] = total ? out[k]! / total : 0
@@ -2095,6 +2126,10 @@ export function simulate(
     // rng, so a run measures exactly as it did before this existed.
     if (waveIndex === WAVES.length - 1) finale = measureFinale(waveIndex)
     spawner.begin(WAVES[waveIndex])
+    // THE MAP'S OPTIONAL BRANCH AND THIS WAVE'S SHARE OF IT. Both undefined on
+    // every level but 9, which is what leaves the pick to the route stream.
+    const flankId = MAP.flankId as string | undefined
+    const flankShare = (WAVES[waveIndex] as { flankShare?: number }).flankShare
     // The dusk flip's clock is the WAVE's, not the run's. See DayNight.ts.
     night?.beginWave(waveIndex)
     // LEVEL 10'S SCHEDULE, re-armed per wave beside the spawner and the dusk
@@ -2128,9 +2163,19 @@ export function simulate(
         // level (heavy down the cheap exit, then the covered one) would be
         // invisible to this file. Undefined leaves the pick to the run's own
         // route stream, which is every wave table before level 8.
+        //
+        // AND THE SHARE OF THE WAVE THAT TAKES THE FLANK, the same way: the map
+        // names the optional branch and the wave says how much of itself goes
+        // round it. ONE DRAW FROM `routeRng` EITHER WAY -- the draw is the share
+        // roll when there is a share and the pick itself when there is not -- so
+        // the route stream advances identically and a level with no `flankShare`
+        // soaks byte for byte as it did before this existed.
+        const roll = routeRng()
         const pick = sp.exit !== undefined
-          ? pickForTerminal(net, sp.lane ?? MAIN_LANE, sp.exit) ?? routeRng()
-          : routeRng()
+          ? pickForTerminal(net, sp.lane ?? MAIN_LANE, sp.exit) ?? roll
+          : flankId !== undefined && flankShare !== undefined
+            ? pickForBranch(net, sp.lane ?? MAIN_LANE, flankId, roll < flankShare) ?? roll
+            : roll
         spawn(sp.enemy, 0, null, sp.lane ?? MAIN_LANE, 0, pick)
       }
       tickNight(DT)

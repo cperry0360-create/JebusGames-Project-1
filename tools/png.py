@@ -96,16 +96,50 @@ def read(path):
             rgba[i*4+3] = trns[idx] if trns and idx < len(trns) else 255
     return w, h, rgba
 
+# Above this many pixels, `write` PAETH-FILTERS the rows and compresses hard.
+#
+# WHY IT IS A THRESHOLD AND NOT ALWAYS ON. This writer emitted filter type 0 --
+# no filtering at all -- on every row, which is fine for the debug overlays it
+# was written for and catastrophic for a 3840x2160 painted plate: re-encoding
+# level 9's map came out at 14.9 MB against the 7.7 MB the art tool had
+# produced, because unfiltered PNG cannot exploit the vertical coherence in a
+# painting. Measured on that plate: filter 0 at level 9 is 14.9 MB, Sub 11.2,
+# Up 9.8 and PAETH 9.0. Paeth costs 36 seconds of pure Python, which is nothing
+# once per re-paint and a great deal on the hundred small overlays the measuring
+# tools write, so it is spent only where it pays.
+BIG = 4_000_000
+
+
 def write(path, w, h, rgba):
+    stride = w * 4
     raw = bytearray()
-    for y in range(h):
-        raw.append(0)
-        raw += rgba[y*w*4:(y+1)*w*4]
+    if w * h >= BIG:
+        prev = bytes(stride)
+        for y in range(h):
+            row = bytes(rgba[y*stride:(y+1)*stride])
+            out = bytearray(stride)
+            for i in range(stride):
+                a = row[i-4] if i >= 4 else 0
+                b = prev[i]
+                c = prev[i-4] if i >= 4 else 0
+                pp = a + b - c
+                pa, pb, pc = abs(pp-a), abs(pp-b), abs(pp-c)
+                pr = a if (pa <= pb and pa <= pc) else (b if pb <= pc else c)
+                out[i] = (row[i] - pr) & 255
+            raw.append(4)
+            raw += out
+            prev = row
+        level = 9
+    else:
+        for y in range(h):
+            raw.append(0)
+            raw += rgba[y*stride:(y+1)*stride]
+        level = 6
     def chunk(t, b):
         return struct.pack('>I', len(b)) + t + b + struct.pack('>I', zlib.crc32(t + b) & 0xffffffff)
     png = b'\x89PNG\r\n\x1a\n'
     png += chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 6, 0, 0, 0))
-    png += chunk(b'IDAT', zlib.compress(bytes(raw), 6))
+    png += chunk(b'IDAT', zlib.compress(bytes(raw), level))
     png += chunk(b'IEND', b'')
     open(path, 'wb').write(png)
 

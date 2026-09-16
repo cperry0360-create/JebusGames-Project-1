@@ -1095,7 +1095,7 @@
   "role": "boss",
   "tier": "boss",
   "sprite": "enemy-perplexed",
-  "maxHealth": 8100,
+  "maxHealth": 7650,
   "armor": 12,
   "speed": 28,
   "peanutReward": 950,

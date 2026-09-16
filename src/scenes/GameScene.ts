@@ -24,7 +24,7 @@ import {
 } from '../systems/Difficulty.ts'
 import { bladeDamage, bladesFrom } from '../systems/Blades.ts'
 import type { BladesDef } from '../systems/Blades.ts'
-import { LaneNetwork, chooseContinuation, pickAt, pickForTerminal } from '../systems/Lanes.ts'
+import { LaneNetwork, chooseContinuation, pickAt, pickForBranch, pickForTerminal } from '../systems/Lanes.ts'
 import type { Lane } from '../systems/Lanes.ts'
 import {
   armorAuraRules, auraArmorAt, type ArmorAuraRules,
@@ -839,6 +839,22 @@ export class GameScene extends Phaser.Scene {
     // `queueLevelArt`, which is also where the reason it is not BootScene's
     // banner is written down.
     queueLevelArt(this, runState().resumeFrom?.level ?? runState().levelId)
+  }
+
+  /**
+   * The `routePick` for one spawn on a map with an optional branch, or
+   * undefined to leave it random.
+   *
+   * Undefined on every map without `flankId` and on every wave without
+   * `flankShare`, which is nine levels and, if the number is taken out of
+   * waves.level9.json, the tenth -- the split then falls back to the map's own
+   * weights, which is what every split before this one did.
+   */
+  private flankPickFor(laneId: string): number | undefined {
+    const flankId = (this.level.map as { flankId?: string }).flankId
+    const share = this.level.waveTable.waves[this.status.wave]?.flankShare
+    if (flankId === undefined || share === undefined) return undefined
+    return pickForBranch(this.lanes, laneId, flankId, Math.random() < share) ?? undefined
   }
 
   create(): void {
@@ -6128,9 +6144,20 @@ export class GameScene extends Phaser.Scene {
         // unroutable name falls back to random rather than throwing, the way
         // `lane()` resolves an unknown lane; tests/level8.test.ts catches the
         // typo instead.
+        // AND THE SHARE OF THE WAVE THAT TAKES THE FLANK. Level 9 paints a road
+        // round the bottom right that leaves the tail and rejoins it short of
+        // the door; `flankId` on the map names it and `flankShare` on the wave
+        // says how much of that wave goes round it. Rolled PER ENEMY at spawn,
+        // exactly like the lane and the exit above, and turned into the one
+        // number the walker carries by `pickForBranch` -- so nothing switches
+        // lane mid-route and the soak, which rolls from its own seeded stream,
+        // agrees with the scene about who went where.
+        //
+        // `exit` wins if a group declares both: it names a terminal, which is a
+        // stronger statement than a share, and no table does both today.
         const routePick = spawn.exit !== undefined
           ? pickForTerminal(this.lanes, lane.id, spawn.exit) ?? undefined
-          : undefined
+          : this.flankPickFor(lane.id)
         const enemy = new Enemy(this, def, lane.path, this.gateway,
           { lanes: this.lanes, laneId: lane.id, routePick })
         // The goblin's line, once per run, on the FIRST enemy to actually come
