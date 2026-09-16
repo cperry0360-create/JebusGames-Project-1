@@ -2,34 +2,42 @@
 
 | commit | what | CI |
 |---|---|---|
-| `9a9702c` | `guaranteedTowers` in draft.json, `draftOpeningTowers`, the cap arithmetic, the two GameScene call sites, the loadout screen's per-row card widths, the deployer's card text, the soak's uniform-hand path, 6 new tests, the `guaranteed` harness scenario | *pending — filled in below* |
-| `PENDING` | This report and `SOAK-REPORT.md` | *pending* |
+| `9a9702c` | `guaranteedTowers` in draft.json, `draftOpeningTowers`, the cap arithmetic, the two GameScene call sites, the loadout screen's per-row card widths, the deployer's card text, the soak's uniform-hand path, 7 new tests, the `guaranteed` harness scenario | superseded by the merge below |
+| `05cb66e` | The first re-soak and its report — **measured against `fe6ec82` and replaced**; see the merge | superseded |
+| `cb9fadf` | Merge `main`: level 9's retune, the flank repaint and Lazy Dad Mode | *pending* |
+| `PENDING` | The re-soak on the merged tree, this report, `SOAK-REPORT.md`, `CLAUDE.md`, `claude/context.md` | *pending* |
+
+**`main` moved while this was being measured** — `fe6ec82` → `f3d597d`, which
+retuned level 9's boss, repainted its flank and added five Lazy Dad knobs, and
+changed `tools/soak/Sim.ts`. Every figure in this report was therefore
+re-measured on the merged tree. The first re-soak's numbers are in `05cb66e`'s
+history and should not be quoted; the only one that moved is level 9's.
 
 **Answers first.**
 
-- **Which levels left the 35–45% band, and by how much.** Four levels were inside
-  it before and **none is inside it now**. Levels **6, 7, 8, 9 and 10 fell below**
-  it — by **17.7, 7.3, 4.6, 23.1 and 10.6 points**. Levels **1, 3, 4 and 5 are
-  above** it — by **39.4, 42.9, 23.3 and 26.5 points**; 1 and 3 were already far
-  above, 4 climbed 6 points further out and **5 climbed 26.1 points out, from the
-  edge to 71.5%**.
-- **What happened to level 2.** It went the other way and it is now the closest
-  level to the band: **255/480 → 218/480, 53.1% → 45.4%**, 0.4 points above the
-  top edge. The brief's premise that it "currently soaks at 21%" is a stale
-  120-seed figure from an earlier era of this file; the published and re-measured
-  figure is 53%, which is *above* the band, not below. The Devil at wave 13 is
-  still what kills it — **245 of 262 losses, 94%**, against 213 of 225 before —
-  so the extra tower cost the Devil nothing; it cost the board that has to reach
-  him.
-- **Can the hand come out with no AOE.** Yes, and at exactly the rate it always
-  could: **1197 of 3000 seeds, unchanged**, because the repair rule ignores the
+- **Which levels left the 35–45% band, and by how much.** **Five levels were
+  inside it and none is now.** All five fell below: **6 by 17.7 points, 7 by 7.3,
+  8 by 4.6, 9 by 10.2 and 10 by 10.6.** The other five were already above it and
+  four moved further out — **1 is +39.4 above, 3 +42.9, 4 +23.3 and 5 +26.5**,
+  level 5 having climbed 26.1 points from the top edge to 71.5%.
+- **What happened to level 2.** It went the *other* way and is now the closest
+  level in the game to the band: **255/480 → 218/480, 53.1% → 45.4%**, 0.4 points
+  above the top edge. The brief's premise that it "currently soaks at 21%, well
+  below band" is a **stale 120-seed figure** from an earlier era of
+  `SOAK-REPORT.md`; the published and re-measured figure is 53%, which is *above*
+  the band. The Devil at wave 13 is still what kills it — **245 of 262 losses,
+  94%**, against 213 of 225 before — so the extra tower cost the Devil nothing and
+  cost the board that has to reach him.
+- **Can the hand come out with no AOE.** Yes, at exactly the rate it always could:
+  **1197 of 3000 seeds, unchanged**, because the repair rule ignores the
   guaranteed tower. Had it counted the dummy as the hand's answer — the dummy is
-  archetype `control`, which *is* an answer archetype — that would have gone to
-  **1872 of 3000**, and 1127 of 3000 hands would have kept a drawn pair with
+  archetype `control`, which *is* an answer archetype — that would have been
+  **1872 of 3000**, and **1127 of 3000** hands would have kept a drawn pair with
   neither AOE nor control.
 - **The premise "every level gets easier" is wrong, measured.** Seven of ten got
-  *harder*. And it is the **guarantee** rather than the pool entry that does it:
-  see the three-column table below.
+  *harder*, and **it is the guarantee rather than the pool entry that does it**:
+  putting the tower in the shared pool without guaranteeing it leaves the same
+  five levels in band and is worth +43 runs over 4800.
 
 ---
 
@@ -60,11 +68,11 @@ honoured inside `draftOpeningTowers`.** Not `towersAtStart: 3`.
 The two are the same outcome for the *count* and not for the *draft*. With
 `towersAtStart: 3` and the dummy guaranteed as one of the three, every run opens
 with the dummy plus **exactly one other tower of six** — the draft stops being a
-draft, which is the thing the brief named and it is right. As a separate slot,
-the drawn pair is untouched, and that is testable rather than asserted:
+draft, which is the thing the brief named and it is right. As a separate slot the
+drawn pair is untouched, and that is testable rather than asserted:
 
 > `the guarantee is an extra slot: the drawn pair is what it always was` —
-> over 2000 seeds, the two drawn cards are identical, card for card and in the
+> over 2000 seeds the two drawn cards are identical, card for card and in the
 > same order, to what the six-tower draft dealt on the same seed.
 
 The guarantee is cut out of the pool *before* the draw (`drawable = pool.filter(w
@@ -100,9 +108,13 @@ Measured over 3000 seeds, three ways:
 | the old six-tower, two-card draft | 1197 / 3000 | 0 / 3000 |
 
 So the coverage rule judges the **drawn pair alone**, and the shipped rate is the
-rate the game always had. Note the second row of the third column: a hand can
-still come out with no AOE, because the guarantee has always been "AOE **or**
-control" and the Bramble is control — that is unchanged and is not a regression.
+rate the game always had. Note the third column's last two rows against the
+first: without this, a third of all hands would have been let through with the
+draft's own guarantee unmet.
+
+A hand can still come out with no AOE, because the guarantee has always been
+"AOE **or** control" and the Bramble is control. That is unchanged, and it is not
+a regression — the rate is identical to `main`'s.
 
 `tests/draft.test.ts` holds both halves: `the DRAWN half of the hand covers
 damage and an answer by itself`, and the unchanged
@@ -125,7 +137,7 @@ wave 8:  min(2 + 2, 4) = 4 ... clamped to 4         <- the 5th never arrives
 A change whose whole purpose is to hand the player a tower would have taken one
 away eight waves later. `unlockedTowerCount` adds the guaranteed count *after*
 the clamp instead, so the drawn schedule is bit-for-bit what it was (2 → 3 → 4
-drawn types) and the run ends with 5 types of 7 rather than 4.
+drawn types) and a run ends with 5 types of 7 rather than 4.
 
 `tests/draft.test.ts`'s `the guaranteed tower does not cost the player a later
 unlock` asserts that against a `guaranteedTowers: []` control at every unlock
@@ -207,10 +219,10 @@ refactor is neutral and what follows is the third card and nothing else:
 | 1400x900 | 4 | 76 | **72** |
 
 **The screen already scrolled at phone width** — `main` overflows by 170 units at
-667x375 with two cards and 30 with the hand `screens` forces — so "it overflows"
-is not a finding about the third card. What the card costs is the difference
-above, and the cause is not width but wrapping: three cards of 225 units need 299
-units of height where two cards of 349 need 187.
+667x375 with two cards — so "it overflows" is not a finding about the third card.
+What the card costs is the difference above, and the cause is not width but
+wrapping: three cards of 225 units need 299 units of height where two cards of
+349 need 187.
 
 **And what overflows scrolls, established by moving it.** The scenario drives 12
 wheel events and reports the stack travelling the full extent — `0 → -90 of -89`,
@@ -220,10 +232,10 @@ under a notch, and no control is under 44pt: `screens` reports the same **single
 fault at every viewport that `main` reports, the Title screen's version stamp,
 which is labelled in the harness as a hidden dev door rather than a tap target.
 
-**This is the one open item.** A desktop loadout now scrolls by 76 units where it
-scrolled by 4, and at 667x375 the tower row itself is partly below the fold where
-before only the specials were. The two-column reflow is *correctly* refused —
-three cards across a 300-unit half-band is 85 units each, far under
+**This is the one open item on the screen.** A desktop loadout now scrolls by 76
+units where it scrolled by 4, and at 667x375 the tower row itself is partly below
+the fold where before only the specials were. The two-column reflow is *correctly*
+refused — three cards across a 300-unit half-band is 85 units each, far under
 `minDealtCard`'s 160 — and stacking the tower row two-deep measures *taller*
 (2 × 187 against 299). So every arrangement the screen already knows about is
 worse, and the fix is a design decision about the screen rather than a bug, which
@@ -234,59 +246,65 @@ per hard rule 6 is not something to do unasked. Reported, not fixed.
 ## The re-soak: 480 seeds, all ten levels
 
 `node --experimental-strip-types tools/soak/level.ts 480 <level>`, difficulty
-normal, seeds 1..480 throughout.
+normal, seeds 1..480 throughout, every column measured on **this** tree.
 
-**The baseline was re-measured rather than quoted.** The brief's list — `428,
-255, 422, 299, 218, 210, 198, 200, 191` — is stale in its last two entries: level
-8 is 184 and level 9 is 113 since the flank lane landed on 2026-09-16. The
-re-measured baseline reproduces every figure published in `SOAK-REPORT.md`
-exactly, which is what makes the columns comparable.
+**The baseline was re-measured rather than quoted, twice.** The brief's list —
+`428, 255, 422, 299, 218, 210, 198, 200, 191` — was already stale in its last two
+entries, and `main` then retuned level 9 mid-session. The baseline column below
+is `origin/main` at `f3d597d` and reproduces every figure published in
+`SOAK-REPORT.md`, level 9's new **192/480** included.
 
 **A third column, because the brief's premise turned out to be wrong.** "Every
-level gets easier" is false — seven of ten got harder — so the change was split
-in two and each half measured: `pool` is `imaDummy` in the shared
-`towerWeights` and `guaranteedTowers: []`, so it is draftable everywhere but
-guaranteed nowhere; `guaranteed` is what shipped.
+level gets easier" is false — seven of ten got harder — so the change was split in
+two and each half measured. `pool` is `imaDummy` in the shared `towerWeights`
+with `guaranteedTowers: []`: draftable everywhere, guaranteed nowhere.
+`guaranteed` is what shipped.
 
-| level | before (`main`) | pool only | **guaranteed (shipped)** | Δ pool | Δ guarantee | band |
+| level | before (`main` `f3d597d`) | pool only | **guaranteed (shipped)** | Δ pool | Δ guarantee | band after |
 |---|---|---|---|---|---|---|
 | 1 | 428 (89.2%) | 428 (89.2%) | **405 (84.4%)** | +0 | −23 | +39.4 above |
 | 2 | 255 (53.1%) | 253 (52.7%) | **218 (45.4%)** | −2 | −35 | +0.4 above |
 | 3 | 422 (87.9%) | 429 (89.4%) | **422 (87.9%)** | +7 | −7 | +42.9 above |
 | 4 | 299 (62.3%) | 335 (69.8%) | **328 (68.3%)** | +36 | −7 | +23.3 above |
 | 5 | 218 (45.4%) | 268 (55.8%) | **343 (71.5%)** | +50 | +75 | +26.5 above |
-| 6 | 210 (43.8%) | 177 (36.9%) | **83 (17.3%)** | −33 | −94 | **−17.7 below** |
-| 7 | 198 (41.2%) | 205 (42.7%) | **133 (27.7%)** | +7 | −72 | **−7.3 below** |
-| 8 | 184 (38.3%) | 189 (39.4%) | **146 (30.4%)** | +5 | −43 | **−4.6 below** |
-| 9 | 113 (23.5%) | 114 (23.8%) | **57 (11.9%)** | +1 | −57 | **−23.1 below** |
-| 10 | 195 (40.6%) | 190 (39.6%) | **117 (24.4%)** | −5 | −73 | **−10.6 below** |
-| **all** | 2522 (52.5%) | 2588 (53.9%) | **2252 (46.9%)** | **+66** | **−336** | |
+| 6 | 210 (43.8%) *in band* | 177 (36.9%) *in band* | **83 (17.3%)** | −33 | −94 | **−17.7 below** |
+| 7 | 198 (41.2%) *in band* | 205 (42.7%) *in band* | **133 (27.7%)** | +7 | −72 | **−7.3 below** |
+| 8 | 184 (38.3%) *in band* | 189 (39.4%) *in band* | **146 (30.4%)** | +5 | −43 | **−4.6 below** |
+| 9 | 192 (40.0%) *in band* | 170 (35.4%) *in band* | **119 (24.8%)** | −22 | −51 | **−10.2 below** |
+| 10 | 195 (40.6%) *in band* | 190 (39.6%) *in band* | **117 (24.4%)** | −5 | −73 | **−10.6 below** |
+| **all** | 2601 (54.2%) | 2644 (55.1%) | **2314 (48.2%)** | **+43** | **−330** | |
 
 ### Where the band went
 
-Before: **four levels inside** the 35–45% band — 6, 7, 8 and 10 — with level 5
-sitting 0.4 points above the top edge, levels 1, 2, 3 and 4 above it and level 9
-below.
+Before: **five levels inside** the 35–45% band — 6, 7, 8, 9 and 10 — with 1, 2, 3
+and 4 above it and 5 sitting 0.4 points above the top edge.
 
-After: **none inside**. Level 2 now holds the 0.4-points-above spot that level 5
-held, and is the closest any level comes. Five levels are below the band and four
-are above it.
+After: **none inside**. All five that were in it are below it. Level 2 now holds
+the 0.4-points-above spot that level 5 held, and is the closest any level comes.
+
+**Level 9 is the sharpest single case.** `main` retuned it back into band on
+`e505a4d` — 113 → 192, 23.5% → 40.0%, the middle of the band — and this change
+takes it to 119 (24.8%), which is within 6 runs of where the flank left it before
+that retune. Whoever picks up the balance should know that the retune it just
+received was derived against a two-tower opening.
 
 ### It is the guarantee, not the pool entry
 
-The `pool` column is nearly a no-op in aggregate: **+66 runs over 4800**, and
-level 1's figure is *identical* because level 1 already had the tower at weight 4.
-The guarantee is worth **−336**. Both effects are real and they are different
-effects, which is why the control was worth the ten minutes.
+The `pool` column is nearly a no-op: **+43 runs over 4800**, and **the same five
+levels are still in band**. Level 1's figure is *identical*, because level 1
+already had the tower at weight 4. The guarantee is worth **−330**.
 
-**The mechanism is in `Sim.ts` and it is worth knowing before anybody retunes
-anything.** The soak's scripted player picks what to build with
+Both are real and they are different effects, which is why the control was worth
+the ten minutes.
+
+**The mechanism is in `Sim.ts` and it matters before anybody retunes anything.**
+The soak's scripted player chooses what to build with
 `const id = rng.pick(affordable)` — **uniformly at random** from the unlocked
-types it can afford and whose range reaches the road. A guaranteed third opener
-that deals **zero** tower damage therefore takes roughly **one pad in three from
-wave 1 on every level**, where before it took none outside level 1. That is a
-property of the soak's player, not of a human's choice: a person builds a
-garrison where blocking pays and the soak builds one wherever the dice say.
+types it can afford whose range reaches the road. A guaranteed third opener that
+deals **zero** tower damage therefore takes roughly **one pad in three from wave 1
+on every level**, where before it took none outside level 1. That is a property of
+the soak's player, not of a human's choice: a person builds a garrison where
+blocking pays and the soak builds one wherever the dice say.
 
 So the guarantee's soak cost is an **upper bound** on what a player will feel, and
 the two levels that went *up* are the more interesting signal, because they went
@@ -294,15 +312,14 @@ up in spite of it:
 
 - **Level 5 (+125 runs, 45.4% → 71.5%)** — the vampire level. Blockers hold the
   lane, and the level's counterplay loop is chip damage holding lifesteal off.
-  Both halves of the change help it: the pool entry alone is worth +50 and the
-  guarantee another +75.
-- **Level 4 (+29)** — almost all of it from the pool entry (+36); the guarantee
-  costs it 7 back.
+  Both halves help it: +50 from the pool entry and +75 more from the guarantee.
+- **Level 4 (+29)** — almost all of it the pool entry (+36); the guarantee costs
+  it 7 back.
 
-And the levels that fell hardest are the DPS-starved boards, which is the same
-story read the other way: **level 6 (−127)**, **level 10 (−78)**, **level 7
-(−65)**, **level 9 (−56)**. Level 9's own map note has said for weeks that its
-board "holds LESS effective DPS than fifteen pads suggests".
+The heaviest falls are the DPS-starved boards, which is the same story read the
+other way: **level 6 (−127)**, **level 10 (−78)**, **level 7 (−65)**, **level 9
+(−73)**. Level 9's own map note has said for weeks that its board "holds LESS
+effective DPS than fifteen pads suggests".
 
 ### Level 2 specifically
 
@@ -310,57 +327,63 @@ board "holds LESS effective DPS than fifteen pads suggests".
 points outside it, which makes it the best-placed level in the game.
 
 The brief's "21%, well below band, 367 of 374 losses on the Devil at wave 13" is a
-**120-seed figure from an earlier era of `SOAK-REPORT.md`** (line 1280 of that
-file). The current published figure, and the one this session re-measured on
-`main`, is 255/480 = 53% — *above* the band.
+**120-seed figure from an earlier era of `SOAK-REPORT.md`**. The current published
+figure, and the one this session re-measured on `main` twice, is 255/480 = 53% —
+*above* the band.
 
 The Devil is untouched as the cause of death:
 
-| | losses | on the Devil | on a Direct Report |
+| | losses | on the Devil, wave 13 | on a Direct Report |
 |---|---|---|---|
 | before | 225 | 213 (95%) | 11 (5%) |
 | after | 262 | 245 (94%) | 17 (6%) |
 
 Every loss still ends at the main exit and every one still lands at wave 13. So
-the extra tower did not make the Devil harder; it made the board that has to
-reach him thinner, by one pad in three.
+the extra tower did not make the Devil harder; it made the board that has to reach
+him thinner, by one pad in three. Note also what stopped getting out: Middle
+Managers fell from 43 to 2 and Late Filers from 40 to 7 — the garrison *is* doing
+its job on the small bodies, and the Devil does not care.
 
-### Two things NOT checked, and they matter
+### Three things NOT checked, and they matter
 
 - **The soak's unlock schedule is not the game's, and this change did not touch
   either.** `Sim.ts` unlocks with `want = min(reserve.length, floor((waveIndex +
-  1) / 3))`, which on a 13-to-16-wave level reaches the **whole reserve** —
-  every tower type — while the game stops at `unlockedTypeCap`. That divergence
-  is pre-existing and is a separate finding; it means the soak is generous about
-  late types and says nothing about whether the 5th type now arriving at wave 8
-  is worth what it costs.
+  1) / 3))`, which on a 13-to-16-wave level reaches the **whole reserve** — every
+  tower type — while the game stops at `unlockedTypeCap`. That divergence is
+  pre-existing and is a separate finding; it means the soak says nothing about
+  whether the 5th type now arriving at wave 8 is worth what it costs.
 - **`openingPurse` can now be smaller.** It is `max(base, ceil(min(drawnCosts) ×
   margin))`, and the dummy's 130 joins the set — so a hand of Longshot (220) and
-  Grinder (150) used to floor the purse at 150 × margin and now floors it at 130 ×
-  margin. It is a floor guarantee ("you can afford at least one thing") and it is
-  still correct, but it is a real and unintended tightening on expensive hands,
-  and it is inside the −336.
+  Grinder (150) used to floor the purse at 150 × margin and now floors it at
+  130 × margin. It is a floor guarantee ("you can afford at least one thing") and
+  it is still correct, but it is a real and unintended tightening on expensive
+  hands, and it is inside the −330.
+- **Only `normal` was soaked.** Tuning is done against normal and only normal, per
+  `tools/soak/level.ts`'s own note, and `main` has just added five Lazy Dad knobs
+  whose interaction with a guaranteed blocker is unmeasured.
 - **No retuning was done, as instructed.** Nothing in `enemies.json`, any
-  `waves.*.json`, `rules.json` or any boss's health was touched.
+  `waves.*.json`, `difficulty.json`, `rules.json` or any boss's health was touched.
 
 ---
 
 ## Verification
 
-- **`npm test`** — 1175 tests, all pass. Six are new: the guaranteed tower in the
-  opening hand on **every level id** (built through `towerWeightsFor`, so a level
-  cannot quietly opt out), a reroll that still produces it, never twice, the drawn
-  pair unchanged from the six-tower draft, the reserve never offering it again,
-  and the cap not eating a later unlock. The reroll test also pins
-  `LoadoutScene`'s reroll stride, so a change to it fails rather than silently
-  testing the wrong seeds.
-- **`sh tools/tsdiff.sh 6fdba0c`** — `baseline 6fdba0c: 214 distinct errors;
+- **`npm test`** — 1176 tests, all pass. Seven are new: the guaranteed tower in
+  the opening hand on **every level id** (built through `towerWeightsFor`, so a
+  level cannot quietly opt out), a reroll that still produces it, never twice, the
+  drawn pair unchanged from the six-tower draft, the drawn pair covering damage
+  and an answer by itself, the reserve never offering it again, and the cap not
+  eating a later unlock — plus the deployer card-text test. The reroll test also
+  pins `LoadoutScene`'s reroll stride, so a change to it fails rather than
+  silently testing the wrong seeds.
+- **`sh tools/tsdiff.sh f3d597d`** — `baseline f3d597d: 214 distinct errors;
   working tree: 214`, **nothing introduced**, and no new-file warning. No new
   Phaser member is touched by this change, which is the blind spot that script
   cannot see.
-- **`sh tools/harness/run.sh guaranteed 220 <vp>`** at **844x390, 667x375 and
-  1400x900** — **27 checks, no faults at each**. Portrait (375x667, 390x844) is
-  gated, which is the correct answer for a landscape-only game.
+- **`sh tools/harness/run.sh guaranteed 240 <vp>`** at **844x390, 667x375 and
+  1400x900** — **27 checks, no faults at each**, on the merged tree. Portrait
+  (375x667, 390x844) is gated, which is the correct answer for a landscape-only
+  game.
 - **`sh tools/harness/run.sh screens 140 <vp>`** at the same three, plus the two
   portrait viewports — one fault at 844x390 and 667x375, none at 1400x900, and
   `main` reports **the same single fault at the same coordinates**: the Title
@@ -381,9 +404,9 @@ given; the shots are gitignored on purpose.
   identical. The card names are read off the scene's own text objects, so what is
   checked is what the player sees.
 - **A reroll still deals it.** The REROLL button is pressed through the input
-  system at its real screen position: `[writeoff, rounding, imaDummy] → [writeoff,
-  extension, imaDummy]`, cards `[GRINDER, BRAMBLE, IMA DUMMY]`. The drawn pair
-  changed and the guaranteed card did not.
+  system at its real screen position: `[writeoff, rounding, imaDummy] →
+  [writeoff, extension, imaDummy]`, cards `[GRINDER, BRAMBLE, IMA DUMMY]`. The
+  drawn pair changed and the guaranteed card did not.
 - **It builds and its lads deploy on level 3** — a level that could not draw this
   tower at all before today. `level3: unlocked [withholding, rounding, imaDummy]`,
   then `garrison: 2 lad(s), rally 572,486` with both at full health, visible, and
@@ -396,42 +419,51 @@ given; the shots are gitignored on purpose.
 
 ```bash
 sh tools/harness/build.sh
-sh tools/harness/run.sh guaranteed 220 844x390
-sh tools/harness/run.sh guaranteed 220 667x375
-sh tools/harness/run.sh guaranteed 220 1400x900
+sh tools/harness/run.sh guaranteed 240 844x390
+sh tools/harness/run.sh guaranteed 240 667x375
+sh tools/harness/run.sh guaranteed 240 1400x900
 sh tools/harness/run.sh screens 140 844x390
 python3 tools/harness/shrink.py tools/harness/shots/guaranteed-level1-844x390.png 900
 ```
 
-`ASSERTS_NOTHING` is unchanged at five. `guaranteed` joins `USES_EXPECT`, so it is
-held to having evaluated at least one check, and
-`tests/harness-scenarios.test.ts` keeps `SCENARIO_NAMES` honest.
+`ASSERTS_NOTHING` is unchanged at five — muzzle, rockets, retreat, regressions,
+meteor. `guaranteed` joins `USES_EXPECT`, so it is held to having evaluated at
+least one check, and `tests/harness-scenarios.test.ts` keeps `SCENARIO_NAMES`
+honest.
 
 ---
 
 ## Where this leaves the repository
 
-**In flight.** Nothing. The change is committed and the report is written against
+**In flight.** Nothing. The change is committed and this report is written against
 a finished tree.
 
-**Waiting on a decision — the balance.** Five levels are below the 35–45% band and
-four are above it, and nothing was retuned, as instructed. Before anybody picks a
-lever, two facts from above are load-bearing: most of the −336 is the **soak's
-uniformly-random builder** spending one pad in three on a zero-damage tower from
-wave 1, which is an upper bound on what a human feels; and several of those levels
-have boss numbers derived against their own board, Vlaude's 26,000 among them.
-Retuning bosses against a soak whose player got worse at building is the wrong
-order of operations.
+**Waiting on a decision — the balance, and it is the whole of what is left.** No
+level is inside the 35–45% band. Five fell out of it and four of the five that
+were already above it moved further out. Nothing was retuned, as instructed.
+Before anybody picks a lever, three facts above are load-bearing:
+
+1. Most of the −330 is the **soak's uniformly-random builder** spending one pad in
+   three on a zero-damage tower from wave 1. That is an upper bound on what a
+   human feels, not a measurement of it.
+2. **Level 9's retune is three commits old** and was derived against a two-tower
+   opening; this change puts it back to within 6 runs of where the flank left it.
+3. Several of these levels have boss numbers derived against their own board,
+   **Vlaude's 26,000 among them**. Retuning bosses against a soak whose *player*
+   got worse at building is the wrong order of operations.
 
 **Waiting on a decision — the loadout screen.** The third card costs 72 to 93
 units of overflow at every viewport, so a desktop loadout scrolls by 76 where it
 scrolled by 4. Every arrangement the screen already knows about is worse than the
 one it picks. See the loadout section.
 
-**Carried forward from `reports/2026-09-16-level-9-flank-route.md`.** Level 9's
-`flankShare: 0.25` is still published as a measurement nobody is happy with — it
-was 23.5% before this change and is 11.9% after. It is one edit in
-`waves.level9.json`.
+**Carried forward from `reports/2026-09-17-level-9-retune.md`.** Level 9 is back
+in band there at 192/480 and is out of it here at 119/480. The two reports do not
+disagree — they measure two different opening hands — but the newer number is the
+one that describes the game.
+
+**Carried forward from `reports/2026-09-16-lazy-dad-mode.md`.** The five Lazy Dad
+knobs are unmeasured against a guaranteed blocker; only `normal` was soaked here.
 
 **Discharged.** The `extraTowerWeights` mechanism is now unused by every level and
 kept deliberately; `tests/draft.test.ts` still walks it so it stays covered for a

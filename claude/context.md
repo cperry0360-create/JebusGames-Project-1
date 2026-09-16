@@ -544,36 +544,43 @@ names them as deliberately unused.
 
 ## Open items
 
-**THE IMA DUMMY TOWER IS GUARANTEED IN EVERY OPENING HAND (2026-09-16), AND IT MOVED
-EVERY WIN RATE IN THE GAME.** It was draftable on level 1 alone -- no entry in
+**THE IMA DUMMY TOWER IS GUARANTEED IN EVERY OPENING HAND (2026-09-16), AND IT TOOK
+EVERY LEVEL OUT OF THE BAND.** It was draftable on level 1 alone -- no entry in
 `draft.json`'s shared `towerWeights`, one entry in level 1's `extraTowerWeights` -- so
 on nine levels of ten it was not in the pool and no reroll could produce it. It is now
 a **third opening slot** driven by `draft.json`'s `guaranteedTowers`, honoured inside
 `draftOpeningTowers`, with no id named in any system module.
 
-**The re-soak, 480 seeds, and the brief's premise was wrong: seven of ten levels got
-HARDER.**
+**The re-soak, 480 seeds, measured on the tree AFTER level 9's retune and Lazy Dad
+Mode. The brief's premise was wrong: seven of ten levels got HARDER.**
 
 | level | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
 |---|---|---|---|---|---|---|---|---|---|---|
-| before | 428 | 255 | 422 | 299 | 218 | 210 | 198 | 184 | 113 | 195 |
-| after | 405 | 218 | 422 | 328 | 343 | 83 | 133 | 146 | 57 | 117 |
+| before | 428 | 255 | 422 | 299 | 218 | 210 | 198 | 184 | 192 | 195 |
+| pool only | 428 | 253 | 429 | 335 | 268 | 177 | 205 | 189 | 170 | 190 |
+| after | 405 | 218 | 422 | 328 | 343 | 83 | 133 | 146 | 119 | 117 |
 
-**No level is inside the 35-45% band any more**, where four were before. Level 2 came
-7.7 points DOWN to 45.4% and is the closest to band; level 5 climbed 26 points out;
-levels 6, 7, 8, 9 and 10 fell below. **Nothing was retuned** -- the brief asked for the
-damage report and a stop, and several of those levels have boss numbers derived against
+**NO LEVEL IS INSIDE THE 35-45% BAND ANY MORE**, where five were -- 6, 7, 8, 9 and 10
+all fell below it. Level 2 came 7.7 points DOWN to 45.4% and is now the closest to
+band; level 5 climbed 26 points out. **Nothing was retuned** -- the brief asked for the
+damage report and a stop, and several of these levels have boss numbers derived against
 their own board.
 
-**BEFORE ANYBODY RETUNES: most of the swing is the SOAK'S BUILDER, not the game.**
-`Sim.ts` picks what to build with `rng.pick(affordable)` -- uniformly at random from
-the unlocked types -- so a guaranteed opener that deals **zero** damage takes about one
-pad in three from wave 1 on every level. A person builds a garrison where blocking
-pays. A control soak separates the two halves: putting the tower in the shared pool
-*without* guaranteeing it is worth **+66 runs over 4800** (nearly nothing); the
-guarantee is worth **-336**. So -336 is a ceiling on what a player feels, not a
-measurement of it. Full three-column table in
-`reports/2026-09-16-dummy-tower-guaranteed.md`.
+**BEFORE ANYBODY RETUNES, three things.**
+
+1. **Most of the swing is the SOAK'S BUILDER, not the game.** `Sim.ts` picks what to
+   build with `rng.pick(affordable)` -- uniformly at random from the unlocked types --
+   so a guaranteed opener that deals **zero** damage takes about one pad in three from
+   wave 1 on every level. A person builds a garrison where blocking pays. The `pool
+   only` row is the control: the tower draftable everywhere but guaranteed nowhere is
+   worth **+43 runs over 4800** and leaves **the same five levels in band**. The
+   guarantee is worth **-330**. So -330 is a ceiling on what a player feels.
+2. **Level 9's retune is newer than its own report.** `e505a4d` put it back in band at
+   192/480 three commits before this, derived against a two-tower opening; this reads
+   119/480, within 6 runs of where the flank left it.
+3. **Levels 4 and 5 went UP** (+29 and +125) and that is the interesting signal, because
+   they went up in spite of the builder. Level 5 is the vampire level: blockers hold the
+   lane and its loop is chip damage holding lifesteal off.
 
 **The answer-archetype trap, because it is the kind of thing that ships silently.**
 `imaDummy` is archetype `control`, which is one of `answerArchetypes`, so a repair rule
