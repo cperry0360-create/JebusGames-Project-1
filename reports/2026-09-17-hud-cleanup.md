@@ -2,9 +2,35 @@
 
 | commit | what | CI |
 |---|---|---|
-| `b105805` | the four changes, their tests, and the two harness instruments | *pending* |
-| `f315335` | merge `main`: the cutscene reorganisation and the guaranteed Ima Dummy Tower | *pending* |
-| *this commit* | the re-soak against `main`'s NEW integers, and this table | *pending* |
+| `b105805` | the four changes, their tests, and the two harness instruments | [run 429](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/35096771507) green |
+| `f315335` | merge `main`: the cutscene reorganisation and the guaranteed Ima Dummy Tower | run 429 green |
+| `fcf3f14` | the re-soak against `main`'s NEW integers, the dead-medallion reproduction, and this report | run 429 green |
+| *this commit* | closing this table on run 429 | it edits this table and nothing else |
+
+All three were pushed together, so only the head got a run of its own; **run
+429 checked the tree containing all three.** Green on `changes`, `typecheck`,
+`test`, `deploy / build` and `deploy / deploy` — **five jobs, and the deploy
+RAN rather than skipping**, because the push touches `src/`. So the live site
+carries this pass. Read the job list, not the conclusion.
+
+**`main`'s tree was read back afterwards**, out of `origin/main` rather than
+out of the working copy, and it carries `presentation.json` (77,208 bytes) with
+`damageNumbers` gone, `chainSparkSize` gone, `haymakerNumberScale` gone,
+`floatingLabel` present with no `critFontSize`, `draftedPitch` 56 /
+`draftedIcon` 48 / `heroPitch` 60 / `heroIcon` 48 / `groupGap` 16, and
+`iconHeight` 52 / `heroChip` 60 / `heroChipGap` 20 / `readoutCount` 3 /
+`readoutHeight` 16 / `rowHeight` 16 / `rowGap` 4 / `readoutNumberSize` 15.
+`HudLayout.ts` (26,793) exports `heroChipContent`; `HudScene.ts` (72,154) has
+`READOUTS = ['peanuts', 'lives', 'wave']` and calls `heroChipContent(box,
+C.edgeWidth)` in both `buildHeroChip` and `drawHeroChip`; `GameScene.ts` has
+**zero** `floatingDamage(` calls; and this report is there at 36 KB.
+
+**The build-job status lagged for about twenty minutes**, which the previous
+session already wrote up and which is worth confirming rather than
+rediscovering: `deploy / build` reported `npm run build` in progress long after
+its own step timestamps showed it finished at 12:37:26 with the two post-build
+assertions, `configure-pages` and `upload-pages-artifact` all green behind it.
+Read the STEPS, not the job's status field, and never cancel on the field alone.
 
 **`main` moved under this branch while it was being verified**, and it moved
 the thing the brief asked to hold still. `b0150d5` guarantees the Ima Dummy
