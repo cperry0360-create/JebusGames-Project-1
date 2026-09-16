@@ -52,7 +52,22 @@
   "doorJunction": [
    1103,
    326
+  ],
+  "flankJoin": [
+   858.0,
+   468.7
   ]
+ },
+ "flank": {
+  "join": [
+   858.0,
+   468.7
+  ],
+  "joinGap": 112.1,
+  "joinBare": 63.1,
+  "length": 489.6,
+  "replaces": 522.65,
+  "_note": "THE SPUR AS A WALKED BRANCH. The spur is a stub: its north end is the door junction and its south end is a cap on open substrate, so the two ends are NOT both on the route and the flank cannot be all paint. `join` is the nearest point on the traced tail to the traced cap -- derived, not chosen -- and `joinBare` is how much of that straight line has no trace under it. Level 6 authors an 82.0 px join for the same reason; see tests/level6map.test.ts. `length` runs join -> cap -> door junction and `replaces` is the tail from the join to the same junction."
  },
  "centreline": {
   "stem": [
@@ -856,6 +871,35 @@
   562.9,
   74.5
  ],
+ "padStandoffToFlank": [
+  370.7,
+  431.3,
+  605.8,
+  154.6,
+  234.8,
+  463.6,
+  532.2,
+  97.1,
+  114.2,
+  651.7,
+  351.5,
+  84.2,
+  121.9,
+  523.7,
+  73.9
+ ],
+ "padsCoveringFlank": [
+  8,
+  9,
+  12,
+  13,
+  15
+ ],
+ "padsUnreachableEvenWithFlank": [
+  1,
+  7
+ ],
+ "_padsCoveringFlank": "WHICH CHIPS CAN SHOOT AT THE FLANK, at the shortest attacking range in towers.json (132). `padStandoff` and `padsUnreachable` are measured against the TRUNK only and are deliberately left that way, so every earlier figure quoted off this file still means what it meant; these three are the flank read on its own.",
  "padsUnreachable": [
   1,
   7,

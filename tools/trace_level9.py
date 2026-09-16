@@ -404,6 +404,48 @@ def point_to_polyline(p, poly):
     return best
 
 
+def closest_on_polyline(p, poly):
+    """The nearest point ON `poly` to `p`, and how far away it is.
+
+    `point_to_polyline` above answers only the distance. The flank join needs
+    the POINT as well, and deriving it here rather than picking the nearest
+    vertex by eye is the difference between a traced coordinate and a typed
+    one: the join may fall part way along a segment, and on this trace it very
+    nearly does.
+    """
+    best, at = float('inf'), None
+    for i in range(len(poly) - 1):
+        ax, ay = poly[i]
+        bx, by = poly[i + 1]
+        dx, dy = bx - ax, by - ay
+        L = dx * dx + dy * dy
+        t = 0.0 if L == 0 else max(0.0, min(1.0, ((p[0] - ax) * dx + (p[1] - ay) * dy) / L))
+        q = (ax + t * dx, ay + t * dy)
+        d = math.hypot(p[0] - q[0], p[1] - q[1])
+        if d < best:
+            best, at = d, q
+    return at, best
+
+
+def unpainted_run(w, h, band, a, b):
+    """How much of the straight line a->b crosses substrate rather than trace.
+
+    Sampled at one pixel: the count of samples outside the painted band, times
+    the sample spacing. This is the number the join has to be honest about --
+    the centreline gap counts both roads' half-widths, and what a player sees
+    is only the part with no paint under it.
+    """
+    n = max(1, int(math.dist(a, b)))
+    off = 0
+    for k in range(n + 1):
+        t = k / n
+        x = int(round(a[0] + (b[0] - a[0]) * t))
+        y = int(round(a[1] + (b[1] - a[1]) * t))
+        if not (0 <= x < w and 0 <= y < h and band[y * w + x]):
+            off += 1
+    return off * math.dist(a, b) / n
+
+
 # ------------------------------------------------------------------ openings
 
 def edge_runs(w, h, mask, min_len=4):
@@ -751,6 +793,43 @@ def main():
           f'{routes["south"]:.1f}')
     print(f'  every painted stretch added up: {total:.1f}')
 
+    # ---------------------------------------------------------------- the flank
+    #
+    # THE SPUR IS A STUB, NOT A LOOP, and this is where that is measured rather
+    # than assumed. Its north end IS the door junction C; its south end is the
+    # cap S, and the paint stops there. So the only way anything walks it is a
+    # JOIN from the tail across bare substrate -- level 6's shape exactly, where
+    # `map_level6.json` authors an 82 px segment to reach a band the plate
+    # leaves separate and says so in its `_fabricated` note.
+    #
+    # The join is DERIVED: the nearest point on the traced tail to the traced
+    # cap. Nothing about it is chosen, and both numbers below are reported so a
+    # build session can see the cost before it takes it -- `joinGap` is
+    # centreline to centreline and counts both roads' half-widths, `joinBare` is
+    # the part of that line with no paint under it, which is what a player sees.
+    #
+    # MEASURED ON THE SIMPLIFIED LINES, which are the ones this file writes and
+    # the ones tools/build_level9_map.py turns into lanes. The raw geodesic is
+    # 5% longer on a curve than the polyline drawn through it, and the spur is
+    # nearly all curve -- measuring the flank raw and the tail raw still says
+    # SHORTCUT but puts the saving at 7% where the shipped lanes read 12%. Two
+    # numbers for one road is how a report ends up arguing with the game.
+    simp_tail = [tuple(p) for p in simplify(lines['tail'], 1.2)]
+    simp_spur = [tuple(p) for p in simplify(lines['spur'], 1.2)]
+    join, join_gap = closest_on_polyline(S, simp_tail)
+    join = (round(join[0], 1), round(join[1], 1))
+    bare = unpainted_run(w, h, band, join, S)
+    flank_line = [join] + list(reversed(simp_spur))
+    flank_len = polyline_length(flank_line)
+    # The stretch of tail the flank stands in for: join to the door junction.
+    at_join = min(range(len(simp_tail)), key=lambda i: math.dist(simp_tail[i], join))
+    replaced = polyline_length([join] + simp_tail[at_join + 1:])
+    print(f'\n--- the flank ---\n  join {join} on the tail, {join_gap:.1f} px from the '
+          f'cap centreline to centreline and {bare:.1f} px of it over bare substrate\n'
+          f'  flank {flank_len:.1f} px against the {replaced:.1f} px of tail it replaces: '
+          f'{"a SHORTCUT" if flank_len < replaced else "a DETOUR"} by '
+          f'{abs(flank_len - replaced):.1f} px ({abs(flank_len - replaced) / replaced:.1%})')
+
     # --------------------------------------------------------------- the width
     print('\n--- trace width ---')
     per = {}
@@ -821,9 +900,11 @@ def main():
     print(f'\n  {"pad":>3} {"x":>7} {"y":>6} {"chip":>9} {"to route":>9} {"to spur":>8} '
           f'{f"passes@{reach}":>10} {f"passes@{LEGACY_TOWER_RANGE}":>11}')
     stand, spurd, twopass, legacy_twopass, unreachable = [], [], 0, 0, []
+    flankd, covers_flank = [], []
     for n, (cx, cy) in enumerate(pads, 1):
         d = min(point_to_polyline((cx, cy), l) for l in route_lines)
         sp = point_to_polyline((cx, cy), lines['spur'])
+        fl = point_to_polyline((cx, cy), flank_line)
         k = passes((cx, cy), reach)
         kl = passes((cx, cy), LEGACY_TOWER_RANGE)
         twopass += 1 if k >= 2 else 0
@@ -832,6 +913,9 @@ def main():
             unreachable.append(n)
         stand.append(round(d, 1))
         spurd.append(round(sp, 1))
+        flankd.append(round(fl, 1))
+        if fl <= reach:
+            covers_flank.append(n)
         ci = chipinfo[n - 1]
         print(f'  {n:3d} {cx:7.1f} {cy:6.1f} {ci["w"]:4d}x{ci["h"]:<4d} {d:9.1f} '
               f'{sp:8.1f} {k:10d} {kl:11d}')
@@ -848,6 +932,14 @@ def main():
           + (', '.join(str(n) for n in unreachable) if unreachable else 'none'))
     print(f'  PADS THAT COVER TWO SEPARATE PASSES OF THE ROUTE: {twopass} of {len(pads)} '
           f'at range {reach}, {legacy_twopass} of {len(pads)} at {LEGACY_TOWER_RANGE}')
+    still_out = [n for n in unreachable if flankd[n - 1] > reach]
+    print(f'  PADS THAT CAN COVER THE FLANK at range {reach}: '
+          + (', '.join(f'{n} ({flankd[n - 1]:.0f} px)' for n in covers_flank)
+             if covers_flank else 'NONE -- a route no tower can reach')
+          + f'\n  of the {len(unreachable)} that cannot reach the trunk, '
+          + (', '.join(str(n) for n in sorted(set(unreachable) & set(covers_flank)))
+             or 'none') + ' can reach the flank; '
+          + (', '.join(str(n) for n in still_out) or 'none') + ' still reach nothing')
 
     # --------------------------------------------------------- the node art
     #
@@ -945,7 +1037,24 @@ def main():
                       'Nothing walks it as the board stands. If level 9 wants a second '
                       'entrance this is the only place the paint offers one.'),
         },
-        'nodes': {'fork': list(A), 'rejoin': list(B), 'doorJunction': list(C)},
+        'nodes': {'fork': list(A), 'rejoin': list(B), 'doorJunction': list(C),
+                  'flankJoin': list(join)},
+        'flank': {
+            'join': list(join),
+            'joinGap': round(join_gap, 1),
+            'joinBare': round(bare, 1),
+            'length': round(flank_len, 2),
+            'replaces': round(replaced, 2),
+            '_note': ('THE SPUR AS A WALKED BRANCH. The spur is a stub: its north end is '
+                      'the door junction and its south end is a cap on open substrate, so '
+                      'the two ends are NOT both on the route and the flank cannot be all '
+                      'paint. `join` is the nearest point on the traced tail to the traced '
+                      'cap -- derived, not chosen -- and `joinBare` is how much of that '
+                      'straight line has no trace under it. Level 6 authors an 82.0 px join '
+                      'for the same reason; see tests/level6map.test.ts. `length` runs join '
+                      '-> cap -> door junction and `replaces` is the tail from the join to '
+                      'the same junction.'),
+        },
         'centreline': {n: [[round(x, 1), round(y, 1)] for x, y in simplify(lines[n], 1.2)]
                        for n in ('stem', 'north', 'south', 'tail', 'door', 'spur')},
         'lengths': {n: round(polyline_length(lines[n]), 2) for n in lines},
@@ -971,6 +1080,15 @@ def main():
                      'own size.'),
         'padStandoff': stand,
         'padStandoffToSpur': spurd,
+        'padStandoffToFlank': flankd,
+        'padsCoveringFlank': covers_flank,
+        'padsUnreachableEvenWithFlank': still_out,
+        '_padsCoveringFlank': ('WHICH CHIPS CAN SHOOT AT THE FLANK, at the shortest attacking '
+                               f'range in towers.json ({reach}). `padStandoff` and '
+                               '`padsUnreachable` are measured against the TRUNK only and are '
+                               'deliberately left that way, so every earlier figure quoted off '
+                               'this file still means what it meant; these three are the flank '
+                               'read on its own.'),
         'padsUnreachable': unreachable,
         'padsCoveringTwoPasses': twopass,
         'padsCoveringTwoPassesAtLegacyRange': legacy_twopass,

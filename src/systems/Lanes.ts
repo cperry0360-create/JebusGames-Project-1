@@ -167,21 +167,76 @@ export function pickForTerminal(
   if (!net.has(terminal)) return null
   const lane = net.lane(from)
   const end = lane.path.totalLength
-  const lands = (pick: number): boolean =>
-    followMerges(net, { laneId: lane.id, laneDistance: end, routePick: pick }).laneId === terminal
-  // The first run of consecutive candidates that work, and its middle.
+  return scanPicks(samples, (pick) =>
+    followMerges(net, { laneId: lane.id, laneDistance: end, routePick: pick }).laneId === terminal)
+}
+
+/**
+ * The first run of candidate picks the test accepts, and its MIDDLE.
+ *
+ * Lifted out of `pickForTerminal` when `pickForBranch` wanted the same scan
+ * and for the same reason that function walks `followMerges` instead of
+ * inverting the hash: one copy of the "find a run, take its middle" rule means
+ * one place it can be wrong. The middle rather than the first hit so the answer
+ * is not sitting on a boundary where a rounding difference would flip the arm.
+ */
+function scanPicks(samples: number, ok: (pick: number) => boolean): number | null {
   let start = -1
   for (let i = 0; i < samples; i++) {
-    const pick = (i + 0.5) / samples
-    if (lands(pick)) {
+    if (ok((i + 0.5) / samples)) {
       if (start < 0) start = i
-      const next = i + 1 < samples && lands((i + 1.5) / samples)
-      if (!next) return (start + i + 1) / 2 / samples
+      if (!(i + 1 < samples && ok((i + 1.5) / samples))) return (start + i + 1) / 2 / samples
     } else if (start >= 0) {
       return (start + i) / 2 / samples
     }
   }
   return null
+}
+
+/**
+ * Every lane a walker starting on `from` and carrying `pick` would walk.
+ *
+ * The whole route, junction by junction, using the same `chooseContinuation`
+ * and `pickAt` the scene and the soak move enemies with. Bounded by the lane
+ * count, which `validateLanes` keeps meaningful by rejecting cycles.
+ */
+export function routeLanes(net: LaneNetwork, from: string, pick: number): string[] {
+  const out: string[] = []
+  let lane = net.lane(from)
+  for (let hops = 0; hops <= net.lanes.length; hops++) {
+    out.push(lane.id)
+    const options = net.continuations(lane.id)
+    if (!options.length) break
+    lane = chooseContinuation(options, pickAt(pick, lane.id)).lane
+  }
+  return out
+}
+
+/**
+ * A `routePick` that sends a walker spawning on `from` down `branch` -- or
+ * deliberately PAST it when `take` is false. Null if no pick does.
+ *
+ * WHY THIS IS NOT `pickForTerminal`. That one asks which lane a walker ENDS
+ * on, and starts its walk at the end of `from`, so it can only see junctions
+ * the walker has already reached. Level 9's flank is neither: both arms end on
+ * the same terminal -- the flank merges back into the hook 74 px short of the
+ * door -- and the junction is most of a board away from where anything spawns.
+ * So the question here is "does this walker's route PASS THROUGH that lane",
+ * which is `routeLanes`, and it is walked rather than reasoned about for the
+ * same reason: the mixing in `pickAt` exists so two junctions on one route do
+ * not correlate, and a second copy of it here would drift from the first.
+ *
+ * Pure and deterministic: same network, same names, same answer, every time.
+ */
+export function pickForBranch(
+  net: LaneNetwork,
+  from: string,
+  branch: string,
+  take: boolean,
+  samples = 256,
+): number | null {
+  if (!net.has(branch)) return null
+  return scanPicks(samples, (pick) => routeLanes(net, from, pick).includes(branch) === take)
 }
 
 export class LaneNetwork {
@@ -398,21 +453,37 @@ export function validateLanes(map: LaneSource): string[] {
   }
 
   // A cycle would hang `terminals` and `routeLengths`.
+  //
+  // THE VISITED SET IS PER PATH, NOT PER WALK, and that distinction is the
+  // whole difference between a cycle and a DIAMOND. One set shared across
+  // sibling branches reports "merges in a circle" for a lane that SPLITS and
+  // whose two arms MEET AGAIN -- the second arm finds the far lane already
+  // marked and calls it a loop, when in fact every walker reaches it once and
+  // stops. The runtime was always fine with it: `routesFrom` recurses down
+  // each arm independently and `followMerges` is bounded by the lane count.
+  //
+  // map_level9.json's `_lanes` note has described this bug and its one-line fix
+  // since the level was traced -- level 9's two arms out of one mouth were
+  // modelled as two ENTRANCE lanes partly to avoid it -- and level 9's flank
+  // is the diamond that finally needed it: `tail` splits into `hook` and
+  // `flank`, and `flank` rejoins `hook` short of the door.
+  //
+  // A real cycle is still caught, because a lane that comes back to one ALREADY
+  // ON THIS PATH is on this path's own set. The branching is bounded by the
+  // lane count, so the copy per step costs nothing at these sizes.
   for (const d of defs) {
-    const walked = new Set<string>([d.id])
-    const step = (at: LaneDef): void => {
+    const step = (at: LaneDef, path: Set<string>): void => {
       for (const m of contsOf(at)) {
         const next = defs.find((t) => t.id === m.into)
         if (!next) continue
-        if (walked.has(next.id)) {
+        if (path.has(next.id)) {
           problems.push(`lane "${d.id}" merges in a circle through "${next.id}"`)
           continue
         }
-        walked.add(next.id)
-        step(next)
+        step(next, new Set([...path, next.id]))
       }
     }
-    step(d)
+    step(d, new Set<string>([d.id]))
   }
 
   return [...new Set(problems)]

@@ -151,6 +151,22 @@ export interface MapDef {
    */
   mainId?: string
   /**
+   * Which lane is the map's OPTIONAL BRANCH: a road that leaves the route and
+   * comes back to it, that a wave may send a share of its enemies down.
+   *
+   * LEVEL 9 ONLY so far. It exists so the SHARE can live in the wave table
+   * without the wave table naming a lane: `WaveDef.flankShare` is a number
+   * between 0 and 1 and this is what it is a share OF. A map that does not
+   * declare it ignores `flankShare` entirely, which is every other level.
+   *
+   * It does NOT create the branch -- the branch is a `merge` with two
+   * continuations, like level 5's crossroads, and works with or without this
+   * key from the map's own split weights. This only says which arm a wave
+   * means when it asks for a quarter of its traffic to take the long way
+   * round.
+   */
+  flankId?: string
+  /**
    * Where the lane `waypoints` describes CONTINUES, if it is not itself an
    * exit. Absent on every map before level 5, and the shape of the field is
    * `LaneDef.merge`'s exactly.
@@ -1337,6 +1353,20 @@ export interface WaveDef {
   /** The enemy id of this wave's boss, if it has one. Drives the name card
    *  and the health bar across the top. */
   boss?: string
+  /**
+   * What share of this wave takes the map's `flankId` branch, 0 to 1.
+   *
+   * PER WAVE, IN THE TABLE, because it is a balance number: a pressure wave
+   * and a gauntlet wave want different amounts of traffic round the back, and
+   * a number in code cannot be tuned by the person tuning the level. Absent
+   * leaves the map's own split weights to decide, which is what every wave
+   * table before level 9 does and what level 9 itself does if this is removed.
+   *
+   * It is a SHARE AND NOT A COUNT: each enemy of the wave is rolled against it
+   * independently, so a wave of four does not spawn exactly one flanker. The
+   * roll happens AT SPAWN and nothing switches lane afterwards.
+   */
+  flankShare?: number
   spawns: WaveSpawnDef[]
 }
 

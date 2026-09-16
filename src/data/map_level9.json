@@ -195,6 +195,8 @@
     "into": "tail",
     "atIndex": 0
   },
+  "flankId": "flank",
+  "_flankId": "THE OPTIONAL BRANCH, named here so a wave table can put a SHARE of a wave down it without naming a lane itself. `mainId` says which lane the map's own `waypoints` are; this says which lane is the one a wave may divert traffic onto, and a wave's `flankShare` is read against it. A map without this key ignores `flankShare` entirely, which is every other level.",
   "lanes": [
     {
       "id": "south",
@@ -317,6 +319,74 @@
         [
           858.0,
           468.7
+        ]
+      ],
+      "merge": [
+        {
+          "into": "hook",
+          "atIndex": 0,
+          "weight": 3
+        },
+        {
+          "into": "flank",
+          "atIndex": 0,
+          "weight": 1
+        }
+      ],
+      "_waypoints": "THE REJOIN TO THE FLANK JUNCTION. Waypoint 0 IS the rejoin, to 0.00 px, which is what `atIndex: 0` on both arms means. Its LAST waypoint is the flank junction at (858.0, 468.7), where the lane SPLITS -- level 5's crossroads shape, and the arm a walker takes is settled from the number it was given at spawn, so nothing switches lane mid-route. 485 px."
+    },
+    {
+      "id": "flank",
+      "waypoints": [
+        [
+          858.0,
+          468.7
+        ],
+        [
+          914.5,
+          568.0
+        ],
+        [
+          1002.0,
+          567.0
+        ],
+        [
+          1028.0,
+          562.8
+        ],
+        [
+          1044.0,
+          551.9
+        ],
+        [
+          1087.4,
+          508.0
+        ],
+        [
+          1096.3,
+          493.0
+        ],
+        [
+          1100.7,
+          472.0
+        ],
+        [
+          1103.0,
+          326.0
+        ]
+      ],
+      "merge": {
+        "into": "hook",
+        "atIndex": 15
+      },
+      "_waypoints": "THE FLANK, round the bottom right. Waypoint 0 is the flank junction on the tail; waypoint 1 is the painted cap of the spur, and everything after it is the traced spur walked backwards to the door junction, where it merges into `hook` at waypoint 15 -- 109 px short of the door, so it inherits the door's own gate and fade rather than needing its own. 494 px against the 528 px of `hook` it stands in for: A SHORTCUT, by 34 px, which is 7% and nothing like the 61% the south arm saves over the north. It is a lateral road, not a cheap one."
+    },
+    {
+      "id": "hook",
+      "waypoints": [
+        [
+          858.0,
+          468.7
         ],
         [
           897.8,
@@ -383,10 +453,10 @@
           329.0
         ]
       ],
-      "_waypoints": "THE REJOIN TO THE DOOR. Waypoint 0 IS the rejoin, to 0.00 px, which is what `atIndex: 0` on both arms means. Its LAST waypoint is the door itself and is not extended off-plate, because the door is not a frame edge -- see `_exit`."
+      "_waypoints": "THE FLANK JUNCTION TO THE DOOR, up the right-hand hook and over the top. The ONLY terminal on this map -- it is the lane with no merge, so it is the one that can leak and the one that gets the door badge. Its LAST waypoint is the door itself and is not extended off-plate, because the door is not a frame edge -- see `_exit`. 602 px."
     }
   ],
-  "_lanes": "TWO ENTRANCES, ONE EXIT, AND NO FORK IN THE DATA. The plate paints a trace that splits just inside the mouth and rejoins at the bottom of the board, which is a diamond -- and `validateLanes` reports a diamond as \"merges in a circle\", because its cycle check shares one visited set across sibling branches instead of keeping one per path. The runtime underneath is fine; the validator is not. So the two arms are modelled as TWO ENTRANCE LANES that share the painted mouth and merge into the tail, which is levels 3 and 4's shape, needs nothing from the engine, and puts exactly the same walkers on exactly the same paint. `south` declares `entrance` because nothing merges into it; see the note on LaneDef. Both are fed by the wave table by name. See reports/2026-09-13-level-9-geometry.md for the validator bug and its one-line fix.",
+  "_lanes": "TWO ENTRANCES, ONE EXIT, AND ONE SPLIT. The plate paints a trace that splits just inside the mouth and rejoins at the bottom of the board, which is a diamond -- and `validateLanes` USED TO report a diamond as \"merges in a circle\", because its cycle check shared one visited set across sibling branches instead of keeping one per path. The runtime underneath was always fine; the validator was not, and the flank below is the diamond that finally made it worth fixing -- it is one per path now. The two arms are still modelled as TWO ENTRANCE LANES that share the painted mouth and merge into the tail, which is levels 3 and 4's shape, needs nothing from the engine, and puts exactly the same walkers on exactly the same paint. `south` declares `entrance` because nothing merges into it; see the note on LaneDef. Both are fed by the wave table by name. See reports/2026-09-13-level-9-geometry.md for the validator bug and its one-line fix, which is now applied. THE THIRD LANE IS THE FLANK, and it is a SPLIT rather than a second entrance: `tail` ends at the flank junction and names two continuations, so a walker picks its arm there from the number it was given at spawn. NEITHER `flank` NOR `hook` GETS A BADGE at its start -- both are fed into, and `markersFor` only draws a spawn badge on a lane nothing merges into. The badge set is unchanged: one mouth on the west edge and one door.",
   "exit": {
     "gateX": 1145.0,
     "vanishX": 1177.0,
@@ -454,7 +524,7 @@
       641.5
     ]
   ],
-  "_buildSpots": "15 PADS, ONE CENTRED ON EACH PAINTED GREY CHIP. Not placed by a scoring pass the way levels 3 to 8 were: on this board the buildable ground IS the fifteen chips the artist painted, and the substrate between them is scenery. tools/check_level9.py verifies every pad's 24 px core sits on chip rather than board. THREE OF THE FIFTEEN CANNOT REACH THE ROUTE AT ALL at the shortest attacking range in towers.json (pads 1, 7 and 15, at 156, 132 and 194 px from the nearest centreline), and only three of the fifteen cover two separate passes of it. This board holds LESS effective DPS than fifteen pads suggests, not more, and every mini-boss health figure is soaked against it and against no other level.",
+  "_buildSpots": "15 PADS, ONE CENTRED ON EACH PAINTED GREY CHIP. Not placed by a scoring pass the way levels 3 to 8 were: on this board the buildable ground IS the fifteen chips the artist painted, and the substrate between them is scenery. tools/check_level9.py verifies every pad's 24 px core sits on chip rather than board. THREE OF THE FIFTEEN COULD NOT REACH THE TRUNK AT ALL at the shortest attacking range in towers.json (pads 1, 7 and 15, at 156, 132 and 194 px from the nearest centreline), and only three of the fifteen cover two separate passes of it. THE FLANK TAKES THAT DOWN TO TWO: pads 8, 9, 12, 13, 15 can shoot at it, and pad 15 -- 194 px from the trunk and useless on every board before this change -- is 74 px from the flank. Pads 1 and 7 still reach nothing. This board holds LESS effective DPS than fifteen pads suggests, not more, and every mini-boss health figure is soaked against it and against no other level.",
   "padArt": [
     {
       "key": "node-chip-cabled"

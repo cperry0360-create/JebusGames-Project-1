@@ -18298,6 +18298,189 @@ async function run() {
         'getting through the door cost ' + (before - G.status.lives) + ' lives')
     }
 
+    /* ---- 4b: THE FLANK, AND WHETHER ANYTHING WALKS OFF THE PAINT ---- */
+    //
+    // Level 9 painted a road round the bottom right that no lane walked --
+    // 10.33% of the trace by tools/orphan_roads.py, the largest orphan on any
+    // of the ten boards. The `flank` lane is the answer to it, and the three
+    // things worth seeing are all things tests/ cannot: enemies ON that trace,
+    // the same enemies coming back onto the trunk and still leaking at the
+    // door, and whether any lane on this board crosses ground with no paint
+    // under it.
+    {
+      const flank = G.lanes.lane('flank')
+      const hook = G.lanes.lane('hook')
+      expect(!!flank && flank.id === 'flank', 'there is no flank lane on the live board')
+
+      // SIX WALKERS SPREAD DOWN THE FLANK, so one frame shows the whole road
+      // occupied rather than a dot at the mouth of it.
+      const onFlank = []
+      for (let i = 0; i < 6; i++) {
+        // The first 80% of the lane, not the whole of it: they WALK while the
+        // frame is being taken, and one placed at the far end is over the
+        // junction and on the hook by the time the shutter goes.
+        const at = (flank.path.totalLength * (0.25 + 0.13 * i))
+        const e = new Enemy9(G, ENEMIES9.packet, flank.path, G.gateway,
+          { lanes: G.lanes, laneId: 'flank', startAt: { laneDistance: at, distance: at } })
+        G.enemies.push(e)
+        onFlank.push(e)
+      }
+      await sleep(220)
+      note('  six walkers placed down the flank: '
+        + onFlank.map((e) => '(' + Math.round(e.x) + ',' + Math.round(e.y) + ')').join(' '))
+      expect(onFlank.every((e) => e.alive), 'a walker did not survive being put on the flank')
+      // THE BOTTOM RIGHT OF THE BOARD, which is where the orphan was: x 894 to
+      // 1124, y 382 to 590. Every one of the six has to be inside it or they
+      // are not on the road this change is about.
+      const inRegion = onFlank.filter((e) => e.x > 880 && e.x < 1140 && e.y > 320 && e.y < 600)
+      expect(inRegion.length === onFlank.length,
+        'only ' + inRegion.length + ' of ' + onFlank.length + ' flankers are in the '
+        + 'bottom-right region the orphan trace occupies')
+      await shot('level9-4b-flank-' + VP.w + 'x' + VP.h)
+
+      // AND THE ONE COMPROMISE, ON PURPOSE AND IN CLOSE-UP. The spur is a stub:
+      // its south end is a cap on open substrate, so the flank's first 112 px
+      // is an authored join and about 60 px of that has no trace under it.
+      // Level 6 authors an 82 px version of the same thing. It is the only
+      // place on this board where a walker is off the paint, and a screenshot
+      // of it is the honest way to let somebody judge whether it reads.
+      {
+        const e = new Enemy9(G, ENEMIES9.packet, flank.path, G.gateway,
+          { lanes: G.lanes, laneId: 'flank', startAt: { laneDistance: 56, distance: 56 } })
+        G.enemies.push(e)
+        // HELD IN PLACE while the camera moves and the shutter goes. A packet
+        // covers 230 px a second, so the 112 px join takes half of one and the
+        // walker is standing on the cap by the time an unheld frame is taken --
+        // which is a picture of the wrong thing.
+        const hold = setInterval(() => { e.laneDistance = 56 }, 16)
+        const cam = G.cameras.main
+        const wasX = cam.scrollX, wasY = cam.scrollY, wasZ = cam.zoom
+        cam.setZoom(2.2)
+        cam.centerOn(887, 519)
+        await sleep(260)
+        note('  the authored join, close up: a walker at ('
+          + Math.round(e.x) + ', ' + Math.round(e.y) + ')')
+        await shot('level9-4c-join-' + VP.w + 'x' + VP.h)
+        clearInterval(hold)
+        cam.setZoom(wasZ); cam.setScroll(wasX, wasY)
+        if (e.alive) e.hurt(e.maxHealth * 10, true, false)
+        await sleep(200)
+      }
+
+      // AND THEY COME BACK. One walker stepped over the end of the flank must
+      // land on `hook` at the door junction, not stop dead and not reappear at
+      // the start of it.
+      {
+        const e = new Enemy9(G, ENEMIES9.packet, flank.path, G.gateway,
+          { lanes: G.lanes, laneId: 'flank',
+            startAt: { laneDistance: flank.path.totalLength - 4, distance: 0 } })
+        G.enemies.push(e)
+        // POLLED, NOT SLEPT. A packet covers the 74 px from the junction to the
+        // door in well under a second, so a fixed wait reads the door and calls
+        // the rejoin a failure. This catches the frame the transfer happens on.
+        await until(() => e.laneId === 'hook', 4000)
+        const at = hook.path.pointAt(e.laneDistance)
+        note('  a flanker over the junction: lane=' + e.laneId + ' at ('
+          + Math.round(at.x) + ', ' + Math.round(at.y) + ')')
+        expect(e.laneId === 'hook', 'a flanker ended up on ' + e.laneId + ', not the hook')
+        expect(Math.hypot(at.x - 1103, at.y - 326) < 20,
+          'it rejoined at (' + Math.round(at.x) + ', ' + Math.round(at.y) + '), not the door junction')
+        // ...and still leaks, through the same interior door, having come the
+        // other way round. The flank inherits the hook's gate rather than
+        // carrying one of its own, and this is what says so.
+        const before = G.status.lives
+        e.laneDistance = hook.path.totalLength - 6
+        await sleep(700)
+        note('  a flanker through the door: lives ' + before + ' -> ' + G.status.lives)
+        expect(before - G.status.lives >= 1,
+          'a flanker getting through the door cost ' + (before - G.status.lives) + ' lives')
+      }
+      // `alive` is a getter, so the six are cleared the way anything else on
+      // this board is: by taking their health off them.
+      for (const e of onFlank) if (e.alive) e.hurt(e.maxHealth * 10, true, false)
+      await sleep(200)
+
+      // ---- NOTHING WALKS OFF THE PAINT, asked of the PLATE ITSELF ----
+      //
+      // The map plate is a loaded texture and Phaser will hand back a pixel of
+      // it, so this is the painted road answering rather than a fixture or an
+      // eye. Every lane is walked at 4 world px, the plate is sampled under the
+      // centreline, and the runs with no cyan trace under them are collected.
+      //
+      // ONE is expected: the authored join from the tail at (858, 469) to the
+      // painted cap of the spur at (914, 568), which is the same shape level 6
+      // authors an 82 px version of. Any other run is an enemy walking on bare
+      // board.
+      {
+        const key = ART9.map[G.level.map.plate]
+        const tex = game.textures.get(key)
+        const src = tex && tex.getSourceImage()
+        if (!src || !src.width) {
+          note('  *** the plate texture ' + key + ' is not readable; skipping the paint check')
+          expect(false, 'the map plate could not be sampled')
+        } else {
+          const sx = src.width / 1280, sy = src.height / 720
+          note('  sampling plate ' + key + ' at ' + src.width + 'x' + src.height
+            + ' (' + sx.toFixed(1) + 'x world scale)')
+          // The tracer's own test, unchanged: green and blue both high with red
+          // far below them. tools/trace_level9.py's `classify`.
+          const isTrace = (x, y) => {
+            const c = game.textures.getPixel(
+              Math.min(src.width - 1, Math.max(0, Math.round(x * sx))),
+              Math.min(src.height - 1, Math.max(0, Math.round(y * sy))), key)
+            return !!c && c.green >= 150 && c.blue >= 170 && c.red < c.green - 60
+          }
+          const bare = []
+          for (const id of laneIds) {
+            const p = G.lanes.lane(id).path
+            let run = null
+            for (let d = 0; d <= p.totalLength; d += 4) {
+              const q = p.pointAt(d)
+              // Off the PLATE is not off the road: every lane but the exit
+              // starts at a computed gateway point outside the frame.
+              if (q.x < 2 || q.y < 2 || q.x > 1278 || q.y > 718) { run = null; continue }
+              if (isTrace(q.x, q.y)) {
+                if (run && run.len > 8) bare.push(run)
+                run = null
+              } else if (run) { run.len += 4; run.to = [Math.round(q.x), Math.round(q.y)] }
+              else run = { lane: id, from: [Math.round(q.x), Math.round(q.y)], to: null, len: 0 }
+            }
+            if (run && run.len > 8) bare.push(run)
+          }
+          for (const b of bare) {
+            note('  off the paint: ' + b.lane + ' (' + b.from + ') -> (' + b.to + '), '
+              + b.len + ' px')
+          }
+          expect(bare.length === 1,
+            'level 9 walks off the painted trace in ' + bare.length + ' places, not the one '
+            + 'authored join')
+          expect(bare.length === 1 && bare[0].lane === 'flank',
+            'the off-paint stretch is on ' + (bare[0] && bare[0].lane) + ', not the flank')
+          expect(bare.length === 1 && bare[0].len <= 80,
+            'the authored join measures ' + (bare[0] && bare[0].len) + ' px of bare board')
+        }
+      }
+
+      // AND THE BADGES DID NOT MOVE. Two lanes were added and neither is an
+      // entrance or an exit, so the board still shows one mouth and one door.
+      {
+        const MK = await import('./js/systems/Markers.js')
+        const MCFG = (await import('./js/data/markers.json', { with: { type: 'json' } })).default
+        const DIS9 = (await import('./js/data/display.json', { with: { type: 'json' } })).default
+        const bw = MK.badgeWorldWidth(MCFG, DIS9.camera.defaultZoom)
+        const badges = MK.markersFor(G.level.map, MCFG, bw,
+          { width: DIS9.width, height: DIS9.height })
+        const sp = badges.filter((m) => m.kind === 'spawn')
+        const ex = badges.filter((m) => m.kind === 'exit')
+        note('  badges: ' + badges.map((m) => m.kind + '(' + JSON.stringify(m.lanes) + ') at ('
+          + Math.round(m.x) + ',' + Math.round(m.y) + ')').join(' '))
+        expect(sp.length === 1, 'level 9 draws ' + sp.length + ' spawn badges, not one')
+        expect(ex.length === 1, 'level 9 draws ' + ex.length + ' exit badges, not one')
+        expect(ex.length === 1 && Math.hypot(ex[0].x - 1177, ex[0].y - 329) < 2,
+          'the door badge moved off the door')
+      }
+    }
+
     /* ---- 5: A TOWER ON EVERY ONE OF THE FIFTEEN PADS ---- */
     {
       const reach = []
