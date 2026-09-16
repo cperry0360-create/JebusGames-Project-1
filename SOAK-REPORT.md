@@ -4,6 +4,86 @@ Newest first.
 
 ---
 
+## 2026-09-16 — Level 9 grows a third lane, and it costs sixteen points
+
+### The headline
+
+**Level 9 soaks at 113/480 on normal — 23.5% — against 191/480 before the flank.**
+Every other level is **identical on the same 480 seeds**, all nine of them, integer
+for integer. The flank is the only thing that moved and level 9 is the only level
+that moved.
+
+**23.5% is BELOW the 35-45% band and is published as a measurement, not as a
+setting anybody is happy with.** The share that produced it is
+`flankShare: 0.25` on all sixteen waves of `waves.level9.json`, which is the value
+the brief asked to start at. It is one edit away from any other value, which is
+why it lives in the wave table.
+
+### The before and after, 480 seeds, `tools/soak/level.ts <n> <level>`
+
+| level | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | **9** | 10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| before | 428 | 255 | 422 | 299 | 218 | 210 | 198 | 184 | **191** | 195 |
+| after | 428 | 255 | 422 | 299 | 218 | 210 | 198 | 184 | **113** | 195 |
+| % after | 89 | 53 | 88 | 62 | 45 | 44 | 41 | 38 | **24** | 41 |
+
+The baseline column reproduces every published figure in this file, level 9's
+**191/480 included**, which is what makes the two columns comparable.
+
+### The share, swept
+
+120 seeds to find the shape, 480 to publish. Same seeds throughout.
+
+| share | 0.05 | 0.10 | 0.15 | 0.19 | **0.20** | 0.25 | 0.35 |
+|---|---|---|---|---|---|---|---|
+| 120 seeds | 33% | 32% | 31% | 29% | 23% | 23% | 21% |
+| 480 seeds | — | **32% (152/480)** | 31% (149/480) | — | — | **23.5% (113/480)** | — |
+
+**THE CLIFF AT 0.20 IS THE SOAK'S OWN THRESHOLD, NOT THE GAME'S.**
+`Sim.ts`'s `MINOR_LANE_SHARE` is 0.2: a lane carrying less than a fifth of the
+level's bodies is kept out of the scripted player's pad-ranking, so a share of
+0.19 leaves the board it always built and a share of 0.20 makes it cover the
+flank first. A human player has no such step. Read the two sides of the cliff as
+two different boards rather than the level changing between 0.19 and 0.20.
+
+### Why it is harder at all
+
+Level 9's own map note has said for weeks that the board "holds LESS effective
+DPS than fifteen pads suggests": three of its fifteen pads could not reach the
+route at the shortest tower range, and only three cover two passes of it. The
+flank spreads that thin board over a second road. Five chips can cover the flank
+— 8, 9, 12, 13 and 15 — and **pad 15 could cover nothing at all before**, but
+covering the flank is peanuts not spent on the trunk.
+
+The flank is also a **shortcut**: 494.1 px against the 528.1 px of trunk it
+replaces, 6.4% shorter. Small — the south arm saves 54.6% over the north and IS
+the cheap road — but it is shorter rather than longer, so it does not pay for
+itself in walking time either.
+
+### THE BALANCING RECOMMENDATION
+
+**Drop the share to 0.10 and level 9 reads 152/480 = 32%**, three points under
+the band instead of twelve. That is the number to take if level 9 is meant to
+stay where it was tuned. Bringing it the rest of the way needs a mini-boss health
+pass, which is a separate job and was not attempted here.
+
+### One thing in the simulator changed, and it had to
+
+`laneTraffic` in `Sim.ts` walked `transferFrom`, which is documented as returning
+**the first arm at a split**. On a plain merge that is the only arm; on a split it
+handed the first arm 100% of the level's bodies and every other arm **zero**. So
+level 9's flank measured 0% traffic with a quarter of every wave on it. It now
+follows every arm by its share, taking the share from the wave's own `flankShare`
+where the map names an optional branch and from the map's split weights
+otherwise.
+
+**It moves no level but 9.** Level 5 is the only other splitting map and its
+crossroads arms already carry direct spawns well over the threshold, so the
+correction changes nothing there — checked, not assumed: level 5 is 218/480 in
+both columns above.
+
+---
+
 ## 2026-09-14 — Vlaude's powers fire, and his health comes down by ten thousand
 
 ### The headline

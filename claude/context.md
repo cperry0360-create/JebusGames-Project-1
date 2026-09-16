@@ -272,8 +272,16 @@ wave-table job, not a boss-health one, and nothing has attempted it.
 reproduce today.** The soak has been reworked several times since. The current
 published Cory-pinned figures at 480 seeds on normal are **level 1 89%, level 2 53%,
 level 3 88%, level 4 62%, level 5 45%, level 6 44%, level 7 41%, level 8 38%,
-level 9 40%, level 10 41%**. `SOAK-REPORT.md` is the living record; read it rather
+level 9 24%, level 10 41%**. `SOAK-REPORT.md` is the living record; read it rather
 than any number in this file.
+
+**LEVEL 9 MOVED ON 2026-09-16 AND IS THE ONE LEVEL OUT OF BAND.** It was 191/480
+(40%) and is 113/480 (23.5%) since the flank lane landed: a third road round the
+bottom right that the plate had always painted and nothing walked. The share of
+each wave that takes it is `flankShare` in `waves.level9.json`, a quarter on every
+wave, and **0.10 reads 152/480 = 32%** if the level should go back toward where it
+was tuned. Nothing else moved — the other nine are identical integers on the same
+480 seeds. See `reports/2026-09-16-level-9-flank-route.md`.
 
 **Two of those moved on 2026-09-15 and both are recorded in
 `reports/2026-09-15-blockers.md`:**
@@ -568,12 +576,24 @@ each of the first two passes broke what the one before it fixed.
   own history, and every pass at this area that reached one step further than it was
   asked to broke something.
 - **Level 9 declares 4 scenery items and builds 8**, and has been reporting it for a
-  while: `run.sh level9` fails two of its 86 checks on it (`4 scenery items declared,
+  while: `run.sh level9` fails two of its 98 checks on it (`4 scenery items declared,
   8 built` and `the rebuilt board has 8 scenery items`), plus a third on `START RUN
   would begin level10`, which is the harness's own save state having every level
   cleared. All three were reproduced on an unmodified tree before the 2026-09-15 pad
-  work and are **not** about pads. The three arcs and the Vlaude screen appear to be
-  counted twice somewhere between the map and the scene graph. Nobody has looked.
+  work and are **not** about pads. **Reproduced again on 2026-09-16**, on a worktree
+  at `5418c5c` with none of the flank change in it, where the same scenario reads 3
+  of 86: so they are not about lanes either. The three arcs and the Vlaude screen
+  appear to be counted twice somewhere between the map and the scene graph. Nobody
+  has looked.
+- **Level 9's flank crosses 60 px of unpainted board**, because the painted spur is
+  a stub rather than a loop: its south end is a cap on open substrate 112 px from
+  the tail. The map authors one straight join, which is what `map_level6.json`
+  already does over 82 px and what `tests/level6map.test.ts` records Cory choosing
+  over repainting a plate. **If the answer here should be different**, paint ~63 px
+  of trace into `art-source/level9/map_level9.png` between chip 13's right edge
+  (x=855) and the capacitor (x=903), re-encode and re-run `tools/trace_level9.py`;
+  the waypoints are derived from the paint and would follow. The picture to judge it
+  on is `sh tools/harness/run.sh level9` → `level9-4c-join-*.png`.
 
 **These are renumbered, twice now.** Seven of the original ten closed between 07 and
 13 September; what is left keeps its wording and gets a new number, so a citation of
