@@ -88,6 +88,10 @@ test('every counter plate has a measured field to slice at', () => {
   // The three-slice cuts the plate at `fieldLeft` and `fieldRight`. Without
   // both, the cut falls back to a guess and the icon ends up in the stretched
   // piece.
+  // The wave plate is in art.json and unread since the count became the
+  // control under this stack; it is checked anyway, because it is kept for the
+  // same reason it was kept the last time and a plate with no measured field
+  // could not be put back without noticing.
   for (const name of ['peanuts', 'lives', 'wave']) {
     const key = ART.ui.counters[name]
     const r = ART.render[key]
@@ -134,10 +138,13 @@ test('the corner reserves the widest the pill can grow to', () => {
       assert.ok(l.counters.width >= reserve - 0.5,
         `${vw}x${vh}: the corner gives the readouts ${l.counters.width.toFixed(1)} `
         + `for a pill that can reach ${reserve.toFixed(1)}`)
-      // And the reserved corner still does not reach the wave control.
-      assert.ok(l.counters.x + l.counters.width <= l.startButton.x + 0.5,
+      // And the reserved corner still does not reach the SETTINGS GEAR, which
+      // is what the readouts share their row with now. The wave control is
+      // under them rather than beside them, so the pill can grow across the
+      // whole top-left corner without ever meeting it.
+      assert.ok(l.counters.x + l.counters.width <= l.settings.x + 0.5,
         `${vw}x${vh}: the readouts reach ${(l.counters.x + l.counters.width).toFixed(1)} `
-        + `and the wave control starts at ${l.startButton.x.toFixed(1)}`)
+        + `and the settings gear starts at ${l.settings.x.toFixed(1)}`)
     }
   }
 })

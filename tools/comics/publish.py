@@ -2,10 +2,17 @@
 
     python3 tools/comics/publish.py [quality]
 
-THE PLAN IS `tools/comics/plan.json`, which pairs a source strip in
-art-source/cutscenes/ with the base name its panels take under
+THE PLAN IS `tools/comics/plan.json`, which pairs a source in
+art-source/cutscenes/ with the name its output takes under
 public/assets/cutscenes/. Nothing here decides where a panel PLAYS -- that is
 src/data/cutscenes.json, and it is the only file that knows.
+
+TWO KINDS OF SOURCE, because not every comic here is a strip. `strips` are
+multi-panel pages and are CUT on measured gutters. `pages` are sources that are
+ALREADY one finished panel -- the level 1 and level 2 openings delivered on
+2026-09-17 are single 1672x941 drawings -- and are encoded whole. Slicing one
+of those would cut a drawing into thirds down the middle of its own art, so the
+two lists are kept apart in the plan rather than guessed at from the image.
 
 Two passes, because there is no WebP encoder in this environment. The slices
 are written as PNG under tools/comics/tmp/ (gitignored), and Chromium encodes
@@ -22,6 +29,7 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, '..'))
 import slice as S
+import png
 
 TMP = os.path.join(HERE, 'tmp')
 DEST = os.path.join(ROOT, 'public', 'assets', 'cutscenes')
@@ -29,9 +37,21 @@ PLAN = os.path.join(HERE, 'plan.json')
 
 
 def build(plan):
-    """Cuts every strip and returns the encode jobs, one per panel."""
+    """Cuts every strip, takes every page whole, and returns the encode jobs."""
     jobs = []
     os.makedirs(TMP, exist_ok=True)
+    # THE WHOLE PAGES FIRST, and they never touch slice.py. The source IS the
+    # panel, so it is handed to the encoder where it lies -- the server serves
+    # the repository root, so an art-source path is reachable without a copy.
+    for entry in plan.get('pages', []):
+        src = os.path.join(ROOT, entry['source'])
+        w, h, _ = png.read(src)
+        entry['measured'] = {'size': f'{w}x{h}', 'panels': 1}
+        jobs.append({
+            'png': entry['source'],
+            'webp': f"cutscenes/{entry['name']}.webp",
+        })
+        print(f"  whole {entry['name']}  {w}x{h}", flush=True)
     for entry in plan['strips']:
         src = os.path.join(ROOT, entry['source'])
         w, h, gutters, spans = S.cuts(src)
@@ -119,5 +139,6 @@ if __name__ == '__main__':
     print(f'TOTAL {total / 1e6:.2f} MB across {len(results)} panels', flush=True)
     worst = min(results, key=lambda r: r['psnr'])
     print(f"worst PSNR {worst['psnr']:.1f} dB on {worst['webp']}", flush=True)
-    json.dump({'quality': quality, 'panels': results, 'strips': plan['strips']},
+    json.dump({'quality': quality, 'panels': results,
+               'strips': plan['strips'], 'pages': plan.get('pages', [])},
               open(os.path.join(HERE, 'last-run.json'), 'w'), indent=1)

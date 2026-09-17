@@ -45,25 +45,85 @@ beforeEach(() => { store.clear() })
 
 test('cutscenes.json names levels that exist, and only those', () => {
   assert.deepEqual(cutsceneProblems(), [])
-  // FOUR OPENINGS. Level 3 joined them on 2026-09-16 -- Vlaude on the
-  // television eliminating everybody's positions, which is the villain's
-  // introduction -- and this list used to be the assertion that it had none.
-  assert.deepEqual(levelsWithCutscenes().sort(),
-    ['level1', 'level2', 'level3', 'level9'])
-  assert.equal(panelsFor('level1').length, 3)
-  assert.equal(panelsFor('level2').length, 3)
-  assert.equal(panelsFor('level3').length, 3)
-  // LEVEL 9 PLAYS ONE PANEL, and it is the last uncut strip left under
-  // `levels`: HAT-GTT's introduction, three sub-panels across inside one
-  // image. See cutscenes.json's `_levels` for why it is also wired as level
-  // 9's wave 3 comic, and what the one-line fix is.
-  assert.equal(panelsFor('level9').length, 1)
+  // THREE OPENINGS, and every one of them is a slot Cory named. The 2026-09-16
+  // pass placed four comics by reading the pictures and got all four wrong;
+  // this list is what the placement fix of 2026-09-17 left.
+  assert.deepEqual(levelsWithCutscenes().sort(), ['level1', 'level2', 'level8'])
+  // Level 1 is three single drawings, level 2 is two. They are `pages` in
+  // tools/comics/plan.json rather than `strips`: each source file already IS
+  // one finished panel, so nothing slices them.
+  assert.deepEqual(panelsFor('level1'), [
+    'cutscenes/level1_intro_panel1.webp',
+    'cutscenes/level1_intro_panel2.webp',
+    'cutscenes/level1_intro_panel3.webp',
+  ])
+  assert.deepEqual(panelsFor('level2'), [
+    'cutscenes/level2_intro_panel1.webp',
+    'cutscenes/level2_intro_panel2.webp',
+  ])
+  // LEVEL 8'S OPENING IS SIX PANELS ACROSS TWO SOURCES, and the order is the
+  // whole of what makes it one comic: all three of intro_a, then all three of
+  // intro_b. Interleaving them would read as nonsense and nothing else here
+  // would notice.
+  assert.deepEqual(panelsFor('level8'), [
+    'cutscenes/level8_intro_a_01.webp',
+    'cutscenes/level8_intro_a_02.webp',
+    'cutscenes/level8_intro_a_03.webp',
+    'cutscenes/level8_intro_b_01.webp',
+    'cutscenes/level8_intro_b_02.webp',
+    'cutscenes/level8_intro_b_03.webp',
+  ])
+  // LEVEL 3 AND LEVEL 9 HAVE NO OPENING. Level 3's art was the second half of
+  // level 8's, and level 9's `cutscene_L9_01.webp` was an unsliced, lower-
+  // resolution copy of the comic its own wave 3 entry plays -- so a run read
+  // Hat-GTT's introduction twice, ninety seconds apart. Hat-GTT stays on
+  // wave 3, where it introduces the enemy that walks on next.
+  assert.deepEqual(panelsFor('level3'), [])
+  assert.deepEqual(panelsFor('level9'), [])
+  assert.equal(shouldPlay('level3'), false)
+  assert.equal(shouldPlay('level9'), false)
+})
+
+test('the level 8 opening is the two halves of one comic, in order', () => {
+  // A SEPARATE TEST BECAUSE IT IS THE PLACEMENT MOST EASILY GOT WRONG. Two
+  // source strips feed one opening, and nothing in the data says they belong
+  // together except this list's order.
+  const panels = panelsFor('level8')
+  const half = (p: string) => /level8_intro_([ab])_/.exec(p)?.[1]
+  assert.deepEqual(panels.map(half), ['a', 'a', 'a', 'b', 'b', 'b'],
+    'the two halves of level 8\'s opening are interleaved or out of order')
+  // And both halves are on disk as three panels each, cut rather than fitted.
+  for (const p of panels) {
+    assert.doesNotThrow(() => readFileSync(new URL(`../public/assets/${p}`, import.meta.url)),
+      `level 8's opening names ${p}, which is not in public/`)
+  }
+})
+
+test('the outro map carries level 8, level 9 and level 10\'s ending plus epilogue', () => {
+  const outros = JSON.parse(src('src/data/cutscenes.json')).outros as Record<string, string[]>
+  assert.deepEqual(Object.keys(outros).sort(), ['level10', 'level8', 'level9'])
+  assert.deepEqual(outros.level8, [
+    'cutscenes/level8_outro_01.webp',
+    'cutscenes/level8_outro_02.webp',
+    'cutscenes/level8_outro_03.webp',
+  ])
+  // THE EPILOGUE RIDES LEVEL 10'S OUTRO rather than having a map of its own.
+  // `leaveWon` sends the last level's outro to the Credits, so this one list
+  // is exactly what plays between the last boss and the roll -- and a fourth
+  // map would need a second lookup in the scene to land in the same place.
+  // tests/level10.test.ts pins the whole list and its order.
+  assert.deepEqual(outros.level10.slice(3), [
+    'cutscenes/epilogue_01.webp',
+    'cutscenes/epilogue_02.webp',
+    'cutscenes/epilogue_03.webp',
+  ], 'the epilogue does not follow level 10\'s ending')
 })
 
 test('a level with no entry simply has no cutscene', () => {
-  // LEVEL 5 IS THE CASE NOW. It was level 3 until level 3 got an opening on
-  // 2026-09-16; the property being held is unchanged and is the DEFAULT rather
-  // than an omission: a level says it has a comic by having one.
+  // LEVEL 5 IS STILL THE CASE. It was level 3, then level 3 got an opening on
+  // 2026-09-16, then that opening turned out to be level 8's and went back;
+  // the property being held never moved and is the DEFAULT rather than an
+  // omission: a level says it has a comic by having one.
   assert.deepEqual(panelsFor('level5'), [])
   assert.equal(shouldPlay('level5'), false)
   assert.deepEqual(panelsFor('level-that-does-not-exist'), [])
@@ -114,7 +174,13 @@ test('every panel file named anywhere in cutscenes.json is on disk', () => {
       `_unplaced names ${c.source} (was ${c.was}), which is not on disk`)
     assert.ok(c.shows.length > 20, `${c.id} has no description, so nobody can place it`)
   }
-  assert.equal(unplacedComics().length, 3)
+  // TWO, NOT THREE. `level10_intro` left this list on 2026-09-17: it was never
+  // level 10's -- it is the LEVEL 8 OUTRO, and the name was a guess made from
+  // the picture. It is at art-source/cutscenes/level8/outro_strip.png now and
+  // it plays. The two that remain are alternates of comics that already ship.
+  assert.equal(unplacedComics().length, 2)
+  assert.deepEqual(unplacedComics().map((c) => c.id).sort(),
+    ['level10_outro_condensed', 'level9_outro_alternate'])
   for (const p of retiredPanels()) {
     assert.doesNotThrow(() => readFileSync(new URL(`../${p}`, import.meta.url)),
       `_retired names ${p}, which is not on disk`)
@@ -131,8 +197,11 @@ test('every panel file named anywhere in cutscenes.json is on disk', () => {
   // 1672x941 is 16:9 to within a pixel, which is what the contain-fit assumes
   // when it says a portrait phone gets full width and vertical chrome. The
   // sliced panels are NOT that shape and are not meant to be -- the layout
-  // reads each panel's source size off its texture -- so this holds only for
-  // the four uncut strips still wired.
+  // reads each panel's source size off its texture -- so this holds for the
+  // THREE uncut strips still wired (level 9's outro and the three L10 ending
+  // panels, which are one strip's worth each) and for the five whole pages of
+  // the level 1 and level 2 openings, which are 1672x941 drawings rather than
+  // thirds of one.
   assert.ok(Math.abs(1672 / 941 - 16 / 9) < 0.002)
 })
 

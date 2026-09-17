@@ -277,13 +277,29 @@ test('the HUD is pinned to the corners it is supposed to be pinned to', () => {
   // the hand and nothing else.
   assert.ok(l.counters.x < width / 3, 'the counters are not in the top-left')
   assert.ok(l.counters.y < height / 4, 'the counters are not at the top')
-  assert.ok(l.startButton.x + l.startButton.width > width * 0.7,
-    'the start button is not in the top-right')
+  // THE WAVE CONTROL IS IN THE LEFT COLUMN, NOT THE RIGHT CORNER, since
+  // 2026-09-17: same x as the readouts, directly under the lower of them, and
+  // it is the only thing in that corner a finger is meant to land on.
+  assert.equal(l.waveControl.x, l.counters.x,
+    'the wave control is not left-aligned with the readouts above it')
+  assert.ok(l.waveControl.y >= l.counters.y + l.counters.height,
+    'the wave control is not under the readouts')
+  assert.ok(l.waveControl.x + l.waveControl.width < width / 2,
+    'the wave control is not in the left-hand corner')
   assert.ok(l.settings.x + l.settings.width > width * 0.95,
     'the settings gear is not at the right-hand end of the top row')
   assert.ok(l.settings.y < height / 4, 'the settings gear is not in the top row')
-  assert.ok(l.settings.x > l.startButton.x + l.startButton.width,
-    'the gear must sit outboard of START WAVE, not on it')
+  // AND THE TOP-RIGHT CORNER IS THE GEAR AND NOTHING ELSE. Everything else in
+  // the layout is either left of the gear's own column or below the top band;
+  // this is the assertion that the 132x44 plate really left rather than moving
+  // a little.
+  for (const [k, r] of Object.entries(l)) {
+    if (k === 'settings' || k === 'panelArea' || typeof r !== 'object') continue
+    const rect = r as { x: number; y: number; width: number; height: number }
+    const inCorner = rect.x + rect.width > l.settings.x
+      && rect.y < l.settings.y + l.settings.height
+    assert.ok(!inCorner, `${k} is in the settings gear's corner`)
+  }
   assert.ok(l.cancel.x + l.cancel.width > width * 0.95,
     'CANCEL is not at the right-hand edge')
   // AND IT IS AT THE BOTTOM, with the ability icons rather than with the
@@ -421,7 +437,7 @@ test('a press on the HUD is not also a press on the board', () => {
 
     for (const [label, rect] of [
       ['ability bar', L.abilities],
-      ['start button', L.startButton],
+      ['wave control', L.waveControl],
       ['settings gear', L.settings],
     ] as const) {
       const [cx, cy] = centre(rect)

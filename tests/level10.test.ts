@@ -482,11 +482,27 @@ test('reaching the exit ends the run, and it is not a life deduction', () => {
 
 test('the comics play on a win and the title card is not one of them', () => {
   const cut = read('cutscenes')
+  // SIX PANELS SINCE 2026-09-17: the ending, and then the EPILOGUE. The three
+  // `cutscene_L10_*` panels are what plays when Vlaude goes down and their
+  // order is unchanged; `epilogue_01/02/03` follow them in the same list
+  // because they play as one comic. `leaveWon` sends the last level's outro to
+  // the Credits, so this list is exactly what sits between the last boss and
+  // the roll -- an epilogue in a map of its own would need a second lookup in
+  // the scene to land in the same place.
   assert.deepEqual(cut.outros.level10, [
     'cutscenes/cutscene_L10_01.webp',
     'cutscenes/cutscene_L10_02.webp',
     'cutscenes/cutscene_L10_03.webp',
-  ], 'the three comics are not level 10\'s outro, in order')
+    'cutscenes/epilogue_01.webp',
+    'cutscenes/epilogue_02.webp',
+    'cutscenes/epilogue_03.webp',
+  ], 'the ending and the epilogue are not level 10\'s outro, in order')
+  // The ending still comes first, stated as an order rather than left to the
+  // deepEqual above to imply.
+  const l10 = cut.outros.level10 as string[]
+  assert.ok(l10.findIndex((p: string) => p.includes('epilogue'))
+    > l10.findLastIndex((p: string) => p.includes('cutscene_L10')),
+    'the epilogue plays before the ending it is an epilogue to')
   assert.equal(cut.levels.level10, undefined,
     'the ending comics are filed as level 10\'s OPENING, so they would play before the level')
   // A LOSS MUST NOT PLAY THEM. `outros` is reached from the win branch alone,

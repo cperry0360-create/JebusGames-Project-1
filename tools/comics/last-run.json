@@ -2,67 +2,123 @@
  "quality": 90,
  "panels": [
   {
-   "webp": "cutscenes/level1_intro_01.webp",
+   "webp": "cutscenes/level1_intro_panel1.webp",
+   "w": 1672,
+   "h": 941,
+   "bytes": 348584,
+   "psnr": 37.68376453299433
+  },
+  {
+   "webp": "cutscenes/level1_intro_panel2.webp",
+   "w": 1672,
+   "h": 941,
+   "bytes": 334560,
+   "psnr": 37.335613991199615
+  },
+  {
+   "webp": "cutscenes/level1_intro_panel3.webp",
+   "w": 1672,
+   "h": 941,
+   "bytes": 353834,
+   "psnr": 37.97216653691201
+  },
+  {
+   "webp": "cutscenes/level2_intro_panel1.webp",
+   "w": 1672,
+   "h": 941,
+   "bytes": 276476,
+   "psnr": 38.39948556709789
+  },
+  {
+   "webp": "cutscenes/level2_intro_panel2.webp",
+   "w": 1672,
+   "h": 941,
+   "bytes": 308434,
+   "psnr": 38.1495392914997
+  },
+  {
+   "webp": "cutscenes/level8_intro_a_01.webp",
    "w": 553,
    "h": 941,
    "bytes": 129702,
    "psnr": 37.01784204221553
   },
   {
-   "webp": "cutscenes/level1_intro_02.webp",
+   "webp": "cutscenes/level8_intro_a_02.webp",
    "w": 550,
    "h": 941,
    "bytes": 112902,
    "psnr": 37.56769051109572
   },
   {
-   "webp": "cutscenes/level1_intro_03.webp",
+   "webp": "cutscenes/level8_intro_a_03.webp",
    "w": 553,
    "h": 941,
    "bytes": 125442,
    "psnr": 37.48247580188297
   },
   {
-   "webp": "cutscenes/level2_intro_01.webp",
-   "w": 552,
-   "h": 941,
-   "bytes": 128632,
-   "psnr": 36.46060637581224
-  },
-  {
-   "webp": "cutscenes/level2_intro_02.webp",
-   "w": 550,
-   "h": 941,
-   "bytes": 111902,
-   "psnr": 37.005038278455935
-  },
-  {
-   "webp": "cutscenes/level2_intro_03.webp",
-   "w": 553,
-   "h": 941,
-   "bytes": 126542,
-   "psnr": 36.78935297478348
-  },
-  {
-   "webp": "cutscenes/level3_intro_01.webp",
+   "webp": "cutscenes/level8_intro_b_01.webp",
    "w": 741,
    "h": 724,
    "bytes": 140150,
    "psnr": 35.6643153212355
   },
   {
-   "webp": "cutscenes/level3_intro_02.webp",
+   "webp": "cutscenes/level8_intro_b_02.webp",
    "w": 706,
    "h": 724,
    "bytes": 104376,
    "psnr": 35.68474503228962
   },
   {
-   "webp": "cutscenes/level3_intro_03.webp",
+   "webp": "cutscenes/level8_intro_b_03.webp",
    "w": 698,
    "h": 724,
    "bytes": 113088,
    "psnr": 34.91391415231175
+  },
+  {
+   "webp": "cutscenes/level8_outro_01.webp",
+   "w": 719,
+   "h": 724,
+   "bytes": 160206,
+   "psnr": 33.39095747662326
+  },
+  {
+   "webp": "cutscenes/level8_outro_02.webp",
+   "w": 717,
+   "h": 724,
+   "bytes": 144984,
+   "psnr": 33.6800859612553
+  },
+  {
+   "webp": "cutscenes/level8_outro_03.webp",
+   "w": 720,
+   "h": 724,
+   "bytes": 225020,
+   "psnr": 31.74281487514233
+  },
+  {
+   "webp": "cutscenes/epilogue_01.webp",
+   "w": 552,
+   "h": 941,
+   "bytes": 128632,
+   "psnr": 36.46060637581224
+  },
+  {
+   "webp": "cutscenes/epilogue_02.webp",
+   "w": 550,
+   "h": 941,
+   "bytes": 111902,
+   "psnr": 37.005038278455935
+  },
+  {
+   "webp": "cutscenes/epilogue_03.webp",
+   "w": 553,
+   "h": 941,
+   "bytes": 126542,
+   "psnr": 36.78935297478348
   },
   {
    "webp": "cutscenes/level3_wave12_01.webp",
@@ -193,8 +249,8 @@
  ],
  "strips": [
   {
-   "source": "art-source/cutscenes/level1/intro_strip.png",
-   "name": "level1_intro",
+   "source": "art-source/cutscenes/level8/intro_a_strip.png",
+   "name": "level8_intro_a",
    "panels": 3,
    "measured": {
     "size": "1672x941",
@@ -225,40 +281,8 @@
    }
   },
   {
-   "source": "art-source/cutscenes/level2/intro_strip.png",
-   "name": "level2_intro",
-   "panels": 3,
-   "measured": {
-    "size": "1672x941",
-    "gutters": [
-     [
-      546,
-      565
-     ],
-     [
-      1105,
-      1124
-     ]
-    ],
-    "panels": [
-     [
-      0,
-      551
-     ],
-     [
-      560,
-      1109
-     ],
-     [
-      1119,
-      1671
-     ]
-    ]
-   }
-  },
-  {
-   "source": "art-source/cutscenes/level3/intro_strip.png",
-   "name": "level3_intro",
+   "source": "art-source/cutscenes/level8/intro_b_strip.png",
+   "name": "level8_intro_b",
    "panels": 3,
    "measured": {
     "size": "2172x724",
@@ -284,6 +308,70 @@
      [
       1474,
       2171
+     ]
+    ]
+   }
+  },
+  {
+   "source": "art-source/cutscenes/level8/outro_strip.png",
+   "name": "level8_outro",
+   "panels": 3,
+   "measured": {
+    "size": "2172x724",
+    "gutters": [
+     [
+      712,
+      734
+     ],
+     [
+      1437,
+      1459
+     ]
+    ],
+    "panels": [
+     [
+      0,
+      718
+     ],
+     [
+      727,
+      1443
+     ],
+     [
+      1452,
+      2171
+     ]
+    ]
+   }
+  },
+  {
+   "source": "art-source/cutscenes/epilogue/epilogue_strip.png",
+   "name": "epilogue",
+   "panels": 3,
+   "measured": {
+    "size": "1672x941",
+    "gutters": [
+     [
+      546,
+      565
+     ],
+     [
+      1105,
+      1124
+     ]
+    ],
+    "panels": [
+     [
+      0,
+      551
+     ],
+     [
+      560,
+      1109
+     ],
+     [
+      1119,
+      1671
      ]
     ]
    }
@@ -478,6 +566,48 @@
       2171
      ]
     ]
+   }
+  }
+ ],
+ "pages": [
+  {
+   "source": "art-source/cutscenes/level1/level1_intro_panel1.png",
+   "name": "level1_intro_panel1",
+   "measured": {
+    "size": "1672x941",
+    "panels": 1
+   }
+  },
+  {
+   "source": "art-source/cutscenes/level1/level1_intro_panel2.png",
+   "name": "level1_intro_panel2",
+   "measured": {
+    "size": "1672x941",
+    "panels": 1
+   }
+  },
+  {
+   "source": "art-source/cutscenes/level1/level1_intro_panel3.png",
+   "name": "level1_intro_panel3",
+   "measured": {
+    "size": "1672x941",
+    "panels": 1
+   }
+  },
+  {
+   "source": "art-source/cutscenes/level2/level2_intro_panel1.png",
+   "name": "level2_intro_panel1",
+   "measured": {
+    "size": "1672x941",
+    "panels": 1
+   }
+  },
+  {
+   "source": "art-source/cutscenes/level2/level2_intro_panel2.png",
+   "name": "level2_intro_panel2",
+   "measured": {
+    "size": "1672x941",
+    "panels": 1
    }
   }
  ]

@@ -99,7 +99,7 @@ test('the tab never covers the ability strip, the wave chip or the gear', () => 
     const hud = hudLayout({ width: w, height: h, insets: NO_INSETS, ...WIDEST }, LAYOUT)
     const { tab } = drawerLayout(w, hud.panelArea, TOWERS.length, 0, CFG)
     for (const [k, r] of Object.entries({
-      counters: hud.counters, startButton: hud.startButton, settings: hud.settings,
+      counters: hud.counters, waveControl: hud.waveControl, settings: hud.settings,
       abilities: hud.abilities, cancel: hud.cancel, heroChip: hud.heroChip,
     })) {
       assert.ok(!overlaps(tab, r), `${name}: the tab overlaps ${k}`)
@@ -114,7 +114,7 @@ test('the expanded panel never covers the ability strip or the wave chip', () =>
     const hud = hudLayout({ width: w, height: h, insets: NO_INSETS, ...WIDEST }, LAYOUT)
     const { panel } = drawerLayout(w, hud.panelArea, TOWERS.length, 0, CFG)
     for (const [k, r] of Object.entries({
-      counters: hud.counters, startButton: hud.startButton, settings: hud.settings,
+      counters: hud.counters, waveControl: hud.waveControl, settings: hud.settings,
       abilities: hud.abilities, cancel: hud.cancel, heroChip: hud.heroChip,
       messageRow: hud.messageRow,
     })) {
@@ -346,14 +346,48 @@ test('how far each viewport has to scroll, measured', () => {
    * shows a whole tile for the first time — it was 55px and 89% of one. The
    * counter was costing the smallest screen the ability to see any tile
    * completely.
+   *
+   * Seventh, 2026-09-17 and later the same day: the wave counter left that
+   * stack again. It is the CONTROL now -- `hud.waveControl`, the bottom row of
+   * the top-left column -- because the start button in the opposite corner was
+   * drawing the same `2/13` on its own label and one of the two copies had to
+   * go. A 44px control cannot shrink the way the 16px readout it replaces did,
+   * so the column is 84px tall against the 56 it was, and `panelArea` clears
+   * the WHOLE column: GameScene hangs level 10's Vlaude icon off its top-left
+   * corner, 20px in, which would otherwise land on the control.
+   *
+   * THAT COSTS FOUR PIXELS OF GRID and they were paid deliberately rather
+   * than found: 118 -> 114 and 72 -> 68. It was eight until the drag check
+   * below named the line: at 110 the grid was ONE pixel short of letting a
+   * single drag reach the last tower, so `panelTop` keeps four pixels under
+   * the control where it keeps eight under the message row -- a painted plate
+   * with its own border does not need the same air as a line of stroked text. The second row itself did NOT move
+   * down with the column -- it clears the readouts and the gear and gives way
+   * in WIDTH beside the control, which is why the bill is eight pixels and not
+   * the twenty-eight the old "clear the taller corner group" rule would have
+   * charged. Twenty-eight would have left 44px at 568x320, under the 62px
+   * tile, and the narrow screen would have stopped showing a whole tile again.
+   *
+   * 68 STILL CLEARS THE 62px TILE, by six pixels, and that is the line to
+   * watch: the next thing that wants a few pixels out of the top-left corner
+   * is taking them off the narrow screen's only whole tile.
    */
   const wide = drawerLayout(844, area(844, 390), 6, 0, CFG)
   const narrow = drawerLayout(568, area(568, 320), 6, 0, CFG)
   const desk = drawerLayout(1280, area(1280, 720), 6, 0, CFG)
-  assert.equal(Math.round(wide.grid.height), 118, '844x390 grid height moved')
-  assert.equal(Math.round(narrow.grid.height), 72, '568x320 grid height moved')
-  assert.equal(Math.round(wide.maxScroll), 80, '844x390 no longer scrolls by 80')
-  assert.equal(Math.round(narrow.maxScroll), 126, '568x320 no longer scrolls by 126')
+  assert.equal(Math.round(wide.grid.height), 114, '844x390 grid height moved')
+  assert.equal(Math.round(narrow.grid.height), 68, '568x320 grid height moved')
+  assert.equal(Math.round(wide.maxScroll), 84, '844x390 no longer scrolls by 84')
+  assert.equal(Math.round(narrow.maxScroll), 130, '568x320 no longer scrolls by 130')
+  // ONE DRAG HAS TO REACH THE LAST TILE, and this is the arithmetic behind the
+  // four pixels `panelTop` gives back under the wave control. A drag runs from
+  // twelve inside the grid's bottom edge to twelve inside its top, so it moves
+  // `grid - 24`; the last tile is reachable in one only if that covers
+  // `maxScroll`. `tools/harness/run.sh drawer` is what actually performs the
+  // drag -- this is the reason it passes.
+  assert.ok(wide.grid.height - 24 >= wide.maxScroll,
+    `844x390: one drag moves ${wide.grid.height - 24}px against a ${wide.maxScroll}px scroll, ` +
+    'so the last tower needs a second drag')
   // THE MARGIN, pinned. A grid under half a tile makes every tile untappable.
   // The narrow screen now clears a WHOLE tile, which it never did before.
   assert.ok(narrow.grid.height >= CFG.tileHeight,

@@ -1,14 +1,22 @@
 {
-  "_note": "WHICH STRIP BECOMES WHICH PANELS. `source` is the strip in art-source/cutscenes/, `name` is the base the panels take under public/assets/cutscenes/, and `panels` is how many the measurement is expected to find -- publish.py fails rather than publishing if the count moves, so a re-export that changes the layout is noticed here instead of on a phone. `measured` is written back by the run and is the record of the cut columns.",
+  "_note": "WHICH SOURCE BECOMES WHICH PANELS. Two lists, because not every comic in this repository is a strip any more. `strips` is a multi-panel page that gets CUT: `source` is the file in art-source/cutscenes/, `name` is the base its panels take under public/assets/cutscenes/, and `panels` is how many the measurement is expected to find -- publish.py fails rather than publishing if the count moves, so a re-export that changes the layout is noticed here instead of on a phone. `pages` is a source that is ALREADY ONE FINISHED PANEL and is only encoded; it takes `name` as the whole output name and is never sliced. `measured` is written back by the run and is the record of the cut columns.\nNOTHING HERE DECIDES WHERE A PANEL PLAYS. That is src/data/cutscenes.json, and it is the only file that knows.",
   "strips": [
-    { "source": "art-source/cutscenes/level1/intro_strip.png",  "name": "level1_intro",  "panels": 3 },
-    { "source": "art-source/cutscenes/level2/intro_strip.png",  "name": "level2_intro",  "panels": 3 },
-    { "source": "art-source/cutscenes/level3/intro_strip.png",  "name": "level3_intro",  "panels": 3 },
+    { "source": "art-source/cutscenes/level8/intro_a_strip.png", "name": "level8_intro_a", "panels": 3 },
+    { "source": "art-source/cutscenes/level8/intro_b_strip.png", "name": "level8_intro_b", "panels": 3 },
+    { "source": "art-source/cutscenes/level8/outro_strip.png",   "name": "level8_outro",   "panels": 3 },
+    { "source": "art-source/cutscenes/epilogue/epilogue_strip.png", "name": "epilogue",    "panels": 3 },
     { "source": "art-source/cutscenes/level3/wave12_strip.png", "name": "level3_wave12", "panels": 3 },
     { "source": "art-source/cutscenes/level4/wave06_strip.png", "name": "level4_wave06", "panels": 3 },
     { "source": "art-source/cutscenes/level9/wave03_strip.png", "name": "level9_wave03", "panels": 3 },
     { "source": "art-source/cutscenes/level9/wave07_strip.png", "name": "level9_wave07", "panels": 3 },
     { "source": "art-source/cutscenes/level9/wave11_strip.png", "name": "level9_wave11", "panels": 3 },
     { "source": "art-source/cutscenes/level9/wave15_strip.png", "name": "level9_wave15", "panels": 3 }
+  ],
+  "pages": [
+    { "source": "art-source/cutscenes/level1/level1_intro_panel1.png", "name": "level1_intro_panel1" },
+    { "source": "art-source/cutscenes/level1/level1_intro_panel2.png", "name": "level1_intro_panel2" },
+    { "source": "art-source/cutscenes/level1/level1_intro_panel3.png", "name": "level1_intro_panel3" },
+    { "source": "art-source/cutscenes/level2/level2_intro_panel1.png", "name": "level2_intro_panel1" },
+    { "source": "art-source/cutscenes/level2/level2_intro_panel2.png", "name": "level2_intro_panel2" }
   ]
 }

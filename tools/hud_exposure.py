@@ -165,8 +165,14 @@ def main():
 
         # 2. Exposure of every candidate position clear of the rest of the HUD.
         hud = hud_rects(vw, vh)
+        # THE LAYOUT'S CURRENT KEYS. This list said `startButton`, `mute` and
+        # `pause`; the last two went when the two bottom-corner buttons were
+        # replaced by one settings gear, and `startButton` became `waveControl`
+        # when it moved into the top-left stack on 2026-09-17 -- so this tool
+        # has been raising KeyError rather than measuring anything for a while.
         others = [{'x': hud[k]['x'], 'y': hud[k]['y'], 'w': hud[k]['width'], 'h': hud[k]['height']}
-                  for k in ('counters', 'startButton', 'messageRow', 'abilities', 'mute', 'pause')]
+                  for k in ('counters', 'waveControl', 'messageRow', 'abilities',
+                            'settings', 'cancel')]
         scored = []
         for py in range(4, vh - bh, 6):
             for px in range(4, vw - bw, 12):
