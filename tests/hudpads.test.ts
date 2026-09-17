@@ -43,7 +43,7 @@ const INPUT = { countersWidth: 48, abilitiesWidth: 322 }
 /** Every rectangle the player reads or presses. `panelArea` is deliberately
  *  absent: it is a hint about where a panel MAY open, not a thing on screen. */
 const hudRects = (l: ReturnType<typeof hudLayout>): Array<[string, Rect]> => [
-  ['counters', l.counters], ['startButton', l.startButton], ['messageRow', l.messageRow],
+  ['counters', l.counters], ['waveControl', l.waveControl], ['messageRow', l.messageRow],
   ['heroChip', l.heroChip], ['abilities', l.abilities], ['settings', l.settings],
   ['cancel', l.cancel],
 ]
@@ -82,6 +82,13 @@ test('every build pad on every level can be brought out from under the HUD', () 
    * under one SIDEWAYS as readily as vertically -- and the old measurement could
    * not see that at all. It counted 47 trapped pads at 667x375 where there is
    * not one.
+   *
+   * The 132px wave control named here is in the top-LEFT column since
+   * 2026-09-17, under the readouts rather than opposite them; the top-right
+   * corner is the 40px gear and nothing else. The shape of the argument is
+   * unchanged -- more clear width than covered width -- and the corner that
+   * the pads have to slide out from under is a little taller and a lot
+   * narrower than it was.
    *
    * WHAT IT COST: the camera was given the HUD's band height as a vertical
    * bounds margin to buy slack the pads did not need, and a margin on the
@@ -222,7 +229,7 @@ test('nothing tappable in the HUD is under the 44pt floor', () => {
   // 44x44. `counters` and `messageRow` are the two readouts and are exempt by
   // name rather than by size, so a future change that makes one of them
   // interactive has to come back here.
-  const TAPPABLE = ['startButton', 'heroChip', 'abilities', 'settings', 'cancel']
+  const TAPPABLE = ['waveControl', 'heroChip', 'abilities', 'settings', 'cancel']
   // LANDSCAPE ONLY, AND PORTRAIT IS NOT A SKIPPED CHECK. The game is
   // landscape-only and a portrait viewport gets a full-screen rotate overlay
   // with the scene paused behind it, so no control in that layout is reachable
@@ -261,32 +268,40 @@ test('the readouts shrank and the controls did not', () => {
   assert.ok(LAYOUT.readoutHeight < LAYOUT.plateHeight,
     'a readout is no smaller than the 44px plate it was cut from')
 
-  // THE STACK IS A THIRD PLATE TALLER SINCE 2026-09-17 and the rule it used to
-  // be held to -- exactly `plateHeight`, so the top band never moved -- could
-  // not survive the wave counter joining it. What that rule was PROTECTING can
-  // and does: the second row sits under this corner and the build drawer's
-  // panel under that, so a taller group costs the drawer its grid. So the
-  // assertion is now against the thing at risk rather than against the
-  // arithmetic that used to keep it safe, and `tests/drawer.test.ts` records
-  // the grid heights that prove it was paid for -- `rowHeight` 22 -> 16 and
-  // `rowGap` 6 -> 4 give back the twelve pixels the third plate costs.
+  // THE STACK IS TWO READOUTS AND A CONTROL SINCE 2026-09-17, and the rule the
+  // readouts used to be held to -- the stack exactly `plateHeight` tall, so the
+  // top band never moved -- cannot be stated about a column that ends in a 44px
+  // button. What that rule was PROTECTING can and does: the second row sits
+  // beside this corner and the build drawer's panel under it, so a taller
+  // column costs the drawer its grid. `tests/drawer.test.ts` records the eight
+  // pixels this cost and why they were not twenty-eight.
   const stack = LAYOUT.readoutHeight * LAYOUT.readoutCount
     + LAYOUT.readoutGap * (LAYOUT.readoutCount - 1)
-  assert.equal(LAYOUT.readoutCount, 3, 'the top-left corner is not three readouts')
-  assert.ok(stack - LAYOUT.plateHeight <= 12,
-    `the readout stack is ${stack}px against the ${LAYOUT.plateHeight} of the row it replaced; ` +
-    'more than twelve over cannot be paid back out of the second row')
-  // AND IT HAS TO BE PAID BACK. The second row is the only thing between this
-  // corner and the drawer's panel, so what the third plate took is what that
-  // row has to give up. 4 + 16 = 20 against the 6 + 22 = 28 it was.
-  assert.ok(LAYOUT.rowGap + LAYOUT.rowHeight <= 20,
-    `the second row costs ${LAYOUT.rowGap + LAYOUT.rowHeight}px, so the third readout ` +
-    'was never paid for and the build drawer is carrying it')
+  assert.equal(LAYOUT.readoutCount, 2, 'the top-left corner is not two readouts')
+  const column = stack + LAYOUT.waveControlGap + LAYOUT.waveControlHeight
+  assert.equal(column, 84,
+    `the top-left column is ${column}px; panelArea clears the whole of it, so this ` +
+    'is the number the build drawer pays for')
+  // AND THE CONTROL IS ABOUT THREE TIMES A READOUT, which is the shape the
+  // brief asked for and the carve-out that decides it: a readout is not
+  // tappable and may shrink to whatever stays legible; a control may not.
+  assert.ok(LAYOUT.waveControlHeight >= 44,
+    'the wave control is under the 44pt tap floor')
+  assert.ok(LAYOUT.waveControlHeight >= LAYOUT.readoutHeight * 2.5,
+    `the wave control is ${LAYOUT.waveControlHeight}px against a ${LAYOUT.readoutHeight}px ` +
+    'readout, which is close enough to read as a third counter')
   assert.ok(LAYOUT.rowHeight >= P.hud.bossBarHeight,
     `the second row is ${LAYOUT.rowHeight}px and the boss bar in it is ${P.hud.bossBarHeight}`)
-  assert.equal(LAYOUT.plateHeight, 44, 'the wave control is under the tap floor')
-  assert.ok(LAYOUT.startWidth < 168, 'the wave control did not get smaller')
-  assert.ok(LAYOUT.startMinWidth >= 44, 'the wave control can shrink under the tap floor')
+  assert.equal(LAYOUT.plateHeight, 44, 'the top row is not a plate tall')
+  assert.ok(LAYOUT.waveControlWidth < 168, 'the wave control did not get smaller')
+  assert.ok(LAYOUT.waveControlMinWidth >= 44, 'the wave control can shrink under the tap floor')
+  // THE RETIRED KEYS, held retired. They were the same control's width in the
+  // corner it no longer occupies, and a stale tunable that nothing reads is how
+  // a later pass ends up tuning the wrong number.
+  assert.equal(LAYOUT.startWidth, undefined, 'startWidth is back and nothing reads it')
+  assert.equal(LAYOUT.startMinWidth, undefined, 'startMinWidth is back and nothing reads it')
+  assert.equal(LAYOUT.startLabelSize, undefined,
+    'startLabelSize is back; the control\'s label size is waveLabelSize')
   assert.ok(LAYOUT.cornerButton + LAYOUT.cornerButtonTapPad >= 44,
     'the settings gear taps under the 44pt floor')
   // The camera's slack has to clear the pad's EDGE, not its centre.

@@ -979,6 +979,25 @@ split alongside its total: pad/HUD overlaps at rest over all ten levels went **3
 pad is hidden and none was un-hidden: `padShowing` is still `isFree` alone, exactly as
 the paragraph above settled it.
 
+**AND THE FIFTH PASS, 2026-09-17, MERGED THE WAVE COUNT INTO ONE CONTROL.** The HUD was
+drawing it twice -- `2/13` on a readout in the top-left stack and `▶ 2/13 +20` on the
+start button in the top-right corner -- because both were correct changes made
+separately and nobody joined them up. **The top-right corner is the settings gear and
+nothing else now**, and the bottom row of the top-left column is the control:
+`HudLayout.waveControl`, 148x44, wearing the same painted plate as every other button
+in the game. `startWidth`, `startMinWidth` and `startLabelSize` are retired; nothing
+outside HudLayout read any of them. `tests/wavecount.test.ts` fails if the count comes
+back in a second place or leaves a live state of the control.
+
+Measured at 844x390 against `ccf7f78`, which is the same boards: pad/HUD overlaps at
+rest went **36 to 32** (`abilities` 12 both ways, `messageRow` 15->11 because the second
+row moved up fourteen pixels, `heroChip` 6 both ways, `startButton` 2 -> `waveControl`
+2, `counters` 1 both ways), and **pads panning alone cannot free went 22 to 18** -- the
+figure that was 24->17 before the new boards landed. Both plots that were under the old
+top-right button are clear: level 6's pad 1 and level 9's pad 4. The build drawer's grid
+paid four pixels for the taller corner, 118->114 and 72->68, and one drag still reaches
+the last tower. `reports/2026-09-17-wave-control-merge.md`.
+
 **Two NEW open items, both small, both from the 2026-09-15 UI pass:**
 
 - **Level 7's spawn and exit badges are invisible on the Highway, and it is an ART
@@ -988,8 +1007,11 @@ the paragraph above settled it.
   badge art are the same luminance. Wants a light halo or a darker outline in the
   picture. Everything else about the markers is finished.
 - **`run.sh drawer` reports two problems that are PRE-EXISTING** (confirmed against a
-  worktree at `f4021cf`) and both want a decision rather than a fix: the drawer shows
-  6 of 7 towers, the seventh below the fold of a grid with `maxScroll 80`; and
+  worktree at `f4021cf`, and again against `ccf7f78` on 2026-09-17) and both want a
+  decision rather than a fix: the drawer shows 6 of 7 towers, the seventh below the
+  fold of a grid whose `maxScroll` is 84 since the wave control took four pixels off
+  it -- one full-height drag still reaches it, which `tests/drawer.test.ts` now pins as
+  `grid - 24 >= maxScroll` rather than leaving it to the scenario; and
   re-tapping the selected tile does not cancel — though the scenario's own tile
   enumeration reports duplicate centres for tiles 2/4 and 3/5, so establish whether
   the harness or the game is wrong before treating it as a defect.

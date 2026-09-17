@@ -141,7 +141,7 @@ test('the gear is reachable and does not sit on anything else', () => {
       assert.ok(g.width >= 40 && g.height >= 40,
         `${name} ${what}: a ${g.width}x${g.height} gear is too small to press`)
       for (const [other, r] of [
-        ['abilities', L.abilities], ['start button', L.startButton],
+        ['abilities', L.abilities], ['wave control', L.waveControl],
         ['counters', L.counters], ['hero chip', L.heroChip], ['message row', L.messageRow],
       ] as const) {
         assert.ok(!overlaps(g, r), `${name} ${what}: the gear sits on the ${other}`)

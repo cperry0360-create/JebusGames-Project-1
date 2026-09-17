@@ -100,9 +100,9 @@ export interface LayoutInput {
    * readouts.
    *
    * It used to be the three counter plates laid side by side, which is what
-   * made the top row span the screen. The wave counter moved into the control
-   * in the other corner and the remaining two are stacked, so the number the
-   * layout needs is a width, not a sum.
+   * made the top row span the screen. They are stacked now and the wave is not
+   * one of them -- it is the CONTROL under them -- so the number the layout
+   * needs is the wider of two plates, not a sum of three.
    */
   countersWidth: number
   /** Measured from the run's hand: the ability icons and the gap between the
@@ -134,10 +134,31 @@ export interface LayoutConfig {
   /** Taller than the gear. It is the way out of a mode the player entered by
    *  accident, and it is pressed with a thumb, in a hurry, on a moving board. */
   cancelHeight: number
-  /** Widest the start-wave button may be; it takes less when the counters and
-   *  the insets leave less. */
-  startWidth: number
-  startMinWidth: number
+  /**
+   * THE WAVE CONTROL'S BOX. It is the last row of the top-LEFT stack now,
+   * under the two readouts, and it is the only tappable thing in that corner.
+   *
+   * NEW KEYS RATHER THAN A RENAME of `startWidth`/`startMinWidth`, which were
+   * the same control's width while it lived in the opposite corner. Nothing
+   * else in the repository read those two -- see
+   * `reports/2026-09-17-wave-control-merge.md` -- so they are retired rather
+   * than carried over, and the height is its own key because `plateHeight` is
+   * now only the nominal top row the gear is centred in.
+   */
+  waveControlWidth: number
+  waveControlMinWidth: number
+  /**
+   * 44, and it may not go under it, because this is a BUTTON.
+   *
+   * The readouts above it are 16 under an explicit carve-out -- a readout is
+   * not tappable, so its only floor is legibility -- and the carve-out has
+   * never applied to anything a finger lands on. So the control is about three
+   * times the height of a readout, which is the point: it must not read as a
+   * third counter.
+   */
+  waveControlHeight: number
+  /** Between the last readout and the control under it. */
+  waveControlGap: number
   /**
    * The second row's width: what the boss bar needs, and nothing more.
    *
@@ -157,8 +178,14 @@ export interface LayoutConfig {
   /** Between two stacked readouts. */
   readoutGap: number
   /**
-   * How many readouts are stacked in that corner. THREE since the wave counter
-   * moved there on 2026-09-17; it was a `2` written into the arithmetic below.
+   * How many readouts are stacked in that corner. TWO: peanuts and lives.
+   *
+   * It was three for one day. The wave counter joined the stack on 2026-09-17
+   * as a readout while a start button in the opposite corner carried the same
+   * `2/13` on its own label, and the two changes were made separately. The
+   * count that survived the merge is the readouts', because the wave is not a
+   * readout any more -- it is the control at the bottom of this column, and a
+   * control does not get to shrink to 16px.
    *
    * A count in the code and a list of readouts in HudScene are two
    * descriptions of the same thing, and the corner's reserved height came off
@@ -172,7 +199,22 @@ export interface LayoutConfig {
 
 export interface HudLayout {
   counters: Rect
-  startButton: Rect
+  /**
+   * THE WAVE CONTROL: the play glyph, the wave count and the early-call bonus,
+   * in one pressable plate at the bottom of the top-left stack.
+   *
+   * IT WAS `startButton`, a 132x44 plate in the TOP-RIGHT corner, and the wave
+   * count was drawn twice -- once here as a readout and once there as the
+   * button's own label. Both halves of that were correct on their own: the
+   * readout belongs with the run's other numbers, and a button that starts
+   * wave 2 has to say which wave it starts. Nobody joined them up, so the
+   * screen carried `2/13` in both corners.
+   *
+   * The join is this: ONE element, in the corner the player already reads,
+   * that is also the thing they press. The top-right corner is the settings
+   * gear and nothing else, and the 132x44 plate that was there is board again.
+   */
+  waveControl: Rect
   /** The right of the second row: the wave message, or the boss bar while one
    *  is up. They are mutually exclusive, so they share one rectangle. */
   messageRow: Rect
@@ -286,7 +328,7 @@ export interface HudLayout {
 export function hudBandHeight(l: HudLayout, viewHeight: number): number {
   const topEdge = Math.max(
     l.counters.y + l.counters.height,
-    l.startButton.y + l.startButton.height,
+    l.waveControl.y + l.waveControl.height,
     l.settings.y + l.settings.height,
     l.messageRow.y + l.messageRow.height,
   )
@@ -301,9 +343,12 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
   const top = insets.top + cfg.marginY
   const bottom = H - insets.bottom - cfg.marginY
 
-  // THE TOP ROW, RIGHT TO LEFT: the settings gear, then START WAVE, then the
-  // counters. The gear is measured out of the row before anything else is
-  // fitted, so it can never be what gives way.
+  // THE TOP-RIGHT CORNER IS THE SETTINGS GEAR AND NOTHING ELSE.
+  //
+  // It used to be the gear and, inboard of it, the start-wave button. The
+  // button is gone from this corner entirely -- it is the last row of the
+  // left-hand stack now -- so nothing is fitted against the gear any more and
+  // the rest of that corner is map.
   const btn = cfg.cornerButton
   const settings: Rect = {
     // Vertically centred in the row: the gear is square and shorter than a
@@ -313,8 +358,9 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
   }
   const topRight = settings.x - cfg.marginX
 
-  // THE READOUTS, STACKED IN THE CORNER. `readoutCount` of them -- peanuts,
-  // lives and the wave -- one above the other, each `readoutHeight` tall.
+  // THE READOUTS, STACKED IN THE CORNER. `readoutCount` of them -- peanuts and
+  // lives -- one above the other, each `readoutHeight` tall, with the wave
+  // CONTROL under them.
   //
   // They were three 44px plates in a row spanning most of the width, and the
   // row is what sat on the build pads: `padhud` measured the counters or the
@@ -325,7 +371,9 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
   //
   // They still give way before the control does, for the old reason: a
   // slightly narrower plate is still readable and an overlapping one is not.
-  const topRoom = topRight - left - cfg.startMinWidth - cfg.marginX
+  // The readouts no longer share their row with a control, so the only thing
+  // they have to stay clear of is the gear.
+  const topRoom = topRight - left
   const countersW = Math.min(input.countersWidth, Math.max(0, topRoom))
   const counterScale = input.countersWidth > 0 ? countersW / input.countersWidth : 1
   const countersH = cfg.readoutHeight * cfg.readoutCount
@@ -336,12 +384,21 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
     height: countersH * counterScale,
   }
 
-  // The start button then takes what is left, down to its own floor: at 240px
-  // fixed it ran into the wave counter on a 568px screen.
-  const spare = topRight - (counters.x + counters.width) - cfg.marginX
-  const startW = Math.max(cfg.startMinWidth, Math.min(cfg.startWidth, spare))
-  const startButton: Rect = {
-    x: topRight - startW, y: top, width: startW, height: cfg.plateHeight,
+  // THE WAVE CONTROL, DIRECTLY UNDER THE READOUTS, and left-aligned with them:
+  // one column in one corner, read top to bottom, with the only pressable
+  // thing in it at the bottom where the thumb is.
+  //
+  // It does NOT scale with `counterScale`. That is the readouts' give-way and
+  // it exists because a slightly narrower plate is still readable; a tap
+  // target under the floor is not, so this one is clamped to its own minimum
+  // and would sooner reach the gear's margin than shrink. It cannot, on any
+  // viewport the game runs at: 132 against the 305 the narrowest phone leaves.
+  const waveW = Math.max(cfg.waveControlMinWidth, Math.min(cfg.waveControlWidth, topRoom))
+  const waveControl: Rect = {
+    x: left,
+    y: counters.y + counters.height + cfg.waveControlGap,
+    width: waveW,
+    height: cfg.waveControlHeight,
   }
 
   // THE SECOND ROW IS THE MESSAGE ROW AND NOTHING ELSE NOW.
@@ -358,16 +415,35 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
   // buttons. So the row is one occupant again and takes its width back rather
   // than reserving a hole for something that is not there — which is the same
   // thing that happened when CANCEL left it.
-  // The second row clears whichever corner group is taller. The readouts are
-  // now the taller of the two on a screen with room, which is why this is a
-  // `max` and not simply the plate height.
-  const rowY = top + Math.max(counters.height, startButton.height) + cfg.rowGap
-  // CENTRED, AND ONLY AS WIDE AS ITS ONE OCCUPANT. Clamped to the space
-  // between the margins so a narrow phone shrinks the bar rather than pushing
-  // it under a corner group.
-  const rowW = Math.min(cfg.messageWidth, right - left)
+  // THE ROW SITS BESIDE THE WAVE CONTROL, NOT UNDER IT, and that is the one
+  // piece of arithmetic this change had to get right.
+  //
+  // The row used to clear whichever top-corner group was taller. Dropping the
+  // wave control into the left column makes that column 84px tall, so the same
+  // rule would push this row -- and `panelArea` under it -- 28px down the
+  // screen, and the build drawer's grid is what pays: at 568x320 it would come
+  // out at 44px for a 62px tile, which is a drawer that cannot show a tower.
+  // `tests/drawer.test.ts` records both grid heights for exactly this reason.
+  //
+  // So the row clears the READOUTS and the GEAR, which are the two things in
+  // the top band proper, and stays clear of the column below-left by GIVING
+  // WAY IN WIDTH -- the same trade the boss bar already makes on a narrow
+  // phone, where the bar's width gives way rather than the boss's name.
+  const rowY = top + Math.max(counters.height, settings.y + settings.height - top) + cfg.rowGap
+  // CENTRED, AND ONLY AS WIDE AS ITS ONE OCCUPANT. The half-width is capped by
+  // the distance from the centre to each column, so it shrinks symmetrically
+  // and stays centred rather than sliding off to one side.
+  const centreX = (left + right) / 2
+  const leftBlock = Math.max(counters.x + counters.width, waveControl.x + waveControl.width)
+    + cfg.marginX
+  const rowHalf = Math.max(0, Math.min(
+    cfg.messageWidth / 2,
+    centreX - leftBlock,
+    topRight - centreX,
+  ))
+  const rowW = rowHalf * 2
   const messageRow: Rect = {
-    x: (left + right) / 2 - rowW / 2, y: rowY, width: rowW, height: cfg.rowHeight,
+    x: centreX - rowW / 2, y: rowY, width: rowW, height: cfg.rowHeight,
   }
 
   // CANCEL, flush to the display's right edge and sitting on the same baseline
@@ -442,7 +518,23 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
   // The bottom is `min` of the two things down there, and the `min` matters:
   // on a narrow screen `abilityScale` shrinks the icons below CANCEL's height,
   // so CANCEL is the taller of the pair and the lower bound.
-  const panelTop = rowY + cfg.rowHeight + 8
+  // AND IT CLEARS THE WHOLE LEFT COLUMN, not just the row. `panelArea` is
+  // where a panel may open without covering anything, and GameScene puts
+  // level 10's Vlaude icon at its top-left corner -- 20px in from x and y --
+  // so a `panelTop` that only cleared the message row would put that icon on
+  // the wave control.
+  //
+  // TWO DIFFERENT GAPS, AND THE FOUR IS BOUGHT RATHER THAN CHOSEN. Eight under
+  // the message row, which is stroked text and has always had eight; four
+  // under the control, which is a painted plate carrying its own border. The
+  // difference is worth naming because four pixels of it are load-bearing: the
+  // drawer's grid comes out of what is left below this line, and its check
+  // that ONE full-height drag reaches the last tile needs
+  // `grid - 24 >= maxScroll`. At 844x390 with seven towers that is grid >= 111
+  // against a content of 198, and the column costs the grid eight pixels of
+  // the twelve it would otherwise take -- 118 -> 114, which clears it, where
+  // 110 was one pixel short and made the last tower a second drag away.
+  const panelTop = Math.max(rowY + cfg.rowHeight + 8, waveControl.y + waveControl.height + 4)
   // The chip joins the `min`: it is the same height as a full-size icon row
   // and taller than a shrunk one, so on a narrow screen it is the lowest thing
   // a panel must stay clear of.
@@ -455,7 +547,7 @@ export function hudLayout(input: LayoutInput, cfg: LayoutConfig): HudLayout {
   }
 
   return {
-    counters, startButton, messageRow, heroChip, abilities, settings, cancel,
+    counters, waveControl, messageRow, heroChip, abilities, settings, cancel,
     panelArea, counterScale, abilityScale,
   }
 }
@@ -545,7 +637,7 @@ export function collisions(layout: HudLayout): string[] {
  */
 export function hudTakesPress(layout: HudLayout, x: number, y: number): boolean {
   const inside = (r: Rect): boolean => insideRect(r, x, y)
-  return inside(layout.abilities) || inside(layout.startButton)
+  return inside(layout.abilities) || inside(layout.waveControl)
     || inside(layout.settings) || inside(layout.cancel) || inside(layout.heroChip)
 }
 
