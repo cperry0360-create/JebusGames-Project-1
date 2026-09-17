@@ -2,7 +2,19 @@
 
 | commit | what | CI |
 |---|---|---|
-| *this commit* | The third role rule in `tools/soak/Sim.ts`, its two witnesses in `SoakResult.builder`, `tools/soak/builder.json`, `tests/soakbuilder.test.ts`, this report, `SOAK-REPORT.md`, `CLAUDE.md`, `claude/context.md` | filled in below once the run lands |
+| `48ea34e` | The third role rule in `tools/soak/Sim.ts`, its two witnesses in `SoakResult.builder`, `tools/soak/builder.json`, `tests/soakbuilder.test.ts`, this report, `SOAK-REPORT.md`, `CLAUDE.md`, `claude/context.md` | [run 438](https://github.com/cperry0360-create/JebusGames-Project-1/actions/runs/35210330270) green |
+| *this commit* | Closing this table on run 438 | it edits this table and nothing else |
+
+**Run 438 is green on all five jobs** — `changes`, `typecheck`, `test`,
+`deploy / build` and `deploy / deploy`. The deploy ran rather than skipping,
+which is correct: `48ea34e` touches `tools/` and `tests/`, not only `.md` and
+`reports/`. Read the job list, not the run's conclusion.
+
+**`main`'s tree was read back afterwards** and carries `tools/soak/builder.json`
+with the `_zeroDamageUpgrades` rule beside `padShare`/`min` (5662 bytes),
+`tools/soak/Sim.ts` (131298 bytes), `tests/soakbuilder.test.ts` and this report.
+`git diff origin/main HEAD -- src/` is **empty**, and so is
+`git diff 7eb04a5 HEAD -- src/ public/ vendor/ tools/harness/`.
 
 **Answers first.**
 
