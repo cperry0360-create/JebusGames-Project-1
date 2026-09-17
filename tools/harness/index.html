@@ -8162,6 +8162,18 @@ async function run() {
     }
     const built = g.towers.length, pads = g.build.spots.length
     note('total ' + built + ' of ' + pads + ' pads built')
+    // AND A PICTURE OF THE FULL BOARD. The count says a tower went down on
+    // every pad; only a frame says what a full board LOOKS like -- whether a
+    // tower on a high pad has its roof under the chrome, whether two towers
+    // on neighbouring pads overlap, whether any of them stands in the road.
+    if (g.rig) {
+      const DSPb = (await import('./js/data/display.json', { with: { type: 'json' } })).default
+      const RESb = await import('./js/systems/Resolution.js')
+      g.rig.setTargetZoom(DSPb.camera.minZoom * RESb.deviceScale())
+      g.rig.lookAt(DSPb.width / 2, DSPb.height / 2)
+      await sleep(900)
+    }
+    await shot('buildall-' + g.level.id + '-' + VP.w + 'x' + VP.h)
     // AND IT HAS TO BE ALL OF THEM. This is the scenario that answers "can the
     // director place a tower on every pad at a phone's zoom, where most of
     // them start off screen" -- a question whose only useful answer is yes.
@@ -17341,20 +17353,39 @@ async function run() {
     const RES = await import('./js/systems/Resolution.js')
     const DSP = (await import('./js/data/display.json', { with: { type: 'json' } })).default
 
-    const seg = (px, py, a, b) => {
-      const dx = b[0] - a[0], dy = b[1] - a[1]
-      const L = dx * dx + dy * dy
-      const t = L ? Math.max(0, Math.min(1, ((px - a[0]) * dx + (py - a[1]) * dy) / L)) : 0
-      return Math.hypot(px - (a[0] + dx * t), py - (a[1] + dy * t))
-    }
     // `waypoints` IS A LANE -- the main one -- and it is never repeated inside
     // `lanes`. Reading only `lanes` measures a board with one road missing.
     const roads = (m) => [m.waypoints, ...(m.lanes || []).map((l) => l.waypoints)]
-    const toRoad = (m, x, y) => Math.min(...roads(m).map((line) => {
-      let best = Infinity
-      for (let i = 0; i < line.length - 1; i++) best = Math.min(best, seg(x, y, line[i], line[i + 1]))
-      return best
-    }))
+
+    /**
+     * The pad's ELLIPSE against the painted road, the same measure
+     * tools/check_plots.py calls `radial` and the same one tools/plots.json's
+     * own `minRoadGap` reports: the distance from the pad centre to the
+     * nearest road pixel, less half the road, less the ellipse's radius in
+     * that direction. Subtracting the SHORT radius regardless of direction is
+     * a different and pessimistic number, and having three conventions in the
+     * repository for one clearance is how a 9.38 and a 10.02 end up in the
+     * same sentence meaning the same pad.
+     */
+    const padGap = (m, px, py, rx, ry) => {
+      const half = m.roadWidth / 2
+      let worst = Infinity
+      for (const line of roads(m)) {
+        for (let i = 0; i < line.length - 1; i++) {
+          const [ax, ay] = line[i], [bx, by] = line[i + 1]
+          const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay)))
+          for (let k = 0; k <= n; k++) {
+            const t = k / n
+            const dx = ax + (bx - ax) * t - px, dy = ay + (by - ay) * t - py
+            const d = Math.hypot(dx, dy)
+            if (d === 0) return -half
+            const r = 1 / Math.sqrt((dx / d / rx) ** 2 + (dy / d / ry) ** 2)
+            worst = Math.min(worst, d - r - half)
+          }
+        }
+      }
+      return worst
+    }
 
     const startLevel = async (levelId) => {
       for (const k of ['Title', 'WorldMap', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
@@ -17374,7 +17405,7 @@ async function run() {
       const G = await startLevel(lv.id)
       if (!G) { note(lv.id + ': did not build'); faults++; continue }
       const m = G.level.map
-      const half = m.roadWidth / 2
+      const rx = m.spotRadius
       const ry = m.spotRadius * 0.62   // GameScene's PAD_SQUASH; the pad is an ellipse
 
       // THE ENGINE'S OWN SPOTS AGAINST THE SHIPPED MAP. `BuildSystem` is what
@@ -17400,7 +17431,7 @@ async function run() {
       let worst = Infinity
       let worstAt = ''
       for (const s of spots) {
-        const gap = toRoad(m, s.x, s.y) - half - ry
+        const gap = padGap(m, s.x, s.y, rx, ry)
         if (gap < worst) { worst = gap; worstAt = s.index + ' (' + s.x + ',' + s.y + ')' }
       }
       if (worst < 0) { note(lv.id + ': *** pad ' + worstAt + ' is drawn on the road ***'); faults++ }

@@ -414,11 +414,35 @@ That includes Vlaude's 26,000 and the 24,265 median in
     guar on,  old builder    C   434 218 431 314 274  99 135 154 146 132
     guar off, +cap only      B   440 266 436 327 262 204 204 207 208 214
     guar off, +spend rule    D   450 292 440 346 263 241 247 238 195 216
-    guar ON,  +spend rule    E   456 277 447 335 279 196 236 218 153 135   <- today
+    guar ON,  +spend rule    E   456 277 447 335 279 196 236 218 153 135
+    E's builder, NEW BOARDS  F   474 309 447 378 377 196  33 283 145 282   <- today
 
-Row E is the game. **Level 6 is in band at 40.8%** and level 8 is 0.4 over the top edge
-at 45.4%; level 7 is 4.2 over, levels 9 and 10 are 3.1 and 6.9 under, and the first five
-are well above. **91.6% of the C-B gap closed**; the guarantee still costs 196 runs
+**F IS A DIFFERENT BOARD, NOT A DIFFERENT INSTRUMENT, and E is its baseline.** The
+hand-placed plots in `tools/plots.json` replaced the algorithmic pad sweep on nine of
+the ten levels on 2026-09-17, so pads per level went `7 15 15 14 14 18 22 19 15 12` to
+`10 10 14 14 18 18 17 20 15 21`. E and F are the SAME builder on the SAME seeds, so
+E->F is the boards and nothing else. **Do not type the pad counts anywhere:
+`python3 tools/padcounts.py` reads them out of each board's own source.**
+
+**Level 6 is the control and it is exact: 196 in both columns**, because level 6 is not
+in `plots.json` and its map is byte-identical. Level 3 is a second control by accident:
+one pad fewer, 447 both ways.
+
+**Under F only level 6 is in the 35-45% band, and level 6 is the board that did not
+move.** **Level 7 fell to 33/480 (6.9%) and has NOT been retuned** -- it lost five pads
+and its uncovered road went from 408 px to 1,201. Level 10 went 135 to 282 on a board
+that went 12 pads to 21. **PAD COUNT MOVES THE SOAK AND COVERAGE DOES NOT**: level 5
+lost twelve points of road coverage, gained four pads and went UP 98.
+
+Every boss health figure in the game is stale again, this time because the board under
+it changed size. `reports/2026-09-17-build-plots.md` has the whole pass -- which file
+owns each level's pads, every check the plots passed, and the per-board coverage.
+
+**Row F is the game; row E is the board it replaced**, and what follows is E's own
+reading of the builder change, which still stands on its own terms. Under E level 6 was
+in band at 40.8% and level 8 was 0.4 over the top edge at 45.4%; level 7 was 4.2 over,
+levels 9 and 10 were 3.1 and 6.9 under, and the first five were well above.
+**91.6% of the C-B gap closed**; the guarantee still costs 196 runs
 against D, so 54.5% of its measured cost was the peanut sink and the rest is the pad.
 Nine of ten levels now sink less of their peanuts into towers that cannot fire than a
 guarantee-off board did (17.1%); level 10 alone reads 22.1%, and that is correct

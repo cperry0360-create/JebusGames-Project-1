@@ -10,8 +10,20 @@ measure, what broke, and what it cost in the soak.
 | _(filled in below once the push lands)_ | | |
 
 **Level 6 is not in `plots.json` and was not touched.** Its eighteen pads are
-byte-identical to what `main` shipped, and the soak agrees: 99/480, which is
-exactly the published figure. That is the control for everything else here.
+byte-identical to what `main` shipped. That is the control for everything else
+here, and it holds twice: against the builder this branch started on it re-soaks
+at **99/480**, exactly its published figure.
+
+**AND THE SOAK'S INSTRUMENT CHANGED UNDER THIS BRANCH WHILE IT WAS BEING
+WRITTEN.** `48ea34e` — *The soak's player stops tiering the wall* — landed on
+`main` between this work being measured and being pushed, and it is the third
+role rule: while any tower that shoots is below its top tier, nothing that does
+not shoot is upgraded. So the first set of figures this pass produced was taken
+with the builder as it was before that rule, and they are not comparable to
+anything measured after it. **Everything in section 7 is re-measured against the
+merged builder**, and the baseline it is compared to is that commit's own **row
+E** — the same builder on the OLD boards, seeds 1–480. That is the clean control
+the two changes need, and it exists because the other session made it.
 
 ---
 
@@ -338,57 +350,87 @@ old counts and old caps out as a sentence.
 
 **THESE FIGURES ARE NOT A TUNING TARGET AND NOTHING WAS RETUNED.** No boss
 health, no tower stat, no wave table and no level rule was touched in this pass.
-Two reasons they cannot be used to tune:
 
-1. No level is inside the 35–45% band, before or after, so there is no
-   before-and-after "in band" to preserve.
-2. The soak builder's peanut-sink artefact is still open — `SOAK-REPORT.md` and
-   `CLAUDE.md` both say an unknown but substantial part of the previous row is
-   still instrument rather than game — and this pass puts a second variable on
-   top of it.
+**Column E is the baseline, not the published row.** The published
+`434 218 431 314 274 99 135 154 146 132` was measured with the builder as it was
+before `48ea34e`, which landed on `main` while this branch was being written.
+Column **E** of `reports/2026-09-17-soak-builder-spend.md` is the SAME builder
+this tree runs, on the OLD boards, on seeds 1–480 — so E against F isolates the
+board change and nothing else. **F is the only row here measured on this tree.**
 
-480 seeds, `normal`, `node --experimental-strip-types tools/soak/level.ts 480 levelN normal`:
+`node --experimental-strip-types tools/soak/level.ts 480 levelN normal`, seeds
+1–480, `normal`, default hero:
 
-| | L1 | L2 | L3 | L4 | L5 | L6 | L7 | L8 | L9 | L10 |
-|---|---|---|---|---|---|---|---|---|---|---|
-| pads before | 7 | 15 | 15 | 14 | 14 | 18 | 22 | 19 | 15 | 12 |
-| **pads now** | 10 | 10 | 14 | 14 | 18 | 18 | 17 | 20 | 15 | 21 |
-| published | 434 | 218 | 431 | 314 | 274 | 99 | 135 | 154 | 146 | 132 |
-| **measured** | **453** | **250** | **429** | **347** | **380** | **99** | **13** | **239** | **148** | **285** |
-| change | +19 | +32 | −2 | +33 | +106 | **0** | **−122** | +85 | +2 | **+153** |
-| now, as % | 94.4 | 52.1 | 89.4 | 72.3 | 79.2 | 20.6 | **2.7** | 49.8 | 30.8 | 59.4 |
+| level | pads E→F | **E** old boards | **F** new boards | F−E | F as % |
+|---|---|---|---|---|---|
+| 1 | 7 → 10 | 456 | **474** | +18 | 98.8 |
+| 2 | 15 → 10 | 277 | **309** | +32 | 64.4 |
+| 3 | 15 → 14 | 447 | **447** | **+0** | 93.1 |
+| 4 | 14 → 14 | 335 | **378** | +43 | 78.8 |
+| 5 | 14 → 18 | 279 | **377** | +98 | 78.5 |
+| 6 | 18 → 18 | 196 | **196** | **+0** | **40.8** |
+| 7 | 22 → 17 | 236 | **33** | **−203** | **6.9** |
+| 8 | 19 → 20 | 218 | **283** | +65 | 59.0 |
+| 9 | 15 → 15 | 153 | **145** | −8 | 30.2 |
+| 10 | 12 → 21 | 135 | **282** | **+147** | 58.8 |
+| **all** | 151 → 157 | **2732** | **2924** | **+192** | **60.9** |
 
-Aggregate 2,137 → 2,243 of 4,800: **+2.2 points, and the aggregate hides
-everything that matters.**
+**Only level 6 is inside the 35–45% band, and level 6 is the board this pass did
+not touch.** Every other level is outside it, seven of them above and two below.
 
-### Level 6 is the control and it is exact
+### Level 6 is the control and it is exact, twice
 
-**99/480, the published figure to the run.** Level 6 is not in `plots.json`, its
-map and geometry file are byte-identical to `main`'s, and it lands on the same
-number. That is what makes the other nine rows comparable to the published ones
-at all: same simulator, same seeds, same builder, only the boards moved.
+**196/480 under the merged builder, which is column E's 196 to the run.** And
+**99/480 under the builder this branch started on, which is the published 99 to
+the run.** Level 6 is not in `plots.json`; its map and geometry file are
+byte-identical to `main`'s. It lands on the right number under both instruments,
+which is what makes the other nine rows a statement about the boards.
+
+Level 3 is the second control by accident: fourteen plots where the sweep put
+fifteen, and **447 both ways** — the same integer as E. Level 9 keeps its
+fifteen chips and moves −8, which is inside the ±11 the sample is worth.
+
+### The first measurement of this pass is superseded and is recorded here anyway
+
+Before the merge, on the pre-`48ea34e` builder, the new boards read
+`453 250 429 347 380 99 13 239 148 285` against the published
+`434 218 431 314 274 99 135 154 146 132`. Both rows are that older instrument,
+so they are internally comparable and level 6 pins them at 99. The direction of
+every level agrees with E→F — level 7 collapses, level 10 roughly doubles — and
+the magnitudes do not. **Use E→F.** The older pair is here because it is the
+evidence that the instrument change did not invent the story.
 
 ### Why each level moved — whole-board road coverage at the shortest range (132)
 
-| level | pads | road covered, before → after | soak |
-|---|---|---|---|
-| 1 | 7 → 10 | 56.1% → 54.4% (−1.7) | 434 → 453 |
-| 2 | 15 → 10 | 71.9% → 65.2% (−6.7) | 218 → 250 |
-| 3 | 15 → 14 | 68.8% → 62.8% (−6.0) | 431 → 429 |
-| 4 | 14 → 14 | 63.8% → 65.0% (+1.2) | 314 → 347 |
-| 5 | 14 → 18 | 83.5% → 71.5% (−12.0) | 274 → 380 |
-| 6 | 18 → 18 | 68.4% → 68.4% (0) | 99 → 99 |
-| 7 | 22 → 17 | 86.0% → 75.1% (−10.9) | 135 → **13** |
-| 8 | 19 → 20 | 79.9% → 76.1% (−3.9) | 154 → 239 |
-| 9 | 15 → 15 | 79.9% → 80.3% (+0.3) | 146 → 148 |
-| 10 | 12 → 21 | 91.3% → 92.2% (+0.9) | 132 → 285 |
+This is the fraction of every painted centreline on the board that is inside
+132 px — the shortest tower's range — of some pad. One number per board, both
+sets of plots measured the same way, against the soak's E→F move:
 
-**Pad COUNT moves the soak more than coverage does**, and the two disagree
-sharply on levels 5 and 7. The soak's player builds on every pad it can afford,
-so a pad is a gun: level 5 lost twelve points of coverage, gained four pads and
-went up 106 runs; level 7 lost eleven points of coverage AND five pads and lost
-122. Level 2 lost five pads and still went up, which is level 2 being one boss
-check and nothing else — that is the level's own known shape, not a plot effect.
+| level | pads | road covered, before → after | soak E→F |
+|---|---|---|---|
+| 1 | 7 → 10 | 56.1% → 54.4% (−1.7) | 456 → 474 |
+| 2 | 15 → 10 | 71.9% → 65.2% (−6.7) | 277 → 309 |
+| 3 | 15 → 14 | 68.8% → 62.8% (−6.0) | 447 → 447 |
+| 4 | 14 → 14 | 63.8% → 65.0% (+1.2) | 335 → 378 |
+| 5 | 14 → 18 | 83.5% → 71.5% (−12.0) | 279 → 377 |
+| 6 | 18 → 18 | 68.4% → 68.4% (0) | 196 → 196 |
+| 7 | 22 → 17 | 86.0% → 75.1% (−10.9) | 236 → **33** |
+| 8 | 19 → 20 | 79.9% → 76.1% (−3.9) | 218 → 283 |
+| 9 | 15 → 15 | 79.9% → 80.3% (+0.3) | 153 → 145 |
+| 10 | 12 → 21 | 91.3% → 92.2% (+0.9) | 135 → **282** |
+
+**PAD COUNT MOVES THE SOAK AND COVERAGE DOES NOT**, and the two disagree
+sharply on exactly the levels that moved. The soak's player builds on every pad
+it can afford, so a pad is a gun:
+
+- Level 5 **lost twelve points of coverage, gained four pads, and went up 98**.
+- Level 10 gained one point of coverage, **gained nine pads, and went up 147**.
+- Level 7 lost eleven points of coverage **and five pads** and lost 203.
+- Levels 3, 6 and 9 kept their pad count within one and moved 0, 0 and −8.
+
+Level 2 is the exception and it is a known one: five pads fewer and still +32,
+because level 2 is twelve free waves and one boss check, so what it measures is
+whether the tower draw cleared a fixed number.
 
 ### Level 7, in detail, because it is the one that fell over
 
@@ -400,15 +442,22 @@ check and nothing else — that is the level's own known shape, not a plot effec
 Five pads fewer, the uncovered road nearly tripled, and the north highway now
 has a 219 px stretch no tower can reach where it had 72. Both of level 7's
 bosses were soaked against a 22-pad board with 20 doubles; neither number means
-anything on this one. **Not retuned.**
+anything on this one. **236 → 33 of 480. Not retuned.**
+
+Every plot on it passes every check in section 3 — none touches the asphalt,
+none is off the plate, the closest pair is 92 px, and all seventeen have road
+inside the cheapest tower's range. The board is simply smaller and thinner than
+the one the level was built around. **That is a design question, not a bug**,
+and it is the first thing to look at.
 
 ### Level 10, the other end
 
 12 pads → 21, the smallest board but one becoming the biggest in the game. Lane
 coverage barely moved (94.2% → 94.9%) because the sweep optimised for exactly
 that and a hand cannot beat it at its own game; what nine more pads buy is
-depth. Vlaude's 26,000 hp was soaked at 12 pads and 132/480. He now loses
-285/480. **Not retuned.**
+depth — nine more guns on the same road. Vlaude's 26,000 hp was soaked against
+the twelve-pad board. He loses **282 of 480** on the twenty-one, against 135 on
+the twelve with the same builder and the same seeds. **Not retuned.**
 
 ---
 
@@ -420,7 +469,7 @@ frame*, a picture was produced and looked at, not only a number read.
 ### Tests and typecheck
 
 ```
-npm test                       1194 passing, 0 failing
+npm test                       1195 passing, 0 failing
 sh tools/tsdiff.sh 7eb04a5     baseline 214 distinct errors; working tree 214
                                --- introduced by the working tree ---   (none)
 ```
@@ -446,24 +495,32 @@ ten levels in turn, reads the pads off the **running scene**, and screenshots
 each whole board at the floor of the zoom band.
 
 ```
-level1   spots 10  drawn 10  map==engine true  worst pad-to-paint 17.9 px
-level2   spots 10  drawn 10  map==engine true  worst pad-to-paint 38.8 px
-level3   spots 14  drawn 14  map==engine true  worst pad-to-paint 17.8 px
-level4   spots 14  drawn 14  map==engine true  worst pad-to-paint 10.7 px
-level5   spots 18  drawn 18  map==engine true  worst pad-to-paint 10.4 px
-level6   spots 18  drawn 18  map==engine true  worst pad-to-paint 28.8 px
-level7   spots 17  drawn 17  map==engine true  worst pad-to-paint 10.4 px
-level8   spots 20  drawn 20  map==engine true  worst pad-to-paint 10.2 px
-level9   spots 15  drawn 15  map==engine true  worst pad-to-paint 24.0 px
-level10  spots 21  drawn 21  map==engine true  worst pad-to-paint 10.3 px
+level1   spots 10  drawn 10  map==engine true  worst pad-to-paint 14.5 px at pad 2 (326,346)
+level2   spots 10  drawn 10  map==engine true  worst pad-to-paint 31.1 px at pad 1 (330,350)
+level3   spots 14  drawn 14  map==engine true  worst pad-to-paint 17.6 px at pad 5 (532,426)
+level4   spots 14  drawn 14  map==engine true  worst pad-to-paint 10.4 px at pad 5 (478,133)
+level5   spots 18  drawn 18  map==engine true  worst pad-to-paint 10.4 px at pad 13 (802,302)
+level6   spots 18  drawn 18  map==engine true  worst pad-to-paint 28.8 px at pad 11 (226.1,451.8)
+level7   spots 17  drawn 17  map==engine true  worst pad-to-paint 10.4 px at pad 9 (610,84)
+level8   spots 20  drawn 20  map==engine true  worst pad-to-paint 10.0 px at pad 14 (833,363)
+level9   spots 15  drawn 15  map==engine true  worst pad-to-paint 24.0 px at pad 5 (506,469)
+level10  spots 21  drawn 21  map==engine true  worst pad-to-paint 10.3 px at pad 6 (321,56)
 RESULT every board built its pads where the map puts them, none drawn on the
 road, level 9's four node pictures each on their own chip
 ```
 
+Those are the `radial` column of the table in section 3, to a tenth, measured
+in a live scene off the running camera rather than off the JSON. **The scenario
+measured something else on its first pass** — it subtracted the ellipse's SHORT
+radius regardless of direction, which is a third convention and a pessimistic
+one, and it put a 10.2 next to `check_plots.py`'s 10.02 for the same pad. It
+computes the radial distance now. One clearance, two conventions, and both are
+named; a third was one too many.
+
 - **Every level's plots are where `plots.json` puts them** — the engine's own
   `build.spots` equal the shipped `buildSpots` on all ten boards, and the
   screenshots show them against the painting.
-- **No plot overlaps the road on any level** — worst is level 8 at 10.2 px in
+- **No plot overlaps the road on any level** — worst is level 8 at 10.0 px in
   the live scene, and the pictures agree: every pad sits on grass, scrub,
   carpet, plating or substrate beside the paint.
 - **Level 9's chips still sit under their plots at the right sizes** — the
@@ -483,10 +540,25 @@ Screenshots (gitignored, reproduce with the command above):
 ### Towers can be built on every plot
 
 ```
-sh tools/harness/run.sh buildall 260 844x390 level1    10 of 10 pads built
+sh tools/harness/run.sh buildall 300 844x390 level1    10 of 10 pads built
 sh tools/harness/run.sh buildall 500 844x390 level5    18 of 18 pads built
 sh tools/harness/run.sh buildall 560 844x390 level10   21 of 21 pads built
 ```
+
+`buildall` takes a picture of the finished board now, which it did not before:
+a count says a tower went down on every pad, and only a frame says what a full
+board looks like. `tools/harness/shots/buildall-level1-844x390.png` is ten
+towers on ten plots — none standing in the road, no two overlapping, and the
+whole board legible.
+
+**Level 1's plot at (366, 93) is the one the legacy HUD rule flags, and it
+builds and reads fine.** The scenario reports `pad 3 world 366,93 inView=true
+screen 241,61 ringOnTap=true bought=true`. In the whole-board picture its tower
+is clipped at the TOP OF THE FRAME, and that is the viewport rather than the
+chrome: at 844x390 the board is wider in aspect than the screen, so a camera
+centred on (640, 360) at the floor of the zoom band leaves the top ~60 world px
+outside the view. Aiming at the pad shows it whole, which is what `lookAt` does
+above before every click.
 
 **And the first run of that was a HARNESS BUG, not a product one.** `buildall`
 and the shared `build()` helper both read `SPOTS`, the `map.json` the harness
@@ -557,21 +629,23 @@ at 5,200**, and the 24,265 damage median in `reports/2026-09-15-blockers.md`.
 
 **Blocked on a decision, not on work:**
 
-- **Level 7 at 2.7% is the thing to look at first.** It is not a bug — every
+- **Level 7 at 6.9% is the thing to look at first.** It is not a bug — every
   plot on it passes every check and the board is simply smaller and thinner. It
   is a design question: seventeen hand-placed plots is what a person wanted
   there, and the level was built around twenty-two.
-- **Retuning is still blocked by the peanut-sink artefact**, unchanged from
-  `reports/2026-09-17-soak-builder.md`: the soak's upgrade loop tiers every
-  tower it owns, so roughly three peanuts in ten still go through towers that
-  cannot shoot. Settle that, re-measure, then look at levels. A number produced
-  today is not a tuning target.
+- **The peanut sink that blocked retuning is CLOSED**, by `48ea34e` rather than
+  by anything here: nine of the ten levels now sink less of their peanuts into
+  towers that cannot fire than a guarantee-off board did. What blocks retuning
+  now is the sample, and that is that commit's own finding: **480 seeds is worth
+  ±11 runs, ±2.3 points at 1σ, against a band ten points wide.** Level 6 reads
+  196, 211, 226 and 208 on four 480-seed blocks of identical code. Decide how
+  many seeds a tuning decision needs before deciding what to tune.
 
 **Carried forward from the previous report and still open:**
 
-- The soak builder's peanut sink (above).
-- No level is in the 35–45% band. It was true before this pass and it is true
-  after.
+- The seed noise above.
+- No level except 6 is in the 35–45% band, and 6 is the one board this pass did
+  not touch.
 
 **New, small, and left as found:**
 
