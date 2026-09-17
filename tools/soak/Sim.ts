@@ -360,13 +360,36 @@ export interface SoakResult {
      * IT EXISTS BECAUSE THE PAD CAP ALONE DID NOT EXPLAIN THE NUMBERS. The cap
      * roughly halves the zero-damage PADS -- level 6 goes from 5.87 of 18 to
      * 2.94 -- and yet only a quarter of the board-DPS gap closed. The
-     * upgrade loop below `spend` walks EVERY tower and tiers it, a zero-damage
-     * tower included, so peanuts keep leaving the board through a tower that
-     * will never fire. This is the number that says how many. See
-     * reports/2026-09-17-soak-builder.md; it is reported, not fixed.
+     * upgrade loop below `spend` walked EVERY tower and tiered it, a
+     * zero-damage tower included, so peanuts kept leaving the board through a
+     * tower that will never fire. This is the number that says how many. See
+     * reports/2026-09-17-soak-builder.md.
+     *
+     * THE SINK IS NOW CLOSED by the third role rule in `spend`: nothing that
+     * does not shoot is upgraded while a tower that does is below its top
+     * tier. This number is what says so, and it is kept because it is the only
+     * thing that can see the rule stop working -- a win rate cannot.
+     * reports/2026-09-17-soak-builder-spend.md has the four columns.
      */
     zeroDamageSpend: number
     towerSpend: number
+    /**
+     * TIERS AND SPECIALISATIONS BOUGHT FOR TOWERS THAT DO NOT SHOOT.
+     *
+     * Not a fault by itself, and level 10 is the reason to say so: a long,
+     * rich board eventually maxes every gun it owns, the third role rule lifts
+     * because nothing that shoots is below its top tier any more, and a
+     * blocker is the only thing left to spend on. That is what a person does
+     * too. It is the ORDER the rule is about, not the total.
+     */
+    zeroDamageUpgrades: number
+    /**
+     * THE SAME, BOUGHT WHILE A GUN WAS STILL BELOW ITS TOP TIER.
+     *
+     * The third role rule makes this impossible, so it must read zero on every
+     * run. `tests/soakbuilder.test.ts` fails if it does not.
+     */
+    zeroDamageUpgradesWhileGunBelowTop: number
   }
 }
 
@@ -1893,6 +1916,13 @@ export function simulate(
   const zeroDamageOnBoard = (): number =>
     towers.reduce((n, t) => n + (dealsDamage(t.id) ? 0 : 1), 0)
   let firstBuilt: string | null = null
+  /** Tiers and specialisations bought for towers that do not shoot. Not a
+   *  fault on its own: once every gun is maxed the rule lifts and a blocker is
+   *  the only thing left to buy, which is what level 10 does. */
+  let zeroDamageUpgrades = 0
+  /** The same, bought while a gun was still below its top tier -- which the
+   *  third role rule makes impossible. Must be zero. */
+  let zeroDamageUpgradesWhileGunBelowTop = 0
 
   const spend = (): void => {
     if (mode === 'nobuild') return
@@ -1961,12 +1991,60 @@ export function simulate(
         manGarrison(t)
       }
     }
+    /*
+     * THE THIRD ROLE RULE: A BLOCKER IS BOUGHT AND LEFT ALONE.
+     *
+     * The cap above limits how many PADS go to towers that do not shoot. It
+     * does not limit the PEANUTS, and this loop is where the rest of them
+     * went: it walked every tower the board owned and tiered it, a
+     * zero-damage tower included, so the simulated player kept pouring
+     * peanuts into a blocker while its guns sat at tier one. Level 6 capped
+     * the pads at a fifth and still sent 29.5% of its tower peanuts through
+     * towers that can never fire, against 17.1% with the guarantee off.
+     * `reports/2026-09-17-soak-builder.md` is that measurement, and it is why
+     * there is a third rule at all.
+     *
+     * A HUMAN BUYS A WALL AND LEAVES IT. So: while any tower that shoots is
+     * still below its top tier, nothing that does not shoot is upgraded. It
+     * is a floor on stupidity, not a strategy -- the rule never chooses WHICH
+     * gun to tier, and past it the loop is the same walk in the same order it
+     * always was.
+     *
+     * Hoisted rather than re-read per tower because it cannot change inside
+     * the loop: a tier is paid for here but `t.tier` only increments when
+     * `buildLeft` runs out, which happens in the wave step.
+     *
+     * `supportonly` IS EXEMPT for the same reason the cap is. Its pool is the
+     * Beacon, so today the test is vacuous there -- no tower on that board
+     * shoots and the rule cannot fire. The check is explicit anyway, because
+     * the day a support tower deals damage is the day this would quietly
+     * start throttling the deliberately-broken player.
+     */
+    const gunBelowTopTier = mode !== 'supportonly'
+      && towers.some((t) => dealsDamage(t.id) && !isMaxed(t.def, t.tier))
     for (const t of towers) {
       if (t.buildLeft > 0 || isMaxed(t.def, t.tier)) continue
+      if (gunBelowTopTier && !dealsDamage(t.id)) continue
       const choice = atSpecChoice(t.def, t.tier)
         ? rng.pick(t.def.specializations)
         : nextStep(t.def, t.tier)
       if (!choice || peanuts < choice.cost) continue
+      if (!dealsDamage(t.id)) {
+        zeroDamageUpgrades += 1
+        /*
+         * THE RULE'S INVARIANT, OBSERVED RATHER THAN ASSUMED.
+         *
+         * Re-derived from the board at the moment the peanuts leave, with a
+         * different expression than the flag above and at a different time --
+         * so it is a witness to the rule rather than a restatement of it. It
+         * must read zero on every run; `tests/soakbuilder.test.ts` fails if it
+         * does not, which is what would happen if the `continue` above were
+         * ever dropped or the flag stopped being recomputed per `spend`.
+         */
+        if (towers.some((o) => dealsDamage(o.id) && !isMaxed(o.def, o.tier))) {
+          zeroDamageUpgradesWhileGunBelowTop += 1
+        }
+      }
       peanuts -= choice.cost
       t.buildLeft = choice.buildSeconds
       // What has been sunk into it, which is what the boss's tower-disable
@@ -2688,6 +2766,8 @@ export function simulate(
       firstBuilt,
       zeroDamageSpend: towers.reduce((n, t) => n + (dealsDamage(t.id) ? 0 : t.value), 0),
       towerSpend: towers.reduce((n, t) => n + t.value, 0),
+      zeroDamageUpgrades,
+      zeroDamageUpgradesWhileGunBelowTop,
     },
   }
 }
