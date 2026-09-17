@@ -205,65 +205,45 @@
   "_waypoints": "Douglas-Peucker at 1.1 overlay px over the traced centre of the cyan stroke. MEASURED, not asserted: check_level2.py walks the painted centreline and reports the worst distance from it to this polyline, and that number is 1.0 OVERLAY px (0.9 canvas px) against a stroke four px wide, so the route is inside the paint for its whole length. The note used to claim 0.6, which was a number from an earlier epsilon that nothing re-measured after the epsilon moved — a file documenting a figure its own check disagreed with. THE TWO END POINTS ARE EXTENSIONS, NOT TRACED: enemies walk in from off the plate at x=-60 and out at x=1340, and each of those is a new point on the line the lane is already travelling when it reaches the edge. Level 1 drags its end waypoints out to those x values in place, which is free on that plate because its lane meets both edges flat. This lane arrives on a slope, and the same drag swung the opening segment 13 overlay px off the paint.",
   "buildSpots": [
     [
-      499.6,
-      141.3
+      130.0,
+      258.0
     ],
     [
-      915.6,
-      195.6
+      330.0,
+      350.0
     ],
     [
-      805.3,
-      207.1
+      342.0,
+      484.0
     ],
     [
-      1009.8,
-      217.8
+      532.0,
+      176.0
     ],
     [
-      739.6,
-      240.0
+      548.0,
+      330.0
     ],
     [
-      685.3,
-      315.6
+      638.0,
+      408.0
     ],
     [
-      536.0,
-      321.8
+      716.0,
+      277.0
     ],
     [
-      1137.8,
-      337.8
+      868.0,
+      496.0
     ],
     [
-      317.3,
-      352.0
+      936.0,
+      194.0
     ],
     [
-      632.0,
-      400.0
-    ],
-    [
-      344.0,
-      451.6
-    ],
-    [
-      803.6,
-      525.3
-    ],
-    [
-      432.0,
-      553.8
-    ],
-    [
-      737.8,
-      577.8
-    ],
-    [
-      515.6,
-      593.8
+      1149.0,
+      321.0
     ]
   ],
-  "_buildSpots": "FIFTEEN RINGS, FIFTEEN PADS, one to one; an unmatched ring either way is a real disagreement and check_level2.py fails on it. Order is the overlay's reading order, top to bottom, and carries no meaning. RE-DERIVED from the second overlay, which moved every ring inward toward the lane. THAT MOVE IS WHY LEVEL 2 IS PLAYABLE. The first ring set sat 117.5-185.5 world px from the centreline; the shortest tower reaches 132, so the far pads were spots four of the five towers could be built on and never fire from, and the soak won 0 of 60 runs. This set sits 97.7-107.7, inside level 1's own 87-119 band, so every tower covers the road from every pad. tests/level2.test.ts asserts both properties — in range of the shortest tower, and no further out than level 1's furthest pad — so a future overlay cannot quietly undo it. SPACING IS THE GAME'S, NOT THE PAINTER'S. A node's tap radius is spotRadius, so two pads need 2 x spotRadius = 68 px between centres before their tap targets stop overlapping. This set's closest pair is 2-4 at 73.5 px, clearing 68 by 5.5. THE TAP RADIUS IS NOT THE ADJUSTABLE END OF THIS. Dropping spotRadius to 28 would also separate tight pads and is the wrong fix: world 1280 renders to 844 CSS px, so 34 world px is a 44.8 px tap diameter and 28 is 36.9, under the 44 pt minimum a thumb needs. The pads move, not the radius. GROUND TYPE UNDER THESE PADS HAS NOT BEEN RE-CHECKED. The previous note listed five pads standing on painted rock rather than open ground, deliberately, because the plate's right third has no clean flat ground beside the lane. Those were the OLD coordinates and none of them survive here. Whether any of this set stands on rock is unverified — it needs an eye on the plate, not a script."
+  "_buildSpots": "10 HAND-PLACED PLOTS, from tools/plots.json, written here by tools/apply_plots.py. THEY ARE NOT THE SCORING PASS's ANY MORE: the sweep's 90-114 px standoff band and its best-first ordering produced the set this replaced, and a person placed these against the painting instead. Every figure below that is a function of the pads was re-derived from THIS set off the centrelines this file ships; the sweep's own parameters (`padRules`, `padStandoffBand`, `padSpacing`, any `candidatePositions`) are left as the record of a pass that no longer chooses anything. tools/check_plots.py re-checks the road clearance, the plate edges and the tap-target spacing."
 }

@@ -32,7 +32,10 @@ there. That fallback IS the two-exit support written for level 5 -- see the
 block comment on `laneGates` -- and it is the reason this level needs no new
 leak handling.
 """
-import json, math, os
+import json, math, os, sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import padcounts  # noqa: E402  -- the per-level pad counts, read rather than typed
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GEO = os.path.join(ROOT, 'tools', 'level8_geometry.json')
@@ -372,23 +375,24 @@ def main():
                   'lane for why it no longer runs to the fork.',
         'buildSpots': [list(p) for p in g['buildSpots']],
         '_buildSpots': f"{len(g['buildSpots'])} PADS, AND THE 'MORE THAN ANY OTHER LEVEL' "
-                       'THIS NOTE USED TO CLAIM IS NO LONGER TRUE: level 7 carries 22. '
-                       'The count per level is 7, 15, 15, 14, 14, 18, 22, 19, 15 -- so the '
-                       '14-15 that levels 2 to 5 and 9 sit at is a HABIT rather than a '
-                       'convention, and three boards are well past it. It matters because '
-                       'cross-level difficulty reasoning leans on it: 19 pads hold more '
-                       'DPS than 14, so a boss health figure does not carry between '
-                       'boards. Placed by '
-                       'tools/trace_level8.py on levels 3 and 4\'s four properties and '
-                       'verified by tools/check_level8.py: each pad\'s 24 px core sits '
-                       'entirely on classified carpet, 90-114 px from the nearest lane '
-                       'centreline, at least 74 px from another pad, and at least 34 px '
-                       'from a frame edge so its tap target is on the board. The count is '
-                       'what those rules allow and is not a target -- the placement stops '
-                       'when the best remaining pad adds no uncovered lane. BOSS HEALTH IS '
-                       'MEASURED AGAINST THIS BOARD and against no other: 19 pads hold '
-                       'more DPS than 14, so the CEO\'s number does not transfer to or '
-                       'from another level.',
+                       'THIS NOTE USED TO CLAIM IS NO LONGER TRUE: level 10 carries '
+                       f'{padcounts.counts()[10]}. The count per level is '
+                       f'{padcounts.phrase()} -- read out of each board\'s own source by '
+                       'tools/padcounts.py rather than typed here, because this list was '
+                       'wrong for as long as it was prose. It matters because cross-level '
+                       'difficulty reasoning leans on it: more pads hold more DPS, so a '
+                       'boss health figure does not carry between boards. HAND-PLACED, '
+                       'from tools/plots.json by tools/apply_plots.py, replacing the 19 '
+                       'tools/trace_level8.py\'s scoring sweep chose. THE SWEEP\'S RULES '
+                       'ARE NOT CONSTRAINTS ON THIS SET: it kept every pad 90-114 px from '
+                       'a lane centreline and these run 57-123, because a person placing '
+                       'them can see which side of a corner is worth standing on. What is '
+                       'still checked, by tools/check_plots.py off the shipped map, is the '
+                       'part that is about the player: no pad overlaps painted road, none '
+                       'hangs off the plate, no two tap targets overlap, and every pad has '
+                       'road inside the shortest tower\'s range. BOSS HEALTH IS MEASURED '
+                       'AGAINST THIS BOARD and against no other, and this board just '
+                       'changed size, so the CEO\'s number is stale until it is re-soaked.',
         '_coverage': 'HOW MUCH OF EACH LANE THE PADS CAN REACH, from the geometry file: '
                      f"shared {g['coverage']['shared']:.0%}, south "
                      f"{g['coverage']['south']:.0%}, east {g['coverage']['east']:.0%}. THE "

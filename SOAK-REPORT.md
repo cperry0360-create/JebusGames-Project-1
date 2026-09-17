@@ -4,6 +4,41 @@ Newest first.
 
 ---
 
+## 2026-09-17 (later) — The hand-authored build plots changed nine of the ten boards
+
+### ⚠ AND THIS TIME THE GAME DID CHANGE
+
+The section below this one warns that its own predecessors were produced by a
+different INSTRUMENT. This one is the other kind of break: **`tools/plots.json`
+replaced the algorithmic pad sweep on nine levels and the boards themselves are
+different**. Level 6 is not in that file and did not move; it is the control, and
+it re-soaks at **99/480**, which is exactly its published figure.
+
+Pads per level went `7, 15, 15, 14, 14, 18, 22, 19, 15, 12` to
+`10, 10, 14, 14, 18, 18, 17, 20, 15, 21`. Board size drives boss health, the
+soak builder's zero-damage cap and every win rate, so **every boss number in
+this file is stale again**, on top of already being stale from the builder work.
+
+**NOTHING WAS RETUNED.** The figures below are for comparison only.
+
+| | L1 | L2 | L3 | L4 | L5 | L6 | L7 | L8 | L9 | L10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| pads before | 7 | 15 | 15 | 14 | 14 | 18 | 22 | 19 | 15 | 12 |
+| **pads now** | 10 | 10 | 14 | 14 | 18 | 18 | 17 | 20 | 15 | 21 |
+| published, old boards | 434 | 218 | 431 | 314 | 274 | 99 | 135 | 154 | 146 | 132 |
+| **new boards, 480 seeds** | **453** | **250** | **429** | **347** | **380** | **99** | **13** | **239** | **148** | **285** |
+| change | +19 | +32 | −2 | +33 | +106 | 0 | **−122** | +85 | +2 | **+153** |
+
+Aggregate 2,137 → 2,243 of 4,800, which is +2.2 points and hides everything
+interesting. **No level is inside the 35–45% band, before or after.** Level 7
+fell to 2.7% — it lost five pads and its uncovered road went from 408 px to
+1,201 — and level 10 nearly doubled on a board that went from 12 pads to 21.
+
+See `reports/2026-09-17-build-plots.md` for the whole pass: which file owns each
+level's pads, the checks every plot passed, and why level 7 collapsed.
+
+---
+
 ## 2026-09-17 — The soak's player learns that towers have roles
 
 ### ⚠ EVERY FIGURE IN EVERY SECTION BELOW THIS ONE WAS PRODUCED BY A DIFFERENT PLAYER

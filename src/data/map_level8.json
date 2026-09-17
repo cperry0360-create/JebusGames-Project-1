@@ -603,82 +603,86 @@
   "_lanes": "TWO ENTRANCES, ONE EXIT, AND THE BEAM IS ON THE ROAD THEY SHARE. This level shipped the other way round -- one entrance on the west and two exits, east and south -- and the Performance Review sat on the south arm, which is to say on ONE of two ways out. Measured over 40 seeds, 10.6 of 239 enemies a run ever set foot on that arm and 6.1 were buffed: the gate touched one enemy in forty. Reversing the east arm into an entrance and making the bottom mouth the only exit puts every walker from both mouths on the same last stretch of road, with the beam standing on it. See reports/2026-09-13-level-8-retopology.md. THE WEST ARM SHARES ALL 2304 PX OF IT; the east arm joins 88 px along and so shares 2216 px, which is the length in front of the beam either way. See `_waypoints` on the east lane for why it no longer runs to the fork.",
   "buildSpots": [
     [
-      202,
-      406
+      82,
+      291
     ],
     [
-      466,
-      414
+      232,
+      440
     ],
     [
-      846,
-      598
+      258,
+      614
+    ],
+    [
+      311,
+      130
+    ],
+    [
+      339,
+      448
+    ],
+    [
+      369,
+      612
+    ],
+    [
+      390,
+      115
+    ],
+    [
+      440,
+      450
+    ],
+    [
+      544,
+      446
+    ],
+    [
+      552,
+      279
+    ],
+    [
+      656,
+      280
+    ],
+    [
+      690,
+      610
+    ],
+    [
+      778,
+      98
     ],
     [
       814,
-      322
+      622
     ],
     [
-      654,
-      222
+      833,
+      363
     ],
     [
-      302,
-      406
+      928,
+      147
     ],
     [
-      330,
-      94
-    ],
-    [
-      534,
-      234
-    ],
-    [
-      634,
-      586
-    ],
-    [
-      694,
-      286
-    ],
-    [
-      1054,
-      554
-    ],
-    [
-      378,
-      406
-    ],
-    [
-      922,
-      114
-    ],
-    [
-      1174,
-      310
-    ],
-    [
-      734,
-      586
+      1036,
+      575
     ],
     [
       1130,
-      182
+      195
     ],
     [
-      866,
-      682
+      1170,
+      340
     ],
     [
-      482,
-      54
-    ],
-    [
-      478,
-      598
+      1242,
+      479
     ]
   ],
-  "_buildSpots": "19 PADS, AND THE 'MORE THAN ANY OTHER LEVEL' THIS NOTE USED TO CLAIM IS NO LONGER TRUE: level 7 carries 22. The count per level is 7, 15, 15, 14, 14, 18, 22, 19, 15 -- so the 14-15 that levels 2 to 5 and 9 sit at is a HABIT rather than a convention, and three boards are well past it. It matters because cross-level difficulty reasoning leans on it: 19 pads hold more DPS than 14, so a boss health figure does not carry between boards. Placed by tools/trace_level8.py on levels 3 and 4's four properties and verified by tools/check_level8.py: each pad's 24 px core sits entirely on classified carpet, 90-114 px from the nearest lane centreline, at least 74 px from another pad, and at least 34 px from a frame edge so its tap target is on the board. The count is what those rules allow and is not a target -- the placement stops when the best remaining pad adds no uncovered lane. BOSS HEALTH IS MEASURED AGAINST THIS BOARD and against no other: 19 pads hold more DPS than 14, so the CEO's number does not transfer to or from another level.",
-  "_coverage": "HOW MUCH OF EACH LANE THE PADS CAN REACH, from the geometry file: shared 71%, south 77%, east 36%. THE EAST BRANCH IS THE CHEAP EXIT and the wave table is built knowing it: a third of that arm is inside somebody's range and two thirds of it is not, so an enemy routed east walks past far fewer guns than one routed south. It is the shortest arm as well -- 1720 px against the south's 3644."
+  "_buildSpots": "20 PADS, AND THE 'MORE THAN ANY OTHER LEVEL' THIS NOTE USED TO CLAIM IS NO LONGER TRUE: level 10 carries 21. The count per level is 10, 10, 14, 14, 18, 18, 17, 20, 15, 21 -- read out of each board's own source by tools/padcounts.py rather than typed here, because this list was wrong for as long as it was prose. It matters because cross-level difficulty reasoning leans on it: more pads hold more DPS, so a boss health figure does not carry between boards. HAND-PLACED, from tools/plots.json by tools/apply_plots.py, replacing the 19 tools/trace_level8.py's scoring sweep chose. THE SWEEP'S RULES ARE NOT CONSTRAINTS ON THIS SET: it kept every pad 90-114 px from a lane centreline and these run 57-123, because a person placing them can see which side of a corner is worth standing on. What is still checked, by tools/check_plots.py off the shipped map, is the part that is about the player: no pad overlaps painted road, none hangs off the plate, no two tap targets overlap, and every pad has road inside the shortest tower's range. BOSS HEALTH IS MEASURED AGAINST THIS BOARD and against no other, and this board just changed size, so the CEO's number is stale until it is re-soaked.",
+  "_coverage": "HOW MUCH OF EACH LANE THE PADS CAN REACH, from the geometry file: shared 61%, south 58%, east 47%. THE EAST BRANCH IS THE CHEAP EXIT and the wave table is built knowing it: a third of that arm is inside somebody's range and two thirds of it is not, so an enemy routed east walks past far fewer guns than one routed south. It is the shortest arm as well -- 1720 px against the south's 3644."
 }

@@ -22,7 +22,7 @@ gateway is the lane's own y at an x outside the frame, and `extend_x`'s
 baseline-heading machinery would only be an elaborate way of returning it.
 """
 
-import json, os
+import json, math, os
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GEOMETRY = os.path.join(ROOT, 'tools', 'level7_geometry.json')
@@ -75,43 +75,63 @@ LANES_NOTE = (
     "without a field saying so."
 )
 
-SPOT_RADIUS_NOTE = (
-    "34, every other level's. World 1280 renders to 844 CSS px, so 34 world px "
-    "is a 44.8 px tap diameter and anything under 44 pt is smaller than a thumb. "
-    "Two pads need 2 x spotRadius between centres before their tap targets "
-    "overlap; tools/check_level7.py measures the closest pair and reports 76.0."
-)
+def spot_radius_note(g, closest):
+    return (
+        "34, every other level's. World 1280 renders to 844 CSS px, so 34 world px "
+        "is a 44.8 px tap diameter and anything under 44 pt is smaller than a thumb. "
+        "Two pads need 2 x spotRadius between centres before their tap targets "
+        f"overlap; this set's closest pair is {closest:.1f} px."
+    )
 
-BUILD_SPOTS_NOTE = (
-    "TWENTY-TWO PADS, AND TWENTY OF THEM REACH TWO HIGHWAYS AT ONCE. That is the "
-    "defining fact about this board and it is what boss health has to be "
-    "measured against. The medians are about 111 px of scrub between two "
-    "highways whose centrelines are 183-184 px apart, and tower range is 112 -- "
-    "so a pad standing in a median at the house standoff of 90-114 px from one "
-    "centreline is inside 112 px of the other as well, by construction rather "
-    "than by luck. Ten pads sit in each median and they are all doubles; the "
-    "remaining two, above the north highway and below the south one, cover one "
-    "lane each. A tower here does roughly double the work of one on any earlier "
-    "level, so THIS BOARD HOLDS FAR MORE EFFECTIVE DPS THAN 22 PADS SUGGESTS and "
-    "neither boss's health transfers to or from another level. Placed by "
-    "tools/trace_level7.py on levels 3, 4 and 8's four properties and verified by "
-    "tools/check_level7.py: each pad's 24 px core sits entirely on classified "
-    "scrub, 90-114 px from the nearest lane centreline, at least 74 px from "
-    "another pad, and at least 34 px from a frame edge so its tap target is on "
-    "the board."
-)
 
-COVERAGE_NOTE = (
-    "HOW MUCH OF EACH HIGHWAY THE PADS CAN REACH, from the geometry file: north "
-    "90.2%, middle 94.1%, south 83.1%. The uncovered spans are at the lane ENDS "
-    "rather than in the middle, because a pad must stand 34 px clear of the frame "
-    "and its range then stops short of the edge. THE SOUTH HIGHWAY'S EAST END IS "
-    "THE BIG ONE: 189 px from x=1090 to the exit with no tower able to reach it, "
-    "against 51 px on the north and 54 on the middle. The rusted pickup wreck in "
-    "the lower median is why -- its bodywork classifies as road, so no pad core "
-    "fits beside it. Anything that survives to x=1090 in the south lane is out, "
-    "and the finale is deliberately routed through it."
-)
+def build_spots_note(g):
+    """THE TWO NUMBERS THAT MATTER ARE READ, NOT TYPED.
+
+    This note used to state "TWENTY-TWO PADS, AND TWENTY OF THEM REACH TWO
+    HIGHWAYS AT ONCE" as prose, and tests/level7.test.ts re-derived both off
+    the shipped map to keep it honest. The pads are hand-placed now, so the
+    figures come out of the geometry file and the prose cannot go stale.
+    """
+    n = len(g['pads'])
+    doubles = g['padsCoveringTwoLanes']
+    per = g['padsPerStrip']
+    stand = sorted(d['standoff'] for d in g['padDetail'])
+    return (
+        f"{n} PADS, AND {doubles} OF THEM REACH TWO HIGHWAYS AT ONCE. That is the "
+        "defining fact about this board and it is what boss health has to be "
+        "measured against. The medians are about 111 px of scrub between two "
+        f"highways whose centrelines are 183-184 px apart, and tower range is "
+        f"{g['towerRange']} -- so a pad standing in a median is inside range of the "
+        "highway on each side of it, by construction rather than by luck. "
+        + ', '.join(f'{v} {k}' for k, v in per.items() if v) + ". "
+        "A tower here does roughly double the work of one on any earlier level, so "
+        f"THIS BOARD HOLDS FAR MORE EFFECTIVE DPS THAN {n} PADS SUGGESTS and neither "
+        "boss's health transfers to or from another level. HAND-PLACED, from "
+        "tools/plots.json by tools/apply_plots.py, replacing the 22 the scoring "
+        f"sweep chose. Standoff {stand[0]:.0f}-{stand[-1]:.0f} px to the nearest "
+        "centreline, which is INSIDE the sweep's old 90-114 band rather than "
+        "across it: a person put these tight against the paint. "
+        "tools/check_plots.py re-checks the road clearance, the plate edges and "
+        "the tap-target spacing off the shipped map."
+    )
+
+
+def coverage_note(g):
+    c = g['coverage']
+    spans = g['uncoveredLaneSpans']
+    worst = max(((name, b - a) for name, ss in spans.items() for a, b in ss),
+                key=lambda t: t[1])
+    return (
+        "HOW MUCH OF EACH HIGHWAY THE PADS CAN REACH, from the geometry file: north "
+        f"{100 * c['north']:.1f}%, middle {100 * c['middle']:.1f}%, south "
+        f"{100 * c['south']:.1f}%. THIS IS DOWN FROM 90.2/94.1/83.1 and the reason is "
+        "the board, not a bug: the sweep put 22 pads out at 90-114 px where each one "
+        f"covered the most UNCOVERED lane it could add, and the {len(g['pads'])} "
+        "hand-placed plots sit closer to the paint and are five fewer. The uncovered "
+        "spans are no longer only at the lane ends -- the longest one now is "
+        f"{worst[1]:.0f} px on the {worst[0]} highway. Anything that survives a gap "
+        "walks it untouched, and the finale is routed through the south lane."
+    )
 
 
 def main() -> None:
@@ -130,6 +150,9 @@ def main() -> None:
                 + [[EXIT_X, y1]])
 
     main_id = lanes_are[0]
+    pads = [(float(x), float(y)) for x, y in g['pads']]
+    closest = min(math.dist(pads[i], pads[j])
+                  for i in range(len(pads)) for j in range(i + 1, len(pads)))
     doc = {
         'plate': 'level7',
         '_plate': (
@@ -141,7 +164,7 @@ def main() -> None:
         '_roadWidth': ROAD_WIDTH_NOTE,
         'note': NOTE,
         'spotRadius': int(g['padFootprintRadius']),
-        '_spotRadius': SPOT_RADIUS_NOTE,
+        '_spotRadius': spot_radius_note(g, closest),
         'mainId': main_id,
         '_mainId': MAIN_ID_NOTE,
         'waypoints': walk(main_id),
@@ -168,8 +191,8 @@ def main() -> None:
         ],
         '_lanes': LANES_NOTE,
         'buildSpots': [[int(x), int(y)] for x, y in g['pads']],
-        '_buildSpots': BUILD_SPOTS_NOTE,
-        '_coverage': COVERAGE_NOTE,
+        '_buildSpots': build_spots_note(g),
+        '_coverage': coverage_note(g),
     }
     with open(OUT, 'w') as f:
         json.dump(doc, f, indent=2)

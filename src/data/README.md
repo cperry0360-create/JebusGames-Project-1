@@ -81,7 +81,17 @@ shape of each one — add a field there when you add one here.
   no HUD bar any more — three counter plates sit in the top-left corner and the
   map runs to the full canvas — but the world still draws underneath them, so
   `tools/trace_map.py` uses this to keep build pads low enough that a tower on
-  one is not decapitated, and a test enforces it.
+  one is not decapitated.
+  **IT IS A LEVEL 1 RULE AND ONLY LEVEL 1 KEEPS IT.** `trace_map.py` traces
+  level 1 and nothing else, and measured across the ten shipped boards level 6
+  breaks it on four pads (three of them put the tallest tower's roof off the top
+  of the plate), level 8 on three, level 9 on two, level 7 on one. Level 1's
+  hand-authored plots break it on one, pad 4 at (366, 93), and
+  `tests/logic.test.ts` names that pad rather than allowing none.
+  It is also the wrong instrument for the question now: the camera zooms
+  0.78–2.37 and pans, the chrome is screen space, and this is a world-space
+  number that lines up with it at one camera position. `tests/hudpads.test.ts`
+  is the real answer and it passes on all 157 pads.
 - **`art.render.hud-*` carries each counter plate's empty field**, as
   `fieldLeft`/`fieldRight`/`fieldCentreY` fractions measured off the artwork.
   The HUD places its number from those rather than from a constant, so a

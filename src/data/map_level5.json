@@ -364,61 +364,77 @@
   "_lanes": "THREE GATES, ONE EXIT. All three run in from the night side and merge into the trunk at its waypoint 0. Two edits per lane, both documented rather than silent, and both the ones level 4 records: a gateway point is prepended ON THE LINE OF THAT ARM'S FIRST TRACED SEGMENT rather than level with the opening, so an enemy walks in along the road it is already on; and each arm's last traced point is snapped onto the junction, since a branch has to END at the join.\nTHE THREE ROUTES ARE NOT THE SAME LENGTH AND CANNOT BE MADE SO. West walks 1436.4 px gate to exit, south 1217.3 and north 1170.1 -- a 22.7% spread. Levels 3 and 4 have equal routes and their wave tables lean on it: groups released from both gates on the same delay ARRIVE TOGETHER, which is what makes a split wave a two-front problem rather than a queue. Here that is a property of the painting, not of a choice: the north arm is 392 px of road and the west arm is 662, and the only way to equalise them would be to push the north gateway 269 px further off the plate, which is seven seconds of a Thrall walking where nobody can see it. So the arrival times are equalised in the WAVE TABLE instead, with per-group delays, and waves.level5.json's `_arrival` carries the numbers. THE WEST GATE IS THE SLOW ONE and the north gate is the fast one, by 266 px -- about 3.6 seconds at a Glider's speed.\nEVERY ROUTE HERE IS SHORT. The longest is 1436.4 against level 4's 1479, level 3's 1560 and level 1's 1977, and the shortest is 1170. A point of enemy health therefore buys more on this level than on any before it, which is why its wave table is not level 4's with the names changed.",
   "buildSpots": [
     [
-      446,
-      297
+      266.0,
+      280.0
     ],
     [
-      464,
-      199
+      286.0,
+      502.0
     ],
     [
-      395,
-      426
+      349.0,
+      284.0
     ],
     [
-      378,
-      288
+      392.0,
+      141.0
     ],
     [
-      657,
-      434
+      403.0,
+      528.0
     ],
     [
-      703,
-      271
+      426.0,
+      292.0
     ],
     [
-      686,
-      205
+      499.0,
+      310.0
     ],
     [
-      725,
-      443
+      596.0,
+      574.0
     ],
     [
-      1026,
-      396
+      599.0,
+      98.0
     ],
     [
-      184,
-      399
+      668.0,
+      514.0
     ],
     [
-      438,
-      647
+      669.0,
+      186.0
     ],
     [
-      836,
-      285
+      712.0,
+      287.0
     ],
     [
-      434,
-      95
+      765.0,
+      520.0
     ],
     [
-      426,
-      494
+      802.0,
+      302.0
+    ],
+    [
+      859.0,
+      514.0
+    ],
+    [
+      886.0,
+      297.0
+    ],
+    [
+      950.0,
+      504.0
+    ],
+    [
+      970.0,
+      286.0
     ]
   ],
-  "_buildSpots": "FOURTEEN PADS, matching levels 2, 3 and 4 (15, 15 and 14), placed by tools/trace_level5.py and verified by tools/check_level5.py on the four properties level 3 established. ON GROUND: each pad's 24 px core sits on ground the classifier calls turf -- the graveyard's indigo or the meadow's green -- and clear of every crypt, tombstone, railing, dead tree, fir, rock, bush, pumpkin, wall and banner. IN RANGE: each pad is 46 to 110 px from the nearest lane centreline against a tower range of 112. APART: the closest pair is 68.15 px, over the 68 that spotRadius needs. AND BOTH HALVES REACH THE MIDDLE: eight pads sit on the night ground and six on the day ground, and each half was given a floor of four pads within 260 px of the junction BEFORE anything competed for the remaining slots. That last one is not decoration -- a single greedy sweep ordered by distance to the junction puts all fourteen on the meadow, because the meadow has the more open ground beside it, and the crossroads stops being contestable from the graveyard at all.\nWHAT THE PADS COVER: 85.4% of the whole route is inside some pad's range -- west 81.0%, east 77.6%, north 100%, south 93.2%. Level 4 covers 45.3% of its tail and is won or lost before the merge. This one is the other shape: the fight is AT the crossroads, and a wave that gets through the middle is very nearly gone."
+  "_buildSpots": "18 HAND-PLACED PLOTS, from tools/plots.json, written here by tools/apply_plots.py. THEY ARE NOT THE SCORING PASS's ANY MORE: the sweep's 90-114 px standoff band and its best-first ordering produced the set this replaced, and a person placed these against the painting instead. Every figure below that is a function of the pads was re-derived from THIS set off the centrelines this file ships; the sweep's own parameters (`padRules`, `padStandoffBand`, `padSpacing`, any `candidatePositions`) are left as the record of a pass that no longer chooses anything. tools/check_plots.py re-checks the road clearance, the plate edges and the tap-target spacing. The map is written from tools/level5_geometry.json by hand -- there is no build_level5_map.py -- so the two copies are kept equal by tools/apply_plots.py and, on levels 3 and 4, asserted equal by the level test."
 }

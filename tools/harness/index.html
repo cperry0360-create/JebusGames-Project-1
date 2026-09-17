@@ -69,7 +69,7 @@ const SCENARIO_NAMES = [
   'loopthrow', 'looptrack', 'lost', 'mapedge', 'maproute', 'markers',
   'meteor', 'midwave', 'mix', 'modal', 'moes', 'music', 'muzzle', 'nightfall',
   'nodefirst', 'noderings', 'notch', 'nuke', 'nukeseq', 'nullframe',
-  'opening', 'padart', 'padhud', 'padpan',
+  'opening', 'padart', 'padhud', 'padpan', 'plots',
   'pausedismiss', 'pauseresume', 'phone', 'pixels', 'plate', 'playrun',
   'politician', 'powerart', 'proximity', 'realboot', 'regressions',
   'results', 'retreat', 'roadfit', 'rotationburst', 'revive', 'ring', 'rockets',
@@ -613,7 +613,14 @@ async function build(spotIndex, towerIndex = 0) {
   // of a 1280x720 world, so most pads are off screen and a tap aimed at one
   // lands outside the canvas entirely — which is how a 13-wave run got scored
   // with zero towers built and no error anywhere.
-  const [wx, wy] = SPOTS[spotIndex]
+  // THE RUNNING SCENE'S SPOTS, NOT LEVEL 1'S. This read `SPOTS`, which is the
+  // `map.json` this file imports at the top -- so on any other board it aimed
+  // at level 1's pads, the ring never opened, and the scenario reported "the
+  // ring did not open" on nine of eighteen pads as though the game had refused
+  // them. Past level 1's seventh pad it threw outright. `SPOTS` stays as the
+  // fallback for a caller with no live scene.
+  const live = g.build?.spots?.[spotIndex]
+  const [wx, wy] = live ? [live.x, live.y] : SPOTS[spotIndex]
   if (!g.cameras.main.worldView.contains(wx, wy)) {
     // Drive the rig's target, not the camera. The rig eases the real camera
     // toward its own target every frame, so a direct centerOn is undone within
@@ -8107,9 +8114,31 @@ async function run() {
   if (scenario === 'buildall') {
     // Does the director actually place towers on every pad, at a phone's
     // zoom, where most of them start off screen?
+    //
+    // `run.sh buildall 200 844x390 level5` runs it on another board. It used
+    // to read level 1's `SPOTS` constant, which is the map this file imports
+    // at the top, so on any other level it aimed the camera at level 1's pads
+    // and clicked empty ground. The spots come off the running scene now and
+    // the constant is only the fallback.
+    if (arg && arg !== 'level1') {
+      const RSb = await import('./js/systems/RunState.js')
+      for (const k of ['Title', 'WorldMap', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+      RSb.setRunState({
+        heroId: 'cory', levelId: arg, seed: 5, abilities: ['molotov', 'glacier'],
+        openingTowers: ['withholding', 'writeoff'], reserveTowers: [], resumeFrom: null,
+      })
+      game.scene.start('Game')
+      if (!(await until(() => running('Game') && scene('Game').hero, 25000))) {
+        note('RESULT *** ' + arg + ' did not build ***'); return
+      }
+      await until(() => running('Hud'), 12000)
+      await sleep(700)
+      g = scene('Game')
+    }
+    note('board: ' + g.level.id + ', ' + g.build.spots.length + ' pads at ' + VP.w + 'x' + VP.h)
     g.status.peanuts = 99999
     for (let i = 0; i < g.build.spots.length; i++) {
-      const [wx, wy] = SPOTS[i]
+      const wx = g.build.spots[i].x, wy = g.build.spots[i].y
       await lookAt(wx, wy)
       const v = g.cameras.main.worldView
       const [sx, sy] = toScreen(wx, wy)
@@ -17289,6 +17318,134 @@ async function run() {
     note('RESULT ' + (ASSERT_FAILS === 0
       ? ASSERTIONS + ' checks, all passed'
       : '*** ' + ASSERT_FAILS + ' of ' + ASSERTIONS + ' checks failed ***'))
+    return
+  }
+
+  if (scenario === 'plots') {
+    /*
+     * THE HAND-AUTHORED BUILD PLOTS, ON EVERY BOARD, IN A FRAME.
+     *
+     * tools/check_plots.py does the geometry off the JSON and tests/ does the
+     * rules. Neither of them has seen a pixel. What this answers is the part
+     * only a frame can: that the pads the ENGINE built stand where the map
+     * says, that none of them is drawn on the painted road, that level 9's
+     * chips are still under their plots, and that level 6 is untouched.
+     *
+     * The camera is pulled to the floor of its own zoom band and aimed at the
+     * middle of the plate, so each screenshot is the whole board: a pad that
+     * moved is visible against the painting rather than inferred from a
+     * number.
+     */
+    const RS = await import('./js/systems/RunState.js')
+    const LV = await import('./js/systems/Levels.js')
+    const RES = await import('./js/systems/Resolution.js')
+    const DSP = (await import('./js/data/display.json', { with: { type: 'json' } })).default
+
+    const seg = (px, py, a, b) => {
+      const dx = b[0] - a[0], dy = b[1] - a[1]
+      const L = dx * dx + dy * dy
+      const t = L ? Math.max(0, Math.min(1, ((px - a[0]) * dx + (py - a[1]) * dy) / L)) : 0
+      return Math.hypot(px - (a[0] + dx * t), py - (a[1] + dy * t))
+    }
+    // `waypoints` IS A LANE -- the main one -- and it is never repeated inside
+    // `lanes`. Reading only `lanes` measures a board with one road missing.
+    const roads = (m) => [m.waypoints, ...(m.lanes || []).map((l) => l.waypoints)]
+    const toRoad = (m, x, y) => Math.min(...roads(m).map((line) => {
+      let best = Infinity
+      for (let i = 0; i < line.length - 1; i++) best = Math.min(best, seg(x, y, line[i], line[i + 1]))
+      return best
+    }))
+
+    const startLevel = async (levelId) => {
+      for (const k of ['Title', 'WorldMap', 'Loadout', 'Game', 'Hud']) game.scene.stop(k)
+      RS.setRunState({
+        heroId: 'cory', levelId, seed: 5, abilities: ['molotov', 'glacier'],
+        openingTowers: ['withholding', 'writeoff'], reserveTowers: [], resumeFrom: null,
+      })
+      game.scene.start('Game')
+      if (!(await until(() => running('Game') && scene('Game').hero, 25000))) return null
+      await until(() => running('Hud'), 12000)
+      await sleep(700)
+      return scene('Game')
+    }
+
+    let faults = 0
+    for (const lv of LV.LEVELS) {
+      const G = await startLevel(lv.id)
+      if (!G) { note(lv.id + ': did not build'); faults++; continue }
+      const m = G.level.map
+      const half = m.roadWidth / 2
+      const ry = m.spotRadius * 0.62   // GameScene's PAD_SQUASH; the pad is an ellipse
+
+      // THE ENGINE'S OWN SPOTS AGAINST THE SHIPPED MAP. `BuildSystem` is what
+      // turns the pairs into objects, so this is the list the player can
+      // actually tap rather than the list in the file.
+      const spots = G.build.spots
+      let same = spots.length === m.buildSpots.length
+      for (let i = 0; i < spots.length && same; i++) {
+        same = spots[i].x === m.buildSpots[i][0] && spots[i].y === m.buildSpots[i][1]
+      }
+      if (!same) { note(lv.id + ': *** the built spots are not the map\'s buildSpots ***'); faults++ }
+
+      // AND THE PADS THAT WERE DRAWN. One image per spot, at the spot.
+      const drawn = (G.pads || []).filter(Boolean)
+      let offPad = 0
+      for (let i = 0; i < spots.length; i++) {
+        const p = G.pads[i]
+        if (!p) { offPad++; continue }
+        if (Math.hypot(p.x - spots[i].x, p.y - spots[i].y) > 1) offPad++
+      }
+      if (offPad) { note(lv.id + ': *** ' + offPad + ' pad images are not on their spot ***'); faults++ }
+
+      let worst = Infinity
+      let worstAt = ''
+      for (const s of spots) {
+        const gap = toRoad(m, s.x, s.y) - half - ry
+        if (gap < worst) { worst = gap; worstAt = s.index + ' (' + s.x + ',' + s.y + ')' }
+      }
+      if (worst < 0) { note(lv.id + ': *** pad ' + worstAt + ' is drawn on the road ***'); faults++ }
+
+      note(lv.id.padEnd(8) + ' spots ' + String(spots.length).padStart(2)
+        + '  drawn ' + String(drawn.length).padStart(2)
+        + '  map==engine ' + same
+        + '  worst pad-to-paint ' + worst.toFixed(1) + ' px at pad ' + worstAt)
+
+      // LEVEL 9 IS THE ONE WITH ART PER PAD. Every other board draws one
+      // picture on every spot; level 9 names four, one per painted chip, and
+      // the plots were reordered when they were hand-placed -- so the thing
+      // worth reading out of a live scene is which texture landed on which
+      // spot and whether it is centred on it.
+      if (lv.id === 'level9' && m.padArt) {
+        // ONE PAD ON EVERY BOARD DRAWS THE SIGN INSTEAD, the one nearest the
+        // spawn, and level 9 is no exception -- `GameScene.signSpotIndex`
+        // picks it by distance to `waypoints[0]`, so it is a fact about the
+        // painting rather than about the order the pads are stored in.
+        for (let i = 0; i < spots.length; i++) {
+          const p = G.pads[i]
+          const sign = i === G.signSpotIndex
+          const want = sign ? '(the sign)' : m.padArt[i].key
+          const ok = sign ? !!p : p && p.texture.key === m.padArt[i].key
+          note('   pad ' + (i + 1) + ' (' + spots[i].x + ',' + spots[i].y + ') wants '
+            + want + '  got ' + (p ? p.texture.key : 'NOTHING')
+            + '  drawn ' + (p ? p.displayWidth.toFixed(1) + 'x' + p.displayHeight.toFixed(1) : '-')
+            + (ok ? '' : '   *** WRONG ART ***'))
+          if (!ok) faults++
+        }
+      }
+
+      // THE WHOLE BOARD IN ONE FRAME. Floor of the zoom band, centred.
+      if (G.rig) {
+        G.rig.setTargetZoom(DSP.camera.minZoom * RES.deviceScale())
+        G.rig.lookAt(DSP.width / 2, DSP.height / 2)
+        await until(() => Math.abs(G.cameras.main.zoom
+          - DSP.camera.minZoom * RES.deviceScale()) < 0.02, 4000)
+        await sleep(400)
+      }
+      await shot('plots-' + lv.id + '-' + VP.w + 'x' + VP.h)
+    }
+    note('RESULT ' + (faults ? '*** ' + faults + ' faults ***'
+      : 'every board built its pads where the map puts them, none drawn on the road, '
+        + 'level 9\'s four node pictures each on their own chip'))
     return
   }
 

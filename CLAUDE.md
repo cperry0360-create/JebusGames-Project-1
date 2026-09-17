@@ -406,7 +406,24 @@ and the 24,265 median in `reports/2026-09-15-blockers.md`, and level 9's PERPLEX
     pre-guarantee, old builder   428 255 422 299 218 210 198 184 192 195
     guarantee on,  old builder   405 218 422 328 343  83 133 146 119 117
     guarantee off, NEW builder   440 266 436 327 262 204 204 207 208 214
-    guarantee ON,  NEW builder   434 218 431 314 274  99 135 154 146 132   <- today
+    guarantee ON,  NEW builder   434 218 431 314 274  99 135 154 146 132
+    HAND-AUTHORED PLOTS          453 250 429 347 380  99  13 239 148 285   <- today
+
+**AND THE FIFTH ROW IS A DIFFERENT BOARD, NOT A DIFFERENT INSTRUMENT.** On
+2026-09-17 the hand-placed plots in `tools/plots.json` replaced the algorithmic pad
+sweep on nine of the ten levels, so the pad counts went `7 15 15 14 14 18 22 19 15 12`
+to `10 10 14 14 18 18 17 20 15 21`. **Level 6 is not in that file, was not touched, and
+re-soaks at exactly 99** -- which is the control that says the two rows are otherwise
+comparable. **Do not type the pad counts anywhere: `python3 tools/padcounts.py` reads
+them out of each board's own source.**
+
+**Level 7 fell off a cliff, 135 to 13 (2.7%), and it has NOT been retuned.** It lost
+five pads and its uncovered road went from 408 px to 1,201. Level 10 nearly doubled on
+a board that went 12 pads to 21. Nothing between rows four and five is a tuning target:
+the peanut-sink artefact in row four is still open and now a second variable is on top
+of it. `reports/2026-09-17-build-plots.md` has the whole pass -- which file owns each
+level's pads, every check the plots passed, and the per-board coverage that explains
+the moves.
 
 The third row is the honest test of the new builder and it passes: +3.5 points
 aggregate, nine of ten levels up, and **the same five levels in band as the old

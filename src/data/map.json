@@ -180,32 +180,44 @@
   ],
   "buildSpots": [
     [
-      252.0,
-      480.0
+      160.0,
+      218.0
     ],
     [
-      348.0,
-      266.0
+      320.0,
+      508.0
     ],
     [
-      564.0,
-      324.0
+      326.0,
+      346.0
     ],
     [
-      578.0,
-      612.0
+      366.0,
+      93.0
     ],
     [
-      868.0,
-      502.0
+      530.0,
+      159.0
     ],
     [
-      836.0,
-      232.0
+      555.0,
+      356.0
     ],
     [
-      1048.0,
-      550.0
+      680.0,
+      362.0
+    ],
+    [
+      809.0,
+      247.0
+    ],
+    [
+      901.0,
+      469.0
+    ],
+    [
+      1106.0,
+      316.0
     ]
   ],
   "signs": {
@@ -359,5 +371,6 @@
     "_note": "THE GATE IS SHUT IN THIS PLATE, and it has no wall attached, which reads oddly; that is a known art issue being handled separately and this traces it as it stands. There is no painted gap to fade through as there was on the old plate, so the fade runs over the last 33px of lane, ending where the road does. Distance, not time: the roster spans a wide speed range and a timed fade would let the fastest walk out still visible while the slowest dissolved before arriving.",
     "gateX": 1205.0,
     "vanishX": 1235.0
-  }
+  },
+  "_buildSpots": "10 HAND-PLACED PLOTS, from tools/plots.json, written here by tools/apply_plots.py. THEY ARE NOT THE SCORING PASS's ANY MORE: the sweep's 90-114 px standoff band and its best-first ordering produced the set this replaced, and a person placed these against the painting instead. Every figure below that is a function of the pads was re-derived from THIS set off the centrelines this file ships; the sweep's own parameters (`padRules`, `padStandoffBand`, `padSpacing`, any `candidatePositions`) are left as the record of a pass that no longer chooses anything. tools/check_plots.py re-checks the road clearance, the plate edges and the tap-target spacing."
 }

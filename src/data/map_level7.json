@@ -5,7 +5,7 @@
   "_roadWidth": "71, the geometry file's `roadWidth`, which is the median of the three highways measured by casting normals through each band. THEY ARE NOT EQUAL: north is 67, middle 75, south 71, a 12% spread that is in the painting. MapDef.roadWidth is one number because tower bases are sized against it and a tower does not know which lane it is nearest to; the middle highway is therefore drawn 4 px wider than the bases sitting beside it and the north one 4 px narrower. Measured rather than averaged: the per-lane figures are in tools/level7_geometry.json's `roadWidthPerLane` and check_level7.py re-derives all three.",
   "note": "THE HIGHWAY: three straight desert highways running west to east, one above another, that never touch. Each has its own west entrance and its own east exit and ALL THREE COST LIVES. Every coordinate comes from tools/level7_geometry.json, which tools/trace_level7.py derived from the painted plate and tools/check_level7.py checks independently; this file is GENERATED from it by tools/build_level7_map.py and is not hand-edited.",
   "spotRadius": 34,
-  "_spotRadius": "34, every other level's. World 1280 renders to 844 CSS px, so 34 world px is a 44.8 px tap diameter and anything under 44 pt is smaller than a thumb. Two pads need 2 x spotRadius between centres before their tap targets overlap; tools/check_level7.py measures the closest pair and reports 76.0.",
+  "_spotRadius": "34, every other level's. World 1280 renders to 844 CSS px, so 34 world px is a 44.8 px tap diameter and anything under 44 pt is smaller than a thumb. Two pads need 2 x spotRadius between centres before their tap targets overlap; this set's closest pair is 92.0 px.",
   "mainId": "north",
   "_mainId": "THE NORTH HIGHWAY IS `north`, not `main`, which is level 6's rename and is here for the same reason: waves.level7.json spawns on all three lanes BY NAME, and `LaneNetwork.lane()` resolves an unknown id to main -- so a table spawning on `north` against a lane called `main` would walk the right road by accident and the wrong one the day the lanes are reordered. One of the three has to be the map's own `waypoints`, because LaneNetwork is built as [waypoints, ...lanes] and GameScene measures the board bounds against the first; naming it is how that lane can be `north` to the waves AND the map's waypoints to the engine.",
   "waypoints": [
@@ -78,94 +78,74 @@
   "_lanes": "THREE INDEPENDENT LANES, ONE MORE THAN ANY MAP BEFORE THIS. Level 6 is the two-lane level and this is the three-lane one; the shape is exactly level 6's, repeated. None of the three declares a `merge` -- each runs to its own exit and nothing continues from it -- and the two that are not the map's own waypoints declare `entrance: true`, which is what tells `validateLanes` that a lane nothing merges into is an arrival rather than a forgotten `merge`. NOTHING ABOUT LEAKING IS PER-EXIT: `GameScene.leak` charges the enemy's own `livesCost` wherever it got out, so all three cost lives without a field saying so.",
   "buildSpots": [
     [
-      1162,
-      242
+      116,
+      443
     ],
     [
-      990,
-      242
+      210,
+      444
     ],
     [
-      862,
-      242
+      267,
+      252
     ],
     [
-      706,
-      242
+      304,
+      444
     ],
     [
-      578,
-      242
+      366,
+      252
     ],
     [
-      450,
-      242
+      396,
+      446
     ],
     [
-      322,
-      242
+      462,
+      252
     ],
     [
-      138,
-      242
+      494,
+      446
     ],
     [
-      266,
-      426
+      554,
+      254
     ],
     [
-      86,
-      426
+      610,
+      84
     ],
     [
-      834,
-      426
+      736,
+      84
     ],
     [
-      1014,
-      426
+      740,
+      446
     ],
     [
-      706,
-      426
+      812,
+      254
     ],
     [
-      578,
-      426
+      836,
+      446
     ],
     [
-      450,
-      426
+      912,
+      256
     ],
     [
-      1086,
-      242
+      928,
+      446
     ],
     [
-      246,
-      242
-    ],
-    [
-      374,
-      426
-    ],
-    [
-      938,
-      426
-    ],
-    [
-      190,
-      426
-    ],
-    [
-      758,
-      46
-    ],
-    [
-      1026,
-      610
+      1117,
+      253
     ]
   ],
-  "_buildSpots": "TWENTY-TWO PADS, AND TWENTY OF THEM REACH TWO HIGHWAYS AT ONCE. That is the defining fact about this board and it is what boss health has to be measured against. The medians are about 111 px of scrub between two highways whose centrelines are 183-184 px apart, and tower range is 112 -- so a pad standing in a median at the house standoff of 90-114 px from one centreline is inside 112 px of the other as well, by construction rather than by luck. Ten pads sit in each median and they are all doubles; the remaining two, above the north highway and below the south one, cover one lane each. A tower here does roughly double the work of one on any earlier level, so THIS BOARD HOLDS FAR MORE EFFECTIVE DPS THAN 22 PADS SUGGESTS and neither boss's health transfers to or from another level. Placed by tools/trace_level7.py on levels 3, 4 and 8's four properties and verified by tools/check_level7.py: each pad's 24 px core sits entirely on classified scrub, 90-114 px from the nearest lane centreline, at least 74 px from another pad, and at least 34 px from a frame edge so its tap target is on the board.",
-  "_coverage": "HOW MUCH OF EACH HIGHWAY THE PADS CAN REACH, from the geometry file: north 90.2%, middle 94.1%, south 83.1%. The uncovered spans are at the lane ENDS rather than in the middle, because a pad must stand 34 px clear of the frame and its range then stops short of the edge. THE SOUTH HIGHWAY'S EAST END IS THE BIG ONE: 189 px from x=1090 to the exit with no tower able to reach it, against 51 px on the north and 54 on the middle. The rusted pickup wreck in the lower median is why -- its bodywork classifies as road, so no pad core fits beside it. Anything that survives to x=1090 in the south lane is out, and the finale is deliberately routed through it."
+  "_buildSpots": "17 PADS, AND 15 OF THEM REACH TWO HIGHWAYS AT ONCE. That is the defining fact about this board and it is what boss health has to be measured against. The medians are about 111 px of scrub between two highways whose centrelines are 183-184 px apart, and tower range is 112 -- so a pad standing in a median is inside range of the highway on each side of it, by construction rather than by luck. 2 above the north highway, 7 between north and middle, 8 between middle and south. A tower here does roughly double the work of one on any earlier level, so THIS BOARD HOLDS FAR MORE EFFECTIVE DPS THAN 17 PADS SUGGESTS and neither boss's health transfers to or from another level. HAND-PLACED, from tools/plots.json by tools/apply_plots.py, replacing the 22 the scoring sweep chose. Standoff 67-83 px to the nearest centreline, which is INSIDE the sweep's old 90-114 band rather than across it: a person put these tight against the paint. tools/check_plots.py re-checks the road clearance, the plate edges and the tap-target spacing off the shipped map.",
+  "_coverage": "HOW MUCH OF EACH HIGHWAY THE PADS CAN REACH, from the geometry file: north 62.9%, middle 72.3%, south 70.9%. THIS IS DOWN FROM 90.2/94.1/83.1 and the reason is the board, not a bug: the sweep put 22 pads out at 90-114 px where each one covered the most UNCOVERED lane it could add, and the 17 hand-placed plots sit closer to the paint and are five fewer. The uncovered spans are no longer only at the lane ends -- the longest one now is 265 px on the south highway. Anything that survives a gap walks it untouched, and the finale is routed through the south lane."
 }

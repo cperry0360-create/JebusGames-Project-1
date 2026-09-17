@@ -243,7 +243,13 @@ See `reports/2026-09-16-lazy-dad-mode.md`.
 
 ## THE BOARD-SIZE PROBLEM (found 2026-09-07, convention settled since)
 
-**Build pads per level: 7, 15, 15, 14, 14, 18, 22, 19, 15, 12** for levels 1 to 10. No
+**Build pads per level: 10, 10, 14, 14, 18, 18, 17, 20, 15, 21** for levels 1 to 10, as
+of 2026-09-17, when the hand-authored plots in `tools/plots.json` replaced the
+algorithmic sweep on all nine levels the file covers. It read
+7, 15, 15, 14, 14, 18, 22, 19, 15, 12 before that. **Do not type this list anywhere
+again** -- `python3 tools/padcounts.py` reads it out of each board's own source, and two
+map notes and `tools/soak/builder.json` all carried it as prose and all three went wrong
+on the same afternoon. See `reports/2026-09-17-build-plots.md`. No
 documented convention when this was written. Boss HP only means something relative to
 how much DPS a board can hold, so **level 1's and level 2's boss numbers were never on
 the same scale**, and cross-level difficulty reasoning done before this was found is
@@ -655,8 +661,11 @@ paints a live confirm.
 
 **Two rules, and deliberately only two.** A cap on zero-damage towers,
 `max(min, floor(pads * padShare))` with padShare 0.2 and min 1 -- **derived from pad
-count, not fixed**, because the boards run 7 to 22 pads: caps are 1, 3, 3, 2, 2, 3, 4,
-3, 3, 2. And the board gets a gun before anything else. Past those the pick is the same
+count, not fixed**, because the boards run 10 to 21 pads: caps are 2, 2, 2, 2, 3, 3, 3,
+4, 3, 4. They were 1, 3, 3, 2, 2, 3, 4, 3, 3, 2 against the old boards and **every one
+of them moved on its own when the hand-authored plots landed** -- nothing in
+`builder.json` was edited and `tests/soakbuilder.test.ts` re-derives each cap from the
+shipped map. And the board gets a gun before anything else. Past those the pick is the same
 uniform `rng.pick`, because a builder that placed towers WELL would flatter whatever
 tuning it suited and stop being a neutral instrument; a test fails if the opening
 collapses to one tower. `supportonly` is **exempt** or it becomes `nobuild`. Knobs live

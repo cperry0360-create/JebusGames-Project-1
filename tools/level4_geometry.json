@@ -381,60 +381,61 @@
  "padFootprintRadius": 32,
  "pads": [
   [
-   792.0,
-   254.0
+   189.0,
+   380.0
   ],
   [
-   504.0,
-   92.0
+   279.0,
+   438.0
   ],
   [
-   284.0,
-   286.0
+   316.0,
+   329.0
   ],
   [
-   562.0,
-   342.0
+   434.0,
+   333.0
   ],
   [
-   668.0,
-   542.0
+   444.0,
+   470.0
   ],
   [
-   742.0,
-   488.0
+   478.0,
+   133.0
   ],
   [
-   304.0,
-   404.0
+   563.0,
+   390.0
   ],
   [
-   486.0,
-   414.0
+   721.0,
+   233.0
   ],
   [
-   940.0,
-   238.0
+   799.0,
+   503.0
   ],
   [
-   866.0,
-   242.0
+   811.0,
+   267.0
   ],
   [
-   390.0,
-   270.0
+   914.0,
+   272.0
   ],
   [
-   378.0,
-   416.0
+   938.0,
+   466.0
   ],
   [
-   466.0,
+   1034.0,
+   257.0
+  ],
+  [
+   1130.0,
    282.0
-  ],
-  [
-   232.0,
-   382.0
   ]
- ]
+ ],
+ "_pads": "14 HAND-PLACED PLOTS, from tools/plots.json, written here by tools/apply_plots.py. THEY ARE NOT THE SCORING PASS's ANY MORE: the sweep's 90-114 px standoff band and its best-first ordering produced the set this replaced, and a person placed these against the painting instead. Every figure below that is a function of the pads was re-derived from THIS set off the centrelines this file ships; the sweep's own parameters (`padRules`, `padStandoffBand`, `padSpacing`, any `candidatePositions`) are left as the record of a pass that no longer chooses anything. tools/check_plots.py re-checks the road clearance, the plate edges and the tap-target spacing."
 }
