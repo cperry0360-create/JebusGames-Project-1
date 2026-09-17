@@ -451,76 +451,124 @@
  },
  "pads": [
   [
-   650,
-   158
+   92,
+   280
   ],
   [
-   294,
-   210
+   119,
+   135
   ],
   [
-   390,
-   254
+   138,
+   496
   ],
   [
-   706,
-   338
+   246,
+   530
   ],
   [
-   802,
-   358
+   318,
+   624
   ],
   [
-   130,
-   438
+   319,
+   263
   ],
   [
-   254,
-   454
+   321,
+   56
   ],
   [
-   546,
-   454
+   432,
+   80
   ],
   [
-   1194,
-   458
+   498,
+   461
   ],
   [
-   470,
-   462
+   514,
+   150
   ],
   [
-   954,
-   518
+   593,
+   213
   ],
   [
-   678,
-   622
+   682,
+   192
+  ],
+  [
+   691,
+   620
+  ],
+  [
+   704,
+   366
+  ],
+  [
+   772,
+   192
+  ],
+  [
+   791,
+   396
+  ],
+  [
+   916,
+   560
+  ],
+  [
+   995,
+   308
+  ],
+  [
+   998,
+   456
+  ],
+  [
+   1100,
+   316
+  ],
+  [
+   1180,
+   504
   ]
  ],
  "padStandoff": [
-  92.3,
-  99.7,
-  90.5,
-  92.2,
-  106.0,
-  95.8,
-  90.1,
-  92.2,
-  106.4,
-  105.7,
-  91.0,
-  90.6
+  59.6,
+  63.4,
+  146.3,
+  104.0,
+  101.3,
+  79.2,
+  53.6,
+  57.2,
+  109.2,
+  66.7,
+  54.6,
+  54.3,
+  88.7,
+  68.2,
+  53.9,
+  68.6,
+  55.5,
+  70.1,
+  74.2,
+  61.0,
+  110.4
  ],
- "padsUnreachable": [],
+ "padsUnreachable": [
+  3
+ ],
  "padsCoveringTwoPasses": 5,
- "padsCoveringTwoPassesAtLegacyRange": 7,
- "closestPadPair": 76.4,
- "laneCoverage": 0.942,
+ "padsCoveringTwoPassesAtLegacyRange": 3,
+ "closestPadPair": 90.0,
+ "laneCoverage": 0.949,
  "vlaudeBerth": [
   1041.5,
   269.0
  ],
- "vlaudeBerthToLane": 127.9
+ "vlaudeBerthToLane": 127.9,
+ "_pads": "21 HAND-PLACED PLOTS, from tools/plots.json, written here by tools/apply_plots.py. THEY ARE NOT THE SCORING PASS's ANY MORE: the sweep's 90-114 px standoff band and its best-first ordering produced the set this replaced, and a person placed these against the painting instead. Every figure below that is a function of the pads was re-derived from THIS set off the centrelines this file ships; the sweep's own parameters (`padRules`, `padStandoffBand`, `padSpacing`, any `candidatePositions`) are left as the record of a pass that no longer chooses anything. tools/check_plots.py re-checks the road clearance, the plate edges and the tap-target spacing."
 }

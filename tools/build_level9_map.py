@@ -421,22 +421,34 @@ def main():
                      'asserts that rather than trusting it.',
         },
         'buildSpots': spots,
-        '_buildSpots': f'{len(spots)} PADS, ONE CENTRED ON EACH PAINTED GREY CHIP. Not '
-                       'placed by a scoring pass the way levels 3 to 8 were: on this board '
-                       'the buildable ground IS the fifteen chips the artist painted, and '
-                       'the substrate between them is scenery. tools/check_level9.py '
-                       "verifies every pad's 24 px core sits on chip rather than board. "
-                       'THREE OF THE FIFTEEN COULD NOT REACH THE TRUNK AT ALL at the '
-                       'shortest attacking range in towers.json (pads 1, 7 and 15, at 156, '
-                       '132 and 194 px from the nearest centreline), and only three of the '
-                       'fifteen cover two separate passes of it. THE FLANK TAKES THAT DOWN '
-                       'TO TWO: pads '
+        '_buildSpots': f'{len(spots)} PADS, ONE ON EACH PAINTED GREY CHIP. Not placed by a '
+                       'scoring pass the way levels 3 to 8 were: on this board the buildable '
+                       'ground IS the fifteen chips the artist painted, and the substrate '
+                       'between them is scenery. HAND-PLACED NOW, from tools/plots.json -- '
+                       'the same fifteen chips, moved at most 6.1 px off the chip centre the '
+                       'trace used and reordered west to east, with `padArt` permuted to '
+                       'follow its own chip. '
+                       + (f'{len(g["padsUnreachable"])} of the fifteen cannot reach the '
+                          f'trunk at all at the shortest attacking range in towers.json '
+                          f'(pad' + ('s ' if len(g['padsUnreachable']) != 1 else ' ')
+                          + ', '.join(f'{n} at {g["padStandoff"][n - 1]:.0f} px'
+                                      for n in g['padsUnreachable'])
+                          + '), ' if g['padsUnreachable'] else 'Every pad reaches the trunk, ')
+                       + f'and {g["padsCoveringTwoPasses"]} of the fifteen cover two '
+                       'separate passes of it. THE FLANK CHANGES THAT: pads '
                        + ', '.join(str(n) for n in g['padsCoveringFlank'])
-                       + ' can shoot at it, and pad 15 -- 194 px from the trunk and useless '
-                       'on every board before this change -- is 74 px from the flank. Pads 1 '
-                       'and 7 still reach nothing. This board holds LESS effective DPS than '
-                       'fifteen pads suggests, not more, and every mini-boss health figure '
-                       'is soaked against it and against no other level.',
+                       + ' can shoot at it, so '
+                       + ('pad ' + ', '.join(str(n) for n in g['padsUnreachableEvenWithFlank'])
+                          + ' is the only one that reaches nothing at all'
+                          if len(g['padsUnreachableEvenWithFlank']) == 1
+                          else ('pads ' + ', '.join(str(n) for n in
+                                                    g['padsUnreachableEvenWithFlank'])
+                                + ' reach nothing at all'
+                                if g['padsUnreachableEvenWithFlank']
+                                else 'nothing is left dead'))
+                       + '. This board holds LESS effective DPS than fifteen pads suggests, '
+                       'not more, and every mini-boss health figure is soaked against it and '
+                       'against no other level.',
         'padArt': pad_art,
         '_padArt': 'FOUR BUILD-NODE PICTURES, which no other level has -- every other board '
                    'draws one pad art on every spot. The pairing is the geometry file\'s '

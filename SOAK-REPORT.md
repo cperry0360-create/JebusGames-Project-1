@@ -4,6 +4,77 @@ Newest first.
 
 ---
 
+## 2026-09-17 (later still) — The hand-authored build plots changed nine boards
+
+### ⚠ AND THIS TIME THE GAME DID CHANGE
+
+The two sections below this one warn that their predecessors were produced by a
+different INSTRUMENT. This is the other kind of break: **`tools/plots.json`
+replaced the algorithmic pad sweep on nine of the ten levels and the BOARDS are
+different.** Pads per level went `7 15 15 14 14 18 22 19 15 12` to
+`10 10 14 14 18 18 17 20 15 21`. Board size drives boss health, the soak
+builder's zero-damage cap and every win rate, so **every boss number in this
+file is stale again**.
+
+**NOTHING WAS RETUNED.** These figures are for comparison only.
+
+### F against E, which is the same builder on the old boards
+
+Column **E** below is `48ea34e`'s own guarantee-on column, seeds 1–480, on the
+boards as they were. **F is the same builder, same seeds, new boards**, so E→F
+is the board change and nothing else.
+
+| level | pads E→F | **E** old boards | **F** new boards | F−E | F as % |
+|---|---|---|---|---|---|
+| 1 | 7 → 10 | 456 | **474** | +18 | 98.8 |
+| 2 | 15 → 10 | 277 | **309** | +32 | 64.4 |
+| 3 | 15 → 14 | 447 | **447** | **+0** | 93.1 |
+| 4 | 14 → 14 | 335 | **378** | +43 | 78.8 |
+| 5 | 14 → 18 | 279 | **377** | +98 | 78.5 |
+| 6 | 18 → 18 | 196 | **196** | **+0** | **40.8 IN BAND** |
+| 7 | 22 → 17 | 236 | **33** | **−203** | **6.9** |
+| 8 | 19 → 20 | 218 | **283** | +65 | 59.0 |
+| 9 | 15 → 15 | 153 | **145** | −8 | 30.2 |
+| 10 | 12 → 21 | 135 | **282** | **+147** | 58.8 |
+| **all** | 151 → 157 | **2732** | **2924** | **+192** | **60.9** |
+
+**Level 6 is the control and it is exact: 196 both ways**, because level 6 is
+not in `plots.json` and its map is byte-identical. Level 3 is a second control
+by accident — one pad fewer and **447 both ways**.
+
+**Only level 6 is in the 35–45% band, and level 6 is the board this pass did not
+touch.**
+
+### Pad COUNT moves the soak; coverage does not
+
+Whole-board road coverage at the shortest tower range (132) against the move:
+
+| level | pads | covered before → after | E→F |
+|---|---|---|---|
+| 1 | 7 → 10 | 56.1% → 54.4% | 456 → 474 |
+| 2 | 15 → 10 | 71.9% → 65.2% | 277 → 309 |
+| 3 | 15 → 14 | 68.8% → 62.8% | 447 → 447 |
+| 4 | 14 → 14 | 63.8% → 65.0% | 335 → 378 |
+| 5 | 14 → 18 | 83.5% → 71.5% | 279 → 377 |
+| 6 | 18 → 18 | 68.4% → 68.4% | 196 → 196 |
+| 7 | 22 → 17 | 86.0% → 75.1% | 236 → **33** |
+| 8 | 19 → 20 | 79.9% → 76.1% | 218 → 283 |
+| 9 | 15 → 15 | 79.9% → 80.3% | 153 → 145 |
+| 10 | 12 → 21 | 91.3% → 92.2% | 135 → **282** |
+
+Level 5 lost twelve points of coverage, gained four pads and went **up** 98.
+Level 10 gained one point, gained nine pads and went up 147. Level 7 lost
+eleven points **and** five pads and lost 203. The simulated player builds on
+every pad it can afford, so a pad is a gun.
+
+**Level 7 at 6.9% is the open question.** Every plot on it passes every
+geometry check; the board is smaller and thinner than the one the level was
+built around, and its uncovered road went from 408 px to 1,201.
+
+See `reports/2026-09-17-build-plots.md`.
+
+---
+
 ## 2026-09-17 (later) — The soak's player stops tiering the wall
 
 ### ⚠ THE SAME WARNING AGAIN, ONE COMMIT LATER

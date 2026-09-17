@@ -157,11 +157,14 @@ test('the map is the geometry file, not a copy of it', () => {
   assert.equal(M.spotRadius, GEOMETRY.padFootprintRadius)
   assert.equal(M.plate, 'level8')
   assert.deepEqual(M.buildSpots, GEOMETRY.buildSpots)
-  // NINETEEN, AND NOT THE LARGEST BOARD -- level 7 carries 22. The counts are
-  // 7, 15, 15, 14, 14, 18, 22, 19, 15, so the 14-15 that five levels sit at is
-  // a habit rather than a rule. Pinned here because boss health is measured
-  // against a pad count and does not carry between boards.
-  assert.equal(M.buildSpots.length, 19, 'level 8 is not nineteen pads any more')
+  // THE COUNT IS NOT PINNED HERE ANY MORE. It said nineteen, and it said the
+  // per-level counts were 7, 15, 15, 14, 14, 18, 22, 19, 15 -- both of which
+  // the hand-placed plots in tools/plots.json made wrong on the same day.
+  // `python3 tools/padcounts.py` reads them out of each board's own source
+  // instead. Boss health IS measured against a pad count and does not carry
+  // between boards, so a board that changes size needs a re-soak, not a
+  // literal in a test.
+  assert.ok(M.buildSpots.length >= 10, `${M.buildSpots.length} pads is not a board`)
   // Every pad is at least `2 x spotRadius` from every other, or two tap
   // targets overlap. tools/check_level8.py measures this off the plate; this
   // measures it off the shipped map.
@@ -247,11 +250,17 @@ test('the two routes are the lengths the level is designed around', () => {
   // of it was the reversal.
   assert.ok(Math.abs(east[0]! - 2558.3) < 1, `the east route walks ${east[0]!.toFixed(1)}`)
   assert.ok(west[0]! > east[0]!, 'the west mouth is no longer the long way in')
-  // THE EAST ARM IS STILL THE UNDER-DEFENDED ONE, and it matters more now than
-  // it did: it is a way IN, so a thin arm is a short unguarded run at the
-  // START of a walk rather than at the end of one.
-  assert.ok(GEOMETRY.coverage.east < 0.4, 'the east arm is no longer the thin one')
-  assert.ok(GEOMETRY.coverage.south > 0.7, 'the south arm is no longer the covered one')
+  // THE EAST ARM IS STILL THE THINNEST, BUT THE WHOLE BOARD IS THINNER NOW.
+  // The scoring sweep's nineteen pads covered shared 71%, south 77% and east
+  // 36%; the twenty hand-placed plots cover 61%, 58% and 47%. The east arm is
+  // still the least defended and it is still a way IN, so a thin arm is a
+  // short unguarded run at the START of a walk -- but the gap between it and
+  // the south arm has closed from 41 points to 11. Recorded, not retuned.
+  assert.ok(GEOMETRY.coverage.east < GEOMETRY.coverage.south,
+    'the east arm is no longer the thin one')
+  assert.ok(GEOMETRY.coverage.east < 0.5 && GEOMETRY.coverage.south < 0.65,
+    `coverage is shared ${GEOMETRY.coverage.shared}, south ${GEOMETRY.coverage.south}, `
+    + `east ${GEOMETRY.coverage.east}; the plots landed at 0.61 / 0.58 / 0.473`)
 })
 
 /* --------------------------------------------------------------- routing */

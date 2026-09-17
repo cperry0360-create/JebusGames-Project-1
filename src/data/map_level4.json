@@ -387,61 +387,61 @@
   "_lanes": "TWO GATES, ONE EXIT, the same shape as level 3. Both branches run in from off the left edge and merge into the trunk at its waypoint 0. TWO EDITS, both documented rather than silent. FIRST, a gateway point is prepended to each branch, placed on the LINE OF THAT BRANCH'S FIRST TRACED SEGMENT rather than level with the opening, so an enemy walks in along the road it is already on. SECOND, a branch has to END at the join, which is what the lane engine expects, and each branch's last traced point was 1.07 px (upper) and 5.60 px (lower) short of the declared merge, so both were snapped onto it. Left alone an enemy would have stepped those pixels sideways as it transferred. THE GATEWAY DISTANCE IS THE ONE THING CHOSEN RATHER THAN COMPUTED, and it is chosen to make the two gates fair. The lower gateway sits at x=-60, level 3's figure. Placing the upper one there too would have left the upper route 3.55 px shorter -- 1475.42 against 1478.97 -- so it is pulled 3.55 px further out along its own line instead, to (-63.39, 68.33). Both routes now walk 1479.0 px gate to exit. THAT IS WORTH THE THREE PIXELS. Level 3's two routes came out equal to 0.03 px by accident of the trace, and its wave table leans on it: groups released from both gates on the same delay ARRIVE TOGETHER, so a split wave is a genuine two-front problem rather than a queue. Level 4's table leans on it the same way, and here it is arranged rather than lucky. The branches alone are 873.94 each and the trunk they share is 605.03. THE TRUNK IS 41% OF THE ROUTE AND ONLY 45.3% COVERED, which is what makes this level front-loaded.",
   "buildSpots": [
     [
-      792,
-      254
+      189.0,
+      380.0
     ],
     [
-      504,
-      92
+      279.0,
+      438.0
     ],
     [
-      284,
-      286
+      316.0,
+      329.0
     ],
     [
-      562,
-      342
+      434.0,
+      333.0
     ],
     [
-      668,
-      542
+      444.0,
+      470.0
     ],
     [
-      742,
-      488
+      478.0,
+      133.0
     ],
     [
-      304,
-      404
+      563.0,
+      390.0
     ],
     [
-      486,
-      414
+      721.0,
+      233.0
     ],
     [
-      940,
-      238
+      799.0,
+      503.0
     ],
     [
-      866,
-      242
+      811.0,
+      267.0
     ],
     [
-      390,
-      270
+      914.0,
+      272.0
     ],
     [
-      378,
-      416
+      938.0,
+      466.0
     ],
     [
-      466,
-      282
+      1034.0,
+      257.0
     ],
     [
-      232,
-      382
+      1130.0,
+      282.0
     ]
   ],
-  "_buildSpots": "FOURTEEN PADS, copied from the geometry file untouched, and verified by check_level4.py on the three properties level 3 established. IN RANGE: each pad is 90 to 114 world px from the nearest lane centreline -- measured 90.9 to 111.0 -- against a tower range of 112, so every pad reaches the road it is meant to cover. APART: the closest pair is 74.11 px, over the 68 that spotRadius needs. ON GROUND: each pad's 24 px core sits on buildable ground -- not the track, an ice pond, rock, tree, the snowman, the bench, the sled or the fence. WHAT THE PADS DO NOT DO is cover the tail evenly, and that is deliberate: pads 0, 8 and 9 are the only three within 112 of the shared trunk (92.8, 102.1 and 101.8 px), and between them they reach 45.3% of it. Do not add pads to compensate -- east of the merge there is nowhere to put one, and the front-loading is the level's whole idea."
+  "_buildSpots": "14 HAND-PLACED PLOTS, from tools/plots.json, written here by tools/apply_plots.py. THEY ARE NOT THE SCORING PASS's ANY MORE: the sweep's 90-114 px standoff band and its best-first ordering produced the set this replaced, and a person placed these against the painting instead. Every figure below that is a function of the pads was re-derived from THIS set off the centrelines this file ships; the sweep's own parameters (`padRules`, `padStandoffBand`, `padSpacing`, any `candidatePositions`) are left as the record of a pass that no longer chooses anything. tools/check_plots.py re-checks the road clearance, the plate edges and the tap-target spacing. The map is written from tools/level4_geometry.json by hand -- there is no build_level4_map.py -- so the two copies are kept equal by tools/apply_plots.py and, on levels 3 and 4, asserted equal by the level test."
 }

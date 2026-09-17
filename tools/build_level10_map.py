@@ -25,6 +25,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import padcounts  # noqa: E402  -- the per-level pad counts, read rather than typed
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GEOM = os.path.join(ROOT, 'tools/level10_geometry.json')
@@ -126,20 +127,26 @@ def main():
                       f'geodesic. Painted length {painted:.1f} px; walked with the two '
                       f'computed points {walked:.1f}.',
         'buildSpots': [[float(x), float(y)] for x, y in g['pads']],
-        '_buildSpots': f'{len(g["pads"])} PADS, placed by the scoring pass levels 3, 4 and '
-                       f'8 use on open ground, with their constants unchanged: a radius-24 '
-                       f'core entirely on painted plating, 90-114 px from the lane '
-                       f'centreline, at least 74 px apart, best-first by how much '
-                       f'UNCOVERED lane each one adds, stopping when nothing left adds any. '
-                       f'NOT LEVEL 9\'s ONE-PAD-PER-PAINTED-CHIP, and the reason is in the '
-                       f'art: level 9 painted fifteen chips of 81x75 median, so its '
+        '_buildSpots': f'{len(g["pads"])} PADS, HAND-PLACED. They come from tools/plots.json '
+                       f'by way of tools/apply_plots.py and they replace the 12 the scoring '
+                       f'pass chose -- levels 3, 4 and 8\'s sweep, run here with its '
+                       f'constants unchanged: a radius-24 core on painted plating, 90-114 px '
+                       f'from the centreline, 74 px apart, best-first by uncovered lane. '
+                       f'THAT BAND IS NOT A CONSTRAINT ON THIS SET and the numbers say so: '
+                       f'standoff {min(g["padStandoff"])}-{max(g["padStandoff"])}. '
+                       f'NOT LEVEL 9\'s ONE-PAD-PER-PAINTED-CHIP either, and the reason is '
+                       f'in the art: level 9 painted fifteen chips of 81x75 median, so its '
                        f'buildable ground WAS those chips; level 10 paints eleven open '
                        f'panels up to 223x150, and one pad on one of those wastes it. '
                        f'They reach {100 * g["laneCoverage"]:.1f}% of the lane at range '
-                       f'{g["towerRange"]}. Standoff {min(g["padStandoff"])}-'
-                       f'{max(g["padStandoff"])}. Levels 1-9 carry 7, 15, 15, 14, 14, 18, '
-                       f'22, 19, 15; this is the second-smallest board in the game and '
-                       f'Vlaude\'s health is soaked against it and against no other.',
+                       f'{g["towerRange"]} -- which is where the twelve were, because the '
+                       f'sweep optimised for exactly this and a hand cannot beat it at its '
+                       f'own game. WHAT THE NINE EXTRA PADS BUY IS DEPTH, not reach: more '
+                       f'guns on the same road. The count per '
+                       f'level is {padcounts.phrase()}, read out of each board\'s own '
+                       f'source by tools/padcounts.py rather than typed: this is the '
+                       f'BIGGEST board in the game now and it was the second-smallest, and '
+                       f'Vlaude\'s health was soaked against the small one.',
         'hazardSpots': walls,
         '_hazardSpots': 'WHERE VLAUDE CAN GENERATE A WALL. Points ON the lane, at fixed '
                         'fractions of walked route distance, so they survive a retrace at a '
@@ -156,7 +163,8 @@ def main():
                         'the upper-right quadrant -- centre x, bottom y, so he stands in '
                         'front of the core instead of inside it. '
                         f'{g["vlaudeBerthToLane"]:.1f} px from the lane centreline, which is '
-                        'further than any tower\'s range, and he is untargetable anyway.',
+                        'further than any tower\'s range reaches, and he is untargetable in '
+                        'those phases regardless.',
     }
     json.dump(doc, open(OUT, 'w'), indent=1)
     print(f'wrote {os.path.relpath(OUT, ROOT)}')

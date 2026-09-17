@@ -435,55 +435,91 @@
  "_waypoints": "ONE LANE, 104 traced points plus TWO computed ones: a gateway at x=-60.0 and a vanish point at x=1340.0, each extended along the heading the lane already has at its terminal so enemies walk in and out along the paint. THE PAINTED LANE DOES NOT REACH EITHER FRAME EDGE: a piece of machine housing is drawn over it at each end and the cyan re-emerges as a stub at the frame, so tools/trace_level10.py bridges the two housings before it walks the geodesic. Painted length 3309.8 px; walked with the two computed points 3440.1.",
  "buildSpots": [
   [
-   650.0,
-   158.0
+   92.0,
+   280.0
   ],
   [
-   294.0,
-   210.0
+   119.0,
+   135.0
   ],
   [
-   390.0,
-   254.0
+   138.0,
+   496.0
   ],
   [
-   706.0,
-   338.0
+   246.0,
+   530.0
   ],
   [
-   802.0,
-   358.0
+   318.0,
+   624.0
   ],
   [
-   130.0,
-   438.0
+   319.0,
+   263.0
   ],
   [
-   254.0,
-   454.0
+   321.0,
+   56.0
   ],
   [
-   546.0,
-   454.0
+   432.0,
+   80.0
   ],
   [
-   1194.0,
-   458.0
+   498.0,
+   461.0
   ],
   [
-   470.0,
-   462.0
+   514.0,
+   150.0
   ],
   [
-   954.0,
-   518.0
+   593.0,
+   213.0
   ],
   [
-   678.0,
-   622.0
+   682.0,
+   192.0
+  ],
+  [
+   691.0,
+   620.0
+  ],
+  [
+   704.0,
+   366.0
+  ],
+  [
+   772.0,
+   192.0
+  ],
+  [
+   791.0,
+   396.0
+  ],
+  [
+   916.0,
+   560.0
+  ],
+  [
+   995.0,
+   308.0
+  ],
+  [
+   998.0,
+   456.0
+  ],
+  [
+   1100.0,
+   316.0
+  ],
+  [
+   1180.0,
+   504.0
   ]
  ],
- "_buildSpots": "12 PADS, placed by the scoring pass levels 3, 4 and 8 use on open ground, with their constants unchanged: a radius-24 core entirely on painted plating, 90-114 px from the lane centreline, at least 74 px apart, best-first by how much UNCOVERED lane each one adds, stopping when nothing left adds any. NOT LEVEL 9's ONE-PAD-PER-PAINTED-CHIP, and the reason is in the art: level 9 painted fifteen chips of 81x75 median, so its buildable ground WAS those chips; level 10 paints eleven open panels up to 223x150, and one pad on one of those wastes it. They reach 94.2% of the lane at range 132. Standoff 90.1-106.4. Levels 1-9 carry 7, 15, 15, 14, 14, 18, 22, 19, 15; this is the second-smallest board in the game and Vlaude's health is soaked against it and against no other.",
+ "_buildSpots": "21 PADS, HAND-PLACED. They come from tools/plots.json by way of tools/apply_plots.py and they replace the 12 the scoring pass chose -- levels 3, 4 and 8's sweep, run here with its constants unchanged: a radius-24 core on painted plating, 90-114 px from the centreline, 74 px apart, best-first by uncovered lane. THAT BAND IS NOT A CONSTRAINT ON THIS SET and the numbers say so: standoff 53.6-146.3. NOT LEVEL 9's ONE-PAD-PER-PAINTED-CHIP either, and the reason is in the art: level 9 painted fifteen chips of 81x75 median, so its buildable ground WAS those chips; level 10 paints eleven open panels up to 223x150, and one pad on one of those wastes it. They reach 94.9% of the lane at range 132 -- which is where the twelve were, because the sweep optimised for exactly this and a hand cannot beat it at its own game. WHAT THE NINE EXTRA PADS BUY IS DEPTH, not reach: more guns on the same road. The count per level is 10, 10, 14, 14, 18, 18, 17, 20, 15, 21, read out of each board's own source by tools/padcounts.py rather than typed: this is the BIGGEST board in the game now and it was the second-smallest, and Vlaude's health was soaked against the small one.",
  "hazardSpots": [
   {
    "x": 255.5,

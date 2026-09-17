@@ -137,9 +137,15 @@ test('every branch ends exactly on the merge point', () => {
 
 /* --------------------------------------------------------------- the pads */
 
-test('fifteen pads, all of them the geometry file\'s', () => {
-  assert.equal(M.buildSpots.length, 15)
+test('the pads are the geometry file\'s, however many there are', () => {
+  // THE COUNT IS READ, NOT TYPED. It was 15 while a scoring sweep chose the
+  // pads and it is 14 now that they are hand-placed in tools/plots.json, and
+  // a number written here would only ever have said which of those two the
+  // test was last edited for. What is worth asserting is that the two copies
+  // of the pads -- this map and the geometry file -- have not drifted apart,
+  // because there is no build_level3_map.py to keep them together.
   assert.deepEqual(M.buildSpots, GEOMETRY.pads)
+  assert.ok(M.buildSpots.length >= 10, `${M.buildSpots.length} pads is not a board`)
 })
 
 test('no two pads are closer than the tap targets allow', () => {
@@ -169,14 +175,33 @@ test('every pad reaches a lane, and none of them stands in one', () => {
   const shortest = Math.min(...Object.values(towers as Record<string, any>)
     .filter((t) => t && typeof t === 'object' && (t.range ?? 0) > 0)
     .map((t) => t.range as number))
+  // THE 90-114 BAND IS GONE AND IT IS NOT COMING BACK. It was the scoring
+  // sweep's own parameter, and these pads are hand-placed: they run 66.1 to
+  // 140.9 px off the nearest centreline because a person can see that a pad
+  // tucked inside a bend covers two passes of road and one out at 114 covers
+  // one. What replaces it is the claim the band was a proxy for -- a tower
+  // here can shoot at the road -- measured to the near EDGE of the paint,
+  // which is what a tower actually has to reach.
   const routes = [toPoly(M.waypoints), ...M.lanes.map((l) => toPoly(l.waypoints))]
+  const half = M.roadWidth / 2
+  const centre: number[] = []
   for (const [i, [x, y]] of M.buildSpots.entries()) {
     const d = Math.min(...routes.map((r) => distToPoly(x!, y!, r)))
-    assert.ok(d <= 114, `pad ${i + 1} is ${d.toFixed(1)}px from the nearest lane, over 114`)
-    assert.ok(d >= 90, `pad ${i + 1} is ${d.toFixed(1)}px from the nearest lane, under 90`)
-    assert.ok(d < shortest,
-      `pad ${i + 1} is ${d.toFixed(1)}px out and the shortest tower reaches ${shortest}`)
+    centre.push(d)
+    // Against the DRAWN pad: `spotRadius` is the tap circle, and what is
+    // painted is an ellipse squashed to 0.62 of it for the three-quarter view.
+    // `python3 tools/check_plots.py` does the exact ellipse-to-paint distance.
+    assert.ok(d > half + M.spotRadius * 0.62,
+      `pad ${i + 1} is ${d.toFixed(1)}px from the nearest lane; its node `
+      + `would stand in a ${M.roadWidth}px road`)
+    assert.ok(d - half < shortest,
+      `pad ${i + 1} is ${(d - half).toFixed(1)}px from the paint and the shortest tower `
+      + `reaches ${shortest}`)
   }
+  // Recorded rather than bounded: the spread IS the board now.
+  const lo = Math.min(...centre), hi = Math.max(...centre)
+  assert.ok(lo > 60 && hi < 145,
+    `standoff runs ${lo.toFixed(1)}-${hi.toFixed(1)}, outside the 66.1-140.9 the plots landed at`)
 })
 
 test('the board centre, where the hero now starts, is off this level\'s road', () => {
@@ -246,7 +271,7 @@ test('the run uses both gates, and the boss arrives alone down one of them', () 
 test('level 3 loads through the registry with its own map and waves', () => {
   const lv = loadLevel('level3')
   assert.equal(lv.name, 'Sports Complex at Dusk')
-  assert.equal(lv.map.buildSpots.length, 15)
+  assert.equal(lv.map.buildSpots.length, M.buildSpots.length)
   assert.equal(lv.waveTable.waves.length, 13)
   assert.equal((lv.map as any).plate, 'level3')
   assert.equal(lv.unlockedBy, 'level2')

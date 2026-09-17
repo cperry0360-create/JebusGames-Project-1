@@ -185,14 +185,29 @@ test('every build pad is within the shortest tower\'s range of the lane', () => 
     return best
   }
 
+  // MEASURED TO THE NEAR EDGE OF THE PAINT, NOT TO THE CENTRELINE, and the
+  // hand-placed plots are what forced the distinction. Pad 7 at (868, 496) is
+  // 133.1 px from the centreline and the shortest tower reaches 132, so the
+  // old form of this test called it dead -- but the road is 65.8 px wide and
+  // enemies wander up to `rules.laneSpread.fraction` of the room inside it,
+  // so a Rounding tower there fires at anything on the near half. What would
+  // really never fire is a pad whose nearest PAINT is out of range.
+  const half = (L2.roadWidth as number) / 2
   const far: string[] = []
   for (const [i, spot] of (L2.buildSpots as [number, number][]).entries()) {
-    const d = toLane(spot)
-    if (d > shortest) far.push(`pad ${i} at (${spot[0]}, ${spot[1]}) is ${d.toFixed(1)}px from the lane`)
+    const d = toLane(spot) - half
+    if (d > shortest) far.push(`pad ${i} at (${spot[0]}, ${spot[1]}) is ${d.toFixed(1)}px from the paint`)
   }
   assert.deepEqual(far, [],
     `these pads are further from the road than the shortest tower (${shortest}px) can reach, ` +
     'so a tower built on one would never fire')
+
+  // And the count that is worth knowing rather than asserting away: how many
+  // pads the CHEAPEST tower covers all the way to the centreline.
+  const full = (L2.buildSpots as [number, number][]).filter((p) => toLane(p) <= shortest).length
+  assert.equal(full, 9,
+    `${full} of ${L2.buildSpots.length} pads reach the centreline with the ${shortest}px tower; `
+    + 'it was 9 when the hand-placed plots landed')
 })
 
 test('level 2 pads sit no further from the lane than level 1\'s do', () => {

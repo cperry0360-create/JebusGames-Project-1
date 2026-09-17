@@ -243,7 +243,13 @@ See `reports/2026-09-16-lazy-dad-mode.md`.
 
 ## THE BOARD-SIZE PROBLEM (found 2026-09-07, convention settled since)
 
-**Build pads per level: 7, 15, 15, 14, 14, 18, 22, 19, 15, 12** for levels 1 to 10. No
+**Build pads per level: 10, 10, 14, 14, 18, 18, 17, 20, 15, 21** for levels 1 to 10, as
+of 2026-09-17, when the hand-authored plots in `tools/plots.json` replaced the
+algorithmic sweep on all nine levels the file covers. It read
+7, 15, 15, 14, 14, 18, 22, 19, 15, 12 before that. **Do not type this list anywhere
+again** -- `python3 tools/padcounts.py` reads it out of each board's own source, and two
+map notes and `tools/soak/builder.json` all carried it as prose and all three went wrong
+on the same afternoon. See `reports/2026-09-17-build-plots.md`. No
 documented convention when this was written. Boss HP only means something relative to
 how much DPS a board can hold, so **level 1's and level 2's boss numbers were never on
 the same scale**, and cross-level difficulty reasoning done before this was found is
@@ -696,12 +702,25 @@ HEAD -- src/` is empty.**
 | B guar-off, cap only | 440 | 266 | 436 | 327 | 262 | 204 | 204 | 207 | 208 | 214 | 2768 |
 | C guar-on, cap only | 434 | 218 | 431 | 314 | 274 | 99 | 135 | 154 | 146 | 132 | 2337 |
 | D guar-off, NEW rule | 450 | 292 | 440 | 346 | 263 | 241 | 247 | 238 | 195 | 216 | 2928 |
-| **E guar-ON, NEW rule** | **456** | **277** | **447** | **335** | **279** | **196** | **236** | **218** | **153** | **135** | **2732** |
+| E guar-ON, NEW rule | 456 | 277 | 447 | 335 | 279 | 196 | 236 | 218 | 153 | 135 | 2732 |
+| **F = E's builder, NEW BOARDS** | **474** | **309** | **447** | **378** | **377** | **196** | **33** | **283** | **145** | **282** | **2924** |
 
-**E is the game. Level 6 is IN BAND at 40.8%**, level 8 is 0.4 over the top edge at
-45.4%, level 7 is 4.2 over, levels 9 and 10 are 3.1 and 6.9 under. **91.6% of the C-B
-gap closed** (E-C = +395 of 431); the guarantee still costs 196 against D, so **54.5% of
-its measured cost was the peanut sink** and the rest is the pad it occupies.
+**F IS THE GAME AND E IS THE BOARD IT REPLACED.** The hand-authored plots landed later
+the same day (see the board-size section above): pads went `7 15 15 14 14 18 22 19 15 12`
+to `10 10 14 14 18 18 17 20 15 21`. **E and F are the SAME builder on the SAME seeds, so
+E->F is the boards and nothing else.** **Level 6 is the control and it is exact at 196
+in both**, because level 6 is not in `tools/plots.json` and its map is byte-identical;
+level 3 is a second control by accident at 447 both ways. **Under F only level 6 is in
+the 35-45% band, and level 6 is the board that did not move.** **Level 7 fell to 33/480
+(6.9%) and was NOT retuned** -- five pads fewer and its uncovered road went 408 px to
+1,201. **Pad COUNT moves the soak and coverage does not**: level 5 lost twelve points of
+road coverage, gained four pads and went UP 98. See
+`reports/2026-09-17-build-plots.md`.
+
+**On E's own terms, which still stand:** level 6 was IN BAND at 40.8%, level 8 0.4 over
+the top edge at 45.4%, level 7 4.2 over, levels 9 and 10 3.1 and 6.9 under. **91.6% of
+the C-B gap closed** (E-C = +395 of 431); the guarantee still costs 196 against D, so
+**54.5% of its measured cost was the peanut sink** and the rest is the pad it occupies.
 
 **D does NOT reproduce B -- it is +160, and +175 on a second seed block, with every
 level's delta inside ±5 runs across both.** That is the rule, not the sample, and it is
@@ -758,8 +777,11 @@ paints a live confirm.
 
 **Two rules, and deliberately only two.** A cap on zero-damage towers,
 `max(min, floor(pads * padShare))` with padShare 0.2 and min 1 -- **derived from pad
-count, not fixed**, because the boards run 7 to 22 pads: caps are 1, 3, 3, 2, 2, 3, 4,
-3, 3, 2. And the board gets a gun before anything else. Past those the pick is the same
+count, not fixed**, because the boards run 10 to 21 pads: caps are 2, 2, 2, 2, 3, 3, 3,
+4, 3, 4. They were 1, 3, 3, 2, 2, 3, 4, 3, 3, 2 against the old boards and **every one
+of them moved on its own when the hand-authored plots landed** -- nothing in
+`builder.json` was edited and `tests/soakbuilder.test.ts` re-derives each cap from the
+shipped map. And the board gets a gun before anything else. Past those the pick is the same
 uniform `rng.pick`, because a builder that placed towers WELL would flatter whatever
 tuning it suited and stop being a neutral instrument; a test fails if the opening
 collapses to one tower. `supportonly` is **exempt** or it becomes `nobuild`. Knobs live
