@@ -1784,6 +1784,18 @@ test('the deploy stays small enough to open on a phone', () => {
   // comics that are NOT wired to anything were deliberately left as PNG in
   // art-source/ rather than converted, so they cost this cap nothing. See
   // cutscenes.json's `_unplacedNote`.
+  //
+  // 2026-09-17: 60.37 MB, AND THE CAP IS DELIBERATELY NOT MOVING. The comic
+  // placement fix republished the openings as whole 1672x941 pages instead of
+  // 552x941 thirds (+1.62 MB across five panels), wired level 8's six-panel
+  // opening and three-panel outro and the epilogue (+1.38 across twelve), and
+  // took the three stale level 3 panels and `cutscene_L9_01.webp` back out
+  // (-1.12). That leaves 0.63 MB of headroom, which is the tightest this has
+  // been -- so the NEXT thing added here trips this, on purpose. The three caps
+  // a player actually experiences did not move: boot 6.67 against 8, music 6.41
+  // against 10, and the worst single level is level 9 at 18.44 against 20 (it
+  // LOST 0.56 when its duplicate opening went). Level 8 went 9.7 -> 11.10, and
+  // level 10 reads 18.08 with the epilogue on its bill.
   const total = files.reduce((a, f) => a + f.mb, 0)
   assert.ok(total < 61,
     `assets total ${total.toFixed(1)}MB, which is more than this project should be`)

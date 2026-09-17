@@ -3809,14 +3809,20 @@ async function run() {
       'heroHp=' + Math.round(g.status.heroHealth),
     ].join('  ')
 
-    /* ---- 0: THE TWO REDRAWN OPENINGS ---- */
+    /* ---- 0: THE THREE OPENINGS ---- */
     //
-    // THE DAD. The panels level 1 and 2 shipped with drew him BEARDED AND IN
-    // ARMOUR at Courjahan's Tavern; the current design is clean-shaven in
-    // modern clothes. Six panels were retired for it, and the only way to
-    // check the right ones are on screen is to look at them.
-    note('=== the redrawn level 1 and level 2 openings ===')
-    for (const id of ['level1', 'level2']) {
+    // WHICH COMIC IS IN WHICH SLOT, and it is the thing the numbers cannot
+    // answer: the 2026-09-16 pass wired four comics into levels they did not
+    // belong to and every layout check passed on all four. The only way to
+    // tell is to look at them.
+    //
+    // THREE OPENINGS AND THREE PANEL COUNTS. Level 1 is three single drawings,
+    // level 2 is two, and LEVEL 8 IS SIX -- the three panels of `intro_a`
+    // followed by the three of `intro_b`, one comic across two source strips.
+    // Levels 3 and 9 have no opening at all any more.
+    const OPENINGS = { level1: 3, level2: 2, level8: 6 }
+    note('=== the level 1, level 2 and level 8 openings ===')
+    for (const id of Object.keys(OPENINGS)) {
       for (const k of ['Title', 'WorldMap', 'Loadout', 'Cutscene', 'Game', 'Hud']) game.scene.stop(k)
       await sleep(200)
       game.scene.start('Cutscene', { levelId: id, then: 'Game' })
@@ -3833,9 +3839,19 @@ async function run() {
         + ' drawn ' + Math.round(at.panel.width) + 'x' + Math.round(at.panel.height)
         + ' at ' + Math.round(at.panel.x) + ',' + Math.round(at.panel.y)
         + '  band=' + at.bandEdge)
-      expect(want.length === 3, id + ' opens with ' + want.length + ' panels, not 3')
+      expect(want.length === OPENINGS[id],
+        id + ' opens with ' + want.length + ' panels, not ' + OPENINGS[id])
       expect(tex.includes(id + '_intro'),
-        id + ' opens with ' + tex + ', which is not the redrawn page')
+        id + ' opens with ' + tex + ', which is not its own opening')
+      // LEVEL 8'S HALVES IN ORDER, which is the one thing about these lists
+      // that nothing else can see: three `intro_a` panels and then three
+      // `intro_b` ones. Interleaved, it reads as nonsense and lays out fine.
+      if (id === 'level8') {
+        const halves = want.map((pth) => (/level8_intro_([ab])_/.exec(pth) || [])[1])
+        expect(halves.join('') === 'aaabbb',
+          "level 8's opening is out of order: " + halves.join(''))
+        note('    level 8 halves: ' + halves.join(''))
+      }
       // CONTAIN, NEVER COVER, whatever shape the panel is. A cut panel is not
       // 16:9 any more, so this is the check that a square one letterboxes.
       const aspect = srcImg.width / srcImg.height
@@ -17990,8 +18006,8 @@ async function run() {
         + ', Credits running=' + running('Credits'))
       expect(!running('Cutscene'), 'a LOSS played the outro comic')
       expect(!running('Credits'), 'a LOSS rolled the credits')
-      expect(CUT.outroPanelsFor('level10').length === 3,
-        'level 10 has ' + CUT.outroPanelsFor('level10').length + ' outro panels, not 3')
+      expect(CUT.outroPanelsFor('level10').length === 6,
+        'level 10 has ' + CUT.outroPanelsFor('level10').length + ' outro panels, not 6')
       await shot('titlecard-3-loss-no-comic-' + VP.w + 'x' + VP.h)
     }
 
@@ -18025,16 +18041,23 @@ async function run() {
     await sleep(400)
     note('outro: panels ' + JSON.stringify(O.panels) + '  then ' + O.next
       + '  thenData ' + JSON.stringify(O.nextData))
-    expect(O.panels.length === 3, 'the outro is ' + O.panels.length + ' panel(s)')
+    // SIX: THE ENDING AND THEN THE EPILOGUE. `cutscene_L10_01/02/03` are what
+    // plays when Vlaude goes down; `epilogue_01/02/03` follow in the same list,
+    // because `leaveWon` sends the last level's outro to the Credits and this
+    // one list is exactly what sits between the last boss and the roll.
+    expect(O.panels.length === 6, 'the outro is ' + O.panels.length + ' panel(s)')
     expect(JSON.stringify(O.panels) === JSON.stringify(CUT.outroPanelsFor('level10')),
       'the outro plays panels in a different order from cutscenes.json')
+    expect(O.panels.slice(3).every((pth) => pth.includes('epilogue'))
+      && O.panels.slice(0, 3).every((pth) => pth.includes('cutscene_L10')),
+    'the epilogue does not follow the ending: ' + JSON.stringify(O.panels))
     // THE CREDITS ARE WHERE IT HANDS OVER, because this is the last level.
     expect(O.next === 'Credits',
       'the last level\'s comic hands over to ' + O.next + ', not the credits')
     expect(O.nextData && O.nextData.then === 'WorldMap',
       'the button the player pressed was thrown away: ' + JSON.stringify(O.nextData))
     // IN ORDER, one tap at a time, and each one is a frame.
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 6; i++) {
       const path = O.panels[O.index]
       note('  panel ' + (O.index + 1) + '/' + O.panels.length + ': ' + path
         + '  drawn=' + (O.image ? O.image.texture.key : 'nothing'))

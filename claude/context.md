@@ -542,7 +542,46 @@ and `prop_route_gate_closed.png`. Route switching was cut from the design. They 
 never converted and never registered, and `reports/2026-09-14-level-10-assets.md`
 names them as deliberately unused.
 
+## Comic placement — CORRECTED 2026-09-17, read this before the section below
+
+**THE 2026-09-16 REORGANISATION PUT FOUR COMICS IN THE WRONG LEVELS, AND WROTE A
+STORYLINE TO JUSTIFY THEM.** It placed them by reading what was drawn in each page
+and reasoning about the plot. Every reading was confident, every layout check passed,
+and all four were wrong. Cory named the real slots on 2026-09-17:
+
+| art | 09-16 said | it actually is |
+| --- | --- | --- |
+| "I'm retiring" | level 1 opening | level 8 opening, FIRST half |
+| "transition opportunity" | level 3 opening | level 8 opening, SECOND half |
+| "Junior Vibe Coder / GameEx" | level 2 opening | the game's EPILOGUE, after level 10 |
+| "Shut yourself down" | `unplaced/level10_intro` | level 8's OUTRO |
+
+**The invented plot is the part that mattered.** `cutscenes.json`'s `_levels` note was
+rewritten on 09-16 into a story — the dad loses his job, is hired at Vlaude Industries,
+watches Vlaude eliminate everybody's positions — and that note auto-loads into every
+session as established fact. A wrong panel is one line to fix; a wrong story in a
+notes file gets built on. It is deleted. **CLAUDE.md hard rule 8** is the standing
+version: never assign a comic to a level, or write story notes for it, unless Cory has
+named the slot; unnamed art goes to `unplaced/` and gets flagged.
+
+**Where the comics are now.** Level 1 opens with three panels and level 2 with two,
+from NEW art delivered as single finished 1672x941 drawings rather than strips — so
+`tools/comics/plan.json` grew a second list, `pages`, for a source that is already one
+panel and must not be sliced. Level 8 opens with six panels: `intro_a` 1-3 then
+`intro_b` 1-3, one comic across two source strips. Level 8 closes with three. Level
+10's outro list is six — the three `cutscene_L10_*` ending panels and then
+`epilogue_01/02/03`, one list because `leaveWon` sends the last level's outro to the
+Credits and this is exactly what sits between the last boss and the roll. **Levels 3
+and 9 have no opening at all**, and `cutscene_L9_01.webp` is deleted: it was a
+lower-resolution unsliced copy of the comic level 9's own wave 3 entry plays.
+
+See `reports/2026-09-17-comic-placement.md`.
+
 ## Cutscenes — reorganised, sliced and wired 2026-09-16
+
+**THIS SECTION IS THE 09-16 PASS AS IT WAS WRITTEN. Its PLACEMENTS are superseded by
+the section above; its SLICING and tooling are still how the pipeline works, except
+that the level 1 and level 2 openings are now whole `pages` rather than strips.**
 
 **EVERY COMIC IN THIS REPOSITORY IS A THREE-PANEL STRIP IN ONE IMAGE.** Measured
 across all twelve unwired files and the shipped ones, not eyeballed:
@@ -567,10 +606,12 @@ and `tools/comics/last-run.json` is the record.
 **Level 1 and 2 were redrawn.** The panels that shipped drew the dad BEARDED AND IN
 ARMOUR at Courjahan's Tavern; the current design is clean-shaven in modern clothes.
 The six old panels are in `art-source/cutscenes/retired/`, out of the deploy and not
-deleted. Both levels got LIGHTER: 0.37 MB against 0.92 and 0.86.
+deleted. The pages this pass wired in their place were the wrong ones and are level
+8's now; the openings that play there today arrived on 2026-09-17 and cost 1.04 and
+0.58 MB.
 
-**Level 3 now has an opening** (Vlaude on the television) and there are **six
-mid-wave comics**: level 3 after wave 12, level 4 after wave 6, level 9 after waves
+**Level 3's opening was removed on 2026-09-17** — that art is the second half of level
+8's opening — and the six **mid-wave comics** are untouched: level 3 after wave 12, level 4 after wave 6, level 9 after waves
 3, 7, 11 and 15. **All six spawn waves were re-read off the wave tables and all six
 matched**, and `tests/midwave.test.ts` re-derives them so a table edit that moves an
 enemy out from under its comic fails the build.
@@ -985,23 +1026,26 @@ the paragraph above settled it.
   before the 2026-09-17 HUD pass, which cost it six. `drawer.test.ts` checks the FLAT
   narrow case only, where the grid is 72 and the rule holds. Nobody has decided
   whether the notched SE-class case is in scope at all.
-- **Level 9 reads the HAT-GTT comic twice.** `cutscene_L9_01.webp`, the opening, IS
-  the HAT-GTT page, and the same comic at higher resolution is wired after wave 3 —
-  rendered and compared side by side, they are the same three beats. Both are wired
-  because the 2026-09-16 brief named both explicitly and the choice is a content call.
-  **The fix is one line: delete the `level9` key under `levels` in `cutscenes.json`**,
-  which leaves it playing on the boundary before the enemy it introduces walks on.
-- **Four comics still ship as uncut three-across strips**, and they are the only ones
-  left: level 9's opening and outro, and level 10's three outro panels (nine
-  sub-panels shown as three). Held unchanged on 2026-09-16 because the brief said so
-  and because level 10's fight is verified frame by frame against them. Cutting them
-  is one row in `tools/comics/plan.json` and one list in `cutscenes.json`; the sources
-  are in `art-source/cutscenes/level10/` and `.../unplaced/`.
-- **`unplaced/level10_intro_strip.png` has no home.** It is the family being pulled
-  into the machine and it reads as level 10's OPENING; level 10 has only a title card.
-  A genuine orphan rather than an alternate — the other two unplaced comics are
-  alternates of the level 9 outro and the level 10 outro respectively. Publishing it
-  is one row in `plan.json` and one key under `levels`.
+- **CLOSED 2026-09-17 — level 9 no longer reads the HAT-GTT comic twice.** The
+  `level9` key under `levels` is gone and `cutscene_L9_01.webp` is deleted; the same
+  comic still plays, at higher resolution and sliced, on the wave 3 boundary before
+  the enemy it introduces walks on.
+- **THREE comics still ship as uncut three-across strips**, down from four: level 9's
+  outro and level 10's three outro panels (nine sub-panels shown as three). Held
+  unchanged because level 10's fight is verified frame by frame against them. Cutting
+  them is one row in `tools/comics/plan.json` and one list in `cutscenes.json`; the
+  sources are in `art-source/cutscenes/level10/`.
+- **CLOSED 2026-09-17 — `unplaced/level10_intro_strip.png` was never level 10's.** It
+  is level 8's OUTRO, at `art-source/cutscenes/level8/outro_strip.png`, cut into three
+  and playing. It was filed under a level-10 name by reading the picture, which is the
+  failure CLAUDE.md hard rule 8 now names. **Two comics remain unplaced** and both are
+  alternates of comics that already ship: `level9_outro_alternate` and
+  `level10_outro_condensed`.
+- **Level 1 and 2's openings are 941px tall against 1086 physical pixels** on a
+  844x390 phone at devicePixelRatio 3 — 0.87x, where hard rule 7 wants at least 1.0.
+  Measured by `tools/harness/run.sh midwave`. Not a regression: every comic panel in
+  the game has been 941 or 724 tall since the art arrived, and a re-export is the only
+  honest fix. Nobody has asked for one.
 
 **These are renumbered, twice now.** Seven of the original ten closed between 07 and
 13 September; what is left keeps its wording and gets a new number, so a citation of

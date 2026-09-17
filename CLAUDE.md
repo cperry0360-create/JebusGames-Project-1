@@ -87,6 +87,41 @@ After any re-export, run `python3 tools/measure_art.py` and update
 world pixels and survives a re-export untouched, so leave it alone unless the
 art is meant to change size.
 
+**8. NEVER ASSIGN A COMIC TO A LEVEL, OR WRITE STORY NOTES FOR IT, UNLESS CORY
+HAS NAMED THE SLOT.**
+
+A comic's placement is not readable from the picture. On 2026-09-16 a
+reorganisation pass placed four comics by looking at what was drawn in them and
+reasoning about the story, and got **all four wrong** — the "I'm retiring" page
+went to level 1 and is the first half of level **8**'s opening; "transition
+opportunity" went to level 3 and is the second half of the same one; "Junior
+Vibe Coder / GameEx" went to level 2 and is the game's **epilogue**, after level
+10; and "Shut yourself down" was filed as `level10_intro` and is level 8's
+**outro**. Every one of those was a confident, well-argued reading of the art.
+Confidence is not the check.
+
+Worse than the wiring, it wrote a **storyline** into `cutscenes.json`'s `_levels`
+note to justify the placements — the dad loses his job, gets hired at Vlaude
+Industries, watches Vlaude eliminate everybody's positions — and that invented
+plot then auto-loaded into the next session as if it were established fact. A
+wrong panel is one line to fix; a wrong story in a notes file gets built on.
+
+So:
+
+- A slot is named by Cory, by filename or by level and position. It is never
+  inferred from the contents of an image, from a filename somebody else guessed,
+  or from what would make a good story.
+- **Art with no named slot goes to `art-source/cutscenes/unplaced/` and gets
+  flagged** — listed in `cutscenes.json`'s `_unplaced` with a `shows` line that
+  describes *what is drawn* and says nothing about where it belongs, and raised
+  in the reply so somebody can name it. Unplaced means "not yet named", not "not
+  yet guessed".
+- Do not write flavor, plot or continuity notes for a comic whose slot is
+  unnamed. Describe the panels; stop there.
+- This applies to `_levels`, `_outros`, `_midWave`, `_unplaced`, reports and
+  `claude/context.md` alike. A note is a claim, and a claim about story is only
+  as good as its source.
+
 ## Verifying a UI change
 
 **Every UI change is verified against a rendered frame from `tools/harness/`
