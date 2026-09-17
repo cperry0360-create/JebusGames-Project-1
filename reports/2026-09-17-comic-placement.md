@@ -11,7 +11,7 @@ it happening again.
 |---|---|---|
 | `13eeeac` | the moves, the publish, `cutscenes.json`, the tests, the harness, CLAUDE.md rule 8 | folded into run 445 |
 | `ee0c5f2` | merge of `ccf7f78` — the hand-authored build plots and the run 442 table | **run 445 — all five jobs green, deploy RAN** |
-| `<this report>` | this file | docs only; `deploy` will correctly skip |
+| `cdcc6b6` | this report | **run 447 — `changes`, `typecheck`, `test` green, `deploy` SKIPPED** |
 
 **Run 445 on `ee0c5f2`:** `changes`, `typecheck`, `test`, `deploy / build` and
 `deploy / deploy` all **success**. The `github-pages` deployment record for
@@ -19,6 +19,12 @@ it happening again.
 `https://cperry0360-create.github.io/JebusGames-Project-1/`. The deploy ran
 rather than skipping, correctly — this push touches `public/` and `src/data/`,
 not only markdown.
+
+**Run 447 on `cdcc6b6`** ran three jobs and no `deploy`, which is the gate
+working rather than a failed publish: the report is markdown, so `changes`
+reported `code=false` and Pages kept serving what run 445 put there. Read the
+job list, not the run's conclusion. (This sentence arrived in a later docs-only
+commit, whose own run is one more of the same.)
 
 **NOT CHECKED: the live site itself.** The egress proxy in this container
 answers `CONNECT tunnel failed, response 403` for `github.io`, so no panel was
