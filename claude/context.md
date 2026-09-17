@@ -243,7 +243,13 @@ See `reports/2026-09-16-lazy-dad-mode.md`.
 
 ## THE BOARD-SIZE PROBLEM (found 2026-09-07, convention settled since)
 
-**Build pads per level: 7, 15, 15, 14, 14, 18, 22, 19, 15, 12** for levels 1 to 10. No
+**Build pads per level: 10, 10, 14, 14, 18, 18, 17, 20, 15, 21** for levels 1 to 10, as
+of 2026-09-17, when the hand-authored plots in `tools/plots.json` replaced the
+algorithmic sweep on all nine levels the file covers. It read
+7, 15, 15, 14, 14, 18, 22, 19, 15, 12 before that. **Do not type this list anywhere
+again** -- `python3 tools/padcounts.py` reads it out of each board's own source, and two
+map notes and `tools/soak/builder.json` all carried it as prose and all three went wrong
+on the same afternoon. See `reports/2026-09-17-build-plots.md`. No
 documented convention when this was written. Boss HP only means something relative to
 how much DPS a board can hold, so **level 1's and level 2's boss numbers were never on
 the same scale**, and cross-level difficulty reasoning done before this was found is
@@ -639,6 +645,81 @@ See `reports/2026-09-16-landing-the-cutscene-branch.md`.
 
 ## Open items
 
+**AND IT STOPPED TIERING THE WALL (2026-09-17, later). THE THIRD ROLE RULE.**
+`tools/soak/Sim.ts`'s upgrade loop walked EVERY tower the board owned and tiered it, a
+zero-damage tower included -- so the cap below bounded the PADS and the peanuts kept
+leaving through a blocker while the guns sat at tier one. Now: **while any tower that
+shoots is below its top tier, nothing that does not shoot is upgraded.** It has no
+number and no knob. A human buys a wall and leaves it. `supportonly` is exempt by an
+explicit mode check, vacuously today. **THE GAME DID NOT CHANGE: `git diff origin/main
+HEAD -- src/` is empty.**
+
+**Four columns, 480 seeds (1-480), `normal`, same seeds throughout:**
+
+| level | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | all |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| B guar-off, cap only | 440 | 266 | 436 | 327 | 262 | 204 | 204 | 207 | 208 | 214 | 2768 |
+| C guar-on, cap only | 434 | 218 | 431 | 314 | 274 | 99 | 135 | 154 | 146 | 132 | 2337 |
+| D guar-off, NEW rule | 450 | 292 | 440 | 346 | 263 | 241 | 247 | 238 | 195 | 216 | 2928 |
+| E guar-ON, NEW rule | 456 | 277 | 447 | 335 | 279 | 196 | 236 | 218 | 153 | 135 | 2732 |
+| **F = E's builder, NEW BOARDS** | **474** | **309** | **447** | **378** | **377** | **196** | **33** | **283** | **145** | **282** | **2924** |
+
+**F IS THE GAME AND E IS THE BOARD IT REPLACED.** The hand-authored plots landed later
+the same day (see the board-size section above): pads went `7 15 15 14 14 18 22 19 15 12`
+to `10 10 14 14 18 18 17 20 15 21`. **E and F are the SAME builder on the SAME seeds, so
+E->F is the boards and nothing else.** **Level 6 is the control and it is exact at 196
+in both**, because level 6 is not in `tools/plots.json` and its map is byte-identical;
+level 3 is a second control by accident at 447 both ways. **Under F only level 6 is in
+the 35-45% band, and level 6 is the board that did not move.** **Level 7 fell to 33/480
+(6.9%) and was NOT retuned** -- five pads fewer and its uncovered road went 408 px to
+1,201. **Pad COUNT moves the soak and coverage does not**: level 5 lost twelve points of
+road coverage, gained four pads and went UP 98. See
+`reports/2026-09-17-build-plots.md`.
+
+**On E's own terms, which still stand:** level 6 was IN BAND at 40.8%, level 8 0.4 over
+the top edge at 45.4%, level 7 4.2 over, levels 9 and 10 3.1 and 6.9 under. **91.6% of
+the C-B gap closed** (E-C = +395 of 431); the guarantee still costs 196 against D, so
+**54.5% of its measured cost was the peanut sink** and the rest is the pad it occupies.
+
+**D does NOT reproduce B -- it is +160, and +175 on a second seed block, with every
+level's delta inside ±5 runs across both.** That is the rule, not the sample, and it is
+still the rule doing what it says: **a guarantee-off board is not a blocker-free board.**
+The Beacon drafts at weight 3 regardless, so B's boards sank 11.1-19.0% of their tower
+peanuts into towers that never fire and the rule closes that too. B was never a clean
+reference -- it was the same artefact at a third of the size.
+
+**Peanut share under E** (median, vs the 17.1% guarantee-off reference re-measured at
+480 seeds): 4.1, 9.8, 12.5, 12.3, 5.9, **5.1**, 7.0, 6.9, 8.6, **22.1**. Nine of ten
+below it, so **the simple rule was sufficient and NO hard spend share was added to
+`builder.json`.** Level 10 alone is above and **it is not a leak**: it buys 5.31
+blocker upgrades a run against 0.00 on levels 6 and 7, and `zeroDamageUpgradesWhileGunBelowTop`
+is 0 on all 480 runs -- so every one of them was bought AFTER every gun on the board was
+maxed, which is what a person does. The rule is about the ORDER, not the total. Level
+10's residual 81-run gap to D is a PAD cost the cap already bounds.
+
+**Two new witnesses on `SoakResult.builder`:** `zeroDamageUpgradesWhileGunBelowTop`
+(re-derived from the board at the moment the peanuts leave, a witness not a restatement,
+must be 0) and `zeroDamageUpgrades` (must be > 0 across the sweep, or the rule has
+become a ban rather than an ordering). Both are asserted in `tests/soakbuilder.test.ts`.
+
+**⚠ AND 480 SEEDS IS WORTH ±11 RUNS. THIS IS THE FIRST MEASUREMENT OF IT.** Same code,
+same config, level 6 across four 480-seed blocks: **196, 211, 226, 208** under E and
+**99, 119, 129, 110** under C. Sample sd 11.3 and 11.1 against a binomial σ of 10.9 and
+9.4, and a strided sample lands mid-pack, so it is ordinary sampling noise and not seed
+correlation. **1σ ≈ 2.3 points against a ten-point band**, and seeds 1-480 happen to be
+a LOW block for level 6 in both configurations (the four blocks average 114 under C, not
+99). **Aggregates are worse, not better, because the ten levels share the seeds** --
+column B's total moved +107 between blocks under identical code. Compare columns on the
+same seeds; never compare a column to a number from a different seed set. Decide how
+many seeds a tuning decision needs BEFORE deciding what to tune.
+
+**The container's local `main` was 109 commits behind `origin/main`** (a strict
+ancestor, so `git branch -f main origin/main` was a clean fast-forward). Check
+`git rev-list --left-right --count main...origin/main` before trusting the branch --
+soaking a 109-commit-old game and publishing it as current is a silent failure.
+
+See `reports/2026-09-17-soak-builder-spend.md`.
+
 **THE SOAK'S PLAYER BUILT BADLY AND NOW DOES NOT (2026-09-17). EVERY PUBLISHED WIN
 RATE BEFORE THIS IS NOT COMPARABLE TO ANYTHING AFTER IT.** `tools/soak/Sim.ts` chose
 with `rng.pick(affordable)` -- uniform over everything it could afford, with no concept
@@ -655,8 +736,11 @@ paints a live confirm.
 
 **Two rules, and deliberately only two.** A cap on zero-damage towers,
 `max(min, floor(pads * padShare))` with padShare 0.2 and min 1 -- **derived from pad
-count, not fixed**, because the boards run 7 to 22 pads: caps are 1, 3, 3, 2, 2, 3, 4,
-3, 3, 2. And the board gets a gun before anything else. Past those the pick is the same
+count, not fixed**, because the boards run 10 to 21 pads: caps are 2, 2, 2, 2, 3, 3, 3,
+4, 3, 4. They were 1, 3, 3, 2, 2, 3, 4, 3, 3, 2 against the old boards and **every one
+of them moved on its own when the hand-authored plots landed** -- nothing in
+`builder.json` was edited and `tests/soakbuilder.test.ts` re-derives each cap from the
+shipped map. And the board gets a gun before anything else. Past those the pick is the same
 uniform `rng.pick`, because a builder that placed towers WELL would flatter whatever
 tuning it suited and stop being a neutral instrument; a test fails if the opening
 collapses to one tower. `supportonly` is **exempt** or it becomes `nobuild`. Knobs live
@@ -686,14 +770,18 @@ the board-DPS gap (level 6 median: 356 old, 382 new, 447 with the guarantee off)
 reason is that **the soak's upgrade loop tiers EVERY tower the board owns**, zero-damage
 ones included, so the board still sends **29.5% of its tower peanuts on level 6** into
 towers that cannot shoot, against 17.7% with the guarantee off.
-`SoakResult.builder.zeroDamageSpend` / `.towerSpend` measure it. **A third role rule is
-the obvious answer**; the brief said to prove the second was not enough first, and that
-proof exists now. Settle it, re-measure row 4, then look at levels.
+`SoakResult.builder.zeroDamageSpend` / `.towerSpend` measure it. **CLOSED by the third
+role rule above, which is the section to read instead of this paragraph.** Rows 3 and 4
+here are columns B and C there, and D and E replace them.
 
 **Stale and flagged: level 9's PERPLEXED, 8100 -> 7650** (`e505a4d`), derived against a
 two-tower opening AND the old builder. Both halves are gone; the level reads 208 under
-row 3 and 146 under row 4. Also stale for the same reason: Vlaude's 26,000 and the
-24,265 median in `reports/2026-09-15-blockers.md`.
+row 3, 146 under row 4 and **153 under column E**. It is the level the spend rule helps
+least (E-C = +7) and the only one whose D-B delta is negative (-13, -9 on the second
+block). **Understand that before retuning it.** Also stale for the same reason: Vlaude's
+26,000 and the 24,265 median in `reports/2026-09-15-blockers.md`; level 10 reads **135
+under E against 132 under C**, inside the noise, because the spend rule never fires
+there.
 
 **NOT AN OPEN ITEM, BUT REMEMBER THE SHAPE OF IT: `buildall` went red at phone width
 and it was a HUD RECTANGLE, not the build system.** On `c3ff5aa` it reported 6 of 7

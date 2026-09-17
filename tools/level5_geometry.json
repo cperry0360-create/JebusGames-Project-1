@@ -336,66 +336,83 @@
  },
  "buildSpots": [
   [
-   446,
-   297
+   266.0,
+   280.0
   ],
   [
-   464,
-   199
+   286.0,
+   502.0
   ],
   [
-   395,
-   426
+   349.0,
+   284.0
   ],
   [
-   378,
-   288
+   392.0,
+   141.0
   ],
   [
-   657,
-   434
+   403.0,
+   528.0
   ],
   [
-   703,
-   271
+   426.0,
+   292.0
   ],
   [
-   686,
-   205
+   499.0,
+   310.0
   ],
   [
-   725,
-   443
+   596.0,
+   574.0
   ],
   [
-   1026,
-   396
+   599.0,
+   98.0
   ],
   [
-   184,
-   399
+   668.0,
+   514.0
   ],
   [
-   438,
-   647
+   669.0,
+   186.0
   ],
   [
-   836,
-   285
+   712.0,
+   287.0
   ],
   [
-   434,
-   95
+   765.0,
+   520.0
   ],
   [
-   426,
-   494
+   802.0,
+   302.0
+  ],
+  [
+   859.0,
+   514.0
+  ],
+  [
+   886.0,
+   297.0
+  ],
+  [
+   950.0,
+   504.0
+  ],
+  [
+   970.0,
+   286.0
   ]
  ],
  "coverage": {
-  "west": 0.81,
-  "east": 0.776,
-  "north": 1.0,
-  "south": 0.932
- }
+  "west": 0.685,
+  "east": 0.669,
+  "north": 0.837,
+  "south": 0.508
+ },
+ "_pads": "18 HAND-PLACED PLOTS, from tools/plots.json, written here by tools/apply_plots.py. THEY ARE NOT THE SCORING PASS's ANY MORE: the sweep's 90-114 px standoff band and its best-first ordering produced the set this replaced, and a person placed these against the painting instead. Every figure below that is a function of the pads was re-derived from THIS set off the centrelines this file ships; the sweep's own parameters (`padRules`, `padStandoffBand`, `padSpacing`, any `candidatePositions`) are left as the record of a pass that no longer chooses anything. tools/check_plots.py re-checks the road clearance, the plate edges and the tap-target spacing."
 }

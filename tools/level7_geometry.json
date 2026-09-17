@@ -201,7 +201,7 @@
   114
  ],
  "padSpacing": 74,
- "padsCoveringTwoLanes": 20,
+ "padsCoveringTwoLanes": 15,
  "candidatePositions": 1207,
  "candidatePositionsCoveringTwoLanes": 399,
  "candidatePositionsPerStrip": {
@@ -211,281 +211,153 @@
   "below the south highway": 686
  },
  "padsPerStrip": {
-  "between north and middle": 10,
-  "between middle and south": 10,
-  "above the north highway": 1,
-  "below the south highway": 1
+  "above the north highway": 2,
+  "between north and middle": 7,
+  "between middle and south": 8,
+  "below the south highway": 0
  },
  "uncoveredLaneSpans": {
   "north": [
    [
-    0,
-    72.0
+    0.0,
+    219.0
    ],
    [
-    1228.0,
+    315.0,
+    318.0
+   ],
+   [
+    856.0,
+    873.0
+   ],
+   [
+    951.0,
+    1071.0
+   ],
+   [
+    1163.0,
     1279.0
    ]
   ],
   "middle": [
    [
-    0,
-    20.0
+    0.0,
+    86.0
    ],
    [
-    1225.0,
+    146.0,
+    184.0
+   ],
+   [
+    631.0,
+    725.0
+   ],
+   [
+    991.0,
+    1041.0
+   ],
+   [
+    1193.0,
     1279.0
    ]
   ],
   "south": [
    [
-    0,
-    22.0
+    0.0,
+    33.0
    ],
    [
-    1090.0,
+    580.0,
+    654.0
+   ],
+   [
+    1014.0,
     1279.0
    ]
   ]
  },
  "pads": [
   [
-   1162,
-   242
+   116,
+   443
   ],
   [
-   990,
-   242
+   210,
+   444
   ],
   [
-   862,
-   242
+   267,
+   252
   ],
   [
-   706,
-   242
+   304,
+   444
   ],
   [
-   578,
-   242
+   366,
+   252
   ],
   [
-   450,
-   242
+   396,
+   446
   ],
   [
-   322,
-   242
+   462,
+   252
   ],
   [
-   138,
-   242
+   494,
+   446
   ],
   [
-   266,
-   426
+   554,
+   254
   ],
   [
-   86,
-   426
+   610,
+   84
   ],
   [
-   834,
-   426
+   736,
+   84
   ],
   [
-   1014,
-   426
+   740,
+   446
   ],
   [
-   706,
-   426
+   812,
+   254
   ],
   [
-   578,
-   426
+   836,
+   446
   ],
   [
-   450,
-   426
+   912,
+   256
   ],
   [
-   1086,
-   242
+   928,
+   446
   ],
   [
-   246,
-   242
-  ],
-  [
-   374,
-   426
-  ],
-  [
-   938,
-   426
-  ],
-  [
-   190,
-   426
-  ],
-  [
-   758,
-   46
-  ],
-  [
-   1026,
-   610
+   1117,
+   253
   ]
  ],
  "padDetail": [
   {
    "centre": [
-    1162,
-    242
+    116,
+    443
    ],
    "toLane": {
-    "north": 91.0,
-    "middle": 93.0,
-    "south": 276.0
+    "north": 292.0,
+    "middle": 108.0,
+    "south": 75.0
    },
-   "standoff": 91.0,
-   "covers": [
-    "middle",
-    "north"
-   ],
-   "strip": "between north and middle"
-  },
-  {
-   "centre": [
-    990,
-    242
-   ],
-   "toLane": {
-    "north": 91.0,
-    "middle": 93.0,
-    "south": 276.0
-   },
-   "standoff": 91.0,
-   "covers": [
-    "middle",
-    "north"
-   ],
-   "strip": "between north and middle"
-  },
-  {
-   "centre": [
-    862,
-    242
-   ],
-   "toLane": {
-    "north": 91.0,
-    "middle": 93.0,
-    "south": 276.0
-   },
-   "standoff": 91.0,
-   "covers": [
-    "middle",
-    "north"
-   ],
-   "strip": "between north and middle"
-  },
-  {
-   "centre": [
-    706,
-    242
-   ],
-   "toLane": {
-    "north": 91.0,
-    "middle": 93.0,
-    "south": 276.0
-   },
-   "standoff": 91.0,
-   "covers": [
-    "middle",
-    "north"
-   ],
-   "strip": "between north and middle"
-  },
-  {
-   "centre": [
-    578,
-    242
-   ],
-   "toLane": {
-    "north": 91.0,
-    "middle": 93.0,
-    "south": 276.0
-   },
-   "standoff": 91.0,
-   "covers": [
-    "middle",
-    "north"
-   ],
-   "strip": "between north and middle"
-  },
-  {
-   "centre": [
-    450,
-    242
-   ],
-   "toLane": {
-    "north": 91.0,
-    "middle": 93.0,
-    "south": 276.0
-   },
-   "standoff": 91.0,
-   "covers": [
-    "middle",
-    "north"
-   ],
-   "strip": "between north and middle"
-  },
-  {
-   "centre": [
-    322,
-    242
-   ],
-   "toLane": {
-    "north": 91.0,
-    "middle": 93.0,
-    "south": 276.0
-   },
-   "standoff": 91.0,
-   "covers": [
-    "middle",
-    "north"
-   ],
-   "strip": "between north and middle"
-  },
-  {
-   "centre": [
-    138,
-    242
-   ],
-   "toLane": {
-    "north": 91.0,
-    "middle": 93.0,
-    "south": 276.0
-   },
-   "standoff": 91.0,
-   "covers": [
-    "middle",
-    "north"
-   ],
-   "strip": "between north and middle"
-  },
-  {
-   "centre": [
-    266,
-    426
-   ],
-   "toLane": {
-    "north": 275.0,
-    "middle": 91.0,
-    "south": 92.0
-   },
-   "standoff": 91.0,
+   "standoff": 75.0,
    "covers": [
     "middle",
     "south"
@@ -494,15 +366,15 @@
   },
   {
    "centre": [
-    86,
-    426
+    210,
+    444
    ],
    "toLane": {
-    "north": 275.0,
-    "middle": 91.0,
-    "south": 92.0
+    "north": 293.0,
+    "middle": 109.0,
+    "south": 74.0
    },
-   "standoff": 91.0,
+   "standoff": 74.0,
    "covers": [
     "middle",
     "south"
@@ -511,134 +383,66 @@
   },
   {
    "centre": [
-    834,
-    426
+    267,
+    252
    ],
    "toLane": {
-    "north": 275.0,
-    "middle": 91.0,
-    "south": 92.0
+    "north": 101.0,
+    "middle": 83.0,
+    "south": 266.0
    },
-   "standoff": 91.0,
+   "standoff": 83.0,
    "covers": [
-    "middle",
-    "south"
-   ],
-   "strip": "between middle and south"
-  },
-  {
-   "centre": [
-    1014,
-    426
-   ],
-   "toLane": {
-    "north": 275.0,
-    "middle": 91.0,
-    "south": 92.0
-   },
-   "standoff": 91.0,
-   "covers": [
-    "middle",
-    "south"
-   ],
-   "strip": "between middle and south"
-  },
-  {
-   "centre": [
-    706,
-    426
-   ],
-   "toLane": {
-    "north": 275.0,
-    "middle": 91.0,
-    "south": 92.0
-   },
-   "standoff": 91.0,
-   "covers": [
-    "middle",
-    "south"
-   ],
-   "strip": "between middle and south"
-  },
-  {
-   "centre": [
-    578,
-    426
-   ],
-   "toLane": {
-    "north": 275.0,
-    "middle": 91.0,
-    "south": 92.0
-   },
-   "standoff": 91.0,
-   "covers": [
-    "middle",
-    "south"
-   ],
-   "strip": "between middle and south"
-  },
-  {
-   "centre": [
-    450,
-    426
-   ],
-   "toLane": {
-    "north": 275.0,
-    "middle": 91.0,
-    "south": 92.0
-   },
-   "standoff": 91.0,
-   "covers": [
-    "middle",
-    "south"
-   ],
-   "strip": "between middle and south"
-  },
-  {
-   "centre": [
-    1086,
-    242
-   ],
-   "toLane": {
-    "north": 91.0,
-    "middle": 93.0,
-    "south": 276.0
-   },
-   "standoff": 91.0,
-   "covers": [
-    "middle",
-    "north"
+    "north",
+    "middle"
    ],
    "strip": "between north and middle"
   },
   {
    "centre": [
-    246,
-    242
+    304,
+    444
    ],
    "toLane": {
-    "north": 91.0,
-    "middle": 93.0,
-    "south": 276.0
+    "north": 293.0,
+    "middle": 109.0,
+    "south": 74.0
    },
-   "standoff": 91.0,
+   "standoff": 74.0,
    "covers": [
     "middle",
-    "north"
+    "south"
+   ],
+   "strip": "between middle and south"
+  },
+  {
+   "centre": [
+    366,
+    252
+   ],
+   "toLane": {
+    "north": 101.0,
+    "middle": 83.0,
+    "south": 266.0
+   },
+   "standoff": 83.0,
+   "covers": [
+    "north",
+    "middle"
    ],
    "strip": "between north and middle"
   },
   {
    "centre": [
-    374,
-    426
+    396,
+    446
    ],
    "toLane": {
-    "north": 275.0,
-    "middle": 91.0,
-    "south": 92.0
+    "north": 295.0,
+    "middle": 111.0,
+    "south": 72.0
    },
-   "standoff": 91.0,
+   "standoff": 72.0,
    "covers": [
     "middle",
     "south"
@@ -647,15 +451,32 @@
   },
   {
    "centre": [
-    938,
-    426
+    462,
+    252
    ],
    "toLane": {
-    "north": 275.0,
-    "middle": 91.0,
-    "south": 92.0
+    "north": 101.0,
+    "middle": 83.0,
+    "south": 266.0
    },
-   "standoff": 91.0,
+   "standoff": 83.0,
+   "covers": [
+    "north",
+    "middle"
+   ],
+   "strip": "between north and middle"
+  },
+  {
+   "centre": [
+    494,
+    446
+   ],
+   "toLane": {
+    "north": 295.0,
+    "middle": 111.0,
+    "south": 72.0
+   },
+   "standoff": 72.0,
    "covers": [
     "middle",
     "south"
@@ -664,32 +485,32 @@
   },
   {
    "centre": [
-    190,
-    426
+    554,
+    254
    ],
    "toLane": {
-    "north": 275.0,
-    "middle": 91.0,
-    "south": 92.0
+    "north": 103.0,
+    "middle": 81.0,
+    "south": 264.0
    },
-   "standoff": 91.0,
+   "standoff": 81.0,
    "covers": [
-    "middle",
-    "south"
+    "north",
+    "middle"
    ],
-   "strip": "between middle and south"
+   "strip": "between north and middle"
   },
   {
    "centre": [
-    758,
-    46
+    610,
+    84
    ],
    "toLane": {
-    "north": 105.0,
-    "middle": 289.0,
-    "south": 472.0
+    "north": 67.0,
+    "middle": 251.0,
+    "south": 434.0
    },
-   "standoff": 105.0,
+   "standoff": 67.0,
    "covers": [
     "north"
    ],
@@ -697,114 +518,198 @@
   },
   {
    "centre": [
-    1026,
-    610
+    736,
+    84
    ],
    "toLane": {
-    "north": 459.0,
-    "middle": 275.0,
-    "south": 92.0
+    "north": 67.0,
+    "middle": 251.0,
+    "south": 434.0
    },
-   "standoff": 92.0,
+   "standoff": 67.0,
    "covers": [
+    "north"
+   ],
+   "strip": "above the north highway"
+  },
+  {
+   "centre": [
+    740,
+    446
+   ],
+   "toLane": {
+    "north": 295.0,
+    "middle": 111.0,
+    "south": 72.0
+   },
+   "standoff": 72.0,
+   "covers": [
+    "middle",
     "south"
    ],
-   "strip": "below the south highway"
+   "strip": "between middle and south"
+  },
+  {
+   "centre": [
+    812,
+    254
+   ],
+   "toLane": {
+    "north": 103.0,
+    "middle": 81.0,
+    "south": 264.0
+   },
+   "standoff": 81.0,
+   "covers": [
+    "north",
+    "middle"
+   ],
+   "strip": "between north and middle"
+  },
+  {
+   "centre": [
+    836,
+    446
+   ],
+   "toLane": {
+    "north": 295.0,
+    "middle": 111.0,
+    "south": 72.0
+   },
+   "standoff": 72.0,
+   "covers": [
+    "middle",
+    "south"
+   ],
+   "strip": "between middle and south"
+  },
+  {
+   "centre": [
+    912,
+    256
+   ],
+   "toLane": {
+    "north": 105.0,
+    "middle": 79.0,
+    "south": 262.0
+   },
+   "standoff": 79.0,
+   "covers": [
+    "north",
+    "middle"
+   ],
+   "strip": "between north and middle"
+  },
+  {
+   "centre": [
+    928,
+    446
+   ],
+   "toLane": {
+    "north": 295.0,
+    "middle": 111.0,
+    "south": 72.0
+   },
+   "standoff": 72.0,
+   "covers": [
+    "middle",
+    "south"
+   ],
+   "strip": "between middle and south"
+  },
+  {
+   "centre": [
+    1117,
+    253
+   ],
+   "toLane": {
+    "north": 102.0,
+    "middle": 82.0,
+    "south": 265.0
+   },
+   "standoff": 82.0,
+   "covers": [
+    "north",
+    "middle"
+   ],
+   "strip": "between north and middle"
   }
  ],
  "buildSpots": [
   [
-   1162,
-   242
+   116,
+   443
   ],
   [
-   990,
-   242
+   210,
+   444
   ],
   [
-   862,
-   242
+   267,
+   252
   ],
   [
-   706,
-   242
+   304,
+   444
   ],
   [
-   578,
-   242
+   366,
+   252
   ],
   [
-   450,
-   242
+   396,
+   446
   ],
   [
-   322,
-   242
+   462,
+   252
   ],
   [
-   138,
-   242
+   494,
+   446
   ],
   [
-   266,
-   426
+   554,
+   254
   ],
   [
-   86,
-   426
+   610,
+   84
   ],
   [
-   834,
-   426
+   736,
+   84
   ],
   [
-   1014,
-   426
+   740,
+   446
   ],
   [
-   706,
-   426
+   812,
+   254
   ],
   [
-   578,
-   426
+   836,
+   446
   ],
   [
-   450,
-   426
+   912,
+   256
   ],
   [
-   1086,
-   242
+   928,
+   446
   ],
   [
-   246,
-   242
-  ],
-  [
-   374,
-   426
-  ],
-  [
-   938,
-   426
-  ],
-  [
-   190,
-   426
-  ],
-  [
-   758,
-   46
-  ],
-  [
-   1026,
-   610
+   1117,
+   253
   ]
  ],
  "coverage": {
-  "north": 0.902,
-  "middle": 0.941,
-  "south": 0.831
- }
+  "north": 0.629,
+  "middle": 0.723,
+  "south": 0.709
+ },
+ "_pads": "17 HAND-PLACED PLOTS, from tools/plots.json, written here by tools/apply_plots.py. THEY ARE NOT THE SCORING PASS's ANY MORE: the sweep's 90-114 px standoff band and its best-first ordering produced the set this replaced, and a person placed these against the painting instead. Every figure below that is a function of the pads was re-derived from THIS set off the centrelines this file ships; the sweep's own parameters (`padRules`, `padStandoffBand`, `padSpacing`, any `candidatePositions`) are left as the record of a pass that no longer chooses anything. tools/check_plots.py re-checks the road clearance, the plate edges and the tap-target spacing.",
+ "padsCoveringNoLane": 0
 }

@@ -384,8 +384,8 @@ at 24% health. That is a boss set right at the top of what a good board can do, 
 is what a 40.6% level looks like. See `reports/2026-09-15-blockers.md`.
 
 **EVERY WIN RATE IN THE PARAGRAPHS ABOVE WAS MEASURED BY A BUILDER THAT NO LONGER
-EXISTS, AND SO WAS EVERY OTHER ONE IN THIS REPOSITORY.** Two things happened in two
-days, in this order, and both matter before any number here is quoted.
+EXISTS, AND SO WAS EVERY OTHER ONE IN THIS REPOSITORY.** Three things happened in two
+days, in this order, and all three matter before any number here is quoted.
 
 **2026-09-16: the Ima Dummy Tower became a guaranteed third opening tower on every
 level**, having been draftable on level 1 alone.
@@ -395,35 +395,72 @@ with `rng.pick(affordable)` -- uniform over everything affordable, with no conce
 what a tower is FOR -- so once a zero-damage blocker was guaranteed it spent about one
 pad in three on it, on every board, from wave 1. It now caps zero-damage towers at
 `max(1, floor(pads * 0.2))` and builds a gun before anything else.
-**THE GAME DID NOT CHANGE: no file under `src/` was touched.** The instrument did, so a
-figure from before that commit and one from after it differ by an unknown mixture of the
-game and the builder. **Re-measure rather than compare.** That includes Vlaude's 26,000
-and the 24,265 median in `reports/2026-09-15-blockers.md`, and level 9's PERPLEXED at
-7650.
 
-**Where the ten levels stand now, 480 seeds, `normal`:**
+**2026-09-17, later: and it stopped tiering the wall.** The cap bounds the PADS, not the
+PEANUTS, and the upgrade loop tiered every tower the board owned -- so level 6 capped its
+pads at a fifth and still sent 29.5% of its tower peanuts through towers that can never
+fire. The third rule: **while any tower that shoots is below its top tier, nothing that
+does not shoot is upgraded.** A human buys a wall and leaves it.
+
+**THE GAME DID NOT CHANGE ON ANY OF THE THREE: no file under `src/` was touched.** The
+instrument did, so a figure from before one of those commits and one from after it differ
+by an unknown mixture of the game and the builder. **Re-measure rather than compare.**
+That includes Vlaude's 26,000 and the 24,265 median in
+`reports/2026-09-15-blockers.md`, and level 9's PERPLEXED at 7650.
+
+**Where the ten levels stand now, 480 seeds (1-480), `normal`:**
 
     pre-guarantee, old builder   428 255 422 299 218 210 198 184 192 195
-    guarantee on,  old builder   405 218 422 328 343  83 133 146 119 117
-    guarantee off, NEW builder   440 266 436 327 262 204 204 207 208 214
-    guarantee ON,  NEW builder   434 218 431 314 274  99 135 154 146 132   <- today
+    guar on,  old builder    C   434 218 431 314 274  99 135 154 146 132
+    guar off, +cap only      B   440 266 436 327 262 204 204 207 208 214
+    guar off, +spend rule    D   450 292 440 346 263 241 247 238 195 216
+    guar ON,  +spend rule    E   456 277 447 335 279 196 236 218 153 135
+    E's builder, NEW BOARDS  F   474 309 447 378 377 196  33 283 145 282   <- today
 
-The third row is the honest test of the new builder and it passes: +3.5 points
-aggregate, nine of ten levels up, and **the same five levels in band as the old
-baseline** (6, 7, 8, 9, 10). The fourth row is the game, and **no level is inside the
-35-45% band** -- 6, 7, 8, 9 and 10 sit 14.4, 6.9, 2.9, 4.6 and 7.5 points below it and
-level 2 is 0.4 above the top edge.
+**F IS A DIFFERENT BOARD, NOT A DIFFERENT INSTRUMENT, and E is its baseline.** The
+hand-placed plots in `tools/plots.json` replaced the algorithmic pad sweep on nine of
+the ten levels on 2026-09-17, so pads per level went `7 15 15 14 14 18 22 19 15 12` to
+`10 10 14 14 18 18 17 20 15 21`. E and F are the SAME builder on the SAME seeds, so
+E->F is the boards and nothing else. **Do not type the pad counts anywhere:
+`python3 tools/padcounts.py` reads them out of each board's own source.**
 
-**NOTHING HAS BEEN RETUNED, and there is a measured reason not to yet.** The cap halves
-the zero-damage PADS and closed only a quarter of the board-DPS gap, because the soak's
-upgrade loop tiers every tower it owns -- so the board still sends **three peanuts in
-ten** through towers that cannot shoot (29.5% on level 6 against 17.7% with the
-guarantee off). **An unknown but substantial part of the last row is still instrument.**
-Settle that first, re-measure, then look at levels.
+**Level 6 is the control and it is exact: 196 in both columns**, because level 6 is not
+in `plots.json` and its map is byte-identical. Level 3 is a second control by accident:
+one pad fewer, 447 both ways.
 
-`reports/2026-09-17-soak-builder.md` has all four rows, the cap's derivation and the
-peanut measurement; `reports/2026-09-16-dummy-tower-guaranteed.md` has the guarantee;
-`SOAK-REPORT.md` opens with the same warning.
+**Under F only level 6 is in the 35-45% band, and level 6 is the board that did not
+move.** **Level 7 fell to 33/480 (6.9%) and has NOT been retuned** -- it lost five pads
+and its uncovered road went from 408 px to 1,201. Level 10 went 135 to 282 on a board
+that went 12 pads to 21. **PAD COUNT MOVES THE SOAK AND COVERAGE DOES NOT**: level 5
+lost twelve points of road coverage, gained four pads and went UP 98.
+
+Every boss health figure in the game is stale again, this time because the board under
+it changed size. `reports/2026-09-17-build-plots.md` has the whole pass -- which file
+owns each level's pads, every check the plots passed, and the per-board coverage.
+
+**Row F is the game; row E is the board it replaced**, and what follows is E's own
+reading of the builder change, which still stands on its own terms. Under E level 6 was
+in band at 40.8% and level 8 was 0.4 over the top edge at 45.4%; level 7 was 4.2 over,
+levels 9 and 10 were 3.1 and 6.9 under, and the first five were well above.
+**91.6% of the C-B gap closed**; the guarantee still costs 196 runs
+against D, so 54.5% of its measured cost was the peanut sink and the rest is the pad.
+Nine of ten levels now sink less of their peanuts into towers that cannot fire than a
+guarantee-off board did (17.1%); level 10 alone reads 22.1%, and that is correct
+behaviour rather than a leak -- it maxes every gun it owns and then buys the wall, which
+is what a person does.
+
+**NOTHING HAS BEEN RETUNED, and there is STILL a measured reason not to rush.** It is no
+longer the instrument, it is the sample: **480 seeds is worth ±11 runs, ±2.3 points at
+1σ, against a band ten points wide.** Level 6 reads 196, 211, 226 and 208 on four
+different 480-seed blocks of the SAME code. Aggregates are worse, not better, because the
+ten levels share the seeds -- column B's total moved +107 between blocks. **Compare
+columns on the same seeds; never compare a column to a number from a different seed set,
+and decide how many seeds a tuning decision needs before deciding what to tune.**
+
+`reports/2026-09-17-soak-builder-spend.md` has all four columns, the seed-noise
+measurement and why level 10 is the exception; `reports/2026-09-17-soak-builder.md` has
+the cap's derivation; `reports/2026-09-16-dummy-tower-guaranteed.md` has the guarantee;
+`SOAK-REPORT.md` opens with the same warnings.
 
 The asset-sweep standing fact above is now **discharged for every level**: `main`
 references level 10's art itself. The two route-gate props in `art-source/level10/`

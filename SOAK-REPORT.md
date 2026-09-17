@@ -4,6 +4,140 @@ Newest first.
 
 ---
 
+## 2026-09-17 (later still) — The hand-authored build plots changed nine boards
+
+### ⚠ AND THIS TIME THE GAME DID CHANGE
+
+The two sections below this one warn that their predecessors were produced by a
+different INSTRUMENT. This is the other kind of break: **`tools/plots.json`
+replaced the algorithmic pad sweep on nine of the ten levels and the BOARDS are
+different.** Pads per level went `7 15 15 14 14 18 22 19 15 12` to
+`10 10 14 14 18 18 17 20 15 21`. Board size drives boss health, the soak
+builder's zero-damage cap and every win rate, so **every boss number in this
+file is stale again**.
+
+**NOTHING WAS RETUNED.** These figures are for comparison only.
+
+### F against E, which is the same builder on the old boards
+
+Column **E** below is `48ea34e`'s own guarantee-on column, seeds 1–480, on the
+boards as they were. **F is the same builder, same seeds, new boards**, so E→F
+is the board change and nothing else.
+
+| level | pads E→F | **E** old boards | **F** new boards | F−E | F as % |
+|---|---|---|---|---|---|
+| 1 | 7 → 10 | 456 | **474** | +18 | 98.8 |
+| 2 | 15 → 10 | 277 | **309** | +32 | 64.4 |
+| 3 | 15 → 14 | 447 | **447** | **+0** | 93.1 |
+| 4 | 14 → 14 | 335 | **378** | +43 | 78.8 |
+| 5 | 14 → 18 | 279 | **377** | +98 | 78.5 |
+| 6 | 18 → 18 | 196 | **196** | **+0** | **40.8 IN BAND** |
+| 7 | 22 → 17 | 236 | **33** | **−203** | **6.9** |
+| 8 | 19 → 20 | 218 | **283** | +65 | 59.0 |
+| 9 | 15 → 15 | 153 | **145** | −8 | 30.2 |
+| 10 | 12 → 21 | 135 | **282** | **+147** | 58.8 |
+| **all** | 151 → 157 | **2732** | **2924** | **+192** | **60.9** |
+
+**Level 6 is the control and it is exact: 196 both ways**, because level 6 is
+not in `plots.json` and its map is byte-identical. Level 3 is a second control
+by accident — one pad fewer and **447 both ways**.
+
+**Only level 6 is in the 35–45% band, and level 6 is the board this pass did not
+touch.**
+
+### Pad COUNT moves the soak; coverage does not
+
+Whole-board road coverage at the shortest tower range (132) against the move:
+
+| level | pads | covered before → after | E→F |
+|---|---|---|---|
+| 1 | 7 → 10 | 56.1% → 54.4% | 456 → 474 |
+| 2 | 15 → 10 | 71.9% → 65.2% | 277 → 309 |
+| 3 | 15 → 14 | 68.8% → 62.8% | 447 → 447 |
+| 4 | 14 → 14 | 63.8% → 65.0% | 335 → 378 |
+| 5 | 14 → 18 | 83.5% → 71.5% | 279 → 377 |
+| 6 | 18 → 18 | 68.4% → 68.4% | 196 → 196 |
+| 7 | 22 → 17 | 86.0% → 75.1% | 236 → **33** |
+| 8 | 19 → 20 | 79.9% → 76.1% | 218 → 283 |
+| 9 | 15 → 15 | 79.9% → 80.3% | 153 → 145 |
+| 10 | 12 → 21 | 91.3% → 92.2% | 135 → **282** |
+
+Level 5 lost twelve points of coverage, gained four pads and went **up** 98.
+Level 10 gained one point, gained nine pads and went up 147. Level 7 lost
+eleven points **and** five pads and lost 203. The simulated player builds on
+every pad it can afford, so a pad is a gun.
+
+**Level 7 at 6.9% is the open question.** Every plot on it passes every
+geometry check; the board is smaller and thinner than the one the level was
+built around, and its uncovered road went from 408 px to 1,201.
+
+See `reports/2026-09-17-build-plots.md`.
+
+---
+
+## 2026-09-17 (later) — The soak's player stops tiering the wall
+
+### ⚠ THE SAME WARNING AGAIN, ONE COMMIT LATER
+
+**Every figure in every section below this one — the one directly beneath it
+included — was produced by a different player.** The builder gained a **third**
+role rule: while any tower that shoots is below its top tier, nothing that does
+not shoot is upgraded. **The GAME did not change: no file under `src/` is
+touched.** Re-measure rather than compare. `reports/2026-09-17-soak-builder-spend.md`.
+
+### Why there is a third rule
+
+The section below measured it: the cap bounds the **pads**, not the **peanuts**,
+and the upgrade loop tiered every tower the board owned, a blocker included.
+Level 6 capped its pads at a fifth and still sent **29.5%** of its tower peanuts
+through towers that can never fire. A human buys a wall and leaves it.
+
+### Four columns, 480 seeds (1–480), same seeds throughout, `normal`
+
+| level | B guar-off / old | C guar-on / old | **D guar-off / NEW** | **E guar-on / NEW** |
+|---|---|---|---|---|
+| 1 | 440 | 434 | 450 | **456 (95.0%)** |
+| 2 | 266 | 218 | 292 | **277 (57.7%)** |
+| 3 | 436 | 431 | 440 | **447 (93.1%)** |
+| 4 | 327 | 314 | 346 | **335 (69.8%)** |
+| 5 | 262 | 274 | 263 | **279 (58.1%)** |
+| 6 | 204 | 99 | 241 | **196 (40.8%) IN BAND** |
+| 7 | 204 | 135 | 247 | **236 (49.2%)** |
+| 8 | 207 | 154 | 238 | **218 (45.4%)** |
+| 9 | 208 | 146 | 195 | **153 (31.9%)** |
+| 10 | 214 | 132 | 216 | **135 (28.1%)** |
+| **all** | 2768 | 2337 | 2928 | **2732** |
+
+**91.6% of the C−B gap closed** (E−C is +395 of 431). Read the other way, the
+guarantee still costs **196 runs** under the new builder against 431 under the
+old, so **54.5% of its measured cost was the peanut sink** and the rest is the
+pad it occupies.
+
+**D does not reproduce B — it is +160, and +175 on a second seed block.** A
+guarantee-off board is not a blocker-free board: the Beacon drafts at weight 3
+regardless, so B's boards sank 11–19% of their peanuts into towers that never
+fire and the rule closes that too. Every level's D−B delta reproduces within ±5
+runs across two independent blocks, so it is the rule and not the sample.
+
+**Peanut share under E, against the 17.1% guarantee-off reference:** 4.1, 9.8,
+12.5, 12.3, 5.9, **5.1**, 7.0, 6.9, 8.6, **22.1**. Nine of ten below it. Level
+10 alone is above, and it is not a leak — its blocker upgrades are all bought
+**after** every gun on the board is maxed, which is what a person does. The
+simple rule was sufficient; **no hard spend share was added to `builder.json`.**
+
+### ⚠ AND 480 SEEDS IS WORTH ±11 RUNS
+
+Same code, same config, level 6 across four 480-seed blocks: **196, 211, 226,
+208** under E and **99, 119, 129, 110** under C. Sample sd 11.3 and 11.1, a
+binomial σ of 10.9 and 9.4, and a strided sample lands mid-pack — ordinary
+sampling noise, larger than these tables look. **1σ ≈ 2.3 points against a
+ten-point band.** Aggregates are worse, not better, because the ten levels share
+the seeds: column B's total moved +107 between blocks under identical code.
+**Compare columns on the same seeds; never compare a column to a number from a
+different seed set.**
+
+---
+
 ## 2026-09-17 — The soak's player learns that towers have roles
 
 ### ⚠ EVERY FIGURE IN EVERY SECTION BELOW THIS ONE WAS PRODUCED BY A DIFFERENT PLAYER

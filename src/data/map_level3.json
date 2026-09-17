@@ -387,65 +387,61 @@
   "_lanes": "TWO GATES, ONE EXIT. Both branches run in from off the left edge and merge into the trunk at its waypoint 0, which is the merge point. A branch ENDS at the join -- that is what the lane engine expects, and each branch's last traced point was 3.26 px (upper) and 8.47 px (lower) short of the declared merge, so both were snapped onto it. Left alone an enemy would have stepped those few pixels sideways as it transferred. THE TWO ROUTES ARE THE SAME LENGTH: 1560.18 and 1560.15 px gate to exit, 0.03 px apart. That is in the geometry, not something arranged here, and it is worth knowing because it means neither gate is the fast one -- a group sent down either branch arrives on the same clock, so a wave that splits across both is a genuine two-front problem rather than a staggered one. The two branches alone are 887.93 and 887.90, and the trunk they share is 672.25.",
   "buildSpots": [
     [
-      550.0,
-      386.0
+      234.0,
+      403.0
     ],
     [
-      340.0,
-      364.0
+      329.0,
+      163.0
     ],
     [
-      780.0,
-      274.0
+      356.0,
+      408.0
     ],
     [
-      318.0,
-      142.0
+      438.0,
+      190.0
     ],
     [
-      226.0,
-      314.0
+      448.0,
+      406.0
     ],
     [
-      478.0,
-      368.0
+      532.0,
+      426.0
     ],
     [
-      562.0,
-      592.0
+      560.0,
+      205.0
     ],
     [
-      798.0,
-      484.0
+      668.0,
+      232.0
     ],
     [
-      344.0,
-      580.0
+      758.0,
+      279.0
     ],
     [
-      202.0,
-      384.0
+      840.0,
+      518.0
     ],
     [
-      996.0,
-      276.0
+      861.0,
+      300.0
     ],
     [
-      860.0,
-      276.0
+      943.0,
+      299.0
     ],
     [
-      1086.0,
-      486.0
+      951.0,
+      519.0
     ],
     [
-      872.0,
-      482.0
-    ],
-    [
-      402.0,
-      158.0
+      1022.0,
+      301.0
     ]
   ],
-  "_buildSpots": "FIFTEEN PADS, copied from the geometry file untouched. Every one of them is verified by check_level3.py on three properties the level cannot be played without. IN RANGE: each pad is 90.0 to 114.0 world px from the nearest lane centreline -- measured 91.7 to 112.0 -- against a tower range of 112, so every pad reaches the road it is meant to cover. This is the check level 2 shipped without, and its absence is why level 2 was unwinnable at 0 of 60. APART: the closest pair is 74.0 px, over the 68 that spotRadius needs. ON GROUND: each pad's 24 px core is on open turf -- not the track, the bleachers, a bench, the fence, a goal, the pool, a light pole, a traffic cone or the football. Measured at 98.7% turf in the worst core (pad 9) and 100% in nine of the fifteen, with the remainder scattered single-pixel grass detail rather than any object: nothing survives a 30 px blob filter."
+  "_buildSpots": "14 HAND-PLACED PLOTS, from tools/plots.json, written here by tools/apply_plots.py. THEY ARE NOT THE SCORING PASS's ANY MORE: the sweep's 90-114 px standoff band and its best-first ordering produced the set this replaced, and a person placed these against the painting instead. Every figure below that is a function of the pads was re-derived from THIS set off the centrelines this file ships; the sweep's own parameters (`padRules`, `padStandoffBand`, `padSpacing`, any `candidatePositions`) are left as the record of a pass that no longer chooses anything. tools/check_plots.py re-checks the road clearance, the plate edges and the tap-target spacing. The map is written from tools/level3_geometry.json by hand -- there is no build_level3_map.py -- so the two copies are kept equal by tools/apply_plots.py and, on levels 3 and 4, asserted equal by the level test."
 }

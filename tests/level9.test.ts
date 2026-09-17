@@ -282,9 +282,19 @@ test('five chips can cover the flank, and one of them could cover nothing before
     .filter((c) => c.d <= RANGE)
     .map((c) => c.n)
   assert.deepEqual(covering, GEO.padsCoveringFlank)
-  assert.deepEqual(covering, [8, 9, 12, 13, 15])
-  // PAD 15 IS THE POINT. 194 px from the trunk at a 132 px range, so it could
-  // not shoot at anything on any board before this change; 74 px from the flank.
-  assert.ok(GEO.padsUnreachable.includes(15))
-  assert.deepEqual(GEO.padsUnreachableEvenWithFlank, [1, 7])
+  // THE SAME FIVE CHIPS, RENUMBERED. This said [8, 9, 12, 13, 15] while the
+  // pads were in the trace's order -- chip bounding box, top to bottom -- and
+  // tools/plots.json sorts them west to east instead, so the identical set of
+  // painted chips now reads [8, 11, 12, 13, 14]. Each plot moved at most 6.1
+  // px off its chip's centre; nothing was added and nothing was dropped.
+  assert.deepEqual(covering, [8, 11, 12, 13, 14])
+  // PAD 12 IS THE POINT, and it is the chip this used to call 15. 190 px from
+  // the trunk at a 132 px range, so it could not shoot at anything on any
+  // board before the flank was painted; 75 px from the flank.
+  assert.ok(GEO.padsUnreachable.includes(12))
+  // ONE CHIP REACHES NOTHING, where two did. The plot on it moved 3.5 px and
+  // that was enough: it was pad 1 at 155.9 px from the trunk and it is pad 9
+  // at 159.1, still out of a 132 px range -- while the chip that was pad 7 at
+  // 132.1 px is pad 3 at 130.5 and is now just inside it.
+  assert.deepEqual(GEO.padsUnreachableEvenWithFlank, [9])
 })

@@ -5,7 +5,7 @@
   "_roadWidth": "47.5, the median of the trace measured over the stem, both arms and the tail by tools/trace_level9.py and re-measured to within 1% by tools/check_level9.py. The paint flares to 60 px where it meets the west frame and that mouth is left out of the median, the same way level 8 leaves its bottom mouth out. Tower bases and the lane spread are sized against this number.",
   "note": "AI OVERRIDE PART 1: the inside of a computer, seen from directly above. A glowing cyan circuit trace over a dark blue substrate, fifteen flat grey chips as the only buildable ground, and AN EXIT THAT IS NOT A FRAME EDGE -- a door in the machine housing at (1177, 329). Every coordinate comes from tools/level9_geometry.json, which tools/trace_level9.py derived from the painted plate and tools/check_level9.py checks independently; this file is GENERATED from it by tools/build_level9_map.py and is not hand-edited. Re-derive with `python3 tools/trace_level9.py --overlay tools/L9_pads_overlay.png` and rebuild with `python3 tools/build_level9_map.py`.",
   "spotRadius": 34,
-  "_spotRadius": "34, every other level's. World 1280 renders to 844 CSS px, so 34 world px is a 44.8 px tap diameter and anything under 44 pt is smaller than a thumb. The closest pair of pads on this board is 120.6 px apart, well over the 2 x spotRadius two tap targets need.",
+  "_spotRadius": "34, every other level's. World 1280 renders to 844 CSS px, so 34 world px is a 44.8 px tap diameter and anything under 44 pt is smaller than a thumb. The closest pair of pads on this board is 120.1 px apart, well over the 2 x spotRadius two tap targets need.",
   "mainId": "north",
   "_mainId": "THE TRUNK IS THE NORTH ARM, and the name matters for the same reason level 6's and level 8's did: the wave table names the lane it spawns on and `LaneNetwork.lane()` resolves an unknown id to main, so a table spawning on `north` against a lane called `main` would walk the right road by accident.",
   "waypoints": [
@@ -480,70 +480,85 @@
   },
   "buildSpots": [
     [
-      781.5,
-      106.0
+      214.0,
+      368.0
     ],
     [
-      621.5,
-      108.0
+      332.0,
+      164.0
     ],
     [
-      331.0,
-      170.0
-    ],
-    [
-      1098.5,
-      176.0
-    ],
-    [
-      805.0,
-      240.0
-    ],
-    [
-      460.0,
-      231.0
-    ],
-    [
-      344.5,
-      329.0
-    ],
-    [
-      1005.5,
-      354.0
-    ],
-    [
-      830.0,
-      358.0
-    ],
-    [
-      214.5,
-      365.5
-    ],
-    [
-      506.5,
-      469.5
-    ],
-    [
-      986.0,
-      483.0
-    ],
-    [
-      780.5,
-      579.0
+      344.0,
+      332.0
     ],
     [
       353.0,
-      607.5
+      607.0
     ],
     [
-      947.5,
-      641.5
+      460.0,
+      228.0
+    ],
+    [
+      506.0,
+      469.0
+    ],
+    [
+      622.0,
+      106.0
+    ],
+    [
+      784.0,
+      578.0
+    ],
+    [
+      785.0,
+      106.0
+    ],
+    [
+      804.0,
+      241.0
+    ],
+    [
+      831.0,
+      358.0
+    ],
+    [
+      948.0,
+      642.0
+    ],
+    [
+      988.0,
+      482.0
+    ],
+    [
+      1008.0,
+      355.0
+    ],
+    [
+      1097.0,
+      176.0
     ]
   ],
-  "_buildSpots": "15 PADS, ONE CENTRED ON EACH PAINTED GREY CHIP. Not placed by a scoring pass the way levels 3 to 8 were: on this board the buildable ground IS the fifteen chips the artist painted, and the substrate between them is scenery. tools/check_level9.py verifies every pad's 24 px core sits on chip rather than board. THREE OF THE FIFTEEN COULD NOT REACH THE TRUNK AT ALL at the shortest attacking range in towers.json (pads 1, 7 and 15, at 156, 132 and 194 px from the nearest centreline), and only three of the fifteen cover two separate passes of it. THE FLANK TAKES THAT DOWN TO TWO: pads 8, 9, 12, 13, 15 can shoot at it, and pad 15 -- 194 px from the trunk and useless on every board before this change -- is 74 px from the flank. Pads 1 and 7 still reach nothing. This board holds LESS effective DPS than fifteen pads suggests, not more, and every mini-boss health figure is soaked against it and against no other level.",
+  "_buildSpots": "15 PADS, ONE ON EACH PAINTED GREY CHIP. Not placed by a scoring pass the way levels 3 to 8 were: on this board the buildable ground IS the fifteen chips the artist painted, and the substrate between them is scenery. HAND-PLACED NOW, from tools/plots.json -- the same fifteen chips, moved at most 6.1 px off the chip centre the trace used and reordered west to east, with `padArt` permuted to follow its own chip. 2 of the fifteen cannot reach the trunk at all at the shortest attacking range in towers.json (pads 9 at 159 px, 12 at 190 px), and 3 of the fifteen cover two separate passes of it. THE FLANK CHANGES THAT: pads 8, 11, 12, 13, 14 can shoot at it, so pad 9 is the only one that reaches nothing at all. This board holds LESS effective DPS than fifteen pads suggests, not more, and every mini-boss health figure is soaked against it and against no other level.",
   "padArt": [
     {
+      "key": "node-chip-square"
+    },
+    {
       "key": "node-chip-cabled"
+    },
+    {
+      "key": "node-chip-ram"
+    },
+    {
+      "key": "node-chip-square"
+    },
+    {
+      "key": "node-chip-ram"
+    },
+    {
+      "key": "node-chip-square"
     },
     {
       "key": "node-chip-square"
@@ -553,9 +568,6 @@
     },
     {
       "key": "node-chip-cabled"
-    },
-    {
-      "key": "node-chip-ram"
     },
     {
       "key": "node-chip-ram"
@@ -567,25 +579,13 @@
       "key": "node-chip-fan"
     },
     {
-      "key": "node-chip-ram"
-    },
-    {
-      "key": "node-chip-square"
-    },
-    {
-      "key": "node-chip-square"
+      "key": "node-chip-fan"
     },
     {
       "key": "node-chip-fan"
     },
     {
       "key": "node-chip-cabled"
-    },
-    {
-      "key": "node-chip-square"
-    },
-    {
-      "key": "node-chip-fan"
     }
   ],
   "_padArt": "FOUR BUILD-NODE PICTURES, which no other level has -- every other board draws one pad art on every spot. The pairing is the geometry file's `suggestedNodeBalanced`: the chips are ranked by aspect and dealt into four runs in the variants' own aspect order, so all four get used and the most landscape chips get the most landscape node. A KEY AND NOTHING ELSE -- there is no size here and there must not be one. Every entry used to carry the painted chip's own `width`, and the engine drew the node at it, so these fifteen pads drew at THIRTEEN sizes between 63 and 150 world px while the tap target stayed a 34 px circle on all of them. Pad size is one derivation for the whole game -- presentation.json's buildPad.quietScreenWidth over display.json's camera.defaultZoom -- and tests/buildpad.test.ts fails if any map file grows a per-pad size again. node-chip-cabled x4, node-chip-fan x3, node-chip-ram x4, node-chip-square x4.",

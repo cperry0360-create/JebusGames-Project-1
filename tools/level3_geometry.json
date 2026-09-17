@@ -367,65 +367,62 @@
   "padFootprintRadius": 32,
   "pads": [
     [
-      550.0,
-      386.0
+      234.0,
+      403.0
     ],
     [
-      340.0,
-      364.0
+      329.0,
+      163.0
     ],
     [
-      780.0,
-      274.0
+      356.0,
+      408.0
     ],
     [
-      318.0,
-      142.0
+      438.0,
+      190.0
     ],
     [
-      226.0,
-      314.0
+      448.0,
+      406.0
     ],
     [
-      478.0,
-      368.0
+      532.0,
+      426.0
     ],
     [
-      562.0,
-      592.0
+      560.0,
+      205.0
     ],
     [
-      798.0,
-      484.0
+      668.0,
+      232.0
     ],
     [
-      344.0,
-      580.0
+      758.0,
+      279.0
     ],
     [
-      202.0,
-      384.0
+      840.0,
+      518.0
     ],
     [
-      996.0,
-      276.0
+      861.0,
+      300.0
     ],
     [
-      860.0,
-      276.0
+      943.0,
+      299.0
     ],
     [
-      1086.0,
-      486.0
+      951.0,
+      519.0
     ],
     [
-      872.0,
-      482.0
-    ],
-    [
-      402.0,
-      158.0
+      1022.0,
+      301.0
     ]
   ],
-  "_lengths": "CORRECTED. This file shipped lengths of 1366.5 (upper) and 1395.5 (lower). Its OWN waypoints walk 1347.3 and 1333.6, and tools/check_level3.py's trace of the painted plate says 1351.6 and 1347.9 -- two independent measurements agreeing to about a percent and both disagreeing with what was declared. The declared pair also has the two routes 29 px apart where every measurement says they are equal to a fraction of one. THE COORDINATES WERE NOT TOUCHED. A derived figure was brought into line with the geometry it is derived from, which is what happened to level 2's 1916.7 for the same reason. The values below are branch + shared tail, on-plate, which is what the originals were measuring; the route a player actually watches is 1560.2, because map_level3.json adds a gateway point at each end so enemies walk in and out off the plate."
+  "_lengths": "CORRECTED. This file shipped lengths of 1366.5 (upper) and 1395.5 (lower). Its OWN waypoints walk 1347.3 and 1333.6, and tools/check_level3.py's trace of the painted plate says 1351.6 and 1347.9 -- two independent measurements agreeing to about a percent and both disagreeing with what was declared. The declared pair also has the two routes 29 px apart where every measurement says they are equal to a fraction of one. THE COORDINATES WERE NOT TOUCHED. A derived figure was brought into line with the geometry it is derived from, which is what happened to level 2's 1916.7 for the same reason. The values below are branch + shared tail, on-plate, which is what the originals were measuring; the route a player actually watches is 1560.2, because map_level3.json adds a gateway point at each end so enemies walk in and out off the plate.",
+  "_pads": "14 HAND-PLACED PLOTS, from tools/plots.json, written here by tools/apply_plots.py. THEY ARE NOT THE SCORING PASS's ANY MORE: the sweep's 90-114 px standoff band and its best-first ordering produced the set this replaced, and a person placed these against the painting instead. Every figure below that is a function of the pads was re-derived from THIS set off the centrelines this file ships; the sweep's own parameters (`padRules`, `padStandoffBand`, `padSpacing`, any `candidatePositions`) are left as the record of a pass that no longer chooses anything. tools/check_plots.py re-checks the road clearance, the plate edges and the tap-target spacing."
 }

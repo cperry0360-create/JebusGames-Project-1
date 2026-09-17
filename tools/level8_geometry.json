@@ -628,163 +628,172 @@
  "padFootprintRadius": 34,
  "pads": [
   [
-   202,
-   406
+   82,
+   291
   ],
   [
-   466,
-   414
+   232,
+   440
   ],
   [
-   846,
-   598
+   258,
+   614
+  ],
+  [
+   311,
+   130
+  ],
+  [
+   339,
+   448
+  ],
+  [
+   369,
+   612
+  ],
+  [
+   390,
+   115
+  ],
+  [
+   440,
+   450
+  ],
+  [
+   544,
+   446
+  ],
+  [
+   552,
+   279
+  ],
+  [
+   656,
+   280
+  ],
+  [
+   690,
+   610
+  ],
+  [
+   778,
+   98
   ],
   [
    814,
-   322
+   622
   ],
   [
-   654,
-   222
+   833,
+   363
   ],
   [
-   302,
-   406
+   928,
+   147
   ],
   [
-   330,
-   94
-  ],
-  [
-   534,
-   234
-  ],
-  [
-   634,
-   586
-  ],
-  [
-   694,
-   286
-  ],
-  [
-   1054,
-   554
-  ],
-  [
-   378,
-   406
-  ],
-  [
-   922,
-   114
-  ],
-  [
-   1174,
-   310
-  ],
-  [
-   734,
-   586
+   1036,
+   575
   ],
   [
    1130,
-   182
+   195
   ],
   [
-   866,
-   682
+   1170,
+   340
   ],
   [
-   482,
-   54
-  ],
-  [
-   478,
-   598
+   1242,
+   479
   ]
  ],
  "buildSpots": [
   [
-   202,
-   406
+   82,
+   291
   ],
   [
-   466,
-   414
+   232,
+   440
   ],
   [
-   846,
-   598
+   258,
+   614
+  ],
+  [
+   311,
+   130
+  ],
+  [
+   339,
+   448
+  ],
+  [
+   369,
+   612
+  ],
+  [
+   390,
+   115
+  ],
+  [
+   440,
+   450
+  ],
+  [
+   544,
+   446
+  ],
+  [
+   552,
+   279
+  ],
+  [
+   656,
+   280
+  ],
+  [
+   690,
+   610
+  ],
+  [
+   778,
+   98
   ],
   [
    814,
-   322
+   622
   ],
   [
-   654,
-   222
+   833,
+   363
   ],
   [
-   302,
-   406
+   928,
+   147
   ],
   [
-   330,
-   94
-  ],
-  [
-   534,
-   234
-  ],
-  [
-   634,
-   586
-  ],
-  [
-   694,
-   286
-  ],
-  [
-   1054,
-   554
-  ],
-  [
-   378,
-   406
-  ],
-  [
-   922,
-   114
-  ],
-  [
-   1174,
-   310
-  ],
-  [
-   734,
-   586
+   1036,
+   575
   ],
   [
    1130,
-   182
+   195
   ],
   [
-   866,
-   682
+   1170,
+   340
   ],
   [
-   482,
-   54
-  ],
-  [
-   478,
-   598
+   1242,
+   479
   ]
  ],
  "coverage": {
-  "shared": 0.71,
-  "east": 0.357,
-  "south": 0.774
- }
+  "shared": 0.61,
+  "east": 0.473,
+  "south": 0.58
+ },
+ "_pads": "20 HAND-PLACED PLOTS, from tools/plots.json, written here by tools/apply_plots.py. THEY ARE NOT THE SCORING PASS's ANY MORE: the sweep's 90-114 px standoff band and its best-first ordering produced the set this replaced, and a person placed these against the painting instead. Every figure below that is a function of the pads was re-derived from THIS set off the centrelines this file ships; the sweep's own parameters (`padRules`, `padStandoffBand`, `padSpacing`, any `candidatePositions`) are left as the record of a pass that no longer chooses anything. tools/check_plots.py re-checks the road clearance, the plate edges and the tap-target spacing."
 }
