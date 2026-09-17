@@ -6,9 +6,28 @@ the settings gear and nothing else.
 
 | commit | what | CI |
 |---|---|---|
-| `8737d1c` | Merge the wave count into one control in the top-left stack | _pending_ |
-| `c0d8bbc` | Merge main: the build-plot pass and the soak spend work | _pending_ |
-| _this file_ | the report, context.md | _pending_ |
+| `8737d1c` | Merge the wave count into one control in the top-left stack | covered by run 449 |
+| `c0d8bbc` | Merge main: the build-plot pass and the soak spend work | covered by run 449 |
+| `bb6e9c1` | Report the wave-control merge, and reconcile `context.md` | covered by run 449 |
+| `90c6f63` | Merge main: the comics pass | covered by run 449 |
+| `ff787e6` | Merge main: the comic placement report — `main`'s head | **run 449: all five jobs green** |
+
+**`main` moved three times while this was being pushed** — another session was
+landing the comics pass and its report at the same time — so the work went up as
+four commits under three merges, and run 449 on `ff787e6` is the run that has
+all of it. All five jobs: `changes`, `typecheck`, `test`, `deploy / build`,
+`deploy / deploy`. **The deploy RAN rather than skipping**, correctly: this
+touches `src/` and not only markdown.
+
+**main's tree was read back rather than assumed.** `git show origin/main:` gives
+`readoutCount: 2` and the four `waveControl*` keys with no `start*` key in
+`presentation.json`; `const READOUTS = ['peanuts', 'lives']`,
+`buildWaveControl` and `drawWaveControl` in `HudScene.ts`; fourteen mentions of
+`waveControl` in `HudLayout.ts` and twelve in the harness; and both
+`tests/wavecount.test.ts` and this file are in main's tree.
+
+**NOT checked:** the live site. The egress proxy in this container answers 403
+to github.io, so nothing was fetched from the deployed URL.
 
 ---
 
