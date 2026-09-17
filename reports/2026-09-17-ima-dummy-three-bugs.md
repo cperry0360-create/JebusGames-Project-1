@@ -9,8 +9,10 @@ a rendered frame rather than reasoned about.
 |---|---|---|
 | `3d96326` | Fix three Ima Dummy Tower bugs: bosses, moving the lads, and selling | covered by run 458 |
 | `4ec8404` | Merge main: the wave-control HUD and the run 451 CI table | **run 458: all five jobs green** |
-| `cbcf45d` | Report the three Ima Dummy Tower fixes | docs only; deploy skips |
-| _this commit_ | Correct this table's own row — `main`'s head | docs only; deploy skips |
+| `cbcf45d` | Report the three Ima Dummy Tower fixes | run 459: green, deploy skipped |
+| `de34178` | Correct this table's own row | run 460: green, deploy skipped |
+| `e752fed` | Carry the fixes into `claude/context.md`'s open items | run 462: green, deploy skipped |
+| _this commit_ | Close this table — `main`'s head | docs only; deploy skips |
 
 **Run 458 on `4ec8404`:** `changes`, `typecheck`, `test`, `deploy / build`,
 `deploy / deploy` — all five green, and **the deploy RAN rather than skipping**,
@@ -244,8 +246,9 @@ broken shape of this feature.
 
 ## Where this leaves the repository
 
-- **`main` is `4ec8404`** and carries the fix. `claude/ima-dummy-tower-bugs-fvmimu`
-  is pushed and identical to it.
+- **The fix is `3d96326` on `main`, under merge `4ec8404`**, and every commit
+  after it in the table is documentation. `claude/ima-dummy-tower-bugs-fvmimu`
+  is pushed and identical to `main`.
 - **The soak sim does not model the first fix.** `tools/soak/Sim.ts` swings only
   at `held`, exactly like the scene did:
   `if (!held) { sd.attackTimer -= dt; continue }`. So the simulated board
