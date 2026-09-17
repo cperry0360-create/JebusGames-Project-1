@@ -9,7 +9,8 @@ a rendered frame rather than reasoned about.
 |---|---|---|
 | `3d96326` | Fix three Ima Dummy Tower bugs: bosses, moving the lads, and selling | covered by run 458 |
 | `4ec8404` | Merge main: the wave-control HUD and the run 451 CI table | **run 458: all five jobs green** |
-| `cc8645e` | Report the three Ima Dummy Tower fixes — `main`'s head | docs only; deploy skips |
+| `cbcf45d` | Report the three Ima Dummy Tower fixes | docs only; deploy skips |
+| _this commit_ | Correct this table's own row — `main`'s head | docs only; deploy skips |
 
 **Run 458 on `4ec8404`:** `changes`, `typecheck`, `test`, `deploy / build`,
 `deploy / deploy` — all five green, and **the deploy RAN rather than skipping**,
@@ -17,9 +18,11 @@ which is correct: this touches `src/`, not only markdown.
 `deploy / deploy` completed at 11:32:58Z via `actions/deploy-pages@v4`. Read off
 the job list rather than off the run's conclusion, per CLAUDE.md.
 
-The report commit that follows is markdown only, so run 459 will show `deploy`
+The two report commits after it are markdown only, so their runs show `deploy`
 SKIPPED. **That is a documentation commit behaving correctly, not a failed
-deploy.**
+deploy.** (A report cannot carry its own hash: `cbcf45d` was amended to fill in
+the row above and the amend changed it, which is why the last row is named
+rather than numbered.)
 
 ---
 
