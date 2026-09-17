@@ -2409,9 +2409,14 @@ async function run() {
     }
     await shot('counters-' + VP.w + 'x' + VP.h)
 
-    /* ---- THE WAVE READOUT, which is the wave control's label ---- */
-    const btn = hud.startBtn
-    const usable = L.startButton.width - 2 * Pc.hud.layout.marginX
+    /* ---- THE WAVE CONTROL'S LABEL, which is the only place the count is ----
+     * It moved out of the top-right corner on 2026-09-17 and is the bottom row
+     * of this stack now, so this block reads `waveBtn` at `L.waveControl`
+     * rather than `startBtn` at `L.startButton`. The measurement is unchanged:
+     * the label against the plate it has to stay inside.
+     */
+    const btn = hud.waveBtn
+    const usable = L.waveControl.width - 2 * Pc.hud.layout.marginX
     for (const [phase, wave, label] of [
       ['ready', 0, 'ready at wave 1'], ['ready', 17, 'ready at wave 18'],
       ['wave', 17, 'mid-wave 18'],
@@ -2425,7 +2430,8 @@ async function run() {
       const t = btn.text
       const over = t.width - usable
       const px = Number(String(t.style.fontSize).replace('px', '')) * t.scaleX
-      note('   ' + label.padEnd(20) + 'label "' + t.text + '" ' + t.width.toFixed(1)
+      note('   ' + label.padEnd(20) + '[' + G.status.phase + '] label "' + t.text + '" '
+        + t.width.toFixed(1)
         + ' in ' + usable.toFixed(1) + '  @scale ' + t.scaleX.toFixed(2)
         + ' = ' + px.toFixed(1) + 'px'
         + (over > 0.6 ? '   *** ' + over.toFixed(1) + 'px PAST THE PLATE ***' : '   inside'))
@@ -2433,6 +2439,46 @@ async function run() {
         + over.toFixed(1) + 'px past its plate')
       expect(px >= 11, label + ': the wave label is drawn at ' + px.toFixed(1) + 'px')
     }
+    /* ---- THE END-OF-RUN STATES ----
+     * Driven through `drawWaveControl` with a synthetic status rather than by
+     * moving the live one, because `endRun` opens the results dialog on the
+     * same frame and a world modal stands the whole HUD down -- so the label
+     * the loop above would read is whatever was on the plate before the run
+     * ended. These two are still worth measuring: they are the widest strings
+     * the plate ever carries that are not numbers.
+     */
+    // AND THE WIDEST STRING THE PLATE CAN EVER CARRY: the last wave, called at
+    // the top of its own countdown, so the bonus is `readySeconds` x the rate.
+    // Same synthetic route, because the live countdown cannot be held still.
+    hud.drawWaveControl({ ...G.status, phase: 'ready', wave: 17, waveCount: 18,
+      readyCountdown: 15 })
+    {
+      const t = btn.text
+      const over = t.width - usable
+      const px = Number(String(t.style.fontSize).replace('px', '')) * t.scaleX
+      note('   ' + '[widest ready]'.padEnd(20) + 'label "' + t.text + '" '
+        + t.width.toFixed(1) + ' in ' + usable.toFixed(1) + '  @scale ' + t.scaleX.toFixed(2)
+        + ' = ' + px.toFixed(1) + 'px'
+        + (over > 0.6 ? '   *** ' + over.toFixed(1) + 'px PAST THE PLATE ***' : '   inside'))
+      expect(/^▶ 18\/18 \+\d+$/.test(t.text), 'the widest ready label reads "' + t.text + '"')
+      expect(over <= 0.6, 'the widest ready label runs ' + over.toFixed(1) + 'px past its plate')
+      expect(px >= 11, 'the widest ready label is drawn at ' + px.toFixed(1) + 'px')
+    }
+
+    for (const [phase, want] of [['won', 'CLEARED'], ['lost', 'OVERRUN']]) {
+      hud.drawWaveControl({ ...G.status, phase })
+      const t = btn.text
+      const over = t.width - usable
+      const px = Number(String(t.style.fontSize).replace('px', '')) * t.scaleX
+      note('   ' + ('[' + phase + ']').padEnd(20) + 'label "' + t.text + '" '
+        + t.width.toFixed(1) + ' in ' + usable.toFixed(1) + '  @scale ' + t.scaleX.toFixed(2)
+        + ' = ' + px.toFixed(1) + 'px'
+        + (over > 0.6 ? '   *** ' + over.toFixed(1) + 'px PAST THE PLATE ***' : '   inside'))
+      expect(t.text === want, phase + ': the plate reads "' + t.text + '", not ' + want)
+      expect(over <= 0.6, phase + ': the label runs ' + over.toFixed(1) + 'px past its plate')
+      expect(px >= 11, phase + ': the label is drawn at ' + px.toFixed(1) + 'px')
+    }
+
     note('RESULT ' + (faults === 0
       ? 'every readout is inside its own field at every value tested'
       : '*** ' + faults + ' readout(s) clipped ***'))
@@ -8663,7 +8709,7 @@ async function run() {
     if (nearest < 20) fail('only ' + Math.round(nearest) + 'px between the chip and an ability button')
     // No overlap with anything else on the glass, at all.
     const rects = { abilities: A(), cancel: hud.layout.cancel, counters: hud.layout.counters,
-      settings: hud.layout.settings, startButton: hud.layout.startButton,
+      settings: hud.layout.settings, waveControl: hud.layout.waveControl,
       messageRow: hud.layout.messageRow }
     for (const [k, r] of Object.entries(rects)) {
       const hit = box.x < r.x + r.width && r.x < box.x + box.width
@@ -10992,7 +11038,7 @@ async function run() {
       // on the first frame of the watch, and the whole 13-wave run this
       // scenario exists to watch has not been watched since. It is the most
       // expensive of the blind ones: nothing else plays a run end to end.
-      const boxes = [['counters', L.counters], ['start', L.startButton],
+      const boxes = [['counters', L.counters], ['wave control', L.waveControl],
         ['hero chip', L.heroChip], ['message', L.messageRow],
         ['abilities', L.abilities], ['settings', L.settings]]
       for (let i = 0; i < boxes.length; i++) {
@@ -12181,10 +12227,10 @@ async function run() {
     if (drawerAt) await check('drawer', drawerAt.x, drawerAt.y, false)
     else { note('  *** the drawer is open and owns no point on the screen ***'); bad++ }
     await check('counters', mid(L.counters).x, mid(L.counters).y, false)
-    await check('start button', mid(L.startButton).x, mid(L.startButton).y, false)
+    await check('wave control', mid(L.waveControl).x, mid(L.waveControl).y, false)
     await check('settings gear', mid(L.settings).x, mid(L.settings).y, false)
     await check('ability bar', mid(L.abilities).x, mid(L.abilities).y, false)
-    await check('wave banner', mid(L.startButton).x, mid(L.startButton).y, false)
+    await check('wave banner', mid(L.waveControl).x, mid(L.waveControl).y, false)
     await check('cancel', mid(L.cancel).x, mid(L.cancel).y, false)
 
     // THE BOARD CONTROL RUNS BEFORE THE MODAL CASE, deliberately. A modal
@@ -12297,12 +12343,17 @@ async function run() {
 
     note('on arrival: phase=' + g.status.phase + ' wave=' + (g.status.wave + 1)
       + ' countdown=' + g.status.readyCountdown.toFixed(2)
-      + ' banner=' + JSON.stringify(hud.startBtn.text.text))
+      + ' banner=' + JSON.stringify(hud.waveBtn.text.text))
     say(g.status.phase === 'ready', 'opens in the build phase')
     say(g.status.wave === 0, 'opens on wave 1')
     say(g.status.readyCountdown === 0, 'wave 1 carries no countdown')
-    say(/^START WAVE/.test(String(hud.startBtn.text.text)),
-      'the banner is a prompt, not a countdown')
+    // `▶ 1/13`: the play glyph and the count, and no bonus, because wave 1
+    // carries no clock to beat. It read `START WAVE 1` when this check was
+    // written and `▶ WAVE 1` after the plate was narrowed; what it has always
+    // been asserting is that this is a PROMPT rather than a countdown, so the
+    // claim is the glyph and the absence of a `+`.
+    say(/^\u25b6 1\/\d+$/.test(String(hud.waveBtn.text.text)),
+      'the banner is a prompt with no bonus, not a countdown')
     await shot('wave1-01-waiting-' + VP.w + 'x' + VP.h)
 
     // THIRTY-FIVE SECONDS. Longer than the 30s clock wave 1 used to carry, so
@@ -12318,8 +12369,11 @@ async function run() {
     say(g.enemies.length === 0, 'nothing has spawned')
     say(g.status.peanuts === peanutsBefore, 'the purse has not moved')
 
-    // THE PRESS. Through the real button, at its real position.
-    const btn = hud.layout.startButton
+    // THE PRESS. Through the real button, at its real position -- which is the
+    // BOTTOM OF THE TOP-LEFT STACK since 2026-09-17, under peanuts and lives,
+    // not the top-right corner. A scenario that taps the old position taps the
+    // map.
+    const btn = hud.layout.waveControl
     await click(btn.x + btn.width / 2, btn.y + btn.height / 2)
     await until(() => g.status.phase === 'wave', 6000)
     note('after the press: phase=' + g.status.phase + ' peanuts='
@@ -12337,7 +12391,7 @@ async function run() {
       // the phase flipped caught the previous wave's label still on the plate.
       await sleep(250)
       note('wave 2 armed: countdown=' + g.status.readyCountdown.toFixed(2)
-        + ' banner=' + JSON.stringify(hud.startBtn.text.text))
+        + ' banner=' + JSON.stringify(hud.waveBtn.text.text))
       say(g.status.readyCountdown > 0, 'wave 2 arms a real countdown')
       // And it arrives WITHOUT being pressed.
       const started = await until(() => g.status.phase === 'wave', 40000)
@@ -12371,7 +12425,7 @@ async function run() {
     note('resumed: phase=' + g2.status.phase + ' wave=' + (g2.status.wave + 1)
       + ' countdown=' + g2.status.readyCountdown.toFixed(2)
       + ' peanuts=' + g2.status.peanuts
-      + ' banner=' + JSON.stringify(hud2.startBtn.text.text))
+      + ' banner=' + JSON.stringify(hud2.waveBtn.text.text))
     say(g2.status.wave === 0, 'the resume came back on wave 1')
     say(g2.status.readyCountdown === 0, 'the resumed wave 1 carries no countdown')
     // Ten seconds is well inside the 15s a later wave would have used.
@@ -12380,9 +12434,45 @@ async function run() {
     say(g2.enemies.length === 0, 'nothing has spawned since the resume')
     await shot('wave1-03-resumed-' + VP.w + 'x' + VP.h)
 
+    /* ---- AND THE EARLY CALL PAYS, THROUGH THE REAL CONTROL ----
+     * The resumed run is sitting on wave 1 with no clock, so a clock is put on
+     * it: `startWave` pays `floor(readyCountdown)` x the rate whoever called
+     * it, which is the same expression the auto-start runs through. Ten seconds
+     * at two a second is twenty peanuts, and the plate has to SAY twenty before
+     * it is pressed -- the label and the payment are two different pieces of
+     * code and this is the one place both are checked against each other.
+     *
+     * Pressed at the control's own rectangle, which is the top-LEFT column
+     * since 2026-09-17.
+     */
+    g2.status.readyCountdown = 10
+    await sleep(200)
+    const label = String(hud2.waveBtn.text.text)
+    const purse = g2.status.peanuts
+    note('early call: banner=' + JSON.stringify(label) + ' purse=' + purse)
+    say(/\+\d+$/.test(label), 'the plate offers a bonus with ten seconds left on the clock')
+    const offered = Number((/\+(\d+)/.exec(label) || [0, 0])[1])
+    const wbox = hud2.layout.waveControl
+    await click(wbox.x + wbox.width / 2, wbox.y + wbox.height / 2)
+    await until(() => g2.status.phase === 'wave', 6000)
+    const paid = g2.status.peanuts - purse
+    note('after the early press: phase=' + g2.status.phase + ' purse=' + g2.status.peanuts
+      + ' (was ' + purse + ')  offered=' + offered + ' paid=' + paid)
+    say(g2.status.phase === 'wave', 'the early call started the wave')
+    // NOT AN EQUALITY, AND THE SLACK IS THE CLOCK. The plate is read, then the
+    // pointer is dispatched, and the countdown runs at `pacing.gameSpeed` 1.4
+    // the whole time -- so the offer can lose a second between being read and
+    // being taken, which is two peanuts. Four is two seconds of slack on a
+    // measurement that is otherwise exact: what is being checked is that the
+    // number on the plate and the number in the purse are the same number, not
+    // that time stopped.
+    say(paid > 0 && offered - paid >= 0 && offered - paid <= 4,
+      'the early call paid ' + paid + ' against the ' + offered + ' its plate offered')
+    await shot('wave1-04-early-call-' + VP.w + 'x' + VP.h)
+
     note('RESULT ' + (bad === 0
       ? 'wave 1 waits for the player and pays nothing, on a fresh run and on a resume; '
-        + 'wave 2 is unchanged'
+        + 'wave 2 is unchanged, and an early call pays what its plate offered'
       : '*** ' + bad + ' check(s) failed ***'))
     return
   }
@@ -13887,7 +13977,7 @@ async function run() {
 
     const hud = g.layout
     for (const [name, r] of Object.entries({
-      counters: hud.counters, startButton: hud.startButton, settings: hud.settings,
+      counters: hud.counters, waveControl: hud.waveControl, settings: hud.settings,
       abilities: hud.abilities, messageRow: hud.messageRow,
     })) report('hud.' + name, r)
 
@@ -13960,7 +14050,7 @@ async function run() {
     //
     // Built from the layout's own keys with an assertion, so the next rename
     // names itself instead of throwing.
-    const want = ['counters', 'startButton', 'settings', 'abilities', 'cancel',
+    const want = ['counters', 'waveControl', 'settings', 'abilities', 'cancel',
       'heroChip', 'messageRow']
     const rects = {}
     for (const k of want) {
@@ -17341,7 +17431,7 @@ async function run() {
       const hud = scene('Hud')
       const L = hud.layout || G.layout
       // The HUD rectangles the player can actually press or read.
-      const named = ['counters', 'startButton', 'messageRow', 'heroChip',
+      const named = ['counters', 'waveControl', 'messageRow', 'heroChip',
         'abilities', 'settings', 'cancel']
       const rects = named.filter((k) => L[k]).map((k) => ({ id: k, r: L[k] }))
       // Every pad's TAP rect in CSS pixels, at the camera the run opens on.
@@ -21507,7 +21597,7 @@ function fingerprint() {
     }
     const hud = scene('Hud')
     if (hud && hud.layout) {
-      for (const k of ['counters', 'startButton', 'messageRow', 'heroRow', 'abilities',
+      for (const k of ['counters', 'waveControl', 'messageRow', 'heroRow', 'abilities',
         'settings', 'cancel']) {
         const r = hud.layout[k]
         if (r) fp('hud ' + k, [r.x, r.y, r.width, r.height].map(r2).join(','))

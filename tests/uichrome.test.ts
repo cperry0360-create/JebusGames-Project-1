@@ -42,7 +42,7 @@ test('every solid piece of HUD chrome claims the gesture that starts on it', () 
     for (const insets of [NO_INSETS, NOTCH]) {
       const l = hudLayout({ width, height, insets, ...WIDEST }, LAYOUT)
       for (const [what, r] of Object.entries({
-        abilities: l.abilities, startButton: l.startButton, settings: l.settings,
+        abilities: l.abilities, waveControl: l.waveControl, settings: l.settings,
         cancel: l.cancel, counters: l.counters, heroChip: l.heroChip,
       })) {
         if (r.width <= 0 || r.height <= 0) continue

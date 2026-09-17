@@ -79,25 +79,27 @@ const SOCKET = presentationData.abilityBar.emptySocket as {
 /** UI lives in its own scene so the world can Y-sort freely without the HUD
  *  ever landing in the middle of the sort order. */
 /**
- * The three stacked readouts in the top-left corner, in drawing order.
+ * The stacked readouts in the top-left corner, in drawing order. TWO of them,
+ * and the wave is not one.
  *
- * THE WAVE PLATE IS BACK, 2026-09-17, and it is the third one. It had been
- * taken out of this corner on the reasoning that the control in the opposite
- * corner had to name the wave it was about to start anyway, so a second copy
- * was chrome. That was true of the copy and wrong about which one to keep: the
- * one in the corner is a READOUT and shrinks to whatever stays legible, while
- * the one in the control is inside a 44px plate that may not shrink, reading
- * `10/13 · 18` in the top-right corner for the whole of every wave.
+ * THE WAVE PLATE WAS HERE FOR ONE DAY. It was added on 2026-09-17 on the
+ * reasoning that the run's numbers belong together in the corner a player
+ * already reads -- which is right -- while a start button in the OPPOSITE
+ * corner went on drawing `▶ 2/13 +20` on its own label, because a button that
+ * starts wave 2 has to say which wave it starts. Both changes were correct
+ * separately. Together they printed the wave count twice.
  *
- * So the wave number is a small plate here with peanuts and lives, where a
- * player already looks for the run's state, and the control opposite says what
- * is LEFT of the wave rather than which wave it is. Two readouts, one fact
- * each, neither of them duplicating the other.
+ * The merge keeps one element and it is the CONTROL, directly under this
+ * stack: `buildWaveControl`. A readout may shrink to 16px because nothing taps
+ * it; the thing that starts the wave may not, so of the two copies only one
+ * could ever have been deleted. The top-right corner is the settings gear and
+ * nothing else now.
  *
- * `art.json`'s `ui.counters.wave` was kept through the whole period it was not
- * drawn, which is why this is a one-line change rather than an art request.
+ * `art.json`'s `ui.counters.wave` plate is unused again, and kept, exactly as
+ * it was kept through the last period it was not drawn. `tests/wavecount.test.ts`
+ * is what stops the count coming back to this list.
  */
-const READOUTS = ['peanuts', 'lives', 'wave'] as const
+const READOUTS = ['peanuts', 'lives'] as const
 
 /**
  * One counter readout, as a pill that grows with the number in it.
@@ -158,7 +160,6 @@ export class HudScene extends Phaser.Scene {
    *  `counters` scenario, which measures them against their own fields. */
   get peanutsText(): Phaser.GameObjects.Text { return this.peanutsPill.text }
   get livesText(): Phaser.GameObjects.Text { return this.livesPill.text }
-  get waveText(): Phaser.GameObjects.Text { return this.wavePill.text }
   /**
    * The hero's portrait chip: the picture, the health over it, the frame
    * round it and the rectangle that takes the tap.
@@ -216,14 +217,19 @@ export class HudScene extends Phaser.Scene {
    */
   private peanutsPill!: Pill
   private livesPill!: Pill
-  /** The third stacked readout, since 2026-09-17. It reads `n/total` and is
-   *  the only one of the three that never changes width mid-run. */
-  private wavePill!: Pill
   private bossBar!: Phaser.GameObjects.Graphics
   private bossLabel!: Phaser.GameObjects.Text
   /** The run's difficulty, read off the run rather than off the save — see
    *  `GameStatus.difficultyId`. */
-  private startBtn!: PlateButton
+  /**
+   * THE WAVE CONTROL, under the two readouts in the top-left stack.
+   *
+   * It is `waveBtn` rather than `startBtn` because starting a wave is only one
+   * of the things it says: mid-wave it is a disabled plate reading the wave
+   * count and what is left of it, and at the end of a run it reads CLEARED or
+   * OVERRUN. The harness reads this field by name in four scenarios.
+   */
+  private waveBtn!: PlateButton
   /** Public for the harness, which has to be able to put the HUD back into a
    *  known state between checks -- a modal reports the whole screen as chrome,
    *  so one left open makes every later check pass without testing anything. */
@@ -302,8 +308,8 @@ export class HudScene extends Phaser.Scene {
     // Top-left: the three counter pills.
     this.buildCounters(L.counters)
 
-    // Top-right: the start-wave button.
-    this.buildStartButton(L.startButton)
+    // Under them, still top-left: the control that starts a wave.
+    this.buildWaveControl(L.waveControl)
 
     // Under the counters: the boss bar, and nothing else.
     //
@@ -478,17 +484,15 @@ export class HudScene extends Phaser.Scene {
 
   private buildCounters(box: Rect): void {
     const keys = ART.ui.counters
-    // THREE, AND `READOUTS` IS THE LIST. The colours are paired with the names
+    // TWO, AND `READOUTS` IS THE LIST. The colours are paired with the names
     // here rather than in that list because the list is what `readouts.test.ts`
     // counts against `hud.layout.readoutCount`, and a list of tuples is not a
-    // list of readouts. The wave takes the dim ink rather than a third alarm
-    // colour: peanuts is amber because it is spendable and lives is red
-    // because losing them ends the run, and the wave number is neither -- it
-    // is the one readout a player checks rather than watches.
+    // list of readouts. Peanuts is amber because it is spendable and lives is
+    // red because losing them ends the run; the wave is neither of those and is
+    // not here at all -- it is the control under this stack.
     const order: Array<[string, string]> = [
       ['peanuts', COLOR.amber],
       ['lives', COLOR.danger],
-      ['wave', COLOR.ink],
     ]
     const x = box.x
     let top = box.y
@@ -573,8 +577,7 @@ export class HudScene extends Phaser.Scene {
       }
       this.stretchPill(pill, natural)
       if (name === 'peanuts') this.peanutsPill = pill
-      else if (name === 'lives') this.livesPill = pill
-      else this.wavePill = pill
+      else this.livesPill = pill
 
       // DOWN, not across. This one line is the shape change.
       top += srcH * scale + LAYOUT.readoutGap * this.layout.counterScale
@@ -803,13 +806,25 @@ export class HudScene extends Phaser.Scene {
     )
   }
 
-  private buildStartButton(box: Rect): void {
+  /**
+   * THE WAVE CONTROL: the bottom row of the top-left stack, and the only thing
+   * in that corner a finger is meant to land on.
+   *
+   * IT WEARS THE SAME PAINTED PLATE AS EVERY OTHER BUTTON IN THE GAME, which
+   * is the whole reason it is a `plateButton` rather than a fourth pill. A
+   * counter pill and a button plate are two different pieces of art, and a
+   * control that wore the pill would be a 44px-tall readout -- the one thing
+   * this corner must not look like now that the readouts above it are 16px. It
+   * also gets the plate's hover tint, its click sound and its disabled plate
+   * for free, and those three ARE the affordance.
+   */
+  private buildWaveControl(box: Rect): void {
     const x = box.x
     const y = box.y
     const w = box.width
     const h = box.height
-    this.startBtn = plateButton(this, x + w / 2, y + h / 2, w, h, '',
-      () => this.world.startWave(), LAYOUT.startLabelSize)
+    this.waveBtn = plateButton(this, x + w / 2, y + h / 2, w, h, '',
+      () => this.world.startWave(), LAYOUT.waveLabelSize)
   }
 
   /**
@@ -950,11 +965,6 @@ export class HudScene extends Phaser.Scene {
 
     this.setCounter(this.peanutsPill, `${s.peanuts}`)
     this.setCounter(this.livesPill, `${s.lives}`)
-    // `n/total`, which is what the control in the other corner used to say
-    // mid-wave. Clamped the same way that one clamped it: the last wave's
-    // spawner leaves `wave` one past the end for a frame and `14/13` is a
-    // rendering fault as far as a player is concerned.
-    this.setCounter(this.wavePill, `${Math.min(s.wave + 1, s.waveCount)}/${s.waveCount}`)
     // Money and lives are the two numbers a player watches, so a change has to
     // announce itself rather than quietly appear.
     if (this.lastPeanuts >= 0 && s.peanuts !== this.lastPeanuts) {
@@ -967,7 +977,7 @@ export class HudScene extends Phaser.Scene {
     this.lastPeanuts = s.peanuts
     this.lastLives = s.lives
     this.drawBossBar(s)
-    this.drawStartButton(s)
+    this.drawWaveControl(s)
     this.drawSlots(s)
     this.drawHeroChip(s)
   }
@@ -1090,14 +1100,34 @@ export class HudScene extends Phaser.Scene {
     })
   }
 
-  private drawStartButton(s: GameScene['status']): void {
+  /**
+   * THE WAVE CONTROL'S FOUR STATES, and every one of them names the wave.
+   *
+   * That is the point of the merge: the count is drawn HERE and nowhere else
+   * on the HUD, so a state that dropped it would take the wave number off the
+   * screen entirely. `tests/wavecount.test.ts` holds it to one place; this
+   * method is what makes that one place enough.
+   *
+   *   ready, clock running   `▶ 2/13 +20`   pressable, pays the bonus
+   *   ready, no clock        `▶ 1/13`       pressable, pays nothing
+   *   wave running           `2/13 · 18`    disabled plate, 18 still coming
+   *   run over               `CLEARED` / `OVERRUN`
+   *
+   * The play glyph is on the two pressable states only. A greyed plate with a
+   * play glyph on it is a button saying press me and refusing, which is worse
+   * than no glyph at all.
+   */
+  private drawWaveControl(s: GameScene['status']): void {
     // Only pressable between waves. Mid-wave it becomes a readout, which is
     // exactly what the disabled plate is for.
-    this.startBtn.setEnabled(s.phase === 'ready')
+    this.waveBtn.setEnabled(s.phase === 'ready')
 
+    // CLAMPED, because the last wave's spawner leaves `wave` one past the end
+    // for a frame and `14/13` is a rendering fault as far as a player is
+    // concerned.
+    const n = Math.min(s.wave + 1, s.waveCount)
     if (s.phase === 'ready') {
-      const n = Math.min(s.wave + 1, s.waveCount)
-      // TWO THINGS, NOT THREE, AND THE WORD `START` IS NOT ONE OF THEM.
+      // THE WORD `START` IS NOT ON IT.
       //
       // It read `WAVE 2 · 3s · +4` and then `START WAVE 2`, and the plate had to
       // be 168px wide to hold the longest of those. What the word START was
@@ -1105,23 +1135,27 @@ export class HudScene extends Phaser.Scene {
       // which greys out the moment the wave is running, and by the play glyph.
       // Dropping it is what let the control come down to 132 without the
       // number or the bonus getting any smaller.
+      //
+      // WAVE 1 AND A RESUMED WAVE 1 CARRY NO CLOCK, so there is no bonus to
+      // show and the plate reads `▶ 1/13`. Not an empty plate and not a
+      // `+0`: a zero bonus is a promise of nothing, and the count is what the
+      // player needs there anyway.
       const bonus = Math.floor(s.readyCountdown) * RULES.pacing.earlyStartPeanutsPerSecond
-      this.startBtn.setLabel(bonus > 0 ? `▶ ${n}/${s.waveCount} +${bonus}` : `▶ WAVE ${n}`)
+      this.waveBtn.setLabel(bonus > 0 ? `▶ ${n}/${s.waveCount} +${bonus}` : `▶ ${n}/${s.waveCount}`)
     }
     // NO WAVE NAME. It read `The Gathering · 6 left`, and the name was a
     // flavour string in waves.json that told the player nothing they could act
     // on while it took the width that the count needed.
     //
-    // AND SINCE 2026-09-17, NO WAVE NUMBER EITHER. It read `10/13 · 18` --
-    // large, top right, for the whole of every wave -- and `10/13` is now a
-    // small plate in the top-left stack with the peanuts and the lives. What
-    // is left here is the only half that CHANGES while a wave runs and the
-    // only half a player acts on: how many are still coming. The two corners
-    // say one fact each and neither repeats the other.
+    // THE COUNT AND WHAT IS LEFT OF THE WAVE, which is the pair this control
+    // carried before the wave counter was briefly split off into a readout of
+    // its own. `18 LEFT` alone was right for the one day the stack above was
+    // also printing `2/13`; with the readout gone it would take the wave number
+    // off the screen for the whole of every wave.
     else if (s.phase === 'wave') {
-      this.startBtn.setLabel(`${s.enemiesLeft} LEFT`)
+      this.waveBtn.setLabel(`${n}/${s.waveCount} · ${s.enemiesLeft}`)
     }
-    else this.startBtn.setLabel(s.phase === 'won' ? 'CLEARED' : 'OVERRUN')
+    else this.waveBtn.setLabel(s.phase === 'won' ? 'CLEARED' : 'OVERRUN')
   }
 
   /**
