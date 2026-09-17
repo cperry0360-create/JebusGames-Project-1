@@ -7,7 +7,32 @@ measure, what broke, and what it cost in the soak.
 
 | commit | what | CI |
 |---|---|---|
-| _(filled in below once the push lands)_ | | |
+| `2ce82c7` | the plots, the tools, the rebuilt maps, the tests | folded into run 442 |
+| `a23c880` | merge of `48ea34e`, the soak's third role rule | folded into run 442 |
+| `4dee13a` | the re-measurement against the merged builder, and this report | folded into run 442 |
+| `0ca45da` | merge of two art uploads and a CI-table commit | **run 442 — all five jobs green** |
+
+Run 442 on `0ca45da`: `changes`, `typecheck`, `test`, `deploy / build` and
+`deploy / deploy` all **success**. The deploy RAN rather than skipping, which is
+correct — this pass touches `src/data/`, not only markdown.
+
+**`main`'s tree was read back after the push**, not assumed. All ten maps carry
+the right number of `buildSpots`, the nine in `plots.json` match it coordinate
+for coordinate, level 6 is untouched, and `tools/apply_plots.py`,
+`tools/check_plots.py` and `tools/padcounts.py` are there:
+
+```
+origin/main level  1: 10 buildSpots, matches plots.json: True
+origin/main level  2: 10 buildSpots, matches plots.json: True
+origin/main level  3: 14 buildSpots, matches plots.json: True
+origin/main level  4: 14 buildSpots, matches plots.json: True
+origin/main level  5: 18 buildSpots, matches plots.json: True
+origin/main level  6: 18 buildSpots, NOT in plots.json (unchanged)
+origin/main level  7: 17 buildSpots, matches plots.json: True
+origin/main level  8: 20 buildSpots, matches plots.json: True
+origin/main level  9: 15 buildSpots, matches plots.json: True
+origin/main level 10: 21 buildSpots, matches plots.json: True
+```
 
 **Level 6 is not in `plots.json` and was not touched.** Its eighteen pads are
 byte-identical to what `main` shipped. That is the control for everything else
@@ -617,7 +642,8 @@ Pre-existing, not touched here.
 
 ## Where this leaves the repository
 
-**In flight:** nothing. Everything in this pass is on `main`.
+**In flight:** nothing. Everything in this pass is on `main` at `0ca45da`,
+green on run 442, deployed.
 
 **Stale and knowingly left stale — every boss health figure in the game.** Boss
 health is derived by soak against a specific board, and nine of the ten boards
