@@ -12,6 +12,8 @@ it happening again.
 | `13eeeac` | the moves, the publish, `cutscenes.json`, the tests, the harness, CLAUDE.md rule 8 | folded into run 445 |
 | `ee0c5f2` | merge of `ccf7f78` — the hand-authored build plots and the run 442 table | **run 445 — all five jobs green, deploy RAN** |
 | `cdcc6b6` | this report | **run 447 — `changes`, `typecheck`, `test` green, `deploy` SKIPPED** |
+| `446b2ae` | the run 447 row above | folded into run 451 |
+| `f2cea40` | merge of `ff787e6` — another session's wave-control HUD merge | **run 451 — three jobs green, `deploy` SKIPPED** |
 
 **Run 445 on `ee0c5f2`:** `changes`, `typecheck`, `test`, `deploy / build` and
 `deploy / deploy` all **success**. The `github-pages` deployment record for
@@ -25,6 +27,21 @@ working rather than a failed publish: the report is markdown, so `changes`
 reported `code=false` and Pages kept serving what run 445 put there. Read the
 job list, not the run's conclusion. (This sentence arrived in a later docs-only
 commit, whose own run is one more of the same.)
+
+**`main` MOVED UNDER THIS PASS, TWICE, and the deployed SHA is not one of mine.**
+Another session landed a wave-control HUD merge on `main` while this report was
+being written, and its own merge (`ff787e6`) took `cdcc6b6` with it. So:
+
+- **The live site is `ff787e6`**, deployed at 11:13:27Z, and `13eeeac` and
+  `cdcc6b6` are both ancestors of it — checked with `git merge-base
+  --is-ancestor`, not assumed. Every comic in this pass is on the deployed site.
+- Run 451 on `f2cea40` skipped `deploy` **correctly**: the only thing that
+  commit adds over `ff787e6` is markdown, so `changes` reported `code=false` and
+  Pages kept serving what it had. A green run with `deploy` skipped is the gate
+  working. Read the job list, not the run's conclusion.
+- The suite was re-run after that merge: **1201 pass, 0 fail** (the four extra
+  tests are the other session's `wavecount.test.ts`), and the comic map was
+  re-read out of the merged tree rather than trusted.
 
 **NOT CHECKED: the live site itself.** The egress proxy in this container
 answers `CONNECT tunnel failed, response 403` for `github.io`, so no panel was
@@ -237,9 +254,9 @@ re-export is the only honest fix and nobody has asked for one.
 
 ## Where this leaves the repository
 
-- **`main` is at `ee0c5f2`, run 445 green on all five jobs, Pages deployed.**
-  `claude/comic-placement-fixes-5q6pyf` carries the same commits and is fully
-  merged; it can be deleted.
+- **`main` is at `f2cea40`, run 451 green, and the live site is `ff787e6`** —
+  which carries every commit of this pass. `claude/comic-placement-fixes-5q6pyf`
+  is pushed to the same tip and is fully merged; it can be deleted.
 - **Open, carried forward from `2026-09-16-cutscene-reorganisation.md`:** three
   comics still ship as uncut three-across strips (level 9's outro, level 10's
   three). Down from four.
