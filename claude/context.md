@@ -686,6 +686,32 @@ See `reports/2026-09-16-landing-the-cutscene-branch.md`.
 
 ## Open items
 
+**THE IMA DUMMY TOWER'S THREE BUGS ARE FIXED (2026-09-17), and one DECISION is left
+open.** A boss walked through the lads untouched (`tickGarrisons` only ever handed a
+soldier the enemy HOLDING STILL for it, and a boss is `blockable: false`); the lads could
+not be moved by any sequence of taps (the rally mode was armed by `selectTower`, which
+also opens the ring, and `onClick` dismisses an open ring first); and selling the tower
+left its lads on the road forever (nothing removed the garrison from `this.garrisons`).
+A MOVE button with a flag arms the mode now, an armed rally order is read BEFORE the ring
+dismissal, and `disbandGarrison` is called from `sellTower` and `destroyTower`.
+`src/systems/Garrison.ts` holds the two rules that are not scene-shaped,
+`tests/garrison.test.ts` has 13 tests and **`tools/harness/run.sh lads` is the half that
+presses the buttons** -- 35 checks, green at 844x390 and 667x375. Run 458 green, deploy
+RAN. `reports/2026-09-17-ima-dummy-three-bugs.md`.
+
+**THE DECISION: the deploying tower's ring is now an ellipse of FOUR where every other
+tower's is an arc of three** (`arcMaxOptions` is 3), so its UPGRADE sits 136px from every
+other tower's -- measured across all 52 ring states. Within its own ring nothing moves
+between states, which is the invariant the reserved slots exist for. The alternative is
+reserving a fourth slot on EVERY tower's ring, which moves the menu for all seven.
+**Cory's call; not made.**
+
+**AND THE SOAK DOES NOT MODEL THE FIRST FIX.** `tools/soak/Sim.ts` still swings only at
+`held` -- `if (!held) { sd.attackTimer -= dt; continue }` -- so the simulated board
+understates a garrison against bosses and flyers. Left alone deliberately: changing it
+changes the instrument, and every number in the table below was measured with the current
+one. **Re-measure rather than compare.**
+
 **AND IT STOPPED TIERING THE WALL (2026-09-17, later). THE THIRD ROLE RULE.**
 `tools/soak/Sim.ts`'s upgrade loop walked EVERY tower the board owned and tiered it, a
 zero-damage tower included -- so the cap below bounded the PADS and the peanuts kept
