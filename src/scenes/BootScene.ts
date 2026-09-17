@@ -5,7 +5,7 @@ import { OPTIONAL_SPRITE_KEYS, REQUIRED_SPRITE_KEYS } from '../systems/Art.ts'
 import { initAudio, missingCues, queueAudio } from '../systems/Audio.ts'
 import { registerEffectAnims } from '../systems/Effects.ts'
 import {
-  ensureBuildGlowTexture, ensureIconFallbackTexture, ensureShadowTexture,
+  ensureBuildGlowTexture, ensureIconFallbackTexture, ensureRallyFlagTexture, ensureShadowTexture,
 } from '../systems/Presentation.ts'
 import { ensureGrey } from '../systems/Desaturate.ts'
 import { ART } from '../systems/Art.ts'
@@ -94,6 +94,10 @@ export class BootScene extends Phaser.Scene {
     ensureShadowTexture(this)
     ensureBuildGlowTexture(this)
     ensureIconFallbackTexture(this)
+    // The lads' flag: the MOVE button's glyph and the mark on their rally
+    // point. Boot rather than GameScene, like the other three, because the
+    // ring is drawn before any level art has arrived.
+    ensureRallyFlagTexture(this)
     // Phaser's animation manager is global, so an effect animation registered
     // anywhere can be played everywhere. This call registers nothing today —
     // every animated sheet in the manifest is an `fx-` key and every one of

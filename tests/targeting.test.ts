@@ -184,12 +184,23 @@ test('the Ima Dummy rally point uses the same mode, so it gets the same escapes'
   // press twice.
   const game = src('scenes/GameScene.ts')
   assert.match(game, /this\.targeting\.arm\(\{ kind: 'rally', id: this\.towerKey\(tower\) \}\)/,
-    'selecting an Ima Dummy Tower does not arm the shared targeting mode')
-  // The same toggle: tapping the tower again backs out.
+    'an Ima Dummy Tower does not arm the shared targeting mode')
+  // THE RING'S MOVE BUTTON ARMS IT, NOT THE SELECTION, 2026-09-17. Selecting a
+  // tower is also what opens its ring, and `onClick` dismissed an open ring
+  // before it looked at anything else -- so the mode armed itself behind a menu
+  // that ate the very next tap, and the lads could not be moved by any sequence
+  // of taps at all. `beginRally` is the one way in now; `selectTower` cancels
+  // whatever was armed, like it does for every other tower.
+  const begin = game.slice(game.indexOf('private beginRally('))
+  const body = begin.slice(0, begin.indexOf('\n  }'))
+  assert.match(body, /this\.targeting\.arm\(\{ kind: 'rally'/,
+    'MOVE does not arm the shared targeting mode')
+  // The same toggle: pressing MOVE again on a tower already waiting backs out.
+  assert.match(body, /=== 'toggled'/,
+    'pressing MOVE again on an armed tower does not back out of the mode')
   const select = game.slice(game.indexOf('private selectTower('))
-  const body = select.slice(0, select.indexOf('\n  }'))
-  assert.match(body, /armed === 'toggled'/,
-    'tapping the selected Ima Dummy Tower again does not deselect it')
+  assert.doesNotMatch(select.slice(0, select.indexOf('\n  }')), /targeting\.arm\(/,
+    'selecting the tower arms the mode behind its own ring again')
   // CANCEL is computed from the mode, so it lights for a rally order too.
   const rc = game.indexOf('private refreshCancel(')
   const refresh = game.slice(rc, game.indexOf('\n  }', rc))

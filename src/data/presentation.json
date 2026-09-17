@@ -555,6 +555,18 @@
     "step": 12,
     "laneRadius": 22
   },
+  "rallyFlag": {
+    "_note": "The lads' flag: the MOVE button's picture on the ring, and the small mark standing on the rally point while an Ima Dummy Tower is selected. ONE shape, drawn by one function at two sizes, so the button a thumb presses and the thing that then moves on the board are visibly the same object. `textureSize` is the generated icon; `markSize` is the pole's height in world pixels on the board.",
+    "textureSize": 256,
+    "markSize": 30,
+    "poleColour": 15913067,
+    "poleWidth": 0.08,
+    "clothColour": 15771696,
+    "clothWidth": 0.52,
+    "clothHeight": 0.34,
+    "ringColour": 15771696,
+    "ringAlpha": 0.85
+  },
   "castCursor": {
     "_note": "Where a summon will land, drawn under the pointer instead of as an outline down both edges of the whole lane. The band described the RULE; the cursor answers the QUESTION, which is 'can I drop it here?'. Kingdom Rush draws nothing on the map.",
     "validKey": "cursor-place-ok",

@@ -830,13 +830,23 @@ test('SELL has a fixed slot that UPGRADE can never take', () => {
    * at the closest.
    */
   const game = src('scenes/GameScene.ts')
+  // THE END OF THE SLICE IS `openTowerRing`, and it used to be a string that
+  // had not existed since the options were extracted into their own method --
+  // `indexOf` returned -1 and the "slice" was most of the file, so every
+  // assertion below was being made against GameScene at large.
   const opts = game.slice(game.indexOf('const options: RingOption[] = []'),
-    game.indexOf('this.openRing(options, () => this.towerAnchor(tower)'))
+    game.indexOf('openTowerRing(tower: Tower): void'))
   assert.match(opts, /id: 'sell',\s*\n\s*slot: 2,/, 'SELL does not claim slot 2')
   for (const m of opts.matchAll(/id: 'upgrade',\s*\n\s*slot: (\d)/g)) {
     assert.equal(m[1], '0', 'an UPGRADE option is not in slot 0')
   }
-  assert.match(game, /\}, 3\)/, 'the tower panel does not reserve three slots')
+  // FOUR ON A DEPLOYING TOWER, 2026-09-17, and the rule is unchanged: what may
+  // never move is a button's place under one tower's own ring, at every tier
+  // and on both branches. The Ima Dummy Tower's MOVE takes a fourth slot that
+  // nothing else can reach, and it has that slot in every state it can be in.
+  assert.match(opts, /id: 'move',\s*\n\s*slot: 3,/, "the lads' MOVE does not claim slot 3")
+  assert.match(game, /\}, tower\.isDeployer \? 4 : 3\)/,
+    'the tower panel does not reserve three slots, or four for a deploying tower')
   // And the ring lays out for the reserved count, not the option count.
   const ring = src('ui/TowerRing.ts')
   assert.match(ring, /private get slotCount\(\): number/, 'the ring has no reserved slot count')

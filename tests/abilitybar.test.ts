@@ -193,9 +193,25 @@ test('Restructure is gone, and the machinery it forced into existence is not', (
   // Cory keeps Haymaker, in slot 1.
   assert.equal(heroes.cory.abilities[0].name, 'Haymaker')
 
-  // A free permanent MOVE is not the answer either, and never was.
+  // A free permanent MOVE FOR THE TOWER is not the answer either, and never
+  // was: a board that can be rearranged at will is a board with no decisions
+  // on it.
+  //
+  // THE IMA DUMMY TOWER'S MOVE IS NOT THAT, 2026-09-17. It moves the two LADS
+  // along the road inside a ring their tower never leaves, which is the only
+  // control that tower has; the tower itself still cannot be picked up, and
+  // nothing names a pad. So the ban holds in the form it was always about:
+  // every MOVE option in this file is behind `tower.isDeployer`, and there is
+  // exactly one of them.
   const code = game.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n')
-  assert.doesNotMatch(code, /id: 'move'/, 'MOVE is back on the tower panel')
+  const moves = [...code.matchAll(/id: 'move'/g)]
+  assert.equal(moves.length, 1, `${moves.length} MOVE options on the tower panel, wanted 1`)
+  const before = code.slice(Math.max(0, moves[0]!.index! - 400), moves[0]!.index!)
+  assert.match(before, /if \(tower\.isDeployer\) \{\s*options\.push\(\{\s*$/,
+    'MOVE is offered on towers that have no lads to move')
+  assert.match(code.slice(moves[0]!.index!, moves[0]!.index! + 600),
+    /onConfirm: \(\) => this\.beginRally\(tower\)/,
+    'the MOVE option does something other than post the garrison')
   assert.doesNotMatch(code, /Tap a free pad/, "the tower panel's move instruction is back")
 
   // THE HIDE MACHINERY STAYS. Restructure was the one slot that came and went

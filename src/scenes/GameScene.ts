@@ -76,7 +76,7 @@ import { Cooldowns } from '../systems/Cooldowns.ts'
 import { unlockedTowerCount } from '../systems/Draft.ts'
 import { runState, setRunState } from '../systems/RunState.ts'
 import { castAbility } from '../systems/AbilityRunner.ts'
-import { PRESENTATION, deathPuff, floatingLabel, hitPause } from '../systems/Presentation.ts'
+import { PRESENTATION, deathPuff, flagInto, floatingLabel, hitPause } from '../systems/Presentation.ts'
 import { cueLeadInMs, play, playRotating, resetVoices } from '../systems/Audio.ts'
 import { Enemy } from '../entities/Enemy.ts'
 import type { Blocker } from '../entities/Enemy.ts'
@@ -85,6 +85,7 @@ import { Hero } from '../entities/Hero.ts'
 import { Fighter } from '../entities/Fighter.ts'
 import { Soldier } from '../entities/Soldier.ts'
 import { defaultRally, rallyFromTap, soldierStations, type RallySpot } from '../systems/Rally.ts'
+import { removeGarrison, swingTarget } from '../systems/Garrison.ts'
 import { Projectile } from '../entities/Projectile.ts'
 import { ScratchCard } from '../ui/ScratchCard.ts'
 import { BODY_SPACING, COLOR, FONT_DISPLAY, FONT_UI, hexColour } from '../ui/Theme.ts'
@@ -2702,6 +2703,28 @@ export class GameScene extends Phaser.Scene {
       return
     }
 
+    // AN ARMED RALLY ORDER OWNS THE GROUND, ring or no ring.
+    //
+    // THIS IS ABOVE THE RING DISMISSAL ON PURPOSE, and being below it is the
+    // whole of bug 2: a ring left open behind the mode swallowed the tap that
+    // was meant to move the lads, so a tower that had just been told "tap the
+    // road" answered a tap on the road by deselecting itself.
+    //
+    // It is still below the pad branch and still asks about the tower and the
+    // hero itself, for the reason the old comment further down gave: only a tap
+    // that would OTHERWISE have deselected becomes an order. Building on the
+    // next pad, selecting the next tower and picking the hero up all still
+    // work while the lads are waiting to be posted.
+    //
+    // And it is gated on the MODE, not on the selection. A selected Ima Dummy
+    // Tower that has not been told to move is an ordinary selected tower, and a
+    // tap on the ground away from it means what it means everywhere else.
+    if (this.rallyArmed() && this.selected !== null
+        && !this.towerAt(w.x, w.y) && !this.hero.hits(w.x, w.y)) {
+      this.orderRally(this.selected, w.x, w.y)
+      return
+    }
+
     if (this.ring?.active) {
       this.clearSelection()
       return
@@ -2731,15 +2754,6 @@ export class GameScene extends Phaser.Scene {
       this.drawerPick = null
       this.refreshCancel()
       this.drawSpots()
-      return
-    }
-
-    // Bare ground with an Ima Dummy Tower selected: post the lads there. Read
-    // AFTER the pad and tower checks above, so selecting the next tower or
-    // building on the next pad still works while one is selected -- only a tap
-    // that would otherwise have deselected becomes an order.
-    if (this.selected?.isDeployer) {
-      this.orderRally(this.selected, w.x, w.y)
       return
     }
 
@@ -3160,21 +3174,34 @@ export class GameScene extends Phaser.Scene {
     return `${Math.round(tower.x)},${Math.round(tower.y)}`
   }
 
+  /**
+   * Whether the board is waiting for a tap that posts a garrison.
+   *
+   * THE MODE, not the selection. `onClick` asks this before it dismisses an
+   * open ring, and "an Ima Dummy Tower is selected" is not a strong enough
+   * answer to take a tap away from every other thing a tap does: the player has
+   * to have pressed MOVE. Derived from the request rather than kept as a second
+   * boolean beside it, which is the pattern `refreshCancel` exists to enforce.
+   */
+  private rallyArmed(): boolean {
+    const req = this.targeting.request
+    if (req?.kind !== 'rally') return false
+    return this.selected?.isDeployer === true && this.towerKey(this.selected) === req.id
+  }
+
   private selectTower(tower: Tower): void {
     // AN IMA DUMMY TOWER'S RALLY ORDER IS A TARGETING MODE, and it is the same
     // one. The board is waiting for a tap on a place, exactly as it is for a
     // summon — so it gets the same CANCEL button, the same ESC key, the same
     // second-press-to-back-out, and the same highlight over where a tap is
-    // legal. It had none of those: the mode was two booleans and a comment.
-    if (tower.isDeployer) {
-      const armed = this.targeting.arm({ kind: 'rally', id: this.towerKey(tower) })
-      if (armed === 'toggled') {
-        this.clearSelection('toggle')
-        return
-      }
-    } else {
-      this.targeting.cancel('replaced')
-    }
+    // legal.
+    //
+    // IT IS NOT ARMED BY SELECTING THE TOWER ANY MORE. It was, and selecting a
+    // tower is also what opens its ring — so the mode armed itself behind a
+    // menu that `onClick` dismisses before it looks at anything else, and the
+    // tap that was supposed to move the lads closed the ring instead. Every
+    // time. `beginRally`, off the ring's own MOVE button, is the one way in.
+    this.targeting.cancel('replaced')
     this.clearGhost()
     this.ring?.close()
     this.drawSpots()
@@ -3187,10 +3214,13 @@ export class GameScene extends Phaser.Scene {
     this.drawCoveredLane(tower)
     const bonus = tower.supportBonus > 0 ? `  ·  +${Math.round(tower.supportBonus * 100)}% lit` : ''
     if (tower.isDeployer) {
+      // THE FLAG IS DRAWN FOR THE SELECTION, not for the mode. "Where are my
+      // lads posted?" is a question a player asks before deciding whether to
+      // move them, so the answer is on the board from the moment the tower is
+      // tapped rather than only once MOVE has been pressed.
       const g = this.garrisons.find((q) => q.tower === tower)
       this.drawRallyMark(g?.rally ?? null)
-      this.status.alert =
-        `${tower.def.name}, tier ${tower.tier}. Tap the highlighted road to move the lads, or CANCEL.`
+      this.status.alert = `${tower.def.name}, tier ${tower.tier}${bonus}  ·  MOVE posts the lads`
     } else {
       this.drawRallyMark(null)
       this.status.alert = `${tower.def.name}, tier ${tower.tier}${bonus}`
@@ -3383,12 +3413,43 @@ export class GameScene extends Phaser.Scene {
     }
 
     /*
-     * NO MOVE HERE, and there is no longer anywhere else either: Restructure
-     * has been cut. A free MOVE on every tower's panel was rejected once for
-     * making DAD MODE's grant of it worthless; with the ability gone, what is
-     * left is the older reason — a tower is a decision about a place, and a
-     * board that can be rearranged at will is a board with no decisions on it.
+     * NO MOVE FOR THE TOWER, and there is no longer anywhere else either:
+     * Restructure has been cut. A free MOVE on every tower's panel was rejected
+     * once for making DAD MODE's grant of it worthless; with the ability gone,
+     * what is left is the older reason — a tower is a decision about a place,
+     * and a board that can be rearranged at will is a board with no decisions
+     * on it.
+     *
+     * MOVING THE LADS IS NOT THAT, and it is the Ima Dummy Tower's whole
+     * control. The tower stays on its pad; what moves is where the two men
+     * stand, inside a ring the tower never leaves. It is the one thing this
+     * tower does, and it had no button at all — the mode was armed by selecting
+     * the tower and then immediately eaten by the ring that selection opens
+     * (see `onClick`), so the lads could not be moved by any sequence of taps.
+     *
+     * SLOT 3, a place nothing else can reach. The three reserved slots above
+     * are reserved against each OTHER; a deploying tower has four and always
+     * four, at every tier and on both branches, so nothing on its ring moves
+     * between states either.
      */
+    if (tower.isDeployer) {
+      options.push({
+        id: 'move',
+        slot: 3,
+        // The flag, generated at boot. `sprite` is checked against the texture
+        // manager before it is used and `icon` is the fallback, so a missing
+        // texture costs the picture rather than the button.
+        icon: 'target',
+        sprite: ART.generated.rallyFlag,
+        price: null,
+        affordable: true,
+        title: def.name,
+        trait: def.trait,
+        stats: now,
+        confirmLabel: 'Move',
+        onConfirm: () => this.beginRally(tower),
+      })
+    }
 
     // Selling is always offered, always affordable, and ALWAYS IN SLOT 2 —
     // a place no upgrade and no branch can reach.
@@ -3412,11 +3473,48 @@ export class GameScene extends Phaser.Scene {
   }
 
   openTowerRing(tower: Tower): void {
-    // THREE, always: see the slot note above.
+    // THREE, always — FOUR on a deploying tower, always. See the slot note
+    // above: what matters is that the count never changes under one tower's
+    // own ring, not that every tower has the same one.
     this.openRing(() => this.towerRingOptions(tower), () => this.towerAnchor(tower), (id) => {
-      this.previewingUpgrade = id !== null && id !== 'sell'
+      this.previewingUpgrade = id !== null && id !== 'sell' && id !== 'move'
       if (this.selected) this.drawSelectedRange(this.selected)
-    }, 3)
+    }, tower.isDeployer ? 4 : 3)
+  }
+
+  /**
+   * MOVE pressed: the ring goes, the mode arms, and the road lights up.
+   *
+   * THIS IS WHAT THE MODE WAS MISSING. It used to be armed by `selectTower`
+   * itself, which also opens the ring — and `onClick` dismisses an open ring
+   * before it looks at anything else, so the very next tap was always spent
+   * closing the menu. The order was unfixable from the tap end alone: with the
+   * ring open, a tap on the road is genuinely ambiguous. A button makes the
+   * player say which they meant, and after that the tap is not ambiguous at
+   * all, which is why `onClick` can put the rally order first.
+   *
+   * The selection is KEPT. `syncTargeting` cancels a rally request whose tower
+   * is not the selected one, so dropping the selection here would disarm the
+   * mode on the same frame it was armed.
+   */
+  private beginRally(tower: Tower): void {
+    this.ring?.close()
+    this.selected = tower
+    // THE SAME SECOND-PRESS ESCAPE every other armed request has: MOVE pressed
+    // again on a tower already waiting for a tap means "no, actually". It moved
+    // here with the arming itself — `selectTower` cancels whatever was armed,
+    // so the button is the only thing that can toggle its own request.
+    if (this.targeting.arm({ kind: 'rally', id: this.towerKey(tower) }) === 'toggled') {
+      this.clearSelection('toggle')
+      return
+    }
+    // Puts the wash over the legal road, lights CANCEL and writes the mirrors
+    // — one call, because one writer. See `syncTargeting`.
+    this.syncTargeting()
+    this.drawSelectedRange(tower)
+    this.drawCoveredLane(tower)
+    this.drawRallyMark(this.garrisons.find((q) => q.tower === tower)?.rally ?? null)
+    this.status.alert = 'Tap the road to move the lads, or CANCEL'
   }
 
   /** The tower's position on the glass, or null once it is gone. */
@@ -3497,6 +3595,9 @@ export class GameScene extends Phaser.Scene {
     this.setPeanuts(this.status.peanuts + refund)
     this.build.release(tower.spot)
     this.towers = this.towers.filter((t) => t !== tower)
+    // Before the tower object goes: the helper reads the garrison's soldiers
+    // off the list, and its own entry names the tower it belonged to.
+    this.disbandGarrison(tower)
     tower.destroy()
     if (this.selected === tower) {
       this.selected = null
@@ -6666,6 +6767,9 @@ export class GameScene extends Phaser.Scene {
     this.build.release(tower.spot)
     this.towers = this.towers.filter((t) => t !== tower)
     const [x, y] = [tower.x, tower.y]
+    // The lads go with it here too. An Ima Dummy Tower taken by a sapper left
+    // its garrison holding the road for a pad that is now rubble.
+    this.disbandGarrison(tower)
     tower.destroy()
     if (this.selected === tower) {
       this.selected = null
@@ -6859,6 +6963,40 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * The lads go with the tower. Both ways it can go.
+   *
+   * THE GARRISON IS NOT PART OF THE TOWER OBJECT, so destroying the tower does
+   * not take it with it -- and neither `sellTower` nor `destroyTower` said
+   * anything about `this.garrisons`. The entry stayed, `tickGarrisons` went on
+   * ticking it, `soldiers.length !== tower.soldierCount` went on reading a tier
+   * off the destroyed tower, and `manGarrison` went on replacing every lad that
+   * fell. A sold tower left two soldiers standing in the road for the rest of
+   * the run, blocking for a pad the player had just cashed in.
+   *
+   * ONE HELPER, called from both places, for the reason `destroyTower`'s own
+   * docstring gives about the pad: two copies of this is one copy that gets
+   * forgotten.
+   */
+  private disbandGarrison(tower: Tower): void {
+    const lads = removeGarrison(this.garrisons, tower)
+    if (lads.length === 0) return
+    const mine = new Set(lads)
+    // RELEASED BEFORE THEY ARE DESTROYED. `tickEngagement` drops a hold when
+    // the holder is no longer in its list, but an enemy holding a destroyed
+    // Container until the next frame is an enemy standing still against
+    // nothing -- and `Soldier.alive` reads `this.scene`, which a destroyed
+    // Container no longer has.
+    for (const e of this.enemies) {
+      if (e.blocker instanceof Soldier && mine.has(e.blocker)) e.blocker = null
+    }
+    for (const lad of lads) lad.destroy()
+    // The flag belongs to the selection, and the selection is about to be
+    // dropped by both callers -- but the mark is drawn by the tower rather
+    // than by the selection, so it has to be taken down here.
+    if (this.selected === tower) this.drawRallyMark(null)
+  }
+
+  /**
    * Brings a garrison up to the strength its tier calls for, and posts everyone.
    *
    * Called on every tier change as well as at build time, because `Need a
@@ -6912,7 +7050,17 @@ export class GameScene extends Phaser.Scene {
         }
         const damage = g.tower.soldierDamage * (s.enraged && rage ? rage.damage : 1)
         const interval = g.tower.soldierInterval * (s.enraged && rage ? rage.interval : 1)
-        s.tick(dt, held.get(s) ?? null, g.tower.soldierRespawn, damage, interval,
+        // A LAD WITH NOTHING TO HOLD STILL SWINGS. He is only ever handed the
+        // enemy that is HOLDING STILL FOR HIM, and a boss is `blockable: false`
+        // so it is never handed to anybody -- which is how a line of lads came
+        // to watch every boss in the game walk through them without landing a
+        // blow. `swingTarget` gives him the nearest thing he may hit but may
+        // not hold; the enemy's `blocker` is untouched, so it keeps walking and
+        // stays as unblockable as it was, and the damage, the interval and the
+        // Rage multipliers above are the same ones a held swing uses.
+        const target = swingTarget(
+          held.get(s) ?? null, this.enemies, s.x, s.y, g.tower.soldierBlockRange)
+        s.tick(dt, target, g.tower.soldierRespawn, damage, interval,
           (enemy, dmg) => this.damageEnemy(enemy, dmg, false, 0))
       }
     }
@@ -6981,14 +7129,29 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
-  /** Where the lads have been told to stand. */
+  /**
+   * Where the lads have been told to stand, WITH A FLAG ON IT.
+   *
+   * Two rings on the road are a mark; they are also what a dozen other things
+   * on this board look like. The flag is the same picture as the MOVE button's
+   * glyph — `flagInto` draws both — so the answer to "what did that button
+   * do?" is the button's own icon, now standing on the road.
+   *
+   * Drawn whenever the tower is SELECTED rather than only while the mode is
+   * armed: where the lads are posted is what a player reads before deciding to
+   * move them.
+   */
   private drawRallyMark(spot: RallySpot | null): void {
     this.rallyMark?.destroy()
     this.rallyMark = undefined
     if (!spot) return
+    const cfg = PRESENTATION.rallyFlag
     const g = this.add.graphics()
-    g.lineStyle(3, 0xf0a830, 0.95).strokeCircle(spot.x, spot.y, 14)
-    g.lineStyle(2, 0xf0a830, 0.6).strokeCircle(spot.x, spot.y, 22)
+    g.lineStyle(3, cfg.ringColour, cfg.ringAlpha).strokeCircle(spot.x, spot.y, 14)
+    g.lineStyle(2, cfg.ringColour, cfg.ringAlpha * 0.63).strokeCircle(spot.x, spot.y, 22)
+    // The pole stands ON the spot, so the flag flies above the mark rather
+    // than sitting inside it where the lads are about to be standing.
+    flagInto(g, spot.x, spot.y, cfg.markSize)
     g.setDepth(spot.y - 3)
     this.rallyMark = g
   }

@@ -1691,6 +1691,9 @@ export interface ArtDef {
     groundShadow: string
     buildGlow: string
     iconMissing: string
+    /** The lads' flag: the MOVE button's picture and the mark on the rally
+     *  point, drawn once so the button and the board agree. */
+    rallyFlag: string
   }
   /** Per-tier tower sprites, keyed by the tower's base sprite key. A tower
    *  with no entry keeps one sprite at every tier, which is the default and

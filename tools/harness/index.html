@@ -64,7 +64,7 @@ const SCENARIO_NAMES = [
   'elibar', 'elifire', 'enemyfacing', 'everyloadout', 'facing', 'fps', 'full', 'full13', 'fx',
   'game', 'gateway', 'gestures', 'glacier', 'gnomes', 'goblin', 'guaranteed', 'heroanim',
   'heroblock', 'herochip', 'herofx', 'herohp', 'lane', 'leak', 'ledger',
-  'labelprobe', 'lanemarkers', 'lazydad', 'lettering', 'level6', 'level7', 'level8', 'level8retopo', 'level9', 'levelart', 'levels',
+  'labelprobe', 'lads', 'lanemarkers', 'lazydad', 'lettering', 'level6', 'level7', 'level8', 'level8retopo', 'level9', 'levelart', 'levels',
   'listenerguard', 'loadout', 'locked',
   'loopthrow', 'looptrack', 'lost', 'mapedge', 'maproute', 'markers',
   'meteor', 'midwave', 'mix', 'modal', 'moes', 'music', 'muzzle', 'nightfall',
@@ -114,6 +114,7 @@ const ASSERTS_NOTHING = new Set([
 const USES_EXPECT = new Set([
   'typegame', 'rotationburst', 'level7', 'level8', 'level9', 'boardinput', 'lanemarkers', 'level8retopo',
   'vlaude', 'titlecard', 'counters', 'everyloadout', 'padpan', 'midwave', 'guaranteed',
+  'lads',
 ])
 
 /** How many checks this run actually EVALUATED, pass or fail. */
@@ -14606,7 +14607,11 @@ async function run() {
       await until(() => g.ring && g.ring.opts.options.length > 0, 4000)
       await openAndMeasure('t1 upgrade ' + t.def.name, 'upgrade')
       await openAndMeasure('t1 sell ' + t.def.name, 'sell')
-      await openAndMeasure('t1 move ' + t.def.name, 'move')
+      // MOVE IS THE DEPLOYING TOWER'S ALONE. It is the Ima Dummy Tower's
+      // control -- it posts the lads along the road -- and every other tower's
+      // ring has three buttons and no fourth. This asked for it on all of them
+      // and reported six missing options as faults.
+      if (t.def.soldierCount > 0) await openAndMeasure('t1 move ' + t.def.name, 'move')
       g.ring.close()
       await sleep(80)
     }
@@ -14717,6 +14722,8 @@ async function run() {
     g.status.lives = 9999
     await sleep(400)
 
+    /** Every MOVE rectangle, for the same muscle-memory comparison below. */
+    const moves = []
     const rectOf = (state, id) => {
       const b = (g.ring ? g.ring.hitBoxes : []).find((h) => h.id === id)
         || (g.ring ? g.ring.hitBoxes : []).find((h) => h.id === 'ring:' + id)
@@ -14760,7 +14767,17 @@ async function run() {
         if (o.id === 'sell' && o.slot !== 2) push(label + ': SELL is in slot ' + o.slot)
         if (o.id === 'upgrade' && o.slot !== 0) push(label + ': UPGRADE is in slot ' + o.slot)
       }
-      if (ids.includes('move')) push(label + ': MOVE is back on the tower panel')
+      // MOVE IS THE DEPLOYING TOWER'S, AND IT IS SLOT 3. A free MOVE for the
+      // TOWER is still gone -- Restructure was cut and a board that can be
+      // rearranged at will is a board with no decisions on it. This one moves
+      // the two LADS along the road inside a ring their tower never leaves, and
+      // it is the only control that tower has.
+      const mv = list.find((o) => o.id === 'move')
+      if (mv && !tower.isDeployer) push(label + ': MOVE is back on a tower with no lads')
+      if (mv && mv.slot !== 3) push(label + ': MOVE is in slot ' + mv.slot)
+      if (!mv && tower.isDeployer) push(label + ': the deploying tower has no MOVE button')
+      const mvRect = mv ? rectOf(label, 'move') : null
+      if (mvRect) moves.push(mvRect)
       states++
       // Two pictures: the two-option state with slot 1 reserved and empty, and
       // the branch that fills it. If the gap reads as a missing button rather
@@ -14787,6 +14804,11 @@ async function run() {
         for (const t of [...g.towers]) {
           g.build.release(t.spot)
           g.towers = g.towers.filter((x) => x !== t)
+          // THE LADS GO WITH IT. This clears the pad by hand rather than
+          // through the sell dialog, so it has to do what `sellTower` does --
+          // otherwise the Ima Dummy Tower's garrison outlives every one of its
+          // eight states and the next tower is measured through a crowd.
+          g.disbandGarrison && g.disbandGarrison(t)
           t.destroy()
         }
         g.status.peanuts = 999999
@@ -14846,8 +14868,60 @@ async function run() {
     }
     note('closest a SELL ever gets to an UPGRADE: ' + nearest.toFixed(1) + 'px')
 
+    /* --- THE FOURTH BUTTON ----------------------------------------------
+     *
+     * A RING OF FOUR IS AN ELLIPSE AND A RING OF THREE IS AN ARC --
+     * `arcMaxOptions` is 3 -- so the deploying tower's ring is a different
+     * SHAPE from every other tower's, and its UPGRADE and SELL are in
+     * different places from theirs. That is measured below rather than
+     * asserted away: it is a consequence of asking for a fourth button on one
+     * tower, and the alternative is reserving a fourth slot on EVERY tower's
+     * ring, which moves the menu for all seven.
+     *
+     * What IS asserted is the invariant the reserved slots exist for, applied
+     * where it was always applied -- under ONE tower's own ring. Across every
+     * state that tower can be in, each of its buttons is in exactly one place,
+     * and no two of them are ever on top of each other.
+     */
+    const sameRect = (a, b) => Math.abs(a.x - b.x) < 1 && Math.abs(a.y - b.y) < 1
+    const deployerRects = sells.concat(upgrades).concat(moves)
+      .filter((r) => /imaDummy/.test(r.state))
+    const byId = {}
+    for (const r of deployerRects) (byId[r.id] = byId[r.id] || []).push(r)
+    for (const [id, rects] of Object.entries(byId)) {
+      const first = rects[0]
+      for (const r of rects) {
+        if (!sameRect(first, r)) {
+          push('the deploying tower\'s ' + id + ' moved between "' + first.state +
+            '" and "' + r.state + '"')
+        }
+      }
+      note('  deploying ring: ' + id + ' at ' + Math.round(first.x) + ',' + Math.round(first.y) +
+        ' in all ' + rects.length + ' of its states')
+    }
+    let mvClashes = 0
+    for (const mv2 of moves) {
+      for (const other of deployerRects) {
+        if (other.id === 'move' || !overlap(mv2, other)) continue
+        mvClashes++
+        if (mvClashes <= 4) push('MOVE lands on ' + other.id + ' in "' + other.state + '"')
+      }
+    }
+    note('MOVE rects ' + moves.length + '; clashes inside the deploying ring: ' + mvClashes)
+    // And how far the one tower with four buttons sits from the six with
+    // three, as a number rather than a verdict.
+    const anyUp = upgrades.find((r) => !/imaDummy/.test(r.state))
+    const dUp = byId.upgrade && anyUp
+      ? Math.round(Math.hypot(byId.upgrade[0].x - anyUp.x, byId.upgrade[0].y - anyUp.y)) : -1
+    note('the deploying tower\'s UPGRADE sits ' + dUp + 'px from every other tower\'s ' +
+      '(four buttons is an ellipse, three is an arc)')
+
     // THE SELL CONFIRMATION, in words.
-    for (const t of [...g.towers]) { g.build.release(t.spot); t.destroy() }
+    for (const t of [...g.towers]) {
+      g.build.release(t.spot)
+      g.disbandGarrison && g.disbandGarrison(t)
+      t.destroy()
+    }
     g.towers = []
     g.status.peanuts = 999999
     g.place(Object.keys(TOWERSD)[0], spot)
@@ -14885,7 +14959,11 @@ async function run() {
     // AND UPGRADE DOES NOT GET ONE.
     g.dialog && g.dialog.close()
     await sleep(200)
-    for (const t of [...g.towers]) { g.build.release(t.spot); t.destroy() }
+    for (const t of [...g.towers]) {
+      g.build.release(t.spot)
+      g.disbandGarrison && g.disbandGarrison(t)
+      t.destroy()
+    }
     g.towers = []
     g.status.peanuts = 999999
     g.place(Object.keys(TOWERSD)[0], spot)
@@ -15517,6 +15595,250 @@ async function run() {
       }
       await shot('guaranteed-level3-garrison-' + VP.w + 'x' + VP.h)
     }
+
+    note('RESULT ' + (ASSERT_FAILS ? '*** ' + ASSERT_FAILS + ' fault(s) ***'
+      : 'no faults; ' + ASSERTIONS + ' checks'))
+    return
+  }
+
+  if (scenario === 'lads') {
+    /*
+     * THE IMA DUMMY TOWER'S THREE BUGS, ON A RENDERED FRAME.
+     *
+     * Nothing in `tests/` can see a scene, and all three of these lived in one:
+     * a lad who never swung at a boss, a MOVE order that could not be given by
+     * any sequence of taps, and a sold tower whose lads stayed on the road.
+     * `tests/garrison.test.ts` holds the rules and the shape of the code. This
+     * presses the buttons.
+     *
+     * LEVEL 3, deliberately. It is a board this tower can be drawn on, it has
+     * its own boss in its own wave table so the art is loaded, and the trunk
+     * lane is long enough that the lads can be posted somewhere they were not.
+     */
+    const RSl = await import('./js/systems/RunState.js')
+    for (const k of ['Title', 'Splash', 'Credits', 'Boot', 'Loadout']) game.scene.stop(k)
+    RSl.setRunState({
+      heroId: 'cory', levelId: 'level3', abilities: ['molotov', 'glacier'],
+      openingTowers: ['withholding', 'rounding', 'imaDummy'], reserveTowers: [], resumeFrom: null,
+    })
+    const G = await startRun()
+    if (!expect(!!G, 'level 3 never started')) return
+    G.status.peanuts = 9999999
+    await sleep(300)
+
+    // THE TRUNK, and a pad that can actually reach it. Everything below --
+    // where the lads may be posted, where the boss walks -- is on this one
+    // lane, so the scenario never has to guess which branch anything is on.
+    const LANE = G.lanes.lanes[0]
+    const D = (await import('./js/data/towers.json', { with: { type: 'json' } })).default.imaDummy
+    const along = (d) => LANE.path.pointAt(d)
+    const nearestOn = (x, y) => {
+      let best = { d: 0, gap: Infinity, x: 0, y: 0 }
+      for (let d = 0; d <= LANE.path.totalLength; d += 4) {
+        const p = along(d)
+        const gap = Math.hypot(p.x - x, p.y - y)
+        if (gap < best.gap) best = { d, gap, x: p.x, y: p.y }
+      }
+      return best
+    }
+    const pad = G.build.freeSpots().find((s) => nearestOn(s.x, s.y).gap <= D.range - 20)
+    if (!expect(!!pad, 'no free pad on level 3 can reach the trunk lane')) return
+    await lookAt(pad.x, pad.y)
+    G.place('imaDummy', pad)
+    await sleep(1200)
+    const tower = G.towers.find((t) => t.id === 'imaDummy')
+    if (!expect(!!tower, 'the Ima Dummy Tower did not build')) return
+    const garr = () => G.garrisons.find((q) => q.tower === tower)
+    if (!expect(!!garr(), 'the tower built but raised no garrison')) return
+    const rallyNow = () => {
+      const r = garr() && garr().rally
+      return r ? { x: Math.round(r.x), y: Math.round(r.y) } : null
+    }
+    note('built on pad ' + pad.index + ' at ' + Math.round(tower.x) + ',' + Math.round(tower.y) +
+      '  range ' + Math.round(tower.range) + '  rally ' + JSON.stringify(rallyNow()) +
+      '  lads ' + garr().soldiers.length)
+
+    /* --- 2. THE MOVE BUTTON, PRESSED ------------------------------------- */
+    //
+    // The whole of bug 2: selecting the tower armed the rally mode behind the
+    // ring the same tap opens, and `onClick` dismisses an open ring before it
+    // looks at anything else -- so the tap meant to move the lads closed the
+    // menu instead, every time, on every board.
+    const [tx, ty] = toScreen(tower.x, tower.y)
+    await click(tx, ty)
+    await sleep(300)
+    if (!expect(!!G.ring, 'tapping the tower did not open its ring')) return
+    note('ring options: [' + G.ring.opts.options.map((o) => o.id).join(', ') + ']')
+    const moveBtn = G.ring.hitBoxes.find((h) => h.id === 'move')
+    if (!expect(!!moveBtn, 'the Ima Dummy Tower ring has no MOVE button')) return
+    expect(G.status.mode !== 'targeting', 'selecting the tower armed the mode behind its own ring')
+    await shot('lads-1-ring-' + VP.w + 'x' + VP.h)
+    await click(moveBtn.rect.x + moveBtn.rect.width / 2, moveBtn.rect.y + moveBtn.rect.height / 2)
+    await sleep(250)
+    const moveConfirm = G.ring && G.ring.hitBoxes.find((h) => h.id === 'ring:confirm')
+    if (!expect(!!moveConfirm, 'the MOVE card has no confirm button')) return
+    await shot('lads-2-move-card-' + VP.w + 'x' + VP.h)
+    await click(moveConfirm.rect.x + moveConfirm.rect.width / 2,
+      moveConfirm.rect.y + moveConfirm.rect.height / 2)
+    await sleep(350)
+    expect(!G.ring, 'the ring stayed open over the board the tap has to land on')
+    expect(G.status.mode === 'targeting', 'MOVE did not arm the rally mode')
+    expect(G.cancelVisible === true, 'the mode armed with no CANCEL on the glass')
+    // THE TOAST, NOT `status.alert`. The HUD consumes the alert the frame it
+    // shows it -- `if (s.alert) { this.toast(s.alert); s.alert = '' }` -- so by
+    // the time anything can read it, it is an empty string and always was. The
+    // pill on the glass is what the player actually gets, so that is what is
+    // read here.
+    const toastText = () => {
+      const h = scene('Hud')
+      const c = h && h.activeToast
+      const t = c && c.list.find((o) => o.type === 'Text')
+      return t ? String(t.text) : ''
+    }
+    note('after MOVE: mode=' + G.status.mode + '  toast=' + JSON.stringify(toastText()))
+    expect(/tap the road to move the lads/i.test(toastText()),
+      'the mode armed without saying what it is waiting for')
+    await shot('lads-3-armed-' + VP.w + 'x' + VP.h)
+
+    /* --- AND A TAP ON THE ROAD MOVES THEM -------------------------------- */
+    //
+    // The furthest legal point on the trunk from where they are standing, so
+    // "it moved" cannot be a rounding error.
+    const legal = []
+    for (let d = 0; d <= LANE.path.totalLength; d += 6) {
+      const p = along(d)
+      if (Math.hypot(p.x - tower.x, p.y - tower.y) <= tower.range - 8) legal.push(p)
+    }
+    if (!expect(legal.length > 1, 'no legal stretch of road inside the ring')) return
+    const before = rallyNow()
+    const away = (p) => Math.hypot(p.x - before.x, p.y - before.y)
+    const aim = legal.reduce((a, b) => (away(b) > away(a) ? b : a))
+    note('posting the lads ' + Math.round(away(aim)) + 'px away, at ' +
+      Math.round(aim.x) + ',' + Math.round(aim.y))
+    expect(away(aim) > 40, 'the legal road is too short for this to prove anything')
+    await lookAt(aim.x, aim.y)
+    const [ax, ay] = toScreen(aim.x, aim.y)
+    await click(ax, ay)
+    await sleep(500)
+    const after = rallyNow()
+    note('rally ' + JSON.stringify(before) + ' -> ' + JSON.stringify(after))
+    expect(after && Math.hypot(after.x - before.x, after.y - before.y) > 30,
+      'the tap on the road did not move the rally point')
+    expect(after && Math.hypot(after.x - aim.x, after.y - aim.y) < 20,
+      'the lads were posted somewhere other than where the road was tapped')
+    const posted = garr().soldiers.every((s) => Math.hypot(s.x - after.x, s.y - after.y) < 200)
+    expect(posted, 'a lad was left behind at the old rally point')
+    await shot('lads-4-moved-' + VP.w + 'x' + VP.h)
+
+    /* --- AND WITH THE RING OPEN OVER IT, IT STILL MOVES THEM -------------- */
+    //
+    // The exact state bug 2 was: armed AND a ring on the glass.
+    //
+    // AN ACCEPTED ORDER DOES NOT END THE MODE -- the lads can be moved again
+    // and again until the selection goes -- so it is still armed here, and the
+    // ring is simply opened behind it. Pressing MOVE again would be the second
+    // press that BACKS OUT of an armed request, which is the opposite of the
+    // state being staged.
+    expect(G.status.mode === 'targeting', 'an accepted rally order ended the mode')
+    G.openTowerRing(tower)
+    await sleep(300)
+    expect(!!G.ring, 'the ring did not reopen')
+    expect(G.status.mode === 'targeting', 'the mode did not survive the ring opening')
+    // A STRETCH OF ROAD THE MENU IS NOT SITTING ON. A press that lands on any
+    // ring object is consumed by the ring before `onClick` ever runs -- see
+    // `pressTakenByUi` -- and so is one on the HUD's own chrome. Neither is the
+    // bug being tested, and aiming at either proves nothing either way.
+    const hudL = scene('Hud').layout
+    const boxes = G.ring.hitBoxes.map((h) => h.rect)
+      .concat(['counters', 'startButton', 'abilities', 'settings', 'cancel', 'messageRow']
+        .map((k) => hudL[k]).filter(Boolean))
+    const clear = (p) => {
+      const [sx, sy] = toScreen(p.x, p.y)
+      if (sx < 24 || sy < 24 || sx > VP.w - 24 || sy > VP.h - 24) return false
+      return !boxes.some((r) => sx > r.x - 14 && sx < r.x + r.width + 14
+        && sy > r.y - 14 && sy < r.y + r.height + 14)
+    }
+    const open = legal.filter(clear)
+    if (!expect(open.length > 0, 'no stretch of legal road is clear of the open ring')) return
+    const far = (p) => Math.hypot(p.x - after.x, p.y - after.y)
+    const back = open.reduce((a, b) => (far(b) > far(a) ? b : a))
+    expect(far(back) > 30, 'the clear stretch of road is too close to where the lads already are')
+    const [bx, by] = toScreen(back.x, back.y)
+    note('tapping the road at ' + Math.round(back.x) + ',' + Math.round(back.y) +
+      ' (screen ' + Math.round(bx) + ',' + Math.round(by) + ') with the ring open')
+    await click(bx, by)
+    await sleep(500)
+    const third = rallyNow()
+    note('with the ring open: rally ' + JSON.stringify(after) + ' -> ' + JSON.stringify(third))
+    expect(third && Math.hypot(third.x - back.x, third.y - back.y) < 20,
+      'the tap was spent dismissing the ring instead of moving the lads')
+    expect(G.selected === tower, 'the tower was deselected by its own rally order')
+    await shot('lads-5-ring-open-' + VP.w + 'x' + VP.h)
+
+    /* --- 1. A BOSS WALKS THROUGH THEM AND TAKES DAMAGE -------------------- */
+    G.clearSelection && G.clearSelection('key')
+    G.status.phase = 'wave'
+    G.spawner.begin({ name: 'probe', spawns: [
+      { enemy: 'unicornBoss', count: 1, interval: 1, delay: 0, lane: LANE.id }] })
+    const came = await until(() => G.enemies.some((e) => e.def.blockable === false), 9000)
+    const boss = G.enemies.find((e) => e.def.blockable === false)
+    if (!expect(came && !!boss, 'no unblockable boss reached the board')) return
+    // Walked up to the lads rather than waited for: the lane is long and the
+    // point of this is the 92px it crosses, not the minute before it.
+    const lads = garr().soldiers
+    const at = nearestOn(lads[0].x, lads[0].y)
+    expect(at.gap <= tower.soldierBlockRange,
+      'the lads are ' + Math.round(at.gap) + 'px off the lane the boss walks')
+    boss.laneDistance = Math.max(0, at.d - 90)
+    boss.distance = boss.laneDistance
+    await sleep(200)
+    const hpBefore = boss.health
+    const startedAt = boss.laneDistance
+    let everHeld = false
+    for (let i = 0; i < 70; i++) {
+      await sleep(100)
+      if (boss.blocker) everHeld = true
+      if (boss.laneDistance > at.d + 120) break
+    }
+    note('boss: hp ' + Math.round(hpBefore) + ' -> ' + Math.round(boss.health) +
+      '  lane ' + Math.round(startedAt) + ' -> ' + Math.round(boss.laneDistance) +
+      '  (lads at ' + Math.round(at.d) + ')  blockable=' + boss.def.blockable)
+    // TOOK DAMAGE. This is bug 1: a lad was only ever handed the enemy HOLDING
+    // STILL for him, and a boss never holds still for anybody.
+    expect(boss.health < hpBefore, 'the boss walked through the garrison untouched')
+    // AND WAS NOT HELD. The other half, and the more important one: a boss
+    // parked on two lads is a fight switched off.
+    expect(everHeld === false, 'a lad took hold of the boss')
+    expect(boss.blocker === null || boss.blocker === undefined, 'the boss ended up held')
+    expect(boss.laneDistance > startedAt + 100, 'the boss stopped walking')
+    await shot('lads-6-boss-' + VP.w + 'x' + VP.h)
+
+    /* --- 3. SELLING TAKES THE LADS WITH IT -------------------------------- */
+    const SoldierC = (await import('./js/entities/Soldier.js')).Soldier
+    const onBoard = () => G.children.list.filter((o) => o instanceof SoldierC).length
+    const heldBySoldier = () => G.enemies.filter((e) => e.blocker instanceof SoldierC).length
+    note('before the sale: ' + G.garrisons.length + ' garrison(s), ' + onBoard() + ' lads drawn, ' +
+      heldBySoldier() + ' enemy/enemies held by one')
+    // One of them killed first, so there is a respawn in flight when the tower
+    // goes -- the exact state that used to put a fresh lad on an empty pad.
+    lads[0].hurt(lads[0].maxHealth * 2)
+    await sleep(200)
+    G.sellTower(tower)
+    await sleep(400)
+    expect(G.garrisons.length === 0, G.garrisons.length + ' garrison(s) survived the sale')
+    expect(onBoard() === 0, onBoard() + ' lad(s) are still drawn on the board')
+    expect(heldBySoldier() === 0, 'an enemy is still held by a lad whose tower was sold')
+    await shot('lads-7-sold-' + VP.w + 'x' + VP.h)
+    // PAST THE RESPAWN. `soldierRespawn` is 10 GAME seconds and the clock runs
+    // faster than real time, so this waits longer than it needs to on purpose.
+    const wait = D.soldierRespawn + 3
+    note('waiting ' + wait + 's, past the ' + D.soldierRespawn + 's respawn...')
+    await sleep(wait * 1000)
+    note('after the respawn window: ' + G.garrisons.length + ' garrison(s), ' +
+      onBoard() + ' lads drawn')
+    expect(G.garrisons.length === 0, 'a garrison came back after the tower was sold')
+    expect(onBoard() === 0, 'the sold tower respawned ' + onBoard() + ' lad(s)')
+    await shot('lads-8-after-respawn-' + VP.w + 'x' + VP.h)
 
     note('RESULT ' + (ASSERT_FAILS ? '*** ' + ASSERT_FAILS + ' fault(s) ***'
       : 'no faults; ' + ASSERTIONS + ' checks'))

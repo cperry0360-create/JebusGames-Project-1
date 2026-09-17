@@ -88,6 +88,58 @@ export function ensureIconFallbackTexture(scene: Phaser.Scene): void {
   g.destroy()
 }
 
+/**
+ * THE LADS' FLAG, drawn into whatever Graphics is handed to it.
+ *
+ * One shape at two sizes and in two places: the MOVE button on an Ima Dummy
+ * Tower's ring, as a generated texture, and the mark standing on the rally
+ * point while that tower is selected, drawn straight onto the board. They are
+ * the same picture on purpose -- the button says "move this", and the thing
+ * that then moves has to be recognisably the thing the button showed.
+ *
+ * `x`/`y` is the FOOT of the pole, because that is what both callers know: on
+ * the board it is the rally point itself, standing on the road like everything
+ * else does.
+ */
+export function flagInto(
+  g: Phaser.GameObjects.Graphics, x: number, y: number, height: number,
+): void {
+  const cfg = PRESENTATION.rallyFlag
+  const pole = Math.max(1, height * cfg.poleWidth)
+  g.fillStyle(cfg.poleColour, 1)
+  g.fillRect(x - pole / 2, y - height, pole, height)
+  // A pennant rather than a rectangle: it reads as a flag at 30px on a moving
+  // board, where a small rectangle on a stick reads as a signpost.
+  g.fillStyle(cfg.clothColour, 1)
+  g.fillTriangle(
+    x, y - height,
+    x + height * cfg.clothWidth, y - height + (height * cfg.clothHeight) / 2,
+    x, y - height + height * cfg.clothHeight,
+  )
+}
+
+/**
+ * The flag as a texture, for the one place that needs an Image rather than a
+ * Graphics: the ring button's glyph.
+ *
+ * Generated rather than drawn from a file because there is no flag in
+ * `art.json` -- see the icon list, which is nine action glyphs and no tenth --
+ * and a MOVE button showing the missing-icon box is a button nobody presses.
+ * `TowerRing.makeGlyph` still falls back to the named icon if this texture is
+ * somehow absent, so the button cannot end up blank.
+ */
+export function ensureRallyFlagTexture(scene: Phaser.Scene): void {
+  const key = ART.generated.rallyFlag
+  if (scene.textures.exists(key)) return
+
+  const cfg = PRESENTATION.rallyFlag
+  const n = cfg.textureSize
+  const g = scene.make.graphics({ x: 0, y: 0 }, false)
+  flagInto(g, n * 0.3, n * 0.95, n * 0.88)
+  g.generateTexture(key, n, n)
+  g.destroy()
+}
+
 export function ensureShadowTexture(scene: Phaser.Scene): void {
   const key = ART.generated.groundShadow
   if (scene.textures.exists(key)) return
